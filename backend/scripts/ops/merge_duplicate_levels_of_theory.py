@@ -110,6 +110,10 @@ _REPOINTED = {
     ("calculation", "lot_id"),
     ("level_of_theory_merge", "merged_lot_id"),
     ("level_of_theory_merge", "into_lot_id"),
+    # ADR 0021: a duplicate's composite-scheme binding is moved to the holder
+    # (or dropped when the holder is bound already), so a merged level is never
+    # bound. Absent on a database older than ``d7a3f1b9c284``.
+    ("level_of_theory_composite", "level_of_theory_id"),
 }
 
 #: Ownership columns that are also citations. ``calculation_dependency`` is
@@ -547,6 +551,21 @@ def commit_plan(session: Session, plan: Plan) -> CommitResult:
                         ),
                         {"holder": holder_id, "dup": dup_id},
                     )
+                    if ("level_of_theory_composite", "level_of_theory_id") in plan.schema.lot_references:
+                        session.execute(
+                            text(
+                                "INSERT INTO level_of_theory_composite "
+                                "(level_of_theory_id, scheme_id, binding_source) "
+                                "SELECT :holder, scheme_id, binding_source "
+                                "FROM level_of_theory_composite WHERE level_of_theory_id = :dup "
+                                "ON CONFLICT (level_of_theory_id) DO NOTHING"
+                            ),
+                            {"holder": holder_id, "dup": dup_id},
+                        )
+                        session.execute(
+                            text("DELETE FROM level_of_theory_composite WHERE level_of_theory_id = :dup"),
+                            {"dup": dup_id},
+                        )
                     left = session.scalar(
                         text("SELECT count(*) FROM calculation WHERE lot_id = :dup"),
                         {"dup": dup_id},

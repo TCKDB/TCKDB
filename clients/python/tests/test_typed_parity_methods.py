@@ -821,6 +821,25 @@ class TestLevelsOfTheory:
 
 
 # ---------------------------------------------------------------------------
+# Composite schemes
+# ---------------------------------------------------------------------------
+
+
+class TestCompositeScheme:
+    def test_detail_path(self):
+        handler, seen = _capture(_detail({"composite_scheme": {}, "terms": []}))
+        client, _ = make_client(handler)
+        client.get_composite_scheme("csch_1")
+        assert _path_of(str(seen[0].url)).endswith("/scientific/composite-schemes/csch_1")
+
+    def test_profile_forwarded(self):
+        handler, seen = _capture(_detail({"composite_scheme": {}, "terms": []}))
+        client, _ = make_client(handler)
+        client.get_composite_scheme("csch_1", profile="curated")
+        assert _query_of(str(seen[0].url))["profile"] == ["curated"]
+
+
+# ---------------------------------------------------------------------------
 # Literature
 # ---------------------------------------------------------------------------
 

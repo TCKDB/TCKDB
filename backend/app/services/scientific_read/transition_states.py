@@ -94,6 +94,9 @@ from app.services.scientific_read.common import (
     review_summary,
     validate_includes,
 )
+from app.services.scientific_read.composite_binding import (
+    composite_scheme_summaries,
+)
 from app.services.scientific_read.handles import (
     resolve_transition_state_entry_handle,
     resolve_transition_state_handle,
@@ -1674,6 +1677,7 @@ def _bulk_lot_summaries(
     rows = session.scalars(
         select(LevelOfTheory).where(LevelOfTheory.id.in_(lot_ids))
     ).all()
+    schemes = composite_scheme_summaries(session, lot_ids)
     return {
         lot.id: LevelOfTheorySummary(
             level_of_theory_id=lot.id,
@@ -1684,6 +1688,7 @@ def _bulk_lot_summaries(
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             label=None,
+            composite_scheme=schemes.get(lot.id),
         )
         for lot in rows
     }

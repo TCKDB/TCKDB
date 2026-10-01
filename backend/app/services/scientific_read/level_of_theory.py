@@ -59,6 +59,7 @@ from app.schemas.reads.scientific_level_of_theory import (
     ScientificLevelOfTheoryRecord,
 )
 from app.services.scientific_read.common import validate_includes
+from app.services.scientific_read.composite_binding import composite_scheme_summary
 from app.services.scientific_read.energy_correction_schemes import (
     build_energy_correction_scheme_record,
 )
@@ -182,6 +183,7 @@ def build_level_of_theory_record(
         keywords=lot.keywords,
         spin_treatment=lot.spin_treatment,
         lot_hash=lot.lot_hash,
+        composite_scheme=composite_scheme_summary(session, lot.id),
         created_at=lot.created_at,
     )
 

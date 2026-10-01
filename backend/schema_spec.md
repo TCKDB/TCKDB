@@ -256,6 +256,29 @@ Notes:
 - No calculation points at a merged row, and `into_lot_id` is never itself merged (one hop).
 - A table rather than a column on `level_of_theory`, so whole-row snapshots of a level of theory (consistency-check inputs, reproducibility context hashes) do not change for every row.
 
+Composite schemes ([ADR 0021](../docs/adr/0021-composite-levels-of-theory-are-a-recipe-bound-to-a-level-not-a-weighted-level.md), revision `d7a3f1b9c284`). A composite energy is a recipe; the recipe is identity, and a side table binds a level of theory to it.
+
+`composite_scheme` fields (identity; deduplicated by `definition_hash`, never updated in place):
+
+- `id`, `public_ref` (`csch_`, content-derived from `definition_hash`)
+- `kind` (`named_method | extrapolation | additive`), `name`
+- `definition_hash` (`CHAR(64)`, unique): for a named method, `sha256` of the canonical JSON `{"kind":"named_method","method":<catalogue key>}`
+- `geometry_level_of_theory_id`, `frequency_level_of_theory_id` (nullable FK `level_of_theory.id`): the levels the recipe runs internally; NULL = not stated
+- `recipe_zpe_scale_factor` (nullable): NULL unless a source is cited; never read as 1.0
+- `source_literature_id` (nullable FK `literature.id`), `note`, `created_at`
+
+`composite_scheme_term` fields: `id`, `scheme_id`, `position` (unique per scheme), `operation` (`base | extrapolation | difference | value | empirical`), `energy_component` (`EnergyComponentKind`: `total | reference | correlation | triples | dboc | scalar_relativistic`), `formula` (nullable; only on an extrapolation term), `exponent` (nullable; only with a formula).
+
+`composite_scheme_term_input` fields: `id`, `term_id`, `slot` (`value | high | low | cardinal`), `level_of_theory_id`, `cardinal_number` (nullable; required on a `cardinal` slot). Unique on `(term_id, slot, cardinal_number)` with NULLs not distinct.
+
+`level_of_theory_composite` fields: `level_of_theory_id` (PK, FK), `scheme_id` (FK), `binding_source` (`named_method_catalogue | declared`), `created_at`.
+
+Notes:
+
+- A named-method scheme and its binding are created when a level of theory whose method is in `app/chemistry/composite_methods.py` is resolved (`app/services/composite_scheme_resolution.py`), and by the revision's backfill for existing levels. The scheme states only what the catalogue states and has no terms. `lot_hash` and the level's `public_ref` are untouched.
+- A term input is never a composite level (bound, or whose method is catalogued): enforced by `assert_ordinary_input_level`, which every writer of `composite_scheme_term_input` goes through. A merged level is checked and stored as the level it was merged into.
+- A merged level is never bound; the merge script moves the duplicate's binding to the holder.
+
 ### 3.6 Application Users and Upload Jobs
 
 `app_user` fields:

@@ -65,6 +65,9 @@ PREFIXES: dict[str, str] = {
     "FrequencyScaleFactor": "fsf",
     "EnergyCorrectionScheme": "ecs",
     "GroupAdditivityScheme": "gasch",
+    # Composite recipe (ADR 0021). Content-derived from ``definition_hash``:
+    # the same recipe is the same ref on any TCKDB instance.
+    "CompositeScheme": "csch",
     # Events / provenance (opaque)
     "SpeciesEntry": "spe",
     "ReactionEntry": "rxe",
@@ -120,6 +123,7 @@ _CONTENT_DERIVED: set[str] = {
     "ConformerAssignmentScheme",
     "FrequencyScaleFactor",
     "EnergyCorrectionScheme",
+    "CompositeScheme",
 }
 
 # Body length (after the ``{prefix}_`` separator). 26 characters matches
@@ -450,6 +454,19 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
     return f"{head}data_revision={data_revision}"
 
 
+def _canonical_composite_scheme(obj: Any) -> str | None:
+    """CompositeScheme identity: its ``definition_hash``.
+
+    ``None`` when the hash is not set yet, so the dispatcher falls back to an
+    opaque ref rather than minting a ref from an empty identity. The resolver
+    always sets the hash before the insert.
+    """
+    definition_hash = getattr(obj, "definition_hash", None)
+    if definition_hash:
+        return f"csch:definition_hash={definition_hash}"
+    return None
+
+
 # Dispatch table from class name → canonical-identity extractor.
 # Extractors may return ``None`` to signal "no canonical identity
 # available, fall back to opaque ref" (see ``_canonical_literature`` and
@@ -467,6 +484,7 @@ _CANONICALIZERS: dict[str, Callable[[Any], str | None]] = {
     "ConformerAssignmentScheme": _canonical_conformer_assignment_scheme,
     "FrequencyScaleFactor": _canonical_frequency_scale_factor,
     "EnergyCorrectionScheme": _canonical_energy_correction_scheme,
+    "CompositeScheme": _canonical_composite_scheme,
 }
 
 
@@ -583,6 +601,7 @@ def backfill_public_refs(session: Session) -> dict[str, int]:
     # Imports done lazily so this module stays importable from places
     # that don't have the full ORM available (e.g. Alembic env).
     from app.db.models.calculation import Calculation
+    from app.db.models.composite_scheme import CompositeScheme
     from app.db.models.energy_correction import (
         EnergyCorrectionScheme,
         FrequencyScaleFactor,
@@ -628,6 +647,7 @@ def backfill_public_refs(session: Session) -> dict[str, int]:
         WorkflowTool, WorkflowToolRelease,
         Literature,
         FrequencyScaleFactor, EnergyCorrectionScheme,
+        CompositeScheme,
         Submission,
         RecordReproducibilityAssessment,
         MolecularPropertyObservation,

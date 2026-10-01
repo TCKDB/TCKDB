@@ -831,6 +831,25 @@ class LevelOfTheoryRecord(TypedDict, total=False):
     software: JSONDict | None
 
 
+class CompositeSchemeRecord(TypedDict):
+    """One composite scheme -- the recipe behind a composite level of theory.
+
+    ``composite_scheme`` holds the identity (``composite_scheme_ref``,
+    ``kind``, ``name``, ``definition_hash``), the levels the recipe runs
+    internally (``geometry_level_of_theory``, ``frequency_level_of_theory``;
+    ``None`` when the source does not state them), and
+    ``recipe_zpe_scale_factor`` (``None`` unless cited: never substitute 1.0).
+    ``terms`` is empty for a ``named_method`` scheme: the catalogue holds no
+    term list, so an empty list means "none recorded", not "no steps".
+    ``bound_levels_of_theory`` lists the levels whose energy the scheme names.
+    Refs only: no database id.
+    """
+
+    composite_scheme: JSONDict
+    terms: list[JSONDict]
+    bound_levels_of_theory: list[JSONDict]
+
+
 class FrequencyScaleFactorRecord(TypedDict, total=False):
     frequency_scale_factor: Required[JSONDict]
     evidence_summary: Required[JSONDict]
@@ -1164,6 +1183,9 @@ LevelOfTheorySearchResponse: TypeAlias = ScientificSearchResponse[
 LevelOfTheoryDetailResponse: TypeAlias = ScientificDetailResponse[
     LevelOfTheoryRecord
 ]
+CompositeSchemeDetailResponse: TypeAlias = ScientificDetailResponse[
+    CompositeSchemeRecord
+]
 LiteratureDetailResponse: TypeAlias = ScientificDetailResponse[LiteratureRecord]
 LiteratureRecordsResponse: TypeAlias = ScientificSearchResponse[
     LiteratureLinkedRecord
@@ -1190,6 +1212,8 @@ __all__ = [
     "CalculationDetailResponse",
     "CalculationRecord",
     "CalculationSearchResponse",
+    "CompositeSchemeDetailResponse",
+    "CompositeSchemeRecord",
     "CondaExecutionRuntime",
     "ConformerGroupDetailResponse",
     "ConformerObservationDetailResponse",

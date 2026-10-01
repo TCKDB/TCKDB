@@ -889,6 +889,100 @@ class SpinTreatment(str, Enum):
     unknown = "unknown"
 
 
+class CompositeSchemeKind(str, Enum):
+    """What sort of recipe a ``composite_scheme`` is (ADR 0021).
+
+    ``named_method``: a fixed program recipe addressed by its name (CBS-QB3,
+    G4, W1U, ...); the recipe is the method's own, held in the curated
+    catalogue, and its terms are descriptive. ``extrapolation``: one
+    extrapolation formula over single points at chosen cardinal numbers.
+    ``additive``: a base energy plus difference terms (a focal-point scheme).
+    The last two are user-declared; no row of either kind is created before
+    the phase that accepts them.
+    """
+
+    named_method = "named_method"
+    extrapolation = "extrapolation"
+    additive = "additive"
+
+
+class CompositeTermOperation(str, Enum):
+    """What a ``composite_scheme_term`` does to the running energy (ADR 0021).
+
+    ``base``: the starting energy. ``extrapolation``: a basis-set limit from
+    several cardinal numbers. ``difference``: a high-minus-low correction.
+    ``value``: one single-point energy taken as it is. ``empirical``: a
+    recipe's fitted term (a higher-level correction, a spin or empirical
+    correction) that the program has already included.
+    """
+
+    base = "base"
+    extrapolation = "extrapolation"
+    difference = "difference"
+    value = "value"
+    empirical = "empirical"
+
+
+class EnergyComponentKind(str, Enum):
+    """Which part of an electronic energy a value is (ADR 0021).
+
+    Named generically because it is shared: a scheme term says which
+    component of an input energy it consumes, and a single-point energy
+    component (a later phase) says which component it stores. ``total`` is
+    the whole electronic energy; ``reference`` the reference-determinant
+    (SCF / HF) part; ``correlation`` the correlation part; ``triples`` the
+    perturbative triples part; ``dboc`` the diagonal Born-Oppenheimer
+    correction; ``scalar_relativistic`` the scalar-relativistic correction.
+    """
+
+    total = "total"
+    reference = "reference"
+    correlation = "correlation"
+    triples = "triples"
+    dboc = "dboc"
+    scalar_relativistic = "scalar_relativistic"
+
+
+class CompositeExtrapolationFormula(str, Enum):
+    """The basis-set extrapolation formula of an extrapolation term (ADR 0021).
+
+    Formula, exponent and cardinal numbers are identity: anything that
+    changes the number for fixed component energies is part of what the
+    level of theory is.
+    """
+
+    inverse_power = "inverse_power"
+    inverse_power_shifted_half = "inverse_power_shifted_half"
+    karton_martin_scf = "karton_martin_scf"
+    exponential_three_point = "exponential_three_point"
+
+
+class CompositeInputSlot(str, Enum):
+    """The role of one input to a ``composite_scheme_term`` (ADR 0021).
+
+    ``value``: the single input of a base or value term. ``high`` / ``low``:
+    the two sides of a difference. ``cardinal``: one of the points of an
+    extrapolation, told apart by its cardinal number.
+    """
+
+    value = "value"
+    high = "high"
+    low = "low"
+    cardinal = "cardinal"
+
+
+class CompositeBindingSource(str, Enum):
+    """Why a level of theory is bound to a composite scheme (ADR 0021).
+
+    ``named_method_catalogue``: the level's method is a catalogued named
+    composite method, bound by TCKDB. ``declared``: a depositor declared the
+    scheme (a later phase).
+    """
+
+    named_method_catalogue = "named_method_catalogue"
+    declared = "declared"
+
+
 class PressureContext(str, Enum):
     """What a rate coefficient means with respect to pressure (DR-0032).
 

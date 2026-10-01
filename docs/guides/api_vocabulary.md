@@ -61,10 +61,10 @@ Three things are deliberately absent:
 | Kind of token | Count | Read from |
 | --- | --- | --- |
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
-| Identifier prefixes | 37 | `backend/app/services/public_refs.py` |
+| Identifier prefixes | 38 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
 | Refusal codes a caller can receive | 214 | `backend/app/api/code_catalogue.py` |
-| **total** | **503** | |
+| **total** | **504** | |
 
 ## How a record is named
 
@@ -77,11 +77,12 @@ There are two kinds of reference, and the difference matters more than it looks:
 
 Nothing in the string says which kind you are holding, which is why this table exists.
 
-### Content-derived prefixes (12)
+### Content-derived prefixes (13)
 
 | Prefix | Names a | Same on every instance? |
 | --- | --- | --- |
 | `cas_` | conformer assignment scheme | yes |
+| `csch_` | composite scheme | yes |
 | `ecs_` | energy correction scheme | yes |
 | `fsf_` | frequency scale factor | yes |
 | `geom_` | geometry | yes |

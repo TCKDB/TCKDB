@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field
 
 from app.db.models.common import CalculationType, FrequencyScaleKind, SpinTreatment
 from app.schemas.reads.scientific_common import (
+    CompositeSchemeSummary,
     ProfiledRequestEcho,
     ReviewStatusSummary,
     SoftwareReleaseSummary,
@@ -91,6 +92,9 @@ class LevelOfTheoryCoreBlock(BaseModel):
     keywords: str | None = None
     spin_treatment: SpinTreatment | None = None
     lot_hash: str
+    #: The composite recipe this level names (ADR 0021), or ``None`` for an
+    #: ordinary level. Not part of ``lot_hash``.
+    composite_scheme: CompositeSchemeSummary | None = None
     created_at: datetime
 
 

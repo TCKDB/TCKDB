@@ -53,6 +53,7 @@ from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
+    CompositeSchemeSummary,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
     LiteratureSummary,
@@ -95,6 +96,9 @@ from app.services.scientific_read.common import (
     validate_pagination,
     validate_temperature_range,
     visible_statuses,
+)
+from app.services.scientific_read.composite_binding import (
+    composite_scheme_summaries,
 )
 from app.services.scientific_read.handles import (
     NO_MATCH,
@@ -1041,6 +1045,7 @@ class _CalcMeta:
     """Lightweight container for calculation metadata used in provenance."""
 
     __slots__ = (
+        "composite_scheme",
         "id",
         "lot_basis",
         "lot_dispersion",
@@ -1074,7 +1079,9 @@ class _CalcMeta:
         software_name: str | None,
         software_version: str | None,
         parameters_json: dict | None,
+        composite_scheme: CompositeSchemeSummary | None = None,
     ):
+        self.composite_scheme = composite_scheme
         self.id = id
         self.type = type
         self.transition_state_entry_id = transition_state_entry_id
@@ -1138,6 +1145,7 @@ def _calc_metadata(
         .join(Software, Software.id == SoftwareRelease.software_id, isouter=True)
         .where(Calculation.id.in_(calc_ids))
     ).all()
+    schemes = composite_scheme_summaries(session, [row[3] for row in rows])
     return {
         row[0]: _CalcMeta(
             id=row[0],
@@ -1154,6 +1162,7 @@ def _calc_metadata(
             software_release_ref=row[11],
             software_name=row[12],
             software_version=row[13],
+            composite_scheme=schemes.get(row[3]),
         )
         for row in rows
     }
@@ -1604,6 +1613,7 @@ def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None
         dispersion=meta.lot_dispersion,
         solvent=meta.lot_solvent,
         label="/".join(p for p in label_parts if p),
+        composite_scheme=meta.composite_scheme,
     )
 
 

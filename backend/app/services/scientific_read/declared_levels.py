@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.level_of_theory import LevelOfTheory
 from app.schemas.reads.scientific_common import LevelOfTheorySummary
+from app.services.scientific_read.composite_binding import composite_scheme_summaries
 from app.services.scientific_read.handles import canonical_level_of_theory_id
 
 
@@ -44,6 +45,7 @@ def load_declared_energy_summaries(
             select(LevelOfTheory).where(LevelOfTheory.id.in_(set(canonical.values())))
         ).all()
     }
+    schemes = composite_scheme_summaries(session, rows)
     out: dict[int, LevelOfTheorySummary] = {}
     for stored, canon in canonical.items():
         lot = rows.get(canon)
@@ -58,5 +60,6 @@ def load_declared_energy_summaries(
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             label=None,
+            composite_scheme=schemes.get(lot.id),
         )
     return out

@@ -277,7 +277,11 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
         assert before[ids[key]][0] not in completed.stdout, key
     assert "duplicate group(s)" in completed.stdout
 
-    # The upload path now finds the existing rows under every spelling.
+    # The upload path now finds the existing rows under every spelling. Resolving a
+    # catalogued method also binds it to its composite scheme (ADR 0021, P2), whose
+    # tables a later revision creates, so go to the head of the scratch database
+    # first. Nothing here depends on that revision: it re-hashes nothing.
+    harness.run("upgrade", "head")
     with Session(harness.engine) as session:
         for method, basis, key in (
             ("cbsqb3", None, "cbs_qb3"),

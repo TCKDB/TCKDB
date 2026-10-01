@@ -30,6 +30,7 @@ from app.api.error_contract import CodedValueError
 from app.api.errors import not_found
 from app.db.models.calculation import Calculation
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.composite_scheme import CompositeScheme
 from app.db.models.energy_correction import (
     EnergyCorrectionScheme,
     FrequencyScaleFactor,
@@ -616,6 +617,16 @@ def resolve_energy_correction_scheme_handle(
         EnergyCorrectionScheme,
         handle,
         kind_label="energy_correction_scheme",
+    )
+
+
+def resolve_composite_scheme_handle(session: Session, handle: str) -> int:
+    """Resolve a composite-scheme path handle (int or ``csch_...``) → row id."""
+    return resolve_path_handle(
+        session,
+        CompositeScheme,
+        handle,
+        kind_label="composite_scheme",
     )
 
 

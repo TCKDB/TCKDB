@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 107 |
+| typed | 108 |
 | raw_only | 107 |
 | not_applicable | 45 |
-| **total** | **259** |
+| **total** | **260** |
 
 ## Typed coverage
 
@@ -53,6 +53,7 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/calculations/{calculation_ref_or_id}/irc` | yes | `get_calculation_irc` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/calculations/{calculation_ref_or_id}/path-search` | yes | `get_calculation_path_search` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/calculations/{calculation_ref_or_id}/scan` | yes | `get_calculation_scan` | — | — | `tests/test_typed_parity_methods.py` |
+| `GET /api/v1/scientific/composite-schemes/{composite_scheme_ref}` | yes | `get_composite_scheme` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/conformer-groups/{conformer_group_ref_or_id}` | yes | `get_conformer_group` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/conformer-observations/{conformer_observation_ref_or_id}` | yes | `get_conformer_observation` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/conformers/search` | yes | `search_conformers` | `iter_conformers` | — | `tests/test_typed_parity_methods.py` |

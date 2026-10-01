@@ -55,6 +55,12 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "calculation_parameter",
         "calculation_parameter_vocab",
         "chem_reaction",
+        # Composite recipes and their level-of-theory binding (ADR 0021).
+        # Identity and its side table: a restore that dropped the binding
+        # would hand back a CBS-QB3 level that no longer names its recipe.
+        "composite_scheme",
+        "composite_scheme_term",
+        "composite_scheme_term_input",
         "conformer_assignment_scheme",
         "conformer_group",
         "conformer_observation",
@@ -90,6 +96,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         # Without it a restored archive would answer a merged ref with the
         # merged row itself.
         "level_of_theory_merge",
+        "level_of_theory_composite",
         "literature",
         "literature_author",
         "machine_review_curator_task",

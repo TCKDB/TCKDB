@@ -471,6 +471,10 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "get_energy_correction_scheme", None, None, _NEW_METHOD_TESTS,
     ),
     (
+        "GET", "/api/v1/scientific/composite-schemes/{composite_scheme_ref}",
+        "get_composite_scheme", None, None, _NEW_METHOD_TESTS,
+    ),
+    (
         "GET", "/api/v1/scientific/frequency-scale-factors/search",
         "search_frequency_scale_factors", "iter_frequency_scale_factors", None,
         _NEW_METHOD_TESTS,
