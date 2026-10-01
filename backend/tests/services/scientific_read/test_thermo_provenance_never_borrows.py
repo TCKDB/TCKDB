@@ -17,14 +17,19 @@ from __future__ import annotations
 
 from app.db.models.common import (
     CalculationType,
+    SCFStabilityStatus,
     ScientificOriginKind,
+    StatmechCalculationRole,
     ThermoCalculationRole,
 )
+from app.db.models.statmech import StatmechSourceCalculation
 from app.db.models.thermo import ThermoSourceCalculation
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_thermo import ThermoReadRequest
 from app.services.scientific_read.thermo import get_species_thermo
 from tests.services.scientific_read._factories import (
+    attach_geometry_validation,
+    attach_scf_stability,
     make_calculation,
     make_lot,
     make_species,
@@ -77,17 +82,41 @@ def test_unlinked_thermo_shows_no_statmech_or_calculations(db_session):
 
 
 def test_unlinked_thermo_evidence_counts_only_its_own_links(db_session):
-    entry, _lot, _stat, _freq, _sp, linked, unlinked = _linked_and_unlinked(db_session)
+    """The sibling statmech has freq, sp and opt sources, a passed geometry
+    validation on the opt and a stable SCF on the sp, so every predicate that
+    could borrow has something to borrow. The unlinked record gets none."""
+    entry, lot, statmech, _freq, sp, linked, unlinked = _linked_and_unlinked(db_session)
+    opt = make_calculation(
+        db_session, type=CalculationType.opt, species_entry_id=entry.id, lot_id=lot.id
+    )
+    db_session.add(
+        StatmechSourceCalculation(
+            statmech_id=statmech.id, calculation_id=opt.id, role=StatmechCalculationRole.opt
+        )
+    )
+    attach_geometry_validation(db_session, calculation=opt)
+    attach_scf_stability(db_session, calculation=sp, status=SCFStabilityStatus.stable)
+    db_session.flush()
 
     records = _records(db_session, entry)
     bare = records[unlinked.public_ref].evidence_completeness
     full = records[linked.public_ref].evidence_completeness
 
-    assert bare.checklist["has_source_calculations"] is False
-    assert bare.checklist["has_statmech_source"] is False
-    assert bare.checklist["has_frequency_evidence"] is False
-    assert bare.checklist["has_sp_or_energy_evidence"] is False
-    assert bare.score < full.score
+    assert bare.checklist == {
+        "has_source_calculations": False,
+        "has_statmech_source": False,
+        "has_frequency_evidence": False,
+        "has_sp_or_energy_evidence": False,
+        "has_temperature_dependent_model": False,
+        "has_uncertainty": False,
+        "has_geometry_validation": False,
+        "has_scf_stability": False,
+    }
+    assert bare.score == 0
+    # The linked record does count the same sibling's evidence.
+    assert full.checklist["has_geometry_validation"] is True
+    assert full.checklist["has_scf_stability"] is True
+    assert full.score == 6
 
 
 def test_collapse_first_prefers_the_linked_record(db_session):

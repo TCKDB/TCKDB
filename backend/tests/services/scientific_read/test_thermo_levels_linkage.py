@@ -1,10 +1,11 @@
 """A thermo's derived ``levels`` come only from what the thermo itself owns (#636).
 
-``get_species_thermo`` resolves a basis statmech per record. Provenance and
-evidence still fall back to the lowest statmech id of the entry for display,
-but the derived ``levels.*`` (geometry / frequency / energy) must not: an
-experimental thermo, or a computed one with its own source calculations, would
-report the levels of an unrelated statmech on the same entry.
+``get_species_thermo`` resolves a basis statmech per record, from the record's
+own ``thermo.statmech_id`` only. Provenance and evidence do not borrow either
+(#645, see ``test_thermo_provenance_never_borrows.py``), and neither do the
+derived ``levels.*`` (geometry / frequency / energy): an experimental thermo,
+or a computed one with its own source calculations, must not report the levels
+of an unrelated statmech on the same entry.
 
 The rule, from the thermo's side:
 

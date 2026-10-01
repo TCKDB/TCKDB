@@ -1429,7 +1429,7 @@ def _evidence_breakdown(
         gv = geom_vals.get(opt_calc_id)
         has_geom_val = gv in {ValidationStatus.passed, ValidationStatus.warning}
 
-    # SCF stability: target = sp source calc (with the same statmech fallback).
+    # SCF stability: target = sp source calc (else the linked statmech's sp).
     sp_calc_id = _calc_id_for_role(sources, ThermoCalculationRole.sp)
     if sp_calc_id is None:
         sp_calc_id = _statmech_calc_id_for_role(

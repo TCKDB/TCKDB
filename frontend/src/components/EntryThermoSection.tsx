@@ -971,6 +971,10 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
     // up to three distinct refs, and no single one of them is "the" ref
     // this row could report without picking a winner among the others.
     const levelsAgree = productLevelsAgree(productLevels)
+    // "none" = the record links to no calculation and no statmech, so there is
+    // nothing these fields could come from (#645). "not recorded" = something
+    // is linked but this field on it is NULL.
+    const noLinkLabel = !provenance.primary_calculation && !provenance.statmech_ref ? "none" : "not recorded"
     return (
         <section aria-labelledby={`provenance-${thermoRef}${idSuffix}`}>
             <h4 className="model-block-heading" id={`provenance-${thermoRef}${idSuffix}`}>Provenance</h4>
@@ -983,7 +987,7 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
                 {levelsAgree && (
                     <div>
                         <dt>Level of theory ref</dt>
-                        <dd>{productLevels.geometry?.level_of_theory_ref ? <Link className="data" to={levelOfTheoryPath(productLevels.geometry.level_of_theory_ref)}>{productLevels.geometry.level_of_theory_ref}</Link> : "not recorded"}</dd>
+                        <dd>{productLevels.geometry?.level_of_theory_ref ? <Link className="data" to={levelOfTheoryPath(productLevels.geometry.level_of_theory_ref)}>{productLevels.geometry.level_of_theory_ref}</Link> : noLinkLabel}</dd>
                     </div>
                 )}
                 <div>
@@ -1003,7 +1007,7 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
                     <dd>
                         {provenance.conformer_group_ref
                             ? <Link className="data" to={`/conformer-groups/${provenance.conformer_group_ref}`}>{provenance.conformer_group_ref}</Link>
-                            : "not recorded"}
+                            : noLinkLabel}
                     </dd>
                 </div>
             </dl>
