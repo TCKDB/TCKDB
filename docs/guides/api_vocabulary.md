@@ -60,11 +60,11 @@ Three things are deliberately absent:
 
 | Kind of token | Count | Read from |
 | --- | --- | --- |
-| Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
+| Status, badge and query words | 108 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 38 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
 | Refusal codes a caller can receive | 224 | `backend/app/api/code_catalogue.py` |
-| **total** | **514** | |
+| **total** | **515** | |
 
 ## How a record is named
 
@@ -559,6 +559,7 @@ What kind of job a stored calculation was. TCKDB records the job, not the intent
 | `scan` | A scan over one or more internal coordinates. |
 | `path_search` | A reaction-path search producing a TS guess. Which algorithm ran (NEB, GSM, …) is recorded on the result row, not as a separate type. |
 | `conf` | A conformer search — a job exploring the accessible conformations of one species. |
+| `composite` | One composite energy: a named method such as CBS-QB3 or G4 that one program run produced from several internal steps. Its energies are on the result row, and its level of theory is bound to a composite scheme. |
 
 ### Calculation quality
 

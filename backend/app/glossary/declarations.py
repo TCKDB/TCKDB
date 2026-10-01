@@ -865,6 +865,15 @@ _CALCULATION_TYPE = Vocabulary(
                 "conformations of one species."
             ),
         ),
+        Term(
+            token="composite",
+            means=(
+                "One composite energy: a named method such as CBS-QB3 or G4 "
+                "that one program run produced from several internal steps. "
+                "Its energies are on the result row, and its level of theory "
+                "is bound to a composite scheme."
+            ),
+        ),
     ),
 )
 
