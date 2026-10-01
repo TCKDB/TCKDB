@@ -527,15 +527,27 @@
         "irc",
         "scan",
         "path_search",
-        "conf"
+        "conf",
+        "composite"
       ],
       "title": "CalculationType",
       "type": "string"
     },
     "CalculationWithResultsPayload": {
       "additionalProperties": false,
-      "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan\nresult fields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param sp_energy_components: Inline parts of the single point's\n    electronic energy (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param scan_result: Inline scan result (type must be ``scan``): the\n    stepped coordinates and the points along them. Whether a route accepts\n    a ``scan`` calculation at all is that route's own allow-list; this\n    field is only where the points go when it does.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
+      "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan\nresult fields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param composite_result: Inline composite energy (type must be ``composite``,\n    and a ``composite`` calculation must carry it). See\n    :class:`CompositeResultPayload`.\n:param sp_energy_components: Inline parts of the single point's\n    electronic energy (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param scan_result: Inline scan result (type must be ``scan``): the\n    stepped coordinates and the points along them. Whether a route accepts\n    a ``scan`` calculation at all is that route's own allow-list; this\n    field is only where the points go when it does.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
       "properties": {
+        "composite_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompositeResultPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "constraints": {
           "description": "Coordinate constraints held fixed during this calculation. Generic across opt, freq, sp, irc, path_search, scan, and any other constrained run — these are input/provenance metadata and do not require a result block. For scan calculations, frozen coordinates may be declared here while the stepped coordinate is declared on the scan_result.coordinates list.",
           "items": {
@@ -784,6 +796,94 @@
         "level_of_theory"
       ],
       "title": "CalculationWithResultsPayload",
+      "type": "object"
+    },
+    "CompositeAssembly": {
+      "enum": [
+        "program_run",
+        "assembled"
+      ],
+      "title": "CompositeAssembly",
+      "type": "string"
+    },
+    "CompositeResultPayload": {
+      "additionalProperties": false,
+      "description": "The energy of a ``composite`` calculation (ADR 0021).\n\nEvery energy is optional and ``null`` means *not stated*, never zero.\nTCKDB never stores a total it computed itself: these are the producer's\nnumbers (or the program's own output), and the two arithmetic checks below\nonly test them.\n\n:param assembly: ``program_run`` (a program printed the final number: a\n    named method such as CBS-QB3 or G4) or ``assembled`` (arithmetic over\n    other deposited calculations). Only ``program_run`` is accepted for\n    now; ``assembled`` is refused with ``composite_assembled_not_accepted``\n    until user-built schemes arrive.\n:param electronic_energy_hartree: ZPE-free energy with every term of the\n    recipe included (the empirical terms of a named method among them).\n    This is the number a correction layer is applied to.\n:param e0_hartree: The 0 K energy *including* the recipe's own scaled\n    zero-point energy (Gaussian's ``CBS-QB3 (0 K)``).\n:param recipe_zpe_hartree: The zero-point energy the recipe added, after\n    its own scale factor. Never negative.\n:param terms: The optional breakdown of ``electronic_energy_hartree``.",
+      "properties": {
+        "assembly": {
+          "$ref": "#/$defs/CompositeAssembly"
+        },
+        "e0_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "E0 Hartree"
+        },
+        "electronic_energy_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Electronic Energy Hartree"
+        },
+        "recipe_zpe_hartree": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recipe Zpe Hartree"
+        },
+        "terms": {
+          "items": {
+            "$ref": "#/$defs/CompositeTermPayload"
+          },
+          "title": "Terms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "assembly"
+      ],
+      "title": "CompositeResultPayload",
+      "type": "object"
+    },
+    "CompositeTermPayload": {
+      "additionalProperties": false,
+      "description": "One term of a composite energy's breakdown.\n\n:param term_position: Position of the term. Where the calculation's scheme\n    lists terms, this is one of their positions; a named method lists none\n    today, so it is then the producer's own ordering (0-based).\n:param value_hartree: The term's contribution to the ZPE-free energy.",
+      "properties": {
+        "term_position": {
+          "maximum": 32767,
+          "minimum": 0,
+          "title": "Term Position",
+          "type": "integer"
+        },
+        "value_hartree": {
+          "title": "Value Hartree",
+          "type": "number"
+        }
+      },
+      "required": [
+        "term_position",
+        "value_hartree"
+      ],
+      "title": "CompositeTermPayload",
       "type": "object"
     },
     "CondaRuntime": {

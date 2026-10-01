@@ -20,9 +20,14 @@ already follow for role/type compatibility:
   from the record's role links alone: which level of theory governs the
   geometry (an ``opt``'s), the frequencies (a ``freq``'s, or an ``opt``'s
   own when no ``freq`` is linked but the ``opt`` calculation itself
-  carries frequency results), and the energy (the linked ``sp``s' shared
-  level when they agree; ``"ambiguous"`` when linked ``sp``s disagree;
-  else an ``opt``'s; else ``composite``/``imported``). Never stored,
+  carries frequency results), and the energy (ADR 0021, decision 4:
+  a linked ``composite``'s level when exactly one level is linked,
+  ``"ambiguous"`` when linked ``composite``s disagree; else the linked
+  ``sp``s' shared level when they agree, ``"ambiguous"`` when they
+  disagree; else an ``opt``'s; else ``imported``). When no ``opt`` /
+  ``freq`` is linked, a program-run ``composite`` with its own output
+  geometry supplies the geometry and frequency levels from its scheme's
+  internal levels, labelled ``composite_recipe``. Never stored,
   never blocking -- purely a projection of whatever is linked right now,
   picking the lowest-id calculation per role for display when more than
   one is linked (the same deterministic tie-break the rest of this
@@ -51,9 +56,29 @@ already follow for role/type compatibility:
   ``energy_level_of_theory`` to fire.
 * **R4'/R5 -- the declared energy level must be honest.** A depositor may
   declare the level of theory they intend the record's energy to stand
-  at. It must equal the linked ``sp``s' shared level when any are linked,
+  at. It must equal the linked ``composite``'s level when one is linked, else
+  the linked ``sp``s' shared level when any are linked,
   or every linked ``opt``'s level when none are (R5: opt-only is valid
   exactly when there is nothing to contradict).
+
+Composite energies (ADR 0021, decision 4). A ``composite`` calculation is one
+energy, so R2', R3', Coverage and R4' apply to it exactly as to an ``sp``, with
+three additions:
+
+* a record may not link **both** an ``sp`` and a ``composite`` as its energy
+  (``*_energy_sp_and_composite_linked``): two energies for one record is the
+  ambiguity these rules exist to remove;
+* the composite must sit on a linked ``opt``'s geometry, comparing the geometry
+  it ran on, else the one it produced, and comparing nothing when it declares none;
+* a linked ``freq`` at a level other than the composite scheme's own frequency
+  level is a **warning** (``composite_frequency_level_differs_from_recipe``): the
+  recipe's scaled ZPE belongs to its own frequency level.
+
+Only a calculation whose *type* is ``composite`` takes part in those checks. A
+calculation of another type linked under the role ``composite`` is the legacy
+shape: it is accepted, answered with a ``composite_role_on_non_composite_calculation``
+warning (owner decision 7: warn now, refuse once the ARC adapter ships), and
+otherwise ignored here exactly as it was before the type existed.
 
 Enforced by default on every write path that links role-tagged source
 calculations -- there is no longer an ensemble-vs-standalone split, because
@@ -67,60 +92,101 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, NamedTuple
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session, object_session
+
 from app.api.error_contract import CodedValueError
 from app.db.models.calculation import Calculation
-from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.common import CalculationType
+from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
+from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
+from app.schemas.upload_warning import UploadWarning
 
 #: Which role supplied the energy level -- shared by :class:`DerivedLevels`
 #: and the read-schema field it feeds
 #: (``app.schemas.reads.scientific_common.ScientificLevelsSummary
 #: .energy_source``), so the two cannot silently drift apart on which
-#: strings are valid. ``"ambiguous"``: linked ``sp``s exist but disagree
-#: on level of theory, so no single energy level can be reported.
+#: strings are valid. ``"ambiguous"``: linked ``sp``s (or linked
+#: ``composite``s) exist but disagree on level of theory, so no single
+#: energy level can be reported.
 EnergySource = Literal["sp", "opt", "composite", "imported", "ambiguous"]
 
-#: A record links two ``sp``s on the same optimisation's geometry (R2').
-#: Distinct codes per product so a client branching on ``code`` never has
+#: Where the geometry level came from: a linked ``opt``, or -- when none is
+#: linked -- the internal geometry level of a program-run composite's scheme
+#: (``"composite_recipe"``). Same sharing rule as :data:`EnergySource`, for
+#: ``ScientificLevelsSummary.geometry_source``.
+GeometrySource = Literal["opt", "composite_recipe"]
+
+#: Where the frequency level came from: a linked ``freq``, an ``opt`` that
+#: carries frequency results itself, or the internal frequency level of a
+#: program-run composite's scheme (``"composite_recipe"``). Feeds
+#: ``ScientificLevelsSummary.frequency_source``.
+FrequencySource = Literal["freq", "opt", "composite_recipe"]
+
+#: A record links two energy calculations on the same optimisation's geometry
+#: (R2'). Distinct codes per product so a client branching on ``code`` never has
 #: to know which product it asked about.
 W_STATMECH_ROLE_DUPLICATE = "statmech_role_duplicate"
 W_THERMO_ROLE_DUPLICATE = "thermo_role_duplicate"
 
-#: A linked 'sp' calculation's input geometry is not an output geometry of
-#: any linked 'opt' (R3').
+#: A linked energy calculation's geometry is not an output geometry of any
+#: linked 'opt' (R3'). The name says 'sp' for history; it covers a composite too.
 W_STATMECH_SP_GEOMETRY_MISMATCH = "statmech_sp_geometry_mismatch"
 W_THERMO_SP_GEOMETRY_MISMATCH = "thermo_sp_geometry_mismatch"
 
-#: Either (a) some linked 'opt' has no covering 'sp' while at least one
-#: other does (Coverage), or (b) a declared ``energy_level_of_theory``
-#: differs from some linked 'opt's level and no 'sp' is linked at all
-#: (R4'). Both name "an opt needs an sp (at this level) and does not have
-#: one"; sharing the code keeps a client's remedy the same for either.
+#: Either (a) some linked 'opt' has no covering energy calculation while at
+#: least one other does (Coverage), or (b) a declared ``energy_level_of_theory``
+#: differs from some linked 'opt's level and no 'sp' / 'composite' is linked at
+#: all (R4'). Both name "an opt needs an energy calculation (at this level) and
+#: does not have one"; sharing the code keeps a client's remedy the same for
+#: either.
 W_STATMECH_ENERGY_LEVEL_REQUIRES_SP = "statmech_energy_level_requires_sp"
 W_THERMO_ENERGY_LEVEL_REQUIRES_SP = "thermo_energy_level_requires_sp"
 
-#: A declared ``energy_level_of_theory`` disagrees with the linked 'sp'
-#: set's own (shared) level of theory.
+#: A declared ``energy_level_of_theory`` disagrees with the linked 'sp' (or
+#: 'composite') set's own (shared) level of theory.
 W_STATMECH_ENERGY_LEVEL_CONTRADICTION = "statmech_energy_level_contradiction"
 W_THERMO_ENERGY_LEVEL_CONTRADICTION = "thermo_energy_level_contradiction"
 
-#: Two or more linked 'sp's disagree on level of theory, so "the energy
-#: level" has no single answer (R2').
+#: Two or more linked 'sp's (or 'composite's) disagree on level of theory, so
+#: "the energy level" has no single answer (R2').
 W_STATMECH_ENERGY_LEVEL_AMBIGUOUS = "statmech_energy_level_ambiguous"
 W_THERMO_ENERGY_LEVEL_AMBIGUOUS = "thermo_energy_level_ambiguous"
 
+#: A record links both an 'sp' and a 'composite' as its energy (ADR 0021,
+#: decision 4). Two energies for one record is the ambiguity R2' exists to remove.
+W_STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED = "statmech_energy_sp_and_composite_linked"
+W_THERMO_ENERGY_SP_AND_COMPOSITE_LINKED = "thermo_energy_sp_and_composite_linked"
+
+#: Warn tier. A linked 'freq' is at a level other than the composite scheme's own
+#: frequency level.
+W_COMPOSITE_FREQUENCY_LEVEL_DIFFERS = "composite_frequency_level_differs_from_recipe"
+
+#: Warn tier. A calculation of a type other than ``composite`` is linked under
+#: the role ``composite`` (the legacy shape, from before the type existed).
+W_COMPOSITE_ROLE_ON_NON_COMPOSITE = "composite_role_on_non_composite_calculation"
+
 
 class RoleCalcInfo(NamedTuple):
-    """The two facts :func:`derive_levels` needs about one role's calculation.
+    """The facts :func:`derive_levels` needs about one role's calculation.
 
     Deliberately not the ``Calculation`` row itself: callers building this
     from bulk-loaded read-time data (thermo's per-record loop) often have
     no ORM row in hand, only a dict of scalar columns. Keeping this a
     plain tuple lets both the write-time (ORM-backed) and read-time
     (dict-backed) callers share one derivation function.
+
+    The last three fields are only read for a ``composite``-role calculation:
+    whether it has an output geometry of its own, and its scheme's internal
+    geometry and frequency levels (``None`` where the scheme does not state
+    them, or the level is not bound to a scheme).
     """
 
     lot_id: int | None
     carries_frequencies: bool = False
+    has_output_geometry: bool = False
+    recipe_geometry_lot_id: int | None = None
+    recipe_frequency_lot_id: int | None = None
 
 
 class DerivedLevels(NamedTuple):
@@ -130,9 +196,13 @@ class DerivedLevels(NamedTuple):
     frequency_lot_id: int | None
     energy_lot_id: int | None
     #: Which role supplied ``energy_lot_id``; ``"ambiguous"`` when linked
-    #: ``sp``s disagreed (``energy_lot_id`` is then ``None``); ``None``
-    #: when nothing linked can answer it.
+    #: ``sp``s (or ``composite``s) disagreed (``energy_lot_id`` is then
+    #: ``None``); ``None`` when nothing linked can answer it.
     energy_source: EnergySource | None
+    #: Where ``geometry_lot_id`` came from; ``None`` when it is ``None``.
+    geometry_source: GeometrySource | None = None
+    #: Where ``frequency_lot_id`` came from; ``None`` when it is ``None``.
+    frequency_source: FrequencySource | None = None
 
 
 def derive_levels(
@@ -142,6 +212,7 @@ def derive_levels(
     sps: Sequence[RoleCalcInfo] = (),
     composites: Sequence[RoleCalcInfo] = (),
     importeds: Sequence[RoleCalcInfo] = (),
+    legacy_composites: Sequence[RoleCalcInfo] = (),
 ) -> DerivedLevels:
     """R1: derive geometry / frequency / energy levels from role links.
 
@@ -156,8 +227,18 @@ def derive_levels(
     and the read-time builders already produce it). Only the first
     element of ``opts``/``freqs`` is used for display, on the same
     deterministic tie-break used everywhere else in this archive. Every
-    element of ``sps`` is used -- to detect disagreement, not only to
-    pick one.
+    element of ``sps`` and of ``composites`` is used -- to detect
+    disagreement, not only to pick one.
+
+    **Energy** (ADR 0021, decision 4): composite > sp > opt > imported. More
+    than one distinct composite level is ``"ambiguous"``.
+
+    **Geometry and frequency**: an ``opt`` / ``freq`` as ever. When there is no
+    ``opt`` (or no ``freq`` and no frequency-carrying ``opt``), the first linked
+    composite that has an output geometry of its own supplies the level from its
+    scheme's internal levels, with source ``"composite_recipe"``; a composite
+    with no output geometry says nothing about the geometry, and a scheme that
+    does not state a level supplies none.
 
     :param opts: The record's ``opt``-role calculation infos, lowest id
         first.
@@ -169,34 +250,58 @@ def derive_levels(
         lowest id first.
     :param importeds: The record's ``imported``-role calculation infos,
         lowest id first.
+    :param legacy_composites: Calculations linked under the role ``composite``
+        whose *type* is not ``composite`` (the shape from before the type
+        existed). They keep the slot they always had -- below an ``opt``, above
+        ``imported``, source ``"composite"`` -- and supply no recipe levels:
+        nothing says a plain ``sp`` or ``opt`` ran a recipe. Only a calculation
+        of type ``composite`` belongs in ``composites``.
     :returns: The derived levels. Any field may be ``None`` when nothing
         linked can answer that question.
     """
     opt = opts[0] if opts else None
-    geometry_lot_id = opt.lot_id if opt is not None else None
+    recipe_source = next((c for c in composites if c.has_output_geometry), None)
 
-    if freqs:
-        frequency_lot_id = freqs[0].lot_id
-    elif opt is not None and opt.carries_frequencies:
-        frequency_lot_id = opt.lot_id
+    geometry_lot_id: int | None
+    geometry_source: GeometrySource | None
+    if opt is not None:
+        geometry_lot_id, geometry_source = opt.lot_id, "opt"
+    elif recipe_source is not None and recipe_source.recipe_geometry_lot_id is not None:
+        geometry_lot_id, geometry_source = recipe_source.recipe_geometry_lot_id, "composite_recipe"
     else:
-        frequency_lot_id = None
+        geometry_lot_id, geometry_source = None, None
+
+    frequency_lot_id: int | None
+    frequency_source: FrequencySource | None
+    if freqs:
+        frequency_lot_id, frequency_source = freqs[0].lot_id, "freq"
+    elif opt is not None and opt.carries_frequencies:
+        frequency_lot_id, frequency_source = opt.lot_id, "opt"
+    elif recipe_source is not None and recipe_source.recipe_frequency_lot_id is not None:
+        frequency_lot_id, frequency_source = recipe_source.recipe_frequency_lot_id, "composite_recipe"
+    else:
+        frequency_lot_id, frequency_source = None, None
 
     energy_lot_id: int | None
     energy_source: EnergySource | None
-    # ``None``-lot sps (an sp whose level of theory did not resolve) are
-    # excluded from the disagreement count -- an unknown level is not
-    # evidence of a *different* level, and every real sp still gets
+    # ``None``-lot calculations (one whose level of theory did not resolve)
+    # are excluded from the disagreement count -- an unknown level is not
+    # evidence of a *different* level, and every real one still gets
     # counted once each.
+    distinct_composite_lots = {i.lot_id for i in composites if i.lot_id is not None}
     distinct_sp_lots = {i.lot_id for i in sps if i.lot_id is not None}
-    if len(distinct_sp_lots) > 1:
+    if len(distinct_composite_lots) > 1:
+        energy_lot_id, energy_source = None, "ambiguous"
+    elif composites:
+        energy_lot_id, energy_source = composites[0].lot_id, "composite"
+    elif len(distinct_sp_lots) > 1:
         energy_lot_id, energy_source = None, "ambiguous"
     elif sps:
         energy_lot_id, energy_source = sps[0].lot_id, "sp"
     elif opt is not None:
         energy_lot_id, energy_source = opt.lot_id, "opt"
-    elif composites:
-        energy_lot_id, energy_source = composites[0].lot_id, "composite"
+    elif legacy_composites:
+        energy_lot_id, energy_source = legacy_composites[0].lot_id, "composite"
     elif importeds:
         energy_lot_id, energy_source = importeds[0].lot_id, "imported"
     else:
@@ -207,6 +312,8 @@ def derive_levels(
         frequency_lot_id=frequency_lot_id,
         energy_lot_id=energy_lot_id,
         energy_source=energy_source,
+        geometry_source=geometry_source,
+        frequency_source=frequency_source,
     )
 
 
@@ -239,20 +346,58 @@ def _by_role(links: list[RoleLink], role: str) -> list[Calculation]:
     return sorted(seen.values(), key=lambda calc: calc.id)
 
 
+def _composite_calcs(links: list[RoleLink]) -> list[Calculation]:
+    """The linked calculations that are composite energies: role *and* type.
+
+    A calculation linked under the role ``composite`` whose type is something
+    else is the legacy shape (see the module docstring); it is not a composite
+    energy for any rule here.
+    """
+    return [calc for calc in _by_role(links, "composite") if calc.type == CalculationType.composite]
+
+
+def _recipe_levels(calc: Calculation) -> tuple[int | None, int | None]:
+    """``(geometry, frequency)`` internal level ids of a composite's scheme.
+
+    ``(None, None)`` when the calculation's level of theory is bound to no
+    scheme, or the scheme does not state them.
+    """
+    session = object_session(calc)
+    if session is None or calc.lot_id is None:
+        return (None, None)
+    row = session.execute(
+        select(CompositeScheme.geometry_level_of_theory_id, CompositeScheme.frequency_level_of_theory_id)
+        .join(LevelOfTheoryComposite, LevelOfTheoryComposite.scheme_id == CompositeScheme.id)
+        .where(LevelOfTheoryComposite.level_of_theory_id == calc.lot_id)
+    ).first()
+    return (None, None) if row is None else (row[0], row[1])
+
+
 def role_calc_infos(links: list[RoleLink], role: str) -> list[RoleCalcInfo]:
     """The ``RoleCalcInfo`` list :func:`derive_levels` wants for *role*.
 
     Exported so write-time callers (already holding ``RoleLink``s) can
     feed the same derivation function the read-time builders use,
-    without duplicating the "carries frequencies" check.
+    without duplicating the "carries frequencies" check. For the
+    ``composite`` role the info also carries whether the calculation has an
+    output geometry and its scheme's internal levels.
     """
-    return [
-        RoleCalcInfo(
-            lot_id=calc.lot_id,
-            carries_frequencies=calc.freq_result is not None,
-        )
-        for calc in _by_role(links, role)
-    ]
+    infos: list[RoleCalcInfo] = []
+    for calc in _by_role(links, role):
+        if role == "composite":
+            recipe_geometry, recipe_frequency = _recipe_levels(calc)
+            infos.append(
+                RoleCalcInfo(
+                    lot_id=calc.lot_id,
+                    carries_frequencies=calc.freq_result is not None,
+                    has_output_geometry=bool(calc.output_geometries),
+                    recipe_geometry_lot_id=recipe_geometry,
+                    recipe_frequency_lot_id=recipe_frequency,
+                )
+            )
+        else:
+            infos.append(RoleCalcInfo(lot_id=calc.lot_id, carries_frequencies=calc.freq_result is not None))
+    return infos
 
 
 def _lot_label(lot: LevelOfTheory | None) -> str:
@@ -266,37 +411,123 @@ def _lot_label(lot: LevelOfTheory | None) -> str:
     return f"{lot.method}/{lot.basis}" if lot.basis else lot.method
 
 
-def _match_sp_to_opts(
-    sp: Calculation,
+def _calc_geometry_ids(calc: Calculation, *, role: str) -> set[int]:
+    """The geometry ids a linked energy calculation declares, for R3'.
+
+    An ``sp`` is compared by the geometry it ran on (its input link), which is
+    what R3' has always done. A composite is compared by the geometry it ran
+    on, else the one it produced: a program-run composite optimises its own
+    geometry, so for the common primary shape the output link is the only one.
+    """
+    inputs = {row.geometry_id for row in calc.input_geometries}
+    if role == "composite" and not inputs:
+        return {row.geometry_id for row in calc.output_geometries}
+    return inputs
+
+
+def _match_energy_to_opts(
+    energy_geometry_ids: set[int],
     opts: list[Calculation],
     opt_output_geoms: dict[int, set[int]],
 ) -> list[Calculation] | None:
-    """Which linked ``opt``s *sp*'s geometry evidence covers (R3').
+    """Which linked ``opt``s an energy calculation's geometry evidence covers (R3').
 
     Three outcomes:
 
     * ``None`` -- not comparable: no ``opt`` is linked at all, or
-      geometry data is absent on the ``sp`` and/or on every ``opt``.
+      geometry data is absent on the energy calculation and/or on every ``opt``.
       Absence of evidence is never treated as a mismatch (house rule);
-      the caller skips this ``sp`` entirely rather than counting or
+      the caller skips this calculation entirely rather than counting or
       blaming it.
     * ``[]`` -- comparable data existed and disagreed: a genuine R3'
       violation. The caller raises.
-    * non-empty list -- the ``opt``(s) this ``sp``'s geometry matches.
+    * non-empty list -- the ``opt``(s) this calculation's geometry matches.
       With exactly one linked ``opt`` this is always that one once any
       data is absent on either side (there is no ambiguity about *which*
       opt to assume); with more than one, only ``opt``s whose declared
-      output geometry the ``sp``'s declared input geometry intersects.
+      output geometry the calculation's declared geometry intersects.
     """
     if not opts:
         return None
-    sp_input_geoms = {row.geometry_id for row in sp.input_geometries}
     comparable_opts = [opt for opt in opts if opt_output_geoms[opt.id]]
-    if not sp_input_geoms or not comparable_opts:
+    if not energy_geometry_ids or not comparable_opts:
         return [opts[0]] if len(opts) == 1 else None
-    return [
-        opt for opt in comparable_opts if opt_output_geoms[opt.id] & sp_input_geoms
+    return [opt for opt in comparable_opts if opt_output_geoms[opt.id] & energy_geometry_ids]
+
+
+def collect_composite_link_warnings(links: list[RoleLink], *, subject: str) -> list[UploadWarning]:
+    """The warn-tier findings about a record's composite links (ADR 0021, decision 7).
+
+    * ``composite_role_on_non_composite_calculation`` -- a calculation whose type is
+      not ``composite`` is linked under the role ``composite``. The legacy
+      shape: stored as sent; will be refused once the ARC adapter ships the
+      composite shape.
+    * ``composite_frequency_level_differs_from_recipe`` -- a linked ``freq``
+      calculation is at a level other than the frequency level of the
+      composite scheme the record's composite is bound to. The recipe's scaled
+      zero-point energy belongs to its own frequency level, so a record that
+      combines the two is worth a second look; it is an expectation, not a
+      definition, so it warns.
+
+    :param links: Every role link resolved for the record.
+    :param subject: ``"statmech"`` or ``"thermo"``, for messages.
+    """
+    warnings: list[UploadWarning] = []
+    legacy = [
+        calc
+        for calc in _by_role(links, "composite")
+        if calc.type != CalculationType.composite
     ]
+    for calc in legacy:
+        warnings.append(
+            UploadWarning(
+                field="source_calculations",
+                code=W_COMPOSITE_ROLE_ON_NON_COMPOSITE,
+                message=(
+                    f"{subject}: a calculation of type '{calc.type.value}' is linked with the role "
+                    "'composite'. The role names a composite energy, which is recorded by a "
+                    "calculation of type 'composite'. The link was stored as sent; it will be "
+                    "refused once producers can send that shape."
+                ),
+            )
+        )
+    freqs = _by_role(links, "freq")
+    if freqs:
+        for composite in _composite_calcs(links):
+            _geometry_lot, frequency_lot = _recipe_levels(composite)
+            if frequency_lot is None:
+                continue
+            session = object_session(composite)
+            if session is None:
+                continue
+            canonical = canonical_level_of_theory_id_for_write(session, frequency_lot)
+            differing = [f for f in freqs if f.lot_id is not None and f.lot_id != canonical]
+            if differing:
+                warnings.append(
+                    UploadWarning(
+                        field="source_calculations",
+                        code=W_COMPOSITE_FREQUENCY_LEVEL_DIFFERS,
+                        message=(
+                            f"{subject}: a linked 'freq' calculation is at "
+                            f"{_lot_label(differing[0].lot)}, but the composite method "
+                            f"{_lot_label(composite.lot)} runs its frequencies at "
+                            f"{_lot_label(session.get(LevelOfTheory, canonical))} and scales their "
+                            "zero-point energy for that level. Link the frequency calculation at the "
+                            "recipe's own level, or expect the record's frequencies and its energy to "
+                            "describe different levels."
+                        ),
+                    )
+                )
+                break
+    return warnings
+
+
+def canonical_level_of_theory_id_for_write(session: Session, level_of_theory_id: int) -> int:
+    """The level a stored id stands for once merges are followed (write-time)."""
+    merged_into = session.scalar(
+        select(LevelOfTheoryMerge.into_lot_id).where(LevelOfTheoryMerge.merged_lot_id == level_of_theory_id)
+    )
+    return merged_into if merged_into is not None else level_of_theory_id
 
 
 def assert_role_consistency(
@@ -308,7 +539,9 @@ def assert_role_consistency(
     requires_sp_code: str,
     contradiction_code: str,
     ambiguous_code: str,
+    sp_and_composite_code: str,
     subject: str,
+    warnings: list[UploadWarning] | None,
 ) -> None:
     """R2'/R3'/Coverage/R4': the full ensemble-aware role-consistency check.
 
@@ -319,8 +552,10 @@ def assert_role_consistency(
     itself.
 
     **Precedence, when a deposit is wrong in more than one way at once**:
-    R3' (a genuine geometry mismatch) first, then R2' distinctness (two
-    sps on one opt's geometry), then R2' level uniformity (ambiguous),
+    an ``sp`` and a ``composite`` both linked as energy (decision 4: the
+    record has two energies) first, then R3' (a genuine geometry mismatch),
+    then R2' distinctness (two energy calculations on the same opt's
+    geometry), then R2' level uniformity (ambiguous),
     then Coverage, then R4'. A deposit that BOTH puts two sps on the same
     opt's geometry AND has those two sps disagree on level of theory
     (both are true of the same pair) is reported as the duplicate --
@@ -331,6 +566,10 @@ def assert_role_consistency(
     disagreement as a side effect, so it is the more useful first thing
     to tell a depositor.
 
+    A linked ``composite`` (type ``composite``) is the record's energy
+    calculation in place of the ``sp``s, and every rule below applies to it
+    as to an ``sp``; messages name the role they are about.
+
     :param links: Every role link resolved for this upload (or bundle
         block) -- every linked ``opt``/``freq``/``sp``/``composite``/
         ``imported`` calculation, from every path that produced one.
@@ -338,60 +577,95 @@ def assert_role_consistency(
         when the depositor did not declare one (the field does not exist
         on every wire model this is called from -- see the module
         docstring).
-    :param duplicate_code: Coded refusal for "two sp's on one opt's
-        geometry" (R2').
-    :param geometry_mismatch_code: Coded refusal for "an sp not on any
-        linked opt's geometry" (R3').
-    :param requires_sp_code: Coded refusal for "an opt has no covering sp
-        while another does" (Coverage) and for "declared level differs
-        from some opt's and no sp is linked at all" (R4').
+    :param duplicate_code: Coded refusal for "two energy calculations on one
+        opt's geometry" (R2').
+    :param geometry_mismatch_code: Coded refusal for "an energy calculation
+        not on any linked opt's geometry" (R3').
+    :param requires_sp_code: Coded refusal for "an opt has no covering energy
+        calculation while another does" (Coverage) and for "declared level
+        differs from some opt's and no energy calculation is linked at all"
+        (R4').
     :param contradiction_code: Coded refusal for "declared level disagrees
-        with the linked sp set's own (shared) level" (R4').
-    :param ambiguous_code: Coded refusal for "linked sps disagree on level
-        of theory" (R2').
+        with the linked energy calculations' own (shared) level" (R4').
+    :param ambiguous_code: Coded refusal for "linked energy calculations
+        disagree on level of theory" (R2').
+    :param sp_and_composite_code: Coded refusal for "an sp and a composite are
+        both linked as the energy" (decision 4).
     :param subject: ``"statmech"`` or ``"thermo"``, for messages.
+    :param warnings: Out-list for the warn-tier findings about composite links
+        (:func:`collect_composite_link_warnings`). Required, with ``None``
+        meaning "this caller has nowhere to report them": every caller states
+        which, so a new call site cannot silently drop them.
     :raises CodedValueError: per the cases above.
     """
+    if warnings is not None:
+        warnings.extend(collect_composite_link_warnings(links, subject=subject))
+
     opts = _by_role(links, "opt")
     sps = _by_role(links, "sp")
+    composites = _composite_calcs(links)
+
+    if sps and composites:
+        raise CodedValueError(
+            sp_and_composite_code,
+            f"{subject}: this record links both 'sp' calculation(s) "
+            f"({', '.join(sp.public_ref for sp in sps)}) and 'composite' calculation(s) "
+            f"({', '.join(c.public_ref for c in composites)}) as its energy. A record has one "
+            "energy: a composite energy already includes its own single points, so link the "
+            "composite alone, or the single point alone, or split the record.",
+            context={
+                "sp_calculation_refs": [sp.public_ref for sp in sps],
+                "composite_calculation_refs": [c.public_ref for c in composites],
+            },
+            message_prefix=False,
+        )
+
+    # The record's energy calculations: the composites when there are any
+    # (the two kinds are never linked together past the check above), else the sps.
+    energy_role = "composite" if composites else "sp"
+    energies = composites if composites else sps
+    # Wording only: an ``sp`` is compared by the geometry it ran on, as ever,
+    # so its messages keep saying "input geometry" and "an 'sp'".
+    geometry_word = "input geometry" if energy_role == "sp" else "geometry"
+    article = "an" if energy_role == "sp" else "a"
 
     opt_output_geoms = {
         opt.id: {row.geometry_id for row in opt.output_geometries} for opt in opts
     }
-    opt_covering_sps: dict[int, list[Calculation]] = {opt.id: [] for opt in opts}
+    opt_covering: dict[int, list[Calculation]] = {opt.id: [] for opt in opts}
 
-    for sp in sps:
-        matched = _match_sp_to_opts(sp, opts, opt_output_geoms)
+    for energy in energies:
+        matched = _match_energy_to_opts(_calc_geometry_ids(energy, role=energy_role), opts, opt_output_geoms)
         if matched is None:
             continue
         if not matched:
             raise CodedValueError(
                 geometry_mismatch_code,
-                f"{subject}: the linked 'sp' calculation ({sp.public_ref}) "
+                f"{subject}: the linked '{energy_role}' calculation ({energy.public_ref}) "
                 "was not run on a geometry any linked 'opt' calculation "
-                "produced. Link the 'sp' role to a calculation whose "
-                "input geometry is one of a linked optimisation's output "
+                f"produced. Link the '{energy_role}' role to a calculation whose "
+                f"{geometry_word} is one of a linked optimisation's output "
                 "geometries.",
-                context={"sp_calculation_ref": sp.public_ref},
+                context={f"{energy_role}_calculation_ref": energy.public_ref},
                 message_prefix=False,
             )
         for opt in matched:
-            opt_covering_sps[opt.id].append(sp)
+            opt_covering[opt.id].append(energy)
 
-    # R2' distinctness: no opt's geometry may be claimed by more than one sp.
+    # R2' distinctness: no opt's geometry may be claimed by more than one energy calculation.
     for opt in opts:
-        covering = opt_covering_sps[opt.id]
+        covering = opt_covering[opt.id]
         if len(covering) > 1:
-            refs = [sp.public_ref for sp in covering]
+            refs = [energy.public_ref for energy in covering]
             raise CodedValueError(
                 duplicate_code,
-                f"{subject}: {len(covering)} 'sp' links ({', '.join(refs)}) "
+                f"{subject}: {len(covering)} '{energy_role}' links ({', '.join(refs)}) "
                 f"claim the same optimisation's geometry ({opt.public_ref}), "
-                f"but a {subject} record may have at most one 'sp' per "
+                f"but a {subject} record may have at most one '{energy_role}' per "
                 "optimisation. Remove the extra link.",
                 context={
                     "opt_calculation_ref": opt.public_ref,
-                    "sp_calculation_refs": refs,
+                    f"{energy_role}_calculation_refs": refs,
                 },
                 message_prefix=False,
             )
@@ -403,82 +677,82 @@ def assert_role_consistency(
     # geometry. An sp that declares no geometry is not compared (absence of
     # evidence is not a match), as everywhere in this module.
     if not opts:
-        sps_by_geometry: dict[int, list[Calculation]] = {}
-        for sp in sps:
-            # The geometry an sp ran on: its input link, else (the network
-            # route links a geometry as a calculation's final output only)
-            # its output link.
-            links = sp.input_geometries or sp.output_geometries
-            for geometry_id in {row.geometry_id for row in links}:
-                sps_by_geometry.setdefault(geometry_id, []).append(sp)
-        for claimants in sps_by_geometry.values():
+        by_geometry: dict[int, list[Calculation]] = {}
+        for energy in energies:
+            # The geometry an energy calculation ran on: its input link, else
+            # (the network route links a geometry as a calculation's final
+            # output only) its output link.
+            geometry_links = energy.input_geometries or energy.output_geometries
+            for geometry_id in {row.geometry_id for row in geometry_links}:
+                by_geometry.setdefault(geometry_id, []).append(energy)
+        for claimants in by_geometry.values():
             if len(claimants) > 1:
-                refs = [sp.public_ref for sp in claimants]
+                refs = [energy.public_ref for energy in claimants]
                 raise CodedValueError(
                     duplicate_code,
-                    f"{subject}: {len(claimants)} 'sp' links ({', '.join(refs)}) "
-                    "ran on the same geometry and no optimisation is linked, "
-                    f"but a {subject} record may have at most one 'sp' per "
+                    f"{subject}: {len(claimants)} '{energy_role}' links ({', '.join(refs)}) "
+                    f"ran on the same geometry and no optimisation is linked, "
+                    f"but a {subject} record may have at most one '{energy_role}' per "
                     "geometry. Remove the extra link.",
-                    context={"sp_calculation_refs": refs},
+                    context={f"{energy_role}_calculation_refs": refs},
                     message_prefix=False,
                 )
 
-    # R2' level-of-theory uniformity across every linked sp. An sp with no
-    # resolved level of theory is excluded from the disagreement count --
-    # see the identical exclusion in :func:`derive_levels`.
-    distinct_sp_lot_ids = {sp.lot_id for sp in sps if sp.lot_id is not None}
-    if len(distinct_sp_lot_ids) > 1:
-        refs = [sp.public_ref for sp in sps]
+    # R2' level-of-theory uniformity across every linked energy calculation.
+    # One with no resolved level of theory is excluded from the disagreement
+    # count -- see the identical exclusion in :func:`derive_levels`.
+    distinct_energy_lot_ids = {energy.lot_id for energy in energies if energy.lot_id is not None}
+    if len(distinct_energy_lot_ids) > 1:
+        refs = [energy.public_ref for energy in energies]
         raise CodedValueError(
             ambiguous_code,
-            f"{subject}: the linked 'sp' calculations ({', '.join(refs)}) "
+            f"{subject}: the linked '{energy_role}' calculations ({', '.join(refs)}) "
             "run at more than one level of theory, so this record's "
-            "energy level has no single answer. Link every 'sp' at the "
+            f"energy level has no single answer. Link every '{energy_role}' at the "
             "same level, or split this record so each level gets its own.",
-            context={"sp_calculation_refs": refs},
+            context={f"{energy_role}_calculation_refs": refs},
             message_prefix=False,
         )
 
-    # Coverage: any sp at all obliges every opt to have one. Unconditional
-    # -- this is the "forgot the SP for one conformer" deposit, and it is
-    # exactly as wrong whether or not a level was ever declared.
-    if sps:
-        uncovered = [opt for opt in opts if not opt_covering_sps[opt.id]]
+    # Coverage: any energy calculation at all obliges every opt to have
+    # one. Unconditional -- this is the "forgot the SP for one conformer"
+    # deposit, and it is exactly as wrong whether or not a level was ever declared.
+    if energies:
+        uncovered = [opt for opt in opts if not opt_covering[opt.id]]
         if uncovered:
             refs = [opt.public_ref for opt in uncovered]
             noun = "optimisation" if len(refs) == 1 else "optimisations"
             verb = "has" if len(refs) == 1 else "have"
             pronoun = "its" if len(refs) == 1 else "their"
-            sp_refs = [sp.public_ref for sp in sps]
+            energy_refs = [energy.public_ref for energy in energies]
             if len(uncovered) == len(opts):
-                # No sp could be matched to *any* linked optimisation's
-                # output geometry at all -- not "one conformer forgot its
-                # sp", but "none of the linked sps carry geometry evidence
-                # that reaches any linked opt". A different fact, so a
-                # different sentence: naming "at least one other
+                # No energy calculation could be matched to *any* linked
+                # optimisation's output geometry at all -- not "one conformer
+                # forgot its sp", but "none of the linked calculations carry
+                # geometry evidence that reaches any linked opt". A different
+                # fact, so a different sentence: naming "at least one other
                 # optimisation... does" would be false here.
                 raise CodedValueError(
                     requires_sp_code,
                     f"{subject}: {len(refs)} {noun} ({', '.join(refs)}) "
-                    f"{verb} no 'sp' calculation linked at {pronoun} geometry, "
-                    "and none of the linked 'sp' calculations "
-                    f"({', '.join(sp_refs)}) could be matched to any "
-                    "linked optimisation's output geometry. Link an 'sp' "
-                    "whose input geometry is one of these optimisations' "
-                    "output geometries, or declare no 'sp' at all.",
+                    f"{verb} no '{energy_role}' calculation linked at {pronoun} geometry, "
+                    f"and none of the linked '{energy_role}' calculations "
+                    f"({', '.join(energy_refs)}) could be matched to any "
+                    f"linked optimisation's output geometry. Link {article} "
+                    f"'{energy_role}' whose {geometry_word} is one of these optimisations' "
+                    f"output geometries, or declare no '{energy_role}' at all.",
                     context={
                         "uncovered_opt_calculation_refs": refs,
-                        "sp_calculation_refs": sp_refs,
+                        f"{energy_role}_calculation_refs": energy_refs,
                     },
                     message_prefix=False,
                 )
             raise CodedValueError(
                 requires_sp_code,
                 f"{subject}: {len(refs)} {noun} ({', '.join(refs)}) "
-                f"{verb} no 'sp' calculation linked at {pronoun} geometry, but "
+                f"{verb} no '{energy_role}' calculation linked at {pronoun} geometry, but "
                 "at least one other optimisation in this record does. "
-                "Link an 'sp' for every optimisation this record's "
+                f"Link {article} '{energy_role}' for every optimisation this record's "
                 "energy claims, or none.",
                 context={"uncovered_opt_calculation_refs": refs},
                 message_prefix=False,
@@ -487,22 +761,22 @@ def assert_role_consistency(
     if declared is None:
         return
 
-    if sps:
-        sp_lot_id = next(iter(distinct_sp_lot_ids), None)
-        if sp_lot_id != declared.id:
-            sp = sps[0]
+    if energies:
+        energy_lot_id = next(iter(distinct_energy_lot_ids), None)
+        if energy_lot_id != declared.id:
+            energy = energies[0]
             raise CodedValueError(
                 contradiction_code,
                 f"{subject}: the declared energy level of theory "
-                f"({_lot_label(declared)}) does not match the linked 'sp' "
-                f"calculations' level ({_lot_label(sp.lot)}). Declare the "
-                "level the linked single points actually ran at, or link "
-                "'sp' calculations run at the declared level.",
+                f"({_lot_label(declared)}) does not match the linked '{energy_role}' "
+                f"calculations' level ({_lot_label(energy.lot)}). Declare the "
+                f"level the linked {'composite energies' if energy_role == 'composite' else 'single points'} "
+                f"actually ran at, or link '{energy_role}' calculations run at the declared level.",
                 context={
                     "declared_level_of_theory_ref": declared.public_ref,
-                    "sp_calculation_refs": [s.public_ref for s in sps],
-                    "sp_level_of_theory_ref": (
-                        sp.lot.public_ref if sp.lot is not None else None
+                    f"{energy_role}_calculation_refs": [e.public_ref for e in energies],
+                    f"{energy_role}_level_of_theory_ref": (
+                        energy.lot.public_ref if energy.lot is not None else None
                     ),
                 },
                 message_prefix=False,
@@ -531,20 +805,28 @@ def assert_role_consistency(
 
 
 __all__ = [
+    "W_COMPOSITE_FREQUENCY_LEVEL_DIFFERS",
+    "W_COMPOSITE_ROLE_ON_NON_COMPOSITE",
     "W_STATMECH_ENERGY_LEVEL_AMBIGUOUS",
     "W_STATMECH_ENERGY_LEVEL_CONTRADICTION",
     "W_STATMECH_ENERGY_LEVEL_REQUIRES_SP",
+    "W_STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED",
     "W_STATMECH_ROLE_DUPLICATE",
     "W_STATMECH_SP_GEOMETRY_MISMATCH",
     "W_THERMO_ENERGY_LEVEL_AMBIGUOUS",
     "W_THERMO_ENERGY_LEVEL_CONTRADICTION",
     "W_THERMO_ENERGY_LEVEL_REQUIRES_SP",
+    "W_THERMO_ENERGY_SP_AND_COMPOSITE_LINKED",
     "W_THERMO_ROLE_DUPLICATE",
     "W_THERMO_SP_GEOMETRY_MISMATCH",
     "DerivedLevels",
+    "EnergySource",
+    "FrequencySource",
+    "GeometrySource",
     "RoleCalcInfo",
     "RoleLink",
     "assert_role_consistency",
+    "collect_composite_link_warnings",
     "derive_levels",
     "role_calc_infos",
 ]

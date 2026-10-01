@@ -36,6 +36,7 @@ from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentMa
 from tckdb_schemas.fragments.calculation import (
     CalculationConstraintCreate,
     CalculationParameterObservation,
+    CompositeResultPayload,
     FreqResultPayload,
     HessianPayload,
     IRCResultPayload,
@@ -47,6 +48,7 @@ from tckdb_schemas.fragments.calculation import (
     SPEnergyComponentPayload,
     SPResultPayload,
     WavefunctionDiagnosticPayload,
+    assert_composite_result_matches_type,
 )
 from tckdb_schemas import frequency_completeness as _frequency_completeness
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
@@ -166,6 +168,7 @@ class CalculationInBundle(SchemaBase):
     opt_result: OptResultPayload | None = None
     freq_result: FreqResultPayload | None = None
     sp_result: SPResultPayload | None = None
+    composite_result: CompositeResultPayload | None = None
     sp_energy_components: list[SPEnergyComponentPayload] = Field(
         default_factory=list, description=SP_ENERGY_COMPONENTS_DESCRIPTION
     )
@@ -252,6 +255,7 @@ class CalculationInBundle(SchemaBase):
                     f"calculation type '{self.type.value}'. "
                     f"Expected '{allowed_field}' or no result."
                 )
+        assert_composite_result_matches_type(self.type, self.composite_result)
         return self
 
     @model_validator(mode="after")
@@ -354,21 +358,30 @@ def require_opt_primary_unless_monatomic(
     ones used). An ``sp`` primary is the honest shape, so it is accepted for
     a geometry of exactly one atom and for nothing else.
 
+    The other exception is a ``composite`` primary (ADR 0021). A named
+    composite method (CBS-QB3, G4, ...) runs its own optimisation as the first
+    step of the recipe, so the one program run that produced the conformer's
+    geometry is the composite calculation, and calling it an ``opt`` would
+    record a job that was not run. The type alone is accepted here; that its
+    level of theory is a catalogued named method and that it is a
+    ``program_run`` are the server's checks, because they need the catalogue.
+
     The count is taken from the XYZ the conformer itself carries, the one
     geometry every conformer must have. A geometry that cannot be counted is
     treated as not-an-atom here: the malformed XYZ is refused by the fragment
     that owns that contract, and an unproven atom must not get the exemption.
 
-    Only ``sp`` is exempt. A ``freq``, ``scan`` or any other type is not a
-    conformer's defining calculation for an atom either, and accepting it
-    would widen the rule past what the issue decided.
+    Only ``sp`` (on one atom) and ``composite`` are exempt. A ``freq``,
+    ``scan`` or any other type is not a conformer's defining calculation, and
+    accepting it would widen the rule past what was decided.
 
     :param primary_type: The declared type of the conformer's primary calculation.
     :param xyz_text: The conformer's own geometry.
     :param subject: The field, named as the refusal should read it (``... must be 'opt'``).
-    :raises ValueError: for a non-``opt`` primary on anything but a single atom.
+    :raises ValueError: for a non-``opt`` primary on anything but a single atom
+        (or a ``composite``).
     """
-    if primary_type is CalculationType.opt:
+    if primary_type is CalculationType.opt or primary_type is CalculationType.composite:
         return
     # Looked up by name on purpose. The counter raises
     # ``atom_map_geometry_unparseable`` internally and swallows it (returning
@@ -388,6 +401,8 @@ def require_opt_primary_unless_monatomic(
         )
     raise ValueError(
         f"{subject} must be 'opt', got '{primary_type.value}'." + detail
+        + " A program-run named composite method (type 'composite') that produced the "
+        "geometry is also accepted."
     )
 
 

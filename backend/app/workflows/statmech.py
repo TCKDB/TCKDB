@@ -28,6 +28,7 @@ from app.services.calculation_resolution import (
     attach_calculation_output_geometries,
     resolve_and_persist_calculation_with_results,
 )
+from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -125,6 +126,15 @@ def persist_statmech_upload(
             context=context,
         )
         calculations_by_key[calc_in.key] = calc_row
+
+    # An inline opt or sp at a named composite method's level is the same
+    # misshapen deposit the bundle routes warn about (ADR 0021, decision 7).
+    if warnings_out is not None:
+        warnings_out.extend(
+            collect_named_composite_deposit_warnings(
+                session, [calc.id for calc in calculations_by_key.values()]
+            )
+        )
 
     # Build the canonical statmech payload and route through the shared
     # resolution service. The source-calculation links and torsions travel

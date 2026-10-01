@@ -476,6 +476,7 @@ def _typed_output_snapshot(calculation: Calculation) -> tuple[bool, dict[str, An
         CalculationType.scan: "scan_result",
         CalculationType.irc: "irc_result",
         CalculationType.path_search: "path_search_result",
+        CalculationType.composite: "composite_result",
     }
     attr = attr_by_type.get(calculation.type)
     if attr is None:
@@ -501,6 +502,16 @@ def _typed_output_snapshot(calculation: Calculation) -> tuple[bool, dict[str, An
         meaningful = bool(result.points) or result.converged is not None
     elif calculation.type is CalculationType.sp:
         meaningful = result.electronic_energy_hartree is not None
+    elif calculation.type is CalculationType.composite:
+        # The breakdown is part of the target's content: a terms edit changes
+        # what the energy is made of, so it must change the digest.
+        snapshot["terms"] = _rows(calculation.composite_terms)
+        meaningful = (
+            result.electronic_energy_hartree is not None
+            or result.e0_hartree is not None
+            or result.recipe_zpe_hartree is not None
+            or bool(calculation.composite_terms)
+        )
     else:
         meaningful = result.final_energy_hartree is not None or result.converged is not None
     return bool(meaningful), snapshot

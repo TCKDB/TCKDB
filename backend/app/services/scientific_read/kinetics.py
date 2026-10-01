@@ -854,7 +854,7 @@ def _build_provenance(
     ts_freq_calc_id = _first_calc_with_type(
         by_role, calc_meta, CalculationType.freq
     )
-    ts_sp_calc_id = _first_calc_with_type(by_role, calc_meta, CalculationType.sp)
+    ts_sp_calc_id = _ts_energy_calc(by_role, calc_meta)
 
     path_search_calc = _first_path_search_calc(by_role, calc_meta)
     path_search_summary: PathSearchSummary | None = None
@@ -1587,6 +1587,24 @@ def _first_calc_with_type(
     return None
 
 
+def _ts_energy_calc(
+    by_role: dict[KineticsCalculationRole, list[KineticsSourceCalculation]],
+    calc_meta: dict[int, _CalcMeta],
+) -> int | None:
+    """The calculation cited as the transition state's energy.
+
+    Taken from the ``ts_energy`` role only, and only if it is a single point or
+    a composite energy. It used to be the first ``sp`` found under *any* role,
+    so a reactant's single point (role ``reactant_energy``) was reported as the
+    transition state's whenever it was listed first.
+    """
+    for sc in by_role.get(KineticsCalculationRole.ts_energy, []):
+        meta = calc_meta.get(sc.calculation_id)
+        if meta is not None and meta.type in (CalculationType.sp, CalculationType.composite):
+            return sc.calculation_id
+    return None
+
+
 def _first_path_search_calc(
     by_role: dict[KineticsCalculationRole, list[KineticsSourceCalculation]],
     calc_meta: dict[int, _CalcMeta],
@@ -1654,7 +1672,10 @@ def _build_kinetics_levels(
     Each input becomes exactly one of
     :func:`app.services.calculation_levels.derive_levels`'s roles:
     ``ts_opt_calc_id`` -> ``opts``, ``ts_freq_calc_id`` -> ``freqs``,
-    ``ts_sp_calc_id`` -> ``sps``. No ``composites``/``importeds`` are fed
+    ``ts_sp_calc_id`` -> ``sps`` -- or ``composites`` when that calculation's
+    type is ``composite`` (ADR 0021: a ``ts_energy`` citation may be a
+    program-run composite energy, which then outranks an ``sp`` exactly as it
+    does everywhere else). No ``importeds`` are fed
     (kinetics provenance has no such concept), and the
     opt-carries-frequencies fallback is never triggered here (every
     ``RoleCalcInfo`` below is built with ``carries_frequencies=False``):
@@ -1690,15 +1711,20 @@ def _build_kinetics_levels(
 
     opt = _info(ts_opt_calc_id)
     freq = _info(ts_freq_calc_id)
-    sp = _info(ts_sp_calc_id)
+    energy = _info(ts_sp_calc_id)
+    energy_meta_cited = calc_meta.get(ts_sp_calc_id) if ts_sp_calc_id is not None else None
+    energy_is_composite = (
+        energy_meta_cited is not None and energy_meta_cited.type == CalculationType.composite
+    )
 
     derived = derive_levels(
         opts=[opt] if opt is not None else [],
         freqs=[freq] if freq is not None else [],
-        sps=[sp] if sp is not None else [],
+        sps=[energy] if energy is not None and not energy_is_composite else [],
+        composites=[energy] if energy is not None and energy_is_composite else [],
     )
 
-    if derived.energy_source == "sp":
+    if derived.energy_source in ("sp", "composite"):
         energy_meta = calc_meta.get(ts_sp_calc_id)
     elif derived.energy_source == "opt":
         energy_meta = calc_meta.get(ts_opt_calc_id)
@@ -1710,6 +1736,8 @@ def _build_kinetics_levels(
         frequency=_lot_summary_for_calc(calc_meta.get(ts_freq_calc_id)),
         energy=_lot_summary_for_calc(energy_meta),
         energy_source=derived.energy_source,
+        geometry_source=derived.geometry_source,
+        frequency_source=derived.frequency_source,
     )
 
 

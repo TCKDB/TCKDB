@@ -60,11 +60,11 @@ Three things are deliberately absent:
 
 | Kind of token | Count | Read from |
 | --- | --- | --- |
-| Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
+| Status, badge and query words | 108 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 38 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 219 | `backend/app/api/code_catalogue.py` |
-| **total** | **509** | |
+| Refusal codes a caller can receive | 229 | `backend/app/api/code_catalogue.py` |
+| **total** | **520** | |
 
 ## How a record is named
 
@@ -559,6 +559,7 @@ What kind of job a stored calculation was. TCKDB records the job, not the intent
 | `scan` | A scan over one or more internal coordinates. |
 | `path_search` | A reaction-path search producing a TS guess. Which algorithm ran (NEB, GSM, …) is recorded on the result row, not as a separate type. |
 | `conf` | A conformer search — a job exploring the accessible conformations of one species. |
+| `composite` | One composite energy: a named method such as CBS-QB3 or G4 that one program run produced from several internal steps. Its energies are on the result row, and its level of theory is bound to a composite scheme. |
 
 ### Calculation quality
 
@@ -709,7 +710,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (166 codes)
+### HTTP 422 (176 codes)
 
 | Code | Names |
 | --- | --- |
@@ -740,6 +741,14 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `composed_search_invalid_page` | a relationship — read `context` |
 | `composed_search_pagination_changed` | a relationship — read `context` |
 | `composed_search_pagination_stalled` | a relationship — read `context` |
+| `composite_assembled_not_accepted` | a thing |
+| `composite_e0_inconsistent` | a relationship — read `context` |
+| `composite_level_not_scheme_bound` | a thing |
+| `composite_program_run_requires_software` | a thing |
+| `composite_result_requires_composite_type` | a thing |
+| `composite_term_position_unknown` | a relationship — read `context` |
+| `composite_terms_do_not_sum` | a relationship — read `context` |
+| `composite_type_requires_composite_result` | a thing |
 | `conformer_key_undeclared` | a thing |
 | `cursor_offset_conflict` | a relationship — read `context` |
 | `cursor_query_mismatch` | a relationship — read `context` |
@@ -839,6 +848,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `statmech_energy_level_ambiguous` | a relationship — read `context` |
 | `statmech_energy_level_contradiction` | a relationship — read `context` |
 | `statmech_energy_level_requires_sp` | a relationship — read `context` |
+| `statmech_energy_sp_and_composite_linked` | a relationship — read `context` |
 | `statmech_role_duplicate` | a relationship — read `context` |
 | `statmech_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `statmech_source_role_type_mismatch` | a relationship — read `context` |
@@ -850,6 +860,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `thermo_energy_level_ambiguous` | a relationship — read `context` |
 | `thermo_energy_level_contradiction` | a relationship — read `context` |
 | `thermo_energy_level_requires_sp` | a relationship — read `context` |
+| `thermo_energy_sp_and_composite_linked` | a relationship — read `context` |
 | `thermo_role_duplicate` | a relationship — read `context` |
 | `thermo_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `thermo_source_role_type_mismatch` | a relationship — read `context` |

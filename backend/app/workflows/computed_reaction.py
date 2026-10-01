@@ -51,11 +51,13 @@ from app.services.calculation_levels import (
     W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
     W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
     W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+    W_STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED,
     W_STATMECH_ROLE_DUPLICATE,
     W_STATMECH_SP_GEOMETRY_MISMATCH,
     W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
     W_THERMO_ENERGY_LEVEL_CONTRADICTION,
     W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+    W_THERMO_ENERGY_SP_AND_COMPOSITE_LINKED,
     W_THERMO_ROLE_DUPLICATE,
     W_THERMO_SP_GEOMETRY_MISMATCH,
     RoleLink,
@@ -86,6 +88,7 @@ from app.services.calculation_scan_resolution import persist_calculation_scan
 from app.services.charge_multiplicity_extraction import (
     try_reconcile_charge_multiplicity_from_output_upload,
 )
+from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.conformer_anchoring import (
     anchor_species_calculation_to_observation,
 )
@@ -183,6 +186,7 @@ def _persist_calculation(
     created_by: int | None = None,
     sp_energy_warnings: list[UploadWarning] | None = None,
     is_single_atom_primary: bool = False,
+    is_conformer_primary: bool = False,
 ) -> Calculation:
     """Persist one bundle-local calculation through the shared calculation seam.
 
@@ -287,6 +291,7 @@ def _persist_calculation(
         fallback_geometry_id=resolved_geom_id,
         context=context,
         is_single_atom_primary=is_single_atom_primary,
+        is_conformer_primary=is_conformer_primary,
     )
 
     # Fill-when-absent Hessian extraction runs *after* input geometries are
@@ -596,6 +601,7 @@ def persist_computed_reaction_upload(
                 created_by=created_by,
                 sp_energy_warnings=sp_energy_warnings,
                 is_single_atom_primary=geometry.natoms == 1,
+                is_conformer_primary=True,
             )
             calculation_key_to_id[conf.calculation.key] = calculation.id
             review_targets.append(
@@ -1276,7 +1282,9 @@ def persist_computed_reaction_upload(
                 requires_sp_code=W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
                 contradiction_code=W_THERMO_ENERGY_LEVEL_CONTRADICTION,
                 ambiguous_code=W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
+                sp_and_composite_code=W_THERMO_ENERGY_SP_AND_COMPOSITE_LINKED,
                 subject="thermo",
+                warnings=sp_energy_warnings,
             )
 
             thermo = Thermo(
@@ -1445,7 +1453,9 @@ def persist_computed_reaction_upload(
                 requires_sp_code=W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
                 contradiction_code=W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
                 ambiguous_code=W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+                sp_and_composite_code=W_STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED,
                 subject="statmech",
+                warnings=sp_energy_warnings,
             )
 
             statmech = Statmech(
@@ -1904,6 +1914,11 @@ def persist_computed_reaction_upload(
     # visible here (#292).
     sp_energy_warnings.extend(
         collect_converged_opt_energy_warnings(
+            session, calculation_key_to_id.values()
+        )
+    )
+    sp_energy_warnings.extend(
+        collect_named_composite_deposit_warnings(
             session, calculation_key_to_id.values()
         )
     )

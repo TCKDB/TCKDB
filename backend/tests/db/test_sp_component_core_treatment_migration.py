@@ -163,6 +163,10 @@ def test_upgrade_adds_the_column_and_table_and_rekeys_nothing(harness):
         "trg_as_truncate_calc_sp_energy_component",
     }
 
+    # ``alembic check`` compares the live schema with the models, which describe
+    # head: bring the scratch database to head first, so this revision's schema
+    # must be what the models say once every later revision has run too.
+    harness.run("upgrade", "head")
     checked = _alembic_check(harness)
     assert checked.returncode == 0, checked.stderr[-3000:] + checked.stdout[-3000:]
     assert "No new upgrade operations detected" in checked.stdout + checked.stderr

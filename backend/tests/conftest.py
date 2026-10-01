@@ -1418,6 +1418,7 @@ _WATCHED_TABLES: tuple[str, ...] = (
     "calc_sp_result",
     "calc_opt_result",
     "calc_freq_result",
+    "calc_composite_result",
     # conformers
     "conformer_group",
     "conformer_observation",

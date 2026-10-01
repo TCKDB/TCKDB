@@ -39,6 +39,12 @@ _EVIDENCE_REVISION = _VERSIONS / "a1f6c3e9b527_freeze_evidence_under_accepted_ro
 #: with ``tckdb_guard_accepted_via_child`` and takes the TRUNCATE refusal.
 _EVIDENCE_KINDS_REVISION = _VERSIONS / "a7d3f1c95e28_ts_evidence_kinds_and_unstated_irc_direction.py"
 
+#: ``f3b7d2a9c514`` adds the ``composite`` calculation type's two result tables
+#: (``calc_composite_result``, ``calc_composite_term``). Both carry the same
+#: ownership guard and TRUNCATE refusal ``calc_sp_result`` has, so a composite
+#: energy cannot be added to, edited or removed once its calculation is accepted.
+_COMPOSITE_RESULT_REVISION = _VERSIONS / "f3b7d2a9c514_composite_calculation_type_and_result.py"
+
 #: The revisions that extend ``c6f2a9d4e7b1``'s regime by adding guards under
 #: their own ``_trigger_name``. Both halves of this test iterate this list, so
 #: a fourth such revision is wired in by adding it here once.
@@ -46,7 +52,13 @@ _EVIDENCE_KINDS_REVISION = _VERSIONS / "a7d3f1c95e28_ts_evidence_kinds_and_unsta
 #: ``calculation`` guarded like ``calc_sp_result``, with the TRUNCATE refusal.
 _SP_COMPONENT_REVISION = _VERSIONS / "e5b2d8a4c613_sp_energy_components_and_core_treatment.py"
 
-_EXTENSION_REVISIONS = (_ATOM_MAP_REVISION, _EVIDENCE_REVISION, _EVIDENCE_KINDS_REVISION, _SP_COMPONENT_REVISION)
+_EXTENSION_REVISIONS = (
+    _ATOM_MAP_REVISION,
+    _EVIDENCE_REVISION,
+    _EVIDENCE_KINDS_REVISION,
+    _SP_COMPONENT_REVISION,
+    _COMPOSITE_RESULT_REVISION,
+)
 
 #: ``d4e9b1c7a253`` narrows the regime instead of extending it: it removes one
 #: registered column from ``c6f2a9d4e7b1``'s ``calc_scf_stability`` guard. It

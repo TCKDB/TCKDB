@@ -70,6 +70,7 @@ from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
     resolve_workflow_tool_release_ref,
 )
+from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.conformer_anchoring import (
     anchor_species_calculation_to_observation,
 )
@@ -626,6 +627,10 @@ def persist_network_pdep_upload(
             created_by=created_by,
             warnings=warning_sink,
         )
+
+    # Every calculation of the upload is flushed: an opt or sp at a named
+    # composite method's level is reported once, as on every other route.
+    warning_sink.extend(collect_named_composite_deposit_warnings(session, calculation_key_to_id.values()))
 
     # ------------------------------------------------------------------
     # 6. Resolve network-level provenance and create network

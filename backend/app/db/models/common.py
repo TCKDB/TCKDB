@@ -362,6 +362,14 @@ class AtomMapSource(str, Enum):
 
 
 class CalculationType(str, Enum):
+    # A comment, not a docstring: this enum is mirrored by
+    # ``tckdb_schemas.enums.CalculationType`` and the two JSON schemas merge into
+    # one OpenAPI component only while they are byte-identical.
+    #
+    # ``composite`` (ADR 0021) is one composite energy at a scheme-bound level
+    # of theory: a program run of a named method (CBS-QB3, G4, ...), or in a
+    # later phase an energy assembled from other calculations. Its number lives
+    # in ``calc_composite_result``, not in an ``sp`` or ``opt`` result.
     opt = "opt"
     freq = "freq"
     sp = "sp"
@@ -369,6 +377,7 @@ class CalculationType(str, Enum):
     scan = "scan"
     path_search = "path_search"
     conf = "conf"
+    composite = "composite"
 
 
 class CalculationRecordKind(str, Enum):
@@ -887,6 +896,20 @@ class SpinTreatment(str, Enum):
     unrestricted = "unrestricted"
     restricted_open = "restricted_open"
     unknown = "unknown"
+
+
+class CompositeAssembly(str, Enum):
+    # How a ``composite`` calculation's energy was produced (ADR 0021).
+    #
+    # ``program_run``: one program run printed the final number (a named method:
+    # CBS-QB3, G4, W1U, ...). ``assembled``: the energy is arithmetic over other
+    # deposited calculations (a user-built scheme). Only ``program_run`` is
+    # accepted today; ``assembled`` arrives with user schemes (phase P5).
+    #
+    # A comment, not a docstring: mirrored by ``tckdb_schemas.enums`` (see
+    # ``CalculationType``).
+    program_run = "program_run"
+    assembled = "assembled"
 
 
 class CoreTreatment(str, Enum):

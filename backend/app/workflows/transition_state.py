@@ -21,6 +21,7 @@ from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
 from app.services.calculation_resolution import collect_converged_opt_energy_warnings
+from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -288,6 +289,12 @@ def persist_transition_state_upload(
     if warnings is not None:
         warnings.extend(
             collect_converged_opt_energy_warnings(
+                session,
+                [primary_calc.id, *(c.id for c in additional_calcs)],
+            )
+        )
+        warnings.extend(
+            collect_named_composite_deposit_warnings(
                 session,
                 [primary_calc.id, *(c.id for c in additional_calcs)],
             )

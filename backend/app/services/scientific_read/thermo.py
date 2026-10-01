@@ -5,6 +5,8 @@ See docs/specs/read_api_mvp.md §Endpoint 4.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -18,6 +20,7 @@ from app.db.models.calculation import (
     CalculationSCFStability,
 )
 from app.db.models.common import (
+    CalculationType,
     RecordReviewStatus,
     SCFStabilityStatus,
     StatmechCalculationRole,
@@ -83,6 +86,12 @@ from app.services.scientific_read.common import (
 )
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
+)
+from app.services.scientific_read.composite_recipe import (
+    CompositeRoleFacts,
+    composite_role_facts,
+    composite_role_info,
+    recipe_lot_ids,
 )
 from app.services.scientific_read.declared_levels import (
     load_declared_energy_summaries,
@@ -179,7 +188,14 @@ _DEFAULT_SORT_ECHO = (
     "review_rank,created_at,id"
 )
 
-# Priority order per Phase 2.3 spec: sp → composite → freq → opt → any.
+# Priority order for links that are not a typed composite: sp → composite →
+# freq → opt → any. A calculation of *type* ``composite`` ranks above all of
+# these (``_primary_calc_id`` takes it first), which is R1's energy order
+# (``app.services.calculation_levels.derive_levels``: composite > sp > opt,
+# ADR 0021 decision 4); the ``composite`` entry here is only the legacy shape,
+# a calculation of another type linked under that role, which keeps the place it
+# always had. ``freq`` sits before ``opt`` as ever: R1's energy chain has no
+# ``freq`` in it and this picker also chooses the record's software.
 _LOT_FILTER_ROLE_PRIORITY = (
     ThermoCalculationRole.sp,
     ThermoCalculationRole.composite,
@@ -357,6 +373,24 @@ def get_species_thermo(
         for meta in calc_meta.values()
         if meta["lot_id"] is not None
     }
+    # What each composite-role calculation says about the geometry and
+    # frequency levels (ADR 0021, R1): bulk, same id set as calc_meta. The
+    # recipe levels are levels no calculation of this request need be at, so
+    # their summaries are loaded here rather than found in calc_meta_by_lot_id.
+    composite_calc_ids = {
+        sc.calculation_id
+        for srcs in (*sources_by_thermo.values(), *statmech_sources_by_id.values())
+        for sc in srcs
+        if sc.role.value == "composite"
+        and sc.calculation_id in calc_meta
+        and calc_meta[sc.calculation_id]["type"] == CalculationType.composite
+    }
+    composite_facts = composite_role_facts(
+        session, {cid: calc_meta[cid]["lot_id"] for cid in composite_calc_ids}
+    )
+    recipe_level_summaries = load_declared_energy_summaries(
+        session, recipe_lot_ids(composite_facts.values())
+    )
     # The conformer this thermo record traces to, resolved one hop past
     # the primary calculation. Loaded for every calc the primary picker
     # can possibly land on (same id set as calc_meta/calc_refs above).
@@ -483,6 +517,8 @@ def get_species_thermo(
             calc_meta=calc_meta,
             calc_meta_by_lot_id=calc_meta_by_lot_id,
             freq_calc_ids=freq_calc_ids,
+            composite_facts=composite_facts,
+            recipe_level_summaries=recipe_level_summaries,
         )
         declared_lot_id = (
             t.energy_level_of_theory_id
@@ -831,6 +867,9 @@ def _statmech_primary_calc_id(
     """Pick a primary calculation id from statmech sources using the same
     role priority the thermo service uses (sp → composite → freq → opt).
     """
+    for sc in statmech_sources:
+        if _is_composite_link(sc):
+            return sc.calculation_id
     for role in (
         StatmechCalculationRole.sp,
         StatmechCalculationRole.composite,
@@ -1089,7 +1128,23 @@ def _fallback_temperature_range(
     return row_min, row_max
 
 
+def _is_composite_link(sc: Any) -> bool:
+    """A source link whose role is ``composite`` *and* whose calculation is one."""
+    calculation = getattr(sc, "calculation", None)
+    return (
+        sc.role.value == "composite"
+        and calculation is not None
+        and calculation.type == CalculationType.composite
+    )
+
+
 def _primary_calc_id(sources: list[ThermoSourceCalculation]) -> int | None:
+    # A calculation of type ``composite`` is the record's energy and so comes first
+    # (R1, ADR 0021). A calculation of another type linked under the role
+    # ``composite`` is the legacy shape and keeps its old place in the priority.
+    for sc in sources:
+        if _is_composite_link(sc):
+            return sc.calculation_id
     for role in _LOT_FILTER_ROLE_PRIORITY:
         for sc in sources:
             if sc.role == role:
@@ -1305,12 +1360,17 @@ def _thermo_role_calc_id_lists(
 
 
 def _lot_summary_from_id(
-    calc_meta_by_lot_id: dict[int, dict], lot_id: int | None
+    calc_meta_by_lot_id: dict[int, dict],
+    lot_id: int | None,
+    fallback: dict[int, LevelOfTheorySummary] | None = None,
 ) -> LevelOfTheorySummary | None:
     if lot_id is None:
         return None
     meta = calc_meta_by_lot_id.get(lot_id)
-    return _lot_summary(meta) if meta is not None else None
+    if meta is not None:
+        return _lot_summary(meta)
+    # A level no linked calculation ran at (a composite recipe's internal level).
+    return (fallback or {}).get(lot_id)
 
 
 def _build_levels_thermo(
@@ -1320,6 +1380,8 @@ def _build_levels_thermo(
     calc_meta: dict[int, dict],
     calc_meta_by_lot_id: dict[int, dict],
     freq_calc_ids: set[int],
+    composite_facts: dict[int, CompositeRoleFacts],
+    recipe_level_summaries: dict[int, LevelOfTheorySummary],
 ) -> ScientificLevelsSummary:
     """R1 for one thermo record: derive its geometry/frequency/energy levels.
 
@@ -1334,7 +1396,20 @@ def _build_levels_thermo(
     """
     role_calc_ids = _thermo_role_calc_id_lists(sources, statmech_sources)
 
+    def is_composite(cid: int) -> bool:
+        return calc_meta[cid]["type"] == CalculationType.composite
+
     def infos(role: str) -> list[RoleCalcInfo]:
+        if role == "composite":
+            # Only a calculation of type ``composite`` is a composite energy;
+            # the legacy shape is read through ``legacy_infos``.
+            return [
+                composite_role_info(
+                    calc_meta[cid]["lot_id"], cid in freq_calc_ids, composite_facts.get(cid)
+                )
+                for cid in role_calc_ids.get(role, [])
+                if cid in calc_meta and is_composite(cid)
+            ]
         return [
             RoleCalcInfo(
                 lot_id=calc_meta[cid]["lot_id"],
@@ -1350,12 +1425,23 @@ def _build_levels_thermo(
         sps=infos("sp"),
         composites=infos("composite"),
         importeds=infos("imported"),
+        legacy_composites=[
+            RoleCalcInfo(lot_id=calc_meta[cid]["lot_id"], carries_frequencies=cid in freq_calc_ids)
+            for cid in role_calc_ids.get("composite", [])
+            if cid in calc_meta and not is_composite(cid)
+        ],
     )
     return ScientificLevelsSummary(
-        geometry=_lot_summary_from_id(calc_meta_by_lot_id, derived.geometry_lot_id),
-        frequency=_lot_summary_from_id(calc_meta_by_lot_id, derived.frequency_lot_id),
+        geometry=_lot_summary_from_id(
+            calc_meta_by_lot_id, derived.geometry_lot_id, recipe_level_summaries
+        ),
+        frequency=_lot_summary_from_id(
+            calc_meta_by_lot_id, derived.frequency_lot_id, recipe_level_summaries
+        ),
         energy=_lot_summary_from_id(calc_meta_by_lot_id, derived.energy_lot_id),
         energy_source=derived.energy_source,
+        geometry_source=derived.geometry_source,
+        frequency_source=derived.frequency_source,
     )
 
 

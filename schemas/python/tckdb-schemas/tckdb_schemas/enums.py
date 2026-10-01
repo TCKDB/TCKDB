@@ -162,6 +162,11 @@ class TorsionTreatmentKind(str, Enum):
 
 
 class CalculationType(str, Enum):
+    # A comment, not a docstring: mirrored by the backend's
+    # ``app.db.models.common.CalculationType`` (see ``MoleculeKind``).
+    #
+    # ``composite`` (ADR 0021) is one composite energy at a scheme-bound level
+    # of theory, deposited with a ``composite_result`` block.
     opt = "opt"
     freq = "freq"
     sp = "sp"
@@ -169,6 +174,17 @@ class CalculationType(str, Enum):
     scan = "scan"
     path_search = "path_search"
     conf = "conf"
+    composite = "composite"
+
+
+class CompositeAssembly(str, Enum):
+    # How a ``composite`` calculation's energy was produced (ADR 0021).
+    # ``program_run``: one program run printed the final number (a named method).
+    # ``assembled``: arithmetic over other deposited calculations; accepted
+    # only once user-built schemes exist (refused today). A comment, not a
+    # docstring, for the reason given on ``CalculationType``.
+    program_run = "program_run"
+    assembled = "assembled"
 
 
 class PathSearchMethod(str, Enum):
@@ -659,6 +675,7 @@ __all__ = (
     "CalculationGeometryRole",
     "CalculationQuality",
     "CalculationType",
+    "CompositeAssembly",
     "ConstraintKind",
     "CoordinateUnit",
     "CoreTreatment",

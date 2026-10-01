@@ -317,23 +317,36 @@ class ScientificLevelsSummary(BaseModel):
     ``imported`` source calculations the record links right now, per
     ``app.services.calculation_levels.derive_levels`` (R1):
 
-    * ``geometry`` — the ``opt`` role's level of theory.
+    * ``geometry`` — the ``opt`` role's level of theory; when no ``opt``
+      is linked, the internal geometry level of a linked program-run
+      ``composite`` that has an output geometry of its own (its scheme's
+      recipe level), ``geometry_source="composite_recipe"``.
     * ``frequency`` — the ``freq`` role's level, or the ``opt``'s own
       level when no separate ``freq`` is linked but the optimisation
-      calculation itself carries frequency results.
-    * ``energy`` — the linked ``sp``s' shared level when they agree;
-      otherwise the ``opt``'s own level (an optimisation's final energy
-      *is* the single-point value at its own level of theory); otherwise
-      a linked ``composite``/``imported`` calculation's level; ``null``
-      when linked ``sp``s disagree on level of theory (see
-      ``energy_source="ambiguous"`` below).
-    * ``energy_source`` names which role answered ``energy`` -- ``'sp'``,
-      ``'opt'``, ``'composite'``, or ``'imported'`` -- or ``'ambiguous'``
+      calculation itself carries frequency results; failing both, the
+      internal frequency level of that composite's scheme
+      (``frequency_source="composite_recipe"``).
+    * ``energy`` — a linked ``composite``'s level when exactly one
+      composite level is linked; otherwise the linked ``sp``s' shared
+      level when they agree; otherwise the ``opt``'s own level (an
+      optimisation's final energy *is* the single-point value at its own
+      level of theory); otherwise a linked ``imported`` calculation's
+      level; ``null`` when linked ``sp``s (or ``composite``s) disagree on
+      level of theory (see ``energy_source="ambiguous"`` below).
+    * ``energy_source`` names which role answered ``energy`` -- ``'composite'``,
+      ``'sp'``, ``'opt'``, or ``'imported'`` -- or ``'ambiguous'``
       when two or more linked ``sp`` calculations (a multi-conformer
-      ensemble's per-conformer single points, say) run at different
+      ensemble's per-conformer single points, say) or two or more linked
+      ``composite`` calculations run at different
       levels of theory, so no single energy level of theory can be
       reported for the record as a whole; or ``null`` when nothing
       linked can answer it.
+    * ``geometry_source`` is ``'opt'`` or ``'composite_recipe'`` (or ``null``
+      when ``geometry`` is); ``frequency_source`` is ``'freq'``, ``'opt'``
+      or ``'composite_recipe'`` (or ``null`` when ``frequency`` is). A
+      ``'composite_recipe'`` level is what the named method runs
+      internally, stated by the method's catalogue entry, not a
+      calculation anybody deposited.
 
     Any field may be ``null`` independently of the others: a record with
     only a ``freq`` link, for instance, reports a ``frequency`` level and
@@ -349,6 +362,8 @@ class ScientificLevelsSummary(BaseModel):
     energy_source: (
         Literal["sp", "opt", "composite", "imported", "ambiguous"] | None
     ) = None
+    geometry_source: Literal["opt", "composite_recipe"] | None = None
+    frequency_source: Literal["freq", "opt", "composite_recipe"] | None = None
     #: The level of theory the depositor *declared* for this record's
     #: energy (``energy_level_of_theory`` on the upload). Unlike the four
     #: fields above this one is **stored**, not derived: it is a claim made

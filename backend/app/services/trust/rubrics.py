@@ -150,6 +150,7 @@ _RESULT_BLOCK_BY_TYPE: dict[CalculationType, str] = {
     CalculationType.irc: "irc_result",
     CalculationType.scan: "scan_result",
     CalculationType.path_search: "path_search_result",
+    CalculationType.composite: "composite_result",
 }
 
 

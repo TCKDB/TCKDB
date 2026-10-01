@@ -117,6 +117,46 @@ def _find_sp_for_species(
     return results[0]
 
 
+def _find_energy_calculation_for_species(
+    session: Session,
+    *,
+    species_entry_id: int,
+    lot_id: int,
+) -> Calculation:
+    """Find the one energy calculation for a species entry at a given level of theory.
+
+    Same priority as every other energy-level rule (ADR 0021, decision 4):
+    a ``composite`` calculation at the level wins; only when the species entry
+    has none there is the single point looked for, exactly as before. A level of
+    theory bound to a composite scheme (``CBS-QB3``) carries composite
+    calculations, so this is what makes ``energy_level_of_theory: CBS-QB3``
+    resolve to the program-run composite instead of failing for want of an
+    ``sp``.
+
+    :raises ValueError: If more than one composite matches, or (with none)
+        zero or more than one single point does.
+    """
+    composites = session.scalars(
+        select(Calculation)
+        .where(
+            Calculation.species_entry_id == species_entry_id,
+            Calculation.type == CalculationType.composite,
+            Calculation.lot_id == lot_id,
+        )
+        .order_by(Calculation.id)
+        .limit(2)
+    ).all()
+    if len(composites) == 1:
+        return composites[0]
+    if len(composites) > 1:
+        raise ValueError(
+            "Multiple composite calculations found for the requested species entry "
+            "at the declared energy level of theory. "
+            "Cannot auto-resolve: multi-conformer disambiguation not yet supported."
+        )
+    return _find_sp_for_species(session, species_entry_id=species_entry_id, lot_id=lot_id)
+
+
 def _resolve_ts_anchored_reaction_entry(
     session: Session,
     request: KineticsUploadRequest,
@@ -919,7 +959,8 @@ def persist_kinetics_upload(
     session.flush()
 
     # 3. Auto-resolve source calculations from energy_level_of_theory
-    #    For each reaction participant, find the SP at that LOT and link it.
+    #    For each reaction participant, find the energy calculation at that LOT
+    #    (a composite if there is one, else the SP) and link it.
     if request.energy_level_of_theory is not None:
         lot = resolve_level_of_theory_ref(session, request.energy_level_of_theory)
 
@@ -928,7 +969,7 @@ def persist_kinetics_upload(
             species_entry = resolve_species_entry(
                 session, participant.species_entry, created_by=created_by
             )
-            calc = _find_sp_for_species(
+            calc = _find_energy_calculation_for_species(
                 session, species_entry_id=species_entry.id, lot_id=lot.id
             )
             session.add(
@@ -944,7 +985,7 @@ def persist_kinetics_upload(
             species_entry = resolve_species_entry(
                 session, participant.species_entry, created_by=created_by
             )
-            calc = _find_sp_for_species(
+            calc = _find_energy_calculation_for_species(
                 session, species_entry_id=species_entry.id, lot_id=lot.id
             )
             session.add(
