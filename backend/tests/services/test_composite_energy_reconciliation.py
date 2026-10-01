@@ -19,6 +19,7 @@ import pytest
 from app.services.composite_energy_reconciliation import (
     UNVERIFIABLE_NO_SUPPORTED_BLOCK,
     UNVERIFIABLE_NOT_GAUSSIAN,
+    W_COMPOSITE_ENERGY_LOG_AVAILABLE,
     W_COMPOSITE_ENERGY_LOG_MISMATCH,
     W_COMPOSITE_LOG_METHOD_MISMATCH,
     CompositeEnergyAction,
@@ -95,10 +96,28 @@ def test_only_the_stated_numbers_are_compared():
     assert only_e0_wrong.action is CompositeEnergyAction.mismatch
 
 
-def test_nothing_deposited_is_absent_even_with_a_readable_log():
-    outcome = _reconcile(e0_hartree=None, electronic_energy_hartree=None, recipe_zpe_hartree=None)
-    assert outcome.action is CompositeEnergyAction.absent
-    assert outcome.warning is None
+_NOTHING = {"e0_hartree": None, "electronic_energy_hartree": None, "recipe_zpe_hartree": None}
+
+
+def test_nothing_deposited_with_a_readable_log_informs_and_fills_nothing():
+    outcome = _reconcile(**_NOTHING)
+    assert outcome.action is CompositeEnergyAction.available
+    assert outcome.warning.code == W_COMPOSITE_ENERGY_LOG_AVAILABLE
+    assert "-283.819775" in outcome.warning.message and "Nothing was filled" in outcome.warning.message
+    assert not hasattr(outcome, "resolved_energy_hartree")
+
+
+def test_nothing_deposited_with_an_unreadable_log_is_absent_and_silent():
+    garbled = _QB3_LOG[: _QB3_LOG.index(" CBS-QB3 (0 K)=")]
+    for text in (garbled, None, "not a log"):
+        outcome = _reconcile(log_text=text, **_NOTHING)
+        assert outcome.action is CompositeEnergyAction.absent
+        assert outcome.warning is None
+
+
+def test_nothing_deposited_and_a_log_of_another_method_warns_about_the_method_not_availability():
+    outcome = _reconcile(level_method="CBS-4M", **_NOTHING)
+    assert outcome.action is CompositeEnergyAction.method_mismatch
 
 
 def test_the_outcome_carries_no_value_to_store():

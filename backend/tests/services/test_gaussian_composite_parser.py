@@ -62,8 +62,6 @@ _EXPECTED = {
         0.049949,
         (-115.082011, -0.351256, -0.096132, -0.018059, 0.024489, -0.090212),
     ),
-    "g4_methanol_g16.out": ("g4", -115.648433, 0.050463, ()),
-    "g4mp2_methanol_g16.out": ("g4mp2", -115.566778, 0.050463, ()),
     "g3_ethylene_g03.log": ("g3", -78.507415, 0.048905, ()),
 }
 
@@ -206,8 +204,8 @@ def test_methods_without_a_real_log_are_declined_not_guessed(key):
 
 
 def test_the_label_must_agree_with_the_route():
-    """A G4 route over a CBS-QB3 summary block is not a G4 result."""
-    text = _text(_QB3).replace("cbs-qb3", "g4", 1)
+    """A G3 route over a CBS-QB3 summary block is not a G3 result (G3 is a read method)."""
+    text = _text(_QB3).replace("cbs-qb3", "g3", 1)
     assert parse_gaussian_composite_summary(text) is None
 
 

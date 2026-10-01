@@ -244,10 +244,15 @@ Each phase is independently mergeable.
     program_run` is accepted; `assembled` is refused by name
     (`composite_assembled_not_accepted`) until P5.
   - **P3b (built).** The Gaussian composite summary-block parser
-    (`gaussian_composite_parser`: CBS-QB3, ROCBS-QB3, CBS-4M, G3, G4, G4MP2, each
-    with a real log; the rest are refused rather than guessed) and
+    (`gaussian_composite_parser`: CBS-QB3, ROCBS-QB3, CBS-4M and G3, each with a
+    real log and each block checked against the manual's identity
+    `Energy - E0 = E(Thermal) - E(ZPE)` and the archive entry; every other method is
+    refused rather than guessed. G4 and G4MP2 are declined too: in the Gaussian 16
+    Rev A.03 logs we hold, the printed labels are shifted by one pair, so the number
+    under `G4(0 K)` is the 298 K energy, not E0) and
     reconciliation of a deposited `composite_result` against it, warning
-    `composite_energy_log_mismatch` / `composite_log_method_mismatch`. Nothing is
+    `composite_energy_log_mismatch` / `composite_log_method_mismatch`, and an
+    informational `composite_energy_log_available` when nothing was deposited. Nothing is
     filled from the log: no block prints the ZPE-free energy, so filling would mean
     storing a number TCKDB computed. A composite route on an `sp` is still refused
     an sp energy, and the reason is recorded.

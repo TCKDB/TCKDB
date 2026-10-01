@@ -15,7 +15,10 @@ the log is a different  ``method_mismatch`` -- warn ``composite_log_method_misma
 method from the level   the energies are then not compared (they answer
 of theory               different questions)
 log not readable        ``unverifiable``   -- the deposit stands, with a recorded reason
-nothing deposited       ``absent``
+nothing deposited,      ``available``      -- inform ``composite_energy_log_available``; the
+log readable            numbers are stated, nothing is filled
+nothing deposited,      ``absent``
+log not readable
 ======================  =====================================================
 
 Always **warn**, never refuse (ADR 0008 tier for ``composite_energy_log_mismatch``):
@@ -79,6 +82,9 @@ from app.services.gaussian_composite_parser import (
 W_COMPOSITE_ENERGY_LOG_MISMATCH = "composite_energy_log_mismatch"
 #: The log is a different composite method from the calculation's level of theory.
 W_COMPOSITE_LOG_METHOD_MISMATCH = "composite_log_method_mismatch"
+#: Informational: the deposit stated no energy and the log states them. Nothing is
+#: filled; this tells the depositor the numbers are there to send.
+W_COMPOSITE_ENERGY_LOG_AVAILABLE = "composite_energy_log_available"
 
 _FLOAT_NOISE = 1e-12
 
@@ -88,6 +94,7 @@ class CompositeEnergyAction(str, Enum):
 
     confirmed = "confirmed"
     mismatch = "mismatch"
+    available = "available"
     method_mismatch = "method_mismatch"
     unverifiable = "unverifiable"
     absent = "absent"
@@ -138,16 +145,20 @@ def reconcile_composite_energy(
     :param log_text: Decoded output-log text.
     :param field: Dot-path used in any emitted warning.
     """
-    deposited = (e0_hartree, electronic_energy_hartree, recipe_zpe_hartree)
-    if all(value is None for value in deposited):
-        return CompositeEnergyReconciliation(action=CompositeEnergyAction.absent)
+    nothing_deposited = all(
+        value is None for value in (e0_hartree, electronic_energy_hartree, recipe_zpe_hartree)
+    )
     if not log_text or detect_software_from_text(log_text) != "gaussian":
+        if nothing_deposited:
+            return CompositeEnergyReconciliation(action=CompositeEnergyAction.absent)
         return CompositeEnergyReconciliation(
             action=CompositeEnergyAction.unverifiable,
             unverifiable_reason=UNVERIFIABLE_NOT_GAUSSIAN,
         )
     summary = parse_gaussian_composite_summary(log_text)
     if summary is None:
+        if nothing_deposited:
+            return CompositeEnergyReconciliation(action=CompositeEnergyAction.absent)
         return CompositeEnergyReconciliation(
             action=CompositeEnergyAction.unverifiable,
             unverifiable_reason=UNVERIFIABLE_NO_SUPPORTED_BLOCK,
@@ -165,6 +176,23 @@ def reconcile_composite_energy(
                     f"level of theory is {level_method!r}. The method was kept as sent and the "
                     "deposited energies were not compared with this log. Attach the log of the run "
                     "that produced this calculation, or correct the level of theory."
+                ),
+            ),
+        )
+
+    if nothing_deposited:
+        return CompositeEnergyReconciliation(
+            action=CompositeEnergyAction.available,
+            log_summary=summary,
+            warning=UploadWarning(
+                field=field,
+                code=W_COMPOSITE_ENERGY_LOG_AVAILABLE,
+                message=(
+                    f"No composite energy was deposited, and the attached {summary.method_key} output "
+                    f"log states E0 = {summary.e0_hartree:.6f} Ha and a recipe ZPE of "
+                    f"{summary.recipe_zpe_hartree:.6f} Ha. Nothing was filled from the log; send these "
+                    "in composite_result (e0_hartree, recipe_zpe_hartree, and the ZPE-free "
+                    "electronic_energy_hartree) if you want them recorded."
                 ),
             ),
         )

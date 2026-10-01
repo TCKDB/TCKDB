@@ -1,6 +1,6 @@
 """Read the summary block of a Gaussian composite-method log (ADR 0021, P3b).
 
-A Gaussian composite job (``CBS-QB3``, ``G4``, ...) runs several internal steps
+A Gaussian composite job (``CBS-QB3``, ``G3``, ...) runs several internal steps
 and ends with one summary block. The block is the only place the method's own
 answer is printed, so this module reads it and nothing else. It is pure text in,
 values out: no database, no TCKDB schema objects.
@@ -33,26 +33,51 @@ Gaussian 09 manual (``k_cbs.htm``, ``k_g1.htm``) and the real logs under
 
 Which methods are read, and why only these
 ------------------------------------------
-Exactly the methods for which a real Gaussian log was available to check the
-layout: ``CBS-QB3``, ``ROCBS-QB3``, ``CBS-4M``, ``G3``, ``G4`` and ``G4MP2``.
+Exactly the methods for which a real Gaussian log was available *and* the block
+passes the checks below: ``CBS-QB3``, ``ROCBS-QB3``, ``CBS-4M`` and ``G3``.
 ``CBS-APNO``, ``G3B3``, ``G3MP2``, ``G3MP2B3``, ``W1U``, ``W1BD`` and ``W1RO``
 have no real log here; they return ``None`` (reject, do not guess). ``W1`` is
 also a different shape: it prints two tables (before and after the spin
 correction) and which one is "the" answer is the manual's to say, not ours.
 
-* The CBS family prints one term per line pair and the terms are read and
-  cross-checked against ``E0``. A block with a term missing, renamed or
-  reordered, or whose terms disagree with ``E0`` beyond printed precision, is
-  refused.
-* The G-family blocks mislabel their middle lines (a real G4 log prints the
-  Hartree-Fock limit under ``DE(HF)`` and repeats ``E(Empiric)``), so the
-  middle lines are not read as terms at all. Only ``E(ZPE)`` and ``E0`` are.
+**``G4`` and ``G4MP2`` are declined, with evidence.** In the Gaussian 16 Rev A.03
+logs we hold (methanol), the ``(0 K)`` line does not carry E0:
+
+* the archive entry states ``\\G4=-115.6517642`` and ``\\G4MP2=-115.571053``, while
+  the ``(0 K)`` lines state -115.648433 and -115.566778;
+* the manual's identities ``Energy - E0 = E(Thermal) - E(ZPE)`` and
+  ``Enthalpy - Energy = RT`` hold within 1e-6 hartree for every CBS log and the
+  G3 log, and fail by 0.002387 (G4) and 0.030352 (G4MP2) hartree, which a shift
+  of the printed pairs by one position satisfies exactly: the number under
+  ``(0 K)`` is the 298 K energy (G4) or the enthalpy (G4MP2);
+* E0 recomputed from the printed components equals the number printed under
+  ``DE(HF)`` (G4) and ``DE(MP2)`` (G4MP2), so those labels sit one pair off too.
+
+So the printed labels of these blocks cannot be trusted, and no layout is read.
+
+Checks every block must pass, or the log yields nothing
+-------------------------------------------------------
+* **Block identity.** ``(Energy - E0) = (E(Thermal) - E(ZPE))`` within the
+  four-rounded-quantities tolerance. This is the check that rejects the shifted
+  G4 / G4MP2 blocks and that would reject any other mislabelled one.
+* **Archive cross-check.** When the log's archive entry states ``\\<METHOD>=value``
+  (``CBSQB3`` for both CBS-QB3 and ROCBS-QB3, ``CBS4M``, ``G3``), it must equal
+  the parsed E0 within the tolerance for two rounded quantities.
+* **Terms** (CBS family): exactly the printed labels in print order, summing to
+  E0 with the ZPE added.
+* **One answer:** two blocks that disagree, or a partial block anywhere, refuse
+  the whole log; the parser never skips from a partial block to a complete one.
+
+The G3 block mislabels nothing the checks can see but its middle lines are not
+read as terms (they repeat labels); only ``E(ZPE)`` and E0 are.
 
 ``CBS-QB3`` and ``ROCBS-QB3`` print the identical label ``CBS-QB3 (0 K)``, and
 ``CBS-4M`` prints ``CBS-4 (0 K)``. The summary alone cannot say which recipe
 ran, so the route line (``# ... rocbs-qb3 ...``) names the method and the label
 must agree with it. A log whose route names no supported method, or names two,
-is refused.
+is refused. Gaussian hard-wraps both the route echo and the archive at a fixed
+column, in the middle of a token (``ro`` / ``cbs-qb3``), so wrapped lines are
+joined with nothing between them after dropping the one leading print column.
 """
 
 from __future__ import annotations
@@ -77,6 +102,8 @@ class _MethodLayout:
 
     label: str
     """Text before ``(0 K)``; several methods share one label."""
+    archive_key: str
+    """Key of the archive entry ``\\<key>=value`` that repeats E0."""
     terms: tuple[str, ...] | None
     """The ordered term labels, or ``None`` when the block's middle is not read."""
 
@@ -84,23 +111,30 @@ class _MethodLayout:
 #: Identity key of the method -> its block layout. Every entry has a real log
 #: in ``tests/fixtures/gaussian_composite`` (see the README there).
 _LAYOUTS: dict[str, _MethodLayout] = {
-    "cbs-qb3": _MethodLayout("CBS-QB3", _CBS_QB3_TERMS),
-    "rocbs-qb3": _MethodLayout("CBS-QB3", _CBS_QB3_TERMS),
-    "cbs-4m": _MethodLayout("CBS-4", _CBS_4M_TERMS),
-    "g3": _MethodLayout("G3", None),
-    "g4": _MethodLayout("G4", None),
-    "g4mp2": _MethodLayout("G4MP2", None),
+    "cbs-qb3": _MethodLayout("CBS-QB3", "CBSQB3", _CBS_QB3_TERMS),
+    "rocbs-qb3": _MethodLayout("CBS-QB3", "CBSQB3", _CBS_QB3_TERMS),
+    "cbs-4m": _MethodLayout("CBS-4", "CBS4M", _CBS_4M_TERMS),
+    "g3": _MethodLayout("G3", "G3", None),
 }
 
-#: Methods the module recognises as composite but declines to read.
+#: Methods the module recognises as composite but declines to read. ``g4`` and
+#: ``g4mp2`` are here because their real blocks fail the identity check (see the
+#: module docstring); the rest have no real log.
 UNREAD_COMPOSITE_METHOD_KEYS = frozenset(
-    {"cbs-apno", "g3b3", "g3mp2", "g3mp2b3", "w1u", "w1bd", "w1ro", "w1", "g1", "g2", "g2mp2"}
+    {"g4", "g4mp2", "cbs-apno", "g3b3", "g3mp2", "g3mp2b3", "w1u", "w1bd", "w1ro", "w1", "g1", "g2", "g2mp2"}
 )
 
 _TEMPERATURE_LINE = re.compile(rf"^\s*Temperature=\s+{_NUMBER}\s+Pressure=\s+{_NUMBER}\s*$")
-_ZPE_LINE = re.compile(rf"^\s*E\(ZPE\)=\s+(?P<zpe>{_NUMBER})\s+E\(Thermal\)=\s+{_NUMBER}\s*$")
+_ZPE_LINE = re.compile(
+    rf"^\s*E\(ZPE\)=\s+(?P<zpe>{_NUMBER})\s+E\(Thermal\)=\s+(?P<thermal>{_NUMBER})\s*$"
+)
 _PAIR = re.compile(rf"(?P<label>[A-Za-z]+\([A-Za-z0-9]+\))=\s+(?P<value>{_NUMBER})")
 _MAX_BLOCK_LINES = 12
+_ARCHIVE_START = re.compile(r"^ 1\\1\\")
+_MAX_ARCHIVE_LINES = 400
+_ARCHIVE_SEARCH_LINES = 8
+_DASH_ROW = re.compile(r"^-{8,}$")
+_FLOAT_NOISE = 1e-12
 
 
 @dataclass(frozen=True)
@@ -116,11 +150,11 @@ class GaussianCompositeSummary:
     """The values a Gaussian composite summary block states.
 
     :param method_key: Identity key of the method the route names
-        (``cbs-qb3``, ``rocbs-qb3``, ``cbs-4m``, ``g3``, ``g4``, ``g4mp2``).
+        (``cbs-qb3``, ``rocbs-qb3``, ``cbs-4m``, ``g3``).
     :param e0_hartree: ``<METHOD> (0 K)``: the 0 K energy including the recipe ZPE.
     :param recipe_zpe_hartree: ``E(ZPE)``: the recipe's scaled zero-point energy.
-    :param terms: The printed terms in print order (CBS family); empty for the
-        G family, whose middle lines are not read.
+    :param terms: The printed terms in print order (CBS family); empty for G3,
+        whose middle lines are not read.
     """
 
     method_key: str
@@ -140,7 +174,15 @@ def implied_electronic_energy_hartree(summary: GaussianCompositeSummary) -> floa
     return summary.e0_hartree - summary.recipe_zpe_hartree
 
 
-_DASH_ROW = re.compile(r"^-{8,}$")
+def _join_wrapped(lines: list[str]) -> str:
+    """Join hard-wrapped echo lines: drop the one leading print column, join with nothing.
+
+    Gaussian breaks a long line at a fixed column, mid-token, and starts the next
+    with a space in column one. Stripping and joining with a space would turn
+    ``ro`` / ``cbs-qb3`` into ``ro cbs-qb3``; a trailing space that ends a line is
+    part of the text and is kept.
+    """
+    return "".join(line.rstrip("\r\n")[1:] for line in lines)
 
 
 def _first_route(lines: list[str]) -> str | None:
@@ -154,11 +196,9 @@ def _first_route(lines: list[str]) -> str | None:
     for index, line in enumerate(lines[:-1]):
         if not _DASH_ROW.match(line.strip()) or not lines[index + 1].strip().startswith("#"):
             continue
-        parts: list[str] = []
-        for follow in lines[index + 1 :]:
-            if _DASH_ROW.match(follow.strip()):
-                return " ".join(parts)
-            parts.append(follow.strip())
+        for end in range(index + 1, len(lines)):
+            if _DASH_ROW.match(lines[end].strip()):
+                return _join_wrapped(lines[index + 1 : end])
         return None
     return None
 
@@ -195,13 +235,40 @@ def _parse_terms(
     return tuple(terms)
 
 
+def _archive_value(lines: list[str], after: int, archive_key: str) -> float | None | bool:
+    """The archive entry ``\\<archive_key>=value`` following a block.
+
+    :returns: the value; ``None`` when there is no archive entry or it does not
+        state this key (nothing to cross-check); ``False`` when the entry states
+        the key with a value that cannot be read.
+    """
+    start = None
+    for index in range(after, min(after + _ARCHIVE_SEARCH_LINES, len(lines))):
+        if _ARCHIVE_START.match(lines[index]):
+            start = index
+            break
+    if start is None:
+        return None
+    end = start
+    while end < min(start + _MAX_ARCHIVE_LINES, len(lines)) and not lines[end].rstrip().endswith("\\@"):
+        end += 1
+    archive = _join_wrapped(lines[start : end + 1])
+    match = re.search(rf"\\{re.escape(archive_key)}=(?P<value>[^\\]*)\\", archive)
+    if match is None:
+        return None
+    try:
+        return float(match["value"])
+    except ValueError:
+        return False
+
+
 def parse_gaussian_composite_summary(text: str | None) -> GaussianCompositeSummary | None:
     """Read the composite summary block of a Gaussian log, or ``None``.
 
     ``None`` means *not read*, for every reason: not a Gaussian composite log,
-    a method outside the supported set, a missing or partial block, terms that
-    contradict ``E0``, two blocks that disagree, or a non-finite number. It never
-    returns a partial result.
+    a method outside the supported set, a missing or partial block, a block that
+    fails its identity or archive check, terms that contradict ``E0``, two blocks
+    that disagree, or a non-finite number. It never returns a partial result.
 
     :param text: Decoded log text.
     """
@@ -215,16 +282,17 @@ def parse_gaussian_composite_summary(text: str | None) -> GaussianCompositeSumma
 
     zero_k = re.compile(
         rf"^\s*{re.escape(layout.label)}\s?\(0 K\)=\s+(?P<e0>{_NUMBER})\s+"
-        rf"{re.escape(layout.label)}\s+Energy=\s+{_NUMBER}\s*$"
+        rf"{re.escape(layout.label)}\s+Energy=\s+(?P<energy>{_NUMBER})\s*$"
     )
     found: list[GaussianCompositeSummary] = []
     for index, line in enumerate(lines):
         match = zero_k.match(line)
         if match is None:
             continue
-        summary = _read_block(lines, index, float(match["e0"]), method_key, layout)
+        summary = _read_block(lines, index, float(match["e0"]), float(match["energy"]), method_key, layout)
         if summary is None:
-            # A (0 K) line whose block is partial: refuse the log, never skip to another.
+            # A (0 K) line whose block is partial or inconsistent: refuse the
+            # log, never skip on to another block.
             return None
         found.append(summary)
     if not found:
@@ -241,6 +309,7 @@ def _read_block(
     lines: list[str],
     zero_k_index: int,
     e0: float,
+    energy: float,
     method_key: str,
     layout: _MethodLayout,
 ) -> GaussianCompositeSummary | None:
@@ -258,7 +327,20 @@ def _read_block(
     if zpe_match is None:
         return None
     zpe = float(zpe_match["zpe"])
-    if not (math.isfinite(zpe) and math.isfinite(e0)) or zpe < 0:
+    thermal = float(zpe_match["thermal"])
+    if not all(math.isfinite(v) for v in (e0, energy, zpe, thermal)) or zpe < 0:
+        return None
+
+    # Block identity (manual): Energy - E0 = E(Thermal) - E(ZPE). Four rounded quantities.
+    identity_gap = (energy - e0) - (thermal - zpe)
+    if abs(identity_gap) > composite_arithmetic_tolerance_hartree(4) + _FLOAT_NOISE:
+        return None
+
+    # Archive cross-check, when the log states the entry.
+    archived = _archive_value(lines, zero_k_index + 1, layout.archive_key)
+    if archived is False:
+        return None
+    if archived is not None and abs(archived - e0) > composite_arithmetic_tolerance_hartree(2) + _FLOAT_NOISE:
         return None
 
     terms: tuple[CompositeLogTerm, ...] = ()
@@ -268,7 +350,7 @@ def _read_block(
             return None
         # e0, zpe and every term are six-decimal roundings: n = terms + 2.
         tolerance = composite_arithmetic_tolerance_hartree(len(parsed) + 2)
-        if abs(sum(t.value_hartree for t in parsed) + zpe - e0) > tolerance + 1e-12:
+        if abs(sum(t.value_hartree for t in parsed) + zpe - e0) > tolerance + _FLOAT_NOISE:
             return None
         terms = parsed
     return GaussianCompositeSummary(

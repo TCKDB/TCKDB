@@ -203,8 +203,12 @@ Every entry of `schemas/python/tckdb-schemas/CHANGELOG.md`, newest first, copied
 Composite levels of theory, phase P3b (ADR 0021): a `composite` calculation's
 deposited energy is compared with the Gaussian output log attached to it. No
 payload field changes and every payload accepted before is accepted unchanged;
-this release only adds two warnings to upload responses.
+this release only adds three warnings to upload responses.
 
+- **New warning `composite_energy_log_available`** (informational): the
+  `composite_result` stated no energy and the attached log's summary block
+  states E0 and the recipe ZPE. Nothing is filled; the message carries the
+  numbers so the producer can send them.
 - **New warnings** (the upload is accepted; the deposited values are kept
   exactly as sent, and nothing is filled from the log):
   `composite_energy_log_mismatch` (an attached Gaussian output log's summary
@@ -215,8 +219,10 @@ this release only adds two warnings to upload responses.
   theory; the energies are then not compared).
 - **What ARC (or any producer) must attach:** the Gaussian output log of the
   composite run as an `output_log` artifact on the `composite` calculation.
-  Logs of CBS-QB3, ROCBS-QB3, CBS-4M, G3, G4 and G4MP2 are read; other composite
-  methods are not compared (no warning either way).
+  Logs of CBS-QB3, ROCBS-QB3, CBS-4M and G3 are read; other composite methods,
+  G4 and G4MP2 included, are not compared (no warning either way). G4 and G4MP2
+  are declined because the Gaussian 16 Rev A.03 summary labels are shifted by one
+  pair, so the number under `G4(0 K)` is not E0.
 - An `sp` at a composite level whose attached log is a composite job still gets
   no single-point energy, as before.
 

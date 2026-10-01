@@ -10,8 +10,9 @@ What would make these vacuous, and what stops it
 * "No warning" is only meaningful when the same log, with one number moved,
   produces the warning: each route has both, and the warning tests assert the
   deposited value is unchanged afterwards (nothing overwritten, nothing filled).
-* A legacy ``sp`` / ``opt`` at the CBS-QB3 level with the same log must still get
-  no single-point energy filled, and no composite warning (that hook is not theirs).
+* A legacy ``sp`` at the CBS-QB3 level with the same log must still get no
+  single-point energy filled, and no composite warning (that hook is not theirs).
+* A composite log attached as ``input`` (not ``output_log``) is not reconciled.
 """
 
 from __future__ import annotations
@@ -23,6 +24,8 @@ import pytest
 from sqlalchemy import select
 
 from app.db.models.calculation import CalculationCompositeResult, CalculationSPResult
+from tests.api.test_api_bundle_monatomic_sp_primary import _h_species
+from tests.api.test_api_composite_reaction_primary import _composite_atom_payload
 
 _LOG = (
     Path(__file__).resolve().parent.parent / "fixtures" / "gaussian_composite" / "cbs_qb3_ts_c2h5no2_g16.out"
@@ -115,7 +118,23 @@ def test_artifacts_route_never_fills_a_null_energy_from_the_log(client, db_sessi
     calc_id = _deposit(client, _composite(e0_hartree=None, electronic_energy_hartree=None, recipe_zpe_hartree=None))
     resp = _attach(client, calc_id)
     assert not _COMPOSITE_WARNING_CODES & set(_codes(resp))
+    # The log's numbers are announced, never stored.
+    available = [w for w in resp.json()["warnings"] if w["code"] == "composite_energy_log_available"]
+    assert len(available) == 1 and "-283.819775" in available[0]["message"]
     assert _stored(db_session, calc_id) == (None, None, None)
+
+
+def test_a_composite_log_attached_as_input_is_not_reconciled(client, db_session):
+    """The kind gate: the same disagreeing deposit, the same bytes, but kind 'input'."""
+    wrong_e0 = _E0 + 0.01
+    calc_id = _deposit(client, _composite(e0_hartree=wrong_e0, electronic_energy_hartree=None))
+    as_input = {**_output_log("cbs-qb3.gjf"), "kind": "input"}
+    resp = client.post(f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [as_input]})
+    assert resp.status_code == 201, resp.text
+    assert not (_COMPOSITE_WARNING_CODES | {"composite_energy_log_available"}) & set(_codes(resp))
+    # Control: the identical deposit warns when the kind is output_log.
+    other = _deposit(client, _composite(e0_hartree=wrong_e0, electronic_energy_hartree=None))
+    assert "composite_energy_log_mismatch" in _codes(_attach(client, other))
 
 
 def test_artifacts_route_log_of_another_method_than_the_level_warns(client, db_session):
@@ -163,7 +182,7 @@ def test_bundle_disagreeing_log_warns_in_the_response(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# The legacy shapes: an sp / opt at the named-composite level
+# The legacy shape: an sp at the named-composite level
 # ---------------------------------------------------------------------------
 
 
@@ -201,3 +220,37 @@ def test_a_legacy_sp_keeps_its_reported_energy_unflagged(client, db_session):
     assert "sp_energy_payload_log_mismatch" not in _codes(resp)
     db_session.expire_all()
     assert db_session.get(CalculationSPResult, calc_id).electronic_energy_hartree == _E0
+
+
+# ---------------------------------------------------------------------------
+# A computed-reaction bundle, log inline on a composite conformer primary
+# ---------------------------------------------------------------------------
+
+
+def _reaction_with_composite(**result) -> dict:
+    payload = _composite_atom_payload()
+    (conformer,) = _h_species(payload)["conformers"]
+    calc = conformer["calculation"]
+    calc["composite_result"] = {"assembly": "program_run", **result}
+    calc["artifacts"] = [_output_log()]
+    return payload
+
+
+def test_reaction_bundle_matching_log_gives_no_composite_warning(client, db_session):
+    resp = client.post(
+        "/api/v1/uploads/computed-reaction",
+        json=_reaction_with_composite(e0_hartree=_E0, electronic_energy_hartree=_ELECTRONIC, recipe_zpe_hartree=_ZPE),
+    )
+    assert resp.status_code == 201, resp.text[:800]
+    assert not (_COMPOSITE_WARNING_CODES | {"composite_energy_log_available"}) & set(_codes(resp))
+
+
+def test_reaction_bundle_disagreeing_log_warns_and_keeps_the_deposit(client, db_session):
+    resp = client.post(
+        "/api/v1/uploads/computed-reaction",
+        json=_reaction_with_composite(electronic_energy_hartree=_ELECTRONIC + 0.01),
+    )
+    assert resp.status_code == 201, resp.text[:800]
+    assert "composite_energy_log_mismatch" in _codes(resp)
+    row = db_session.scalars(select(CalculationCompositeResult)).one()
+    assert (row.e0_hartree, row.electronic_energy_hartree) == (None, _ELECTRONIC + 0.01)
