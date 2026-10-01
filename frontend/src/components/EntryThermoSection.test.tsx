@@ -790,7 +790,34 @@ describe("EntryThermoSection: provenance refs render as .data, like every other 
         expect(statmechDd.querySelector(".data")).not.toBeNull()
     })
 
-    it("renders plain 'not recorded' text (no empty .data span) when either ref is absent", async () => {
+    it("shows 'none' for the statmech and every calculation ref of an UNLINKED record, in the card and in the table (#645)", async () => {
+        const [alpha] = mockRecords()
+        const unlinked = {
+            ...alpha,
+            thermo_ref: "thm_unlinked",
+            provenance: {
+                ...alpha.provenance,
+                statmech_id: null,
+                statmech_ref: null,
+                primary_calculation: null,
+                level_of_theory: null,
+                freq_calculation_ref: null,
+                sp_calculation_ref: null,
+            },
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [unlinked] }))))
+        page()
+        await screen.findByText("thm_unlinked")
+        const card = screen.getByText("thm_unlinked").closest("article") as HTMLElement
+
+        expect(ddFor(card, "Statmech ref")).toBe("none")
+        expect(ddFor(card, "Primary calculation")).toBe("none")
+        expect(ddFor(card, "Frequency calculation")).toBe("none")
+        expect(ddFor(card, "Single-point calculation")).toBe("none")
+        expect(card.textContent).not.toContain("sm_alpha")
+    })
+
+    it("renders plain 'none' text (no empty .data span) when either ref is absent and nothing is linked (#645)", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_beta")
@@ -798,8 +825,47 @@ describe("EntryThermoSection: provenance refs render as .data, like every other 
 
         const lotDt = Array.from(betaCard.querySelectorAll("dt")).find((el) => el.textContent === "Level of theory ref")!
         const lotDd = lotDt.nextElementSibling as HTMLElement
-        expect(lotDd).toHaveTextContent("not recorded")
+        expect(lotDd).toHaveTextContent("none")
         expect(lotDd.querySelector(".data")).toBeNull()
+        expect(ddFor(betaCard, "Conformer")).toBe("none")
+        // Software is the record's own nullable column, not a link.
+        expect(ddFor(betaCard, "Software")).toBe("not recorded")
+    })
+
+    it("says 'not recorded' (not 'none') for the level and conformer of a record that IS linked but whose fields are NULL", async () => {
+        const [alpha] = mockRecords()
+        const linkedNoLevel = {
+            ...alpha,
+            provenance: { ...alpha.provenance, level_of_theory: null, primary_calculation: null, statmech_ref: "sm_alpha" },
+            levels: null,
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [linkedNoLevel] }))))
+        page()
+        await screen.findByText("thm_alpha")
+        const card = screen.getByText("thm_alpha").closest("article") as HTMLElement
+        expect(ddFor(card, "Level of theory ref")).toBe("not recorded")
+        expect(ddFor(card, "Conformer")).toBe("not recorded")
+    })
+
+    it("reads 'none' in the identical-group table's Statmech ref cell for unlinked records (#645)", async () => {
+        const [alpha] = mockRecords()
+        const unlinked = (ref: string) => ({
+            ...alpha,
+            thermo_ref: ref,
+            provenance: {
+                ...alpha.provenance,
+                statmech_ref: null, primary_calculation: null, level_of_theory: null,
+                freq_calculation_ref: null, sp_calculation_ref: null,
+            },
+            levels: null,
+        })
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [unlinked("thm_u1"), unlinked("thm_u2")] }))))
+        page()
+        await screen.findByText("2 records with identical values")
+        const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+        const row = within(refsTable).getByText("thm_u1").closest("tr") as HTMLElement
+        expect(cellAt(row, "Statmech ref")).toBe("none")
+        expect(cellAt(row, "Primary calculation")).toBe("none")
     })
 })
 
@@ -1120,10 +1186,11 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         expect(within(row).getByRole("link", { name: "calc_distinct_sp" })).toHaveAttribute("href", "/calculations/calc_distinct_sp")
 
         // The sibling row's null Freq ref hits the cell's third branch --
-        // "not recorded", plain text, never a link and never confused with
-        // the "same as primary" collapse (a null ref is not a match).
+        // "none" (#645: an absent link reads "none", never a borrowed ref),
+        // plain text, never a link and never confused with the "same as
+        // primary" collapse (a null ref is not a match).
         const plainRow = within(refsTable).getByText("thm_plain").closest("tr") as HTMLElement
-        expect(cellAt(plainRow, "Freq calculation")).toBe("not recorded")
+        expect(cellAt(plainRow, "Freq calculation")).toBe("none")
         const plainFreqCell = plainRow.querySelector('td[data-label="Freq calculation"]') as HTMLElement
         expect(within(plainFreqCell).queryByRole("link")).toBeNull()
     })

@@ -158,8 +158,9 @@ print("software_release_ref :", sw.get("software_release_ref"),
 
 Important detail:
 
-- For computed thermo derived from a statmech, the read service **falls back** to the statmech's source calculations when the thermo itself didn't declare any. So `freq_calculation_ref` and `sp_calculation_ref` are usually populated even when the thermo has no `ThermoSourceCalculation` rows of its own.
-- Explicit thermo source calcs always take precedence over the statmech fallback. The fallback is invisible to the caller — the response shape is identical either way.
+- For computed thermo linked to a statmech (`thermo.statmech_id`), the read service uses that statmech's source calculations for the roles the thermo itself didn't declare. So `freq_calculation_ref` and `sp_calculation_ref` are populated for a linked thermo with no `ThermoSourceCalculation` rows of its own.
+- Explicit thermo source calcs always take precedence over the linked statmech's.
+- A thermo with no `statmech_id` and no source calcs shows `statmech_ref`, calculation refs and level of theory as null. Nothing is borrowed from other statmech records on the species entry, and the evidence score counts only the record's own links.
 
 ---
 

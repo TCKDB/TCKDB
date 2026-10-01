@@ -186,8 +186,8 @@ class ThermoProvenance(BaseModel):
     single calculation used for ``primary_calculation`` one hop further,
     through ``calculation.conformer_observation_id`` to the conformer
     basin it belongs to. All four are ``null`` when the record has no
-    resolvable primary calculation (no source calc, direct or borrowed
-    from statmech) — a record with no calculation has no conformer to
+    resolvable primary calculation (no source calc, direct or from the
+    linked statmech) — a record with no calculation has no conformer to
     report, and this block does not invent one.
     """
 

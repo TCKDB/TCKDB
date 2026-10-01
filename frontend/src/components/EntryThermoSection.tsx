@@ -567,7 +567,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                                     <td data-label="SP calculation">
                                         <CalculationRefCell calculationRef={provenance?.sp_calculation_ref ?? null} primaryRef={primaryRef} />
                                     </td>
-                                    <td data-label="Statmech ref">{provenance?.statmech_ref ? <code className="data">{provenance.statmech_ref}</code> : "not recorded"}</td>
+                                    <td data-label="Statmech ref">{provenance?.statmech_ref ? <code className="data">{provenance.statmech_ref}</code> : "none"}</td>
                                     <td data-label="Software">{softwareLabel(provenance?.software_release) ?? "not recorded"}</td>
                                     <td data-label="Workflow tool">{toolReleaseLabel(provenance?.workflow_tool_release) ?? "not recorded"}</td>
                                 </tr>
@@ -582,7 +582,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
 
 /**
  * One calculation-ref cell in `IdenticalThermoGroupRefs`' table: a link
- * when the ref is present, plain "not recorded" text otherwise.
+ * when the ref is present, plain "none" text otherwise (no borrowed ref, #645).
  *
  * `primaryRef`, when passed, is the SAME dedup this table's Primary
  * column always shows in full -- if this cell's own ref equals it, the
@@ -603,8 +603,8 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
  * be hidden, only the identical one.
  */
 function CalculationRefCell({ calculationRef, primaryRef = null }: { calculationRef: string | null; primaryRef?: string | null }) {
-    if (!calculationRef) return <>not recorded</>
-    // Plain text, not a link -- like the "not recorded" branch above, this
+    if (!calculationRef) return <>none</>
+    // Plain text, not a link -- like the "none" branch above, this
     // cell has no calculation of its own to point at; the ref is already
     // linked from the Primary column in the same row.
     if (primaryRef && calculationRef === primaryRef) return <>same as primary</>
@@ -907,7 +907,7 @@ type CalcRefRow = { labels: string[]; ref: string }
  * calculations that simply happen to match, not one calculation serving
  * two roles. Each DISTINCT ref gets exactly one row here, labelled with
  * every role it fills, joined "/"; a role whose own ref is `null` keeps
- * its own separate row, stating "not recorded" plainly rather than being
+ * its own separate row, stating "none" plainly rather than being
  * folded into a group it was never actually part of.
  */
 function provenanceCalculationRows(provenance: NonNullable<ThermoRecord["provenance"]>): { rows: CalcRefRow[]; missing: string[] } {
@@ -938,7 +938,7 @@ function CalculationProvenanceRows({ provenance }: { provenance: NonNullable<The
                 </div>
             ))}
             {missing.map((label) => (
-                <div key={label}><dt>{label}</dt><dd>not recorded</dd></div>
+                <div key={label}><dt>{label}</dt><dd>none</dd></div>
             ))}
         </>
     )
@@ -971,6 +971,10 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
     // up to three distinct refs, and no single one of them is "the" ref
     // this row could report without picking a winner among the others.
     const levelsAgree = productLevelsAgree(productLevels)
+    // "none" = the record links to no calculation and no statmech, so there is
+    // nothing these fields could come from (#645). "not recorded" = something
+    // is linked but this field on it is NULL.
+    const noLinkLabel = !provenance.primary_calculation && !provenance.statmech_ref ? "none" : "not recorded"
     return (
         <section aria-labelledby={`provenance-${thermoRef}${idSuffix}`}>
             <h4 className="model-block-heading" id={`provenance-${thermoRef}${idSuffix}`}>Provenance</h4>
@@ -983,7 +987,7 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
                 {levelsAgree && (
                     <div>
                         <dt>Level of theory ref</dt>
-                        <dd>{productLevels.geometry?.level_of_theory_ref ? <Link className="data" to={levelOfTheoryPath(productLevels.geometry.level_of_theory_ref)}>{productLevels.geometry.level_of_theory_ref}</Link> : "not recorded"}</dd>
+                        <dd>{productLevels.geometry?.level_of_theory_ref ? <Link className="data" to={levelOfTheoryPath(productLevels.geometry.level_of_theory_ref)}>{productLevels.geometry.level_of_theory_ref}</Link> : noLinkLabel}</dd>
                     </div>
                 )}
                 <div>
@@ -997,13 +1001,13 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
                 <CalculationProvenanceRows provenance={provenance} />
                 {/* No dedicated statmech detail page exists in this project (see the
                     module docstring), so this stays plain text rather than a dead link. */}
-                <div><dt>Statmech ref</dt><dd>{provenance.statmech_ref ? <span className="data">{provenance.statmech_ref}</span> : "not recorded"}</dd></div>
+                <div><dt>Statmech ref</dt><dd>{provenance.statmech_ref ? <span className="data">{provenance.statmech_ref}</span> : "none"}</dd></div>
                 <div>
                     <dt>Conformer</dt>
                     <dd>
                         {provenance.conformer_group_ref
                             ? <Link className="data" to={`/conformer-groups/${provenance.conformer_group_ref}`}>{provenance.conformer_group_ref}</Link>
-                            : "not recorded"}
+                            : noLinkLabel}
                     </dd>
                 </div>
             </dl>
