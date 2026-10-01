@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.71.0 - 2026-10-01
+
+Composite levels of theory, phase P3b (ADR 0021): a `composite` calculation's
+deposited energy is compared with the Gaussian output log attached to it. No
+payload field changes and every payload accepted before is accepted unchanged;
+this release only adds two warnings to upload responses.
+
+- **New warnings** (the upload is accepted; the deposited values are kept
+  exactly as sent, and nothing is filled from the log):
+  `composite_energy_log_mismatch` (an attached Gaussian output log's summary
+  block states a different `e0_hartree`, `recipe_zpe_hartree` or
+  `electronic_energy_hartree` than the `composite_result`, beyond printed
+  precision, `max(1e-6, 5e-7 * n)` hartree) and `composite_log_method_mismatch`
+  (the log is a different composite method from the calculation's level of
+  theory; the energies are then not compared).
+- **What ARC (or any producer) must attach:** the Gaussian output log of the
+  composite run as an `output_log` artifact on the `composite` calculation.
+  Logs of CBS-QB3, ROCBS-QB3, CBS-4M, G3, G4 and G4MP2 are read; other composite
+  methods are not compared (no warning either way).
+- An `sp` at a composite level whose attached log is a composite job still gets
+  no single-point energy, as before.
+
 ## 0.70.0 - 2026-10-01
 
 Composite levels of theory, phase P3a (ADR 0021): a calculation of type

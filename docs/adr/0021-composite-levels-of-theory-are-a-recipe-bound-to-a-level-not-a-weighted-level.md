@@ -107,12 +107,25 @@ derive the notation. R1 reports geometry from the optimisation and energy from
 the single point, as it does today.
 
 **TCKDB never stores a total it computed itself.** The deposited total is
-checked by recomputation from its inputs (block on mismatch beyond 1e-6 Eh),
-and is `unverifiable` when an input energy is missing. Checks follow ADR 0008:
+checked by recomputation from its inputs (block on mismatch beyond the
+tolerance below), and is `unverifiable` when an input energy is missing. Checks follow ADR 0008:
 a missing input slot, an input at the wrong level, an input of the wrong type,
 inputs on different entries or geometries, a total that does not recompute and
 terms that do not sum block; an undeclared geometry or a log that disagrees with
 the deposited value warn.
+
+**Arithmetic tolerance (amended 2026-10-01, #654).** Every arithmetic check on
+a deposited composite (`composite_e0_inconsistent`, `composite_terms_do_not_sum`,
+and the recomputed-total check of P5) uses `max(1e-6, 5e-7 * n)` hartree, where
+`n` is the number of rounded quantities in the equation: 3 for
+`e0 = electronic + zpe`, and the number of terms plus one for a sum of terms
+against its total. *Why:* a program prints each number rounded to six decimals,
+so each can be off by up to 5e-7 and `n` of them by up to `5e-7 * n`. A flat
+1e-6 refuses real logs: a seven-term CBS-QB3 breakdown and its total can drift by
+about 3.5e-6. The floor keeps the short equations as tight as before. The check is
+there to catch a number that is wrong, not printed precision. The wire package
+owns the function (`composite_arithmetic_tolerance_hartree`) so the wire
+validators, the persistence seam and the log comparison cannot disagree.
 
 ## The twelve decisions
 
@@ -230,7 +243,14 @@ Each phase is independently mergeable.
     `composite_role_on_non_composite_calculation`). Only `assembly =
     program_run` is accepted; `assembled` is refused by name
     (`composite_assembled_not_accepted`) until P5.
-  - **P3b (not built).** The Gaussian composite-log parser.
+  - **P3b (built).** The Gaussian composite summary-block parser
+    (`gaussian_composite_parser`: CBS-QB3, ROCBS-QB3, CBS-4M, G3, G4, G4MP2, each
+    with a real log; the rest are refused rather than guessed) and
+    reconciliation of a deposited `composite_result` against it, warning
+    `composite_energy_log_mismatch` / `composite_log_method_mismatch`. Nothing is
+    filled from the log: no block prints the ZPE-free energy, so filling would mean
+    storing a number TCKDB computed. A composite route on an `sp` is still refused
+    an sp energy, and the reason is recorded.
 - **P4.** `calc_sp_energy_component` and the core-treatment field.
 - **P5.** User schemes: the inline definition, the hash branch,
   `calc_composite_input`, the `composite_input` role, the checks.

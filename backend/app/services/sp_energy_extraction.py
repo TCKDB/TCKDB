@@ -37,6 +37,9 @@ from app.db.models.calculation import Calculation, CalculationSPResult
 from app.db.models.common import ArtifactKind, CalculationType
 from app.schemas.fragments.artifact import ArtifactIn
 from app.services.best_effort import isolated_best_effort
+from app.services.composite_energy_extraction import (
+    try_reconcile_composite_energy_from_output_log,
+)
 from app.services.sp_energy_reconciliation import (
     SpEnergyAction,
     SpEnergyReconciliation,
@@ -60,7 +63,8 @@ def try_reconcile_sp_energy_from_output_upload(
     Returns an :class:`UploadWarning` when the reconciliation produced one
     (a mismatch flagged for review, or an informational note that the
     energy was filled from the log), otherwise ``None``. Returns ``None``
-    for non-output-log artifacts, non-single-point calculations, and any
+    for non-output-log artifacts, calculations that are neither single-point nor
+    composite (a composite is reconciled by its own hook), and any
     failure — a broad safety net guarantees the canonical artifact upload
     is never aborted by a reconciliation error, matching the sibling
     parameter-extraction hook.
@@ -83,6 +87,12 @@ def try_reconcile_sp_energy_from_output_upload(
     # across the boundary (an identity check would always fail).
     if artifact_in.kind != ArtifactKind.output_log:
         return None
+    if calculation.type == CalculationType.composite:
+        # A composite calculation's log is reconciled against its composite
+        # result, not against a single-point energy (ADR 0021, P3b).
+        return try_reconcile_composite_energy_from_output_log(
+            session, calculation, artifact_in
+        )
     if calculation.type != CalculationType.sp:
         return None
 
@@ -120,6 +130,16 @@ def _reconcile_and_fill(
         payload_energy_hartree=payload_energy,
         log_text=text,
     )
+
+    if outcome.unverifiable_reason is not None:
+        # The refusal to read a composite job's sub-step energy is deliberate;
+        # record why, so a calculation left unverified is not left unexplained.
+        logger.info(
+            "sp_energy for calculation id=%s left unverified by artifact '%s': %s",
+            calculation.id,
+            artifact_in.filename,
+            outcome.unverifiable_reason,
+        )
 
     if outcome.action is SpEnergyAction.filled:
         return _fill(session, calculation, existing, outcome)
