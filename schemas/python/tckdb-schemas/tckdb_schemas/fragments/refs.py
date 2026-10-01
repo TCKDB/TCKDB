@@ -737,7 +737,8 @@ class LevelOfTheoryRef(OrdinaryLevelOfTheoryRef):
     scheme's input levels.
     """
 
-    method: str | None = Field(default=None, min_length=1)
+    # Widens the parent's required ``str``: the one place a level may name no method.
+    method: str | None = Field(default=None, min_length=1)  # type: ignore[assignment]
     composite_scheme: CompositeSchemeDefinition | None = None
 
     @model_validator(mode="after")
