@@ -10568,6 +10568,265 @@
         "title": "CollapseMode",
         "type": "string"
       },
+      "CompositeBindingSource": {
+        "description": "Why a level of theory is bound to a composite scheme (ADR 0021).\n\n``named_method_catalogue``: the level's method is a catalogued named\ncomposite method, bound by TCKDB. ``declared``: a depositor declared the\nscheme (a later phase).",
+        "enum": [
+          "named_method_catalogue",
+          "declared"
+        ],
+        "title": "CompositeBindingSource",
+        "type": "string"
+      },
+      "CompositeExtrapolationFormula": {
+        "description": "The basis-set extrapolation formula of an extrapolation term (ADR 0021).\n\nFormula, exponent and cardinal numbers are identity: anything that\nchanges the number for fixed component energies is part of what the\nlevel of theory is.",
+        "enum": [
+          "inverse_power",
+          "inverse_power_shifted_half",
+          "karton_martin_scf",
+          "exponential_three_point"
+        ],
+        "title": "CompositeExtrapolationFormula",
+        "type": "string"
+      },
+      "CompositeInputSlot": {
+        "description": "The role of one input to a ``composite_scheme_term`` (ADR 0021).\n\n``value``: the single input of a base or value term. ``high`` / ``low``:\nthe two sides of a difference. ``cardinal``: one of the points of an\nextrapolation, told apart by its cardinal number.",
+        "enum": [
+          "value",
+          "high",
+          "low",
+          "cardinal"
+        ],
+        "title": "CompositeInputSlot",
+        "type": "string"
+      },
+      "CompositeSchemeBoundLevel": {
+        "description": "A level of theory whose energy this scheme names.",
+        "properties": {
+          "binding_source": {
+            "$ref": "#/components/schemas/CompositeBindingSource"
+          },
+          "level_of_theory": {
+            "$ref": "#/components/schemas/LevelOfTheorySummary"
+          }
+        },
+        "required": [
+          "level_of_theory",
+          "binding_source"
+        ],
+        "title": "CompositeSchemeBoundLevel",
+        "type": "object"
+      },
+      "CompositeSchemeCoreBlock": {
+        "description": "Direct ``composite_scheme`` row metadata.\n\n``geometry_level_of_theory`` and ``frequency_level_of_theory`` are the\nlevels the *recipe* runs internally; ``None`` means the source does not\nstate it, never \"the same as the energy level\". ``recipe_zpe_scale_factor``\nis ``None`` unless a source is cited, and a reader must not substitute 1.0.",
+        "properties": {
+          "composite_scheme_ref": {
+            "title": "Composite Scheme Ref",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "definition_hash": {
+            "title": "Definition Hash",
+            "type": "string"
+          },
+          "frequency_level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "geometry_level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CompositeSchemeKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "recipe_zpe_scale_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Zpe Scale Factor"
+          },
+          "source_literature_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Literature Ref"
+          }
+        },
+        "required": [
+          "composite_scheme_ref",
+          "kind",
+          "name",
+          "definition_hash",
+          "created_at"
+        ],
+        "title": "CompositeSchemeCoreBlock",
+        "type": "object"
+      },
+      "CompositeSchemeKind": {
+        "description": "What sort of recipe a ``composite_scheme`` is (ADR 0021).\n\n``named_method``: a fixed program recipe addressed by its name (CBS-QB3,\nG4, W1U, ...); the recipe is the method's own, held in the curated\ncatalogue, and its terms are descriptive. ``extrapolation``: one\nextrapolation formula over single points at chosen cardinal numbers.\n``additive``: a base energy plus difference terms (a focal-point scheme).\nThe last two are user-declared; no row of either kind is created before\nthe phase that accepts them.",
+        "enum": [
+          "named_method",
+          "extrapolation",
+          "additive"
+        ],
+        "title": "CompositeSchemeKind",
+        "type": "string"
+      },
+      "CompositeSchemeSummary": {
+        "description": "The composite recipe a level of theory is bound to (ADR 0021).\n\n``composite_scheme_ref`` is the handle for\n``GET /scientific/composite-schemes/{ref}``, which returns the recipe's\nterms and inputs. Refs only: no database id.",
+        "properties": {
+          "composite_scheme_ref": {
+            "title": "Composite Scheme Ref",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CompositeSchemeKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "composite_scheme_ref",
+          "kind",
+          "name"
+        ],
+        "title": "CompositeSchemeSummary",
+        "type": "object"
+      },
+      "CompositeSchemeTermInputRecord": {
+        "description": "One level-of-theory input of a term.",
+        "properties": {
+          "cardinal_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cardinal Number"
+          },
+          "level_of_theory": {
+            "$ref": "#/components/schemas/LevelOfTheorySummary"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/CompositeInputSlot"
+          }
+        },
+        "required": [
+          "slot",
+          "level_of_theory"
+        ],
+        "title": "CompositeSchemeTermInputRecord",
+        "type": "object"
+      },
+      "CompositeSchemeTermRecord": {
+        "description": "One term of the recipe, in order.",
+        "properties": {
+          "energy_component": {
+            "$ref": "#/components/schemas/EnergyComponentKind"
+          },
+          "exponent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exponent"
+          },
+          "formula": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompositeExtrapolationFormula"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/CompositeSchemeTermInputRecord"
+            },
+            "title": "Inputs",
+            "type": "array"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/CompositeTermOperation"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "position",
+          "operation",
+          "energy_component",
+          "inputs"
+        ],
+        "title": "CompositeSchemeTermRecord",
+        "type": "object"
+      },
+      "CompositeTermOperation": {
+        "description": "What a ``composite_scheme_term`` does to the running energy (ADR 0021).\n\n``base``: the starting energy. ``extrapolation``: a basis-set limit from\nseveral cardinal numbers. ``difference``: a high-minus-low correction.\n``value``: one single-point energy taken as it is. ``empirical``: a\nrecipe's fitted term (a higher-level correction, a spin or empirical\ncorrection) that the program has already included.",
+        "enum": [
+          "base",
+          "extrapolation",
+          "difference",
+          "value",
+          "empirical"
+        ],
+        "title": "CompositeTermOperation",
+        "type": "string"
+      },
       "ComputedReactionCalculationIn": {
         "additionalProperties": false,
         "description": "Bundle-local calculation block for the computed-reaction endpoint.\n\nExtends the shared ``CalculationIn`` with three producer-controlled\nprovenance fields:\n\n* ``input_geometries`` — geometries this calculation actually ran on.\n* ``output_geometries`` — geometries this calculation produced or\n  reported, each tagged with its scientific role.\n* ``depends_on`` — explicit local-key dependency edges (in addition\n  to the workflow's auto-edges from additional calcs to their primary\n  opt).\n\nThe fields are not part of the shared ``CalculationIn`` because the\nnetwork-PDep workflow does not currently honor them; accepting them\nthere would silently drop producer-declared data. Lift into the\nshared shape only after network-PDep persists them too.",
@@ -15103,6 +15362,19 @@
           "any"
         ],
         "title": "ElementMatchMode",
+        "type": "string"
+      },
+      "EnergyComponentKind": {
+        "description": "Which part of an electronic energy a value is (ADR 0021).\n\nNamed generically because it is shared: a scheme term says which\ncomponent of an input energy it consumes, and a single-point energy\ncomponent (a later phase) says which component it stores. ``total`` is\nthe whole electronic energy; ``reference`` the reference-determinant\n(SCF / HF) part; ``correlation`` the correlation part; ``triples`` the\nperturbative triples part; ``dboc`` the diagonal Born-Oppenheimer\ncorrection; ``scalar_relativistic`` the scalar-relativistic correction.",
+        "enum": [
+          "total",
+          "reference",
+          "correlation",
+          "triples",
+          "dboc",
+          "scalar_relativistic"
+        ],
+        "title": "EnergyComponentKind",
         "type": "string"
       },
       "EnergyCorrectionApplicationRole-Output": {
@@ -21853,6 +22125,16 @@
             ],
             "title": "Cabs Basis"
           },
+          "composite_scheme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompositeSchemeSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -22502,6 +22784,16 @@
               }
             ],
             "title": "Basis"
+          },
+          "composite_scheme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompositeSchemeSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "dispersion": {
             "anyOf": [
@@ -36277,6 +36569,56 @@
           "pagination"
         ],
         "title": "ScientificCalculationsSearchResponse",
+        "type": "object"
+      },
+      "ScientificCompositeSchemeDetailResponse": {
+        "description": "Response envelope for ``GET /scientific/composite-schemes/{ref}``.",
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/ScientificCompositeSchemeRecord"
+          },
+          "request": {
+            "$ref": "#/components/schemas/app__schemas__reads__scientific_composite_scheme__RequestEcho"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "record"
+        ],
+        "title": "ScientificCompositeSchemeDetailResponse",
+        "type": "object"
+      },
+      "ScientificCompositeSchemeRecord": {
+        "description": "One ``composite_scheme`` row projected as a scientific record.",
+        "properties": {
+          "bound_levels_of_theory": {
+            "items": {
+              "$ref": "#/components/schemas/CompositeSchemeBoundLevel"
+            },
+            "title": "Bound Levels Of Theory",
+            "type": "array"
+          },
+          "composite_scheme": {
+            "$ref": "#/components/schemas/CompositeSchemeCoreBlock"
+          },
+          "terms": {
+            "items": {
+              "$ref": "#/components/schemas/CompositeSchemeTermRecord"
+            },
+            "title": "Terms",
+            "type": "array"
+          }
+        },
+        "required": [
+          "composite_scheme",
+          "terms",
+          "bound_levels_of_theory"
+        ],
+        "title": "ScientificCompositeSchemeRecord",
         "type": "object"
       },
       "ScientificConformerGroupDetailResponse": {
@@ -52887,6 +53229,39 @@
           "workflow_tool"
         ],
         "title": "WorkflowToolReleaseSummary",
+        "type": "object"
+      },
+      "app__schemas__reads__scientific_composite_scheme__RequestEcho": {
+        "description": "Echo of the parsed include list, post-validation and post-policy.",
+        "properties": {
+          "include": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Include",
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          }
+        },
+        "title": "RequestEcho",
         "type": "object"
       },
       "app__schemas__reads__scientific_conformer__RequestEcho": {
@@ -70295,6 +70670,99 @@
           }
         },
         "summary": "Scientific Calculation Scan",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/composite-schemes/{composite_scheme_ref}": {
+      "get": {
+        "description": "Return one composite scheme: its terms, their inputs, and the levels bound to it.\n\nThe path handle is a public ref of the form ``csch_...`` (an integer id is\naccepted like on every scientific detail route, and never echoed).",
+        "operationId": "scientific_composite_scheme_detail_api_v1_scientific_composite_schemes__composite_scheme_ref__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "composite_scheme_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Composite Scheme Ref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificCompositeSchemeDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Composite Scheme Detail",
         "tags": [
           "scientific"
         ]

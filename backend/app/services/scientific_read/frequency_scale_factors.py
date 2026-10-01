@@ -43,6 +43,7 @@ from app.schemas.reads.scientific_frequency_scale_factor import (
     ScientificFrequencyScaleFactorRecord,
 )
 from app.services.scientific_read.common import validate_includes
+from app.services.scientific_read.composite_binding import composite_scheme_summary
 from app.services.scientific_read.handles import (
     resolve_frequency_scale_factor_handle,
 )
@@ -293,6 +294,7 @@ def _build_lot_summary(
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
         label=None,
+        composite_scheme=composite_scheme_summary(session, lot.id),
     )
 
 

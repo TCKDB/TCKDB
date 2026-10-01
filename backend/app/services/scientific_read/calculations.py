@@ -119,6 +119,9 @@ from app.services.scientific_read.common import (
     review_summary,
     validate_includes,
 )
+from app.services.scientific_read.composite_binding import (
+    composite_scheme_summary,
+)
 from app.services.scientific_read.handles import resolve_calculation_handle
 from app.services.scientific_read.imaginary_mode_projection import (
     build_imaginary_mode_projection,
@@ -759,6 +762,7 @@ def _build_lot_summary(
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
         label=None,
+        composite_scheme=composite_scheme_summary(session, lot.id),
     )
 
 

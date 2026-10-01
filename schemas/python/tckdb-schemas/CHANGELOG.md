@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.68.0 - 2026-10-01
+
+Composite levels of theory, phase P2 (ADR 0021): the server now records the
+recipe behind a named composite method. No upload payload field is added,
+removed or changed, and every payload accepted before is accepted unchanged.
+
+- **A level of theory that names a catalogued composite method is bound to its
+  recipe.** `CBS-QB3`, `G4`, `W1U` and the other methods in the server's
+  catalogue (`cbsqb3` and the other aliases reach the same one) now resolve to a
+  level of theory bound to a `named_method` composite scheme. The level's hash
+  and ref are unchanged, so a level sent before and after is the same row. A
+  method that is not in the catalogue is bound to nothing.
+- **Reads gain the recipe.** `GET /scientific/composite-schemes/{ref}` returns a
+  scheme (`csch_...` ref), and every level-of-theory summary on a read carries
+  `composite_scheme` (`{composite_scheme_ref, kind, name}`), `null` for an
+  ordinary level. These are server responses, not producer payloads.
+- **New public-ref prefix `csch_`** (content-derived: the same recipe has the
+  same ref on every instance).
+- Not in this release: sending a scheme of your own, the `composite`
+  calculation type, and energy components. Those are later phases and change
+  the upload contract when they land.
+
 ## 0.67.0 - 2026-10-01
 
 `level_of_theory.method` guards for named composite methods (ADR 0021). Every

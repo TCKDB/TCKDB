@@ -97,6 +97,9 @@ from app.services.scientific_read.common import (
     validate_includes,
     visible_statuses,
 )
+from app.services.scientific_read.composite_binding import (
+    composite_scheme_summaries,
+)
 from app.services.scientific_read.conformers import build_group_record
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
@@ -880,6 +883,7 @@ def _build_calculations_section(
     ).all()
 
     calc_ids = [row[0] for row in rows]
+    schemes = composite_scheme_summaries(session, [row[3] for row in rows])
     trust_by_calc_id = (
         _build_calculation_trust_fragments(session, calc_ids)
         if include_trust
@@ -903,6 +907,7 @@ def _build_calculations_section(
                     dispersion=row[7],
                     solvent=row[8],
                     label="/".join(p for p in (row[5] or "", row[6]) if p),
+                    composite_scheme=schemes.get(row[3]),
                 )
                 if row[3] is not None
                 else None

@@ -66,6 +66,7 @@ from app.db.models.common import CalculationType
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.species import ConformerObservation
 from app.schemas.reads.scientific_common import LevelOfTheorySummary
+from app.services.scientific_read.composite_binding import composite_scheme_summaries
 
 #: Key order for the emitted map. The declaration order of
 #: :class:`CalculationType`, which reads the way a workflow runs (optimise,
@@ -187,8 +188,10 @@ def _build(
         .distinct()
     )
 
+    rows = session.execute(stmt).all()
+    schemes = composite_scheme_summaries(session, [row.id for row in rows])
     collected: dict[int, dict[str, dict[int, LevelOfTheorySummary]]] = {}
-    for row in session.execute(stmt):
+    for row in rows:
         per_owner = collected.setdefault(row.owner_id, {})
         # ``setdefault`` on the type, then populate only if a level is
         # attributed: the type key exists as soon as a calculation of that
@@ -204,6 +207,7 @@ def _build(
             dispersion=row.dispersion,
             solvent=row.solvent,
             label=None,
+            composite_scheme=schemes.get(row.id),
         )
 
     return LevelsOfTheoryIndex(

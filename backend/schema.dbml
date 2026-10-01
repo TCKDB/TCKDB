@@ -107,6 +107,39 @@ enum CalculationType {
   conf
 }
 
+enum CompositeBindingSource {
+  named_method_catalogue
+  declared
+}
+
+enum CompositeExtrapolationFormula {
+  inverse_power
+  inverse_power_shifted_half
+  karton_martin_scf
+  exponential_three_point
+}
+
+enum CompositeInputSlot {
+  value
+  high
+  low
+  cardinal
+}
+
+enum CompositeSchemeKind {
+  named_method
+  extrapolation
+  additive
+}
+
+enum CompositeTermOperation {
+  base
+  extrapolation
+  difference
+  value
+  empirical
+}
+
 enum ConformerAssignmentScopeKind {
   canonical
   imported
@@ -141,6 +174,15 @@ enum DatasetReleaseStatus {
   draft
   published
   withdrawn
+}
+
+enum EnergyComponentKind {
+  total
+  reference
+  correlation
+  triples
+  dboc
+  scalar_relativistic
 }
 
 enum EnergyCorrectionApplicationRole {
@@ -1584,6 +1626,73 @@ Table chem_reaction {
   }
 }
 
+Table composite_scheme {
+  id bigint [pk, not null]
+  kind CompositeSchemeKind [not null]
+  name text [not null]
+  definition_hash varchar(64) [not null]
+  geometry_level_of_theory_id bigint [ref: > level_of_theory.id]
+  frequency_level_of_theory_id bigint [ref: > level_of_theory.id]
+  recipe_zpe_scale_factor double
+  source_literature_id bigint [ref: > literature.id]
+  note text
+  created_at timestamp [not null, default: 'now']
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_composite_scheme_public_ref']
+    definition_hash [unique, name: 'uq_composite_scheme_definition_hash']
+  }
+
+  checks {
+    `recipe_zpe_scale_factor IS NULL OR recipe_zpe_scale_factor > 0` [name: 'ck_composite_scheme_recipe_zpe_scale_factor_positive']
+  }
+
+  Note: 'One composite recipe (identity; ref prefix ``csch_``).'
+}
+
+Table composite_scheme_term {
+  id bigint [pk, not null]
+  scheme_id bigint [not null, ref: > composite_scheme.id]
+  position int [not null]
+  operation CompositeTermOperation [not null]
+  energy_component EnergyComponentKind [not null]
+  formula CompositeExtrapolationFormula
+  exponent double
+
+  indexes {
+    (scheme_id, position) [unique, name: 'uq_composite_scheme_term_scheme_id_position']
+  }
+
+  checks {
+    `exponent IS NULL OR formula IS NOT NULL` [name: 'ck_composite_scheme_term_exponent_needs_formula']
+    `formula IS NULL OR operation = 'extrapolation'` [name: 'ck_composite_scheme_term_formula_only_on_extrapolation']
+    `position >= 0` [name: 'ck_composite_scheme_term_position_non_negative']
+  }
+
+  Note: 'One term of a recipe, in order.'
+}
+
+Table composite_scheme_term_input {
+  id bigint [pk, not null]
+  term_id bigint [not null, ref: > composite_scheme_term.id]
+  slot CompositeInputSlot [not null]
+  level_of_theory_id bigint [not null, ref: > level_of_theory.id]
+  cardinal_number int
+
+  indexes {
+    level_of_theory_id [name: 'ix_composite_scheme_term_input_level_of_theory_id']
+    (term_id, slot, cardinal_number) [unique, name: 'uq_composite_scheme_term_input_term_slot_cardinal']
+  }
+
+  checks {
+    `cardinal_number IS NULL OR cardinal_number >= 1` [name: 'ck_composite_scheme_term_input_cardinal_number_positive']
+    `slot <> 'cardinal' OR cardinal_number IS NOT NULL` [name: 'ck_composite_scheme_term_input_cardinal_slot_needs_number']
+  }
+
+  Note: 'One level-of-theory input of a term.'
+}
+
 Table conformer_assignment_scheme {
   id bigint [pk, not null]
   name string [not null]
@@ -2206,6 +2315,19 @@ Table level_of_theory {
   }
 
   Note: 'Method/basis provenance used by calculations.'
+}
+
+Table level_of_theory_composite {
+  level_of_theory_id bigint [pk, not null, ref: > level_of_theory.id]
+  scheme_id bigint [not null, ref: > composite_scheme.id]
+  binding_source CompositeBindingSource [not null]
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    scheme_id [name: 'ix_level_of_theory_composite_scheme_id']
+  }
+
+  Note: 'Binds a level of theory to the composite scheme its energy names.'
 }
 
 Table level_of_theory_merge {

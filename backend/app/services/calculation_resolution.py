@@ -71,6 +71,7 @@ from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
 )
 from app.services.calculation_scan_resolution import persist_calculation_scan
+from app.services.composite_scheme_resolution import ensure_named_method_binding
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.hessian_method_inference import infer_hessian_method
@@ -273,6 +274,11 @@ def resolve_level_of_theory_ref(
     )
     if kept_id is not None:
         level_of_theory = session.get(LevelOfTheory, kept_id)
+
+    # A catalogued named composite method (CBS-QB3, G4, ...) is bound to its
+    # recipe here, on the row resolution landed on. The hash is not touched.
+    # Plain methods return without a query (ADR 0021).
+    ensure_named_method_binding(session, level_of_theory)
 
     return level_of_theory
 

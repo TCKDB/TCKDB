@@ -50,6 +50,7 @@ from app.api.routes.scientific import (
     artifacts,
     calculation_paths,
     calculations,
+    composite_schemes,
     conformers,
     corrections,
     export,
@@ -150,6 +151,8 @@ scientific_router.include_router(networks.kinetics_router)
 scientific_router.include_router(literature.router)
 scientific_router.include_router(corrections.fsf_router)
 scientific_router.include_router(corrections.ecs_router)
+# Composite recipes (ADR 0021): one detail route, no search yet.
+scientific_router.include_router(composite_schemes.router)
 # Identifier-free catalogue read, registered right before the search +
 # detail router it deliberately does not modify -- and it must come
 # first: level_of_theory.router's ``/{level_of_theory_ref_or_id}``

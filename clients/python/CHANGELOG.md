@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.107.0 - 2026-10-01
+
+`Client.get_composite_scheme(ref)` reads `GET /scientific/composite-schemes/{ref}`
+(ADR 0021, `tckdb-schemas` 0.68.0): the recipe behind a composite level of
+theory such as CBS-QB3, with its internal levels, terms and the levels of theory
+bound to it. A level of theory's own summary now carries `composite_scheme`
+(`composite_scheme_ref`, `kind`, `name`, or `null` for an ordinary level); pass
+that ref here. New typed shapes `CompositeSchemeRecord` and
+`CompositeSchemeDetailResponse`. Nothing else in the client changes.
+
 ## 0.106.0 - 2026-10-01
 
 Docs and help text only: README, `examples/query_cookbook.py` and

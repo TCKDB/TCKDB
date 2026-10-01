@@ -93,6 +93,7 @@ hide PKs.
 | `literature` | `literature.id` | ✅ Yes | `lit_` | **Content-derived** from normalized DOI / normalized ISBN / canonical (title, year, volume, pages) fallback | Yes | Optional | DOI/ISBN already have normalization indexes — exploit them. |
 | `frequency_scale_factor` | `frequency_scale_factor.id` | ⚠ When exposed | `fsf_` | **Content-derived** from `(level_of_theory.lot_hash, scope)` | Only when surfaced (rare in scientific reads) | No | Reference table. |
 | `energy_correction_scheme` | `energy_correction_scheme.id` | ⚠ When exposed | `ecs_` | **Content-derived** from `(name, version)` | Only when surfaced | No | Reference table. |
+| `composite_scheme` | `composite_scheme.id` | ✅ Yes | `csch_` | **Content-derived** from `definition_hash` | When a level of theory is a composite level | No | Identity table (ADR 0021); cross-instance stable. |
 | `submission` | `submission.id` | ⚠ Internal-tilted | `sub_` | **Opaque** (ULID) | Curator/admin context only | No | Provenance audit. |
 | `record_review` | `record_review.id` | ❌ No | n/a | n/a | Never (use `record_type` + record_ref instead) | n/a | Polymorphic; the badge is what's public. |
 | `record_reproducibility_assessment` | `record_reproducibility_assessment.id` | ✅ Yes | `rpa_` | **Opaque** (ULID-like) | Only in opt-in compact assessment summaries | No | Immutable provenance/curation claim; the ref identifies the exact stored assessment, not its currentness or approval. |

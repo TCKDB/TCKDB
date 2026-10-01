@@ -77,6 +77,7 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "get_calculation_irc": ("calc_1",),
     "get_calculation_path_search": ("calc_1",),
     "get_calculation_scan": ("calc_1",),
+    "get_composite_scheme": ("csch_1",),
     "get_conformer_group": ("cgrp_1",),
     "get_conformer_observation": ("cobs_1",),
     "get_energy_correction_scheme": ("ecs_1",),

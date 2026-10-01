@@ -16,6 +16,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.db.models.common import (
+    CompositeSchemeKind,
     ProfileRecommendation,
     ReadProfile,
     RecordReviewStatus,
@@ -238,6 +239,19 @@ class SupersessionNotice(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class CompositeSchemeSummary(BaseModel):
+    """The composite recipe a level of theory is bound to (ADR 0021).
+
+    ``composite_scheme_ref`` is the handle for
+    ``GET /scientific/composite-schemes/{ref}``, which returns the recipe's
+    terms and inputs. Refs only: no database id.
+    """
+
+    composite_scheme_ref: str
+    kind: CompositeSchemeKind
+    name: str
+
+
 class LevelOfTheorySummary(BaseModel):
     """Lightweight LoT shape used in scientific provenance summaries.
 
@@ -258,6 +272,11 @@ class LevelOfTheorySummary(BaseModel):
     #: LOT identity and folded into ``lot_hash``; not builders' to omit.
     spin_treatment: SpinTreatment | None = None
     label: str | None = None
+    #: The composite recipe this level names, or ``None`` when the level is an
+    #: ordinary one. Bound by TCKDB for a catalogued named composite method
+    #: (CBS-QB3, G4, ...). ``None`` never means "composite but unknown": an
+    #: unbound level is simply not composite.
+    composite_scheme: CompositeSchemeSummary | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

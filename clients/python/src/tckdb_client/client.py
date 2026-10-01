@@ -43,6 +43,7 @@ from tckdb_client.scientific_types import (
     CalculationAnalyticsResponse,
     CalculationDetailResponse,
     CalculationSearchResponse,
+    CompositeSchemeDetailResponse,
     ConformerGroupDetailResponse,
     ConformerObservationDetailResponse,
     ConformerRecord,
@@ -3794,6 +3795,29 @@ class TCKDBClient:
         return self._get_scientific_detail(
             f"/scientific/level-of-theories/{level_of_theory_ref_or_id}",
             include=include,
+            profile=profile,
+        )
+
+    def get_composite_scheme(
+        self,
+        composite_scheme_ref: str,
+        *,
+        profile: str | None = None,
+    ) -> CompositeSchemeDetailResponse:
+        """``GET /scientific/composite-schemes/{ref}``.
+
+        The recipe behind a composite level of theory (CBS-QB3, G4, ...):
+        its identity, the levels the recipe runs internally, its terms and
+        their inputs, and the levels of theory bound to it. A level's own
+        ``composite_scheme`` summary (``level_of_theory.composite_scheme``,
+        ``null`` for an ordinary level) carries the ref to pass here. A
+        ``named_method`` scheme has no terms recorded. Refs only: no
+        database id. An unknown ref is a 404.
+        """
+
+        return self._get_scientific_detail(
+            f"/scientific/composite-schemes/{composite_scheme_ref}",
+            include=None,
             profile=profile,
         )
 

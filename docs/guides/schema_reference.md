@@ -153,6 +153,52 @@ the gap.
 
 - `ck_calculation_parameter_parameter_index_ge_0`: `parameter_index IS NULL OR parameter_index >= 0`
 
+### `composite_scheme`
+
+**Role:** identity
+
+**Purpose:** One composite recipe (identity; ref prefix ``csch_``).
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `kind` | CompositeSchemeKind (enum) | no | — | — | `named_method`, `extrapolation`, `additive` | not documented |
+| `name` | TEXT | no | — | — | — | not documented |
+| `definition_hash` | CHAR(64) | no | — | — | — | not documented |
+| `geometry_level_of_theory_id` | BIGINT | yes | — | level_of_theory.id | — | not documented |
+| `frequency_level_of_theory_id` | BIGINT | yes | — | level_of_theory.id | — | not documented |
+| `recipe_zpe_scale_factor` | DOUBLE PRECISION | yes | — | — | — | not documented |
+| `source_literature_id` | BIGINT | yes | — | literature.id | — | not documented |
+| `note` | TEXT | yes | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_composite_scheme_recipe_zpe_scale_factor_positive`: `recipe_zpe_scale_factor IS NULL OR recipe_zpe_scale_factor > 0`
+
+### `composite_scheme_term`
+
+**Role:** identity
+
+**Purpose:** One term of a recipe, in order.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `scheme_id` | BIGINT | no | — | composite_scheme.id | — | not documented |
+| `position` | SMALLINT | no | — | — | — | not documented |
+| `operation` | CompositeTermOperation (enum) | no | — | — | `base`, `extrapolation`, `difference`, `value`, `empirical` | not documented |
+| `energy_component` | EnergyComponentKind (enum) | no | — | — | `total`, `reference`, `correlation`, `triples`, `dboc`, `scalar_relativistic` | not documented |
+| `formula` | CompositeExtrapolationFormula (enum) | yes | — | — | `inverse_power`, `inverse_power_shifted_half`, `karton_martin_scf`, `exponential_three_point` | not documented |
+| `exponent` | DOUBLE PRECISION | yes | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_composite_scheme_term_exponent_needs_formula`: `exponent IS NULL OR formula IS NOT NULL`
+- `ck_composite_scheme_term_formula_only_on_extrapolation`: `formula IS NULL OR operation = 'extrapolation'`
+- `ck_composite_scheme_term_position_non_negative`: `position >= 0`
+
 ### `conformer_group`
 
 **Role:** identity
@@ -1404,6 +1450,25 @@ the gap.
 
 - `ck_chem_reaction_reaction_family_raw_requires_source_note`: `reaction_family_raw IS NULL OR reaction_family_source_note IS NOT NULL`
 
+### `composite_scheme_term_input`
+
+**Role:** role not stated on the model
+
+**Purpose:** One level-of-theory input of a term.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `term_id` | BIGINT | no | — | composite_scheme_term.id | — | not documented |
+| `slot` | CompositeInputSlot (enum) | no | — | — | `value`, `high`, `low`, `cardinal` | not documented |
+| `level_of_theory_id` | BIGINT | no | — | level_of_theory.id | — | not documented |
+| `cardinal_number` | INTEGER | yes | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_composite_scheme_term_input_cardinal_number_positive`: `cardinal_number IS NULL OR cardinal_number >= 1`
+- `ck_composite_scheme_term_input_cardinal_slot_needs_number`: `slot <> 'cardinal' OR cardinal_number IS NOT NULL`
+
 ### `dataset_release`
 
 **Role:** role not stated on the model
@@ -1855,6 +1920,19 @@ the gap.
 - `ck_kinetics_tunneling_application_model_enum`: `model IN ('none', 'wigner', 'eckart', 'sct', 'other')`
 - `ck_kinetics_tunneling_application_other_note`: `(energy_zero_convention IS DISTINCT FROM 'other' AND energy_correction_convention IS DISTINCT FROM 'other') OR convention_note IS NOT NULL`
 - `ck_kinetics_tunneling_application_other_replayable`: `model <> 'other' OR (model_identifier IS NOT NULL AND result_artifact_id IS NOT NULL)`
+
+### `level_of_theory_composite`
+
+**Role:** role not stated on the model
+
+**Purpose:** Binds a level of theory to the composite scheme its energy names.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `level_of_theory_id` | BIGINT | no | — | level_of_theory.id | — | not documented |
+| `scheme_id` | BIGINT | no | — | composite_scheme.id | — | not documented |
+| `binding_source` | CompositeBindingSource (enum) | no | — | — | `named_method_catalogue`, `declared` | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 
 ### `literature`
 

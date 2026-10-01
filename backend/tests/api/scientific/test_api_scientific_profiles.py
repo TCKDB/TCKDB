@@ -517,6 +517,8 @@ def test_every_handle_resolver_is_classified_for_the_curated_floor():
         "FrequencyScaleFactor",
         "EnergyCorrectionScheme",
         "LevelOfTheory",
+        # A recipe is identity data (ADR 0021), like a level of theory.
+        "CompositeScheme",
         # Scoping parents: they say which records to look under, not what is
         # returned. The floor is applied to the products by visible_statuses.
         "SpeciesEntry",

@@ -51,8 +51,22 @@ teaching pages. A value taken from the last is labelled ``secondary`` in its
 citation and names the paper it reports; the paper's own text was not
 retrievable (the publisher returns 403).
 
-This module is pure and is not yet read by the resolution path (that is plan
-phase P2); it is the data P2 will bind level-of-theory rows to.
+This module is pure. The resolution path reads it
+(``app/services/composite_scheme_resolution.py``) to bind a level of theory to
+its named-method scheme the first time the level is resolved.
+
+Adding or removing an entry ships with a backfill revision
+----------------------------------------------------------
+Binding is lazy: a level of theory that already exists is bound only when it is
+next resolved, and until then it has no binding row, which a read reports as
+"not composite". That is only true if no level of theory was stored before its
+method joined the catalogue. So **every change to the set of keys here comes with
+an Alembic revision that backfills the bindings for the levels already stored**,
+frozen as ``d7a3f1b9c284`` froze the first set (its ``_NAMED_METHODS``).
+``tests/services/test_composite_scheme_resolution.py`` fails when this module's key
+set differs from the latest revision's frozen set, so an entry cannot land without
+its backfill. Changing a value inside an existing entry does not change a scheme
+row that already exists (identity rows are never updated in place).
 """
 
 from __future__ import annotations

@@ -81,6 +81,9 @@ from app.services.scientific_read.common import (
     validate_temperature_range,
     visible_statuses,
 )
+from app.services.scientific_read.composite_binding import (
+    composite_scheme_summaries,
+)
 from app.services.scientific_read.declared_levels import (
     load_declared_energy_summaries,
 )
@@ -909,6 +912,7 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
         )
         .where(Calculation.id.in_(calc_ids))
     ).all()
+    schemes = composite_scheme_summaries(session, [row[2] for row in rows])
     return {
         row[0]: {
             "type": row[1],
@@ -918,6 +922,7 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
             "lot_basis": row[5],
             "lot_dispersion": row[6],
             "lot_solvent": row[7],
+            "composite_scheme": schemes.get(row[2]),
             "software_release_id": row[8],
             "software_release_ref": row[9],
             "software_name": row[10],
@@ -1247,6 +1252,7 @@ def _lot_summary(meta: dict) -> LevelOfTheorySummary | None:
         dispersion=meta["lot_dispersion"],
         solvent=meta["lot_solvent"],
         label="/".join(p for p in label_parts if p),
+        composite_scheme=meta.get("composite_scheme"),
     )
 
 

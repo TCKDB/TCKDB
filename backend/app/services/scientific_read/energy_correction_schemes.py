@@ -49,6 +49,9 @@ from app.schemas.reads.scientific_energy_correction_scheme import (
     ScientificEnergyCorrectionSchemeRecord,
 )
 from app.services.scientific_read.common import validate_includes
+from app.services.scientific_read.composite_binding import (
+    composite_scheme_summary,
+)
 from app.services.scientific_read.handles import (
     resolve_energy_correction_scheme_handle,
 )
@@ -426,6 +429,7 @@ def _build_lot_summary(
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
         label=None,
+        composite_scheme=composite_scheme_summary(session, lot.id),
     )
 
 

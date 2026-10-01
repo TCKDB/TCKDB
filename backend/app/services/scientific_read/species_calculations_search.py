@@ -78,6 +78,7 @@ from app.schemas.reads.scientific_calculation import (
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     CollapseMode,
+    CompositeSchemeSummary,
     LevelOfTheorySummary,
     ReviewStatusSummary,
     SCFStabilitySummary,
@@ -116,6 +117,9 @@ from app.services.scientific_read.common import (
     validate_includes,
     validate_pagination,
     visible_statuses,
+)
+from app.services.scientific_read.composite_binding import (
+    composite_scheme_summaries,
 )
 from app.services.scientific_read.handles import (
     NO_MATCH,
@@ -183,6 +187,7 @@ class _CalcRow:
     conformer_observation_id: int | None
     energy_hartree: float | None
     energy_kind: str | None  # "electronic_energy" | "final_energy" | None
+    composite_scheme: CompositeSchemeSummary | None = None
 
 
 def search_species_calculations(
@@ -682,6 +687,7 @@ def _query_candidate_calculations(
 
     raw_rows = session.execute(stmt).all()
 
+    schemes = composite_scheme_summaries(session, [row[6] for row in raw_rows])
     out: list[_CalcRow] = []
     for row in raw_rows:
         sp_energy = row[21]
@@ -725,6 +731,7 @@ def _query_candidate_calculations(
                 conformer_observation_id=row[20],
                 energy_hartree=energy_hartree,
                 energy_kind=energy_kind,
+                composite_scheme=schemes.get(row[6]),
             )
         )
     return out
@@ -1243,6 +1250,7 @@ def _lot_summary_from_row(row: _CalcRow) -> LevelOfTheorySummary | None:
         dispersion=row.lot_dispersion,
         solvent=row.lot_solvent,
         label="/".join(p for p in label_parts if p),
+        composite_scheme=row.composite_scheme,
     )
 
 
