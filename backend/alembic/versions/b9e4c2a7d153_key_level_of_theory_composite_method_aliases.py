@@ -104,7 +104,7 @@ without merges in between
 this over randomised lifecycles).
 
 Revision ID: b9e4c2a7d153
-Revises: f3b8d5a1c702
+Revises: c5e1a8d3f6b9
 Create Date: 2026-10-01
 """
 
@@ -121,7 +121,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b9e4c2a7d153"
-down_revision: Union[str, Sequence[str], None] = "f3b8d5a1c702"
+down_revision: Union[str, Sequence[str], None] = "c5e1a8d3f6b9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

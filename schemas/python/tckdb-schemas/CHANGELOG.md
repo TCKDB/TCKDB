@@ -30,6 +30,7 @@ to `g4mp2`, `g3mp2` and `g3mp2b3`, so a level of theory written either way is
 one row. `W1`, `W1U`, `W1BD` and `W1RO` stay four methods and `CBS-QB3` and
 `ROCBS-QB3` stay two. A producer that hashes level-of-theory identity locally
 must adopt the same aliases to agree with the server.
+
 ## 0.66.0 - 2026-10-01
 
 Frequency level on correction schemes (composite-levels plan P6). One optional
