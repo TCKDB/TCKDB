@@ -177,7 +177,7 @@ def search_kinetics(
     if not reaction_contexts:
         return _empty_response(request, includes, offset, limit)
 
-    # 2) Per entry, retrieve kinetics with D9 ordering already applied.
+    # 2) Per entry, retrieve kinetics with review-then-newest ordering already applied.
     inner_includes = sorted(includes & _KINETICS_LEGAL_INCLUDES_PASSTHROUGH)
 
     flat: list[KineticsSearchRecord] = []

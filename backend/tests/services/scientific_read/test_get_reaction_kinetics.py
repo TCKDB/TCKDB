@@ -200,7 +200,7 @@ def test_collapse_first_applies_before_offset(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Temperature coverage + D9 ordering
+# Temperature coverage reporting (does not order; review status, then newest)
 # ---------------------------------------------------------------------------
 
 

@@ -41,8 +41,8 @@ _T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
 def _reaction(db_session):
-    rs = make_species(db_session, smiles="KOA", inchi_key=next_inchi_key("KO"))
-    ps = make_species(db_session, smiles="KOB", inchi_key=next_inchi_key("KP"))
+    rs = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("KO"))
+    ps = make_species(db_session, smiles="CCC", inchi_key=next_inchi_key("KP"))
     chem = make_chem_reaction(db_session, reactants=[rs], products=[ps])
     reactant_entry = make_species_entry(db_session, rs)
     entry = make_reaction_entry(
@@ -210,7 +210,7 @@ def test_search_orders_entry_kinetics_by_review_then_newest(db_session):
         db_session, entry, origin=ScientificOriginKind.experimental, age_days=1
     )
     resp = search_kinetics(
-        db_session, KineticsSearchRequest(reactants=["KOA"], products=["KOB"])
+        db_session, KineticsSearchRequest(reactants=["CC"], products=["CCC"])
     )
     assert [r.kinetics.kinetics_id for r in resp.records] == [
         experimental.id,

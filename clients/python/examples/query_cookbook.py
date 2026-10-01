@@ -255,8 +255,8 @@ def recipe_species_search(
 def recipe_thermo_search(
     client: TCKDBClient, args: argparse.Namespace
 ) -> dict | None:
-    """Q: Give me the best thermo record for this species across the
-    requested temperature range.
+    """Q: Give me the top thermo record for this species (best review
+    status, then newest) and report whether it covers a temperature window.
 
     ``collapse="first"`` asks the backend to return the top record
     under its locked sort order (review status, then newest). The

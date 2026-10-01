@@ -77893,7 +77893,7 @@
     },
     "/api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics": {
       "get": {
-        "description": "Return kinetics records for a reaction entry, sorted per D9.\n\nPath handle is strictly the reaction-entry resource: an integer\n``reaction_entry.id`` or a public ref starting with ``rxe_``. A\n``chem_reaction.id`` (or any other prefix) returns 422 / 404.\nProvenance keys are always present; TS-chain fields are populated\nonly for TS-backed records (Phase 2.2). Default sort is the locked\nD9 chain. ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``\n§Endpoint 3 and ``docs/specs/public_identifier_policy.md``.",
+        "description": "Return kinetics records for a reaction entry, sorted by review status, then newest.\n\nPath handle is strictly the reaction-entry resource: an integer\n``reaction_entry.id`` or a public ref starting with ``rxe_``. A\n``chem_reaction.id`` (or any other prefix) returns 422 / 404.\nProvenance keys are always present; TS-chain fields are populated\nonly for TS-backed records (Phase 2.2). Default sort is review\nstatus, then newest, then id (temperature coverage and evidence are\nreported per record, not ranked). ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``\n§Endpoint 3 and ``docs/specs/public_identifier_policy.md``.",
         "operationId": "reaction_kinetics_api_v1_scientific_reaction_entries__reaction_entry_id__kinetics_get",
         "parameters": [
           {

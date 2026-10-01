@@ -305,7 +305,7 @@ def get_reaction_kinetics(
     reaction_entry_id: int,
     request: KineticsReadRequest,
 ) -> ScientificReactionKineticsResponse:
-    """Return kinetics records for a reaction entry, sorted per D9.
+    """Return kinetics records for a reaction entry, sorted by review status, then newest.
 
     Order: review_rank ASC, created_at DESC, id DESC (the export's
     ``simple_selection_sort_key``). Coverage and evidence are reported per
@@ -655,7 +655,7 @@ def get_reaction_kinetics(
 
     summary = review_summary(badges[k.id] for k in kinetics_rows)
 
-    # D9 sort (#648 rule, extended to kinetics): review status, then newest,
+    # Sort: review status, then newest (#648 rule, extended to kinetics): review status, then newest,
     # then id -- the same ``simple_selection_sort_key`` the export uses, so the
     # read and the export pick the same record. ``evidence_completeness`` and
     # ``temperature_coverage`` stay on each record as displayed fields but are
