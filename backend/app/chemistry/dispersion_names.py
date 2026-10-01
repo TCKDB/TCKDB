@@ -26,7 +26,13 @@ spelling            key          source of the claim
 ``d3(bj)``          ``d3bj``     Psi4 dftd3 table, ``-d3bj`` row
 ``gd3``             ``d3zero``   Gaussian EmpiricalDispersion=GD3
 ``gd2``             ``d2``       Gaussian EmpiricalDispersion=GD2
+``d30``             ``d3zero``   ORCA 6.1 Table 3.13 (``D30`` = ``D3ZERO``)
 ==================  ===========  =========================================
+
+Not in the table, because no citation was found: ``d3(0)`` and ``d3bj2b``
+(Psi4 row spellings), the folded ``-gd3``, ``-gd2`` and ``-d3(0)``, and the
+Gaussian route abbreviation ``em=``. Leaving them split is recoverable (the
+merge script joins them later once an entry is added with a revision).
 
 Gaussian writes the dispersion as a route option, and ARC stores the whole
 option. Each alias is therefore also recognised wrapped as
@@ -60,13 +66,22 @@ It is conservative on three counts, because a false merge cannot be undone
   aliases) are split;
 * only off a stem in :data:`FOLDED_STEMS`: a functional that is published
   *without* a dispersion-specific refit, so that the dispersion really is an
-  add-on. ``wb97x-d3bj``, ``wb97m-d3bj``, ``b97-d3bj`` and the double hybrids
-  are separate functionals with their own parametrisation and stay folded in
+  add-on (``b2plyp`` is on the list: B2PLYP-D3BJ is standard, Grimme 2011).
+  ``wb97x-d3bj``, ``wb97m-d3bj``, ``b97-d3bj`` and the refit double hybrids
+  (``dsd-*``, ``pwpb95``) are separate functionals with their own
+  parametrisation and stay folded in
   their method key, as does everything else not listed (a split is
   recoverable by adding a stem, with a revision; a false merge is not); and
 * if the column also states a dispersion and it is a different one
   (``b3lyp-d3bj`` with ``dispersion=d3zero``), the level contradicts itself and
   nothing is split.
+
+Some stem and dispersion combinations have no parameter set in some programs:
+M06-2X with D3BJ is absent in Psi4, ORCA offers M06 with zero damping only and
+Gaussian refuses it; HF with D3ZERO is BJ-only in ORCA; Psi4 has no D2 for
+``hf``, ``m06-2x``, ``b3pw91``, ``cam-b3lyp`` or ``bhlyp``. Both spellings of
+such a combination still name the same (nonexistent) calculation, so identity
+is unaffected: the key joins spellings, it does not assert the combination runs.
 
 The SQL twin used by the search filters is built from the rules here
 (``scientific_read/lot_identity_filters.py``). The Alembic revision that
@@ -148,6 +163,18 @@ DISPERSION_ALIASES: tuple[DispersionAlias, ...] = (
             "Gaussian 16 manual, EmpiricalDispersion=GD2: Grimme's D2 version.",
             "ORCA 6.1 manual 3.4: keyword D2; Psi4 manual, DFTD3 interface: '-D2'.",
             "S. Grimme, J. Comput. Chem. 27, 1787 (2006): D2.",
+        ),
+    ),
+    DispersionAlias(
+        alias="d30",
+        canonical="d3zero",
+        programs=None,
+        citations=(
+            "ORCA 6.1 manual, Table 3.13 (simple input keywords for the DFT-D "
+            "corrections): 'D30 activates D3 correction with zero damping, "
+            "equivalent to D3ZERO'.",
+            "Psi4 manual, DFTD3 interface: '-D3ZERO' is D3 with zero damping.",
+            _GRIMME_D3,
         ),
     ),
 )

@@ -41,7 +41,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.errors import NotFoundError
 from app.chemistry.basis_set_names import basis_identity_key
-from app.chemistry.dispersion_names import method_matches_level
+from app.chemistry.dispersion_names import level_identity_keys, method_matches_level
 from app.chemistry.reaction_family_display import reaction_family_display_name
 from app.chemistry.species import canonical_species_identity
 from app.db.models.calculation import (
@@ -294,8 +294,12 @@ def _lot_match(
             lot_status = "partial"
 
     # Report LOT fields that were present but not queried
-    if lot.dispersion:
-        mb.add(LOT_DISPERSION_PRESENT, f"dispersion={lot.dispersion} (not queried)")
+    # By identity key, so a dispersion folded into the method (``b3lyp-d3bj``,
+    # empty column) is reported like one in the column (#630).
+    dispersion_key = level_identity_keys(lot.method, lot.dispersion)[1]
+    if dispersion_key:
+        shown = lot.dispersion or dispersion_key
+        mb.add(LOT_DISPERSION_PRESENT, f"dispersion={shown} (not queried)")
     if lot.solvent:
         mb.add(LOT_SOLVENT_PRESENT, f"solvent={lot.solvent} (not queried)")
     if lot.solvent_model:

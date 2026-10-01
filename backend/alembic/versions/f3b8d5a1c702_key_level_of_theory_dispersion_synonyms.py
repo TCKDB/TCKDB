@@ -7,7 +7,7 @@ closes them, re-keying the rows that already exist so the next upload of any
 of them still finds it. Verbatim names are not touched.
 
 * **Dispersion column synonyms.** ``gd3bj`` and ``d3(bj)`` key as ``d3bj``,
-  ``gd3`` as ``d3zero`` and ``gd2`` as ``d2``, also when wrapped the way
+  ``gd3`` and ``d30`` as ``d3zero`` and ``gd2`` as ``d2``, also when wrapped the way
   Gaussian's route writes them (``EmpiricalDispersion=GD3BJ``,
   ``EmpiricalDispersion=(GD3BJ)``, ``EmpiricalDispersion(GD3BJ)``). Bare
   ``d3`` stays its own key (ORCA ``D3`` is BJ-damped, Psi4 ``-d3`` is
@@ -161,6 +161,10 @@ _DISPERSION_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
         (
             r"^(?:gd2|empiricaldispersion\s*(?:=\s*gd2|=\s*\(\s*gd2\s*\)|\(\s*gd2\s*\)))$",
             "d2",
+        ),
+        (
+            r"^(?:d30|empiricaldispersion\s*(?:=\s*d30|=\s*\(\s*d30\s*\)|\(\s*d30\s*\)))$",
+            "d3zero",
         ),
     )
 )
@@ -361,7 +365,7 @@ def downgrade() -> None:
     if groups:
         print(
             f"level_of_theory downgrade: {len(groups)} group(s) of rows share one "
-            "pre-#630 hash (rows this revision moved onto a shared key, ); one row per group took it and "
+            "pre-#630 hash (rows this revision moved onto a shared key); one row per group took it and "
             "the others kept their current hash."
         )
     for ref in blocked:

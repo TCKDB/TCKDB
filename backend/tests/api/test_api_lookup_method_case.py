@@ -11,14 +11,18 @@ from __future__ import annotations
 import pytest
 
 
-def _payload(method: str, basis: str) -> dict:
+def _payload(method: str, basis: str, dispersion: str | None = None) -> dict:
     return {
         "species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1},
         "geometry": {"xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74"},
         "calculation": {
             "type": "opt",
             "software_release": {"name": "gaussian", "version": "09"},
-            "level_of_theory": {"method": method, "basis": basis},
+            "level_of_theory": {
+                "method": method,
+                "basis": basis,
+                **({"dispersion": dispersion} if dispersion else {}),
+            },
             "opt_result": {"converged": True, "n_steps": 3, "final_energy_hartree": -1.17264},
         },
     }
@@ -128,3 +132,43 @@ def test_a_blank_basis_request_does_not_claim_a_match_with_a_row_that_has_none()
     lot.basis = "Def2TZVP"
     _lot_match(lot, None, "def2-tzvp", mb)
     assert "lot_basis_exact" in mb.codes
+
+
+def _lookup(client, method: str) -> dict:
+    resp = client.get(
+        "/api/v1/lookup/species-calculation",
+        params={
+            "smiles": "[H][H]", "charge": 0, "multiplicity": 1,
+            "type": "opt", "method": method, "basis": "def2-tzvp",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()["match"]
+
+
+@pytest.mark.parametrize(
+    ("stored_method", "stored_dispersion"),
+    [("b3lyp-d3bj", None), ("b3lyp", "d3bj"), ("b3lyp", "EmpiricalDispersion=GD3BJ")],
+    ids=["folded", "column", "gaussian route"],
+)
+def test_plain_method_request_is_told_the_stored_level_has_a_dispersion(
+    client, stored_method, stored_dispersion
+):
+    """#630: a request for plain ``b3lyp`` must not silently get B3LYP-D3BJ as
+    an unqualified exact match, whether the dispersion is folded in the method
+    or in the column."""
+    resp = client.post(
+        "/api/v1/uploads/conformers", json=_payload(stored_method, "def2tzvp", stored_dispersion)
+    )
+    assert resp.status_code in (200, 201), resp.text
+    codes = _lookup(client, "b3lyp")["detail_codes"]
+    assert "lot_method_exact" in codes
+    assert "lot_dispersion_present_not_queried" in codes, codes
+
+
+def test_a_request_that_folds_a_dispersion_in_misses_the_bare_functional(client):
+    resp = client.post("/api/v1/uploads/conformers", json=_payload("b3lyp", "def2tzvp"))
+    assert resp.status_code in (200, 201), resp.text
+    codes = _lookup(client, "b3lyp-d3bj")["detail_codes"]
+    assert "lot_method_exact" not in codes
+    assert "lot_dispersion_present_not_queried" not in codes

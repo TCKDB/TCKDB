@@ -25,7 +25,6 @@ from app.chemistry.dispersion_names import (
     level_identity_keys,
     method_matches_level,
 )
-from app.chemistry.method_names import method_identity_key
 from app.services.calculation_resolution import (
     _level_of_theory_hash,
     resolve_level_of_theory_ref,
@@ -51,6 +50,7 @@ DISPERSION = [
     ("Gaussian", "GD3", "d3zero"),
     ("Gaussian route", "EmpiricalDispersion=GD3", "d3zero"),
     ("ORCA / Psi4", "D3ZERO", "d3zero"),
+    ("ORCA synonym of D3ZERO", "D30", "d3zero"),
     ("Gaussian", "GD2", "d2"),
     ("Gaussian route", "EmpiricalDispersion=(GD2)", "d2"),
     ("ORCA", "D2", "d2"),
@@ -90,7 +90,7 @@ def test_the_tables_are_not_empty():
 
 
 def test_the_alias_table_is_cited_program_independent_and_leaves_bare_d3_out():
-    assert len(DISPERSION_ALIASES) >= 4
+    assert len(DISPERSION_ALIASES) >= 5
     for entry in DISPERSION_ALIASES:
         assert entry.programs is None, "the hash cannot see a program"
         assert len(entry.citations) >= 2, entry.alias
@@ -166,14 +166,25 @@ def test_level_keys_are_idempotent(method, dispersion):
     assert level_identity_keys(*first) == first
 
 
-def test_every_stem_and_suffix_is_exercised_and_keyed():
-    """Each stem splits with each suffix, to a stem the method key leaves alone."""
-    for stem in FOLDED_STEMS:
-        for suffix in FOLDED_SUFFIXES:
-            got = level_identity_keys(f"{stem}-{suffix}", None)
-            assert got == (method_identity_key(stem), suffix), (stem, suffix)
+#: The stems that may split, written out here rather than read from
+#: ``FOLDED_STEMS``, so dropping or adding one fails a behavioural test.
+_EXPECTED_STEMS = (
+    "b3lyp", "cam-b3lyp", "pbe", "pbe0", "tpss", "tpss0", "bp86", "blyp", "b2plyp",
+    "revpbe", "b3pw91", "bhlyp", "hf", "m06-2x", "m062x",
+)
+
+
+@pytest.mark.parametrize("stem", _EXPECTED_STEMS)
+@pytest.mark.parametrize("suffix", ["d3bj", "d3zero", "d2"])
+def test_each_expected_stem_splits_with_each_suffix(stem, suffix):
+    expected_stem = "m062x" if stem.startswith("m06") else stem
+    assert level_identity_keys(f"{stem}-{suffix}", None) == (expected_stem, suffix)
+
+
+def test_the_stem_and_suffix_lists_are_exactly_the_expected_ones():
+    assert sorted(FOLDED_STEMS) == sorted(_EXPECTED_STEMS)
+    assert sorted(FOLDED_SUFFIXES) == ["d2", "d3bj", "d3zero"]
     assert {"wb97x", "wb97m", "b97"}.isdisjoint(FOLDED_STEMS)
-    assert "d3" not in FOLDED_SUFFIXES
 
 
 # ---------------------------------------------------------------------------

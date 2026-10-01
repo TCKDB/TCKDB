@@ -655,14 +655,14 @@ DDL; same in-place re-hash, same holder choice (`d0a7c3b91e4f`'s three rules,
 
 - **Dispersion column synonyms** (`app/chemistry/dispersion_names.py`, every
   entry cited, none program-scoped): `gd3bj` and `d3(bj)` key as `d3bj`, `gd3`
-  as `d3zero`, `gd2` as `d2`, also wrapped as Gaussian's route writes them
+  and `d30` as `d3zero`, `gd2` as `d2`, also wrapped as Gaussian's route writes them
   (`EmpiricalDispersion=GD3BJ`, `=(GD3BJ)`, `(GD3BJ)`). Bare `d3` stays its own
   key (ORCA `D3` is BJ-damped, Psi4 `-d3` is zero-damped).
 - **Folded dispersion**: `b3lyp-d3bj` and `b3lyp` + `d3bj` are one level. A
   trailing `-d3bj` / `-d3zero` / `-d2` moves into the dispersion key, only off
   an allow-listed stem (`b3lyp`, `pbe`, `tpss`, ... , `m06-2x`; never
-  `wb97x-d3bj`, `wb97m-d3bj`, `b97-d3bj`, double hybrids, which are separate
-  functionals), and not when the column states a different dispersion.
+  `wb97x-d3bj`, `wb97m-d3bj`, `b97-d3bj` or the refit double hybrids `dsd-*`
+  and `pwpb95`, which are separate functionals), and not when the column states a different dispersion.
 
 **What the upgrade prints.** One summary line
 (`level_of_theory dispersion re-key: N row(s) re-hashed, M duplicate
