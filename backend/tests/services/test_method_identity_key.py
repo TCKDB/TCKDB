@@ -103,6 +103,46 @@ SAME_METHOD: list[tuple[str, list[tuple[str, str]], str]] = [
     ),
     ("wB97X-D3BJ", [("ORCA", "wB97X-D3BJ"), ("ARC", "wb97x-d3bj")], "wb97x-d3bj"),
     ("wB97X-D3(BJ)", [("Psi4 alias", "wB97X-D3(BJ)")], "wb97x-d3bj"),
+    # Named composite methods (ADR 0021). The key is the Gaussian / ARC spelling.
+    (
+        "CBS-QB3",
+        [
+            ("Gaussian", "CBS-QB3"),
+            ("ARC", "cbs-qb3"),
+            ("Arkane", "cbsqb3"),
+            ("Arkane upper", "CBSQB3"),
+            ("padded", "CBSQB3 "),
+        ],
+        "cbs-qb3",
+    ),
+    (
+        "ROCBS-QB3",
+        [("Gaussian", "ROCBS-QB3"), ("ARC", "rocbs-qb3"), ("Arkane", "rocbsqb3")],
+        "rocbs-qb3",
+    ),
+    ("CBS-4M", [("Gaussian", "CBS-4M"), ("ARC", "cbs-4m"), ("Arkane", "cbs4m")], "cbs-4m"),
+    (
+        "CBS-APNO",
+        [("Gaussian", "CBS-APNO"), ("ARC", "cbs-apno"), ("Arkane", "cbsapno")],
+        "cbs-apno",
+    ),
+    (
+        "G4(MP2)",
+        [("Gaussian", "G4MP2"), ("ARC", "g4mp2"), ("paper", "G4(MP2)"), ("paper lower", "g4(mp2)")],
+        "g4mp2",
+    ),
+    ("G3(MP2)", [("Gaussian", "G3MP2"), ("ARC", "g3mp2"), ("paper", "G3(MP2)")], "g3mp2"),
+    (
+        "G3(MP2)B3",
+        [("Gaussian", "G3MP2B3"), ("ARC", "g3mp2b3"), ("paren", "G3(MP2)B3")],
+        "g3mp2b3",
+    ),
+    ("G4", [("Gaussian", "G4"), ("ARC", "g4")], "g4"),
+    ("G3", [("Gaussian", "G3"), ("ARC", "g3")], "g3"),
+    ("G3B3", [("Gaussian", "G3B3"), ("ARC", "g3b3")], "g3b3"),
+    ("W1U", [("Gaussian", "W1U"), ("ARC", "w1u")], "w1u"),
+    ("W1BD", [("Gaussian", "W1BD"), ("ARC", "w1bd")], "w1bd"),
+    ("W1RO", [("Gaussian", "W1RO"), ("ARC", "w1ro")], "w1ro"),
 ]
 
 #: Different methods. Each pair differs by a character the key must keep, or
@@ -128,6 +168,30 @@ DIFFERENT_METHOD: list[tuple[str, str, str]] = [
     ("B3LYP", "UB3LYP", "unrestricted"),
     ("DLPNO-CCSD(T)", "CCSD(T)", "local approximation"),
     ("PBE", "PBE0", "different functionals"),
+    # Named composite methods (ADR 0021): recipes that look alike and are not.
+    ("W1BD", "W1-BD", "no source writes W1-BD, so it is not an alias; it stays its own key"),
+    ("W1-BD", "W1U", "a hyphenated W1BD is not W1U either"),
+    ("W1", "W1U", "W1 uses ROCCSD; W1U uses UCCSD (Gaussian 09 manual, W1 methods)"),
+    ("W1", "W1BD", "W1BD replaces coupled cluster with Brueckner doubles"),
+    ("W1", "W1RO", "W1RO has a different scalar relativistic correction"),
+    ("W1U", "W1BD", "UCCSD vs Brueckner doubles"),
+    ("W1U", "W1RO", "UCCSD vs ROCCSD with another relativistic correction"),
+    ("W1BD", "W1RO", "Brueckner doubles vs ROCCSD"),
+    ("W1", "W2", "different recipes"),
+    ("CBS-QB3", "ROCBS-QB3", "restricted-open-shell, no spin correction (Wood 2006)"),
+    ("cbsqb3", "rocbsqb3", "the hyphen-free spellings keep the two recipes apart"),
+    ("CBS-QB3", "CBS-4M", "different recipes"),
+    ("CBS-QB3", "CBS-APNO", "different recipes"),
+    ("CBS-QB3", "cbs-qb3-paraskevas", "a correction-table name is not the method; never aliased"),
+    ("cbsqb3", "cbs-qb3-paraskevas", "a correction-table name is not the method; never aliased"),
+    ("CBS-QB3", "cbsqb32023", "a year suffix names a correction table; never aliased"),
+    ("CBS-QB3", "CBS-QB3-2023", "a year suffix names a correction table; never aliased"),
+    ("G4", "G4(MP2)", "reduced-order perturbation theory is another recipe"),
+    ("G3", "G3(MP2)", "reduced-order perturbation theory is another recipe"),
+    ("G3B3", "G3(MP2)B3", "reduced-order perturbation theory is another recipe"),
+    ("G3(MP2)", "G3(MP2)B3", "B3LYP geometries and frequencies are another recipe"),
+    ("G3", "G3B3", "MP2/HF geometries vs B3LYP geometries"),
+    ("G4(MP2)", "G3(MP2)", "different generations"),
 ]
 
 

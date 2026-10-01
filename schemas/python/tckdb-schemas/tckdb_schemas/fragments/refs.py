@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Self
 
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
+from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import FrequencyScaleKind, SpinTreatment
 from tckdb_schemas.upload_warning import UploadWarning
@@ -37,6 +38,44 @@ W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE = "software_release_version_is_composite
 #: existed -- and destroy the only evidence the record disagrees with
 #: itself. Left completely untouched; only the warning fires.
 W_SOFTWARE_RELEASE_NAME_LOOKS_WRONG = "software_release_name_looks_wrong"
+
+#: ``LevelOfTheoryRef.method`` contains ``//``: an ``energy//geometry`` pair
+#: written as one method name (ARC's ``level_of_theory: "x//y"`` shorthand).
+#: That is two ordinary levels of theory, not one method (ADR 0021), and a
+#: single row named by both would be a level no program ran. Refused.
+LEVEL_OF_THEORY_METHOD_IS_COMPOUND = "level_of_theory_method_is_compound"
+
+#: ``LevelOfTheoryRef.method`` is a named composite method followed by a
+#: correction-table label (``cbs-qb3-paraskevas``) or a year (``cbsqb32023``).
+#: Those select a set of AEC/BAC parameters in Arkane, not a method: the
+#: calculation that ran is CBS-QB3. The name is stored as sent (never aliased,
+#: ADR 0021) and this warning tells the producer to send the method and name
+#: the table as an energy correction scheme.
+W_LEVEL_OF_THEORY_METHOD_NAMES_CORRECTION_TABLE = (
+    "level_of_theory_method_names_correction_table"
+)
+
+#: A named composite method (any spelling the curated aliases join, or the
+#: hyphen-free one) immediately followed by ``-paraskevas`` or a four-digit
+#: year, with or without a hyphen. Matched against the lower-cased method.
+_CORRECTION_TABLE_METHOD = re.compile(
+    r"(?P<stem>rocbs-?qb3|cbs-?qb3|cbs-?4m|cbs-?apno"
+    r"|g3(?:\(?mp2\)?)?(?:b3)?|g4(?:\(?mp2\)?)?"
+    r"|w1(?:u|bd|ro)?|w2)"
+    r"(?P<table>-paraskevas|-?(?:19|20)\d{2})"
+)
+
+
+def correction_table_method_stem(method: str) -> str | None:
+    """Return the composite stem when ``method`` names a correction table.
+
+    :param method: A method name as a producer wrote it.
+    :returns: The named-method part (``"cbs-qb3"`` for
+        ``"cbs-qb3-paraskevas"``), or ``None`` when ``method`` is not such a
+        name. Nothing is rewritten; this only recognises the shape.
+    """
+    match = _CORRECTION_TABLE_METHOD.fullmatch(method.strip().lower())
+    return match.group("stem") if match else None
 
 #: Any internal whitespace is the sole trigger for inspecting ``version``
 #: further below. A real version token never has one; a parsed ESS
@@ -330,8 +369,35 @@ def collect_software_release_version_warnings(
     return warnings
 
 
+def collect_ref_warnings(
+    root: object,
+    *,
+    field_prefix: str = "",
+) -> list[UploadWarning]:
+    """Collect every ref-level warning in a validated request tree.
+
+    The software-release version warnings of
+    :func:`collect_software_release_version_warnings` plus the
+    :class:`LevelOfTheoryRef` method warnings, from one walk, so a route that
+    calls this one function gets both and a new warning on a ref needs no new
+    call site.
+
+    :param root: Any validated request (sub)tree.
+    :param field_prefix: Dot-path prefix naming ``root``'s position.
+    """
+    warnings: list[UploadWarning] = []
+    _walk_for_software_release_warnings(
+        root, field_prefix, warnings, include_level_of_theory=True
+    )
+    return warnings
+
+
 def _walk_for_software_release_warnings(
-    obj: object, prefix: str, out: list[UploadWarning]
+    obj: object,
+    prefix: str,
+    out: list[UploadWarning],
+    *,
+    include_level_of_theory: bool = False,
 ) -> None:
     if obj is None:
         return
@@ -340,21 +406,33 @@ def _walk_for_software_release_warnings(
         if warning is not None:
             out.append(warning)
         return
+    if include_level_of_theory and isinstance(obj, LevelOfTheoryRef):
+        method_warning = obj.method_warning(field_prefix=prefix)
+        if method_warning is not None:
+            out.append(method_warning)
+        return
     if isinstance(obj, BaseModel):
         for name in type(obj).model_fields:
             _walk_for_software_release_warnings(
-                getattr(obj, name), f"{prefix}{name}.", out
+                getattr(obj, name),
+                f"{prefix}{name}.",
+                out,
+                include_level_of_theory=include_level_of_theory,
             )
         return
     if isinstance(obj, (list, tuple)):
         base = prefix[:-1] if prefix.endswith(".") else prefix
         for i, item in enumerate(obj):
-            _walk_for_software_release_warnings(item, f"{base}[{i}].", out)
+            _walk_for_software_release_warnings(
+                item, f"{base}[{i}].", out, include_level_of_theory=include_level_of_theory
+            )
         return
     if isinstance(obj, dict):
         base = prefix[:-1] if prefix.endswith(".") else prefix
         for key, value in obj.items():
-            _walk_for_software_release_warnings(value, f"{base}[{key!r}].", out)
+            _walk_for_software_release_warnings(
+                value, f"{base}[{key!r}].", out, include_level_of_theory=include_level_of_theory
+            )
         return
 
 
@@ -393,10 +471,29 @@ class LevelOfTheoryRef(SchemaBase):
     keywords: str | None = None
     spin_treatment: SpinTreatment | None = None
 
+    # Bookkeeping, as on ``SoftwareReleaseRef``: not wire fields, read back
+    # through ``method_warning()``.
+    _method_warning_code: str | None = PrivateAttr(default=None)
+    _method_warning_message: str | None = PrivateAttr(default=None)
+
     @field_validator("method")
     @classmethod
     def normalize_method(cls, value: str) -> str:
-        return normalize_required_text(value)
+        value = normalize_required_text(value)
+        if "//" in value:
+            raise CodedValidationError(
+                LEVEL_OF_THEORY_METHOD_IS_COMPOUND,
+                (
+                    f"level_of_theory.method={value!r} contains '//', which writes an "
+                    "energy level and a geometry level as one name (energy//geometry). "
+                    "That is two levels of theory, not one method. Send the single-point "
+                    "and the optimization levels as separate calculations, each with its "
+                    "own level of theory."
+                ),
+                context={"field": "method", "value": value},
+                message_prefix=False,
+            )
+        return value
 
     @model_validator(mode="after")
     def normalize_optional_fields(self) -> Self:
@@ -408,6 +505,40 @@ class LevelOfTheoryRef(SchemaBase):
         self.solvent_model = normalize_optional_text(self.solvent_model)
         self.keywords = normalize_optional_text(self.keywords)
         return self
+
+    @model_validator(mode="after")
+    def warn_on_correction_table_method(self) -> Self:
+        """Warn when ``method`` is a composite name plus a correction-table label.
+
+        Never refuses and never rewrites: the verbatim name is what is stored,
+        and it is a different identity from the method it is a table for.
+        """
+        stem = correction_table_method_stem(self.method)
+        if stem is not None:
+            self._method_warning_code = W_LEVEL_OF_THEORY_METHOD_NAMES_CORRECTION_TABLE
+            self._method_warning_message = (
+                f"level_of_theory.method={self.method!r} is the named method {stem!r} "
+                "followed by a label that selects an energy-correction table (a "
+                "correction-set name or a year), not a method. The calculation ran "
+                f"{stem!r}. Stored as sent, as a separate level of theory from "
+                f"{stem!r}. Send method={stem!r} and name the table on the energy "
+                "correction scheme instead."
+            )
+        return self
+
+    def method_warning(self, field_prefix: str = "") -> UploadWarning | None:
+        """The warning :meth:`warn_on_correction_table_method` produced, if any.
+
+        :param field_prefix: Dot-path prefix naming this ref's position in the
+            enclosing request tree.
+        """
+        if self._method_warning_code is None:
+            return None
+        return UploadWarning(
+            field=f"{field_prefix}method",
+            code=self._method_warning_code,
+            message=self._method_warning_message or "",
+        )
 
 
 class SoftwareRef(SchemaBase):

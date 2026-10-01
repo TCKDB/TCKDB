@@ -74,6 +74,19 @@ joins it later; a false merge is not.
 The canonical key of each alias is the spelling ARC and Gaussian write, so
 rows already stored that way keep their hash.
 
+Named composite methods (ADR 0021)
+----------------------------------
+``cbsqb3``, ``rocbsqb3``, ``cbs4m`` and ``cbsapno`` (Arkane's hyphen-free
+spelling) key to the hyphenated forms, and ``g4(mp2)``, ``g3(mp2)`` and
+``g3(mp2)b3`` to the Gaussian keywords ``g4mp2``, ``g3mp2`` and ``g3mp2b3``.
+What stays apart, on purpose: ``w1`` / ``w1u`` / ``w1bd`` / ``w1ro`` (four
+recipes), ``cbs-qb3`` / ``rocbs-qb3`` (restricted-open-shell, no spin
+correction), ``w1-bd`` (no source writes it, so no alias), and every
+correction-table name (``cbs-qb3-paraskevas``, ``cbsqb32023``): those select a
+set of BAC parameters in Arkane, not a method, and are warned about on upload
+(``level_of_theory_method_names_correction_table``) and never aliased.
+:mod:`app.chemistry.composite_methods` records what each named method is.
+
 The SQL twin used by the search filters
 (``scientific_read/lot_identity_filters.py``) is built from this same table
 and agrees with this key on every real method name; its documented
@@ -145,6 +158,97 @@ NAME_ALIASES: tuple[MethodAlias, ...] = (
             "Y. Zhao and D. G. Truhlar, Theor. Chem. Acc. 120, 215 (2008): M06-2X.",
             "Gaussian keyword M062X and ORCA 6.1 manual Table 3.12 keyword M062X "
             "(hyb_mgga_x_m06_2x + mgga_c_m06_2x); Q-Chem and Psi4 write M06-2X.",
+        ),
+    ),
+    # Named composite methods (ADR 0021). The canonical key is the Gaussian /
+    # ARC spelling, so rows stored that way keep their hash. Every spelling
+    # below names the same recipe in every program that accepts it; only
+    # Gaussian documents these as keywords (app/chemistry/composite_methods.py).
+    MethodAlias(
+        alias="cbsqb3",
+        canonical="cbs-qb3",
+        programs=None,
+        citations=(
+            "Arkane (RMG-Py arkane/modelchem.py, standardize_name, 62eb728c0) removes "
+            "hyphens and spaces and lower-cases every model-chemistry name, so it writes "
+            "CBS-QB3 as 'cbsqb3'.",
+            "Gaussian 09 manual, CBS Methods: keyword CBS-QB3 (Montgomery et al., "
+            "J. Chem. Phys. 110, 2822 (1999), doi:10.1063/1.477924); ARC "
+            "data/ess_methods.yml (d9f47ab9) writes 'cbs-qb3'.",
+            "rag-drg level-of-theory card: CBS-QB3 'also written: cbs-qb3, cbsqb3'.",
+            "ROCBS-QB3 is a different recipe (Wood et al., doi:10.1063/1.2335438) and "
+            "keeps its own key.",
+        ),
+    ),
+    MethodAlias(
+        alias="rocbsqb3",
+        canonical="rocbs-qb3",
+        programs=None,
+        citations=(
+            "Arkane standardize_name (hyphens removed), as for cbsqb3.",
+            "Gaussian 09 manual, CBS Methods: 'ROCBS-QB3 [Wood06]'; ARC "
+            "data/ess_methods.yml writes 'rocbs-qb3'.",
+            "Wood et al., J. Chem. Phys. 125, 094106 (2006), doi:10.1063/1.2335438: "
+            "restricted-open-shell variant, a different recipe from CBS-QB3.",
+        ),
+    ),
+    MethodAlias(
+        alias="cbs4m",
+        canonical="cbs-4m",
+        programs=None,
+        citations=(
+            "Arkane standardize_name (hyphens removed), as for cbsqb3.",
+            "Gaussian 09 manual, CBS Methods: keyword CBS-4M; ARC data/ess_methods.yml "
+            "writes 'cbs-4m'.",
+            "Montgomery, Ochterski, Petersson, J. Chem. Phys. 112, 6532 (2000), "
+            "doi:10.1063/1.481224.",
+        ),
+    ),
+    MethodAlias(
+        alias="cbsapno",
+        canonical="cbs-apno",
+        programs=None,
+        citations=(
+            "Arkane standardize_name (hyphens removed), as for cbsqb3.",
+            "Gaussian 09 manual, CBS Methods: keyword CBS-APNO; ARC "
+            "data/ess_methods.yml writes 'cbs-apno'.",
+            "Montgomery, Ochterski, Petersson, J. Chem. Phys. 101, 5900 (1994), "
+            "doi:10.1063/1.467306 (CBS-QCI/APNO).",
+        ),
+    ),
+    MethodAlias(
+        alias="g4(mp2)",
+        canonical="g4mp2",
+        programs=None,
+        citations=(
+            "Curtiss, Redfern, Raghavachari, J. Chem. Phys. 127, 124105 (2007), "
+            "doi:10.1063/1.2770701: the paper names the method G4(MP2).",
+            "Gaussian 09 manual, G1-G4: keyword G4MP2 requests the fourth-generation "
+            "methods [Curtiss07, Curtiss07a]; ARC data/ess_methods.yml writes 'g4mp2'.",
+        ),
+    ),
+    MethodAlias(
+        alias="g3(mp2)",
+        canonical="g3mp2",
+        programs=None,
+        citations=(
+            "Gaussian 09 manual, G1-G4: 'G3MP2 requests the similarly modified G3(MP2) "
+            "method [Curtiss99]'.",
+            "Curtiss et al., J. Chem. Phys. 110, 4703 (1999), doi:10.1063/1.478385.",
+        ),
+    ),
+    MethodAlias(
+        alias="g3(mp2)b3",
+        canonical="g3mp2b3",
+        programs=None,
+        citations=(
+            "Gaussian 09 manual, G1-G4: the G3 variants using B3LYP structures and "
+            "frequencies [Baboul99] 'are requested with the G3B3 and G3MP2B3 keywords'; "
+            "G3MP2 is the manual's gloss of G3(MP2), so G3(MP2)B3 is the same recipe "
+            "with the parenthesis written. ARC data/ess_methods.yml writes 'g3mp2b3'.",
+            "Baboul et al., J. Chem. Phys. 110, 7650 (1999), doi:10.1063/1.478676. The "
+            "exact spelling 'G3(MP2)B3' was not found in a primary text that could be "
+            "retrieved; the entry rests on the manual's keyword gloss above.",
         ),
     ),
 )

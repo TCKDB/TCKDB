@@ -1179,7 +1179,7 @@ class AdminEnergyCorrectionSchemeProvenanceResponse(BaseModel):
     #: reshaped cannot tell whether it was reshaped correctly.
     #:
     #: The upload path has surfaced these since it gained the validator
-    #: (``uploads.py``, via ``collect_software_release_version_warnings``).
+    #: (``uploads.py``, via ``collect_ref_warnings``).
     #: This route now gives the same answer to the same input rather than
     #: a quieter one. Raised in review of #461.
     warnings: list[UploadWarning] = []

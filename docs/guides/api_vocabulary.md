@@ -768,6 +768,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `kinetics_interpretation_conformer_selection_owner_mismatch` | a relationship — read `context` |
 | `kinetics_interpretation_statmech_owner_mismatch` | a relationship — read `context` |
 | `level_of_theory_handle_conflict` | a relationship — read `context` |
+| `level_of_theory_method_is_compound` | a thing |
 | `limit_too_large` | a relationship — read `context` |
 | `lowest_energy_unavailable` | a thing |
 | `micro_reaction_key_undeclared` | a thing |

@@ -241,31 +241,34 @@ scheme detail and search records.
 
 ### 0.65.0 - 2026-10-01
 
-A single atom may be deposited with an `sp` primary on the pressure-dependent
-network bundle too (#615). Every existing payload is unchanged.
+`level_of_theory.method` guards for named composite methods (ADR 0021). Every
+payload that was accepted and meant one method is unchanged.
 
-- **`POST /uploads/networks/pdep`: a one-atom conformer may send its `sp` as
-  `calculation`.** The two other bundle routes accepted this already (#610);
-  the network route still required an `opt`, so the H atom of a hydrazine-style
-  network could not be sent honestly. The rule is the same one: a conformer
-  whose geometry is exactly one atom may carry `type: "sp"` as its primary, with
-  `sp_electronic_energy_hartree`; an `sp` on two or more atoms, an uncountable
-  geometry, or any type other than `opt`/`sp` is still refused with the same
-  message. The atom's statmech `source_calculations` link that `sp` with role
-  `sp`, and the solve's `source_calculations` and `state_energies` name it. A
-  relabelled `opt` on an atom is still accepted. Transition states still require
-  an `opt` primary. Only the producer contract's description of the network's
-  conformer changed; no field was added or removed.
-- **Duplicate single points are now refused when they declare output-only
-  geometry (shared rule, so `/uploads/statmech` and `/uploads/thermo` change
-  too).** With no `opt` linked, two `sp` links on one geometry are refused with
-  `statmech_role_duplicate` / `thermo_role_duplicate`. The rule used to read an
-  `sp`'s input geometry only; it now reads its input geometry, else its output
-  geometry. A deposit whose `sp` declares only an output geometry on the same
-  geometry as another linked `sp` therefore changes: the same level of theory
-  used to return 201 and now returns the `*_role_duplicate` refusal; a different
-  level used to return `*_energy_level_ambiguous` and now returns
-  `*_role_duplicate`. This is what two input-linked `sp`s already got.
+- **`//` is refused in `method`.** `LevelOfTheoryRef.method` containing `//`
+  (ARC's `energy//geometry` shorthand, `"ccsd(t)-f12/cc-pvtz-f12//b3lyp/def2tzvp"`)
+  is refused with code `level_of_theory_method_is_compound` and `context`
+  `{field: "method", value}`. It is two levels of theory, not one method: send
+  the single-point and the optimization levels as separate calculations, each
+  with its own level of theory. A single `/` is still accepted.
+- **Correction-table names warn.** A named composite method followed by a
+  correction-table label or a year (`cbs-qb3-paraskevas`, `cbsqb32023`) is
+  accepted with an upload warning `level_of_theory_method_names_correction_table`
+  at `...level_of_theory.method`. These names select Arkane AEC/BAC parameters,
+  not a method: the calculation that ran is CBS-QB3. The name is stored as sent,
+  as a separate level of theory from the method, and is never aliased. Send the
+  method and name the table on the energy correction scheme. A later release
+  will refuse these once the producers send the method.
+- **New helpers.** `collect_ref_warnings` walks a validated request and returns
+  the software-release version warnings and these method warnings together;
+  `collect_software_release_version_warnings` is unchanged.
+  `correction_table_method_stem` recognises the shape.
+
+Server side, in the same change: `cbsqb3`, `rocbsqb3`, `cbs4m` and `cbsapno`
+now key to the hyphenated spellings, and `g4(mp2)`, `g3(mp2)` and `g3(mp2)b3`
+to `g4mp2`, `g3mp2` and `g3mp2b3`, so a level of theory written either way is
+one row. `W1`, `W1U`, `W1BD` and `W1RO` stay four methods and `CBS-QB3` and
+`ROCBS-QB3` stay two. A producer that hashes level-of-theory identity locally
+must adopt the same aliases to agree with the server.
 
 ### 0.64.0 - 2026-10-01
 
@@ -1157,6 +1160,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`geometry_key_unresolved`](#c-geometry-key-unresolved) | 422 | payload validation; route handler |
 | [`kinetics_interpretation_conformer_selection_owner_mismatch`](#c-kinetics-interpretation-conformer-selection-owner-mismatch) | 422 | route handler |
 | [`kinetics_interpretation_statmech_owner_mismatch`](#c-kinetics-interpretation-statmech-owner-mismatch) | 422 | route handler |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
 | [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
@@ -1465,6 +1469,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`enthalpy_reference_kind_unrecognized`](#c-enthalpy-reference-kind-unrecognized) | 422 | route handler |
 | [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation |
 | [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
 | [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
 | [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
 | [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
@@ -1692,6 +1697,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`energy_correction_scheme_frequency_level_without_energy_level`](#c-energy-correction-scheme-frequency-level-without-energy-level) | 422 | payload validation; route handler |
 | [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation; route handler |
 | [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation; route handler |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
 | [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
 | [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
 | [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
@@ -1923,6 +1929,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | route handler |
 | [`kinetics_interpretation_conformer_selection_owner_mismatch`](#c-kinetics-interpretation-conformer-selection-owner-mismatch) | 422 | route handler |
 | [`kinetics_interpretation_statmech_owner_mismatch`](#c-kinetics-interpretation-statmech-owner-mismatch) | 422 | route handler |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
 | [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | route handler |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
@@ -2009,7 +2016,7 @@ The most specific refusals traced for this surface (ranking in the [code referen
 - [`species_kind_conflict`](#c-species-kind-conflict) (422): This deposit declares molecule_kind={payload.molecule_kind.value}, but the species identity it resolves to (smiles={species.smiles}, charge={species.charge}, multiplicity={species.multiplicity}) is already stored as molecule_kind={species.kind.value} (species_kind_conflict).
 - [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) (422): species_entry.charge={payload.charge} does not match SMILES charge {charge}
 - [`stored_species_smiles_unparseable`](#c-stored-species-smiles-unparseable) (422): Cannot parse the stored SMILES {species.smiles} of participant {species.public_ref} while validating reaction elemental balance.
-- [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) (403): only the account that made the deposit can attest a depositor agreement for it.
+- [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) (422): level_of_theory.method={value} contains '//', which writes an energy level and a geometry level as one name (energy//geometry).
 
 ### Routes
 
@@ -2065,6 +2072,7 @@ Traced statically from the payload validators, route handlers and route dependen
 
 | Code | Status | Traced via |
 |---|---|---|
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | route handler |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
 | [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
@@ -2306,6 +2314,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation; route handler |
 | [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation; route handler |
 | [`geometry_key_unresolved`](#c-geometry-key-unresolved) | 422 | payload validation; route handler |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
 | [`micro_reaction_key_undeclared`](#c-micro-reaction-key-undeclared) | 422 | payload validation; route handler |
 | [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation |
 | [`network_channel_key_undeclared`](#c-network-channel-key-undeclared) | 422 | payload validation; route handler |
@@ -2448,6 +2457,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | Code | Status | Traced via |
 |---|---|---|
 | [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | route handler |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | route handler |
 | [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | route handler |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
@@ -2701,6 +2711,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | route handler |
 | [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation |
 | [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
 | [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
 | [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
 | [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
@@ -3006,6 +3017,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`enthalpy_reference_kind_unrecognized`](#c-enthalpy-reference-kind-unrecognized) | 422 | route handler |
 | [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation |
 | [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
 | [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
 | [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
 | [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
@@ -3379,6 +3391,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`energy_correction_scheme_frequency_level_without_energy_level`](#c-energy-correction-scheme-frequency-level-without-energy-level) | 422 | payload validation; route handler |
 | [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation |
 | [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
 | [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | route handler |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
@@ -3621,6 +3634,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | route handler |
 | [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation |
 | [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
 | [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
 | [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
 | [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
@@ -3895,6 +3909,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
 | [`kinetics_interpretation_conformer_selection_owner_mismatch`](#c-kinetics-interpretation-conformer-selection-owner-mismatch) | 422 | route handler |
 | [`kinetics_interpretation_statmech_owner_mismatch`](#c-kinetics-interpretation-statmech-owner-mismatch) | 422 | route handler |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
 | [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
@@ -5416,23 +5431,13 @@ Unknown keys are refused.
 |---|---|---|---|---|---|---|
 | `key` | string | yes |  |  | length >= 1 | Local key for this conformer. |
 | `geometry` | [`GeometryIn`](#m-geometryin) | yes |  |  |  | Geometry payload with a reusable key. |
-| `calculation` | [`CalculationIn`](#m-calculationin) | yes |  |  |  | The optimization calculation that produced this conformer. Must have ``type == "opt"``, except for a one-atom geometry, whose primary may be its ``sp`` (#615). |
+| `calculation` | [`CalculationIn`](#m-calculationin) | yes |  |  |  | The optimization calculation that produced this conformer. Must have ``type == "opt"``. |
 | `scientific_origin` | `ScientificOriginKind` | no | `"computed"` |  | `computed`, `experimental`, `estimated` | Scientific origin for the conformer observation. |
 | `label` | string \| null | no | `null` |  |  | Optional user hint carried with the upload; basin dedupe still happens at the conformer-group layer. |
 | `note` | string \| null | no | `null` |  |  | Optional note on the conformer observation. |
 
 - **ConformerIn (network_pdep_upload).normalize_text** (model, after): applies `normalize_optional_text` to `label`, `note`: Trim optional text inputs and collapse blank strings to None.
-- **ConformerIn (network_pdep_upload).validate_primary_calc_is_opt** (model, after; can refuse via `require_opt_primary_unless_monatomic`):
-
-  Send an ``opt`` as a conformer's ``calculation``; a single atom sends its ``sp``.
-
-  The same rule as the computed-species and computed-reaction bundles
-  (#610, #615), taken from the one helper they share: an atom has no
-  geometry to optimise, so its honest primary is the single point that
-  ran, once, with the atom's one-atom XYZ as the conformer geometry. An
-  ``sp`` on two or more atoms, an uncountable geometry, or any type other
-  than ``opt``/``sp`` is refused. A relabelled ``opt`` on an atom is still
-  accepted.
+- **ConformerIn (network_pdep_upload).validate_primary_calc_is_opt** (model, after; can refuse): Conformer '{self.key}' primary calculation must be type 'opt', got '{self.calculation.type.value}'.
 
 <a id="m-conformerin-computed-reaction-upload"></a>
 
@@ -6314,7 +6319,14 @@ Unknown keys are refused.
 | `spin_treatment` | `SpinTreatment` \| null | no | `null` |  | `restricted`, `unrestricted`, `restricted_open`, `unknown` |  |
 
 - **LevelOfTheoryRef.normalize_optional_fields** (model, after): applies `normalize_optional_text` to `basis`, `aux_basis`, `cabs_basis`, `dispersion`, `solvent`, `solvent_model`, `keywords`: Trim optional text inputs and collapse blank strings to None.
-- **LevelOfTheoryRef.normalize_method** (field, after on `method`; can refuse via `normalize_required_text`): applies `normalize_required_text` to `method`: Trim required text inputs and reject blank values.
+- **LevelOfTheoryRef.warn_on_correction_table_method** (model, after):
+
+  Warn when ``method`` is a composite name plus a correction-table label.
+
+  Never refuses and never rewrites: the verbatim name is what is stored,
+  and it is a different identity from the method it is a table for.
+
+- **LevelOfTheoryRef.normalize_method** (field, after on `method`; can refuse): level_of_theory.method={value} contains '//', which writes an energy level and a geometry level as one name (energy//geometry). That is two levels of theory, not one method. Send the single-point and the optimization levels as separate calculations, each with its own level of theory.
 
 <a id="m-literatureuploadrequest"></a>
 
@@ -8402,6 +8414,14 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: One code, two comparisons: a reactant/product assignment is held to the participant's species entry and a transition-state one to the declared TS entry.
+
+<a id="c-level-of-theory-method-is-compound"></a>
+
+#### `level_of_theory_method_is_compound`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/fragments/refs.py`.
+- Message: "level_of_theory.method={value} contains '//', which writes an energy level and a geometry level as one name (energy//geometry). That is two levels of theory, not one method. Send the single-point and the optimization levels as separate calculations, each with its own level of theory."
+- Note: level_of_theory.method contains '//': an energy//geometry pair (ARC's 'x//y' shorthand) written as one method name.
 
 <a id="c-micro-reaction-key-undeclared"></a>
 
