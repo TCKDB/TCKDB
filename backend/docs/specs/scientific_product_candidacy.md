@@ -135,6 +135,15 @@ thermo. See `backend/app/services/scientific_read/thermo.py`
 (`get_species_thermo`, `_build_provenance`) and
 `backend/tests/services/scientific_read/test_get_species_thermo.py::test_statmech_fallback_pick_is_deterministic_with_multiple_statmech`.
 
+**The derived `levels.*` do not use this fallback (#636).** A thermo's
+geometry / frequency / energy levels come from its own source calculations
+(per role), then from the statmech it is linked to by `thermo.statmech_id`;
+otherwise they are `null`. The entry-wide pick would report an unrelated
+statmech's levels for an unlinked (say experimental) thermo. The same
+own-link-only rule governs `levels.declared_energy` (#633). Provenance and the
+evidence checklist still use the display fallback described above.
+Test: `backend/tests/services/scientific_read/test_thermo_levels_linkage.py`.
+
 ## Resolved: product-level curated selection (Stage 3)
 
 The open question above — whether to add an explicit product-level

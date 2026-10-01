@@ -279,9 +279,11 @@ class ThermoRecord(BaseModel):
     provenance: ThermoProvenance
     #: Geometry / frequency / energy levels of theory, derived at read
     #: time from this record's own source calculations, falling back to
-    #: its statmech basis's for any role this record does not cover
-    #: (R6: a thermo derived from a statmech record inherits its
-    #: levels). See :class:`ScientificLevelsSummary`.
+    #: the statmech it is linked to (``statmech_id``) for any role this
+    #: record does not cover (R6: a thermo derived from a statmech record
+    #: inherits its levels). Never borrowed from an unlinked statmech on the
+    #: same entry: an unlinked thermo with no source calculations has none
+    #: (#636). See :class:`ScientificLevelsSummary`.
     levels: ScientificLevelsSummary = Field(default_factory=ScientificLevelsSummary)
     # Group-additivity estimation breakdown; null unless the record is an
     # estimated thermo with an attached GA breakdown (DR-0035).
