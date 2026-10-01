@@ -583,8 +583,13 @@ def persist_network_pdep_upload(
                         f"validation_evidence[{index}].source_calculation_key"
                     ),
                 )
+                # An energy_ordering record names its source calculations one
+                # per energy, and the seam resolves those itself.
+                if evidence_in.source_calculation_key is not None
+                else None
                 for index, evidence_in in enumerate(ts_in.validation_evidence)
             ],
+            calculation_ids_by_key=calculation_key_to_id,
             subject_label=ts_in.key,
             field_path=f"transition_states[{ts_in.key}].validation_evidence",
             reaction_entry_id=reaction_entry.id,

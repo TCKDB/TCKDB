@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.64.0 - 2026-10-01
+
+Transition-state contract additions (#621). Every field is optional and
+every existing payload is unchanged.
+
+- **Two more kinds of transition-state validation evidence.**
+  `TransitionStateValidationEvidenceIn.kind` was `"irc"` only. It now also
+  accepts `"energy_ordering"` (the saddle point lies above both wells) and
+  `"imaginary_mode"` (what the frequency calculation found). At most one record
+  per kind. An `energy_ordering` record carries `energies`, one per participant
+  (`"ts"`, `"reactant:N"`, `"product:N"`), each with an `energy_kind`
+  (`"electronic"` or `"e0"`, which are never compared with each other), an
+  `energy_hartree` and the `source_calculation_key` it was taken from, which
+  must belong to that participant. An `imaginary_mode` record carries
+  `imaginary_frequency_count`, `imaginary_frequency_cm1` (negative) and
+  `mode_displacement_agrees` (your displacement check's verdict, null when not
+  assessed). A pass that the record's own *stated* numbers contradict is refused, a
+  field is refused on a kind it does not describe, and only a passing `irc`
+  record silences `transition_state_missing_irc_evidence`. `energy_ordering`
+  is accepted on the computed-reaction and pressure-dependent bundles and
+  refused on the standalone transition-state upload, which has no
+  calculations for the wells; `imaginary_mode` binds there to the single
+  `freq` additional calculation. Energies are finite and not positive (absolute,
+  in hartree; zero is exact for the bare proton), `imaginary_frequency_cm1` is finite, and the database refuses
+  NaN and infinities too. An `electronic` energy must come from an `sp` or
+  `opt` calculation and an `e0` from a `freq`; one energy kind taken at more
+  than one level of theory is accepted with a
+  `transition_state_energy_ordering_mixed_levels` warning. An `imaginary_mode`
+  count or frequency that disagrees with the frequency result it cites is
+  refused, and a pass with more than one imaginary mode needs that result to
+  designate the reaction coordinate. Stated energies are not reconciled with
+  the energies stored on the cited calculations.
+- **Transition-state statmech on the reaction bundle.**
+  `BundleTransitionStateIn` gains `statmech`, the block a species carries on
+  the computed-species route, written through the same code, so the same rules
+  apply (source roles, the three energy levels, scale-factor resolution).
+  Its `source_calculations` and torsion scans must be the saddle point's own
+  calculations. The response gains `transition_state_statmech_id`, and a
+  transition-state entry read serves it under `include=statmech`.
+- **Standalone transition-state route.** `additional_calculations` now accepts
+  `scan`, and `CalculationWithResultsPayload` gains `scan_result` (type `scan`
+  only) so the points travel with it. That payload is shared, so this is a
+  cross-route addition: a route that already accepted a `scan` calculation
+  (the conformer route does not restrict its primary calculation's type) now
+  stores the scan's points, and a route that does not allow `scan` is unchanged. The request gains
+  `applied_energy_corrections` (no source keys or frequency scale factor, since
+  the payload has no key namespace), and `atom_map`, with a `key` and a
+  `geometry` on each reaction participant and a `geometry_key` for the saddle
+  point, because a map counts its indices into geometries.
+- **An IRC result may leave its direction and flags unstated.**
+  `IRCResultPayload.direction`, `has_forward` and `has_reverse` are now
+  optional. Unstated is stored and read back as null, never as `false`; a flag
+  stated `false` against points of that direction is still refused.
+
 ## 0.63.0 - 2026-09-30
 
 The Arrhenius reference temperature, and the reaction bundle's kinetics block

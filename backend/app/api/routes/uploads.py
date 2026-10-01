@@ -245,6 +245,14 @@ class ComputedReactionUploadResult(BaseModel):
     transport_ids: list[int] = Field(default_factory=list)
     #: The ``trn_`` ref of each record in ``transport_ids``, in the same order.
     transport_refs: list[str] = Field(default_factory=list)
+    #: The ``statmech`` row written for the transition state, if the bundle's
+    #: ``transition_state`` carried a ``statmech`` block. Separate from
+    #: ``statmech_ids`` rather than appended to it: that list is one id per
+    #: species statmech, and a consumer that pairs it with ``species_entry_ids``
+    #: would be misled by an entry that belongs to no species.
+    transition_state_statmech_id: int | None = None
+    #: The ``sm_``-style public ref of the same record, for reads.
+    transition_state_statmech_ref: str | None = None
     species_entry_ids: list[int]
     species_count: int
     # Bundle-local calc key → assigned ``calculation.id`` for every

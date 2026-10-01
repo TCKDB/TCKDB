@@ -3878,7 +3878,7 @@
       },
       "BundleTransitionStateIn": {
         "additionalProperties": false,
-        "description": "Transition state for the reaction in this bundle.\n\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity.\n:param unmapped_smiles: Optional SMILES for the TS.\n:param geometry: Saddle-point geometry.\n:param calculation: Primary opt calculation.\n:param calculations: Additional calculations (freq, sp, irc).\n:param label: Optional label.\n:param note: Optional note.",
+        "description": "Transition state for the reaction in this bundle.\n\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity.\n:param unmapped_smiles: Optional SMILES for the TS.\n:param geometry: Saddle-point geometry.\n:param calculation: Primary opt calculation.\n:param calculations: Additional calculations (freq, sp, irc, scan).\n:param statmech: Optional statistical-mechanics interpretation of the\n    saddle point: the partition-function inputs a rate constant is\n    computed from. The same block a species carries on the computed-species\n    route, written through the same persistence, so every rule that governs\n    a species' statmech governs this one. ``source_calculations`` and\n    ``torsions[*].source_scan_calculation_key`` name calculations this\n    transition state owns. A saddle point is a polyatomic, so this block\n    never describes a single atom.\n:param label: Optional label.\n:param note: Optional note.",
         "properties": {
           "applied_energy_corrections": {
             "description": "Applied energy corrections targeting the resolved transition_state_entry directly. TS-side corrections are never stored as reaction-entry corrections. ``source_calculation_key`` resolves against the bundle's global calculation namespace; the workflow rejects 422 when the referenced calc is not owned by this transition state. ``source_conformer_key`` has nothing to resolve against here — a transition state in this bundle declares no conformers — so setting it is refused rather than ignored.",
@@ -3932,6 +3932,16 @@
             ],
             "title": "Note"
           },
+          "statmech": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatmechInBundle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "unmapped_smiles": {
             "anyOf": [
               {
@@ -3944,7 +3954,7 @@
             "title": "Unmapped Smiles"
           },
           "validation_evidence": {
-            "description": "Structured IRC evidence that this saddle point connects the bundle's declared reactants and products. Optional but strongly recommended: a deposit without it succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. ``source_calculation_key`` names an irc calculation owned by this transition state.",
+            "description": "Structured validation evidence for this saddle point, at most one record per kind. kind='irc': the path connects the bundle's declared reactants and products; ``source_calculation_key`` names an irc calculation owned by this transition state. kind='imaginary_mode': the frequency calculation found the expected imaginary mode; ``source_calculation_key`` names a freq calculation owned by this transition state. kind='energy_ordering': the saddle point lies above both wells; each compared energy names its own source calculation, owned by the saddle point or by that participant's species. Optional but strongly recommended: a deposit without a passing IRC record succeeds and returns a 'transition_state_missing_irc_evidence' upload warning; the other kinds do not silence it.",
             "items": {
               "$ref": "#/components/schemas/TransitionStateValidationEvidenceIn"
             },
@@ -5818,15 +5828,36 @@
             "type": "integer"
           },
           "direction": {
-            "$ref": "#/components/schemas/IRCDirection"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IRCDirection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "has_forward": {
-            "title": "Has Forward",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Forward"
           },
           "has_reverse": {
-            "title": "Has Reverse",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Reverse"
           },
           "note": {
             "anyOf": [
@@ -5881,10 +5912,7 @@
           }
         },
         "required": [
-          "calculation_id",
-          "direction",
-          "has_forward",
-          "has_reverse"
+          "calculation_id"
         ],
         "title": "CalculationIRCResultRead",
         "type": "object"
@@ -5893,15 +5921,36 @@
         "description": "Summary projection of a ``calc_irc_result`` row.\n\nPer-point arrays are deferred to ``include=irc``.",
         "properties": {
           "direction": {
-            "$ref": "#/components/schemas/IRCDirection"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IRCDirection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "has_forward": {
-            "title": "Has Forward",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Forward"
           },
           "has_reverse": {
-            "title": "Has Reverse",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Reverse"
           },
           "note": {
             "anyOf": [
@@ -5948,11 +5997,6 @@
             "title": "Zero Energy Reference Hartree"
           }
         },
-        "required": [
-          "direction",
-          "has_forward",
-          "has_reverse"
-        ],
         "title": "CalculationIRCResultSummary",
         "type": "object"
       },
@@ -5960,19 +6004,40 @@
         "description": "``include=irc`` summary projection.\n\nBounded — no per-point arrays, no per-point geometry refs, no\nreaction-coordinate arrays. Aggregates (``forward_point_count``,\n``reverse_point_count``, ``ts_point_count``, energy MIN/MAX,\nreaction-coordinate MIN/MAX) come from cheap SQL aggregates so the\ninclude is safe to populate on a search page.\n\nFull trajectory data (each IRC point's energy, reaction coordinate,\ngeometry link) belongs to the future specialized endpoint\n``GET /scientific/calculations/{calculation_ref_or_id}/irc``.\n\nDirection-counting policy: rows with ``direction = forward`` count\ntoward ``forward_point_count``; rows with ``direction = reverse``\ncount toward ``reverse_point_count``. Rows with ``direction = both``\nor ``direction IS NULL`` (e.g. an ORCA TS-marker row) are\nintentionally NOT double-counted. ``ts_point_count`` is independent\nand counts every row with ``is_ts = True`` regardless of direction.",
         "properties": {
           "direction": {
-            "$ref": "#/components/schemas/IRCDirection"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IRCDirection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "forward_point_count": {
             "title": "Forward Point Count",
             "type": "integer"
           },
           "has_forward": {
-            "title": "Has Forward",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Forward"
           },
           "has_reverse": {
-            "title": "Has Reverse",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Reverse"
           },
           "max_electronic_energy_hartree": {
             "anyOf": [
@@ -6094,9 +6159,6 @@
           }
         },
         "required": [
-          "direction",
-          "has_forward",
-          "has_reverse",
           "forward_point_count",
           "reverse_point_count",
           "ts_point_count"
@@ -9455,7 +9517,7 @@
       },
       "CalculationWithResultsPayload": {
         "additionalProperties": false,
-        "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search result\nfields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
+        "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan\nresult fields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param scan_result: Inline scan result (type must be ``scan``): the\n    stepped coordinates and the points along them. Whether a route accepts\n    a ``scan`` calculation at all is that route's own allow-list; this\n    field is only where the points go when it does.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
         "properties": {
           "constraints": {
             "description": "Coordinate constraints held fixed during this calculation. Generic across opt, freq, sp, irc, path_search, scan, and any other constrained run — these are input/provenance metadata and do not require a result block. For scan calculations, frozen coordinates may be declared here while the stepped coordinate is declared on the scan_result.coordinates list.",
@@ -9606,6 +9668,16 @@
           "quality": {
             "$ref": "#/components/schemas/CalculationQuality",
             "default": "raw"
+          },
+          "scan_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalculationScanResultCreate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "scf_stability": {
             "anyOf": [
@@ -11130,6 +11202,28 @@
             ],
             "title": "Transition State Entry Id"
           },
+          "transition_state_statmech_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Statmech Id"
+          },
+          "transition_state_statmech_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Statmech Ref"
+          },
           "transport_ids": {
             "items": {
               "type": "integer"
@@ -11641,6 +11735,16 @@
           "quality": {
             "$ref": "#/components/schemas/CalculationQuality",
             "default": "raw"
+          },
+          "scan_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalculationScanResultCreate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "scf_stability": {
             "anyOf": [
@@ -18462,18 +18566,39 @@
       },
       "IRCResultPayload": {
         "additionalProperties": false,
-        "description": "Upload-facing inline result for an IRC calculation.\n\n:param direction: Overall run mode (forward / reverse / both).\n:param has_forward: True when at least one forward-branch point is present.\n:param has_reverse: True when at least one reverse-branch point is present.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
+        "description": "Upload-facing inline result for an IRC calculation.\n\n``direction``, ``has_forward`` and ``has_reverse`` are each optional, and\nomitting one says \"the producer did not state it\". That is a real position\nfor a producer to be in: an IRC whose log does not record which way it ran\nis still a path with points on it, and requiring the three to be written\nmade such a producer drop the whole result. A value that is not stated is\nstored as NULL and read back as null, never as ``false``: ``has_forward``\nfalse is a claim that no forward-branch point exists, which is a different\nstatement from not knowing.\n\n:param direction: Overall run mode (forward / reverse / both). Omit when\n    the run mode is not stated.\n:param has_forward: True when at least one forward-branch point is present,\n    false when none is. Omit when not stated.\n:param has_reverse: True when at least one reverse-branch point is present,\n    false when none is. Omit when not stated.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
         "properties": {
           "direction": {
-            "$ref": "#/components/schemas/IRCDirection"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IRCDirection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "has_forward": {
-            "title": "Has Forward",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Forward"
           },
           "has_reverse": {
-            "title": "Has Reverse",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Reverse"
           },
           "note": {
             "anyOf": [
@@ -18529,11 +18654,6 @@
             "title": "Zero Energy Reference Hartree"
           }
         },
-        "required": [
-          "direction",
-          "has_forward",
-          "has_reverse"
-        ],
         "title": "IRCResultPayload",
         "type": "object"
       },
@@ -39139,6 +39259,21 @@
               }
             ]
           },
+          "statmech": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TransitionStateStatmechSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statmech",
+            "x-tckdb-include-gated": "statmech"
+          },
           "transition_state": {
             "$ref": "#/components/schemas/TransitionStateCoreBlock"
           },
@@ -39260,6 +39395,21 @@
             ],
             "title": "Review History",
             "x-tckdb-include-gated": "review"
+          },
+          "statmech": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TransitionStateEntryStatmech"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statmech",
+            "x-tckdb-include-gated": "statmech"
           },
           "transition_state": {
             "$ref": "#/components/schemas/TransitionStateCoreBlock"
@@ -44628,8 +44778,30 @@
       },
       "TSReactionParticipantUpload": {
         "additionalProperties": false,
-        "description": "One participant slot in the TS reaction description.\n\n:param species_entry: Species-entry identity payload to resolve or create.\n:param note: Optional note stored on the structured participant row.",
+        "description": "One participant slot in the TS reaction description.\n\n:param species_entry: Species-entry identity payload to resolve or create.\n:param note: Optional note stored on the structured participant row.\n:param key: Local name for this participant, which an ``atom_map`` uses to\n    say which participant a mapping is about. Required on every\n    participant when the request carries an ``atom_map`` and unused\n    otherwise. Unique within the request.\n:param geometry: The participant's own geometry, which an ``atom_map``\n    counts its atom indices into. Optional; a participant the map does not\n    map (or one with no atoms, such as a free electron) has none. Its\n    ``key`` is what the map's ``geometry_key`` names, and is unique within\n    the request. Stored as a geometry only; nothing is computed from it.",
         "properties": {
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeometryIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
           "note": {
             "anyOf": [
               {
@@ -48235,6 +48407,78 @@
         "title": "TransitionStateCalculationSummary",
         "type": "object"
       },
+      "TransitionStateComparedEnergy": {
+        "additionalProperties": false,
+        "description": "One energy an ``energy_ordering`` record compared.\n\n:param participant: Whose energy this is: ``\"ts\"`` for the saddle point, or\n    ``\"reactant:N\"`` / ``\"product:N\"`` for the N-th declared participant\n    of that side (1-based, in the order the reaction declares them).\n:param energy_kind: ``\"electronic\"`` for the electronic energy, or ``\"e0\"``\n    for the electronic energy plus the zero-point energy. They are\n    different quantities and are never compared with each other.\n:param energy_hartree: The absolute energy, in hartree: finite and not\n    positive. A bound system's total energy is below the zero of separated\n    nuclei and electrons, so a positive value is a relative energy (or a\n    unit slip) and is refused rather than stored where a reader would take\n    it for absolute. Zero is allowed because it is exact for the bare\n    proton (``[H+]``), a participant with atoms and no electrons. A side of the\n    reaction with several participants is compared by the sum of their\n    energies, so a participant is given its own and never a pre-summed\n    total: a total has no single calculation to name.\n:param source_calculation_key: Local key of the calculation this energy\n    was taken from, in the enclosing payload's calculation namespace. The\n    calculation must belong to the thing the energy is of: the saddle\n    point's own calculation for ``ts``, the participant species' own for a\n    reactant or product.",
+        "properties": {
+          "energy_hartree": {
+            "maximum": 0.0,
+            "title": "Energy Hartree",
+            "type": "number"
+          },
+          "energy_kind": {
+            "enum": [
+              "electronic",
+              "e0"
+            ],
+            "title": "Energy Kind",
+            "type": "string"
+          },
+          "participant": {
+            "pattern": "^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$",
+            "title": "Participant",
+            "type": "string"
+          },
+          "source_calculation_key": {
+            "minLength": 1,
+            "title": "Source Calculation Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "participant",
+          "energy_kind",
+          "energy_hartree",
+          "source_calculation_key"
+        ],
+        "title": "TransitionStateComparedEnergy",
+        "type": "object"
+      },
+      "TransitionStateComparedEnergySummary": {
+        "description": "One energy an ``energy_ordering`` evidence record compared.\n\n``participant`` is ``ts``, ``reactant:N`` or ``product:N``; ``energy_kind``\nis ``electronic`` or ``e0`` (electronic energy plus zero-point energy), and\nthe two are never compared with each other. ``energy_hartree`` is the\nabsolute energy as the producer reported it, and\n``source_calculation_ref`` is the calculation it was taken from.",
+        "properties": {
+          "energy_hartree": {
+            "title": "Energy Hartree",
+            "type": "number"
+          },
+          "energy_kind": {
+            "title": "Energy Kind",
+            "type": "string"
+          },
+          "participant": {
+            "title": "Participant",
+            "type": "string"
+          },
+          "source_calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Ref"
+          }
+        },
+        "required": [
+          "participant",
+          "energy_kind",
+          "energy_hartree"
+        ],
+        "title": "TransitionStateComparedEnergySummary",
+        "type": "object"
+      },
       "TransitionStateCoreBlock": {
         "description": "Direct transition-state-row metadata.\n\n``transition_state_ref`` is the public stable handle; the integer id\nis stripped when the deployment forbids exposing internal ids.",
         "properties": {
@@ -48604,6 +48848,28 @@
         "title": "TransitionStateEntryRead",
         "type": "object"
       },
+      "TransitionStateEntryStatmech": {
+        "description": "One entry's statmech records, on a TS-*concept* response.\n\nKeyed by entry ref for the reason ``TransitionStateEntryValidationEvidence``\nis: a concept pools candidates computed at different levels of theory, and\na union across them would not say which entry a record belongs to.",
+        "properties": {
+          "statmech": {
+            "items": {
+              "$ref": "#/components/schemas/TransitionStateStatmechSummary"
+            },
+            "title": "Statmech",
+            "type": "array"
+          },
+          "transition_state_entry_ref": {
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "transition_state_entry_ref",
+          "statmech"
+        ],
+        "title": "TransitionStateEntryStatmech",
+        "type": "object"
+      },
       "TransitionStateEntryStatus": {
         "enum": [
           "guess",
@@ -48783,7 +49049,7 @@
             ]
           },
           "validation_evidence": {
-            "description": "Structured IRC evidence. Optional but strongly recommended: a deposit without it succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. source_calculation_key resolves within this transition state's calculation namespace and must name an irc-type calculation.",
+            "description": "Structured validation evidence, at most one record per kind. kind='irc' is evidence the saddle point connects the declared endpoints: optional but strongly recommended, since a deposit without a passing one succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. source_calculation_key resolves within this transition state's calculation namespace and must name an irc-type calculation (a freq-type one for kind='imaginary_mode'). kind='energy_ordering' names a source calculation per compared energy: the saddle point's own, or the participant species' own.",
             "items": {
               "$ref": "#/components/schemas/TransitionStateValidationEvidenceIn"
             },
@@ -49148,9 +49414,175 @@
         "title": "TransitionStateSaddlePointEvidence",
         "type": "object"
       },
+      "TransitionStateStatmechSourceCalculation": {
+        "description": "One calculation a transition state's statmech record was computed from.",
+        "properties": {
+          "calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Ref"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "title": "TransitionStateStatmechSourceCalculation",
+        "type": "object"
+      },
+      "TransitionStateStatmechSummary": {
+        "description": "Compact projection of a statmech record owned by a transition state.\n\nWhat is needed to tell what partition-function inputs the saddle point\ncarries. The full record, with torsions, electronic levels and the\nfrequency scale factor, is ``/scientific/statmech/{statmech_ref}``.",
+        "properties": {
+          "external_symmetry": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Symmetry"
+          },
+          "is_linear": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Linear"
+          },
+          "optical_isomers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optical Isomers"
+          },
+          "point_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Point Group"
+          },
+          "rigid_rotor_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rigid Rotor Kind"
+          },
+          "rotational_constant_a_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotational Constant A Cm1"
+          },
+          "rotational_constant_b_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotational Constant B Cm1"
+          },
+          "rotational_constant_c_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotational Constant C Cm1"
+          },
+          "scientific_origin": {
+            "title": "Scientific Origin",
+            "type": "string"
+          },
+          "source_calculations": {
+            "items": {
+              "$ref": "#/components/schemas/TransitionStateStatmechSourceCalculation"
+            },
+            "title": "Source Calculations",
+            "type": "array"
+          },
+          "statmech_ref": {
+            "title": "Statmech Ref",
+            "type": "string"
+          },
+          "statmech_treatment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statmech Treatment"
+          },
+          "torsion_count": {
+            "default": 0,
+            "title": "Torsion Count",
+            "type": "integer"
+          },
+          "uses_projected_frequencies": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uses Projected Frequencies"
+          }
+        },
+        "required": [
+          "statmech_ref",
+          "scientific_origin"
+        ],
+        "title": "TransitionStateStatmechSummary",
+        "type": "object"
+      },
       "TransitionStateUploadRequest": {
         "additionalProperties": false,
-        "description": "Workflow-facing transition-state upload payload.\n\nThe backend resolves the reaction from the embedded content, creates a\n``TransitionState`` concept and ``TransitionStateEntry``, resolves the\ngeometry and calculation provenance, and optionally attaches additional\ncalculations.\n\n:param reaction: Reaction described by scientific content (reactants/products).\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity of the TS structure.\n:param unmapped_smiles: Optional SMILES for the TS (no atom maps).\n:param geometry: Saddle-point geometry payload (XYZ text).\n:param primary_opt: Required primary optimisation calculation.\n:param additional_calculations: Optional freq / sp / irc / path_search\n    calculations. A ``path_search`` additional calculation models a\n    TS-guess generator (NEB, GSM, ...) and is wired as the parent of\n    the primary opt via ``calculation_dependency.role = optimized_from``.\n:param label: Optional human-readable label for the TS concept.\n:param note: Optional free-text note on the TS concept.",
+        "description": "Workflow-facing transition-state upload payload.\n\nThe backend resolves the reaction from the embedded content, creates a\n``TransitionState`` concept and ``TransitionStateEntry``, resolves the\ngeometry and calculation provenance, and optionally attaches additional\ncalculations.\n\n:param reaction: Reaction described by scientific content (reactants/products).\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity of the TS structure.\n:param unmapped_smiles: Optional SMILES for the TS (no atom maps).\n:param geometry: Saddle-point geometry payload (XYZ text).\n:param primary_opt: Required primary optimisation calculation.\n:param additional_calculations: Optional freq / sp / irc / scan / path_search\n    calculations. A ``path_search`` additional calculation models a\n    TS-guess generator (NEB, GSM, ...) and is wired as the parent of\n    the primary opt via ``calculation_dependency.role = optimized_from``.\n:param geometry_key: Local name for ``geometry``, which the ``atom_map``\n    names as its ``ts_geometry_key``. Required when an ``atom_map`` is\n    supplied, unused otherwise.\n:param applied_energy_corrections: Applied energy corrections targeting\n    this transition state directly (AEC, BAC, SOC totals, with optional\n    component breakdowns). This payload has no calculation-key or\n    conformer-key namespace, so ``source_calculation_key`` and\n    ``source_conformer_key`` are not accepted, and neither is a frequency\n    scale factor, which is defined by the frequency calculation it was\n    applied to.\n:param atom_map: Which atom of each reactant and product is which atom of\n    the saddle point (ADR 0011), supplied and never derived. It names the\n    participants by their ``key`` and the geometries by the ``key`` of the\n    participant ``geometry`` it counts into; ``ts_geometry_key`` names\n    ``geometry_key``. Optional: a deposit without one succeeds and returns\n    a ``reaction_atom_map_absent`` upload warning.\n:param label: Optional human-readable label for the TS concept.\n:param note: Optional free-text note on the TS concept.",
         "examples": [
           {
             "charge": 0,
@@ -49214,12 +49646,42 @@
             "title": "Additional Calculations",
             "type": "array"
           },
+          "applied_energy_corrections": {
+            "items": {
+              "$ref": "#/components/schemas/AppliedEnergyCorrectionUploadPayload"
+            },
+            "title": "Applied Energy Corrections",
+            "type": "array"
+          },
+          "atom_map": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReactionAtomMapIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which atom of each reactant and product is which atom of the saddle point (ADR 0011). Supplied by the depositor and never derived. Requires 'geometry_key' on the request and a 'key' on every reaction participant; the participants' 'geometry' keys are what the map counts into. Optional: a deposit without one succeeds and returns a 'reaction_atom_map_absent' upload warning."
+          },
           "charge": {
             "title": "Charge",
             "type": "integer"
           },
           "geometry": {
             "$ref": "#/components/schemas/GeometryPayload"
+          },
+          "geometry_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geometry Key"
           },
           "label": {
             "anyOf": [
@@ -49276,7 +49738,7 @@
             "title": "Unmapped Smiles"
           },
           "validation_evidence": {
-            "description": "Structured IRC evidence that this saddle point connects the declared reactants and products. Optional but strongly recommended: a deposit without it succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. This payload has no calculation-key namespace, so evidence binds to the upload's single 'irc' additional calculation; source_calculation_key must be omitted.",
+            "description": "Structured validation evidence, at most one record per kind. kind='irc' is evidence that this saddle point connects the declared reactants and products; optional but strongly recommended: a deposit without a passing one succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. kind='imaginary_mode' records what the frequency calculation found. This payload has no calculation-key namespace, so evidence binds to the upload's single additional calculation of the needed type ('irc' or 'freq'); source_calculation_key must be omitted. kind='energy_ordering' compares the saddle point with the wells' own calculations, which this payload does not carry, so it is accepted only on the computed-reaction upload.",
             "items": {
               "$ref": "#/components/schemas/TransitionStateValidationEvidenceIn"
             },
@@ -49353,8 +49815,28 @@
         "type": "object"
       },
       "TransitionStateValidationDescriptor": {
-        "description": "One compact, machine-readable statement of validation status.\n\nAlways present on a TS-entry record, independent of include tokens, so a\nconsumer never has to infer \"was this saddle point validated?\" from the\nabsence of an optional block. Values are machine tokens:\n\n- ``present``: a passed IRC evidence record exists.\n- ``failed``: an IRC evidence record exists but did not pass.\n- ``absent``: no IRC evidence was deposited.",
+        "description": "One compact, machine-readable statement of validation status.\n\nAlways present on a TS-entry record, independent of include tokens, so a\nconsumer never has to infer \"was this saddle point validated?\" from the\nabsence of an optional block. Values are machine tokens:\n\n- ``present``: a passed evidence record of that kind exists.\n- ``failed``: a record of that kind exists but did not pass.\n- ``absent``: none of that kind was deposited.\n\nOne token per kind, and they are independent: a passing\n``imaginary_mode`` is not IRC evidence, and ``irc`` does not become\n``present`` because some other kind passed.",
         "properties": {
+          "energy_ordering": {
+            "default": "absent",
+            "enum": [
+              "present",
+              "absent",
+              "failed"
+            ],
+            "title": "Energy Ordering",
+            "type": "string"
+          },
+          "imaginary_mode": {
+            "default": "absent",
+            "enum": [
+              "present",
+              "absent",
+              "failed"
+            ],
+            "title": "Imaginary Mode",
+            "type": "string"
+          },
           "irc": {
             "enum": [
               "present",
@@ -49373,12 +49855,65 @@
       },
       "TransitionStateValidationEvidenceIn": {
         "additionalProperties": false,
-        "description": "Producer-declared IRC validation evidence for one TS candidate.\n\n:param source_calculation_key: Local key of the ``irc`` calculation that\n    reconstructed the path, in the enclosing payload's calculation\n    namespace. Omitted on the standalone transition-state upload, which\n    has no key namespace and binds to its single ``irc`` calculation.\n\nParticipant→atom mappings are optional, but when supplied alongside\n``passed=true`` they must be *complete*: a partial map proves nothing\nabout the atoms it omits, so it is never accepted as passing evidence.\nSupply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write —\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n— and it is legitimate only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.",
+        "description": "Producer-declared validation evidence for one TS candidate.\n\n:param kind: ``\"irc\"``, ``\"energy_ordering\"`` or ``\"imaginary_mode\"``; see\n    the module docstring. At most one record per kind.\n:param passed: The producer's verdict for this check.\n:param rationale: Why; free text, required.\n:param source_calculation_key: Local key of the calculation the evidence\n    comes from, in the enclosing payload's calculation namespace: the\n    ``irc`` calculation that reconstructed the path, or the ``freq``\n    calculation that found the imaginary mode. Omitted on the standalone\n    transition-state upload, which has no key namespace and binds to its\n    single calculation of the needed type. Not accepted on an\n    ``energy_ordering`` record, whose energies each name their own.\n:param energies: ``energy_ordering`` only. The energies compared.\n:param imaginary_frequency_count: ``imaginary_mode`` only. How many\n    imaginary modes the frequency calculation found.\n:param imaginary_frequency_cm1: ``imaginary_mode`` only. The value, in\n    cm^-1, of the imaginary mode taken as the reaction coordinate. Negative\n    by convention, as it is on a frequency result.\n:param mode_displacement_agrees: ``imaginary_mode`` only. The producer's\n    verdict on whether the mode's atom displacements agree with the bonds\n    the reaction breaks and forms. ``None`` means not assessed; it is not\n    ``False``.\n\nParticipant->atom mappings (``irc`` only) are optional, but when supplied\nalongside ``passed=true`` they must be *complete*: a partial map proves\nnothing about the atoms it omits, so it is never accepted as passing\nevidence. Supply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write --\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n-- and it is acceptable only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.\n\nA pass is refused when the record's own *stated* numbers contradict it: an\n``energy_ordering`` that passes with a saddle point that is not above a\nside (checked by :func:`validate_ts_evidence_set`, which knows the\nreaction's participants and so whether a side is complete), or an\n``imaginary_mode`` that passes having found no imaginary mode.\nThe reverse is not refused. A record that fails with numbers that look\nfine is a producer applying a criterion this model cannot see.",
         "properties": {
+          "energies": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TransitionStateComparedEnergy"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energies"
+          },
+          "imaginary_frequency_cm1": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imaginary Frequency Cm1"
+          },
+          "imaginary_frequency_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imaginary Frequency Count"
+          },
           "kind": {
-            "const": "irc",
+            "enum": [
+              "irc",
+              "energy_ordering",
+              "imaginary_mode"
+            ],
             "title": "Kind",
             "type": "string"
+          },
+          "mode_displacement_agrees": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Displacement Agrees"
           },
           "passed": {
             "title": "Passed",
@@ -49445,11 +49980,58 @@
         "type": "object"
       },
       "TransitionStateValidationEvidenceSummary": {
-        "description": "Structured IRC validation evidence with a replayable source link.\n\nThe two participant mappings say which saddle-point atoms become which\ndeclared participant, by index, and those indices count into\n``transition_state_geometry_ref`` -- not into \"the transition state\",\nwhich has no atom order of its own. It is ``None`` exactly when both\nmappings are, since a record that partitions no atoms binds no indices.\nNamed to match ``ReactionAtomMapDetail.transition_state_geometry_ref``,\nwhich is the same geometry playing the same role for the other surface\nthat indexes the saddle point.",
+        "description": "Structured validation evidence with a replayable source link.\n\n``kind`` is ``irc``, ``energy_ordering`` or ``imaginary_mode``, and a\nfield is populated only on the kind it describes: the participant\nmappings on ``irc``, ``compared_energies`` on ``energy_ordering``, and the\nthree imaginary-mode fields on ``imaginary_mode``. ``None`` on the\nimaginary-mode fields means the producer did not state it, which is not\nthe same statement as zero or false. ``reconstruction_calculation_ref`` is\nthe irc calculation for ``irc`` and the freq calculation for\n``imaginary_mode``; it is ``None`` for ``energy_ordering``, whose\nenergies each name their own.\n\nThe two participant mappings say which saddle-point atoms become which\ndeclared participant, by index, and those indices count into\n``transition_state_geometry_ref`` -- not into \"the transition state\",\nwhich has no atom order of its own. It is ``None`` exactly when both\nmappings are, since a record that partitions no atoms binds no indices.\nNamed to match ``ReactionAtomMapDetail.transition_state_geometry_ref``,\nwhich is the same geometry playing the same role for the other surface\nthat indexes the saddle point.",
         "properties": {
+          "compared_energies": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TransitionStateComparedEnergySummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compared Energies"
+          },
+          "imaginary_frequency_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imaginary Frequency Cm1"
+          },
+          "imaginary_frequency_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imaginary Frequency Count"
+          },
           "kind": {
             "title": "Kind",
             "type": "string"
+          },
+          "mode_displacement_agrees": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Displacement Agrees"
           },
           "passed": {
             "title": "Passed",

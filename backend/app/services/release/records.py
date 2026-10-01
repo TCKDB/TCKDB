@@ -138,7 +138,16 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
         ),
     ),
     SubmissionRecordType.transition_state_entry: (
-        ChildTable("transition_state_validation_evidence", "transition_state_entry_id"),
+        # An ``energy_ordering`` record's verdict rests on the energies it
+        # compared, so they ship with it: a released record that carried the
+        # verdict and not the numbers could not be checked by its reader.
+        ChildTable(
+            "transition_state_validation_evidence",
+            "transition_state_entry_id",
+            children=(
+                ChildTable("transition_state_validation_energy", "evidence_id"),
+            ),
+        ),
         # The atom map is scientific content of the released saddle point, not
         # a curation overlay: it is what says which bonds break and form, and
         # it is the difference between a record a reader can check and a bare

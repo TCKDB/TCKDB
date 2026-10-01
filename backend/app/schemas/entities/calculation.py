@@ -422,9 +422,9 @@ class CalculationIRCPointRead(ORMBaseSchema):
 
 class CalculationIRCResultRead(ORMBaseSchema):
     calculation_id: int
-    direction: IRCDirection
-    has_forward: bool
-    has_reverse: bool
+    direction: IRCDirection | None = None
+    has_forward: bool | None = None
+    has_reverse: bool | None = None
     ts_point_index: int | None = None
     point_count: int | None = None
     zero_energy_reference_hartree: float | None = None

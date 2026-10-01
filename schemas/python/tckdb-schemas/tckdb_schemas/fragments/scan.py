@@ -183,3 +183,15 @@ class CalculationScanResultCreate(CalculationScanResultPayload, SchemaBase):
                     )
 
         return self
+
+
+# ``CalculationWithResultsPayload.scan_result`` names ``CalculationScanResultCreate``
+# by string, because this module imports from ``fragments.calculation`` and the
+# reverse import cannot sit at the top of that one. Now that the class exists,
+# resolve the field. Doing it here, rather than at the foot of ``calculation``,
+# is what makes the result independent of which module is imported first.
+from tckdb_schemas.fragments.calculation import CalculationWithResultsPayload  # noqa: E402
+
+CalculationWithResultsPayload.model_rebuild(
+    _types_namespace={"CalculationScanResultCreate": CalculationScanResultCreate}
+)

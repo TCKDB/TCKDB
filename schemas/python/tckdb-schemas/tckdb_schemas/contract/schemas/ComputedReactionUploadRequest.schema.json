@@ -1162,7 +1162,7 @@
     },
     "BundleTransitionStateIn": {
       "additionalProperties": false,
-      "description": "Transition state for the reaction in this bundle.\n\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity.\n:param unmapped_smiles: Optional SMILES for the TS.\n:param geometry: Saddle-point geometry.\n:param calculation: Primary opt calculation.\n:param calculations: Additional calculations (freq, sp, irc).\n:param label: Optional label.\n:param note: Optional note.",
+      "description": "Transition state for the reaction in this bundle.\n\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity.\n:param unmapped_smiles: Optional SMILES for the TS.\n:param geometry: Saddle-point geometry.\n:param calculation: Primary opt calculation.\n:param calculations: Additional calculations (freq, sp, irc, scan).\n:param statmech: Optional statistical-mechanics interpretation of the\n    saddle point: the partition-function inputs a rate constant is\n    computed from. The same block a species carries on the computed-species\n    route, written through the same persistence, so every rule that governs\n    a species' statmech governs this one. ``source_calculations`` and\n    ``torsions[*].source_scan_calculation_key`` name calculations this\n    transition state owns. A saddle point is a polyatomic, so this block\n    never describes a single atom.\n:param label: Optional label.\n:param note: Optional note.",
       "properties": {
         "applied_energy_corrections": {
           "description": "Applied energy corrections targeting the resolved transition_state_entry directly. TS-side corrections are never stored as reaction-entry corrections. ``source_calculation_key`` resolves against the bundle's global calculation namespace; the workflow rejects 422 when the referenced calc is not owned by this transition state. ``source_conformer_key`` has nothing to resolve against here — a transition state in this bundle declares no conformers — so setting it is refused rather than ignored.",
@@ -1218,6 +1218,17 @@
           "default": null,
           "title": "Note"
         },
+        "statmech": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatmechInBundle"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "unmapped_smiles": {
           "anyOf": [
             {
@@ -1231,7 +1242,7 @@
           "title": "Unmapped Smiles"
         },
         "validation_evidence": {
-          "description": "Structured IRC evidence that this saddle point connects the bundle's declared reactants and products. Optional but strongly recommended: a deposit without it succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. ``source_calculation_key`` names an irc calculation owned by this transition state.",
+          "description": "Structured validation evidence for this saddle point, at most one record per kind. kind='irc': the path connects the bundle's declared reactants and products; ``source_calculation_key`` names an irc calculation owned by this transition state. kind='imaginary_mode': the frequency calculation found the expected imaginary mode; ``source_calculation_key`` names a freq calculation owned by this transition state. kind='energy_ordering': the saddle point lies above both wells; each compared energy names its own source calculation, owned by the saddle point or by that participant's species. Optional but strongly recommended: a deposit without a passing IRC record succeeds and returns a 'transition_state_missing_irc_evidence' upload warning; the other kinds do not silence it.",
           "items": {
             "$ref": "#/$defs/TransitionStateValidationEvidenceIn"
           },
@@ -3179,18 +3190,42 @@
     },
     "IRCResultPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline result for an IRC calculation.\n\n:param direction: Overall run mode (forward / reverse / both).\n:param has_forward: True when at least one forward-branch point is present.\n:param has_reverse: True when at least one reverse-branch point is present.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
+      "description": "Upload-facing inline result for an IRC calculation.\n\n``direction``, ``has_forward`` and ``has_reverse`` are each optional, and\nomitting one says \"the producer did not state it\". That is a real position\nfor a producer to be in: an IRC whose log does not record which way it ran\nis still a path with points on it, and requiring the three to be written\nmade such a producer drop the whole result. A value that is not stated is\nstored as NULL and read back as null, never as ``false``: ``has_forward``\nfalse is a claim that no forward-branch point exists, which is a different\nstatement from not knowing.\n\n:param direction: Overall run mode (forward / reverse / both). Omit when\n    the run mode is not stated.\n:param has_forward: True when at least one forward-branch point is present,\n    false when none is. Omit when not stated.\n:param has_reverse: True when at least one reverse-branch point is present,\n    false when none is. Omit when not stated.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
       "properties": {
         "direction": {
-          "$ref": "#/$defs/IRCDirection"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IRCDirection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "has_forward": {
-          "title": "Has Forward",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Forward"
         },
         "has_reverse": {
-          "title": "Has Reverse",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Reverse"
         },
         "note": {
           "anyOf": [
@@ -3250,11 +3285,6 @@
           "title": "Zero Energy Reference Hartree"
         }
       },
-      "required": [
-        "direction",
-        "has_forward",
-        "has_reverse"
-      ],
       "title": "IRCResultPayload",
       "type": "object"
     },
@@ -4906,6 +4936,229 @@
       "title": "StatmechCalculationRole",
       "type": "string"
     },
+    "StatmechInBundle": {
+      "additionalProperties": false,
+      "description": "Statistical-mechanics interpretation for the bundle's species.\n\nOne statmech row per ``ComputedSpeciesUploadRequest``. The block\nmirrors computed-reaction's ``BundleStatmechIn`` for shared\nmetadata, exposes the unified ``FreqScaleFactorRef`` for frequency\nscale factor linkage, and adds ``source_calculations`` referencing\nbundle-local calc keys (the same pattern thermo uses inside this\nbundle).\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance.\n:param software_release: Optional software (e.g. analysis code) used\n    to compute statmech.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Optional unified frequency scale factor\n    ref. Resolved via the shared energy-correction-resolution\n    service and linked through ``statmech.frequency_scale_factor_id``.\n    Using a scale factor here does not produce an\n    ``applied_energy_correction`` row.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key.\n:param electronic_levels: Ordered (energy, degeneracy) pairs for the\n    electronic partition function, same shape and validation as\n    ``/uploads/statmech`` (``ElectronicLevelIn``). Needed for atoms and\n    radicals whose ground term is not S (O, Cl, ...).\n:param torsions: Torsional mode metadata.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. Checked\n    against the resolved role links, then stored as declared and\n    read back as ``levels.declared_energy``.\n:param note: Optional free-text note.",
+      "properties": {
+        "electronic_levels": {
+          "items": {
+            "$ref": "#/$defs/ElectronicLevelIn"
+          },
+          "title": "Electronic Levels",
+          "type": "array"
+        },
+        "energy_level_of_theory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LevelOfTheoryRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "external_symmetry": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Symmetry"
+        },
+        "freq_scale_factor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FreqScaleFactorRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "is_linear": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Linear"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "optical_isomers": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Optical Isomers"
+        },
+        "point_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Point Group"
+        },
+        "rigid_rotor_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RigidRotorKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotational_constant_a_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Constant A Cm1"
+        },
+        "rotational_constant_b_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Constant B Cm1"
+        },
+        "rotational_constant_c_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Constant C Cm1"
+        },
+        "scientific_origin": {
+          "$ref": "#/$defs/ScientificOriginKind",
+          "default": "computed"
+        },
+        "software_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoftwareReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_calculations": {
+          "items": {
+            "$ref": "#/$defs/StatmechSourceCalcIn"
+          },
+          "title": "Source Calculations",
+          "type": "array"
+        },
+        "statmech_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatmechTreatmentKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "torsions": {
+          "items": {
+            "$ref": "#/$defs/StatmechTorsionInBundle"
+          },
+          "title": "Torsions",
+          "type": "array"
+        },
+        "uses_projected_frequencies": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uses Projected Frequencies"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "StatmechInBundle",
+      "type": "object"
+    },
     "StatmechSourceCalcIn": {
       "additionalProperties": false,
       "description": "Statmech → calculation link, by local calculation key.\n\nOnly a key is accepted (DR-0029 Requirement 1). The key resolves\nagainst whichever calc-key namespace the enclosing request defines —\nthe bundle's global namespace, the standalone statmech upload's\ninline ``calculations`` list, or the keys a conformer upload put on\nits own primary/additional calculations — and the resolved row is\nattached as a ``statmech_source_calculation`` row with this role.\n\n:param calculation_key: Local key of a calculation declared in the\n    same request.\n:param role: Scientific role the calculation plays for this statmech.",
@@ -4964,6 +5217,95 @@
         "atom4_index"
       ],
       "title": "StatmechTorsionCoordinateIn",
+      "type": "object"
+    },
+    "StatmechTorsionInBundle": {
+      "additionalProperties": false,
+      "description": "One torsional mode in a bundle statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index within the record.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param invalidated_reason: Optional reason the producer rejected this\n    rotor, for example that the scan was not a smooth periodic\n    potential. Same field, same meaning and same storage as\n    ``StatmechTorsionIn.invalidated_reason`` on the conformer route.\n    Absent means the rotor was not rejected; present records that it was.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
+      "properties": {
+        "coordinates": {
+          "items": {
+            "$ref": "#/$defs/StatmechTorsionCoordinateIn"
+          },
+          "title": "Coordinates",
+          "type": "array"
+        },
+        "dimension": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "invalidated_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invalidated Reason"
+        },
+        "source_scan_calculation_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Scan Calculation Key"
+        },
+        "symmetry_number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symmetry Number"
+        },
+        "top_description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Top Description"
+        },
+        "torsion_index": {
+          "minimum": 1,
+          "title": "Torsion Index",
+          "type": "integer"
+        },
+        "treatment_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TorsionTreatmentKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "torsion_index"
+      ],
+      "title": "StatmechTorsionInBundle",
       "type": "object"
     },
     "StatmechTreatmentKind": {
@@ -5192,14 +5534,108 @@
       "title": "TorsionTreatmentKind",
       "type": "string"
     },
+    "TransitionStateComparedEnergy": {
+      "additionalProperties": false,
+      "description": "One energy an ``energy_ordering`` record compared.\n\n:param participant: Whose energy this is: ``\"ts\"`` for the saddle point, or\n    ``\"reactant:N\"`` / ``\"product:N\"`` for the N-th declared participant\n    of that side (1-based, in the order the reaction declares them).\n:param energy_kind: ``\"electronic\"`` for the electronic energy, or ``\"e0\"``\n    for the electronic energy plus the zero-point energy. They are\n    different quantities and are never compared with each other.\n:param energy_hartree: The absolute energy, in hartree: finite and not\n    positive. A bound system's total energy is below the zero of separated\n    nuclei and electrons, so a positive value is a relative energy (or a\n    unit slip) and is refused rather than stored where a reader would take\n    it for absolute. Zero is allowed because it is exact for the bare\n    proton (``[H+]``), a participant with atoms and no electrons. A side of the\n    reaction with several participants is compared by the sum of their\n    energies, so a participant is given its own and never a pre-summed\n    total: a total has no single calculation to name.\n:param source_calculation_key: Local key of the calculation this energy\n    was taken from, in the enclosing payload's calculation namespace. The\n    calculation must belong to the thing the energy is of: the saddle\n    point's own calculation for ``ts``, the participant species' own for a\n    reactant or product.",
+      "properties": {
+        "energy_hartree": {
+          "maximum": 0,
+          "title": "Energy Hartree",
+          "type": "number"
+        },
+        "energy_kind": {
+          "enum": [
+            "electronic",
+            "e0"
+          ],
+          "title": "Energy Kind",
+          "type": "string"
+        },
+        "participant": {
+          "pattern": "^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$",
+          "title": "Participant",
+          "type": "string"
+        },
+        "source_calculation_key": {
+          "minLength": 1,
+          "title": "Source Calculation Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant",
+        "energy_kind",
+        "energy_hartree",
+        "source_calculation_key"
+      ],
+      "title": "TransitionStateComparedEnergy",
+      "type": "object"
+    },
     "TransitionStateValidationEvidenceIn": {
       "additionalProperties": false,
-      "description": "Producer-declared IRC validation evidence for one TS candidate.\n\n:param source_calculation_key: Local key of the ``irc`` calculation that\n    reconstructed the path, in the enclosing payload's calculation\n    namespace. Omitted on the standalone transition-state upload, which\n    has no key namespace and binds to its single ``irc`` calculation.\n\nParticipant→atom mappings are optional, but when supplied alongside\n``passed=true`` they must be *complete*: a partial map proves nothing\nabout the atoms it omits, so it is never accepted as passing evidence.\nSupply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write —\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n— and it is legitimate only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.",
+      "description": "Producer-declared validation evidence for one TS candidate.\n\n:param kind: ``\"irc\"``, ``\"energy_ordering\"`` or ``\"imaginary_mode\"``; see\n    the module docstring. At most one record per kind.\n:param passed: The producer's verdict for this check.\n:param rationale: Why; free text, required.\n:param source_calculation_key: Local key of the calculation the evidence\n    comes from, in the enclosing payload's calculation namespace: the\n    ``irc`` calculation that reconstructed the path, or the ``freq``\n    calculation that found the imaginary mode. Omitted on the standalone\n    transition-state upload, which has no key namespace and binds to its\n    single calculation of the needed type. Not accepted on an\n    ``energy_ordering`` record, whose energies each name their own.\n:param energies: ``energy_ordering`` only. The energies compared.\n:param imaginary_frequency_count: ``imaginary_mode`` only. How many\n    imaginary modes the frequency calculation found.\n:param imaginary_frequency_cm1: ``imaginary_mode`` only. The value, in\n    cm^-1, of the imaginary mode taken as the reaction coordinate. Negative\n    by convention, as it is on a frequency result.\n:param mode_displacement_agrees: ``imaginary_mode`` only. The producer's\n    verdict on whether the mode's atom displacements agree with the bonds\n    the reaction breaks and forms. ``None`` means not assessed; it is not\n    ``False``.\n\nParticipant->atom mappings (``irc`` only) are optional, but when supplied\nalongside ``passed=true`` they must be *complete*: a partial map proves\nnothing about the atoms it omits, so it is never accepted as passing\nevidence. Supply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write --\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n-- and it is acceptable only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.\n\nA pass is refused when the record's own *stated* numbers contradict it: an\n``energy_ordering`` that passes with a saddle point that is not above a\nside (checked by :func:`validate_ts_evidence_set`, which knows the\nreaction's participants and so whether a side is complete), or an\n``imaginary_mode`` that passes having found no imaginary mode.\nThe reverse is not refused. A record that fails with numbers that look\nfine is a producer applying a criterion this model cannot see.",
       "properties": {
+        "energies": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TransitionStateComparedEnergy"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Energies"
+        },
+        "imaginary_frequency_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Imaginary Frequency Cm1"
+        },
+        "imaginary_frequency_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Imaginary Frequency Count"
+        },
         "kind": {
-          "const": "irc",
+          "enum": [
+            "irc",
+            "energy_ordering",
+            "imaginary_mode"
+          ],
           "title": "Kind",
           "type": "string"
+        },
+        "mode_displacement_agrees": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode Displacement Agrees"
         },
         "passed": {
           "title": "Passed",

@@ -22,6 +22,25 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Transition-state contract additions (2026-09-30)
+
+- tckdb-schemas 0.64.0 and tckdb-backend: a transition state carries more of
+  what a producer knows (#621). Validation evidence gains the kinds
+  `energy_ordering` (the saddle point above both wells, with the compared
+  energies, each from its own calculation) and `imaginary_mode` (count,
+  frequency, displacement verdict); the computed-reaction bundle accepts a
+  `statmech` block on its transition state; the standalone transition-state
+  upload accepts scans, applied energy corrections and an atom map; and an IRC
+  result may leave its direction and branch flags unstated, which read back as
+  null and never as `false`. A TS entry read gains `include=statmech`, and its
+  `validation` descriptor reports each evidence kind separately. Schema
+  impact: revision `a7d3f1c95e28` adds `transition_state_validation_energy`,
+  three nullable columns and relaxed constraints on
+  `transition_state_validation_evidence`, and makes the IRC direction and flag
+  columns nullable; it adds nothing to fill and refuses to downgrade over rows
+  the old shape cannot hold. Only a passing `irc` record silences
+  `transition_state_missing_irc_evidence`. No new environment variable. No client change.
+
 ## Kinetics: an Arrhenius reference temperature, and parity on the bundle (2026-09-30)
 
 - tckdb-schemas 0.63.0, tckdb-backend, tckdb-client 0.102.0 (#620): a kinetics

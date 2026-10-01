@@ -910,11 +910,21 @@ def test_tse_detail_includes_structured_irc_validation_evidence(
     # The mappings' indices count into a named geometry, and the reader is
     # told which one rather than having to pick among the entry's geometries.
     assert evidence[0]["transition_state_geometry_ref"] == ts_geometry.public_ref
-    # NMD evidence is not a TCKDB concept; no such field survives.
+    # The producer's displacement verdict is a field of an ``imaginary_mode``
+    # record (#621), and it is null on every other kind. What is still not a
+    # TCKDB record is the per-atom displacement vectors themselves: no such
+    # field survives.
+    assert evidence[0]["mode_displacement_agrees"] is None
+    assert evidence[0]["compared_energies"] is None
     assert "mode_index" not in evidence[0]
     assert "displacement_artifact_sha256" not in evidence[0]
-    # One typed descriptor states validation status without any include token.
-    assert record["validation"] == {"irc": "present"}
+    # One typed descriptor states validation status without any include token,
+    # one token per evidence kind and each independent of the others.
+    assert record["validation"] == {
+        "irc": "present",
+        "energy_ordering": "absent",
+        "imaginary_mode": "absent",
+    }
 
 
 def test_tse_detail_validation_descriptor_reports_absent_and_failed(
@@ -926,7 +936,11 @@ def test_tse_detail_validation_descriptor_reports_absent_and_failed(
     _, _, _, entries = _make_reaction_with_ts(db_session)
     tse = entries[0]
     body = client.get(_tse_detail_url(tse.public_ref)).json()
-    assert body["record"]["validation"] == {"irc": "absent"}
+    assert body["record"]["validation"] == {
+        "irc": "absent",
+        "energy_ordering": "absent",
+        "imaginary_mode": "absent",
+    }
 
     calc = _attach_calc(db_session, tse=tse, calc_type=CalculationType.irc)
     db_session.add(
@@ -940,7 +954,11 @@ def test_tse_detail_validation_descriptor_reports_absent_and_failed(
     )
     db_session.flush()
     body = client.get(_tse_detail_url(tse.public_ref)).json()
-    assert body["record"]["validation"] == {"irc": "failed"}
+    assert body["record"]["validation"] == {
+        "irc": "failed",
+        "energy_ordering": "absent",
+        "imaginary_mode": "absent",
+    }
 
 
 def test_tse_detail_include_geometries(client, db_session):

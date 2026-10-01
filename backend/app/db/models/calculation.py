@@ -1028,6 +1028,12 @@ class CalculationIRCResult(Base):
     - ``forward`` / ``reverse`` for single-direction jobs
     - ``both`` for ORCA-style bidirectional IRC
 
+    ``direction``, ``has_forward`` and ``has_reverse`` are nullable, and NULL
+    means "the producer did not state it". ``has_forward = false`` is a claim
+    that no forward-branch point exists; NULL is not that claim. The columns
+    carry no default for the same reason: a default of false would turn every
+    unstated flag into that claim.
+
     Per-point direction is on ``CalculationIRCPoint.direction``.
     """
 
@@ -1038,12 +1044,12 @@ class CalculationIRCResult(Base):
         ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
         primary_key=True,
     )
-    direction: Mapped[IRCDirection] = mapped_column(
+    direction: Mapped[Optional[IRCDirection]] = mapped_column(
         SAEnum(IRCDirection, name="irc_direction"),
-        nullable=False,
+        nullable=True,
     )
-    has_forward: Mapped[bool] = mapped_column(default=False)
-    has_reverse: Mapped[bool] = mapped_column(default=False)
+    has_forward: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    has_reverse: Mapped[Optional[bool]] = mapped_column(nullable=True)
     ts_point_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     point_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     zero_energy_reference_hartree: Mapped[Optional[float]] = mapped_column(

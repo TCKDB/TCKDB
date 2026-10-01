@@ -157,6 +157,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "transition_state",
         "transition_state_entry",
         "transition_state_selection",
+        "transition_state_validation_energy",
         "transition_state_validation_evidence",
         "transport",
         "transport_source_calculation",

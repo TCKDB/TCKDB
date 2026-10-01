@@ -31,13 +31,15 @@ was catalogued long before anything on this route could produce it.
 
 Scope, stated rather than left to inference
 -------------------------------------------
-A **transition state** cannot reach this rule on this route:
-``BundleTransitionStateIn`` has no ``statmech`` field, so it carries no
-torsions. The TS case is reachable only through
-``/uploads/networks/pdep``, where it is enforced at the same seam and
-provoked by ``tests/api/test_api_network_pdep_ownership.py``. The rule in
-both places is the same one, and it is the strict one: a torsion's scan
-must belong to the torsion's own subject. Decided 2026-08-15 -- a
+A **transition state** now carries a ``statmech`` block on this route
+(#621), and its torsion scan keys are narrowed at the schema layer to the
+saddle point's own calculations, so the TS case is refused one layer earlier
+than this seam, with ``calculation_key_undeclared``
+(``tests/api/test_api_ts_contract_621.py``). Through
+``/uploads/networks/pdep`` it is enforced at this seam and provoked by
+``tests/api/test_api_network_pdep_ownership.py``. The rule in both places is
+the same one, and it is the strict one: a torsion's scan must belong to the
+torsion's own subject. Decided 2026-08-15 -- a
 depositor who genuinely approximated one rotor with another molecule's
 scan has no way to record that today, and gaining one is a schema change
 that says so explicitly, not a silently accepted link.

@@ -3421,6 +3421,43 @@
       "title": "TorsionTreatmentKind",
       "type": "string"
     },
+    "TransitionStateComparedEnergy": {
+      "additionalProperties": false,
+      "description": "One energy an ``energy_ordering`` record compared.\n\n:param participant: Whose energy this is: ``\"ts\"`` for the saddle point, or\n    ``\"reactant:N\"`` / ``\"product:N\"`` for the N-th declared participant\n    of that side (1-based, in the order the reaction declares them).\n:param energy_kind: ``\"electronic\"`` for the electronic energy, or ``\"e0\"``\n    for the electronic energy plus the zero-point energy. They are\n    different quantities and are never compared with each other.\n:param energy_hartree: The absolute energy, in hartree: finite and not\n    positive. A bound system's total energy is below the zero of separated\n    nuclei and electrons, so a positive value is a relative energy (or a\n    unit slip) and is refused rather than stored where a reader would take\n    it for absolute. Zero is allowed because it is exact for the bare\n    proton (``[H+]``), a participant with atoms and no electrons. A side of the\n    reaction with several participants is compared by the sum of their\n    energies, so a participant is given its own and never a pre-summed\n    total: a total has no single calculation to name.\n:param source_calculation_key: Local key of the calculation this energy\n    was taken from, in the enclosing payload's calculation namespace. The\n    calculation must belong to the thing the energy is of: the saddle\n    point's own calculation for ``ts``, the participant species' own for a\n    reactant or product.",
+      "properties": {
+        "energy_hartree": {
+          "maximum": 0,
+          "title": "Energy Hartree",
+          "type": "number"
+        },
+        "energy_kind": {
+          "enum": [
+            "electronic",
+            "e0"
+          ],
+          "title": "Energy Kind",
+          "type": "string"
+        },
+        "participant": {
+          "pattern": "^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$",
+          "title": "Participant",
+          "type": "string"
+        },
+        "source_calculation_key": {
+          "minLength": 1,
+          "title": "Source Calculation Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant",
+        "energy_kind",
+        "energy_hartree",
+        "source_calculation_key"
+      ],
+      "title": "TransitionStateComparedEnergy",
+      "type": "object"
+    },
     "TransitionStateIn": {
       "additionalProperties": false,
       "description": "A transition state for one micro reaction.\n\n:param key: Local key for this transition state.\n:param micro_reaction_key: Local key referencing a micro reaction.\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity.\n:param geometry: Geometry of the saddle point (with a reusable key).\n:param calculation: The optimization calculation that produced this TS geometry.\n:param calculations: Additional calculations on this TS (freq, sp, irc).\n:param label: Optional human-readable label.\n:param note: Optional note.",
@@ -3493,7 +3530,7 @@
           "default": null
         },
         "validation_evidence": {
-          "description": "Structured IRC evidence. Optional but strongly recommended: a deposit without it succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. source_calculation_key resolves within this transition state's calculation namespace and must name an irc-type calculation.",
+          "description": "Structured validation evidence, at most one record per kind. kind='irc' is evidence the saddle point connects the declared endpoints: optional but strongly recommended, since a deposit without a passing one succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. source_calculation_key resolves within this transition state's calculation namespace and must name an irc-type calculation (a freq-type one for kind='imaginary_mode'). kind='energy_ordering' names a source calculation per compared energy: the saddle point's own, or the participant species' own.",
           "items": {
             "$ref": "#/$defs/TransitionStateValidationEvidenceIn"
           },
@@ -3514,12 +3551,69 @@
     },
     "TransitionStateValidationEvidenceIn": {
       "additionalProperties": false,
-      "description": "Producer-declared IRC validation evidence for one TS candidate.\n\n:param source_calculation_key: Local key of the ``irc`` calculation that\n    reconstructed the path, in the enclosing payload's calculation\n    namespace. Omitted on the standalone transition-state upload, which\n    has no key namespace and binds to its single ``irc`` calculation.\n\nParticipant→atom mappings are optional, but when supplied alongside\n``passed=true`` they must be *complete*: a partial map proves nothing\nabout the atoms it omits, so it is never accepted as passing evidence.\nSupply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write —\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n— and it is legitimate only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.",
+      "description": "Producer-declared validation evidence for one TS candidate.\n\n:param kind: ``\"irc\"``, ``\"energy_ordering\"`` or ``\"imaginary_mode\"``; see\n    the module docstring. At most one record per kind.\n:param passed: The producer's verdict for this check.\n:param rationale: Why; free text, required.\n:param source_calculation_key: Local key of the calculation the evidence\n    comes from, in the enclosing payload's calculation namespace: the\n    ``irc`` calculation that reconstructed the path, or the ``freq``\n    calculation that found the imaginary mode. Omitted on the standalone\n    transition-state upload, which has no key namespace and binds to its\n    single calculation of the needed type. Not accepted on an\n    ``energy_ordering`` record, whose energies each name their own.\n:param energies: ``energy_ordering`` only. The energies compared.\n:param imaginary_frequency_count: ``imaginary_mode`` only. How many\n    imaginary modes the frequency calculation found.\n:param imaginary_frequency_cm1: ``imaginary_mode`` only. The value, in\n    cm^-1, of the imaginary mode taken as the reaction coordinate. Negative\n    by convention, as it is on a frequency result.\n:param mode_displacement_agrees: ``imaginary_mode`` only. The producer's\n    verdict on whether the mode's atom displacements agree with the bonds\n    the reaction breaks and forms. ``None`` means not assessed; it is not\n    ``False``.\n\nParticipant->atom mappings (``irc`` only) are optional, but when supplied\nalongside ``passed=true`` they must be *complete*: a partial map proves\nnothing about the atoms it omits, so it is never accepted as passing\nevidence. Supply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write --\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n-- and it is acceptable only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.\n\nA pass is refused when the record's own *stated* numbers contradict it: an\n``energy_ordering`` that passes with a saddle point that is not above a\nside (checked by :func:`validate_ts_evidence_set`, which knows the\nreaction's participants and so whether a side is complete), or an\n``imaginary_mode`` that passes having found no imaginary mode.\nThe reverse is not refused. A record that fails with numbers that look\nfine is a producer applying a criterion this model cannot see.",
       "properties": {
+        "energies": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TransitionStateComparedEnergy"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Energies"
+        },
+        "imaginary_frequency_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Imaginary Frequency Cm1"
+        },
+        "imaginary_frequency_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Imaginary Frequency Count"
+        },
         "kind": {
-          "const": "irc",
+          "enum": [
+            "irc",
+            "energy_ordering",
+            "imaginary_mode"
+          ],
           "title": "Kind",
           "type": "string"
+        },
+        "mode_displacement_agrees": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode Displacement Agrees"
         },
         "passed": {
           "title": "Passed",

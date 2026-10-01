@@ -1172,6 +1172,7 @@ def _persist_statmech_block(
     literature_field_prefix: str = "statmech.literature.",
     subject_xyz_texts: Sequence[str] = (),
     subject_smiles: str | None = None,
+    content_warning_field: str = "statmech",
 ) -> Statmech | None:
     """Persist an optional statmech block for exactly one species or TS subject.
 
@@ -1338,6 +1339,7 @@ def _persist_statmech_block(
                         s, xyz_texts=subject_xyz_texts, smiles=subject_smiles
                     )
                 ),
+                field=content_warning_field,
             )
         )
 

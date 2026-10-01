@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -33,6 +33,9 @@ from tckdb_schemas.stationary_point import (
     evaluate_transition_state_frequency,
     resolve_tau_from_parameters,
 )
+
+if TYPE_CHECKING:
+    from tckdb_schemas.fragments.scan import CalculationScanResultCreate
 
 # ---------------------------------------------------------------------------
 # Constraint payload (lives in fragments so calculation upload payloads can
@@ -689,9 +692,21 @@ class IRCPointPayload(SchemaBase):
 class IRCResultPayload(SchemaBase):
     """Upload-facing inline result for an IRC calculation.
 
-    :param direction: Overall run mode (forward / reverse / both).
-    :param has_forward: True when at least one forward-branch point is present.
-    :param has_reverse: True when at least one reverse-branch point is present.
+    ``direction``, ``has_forward`` and ``has_reverse`` are each optional, and
+    omitting one says "the producer did not state it". That is a real position
+    for a producer to be in: an IRC whose log does not record which way it ran
+    is still a path with points on it, and requiring the three to be written
+    made such a producer drop the whole result. A value that is not stated is
+    stored as NULL and read back as null, never as ``false``: ``has_forward``
+    false is a claim that no forward-branch point exists, which is a different
+    statement from not knowing.
+
+    :param direction: Overall run mode (forward / reverse / both). Omit when
+        the run mode is not stated.
+    :param has_forward: True when at least one forward-branch point is present,
+        false when none is. Omit when not stated.
+    :param has_reverse: True when at least one reverse-branch point is present,
+        false when none is. Omit when not stated.
     :param ts_point_index: Optional index of the point marked as TS.
     :param point_count: Optional total sampled-point count (consistency check).
     :param zero_energy_reference_hartree: Optional energy used as relative zero.
@@ -699,9 +714,9 @@ class IRCResultPayload(SchemaBase):
     :param points: Sampled IRC-path points attached to the result.
     """
 
-    direction: IRCDirection
-    has_forward: bool
-    has_reverse: bool
+    direction: IRCDirection | None = None
+    has_forward: bool | None = None
+    has_reverse: bool | None = None
     ts_point_index: int | None = Field(default=None, ge=0)
     point_count: int | None = Field(default=None, ge=0)
     zero_energy_reference_hartree: float | None = None
@@ -710,7 +725,12 @@ class IRCResultPayload(SchemaBase):
 
     @model_validator(mode="after")
     def validate_points(self) -> Self:
-        """Enforce unique indices, TS index consistency, and direction flags."""
+        """Enforce unique indices, TS index consistency, and direction flags.
+
+        A flag that is *stated false* contradicts a point in that direction; a
+        flag that is not stated contradicts nothing, and is left unstated
+        rather than inferred from the points.
+        """
 
         if not self.points:
             return self
@@ -733,11 +753,11 @@ class IRCResultPayload(SchemaBase):
         has_reverse_in_points = any(
             point.direction == IRCDirection.reverse for point in self.points
         )
-        if has_forward_in_points and not self.has_forward:
+        if has_forward_in_points and self.has_forward is False:
             raise ValueError(
                 "has_forward must be true when forward-direction points are provided."
             )
-        if has_reverse_in_points and not self.has_reverse:
+        if has_reverse_in_points and self.has_reverse is False:
             raise ValueError(
                 "has_reverse must be true when reverse-direction points are provided."
             )
@@ -922,8 +942,8 @@ class OutputGeometryEntry(SchemaBase):
 class CalculationWithResultsPayload(CalculationPayload):
     """A calculation with optional typed result blocks.
 
-    Extends ``CalculationPayload`` with opt/freq/sp/irc/path_search result
-    fields. Validation enforces that only the result type matching the
+    Extends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan
+    result fields. Validation enforces that only the result type matching the
     calculation type may be provided.
 
     :param opt_result: Inline optimisation result (type must be ``opt``).
@@ -933,6 +953,10 @@ class CalculationWithResultsPayload(CalculationPayload):
     :param path_search_result: Inline path-search result bundle (type
         must be ``path_search``). Carries NEB, GSM, and other path-based
         TS-search algorithms via ``path_search_result.method``.
+    :param scan_result: Inline scan result (type must be ``scan``): the
+        stepped coordinates and the points along them. Whether a route accepts
+        a ``scan`` calculation at all is that route's own allow-list; this
+        field is only where the points go when it does.
     :param parameters: Optional parsed execution-control parameter
         observations. Each becomes one ``calculation_parameter`` row.
     :param parameters_json: Optional JSON snapshot of the parser output
@@ -947,6 +971,9 @@ class CalculationWithResultsPayload(CalculationPayload):
     sp_result: SPResultPayload | None = None
     irc_result: IRCResultPayload | None = None
     path_search_result: PathSearchResultPayload | None = None
+    # Resolved at the foot of this module: ``fragments.scan`` imports
+    # ``CalculationConstraintCreate`` from here, so it cannot be imported above.
+    scan_result: "CalculationScanResultCreate | None" = None
     execution_environment: ExecutionEnvironmentManifestPayload | None = None
 
     scf_stability: SCFStabilityPayload | None = None
@@ -1081,6 +1108,7 @@ class CalculationWithResultsPayload(CalculationPayload):
             CalculationType.sp: "sp_result",
             CalculationType.irc: "irc_result",
             CalculationType.path_search: "path_search_result",
+            CalculationType.scan: "scan_result",
         }
         allowed_field = allowed.get(self.type)
         for field_name in (
@@ -1089,6 +1117,7 @@ class CalculationWithResultsPayload(CalculationPayload):
             "sp_result",
             "irc_result",
             "path_search_result",
+            "scan_result",
         ):
             value = getattr(self, field_name)
             if value is not None and field_name != allowed_field:
@@ -1113,3 +1142,11 @@ class CalculationWithResultsPayload(CalculationPayload):
             return self
         CalculationOriginMetadata.model_validate(origin_block)
         return self
+
+
+# ``fragments.scan`` needs ``CalculationConstraintCreate`` from this module, so
+# the scan result type cannot be named above. Importing the module (not a name
+# from it) is safe whichever of the two is imported first: if ``scan`` is the
+# one mid-import, this line finds it already in ``sys.modules`` and does
+# nothing, and ``scan`` finishes the job itself with the rebuild at its foot.
+import tckdb_schemas.fragments.scan  # noqa: E402,F401

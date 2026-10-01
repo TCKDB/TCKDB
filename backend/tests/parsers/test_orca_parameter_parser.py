@@ -486,3 +486,43 @@ class TestPalMultiLine:
         assert p is not None
         assert p["raw_value"] == "24"
         assert p["section"] == "parallel"
+
+
+# ---------------------------------------------------------------------------
+# IRC path summary: an undetermined direction is unstated, never "both"/False
+# ---------------------------------------------------------------------------
+
+_IRC_ROWS_NO_TS = """\
+IRC PATH SUMMARY
+------------------------------------------------------------------
+Step     E(Eh)     dE(kcal/mol)   max(|Grad|)   RMS(Grad)
+------------------------------------------------------------------
+  0   -1.000000      0.50    0.010000    0.002000
+  1   -1.001000      0.40    0.009000    0.001900
+"""
+
+_IRC_ROWS_WITH_TS = (
+    _IRC_ROWS_NO_TS
+    + "  2   -0.990000      3.00    0.000100    0.000050 <= TS\n"
+    + "  3   -1.002000      0.10    0.008000    0.001800\n"
+)
+
+
+def test_irc_summary_without_a_ts_marker_leaves_direction_and_flags_unstated():
+    from app.services.orca_parameter_parser import parse_irc_path_summary
+
+    result = parse_irc_path_summary(_IRC_ROWS_NO_TS)
+    assert result is not None
+    assert len(result["points"]) == 2
+    assert result["has_forward"] is None
+    assert result["has_reverse"] is None
+    assert result["direction"] is None
+    assert all(p["direction"] is None for p in result["points"])
+
+
+def test_irc_summary_with_a_ts_marker_still_derives_both_branches():
+    from app.services.orca_parameter_parser import parse_irc_path_summary
+
+    result = parse_irc_path_summary(_IRC_ROWS_WITH_TS)
+    assert result is not None
+    assert (result["has_forward"], result["has_reverse"], result["direction"]) == (True, True, "both")

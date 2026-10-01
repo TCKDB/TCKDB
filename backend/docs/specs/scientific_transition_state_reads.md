@@ -201,11 +201,26 @@ include=entries        — every entry under this record's parent
                          transition state, this one included; the same
                          list the concept surface returns under the same
                          token. Was a documented no-op until PR 2.
-include=validation_evidence — IRC validation evidence for this entry
+include=validation_evidence — validation evidence for this entry, one
+                         record per kind (irc, energy_ordering,
+                         imaginary_mode). An energy_ordering record lists
+                         the energies it compared, each with the ref of the
+                         calculation it came from; an imaginary_mode record
+                         carries the count, the frequency and the
+                         displacement verdict, null where not stated.
+include=statmech       — the statmech records this saddle point owns, a
+                         compact projection with the refs of their source
+                         calculations; the full record is
+                         /scientific/statmech/{ref}.
 include=trust          — computed_transition_state_v2 fragment;
                          internal-tokenized, so include=all skips it
 include=internal_ids   — Phase D policy gate
 ```
+
+The entry record's `validation` descriptor always carries one token per
+evidence kind (`irc`, `energy_ordering`, `imaginary_mode`), each `present`,
+`failed` or `absent`, and independent of the others: a passing
+`imaginary_mode` does not make `irc` read `present`.
 
 Search (`/transition-states/search`):
 
@@ -222,13 +237,16 @@ include=entries        — embed each record's parent's entry list, one
                          (not on the detail surfaces): the block's cost
                          follows how many entries the page's parents have,
                          so it is asked for by name.
-include=validation_evidence — IRC validation evidence per record
+include=validation_evidence — validation evidence per record
+include=statmech       — statmech records per record (one grouped lookup
+                         per record, like validation_evidence)
 include=trust          — computed_transition_state_v2 fragment at
                          records[*].trust. The page query eager-loads the
                          23-entry evidence graph once for the whole page.
                          Internal-tokenized: include=all does not reach it.
 include=all            — calculations + geometries + review +
-                         validation_evidence. Not entries, and not trust:
+                         validation_evidence + statmech. Not entries, and
+                         not trust:
                          both are internal-tokenized on this surface
                          because their cost is opted into, not implied.
                          Never internal_ids.

@@ -70,6 +70,7 @@ from app.schemas.upload_warning import UploadWarning
 from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
 )
+from app.services.calculation_scan_resolution import persist_calculation_scan
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.hessian_method_inference import infer_hessian_method
@@ -1172,6 +1173,10 @@ def persist_calculation_result(
         calculation's ``type`` — a defensive check that mirrors the
         schema-layer validator.
     """
+
+    if calc_upload.scan_result is not None:
+        # The wire validator already refused a scan result on any other type.
+        persist_calculation_scan(session, calculation.id, calc_upload.scan_result)
 
     if calc_upload.opt_result is not None:
         session.add(

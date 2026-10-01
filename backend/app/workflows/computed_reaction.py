@@ -150,6 +150,7 @@ from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
 from app.services.upload_reconciliation import term_symbol_warnings
+from app.workflows.computed_species import _persist_statmech_block
 from app.workflows.kinetics import (
     persist_interpretation_assignments,
     persist_tunneling_application,
@@ -472,6 +473,28 @@ def _collect_bundle_provenance_warnings(
                 )
             )
 
+    # The saddle point's statmech is the same kind of row as a species', and
+    # is reported on the same terms. Its software falls back to the bundle's
+    # analysis software, as the workflow persists it (see the statmech step).
+    ts_in = request.transition_state
+    if ts_in is not None and ts_in.statmech is not None:
+        warnings.extend(
+            collect_provenance_warnings(
+                scientific_origin=ts_in.statmech.scientific_origin,
+                software_release=(
+                    ts_in.statmech.software_release
+                    or request.analysis_software_release
+                ),
+                workflow_tool_release=(
+                    ts_in.statmech.workflow_tool_release
+                    or request.workflow_tool_release
+                ),
+                literature=ts_in.statmech.literature,
+                freq_scale_factor=ts_in.statmech.freq_scale_factor,
+                field_prefix="transition_state.statmech.",
+            )
+        )
+
     # Kinetics provenance is bundle-scoped, and the field paths say so.
     # ``BundleKineticsIn`` carries no provenance fields at all; the workflow
     # writes ``request.literature``, ``request.analysis_software_release`` and
@@ -731,6 +754,8 @@ def persist_computed_reaction_upload(
     # 3. Transition state (optional)
     # ------------------------------------------------------------------
     ts_entry = None
+    ts_statmech_id: int | None = None
+    ts_statmech_ref: str | None = None
     if request.transition_state:
         ts_in = request.transition_state
         ts = TransitionState(
@@ -804,8 +829,44 @@ def persist_computed_reaction_upload(
                 RecordRef(SubmissionRecordType.calculation, calc.id)
             )
 
-        # Structured IRC evidence for this saddle point. Optional on every
-        # path; its absence is reported, never rejected.
+        # Statistical-mechanics interpretation of the saddle point, through
+        # the same seam the computed-species and PDep routes write theirs
+        # with, so every rule that governs a species' statmech (role/type
+        # compatibility, the three energy levels, ownership, scale-factor
+        # resolution) governs this one. The bundle-level analysis software
+        # fills in only where the block names none, as it does for a species.
+        if ts_in.statmech is not None:
+            ts_statmech_in = ts_in.statmech
+            if (
+                ts_statmech_in.software_release is None
+                and request.analysis_software_release is not None
+            ):
+                ts_statmech_in = ts_statmech_in.model_copy(
+                    update={"software_release": request.analysis_software_release}
+                )
+            ts_statmech_row = _persist_statmech_block(
+                session,
+                ts_statmech_in,
+                transition_state_entry_id=ts_entry.id,
+                calc_keys_to_id={
+                    key: session.get(Calculation, calc_id)
+                    for key, calc_id in calculation_key_to_id.items()
+                },
+                default_workflow_tool_release=request.workflow_tool_release,
+                created_by=created_by,
+                warnings=sp_energy_warnings,
+                literature_field_prefix="transition_state.statmech.literature.",
+                content_warning_field="transition_state.statmech",
+            )
+            if ts_statmech_row is not None:
+                ts_statmech_id = ts_statmech_row.id
+                ts_statmech_ref = ts_statmech_row.public_ref
+                review_targets.append(
+                    RecordRef(SubmissionRecordType.statmech, ts_statmech_row.id)
+                )
+
+        # Structured evidence for this saddle point. Optional on every
+        # path; the absence of IRC evidence is reported, never rejected.
         persist_transition_state_validation_evidence(
             session,
             ts_in.validation_evidence,
@@ -819,8 +880,13 @@ def persist_computed_reaction_upload(
                         f"source_calculation_key"
                     ),
                 )
+                # An energy_ordering record names its source calculations one
+                # per energy, and the seam resolves those itself.
+                if record.source_calculation_key is not None
+                else None
                 for index, record in enumerate(ts_in.validation_evidence)
             ],
+            calculation_ids_by_key=calculation_key_to_id,
             subject_label=ts_in.label or "transition state",
             field_path="transition_state.validation_evidence",
             reaction_entry_id=canonical_reaction_entry.id,
@@ -1857,6 +1923,8 @@ def persist_computed_reaction_upload(
         "statmech_ids": statmech_ids,
         "transport_ids": transport_ids,
         "transport_refs": transport_refs,
+        "transition_state_statmech_id": ts_statmech_id,
+        "transition_state_statmech_ref": ts_statmech_ref,
         "species_entry_ids": [e.id for e in species_key_to_entry.values()],
         "species_count": len(request.species),
         # Expose the bundle-local calc-key → assigned-id map so the

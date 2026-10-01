@@ -1,5 +1,171 @@
 {
   "$defs": {
+    "AppliedCorrectionComponentKind": {
+      "enum": [
+        "atom",
+        "bond",
+        "molecular",
+        "zpe_scale",
+        "soc",
+        "other"
+      ],
+      "title": "AppliedCorrectionComponentKind",
+      "type": "string"
+    },
+    "AppliedCorrectionComponentPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "component_kind": {
+          "$ref": "#/$defs/AppliedCorrectionComponentKind"
+        },
+        "contribution_value": {
+          "title": "Contribution Value",
+          "type": "number"
+        },
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "multiplicity": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Multiplicity",
+          "type": "integer"
+        },
+        "parameter_value": {
+          "title": "Parameter Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "component_kind",
+        "key",
+        "parameter_value",
+        "contribution_value"
+      ],
+      "title": "AppliedCorrectionComponentPayload",
+      "type": "object"
+    },
+    "AppliedEnergyCorrectionUploadPayload": {
+      "additionalProperties": false,
+      "description": "Upload-facing payload for one applied energy correction.\n\nExactly one of ``scheme`` or ``frequency_scale_factor`` must be provided.\nThe ``source_conformer_key`` and ``source_calculation_key`` are local\nstring keys that reference other objects in the same upload bundle;\nthey are resolved to integer IDs by the workflow orchestrator.\n\nBoth keys resolve against a namespace the *enclosing* request\ndeclared, and a key naming nothing in it is refused with\n``applied_energy_correction_source_key_undeclared`` rather than\ndropped. ``source_conformer_key`` names the request's\n``conformer_key`` on ``/uploads/conformers``; ``conformers[*].key``\non ``/uploads/computed-species``; and, on\n``/uploads/computed-reaction``, ``conformers[*].key`` of the species\nthe correction sits under — a transition state declares no\nconformers there, so a TS-side correction can never name one.\nScoping the reaction bundle's conformer namespace to one species is\nwhat makes ownership true by construction: a correction targeting\none species entry cannot borrow another's conformer.",
+      "properties": {
+        "application_role": {
+          "$ref": "#/$defs/EnergyCorrectionApplicationRole"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/AppliedCorrectionComponentPayload"
+          },
+          "title": "Components",
+          "type": "array"
+        },
+        "frequency_scale_factor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FreqScaleFactorRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "scheme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnergyCorrectionSchemeRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_calculation_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Calculation Key"
+        },
+        "source_conformer_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Conformer Key"
+        },
+        "temperature_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperature K"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "value_unit": {
+          "$ref": "#/$defs/EnergyUnit"
+        }
+      },
+      "required": [
+        "application_role",
+        "value",
+        "value_unit"
+      ],
+      "title": "AppliedEnergyCorrectionUploadPayload",
+      "type": "object"
+    },
+    "AtomMapSource": {
+      "description": "How a reaction atom map was obtained (ADR 0011).\n\n``declared``\n    The depositor stated the correspondence.\n``inferred``\n    An algorithm produced it. It is recorded and read back as inferred,\n    never as though a human asserted it.\n\nThere is no default member. A map that cannot say how it was obtained is\nnot a map this database accepts.",
+      "enum": [
+        "declared",
+        "inferred"
+      ],
+      "title": "AtomMapSource",
+      "type": "string"
+    },
+    "AtomParamApplication": {
+      "description": "How a scheme's ``atom_params`` values enter the corrected energy.\n\nDeclared per scheme, because every atom parameter of one scheme is\napplied the same way. ``NULL`` on a scheme means the producer did not\nsay; it is never inferred from ``kind``.\n\n* ``subtracted`` -- the per-element value is multiplied by the atom\n  count and subtracted from the energy. Arkane's ``atom_energy`` tables\n  are applied like this (the level's own atomic energies are removed so\n  energies are referenced to a level-independent basis), and so are its\n  ``atom_thermal`` tables.\n* ``added`` -- the per-element value is multiplied by the atom count\n  and added. Arkane's ``atom_hf`` tables are applied like this. Arkane\n  applies ``+ count * (atom_hf - atom_thermal)`` per atom, so\n  ``atom_hf`` is ``added`` and ``atom_thermal`` is ``subtracted``.",
+      "enum": [
+        "subtracted",
+        "added"
+      ],
+      "title": "AtomParamApplication",
+      "type": "string"
+    },
     "CalculationConstraintCreate": {
       "additionalProperties": false,
       "properties": {
@@ -191,6 +357,334 @@
       "title": "CalculationQuality",
       "type": "string"
     },
+    "CalculationScanCoordinateCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "atom1_index": {
+          "minimum": 1,
+          "title": "Atom1 Index",
+          "type": "integer"
+        },
+        "atom2_index": {
+          "minimum": 1,
+          "title": "Atom2 Index",
+          "type": "integer"
+        },
+        "atom3_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Atom3 Index"
+        },
+        "atom4_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Atom4 Index"
+        },
+        "coordinate_index": {
+          "minimum": 1,
+          "title": "Coordinate Index",
+          "type": "integer"
+        },
+        "coordinate_kind": {
+          "pattern": "^(bond|angle|dihedral|improper)$",
+          "title": "Coordinate Kind",
+          "type": "string"
+        },
+        "end_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Value"
+        },
+        "resolution_degrees": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution Degrees"
+        },
+        "start_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Value"
+        },
+        "step_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Count"
+        },
+        "step_size": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Size"
+        },
+        "symmetry_number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symmetry Number"
+        },
+        "value_unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoordinateUnit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "coordinate_index",
+        "coordinate_kind",
+        "atom1_index",
+        "atom2_index"
+      ],
+      "title": "CalculationScanCoordinateCreate",
+      "type": "object"
+    },
+    "CalculationScanPointCoordinateValueCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "coordinate_index": {
+          "minimum": 1,
+          "title": "Coordinate Index",
+          "type": "integer"
+        },
+        "coordinate_value": {
+          "title": "Coordinate Value",
+          "type": "number"
+        },
+        "value_unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoordinateUnit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "coordinate_index",
+        "coordinate_value"
+      ],
+      "title": "CalculationScanPointCoordinateValueCreate",
+      "type": "object"
+    },
+    "CalculationScanPointCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "coordinate_values": {
+          "items": {
+            "$ref": "#/$defs/CalculationScanPointCoordinateValueCreate"
+          },
+          "title": "Coordinate Values",
+          "type": "array"
+        },
+        "electronic_energy_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Electronic Energy Hartree"
+        },
+        "geometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeometryPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "geometry_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Geometry Id"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "point_index": {
+          "minimum": 1,
+          "title": "Point Index",
+          "type": "integer"
+        },
+        "relative_energy_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Energy Kj Mol"
+        }
+      },
+      "required": [
+        "point_index"
+      ],
+      "title": "CalculationScanPointCreate",
+      "type": "object"
+    },
+    "CalculationScanResultCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "items": {
+            "$ref": "#/$defs/CalculationConstraintCreate"
+          },
+          "title": "Constraints",
+          "type": "array"
+        },
+        "coordinates": {
+          "items": {
+            "$ref": "#/$defs/CalculationScanCoordinateCreate"
+          },
+          "title": "Coordinates",
+          "type": "array"
+        },
+        "dimension": {
+          "minimum": 1,
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "is_relaxed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Relaxed"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/CalculationScanPointCreate"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "zero_energy_reference_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zero Energy Reference Hartree"
+        }
+      },
+      "required": [
+        "dimension"
+      ],
+      "title": "CalculationScanResultCreate",
+      "type": "object"
+    },
     "CalculationType": {
       "enum": [
         "opt",
@@ -206,7 +700,7 @@
     },
     "CalculationWithResultsPayload": {
       "additionalProperties": false,
-      "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search result\nfields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
+      "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan\nresult fields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param scan_result: Inline scan result (type must be ``scan``): the\n    stepped coordinates and the points along them. Whether a route accepts\n    a ``scan`` calculation at all is that route's own allow-list; this\n    field is only where the points go when it does.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
       "properties": {
         "constraints": {
           "description": "Coordinate constraints held fixed during this calculation. Generic across opt, freq, sp, irc, path_search, scan, and any other constrained run — these are input/provenance metadata and do not require a result block. For scan calculations, frozen coordinates may be declared here while the stepped coordinate is declared on the scan_result.coordinates list.",
@@ -369,6 +863,17 @@
           "$ref": "#/$defs/CalculationQuality",
           "default": "raw"
         },
+        "scan_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CalculationScanResultCreate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "scf_stability": {
           "anyOf": [
             {
@@ -513,6 +1018,14 @@
       "title": "ContentAddressedReference",
       "type": "object"
     },
+    "CoordinateUnit": {
+      "enum": [
+        "angstrom",
+        "degree"
+      ],
+      "title": "CoordinateUnit",
+      "type": "string"
+    },
     "DepositRights": {
       "additionalProperties": false,
       "description": "Deposit-time agreement that the records may be licensed as stated.",
@@ -578,6 +1091,178 @@
       ],
       "title": "DescribedRuntime",
       "type": "object"
+    },
+    "EnergyCorrectionApplicationRole": {
+      "enum": [
+        "zpe",
+        "thermal_correction_energy",
+        "thermal_correction_enthalpy",
+        "thermal_correction_gibbs",
+        "entropy_contribution",
+        "bac_total",
+        "aec_total",
+        "soc_total",
+        "atomization_reference_adjustment",
+        "composite_delta",
+        "custom"
+      ],
+      "title": "EnergyCorrectionApplicationRole",
+      "type": "string"
+    },
+    "EnergyCorrectionSchemeKind": {
+      "enum": [
+        "atom_energy",
+        "atom_hf",
+        "atom_thermal",
+        "soc",
+        "bac_petersson",
+        "bac_melius",
+        "isodesmic",
+        "other"
+      ],
+      "title": "EnergyCorrectionSchemeKind",
+      "type": "string"
+    },
+    "EnergyCorrectionSchemeRef": {
+      "additionalProperties": false,
+      "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists it is reused. Otherwise a new\nscheme is created. Identity has two forms, chosen by ``data_revision``:\n\n* ``data_revision`` **absent**: ``(kind, name, level_of_theory,\n  source_literature, software_release, workflow_tool_release)``. This is\n  the original identity, unchanged, so every scheme deposited before\n  ``data_revision`` existed keeps its identity and its public ref.\n* ``data_revision`` **present**: ``(kind, name, level_of_theory,\n  source_literature, software_release, data_revision)``. The workflow\n  tool build is *not* part of this identity; see below.\n\nA scheme deposited without ``data_revision`` never matches one\ndeposited with it, even when the tables are identical: absence says\nnothing about which revision the numbers came from, so it is not\nguessed.\n\nA citation or software release that differs from an existing\nsame-``(kind, name, level_of_theory)`` scheme is never dropped: it\nmakes this a scientifically distinct scheme (a different citation, or\na different program build's numbers), so it resolves to a\ndifferent row rather than silently overwriting or discarding what was\nsupplied.\n\n:param software: The program *release* that computed this scheme's\n    parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or\n    bond-additivity parameter set is the output of a program's own\n    build-level numerics (integration grid, SCF thresholds, a named\n    basis set's internal definition), which change between releases\n    of the same program -- so the correction is release-specific, not\n    merely program-specific. Only ``name`` is required; a depositor\n    who knows only the program (no version/revision/build) resolves\n    to the version-less release row for it, a complete and honest\n    deposit, not a degraded one. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program build computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``. When\n    ``data_revision`` is absent this is part of the scheme's identity\n    (each build is its own scheme). When ``data_revision`` is present\n    it is provenance only: it records the build that first deposited\n    the scheme, and a later deposit of the same revision by a different\n    build reuses the row and does not replace it.\n:param data_revision: The revision of the *data* that holds the\n    parameter tables, for example the RMG-database commit that holds\n    Arkane's atom-energy and BAC tables. A tool build (the RMG-Py\n    commit recorded on ``workflow_tool_release``) does not say which\n    tables it read, because the tables live in a separate repository.\n    The same ``data_revision`` with the same tables is the same scheme\n    whichever build read it; a new ``data_revision`` is a new scheme,\n    so a one-parameter change in a new database revision is a new\n    scheme and not a conflict. Free text, at most 200 characters. A\n    value that is 7 to 64 hex digits is treated as a git commit and\n    lower-cased; any other value (a tag, say) is kept exactly as\n    written. Send the full 40-hex commit: a short and a full SHA of\n    the same commit are two revisions and make two schemes. Send it only\n    when the tables really came from that repository revision, not when\n    the values were overridden by the user (Arkane ``atomEnergies`` or\n    BAC overrides in an input file). Optional: omit it when the data\n    revision is not known or the tables were modified.\n\n    On a scheme with a ``data_revision``, the stored\n    ``workflow_tool_release`` is the first depositor's build, not a\n    list of every build that later sent the same revision.\n\n    Send the program name in ``software`` (``{\"name\": \"Gaussian\"}``)\n    rather than the ESS version: a version is part of identity, so each\n    one makes another scheme.\n:param atom_params_applied_as: How ``atom_params`` enter the corrected\n    energy: ``subtracted`` or ``added`` (see ``AtomParamApplication``).\n    Applies to every entry of ``atom_params`` and to nothing else.\n    Optional: omit it when not known, and nothing is assumed. Giving\n    it without ``atom_params`` is refused. Sending a value that\n    differs from the one already stored on the matched scheme is a\n    conflict, as a differing parameter value is.",
+      "properties": {
+        "atom_params": {
+          "items": {
+            "$ref": "#/$defs/SchemeAtomParamPayload"
+          },
+          "title": "Atom Params",
+          "type": "array"
+        },
+        "atom_params_applied_as": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AtomParamApplication"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "bond_params": {
+          "items": {
+            "$ref": "#/$defs/SchemeBondParamPayload"
+          },
+          "title": "Bond Params",
+          "type": "array"
+        },
+        "component_params": {
+          "items": {
+            "$ref": "#/$defs/SchemeComponentParamPayload"
+          },
+          "title": "Component Params",
+          "type": "array"
+        },
+        "data_revision": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Revision"
+        },
+        "kind": {
+          "$ref": "#/$defs/EnergyCorrectionSchemeKind"
+        },
+        "level_of_theory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LevelOfTheoryRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "software": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoftwareReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "units": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnergyUnit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "title": "EnergyCorrectionSchemeRef",
+      "type": "object"
+    },
+    "EnergyUnit": {
+      "enum": [
+        "hartree",
+        "kj_mol",
+        "kcal_mol"
+      ],
+      "title": "EnergyUnit",
+      "type": "string"
     },
     "EnvironmentClosureEntry": {
       "additionalProperties": false,
@@ -784,6 +1469,75 @@
       "title": "FreqResultPayload",
       "type": "object"
     },
+    "FreqScaleFactorRef": {
+      "additionalProperties": false,
+      "description": "Content-keyed reference to a frequency scale factor.\n\nThe service layer finds or creates the immutable\n``frequency_scale_factor`` registry row whose identity matches the\nsupplied fields. Identity is the full tuple\n``(level_of_theory, software_release, scale_kind, value,\nsource_literature, workflow_tool_release)`` and matches the DB unique\nindex on ``frequency_scale_factor``. ``note`` is descriptive only and\nnever participates in identity/dedupe.\n\nSource handling:\n\n* If structured literature is available, pass ``source_literature``;\n  it is resolved/created via the standard literature pipeline.\n* If only a citation string is available, pass it in ``note`` and\n  leave ``source_literature`` null. Do not synthesize placeholder\n  literature rows from raw citation strings.\n* If a workflow tool's curated data file is the proximate source,\n  pass ``workflow_tool_release`` and put any descriptive file/source\n  reference in ``note``.\n\nNull ``frequency_scale_factor_id`` on a statmech row means\n\"unknown/not recorded\". Pass ``value=1.0`` with no source to represent\nexplicitly unscaled (a real registry row exists, just with value 1.0).\n\n:param level_of_theory: Level of theory this factor applies to.\n:param scale_kind: Type of scaling (fundamental, ZPE, enthalpy, etc.).\n:param value: The scale factor value.\n:param software: The ESS program *release* the factor was fit against\n    (e.g. Gaussian 16, Revision C.02). A harmonic frequency scale\n    factor is fit against a program's own build-level vibrational\n    frequencies, which change between releases of the same program\n    (correction-scheme-provenance plan v2 §6, mirroring\n    ``EnergyCorrectionSchemeRef.software``'s reasoning) -- so the\n    factor is release-specific, not merely program-specific. Only\n    ``name`` is required; a depositor who knows only the program\n    resolves to the version-less release row for it. Null means\n    software-agnostic or unknown.\n:param source_literature: Structured literature provenance, when\n    available. Mutually informative with ``workflow_tool_release``;\n    either, both, or neither may be supplied.\n:param workflow_tool_release: Workflow tool (e.g. ARC) whose data\n    file was the proximate source, when the factor was looked up\n    from a tool table rather than directly from a paper.\n:param note: Optional descriptive note. Never used for dedupe.",
+      "properties": {
+        "level_of_theory": {
+          "$ref": "#/$defs/LevelOfTheoryRef"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "scale_kind": {
+          "$ref": "#/$defs/FrequencyScaleKind",
+          "default": "fundamental"
+        },
+        "software": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoftwareReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "value": {
+          "exclusiveMinimum": 0,
+          "title": "Value",
+          "type": "number"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "level_of_theory",
+        "value"
+      ],
+      "title": "FreqScaleFactorRef",
+      "type": "object"
+    },
     "FrequencyModePayload": {
       "description": "One vibrational mode within a frequency calculation result.\n\nImaginary modes use a negative ``frequency_cm1`` together with\n``is_imaginary=True``. Producers that have only positive magnitudes\nmust flip the sign before upload; the cross-field validator below\nrefuses inconsistent combinations rather than silently normalising,\nso the source of truth stays at the producer boundary.\n\n:param mode_index: 1-based ordering from the ESS output.\n:param frequency_cm1: Harmonic frequency in cm⁻¹; negative for\n    imaginary modes.\n:param is_imaginary: Whether the mode is imaginary. Required and\n    consistent with the sign of ``frequency_cm1``.\n:param reduced_mass_amu: Reduced mass in amu, when reported.\n:param force_constant_mdyne_angstrom: Force constant in\n    mDyne/Ångström, when reported.\n:param ir_intensity_km_mol: IR intensity in km/mol, when reported.\n:param raman_activity: Raman activity (Å⁴/amu), when reported.\n:param symmetry_label: Irreducible representation label\n    (e.g. ``\"A1\"``, ``\"E\"``), when reported.\n:param imaginary_disposition: What this imaginary mode *is*, when it\n    is not the reaction coordinate. Declared by the depositor, never\n    inferred — TCKDB stores no normal-mode displacement vectors to\n    infer it from. Only meaningful on an imaginary mode; setting it\n    on a real one is refused rather than ignored. See ADR 0012.\n:param note: Optional free-text annotation.",
       "properties": {
@@ -892,6 +1646,54 @@
         "is_imaginary"
       ],
       "title": "FrequencyModePayload",
+      "type": "object"
+    },
+    "FrequencyScaleKind": {
+      "enum": [
+        "fundamental",
+        "zpe",
+        "enthalpy",
+        "entropy",
+        "heat_capacity"
+      ],
+      "title": "FrequencyScaleKind",
+      "type": "string"
+    },
+    "GeometryIn": {
+      "additionalProperties": false,
+      "description": "A geometry defined within this upload, with a local key for reuse.\n\n:param key: Globally unique local key for this geometry.\n:param xyz_text: Raw XYZ text block.\n:param isotopes: Optional atom-resolved isotope labelling, mapping a\n    1-based XYZ atom index to that atom's isotope mass number. See\n    :class:`tckdb_schemas.fragments.geometry.GeometryPayload`.",
+      "properties": {
+        "isotopes": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Isotopes"
+        },
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "xyz_text": {
+          "minLength": 1,
+          "title": "Xyz Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "xyz_text"
+      ],
+      "title": "GeometryIn",
       "type": "object"
     },
     "GeometryPayload": {
@@ -1149,18 +1951,42 @@
     },
     "IRCResultPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline result for an IRC calculation.\n\n:param direction: Overall run mode (forward / reverse / both).\n:param has_forward: True when at least one forward-branch point is present.\n:param has_reverse: True when at least one reverse-branch point is present.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
+      "description": "Upload-facing inline result for an IRC calculation.\n\n``direction``, ``has_forward`` and ``has_reverse`` are each optional, and\nomitting one says \"the producer did not state it\". That is a real position\nfor a producer to be in: an IRC whose log does not record which way it ran\nis still a path with points on it, and requiring the three to be written\nmade such a producer drop the whole result. A value that is not stated is\nstored as NULL and read back as null, never as ``false``: ``has_forward``\nfalse is a claim that no forward-branch point exists, which is a different\nstatement from not knowing.\n\n:param direction: Overall run mode (forward / reverse / both). Omit when\n    the run mode is not stated.\n:param has_forward: True when at least one forward-branch point is present,\n    false when none is. Omit when not stated.\n:param has_reverse: True when at least one reverse-branch point is present,\n    false when none is. Omit when not stated.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
       "properties": {
         "direction": {
-          "$ref": "#/$defs/IRCDirection"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IRCDirection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "has_forward": {
-          "title": "Has Forward",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Forward"
         },
         "has_reverse": {
-          "title": "Has Reverse",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Reverse"
         },
         "note": {
           "anyOf": [
@@ -1220,11 +2046,6 @@
           "title": "Zero Energy Reference Hartree"
         }
       },
-      "required": [
-        "direction",
-        "has_forward",
-        "has_reverse"
-      ],
       "title": "IRCResultPayload",
       "type": "object"
     },
@@ -1519,6 +2340,16 @@
       },
       "title": "LiteratureUploadRequest",
       "type": "object"
+    },
+    "MeliusBacComponentKind": {
+      "enum": [
+        "atom_corr",
+        "bond_corr_length",
+        "bond_corr_neighbor",
+        "mol_corr"
+      ],
+      "title": "MeliusBacComponentKind",
+      "type": "string"
     },
     "ModuleDescription": {
       "additionalProperties": false,
@@ -1883,6 +2714,115 @@
       "title": "PathSearchResultPayload",
       "type": "object"
     },
+    "ReactionAtomMapIn": {
+      "additionalProperties": false,
+      "description": "A complete atom correspondence for one micro reaction.\n\n:param source: How the map was obtained. Required — there is no default,\n    because ``declared`` would manufacture human attribution and\n    ``inferred`` would understate a real declaration.\n:param ts_geometry_key: Bundle-local key of the saddle-point geometry both\n    legs map onto.\n:param participants: One entry per participant molecule that is mapped.\n:param equivalent_map_count: How many maps are equivalent to this one under\n    the symmetry of the participating structures, where known. Omit when\n    unknown — ``null`` is not ``1``. Symmetry makes a valid map routinely\n    non-unique and TCKDB does not attempt to canonicalise among the\n    alternatives.\n:param note: Free text. **Required when ``source`` is ``inferred``**, where\n    it must name the algorithm that produced the map. Trimmed, and blank\n    collapses to ``None``.",
+      "properties": {
+        "equivalent_map_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Equivalent Map Count"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "participants": {
+          "items": {
+            "$ref": "#/$defs/ReactionAtomMapParticipantIn"
+          },
+          "minItems": 1,
+          "title": "Participants",
+          "type": "array"
+        },
+        "source": {
+          "$ref": "#/$defs/AtomMapSource"
+        },
+        "ts_geometry_key": {
+          "minLength": 1,
+          "title": "Ts Geometry Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "ts_geometry_key",
+        "participants"
+      ],
+      "title": "ReactionAtomMapIn",
+      "type": "object"
+    },
+    "ReactionAtomMapParticipantIn": {
+      "additionalProperties": false,
+      "description": "One participant molecule's atoms, identified with transition-state atoms.\n\n:param side: Which leg this participant sits on.\n:param species_key: Bundle-local key of the species this participant is.\n:param participant_index: 1-based position of this participant on its side.\n    Required because the same species may appear twice on one side\n    (``2 CH3 → C2H6``) and the two copies map to different saddle-point\n    atoms.\n:param geometry_key: Bundle-local key of the geometry the atom indices\n    count into. Named explicitly; see the module docstring. Omitted, and\n    only omitted, by a participant with no atoms: there are no indices to\n    count, and naming a geometry a participant does not have would be the\n    implicit-indexing failure this fragment exists to prevent, written\n    explicitly.\n:param atom_to_ts: ``{atom index in this participant's geometry: atom index\n    in the transition-state geometry}``. Both sides 1-based. Empty **only**\n    for a participant that has no atoms — a free electron. That is a claim\n    (\"this participant is made of nothing\"), not an omission: a depositor\n    who mapped none of a molecule's atoms leaves the participant out of the\n    map entirely, and the incompleteness warning says so.",
+      "properties": {
+        "atom_to_ts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Atom To Ts",
+          "type": "object"
+        },
+        "geometry_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Geometry Key"
+        },
+        "participant_index": {
+          "minimum": 1,
+          "title": "Participant Index",
+          "type": "integer"
+        },
+        "side": {
+          "$ref": "#/$defs/ReactionRole"
+        },
+        "species_key": {
+          "minLength": 1,
+          "title": "Species Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "side",
+        "species_key",
+        "participant_index",
+        "atom_to_ts"
+      ],
+      "title": "ReactionAtomMapParticipantIn",
+      "type": "object"
+    },
+    "ReactionRole": {
+      "enum": [
+        "reactant",
+        "product"
+      ],
+      "title": "ReactionRole",
+      "type": "string"
+    },
     "SCFStabilityPayload": {
       "additionalProperties": false,
       "description": "SCF stability evidence that may cite rows outside its own record.\n\nThe primitive upload routes take this shape. They already accept\ndatabase ids as a deliberate programmatic-chaining mechanism, so\nnaming the calculation or artifact that carries the stability log is\nthe same kind of claim they already support.\n\nBundle roots take :class:`SCFStabilityContent` instead, which names the\nmeasuring job by local key rather than by id. Both share\n:class:`SCFStabilityBase`, so neither route publishes the other's\ncitation field.\n\n:param source_calculation_id: Optional FK to the calculation whose\n    log carries the stability evidence (when separate from the\n    owning calculation).\n:param source_artifact_id: Optional FK to a ``calculation_artifact``\n    row holding the stability log bytes (e.g. an ``ancillary`` or\n    ``output_log`` artifact).",
@@ -2010,6 +2950,72 @@
         }
       },
       "title": "SPResultPayload",
+      "type": "object"
+    },
+    "SchemeAtomParamPayload": {
+      "additionalProperties": false,
+      "description": "One element-keyed scalar of a scheme.\n\n``value`` is in the enclosing scheme's ``units``. What it means\ndepends on the scheme ``kind``, and how it is applied is stated by the\nscheme's ``atom_params_applied_as``:\n\n* ``atom_energy``: the level's atomic energy of ``element`` (the\n  energy of the isolated atom at the scheme's level of theory).\n  Arkane subtracts ``count * value`` from the molecule's energy\n  (``atom_params_applied_as = subtracted``). Arkane also applies\n  ``+ count * (atom_hf - atom_thermal)`` per atom, carried by the\n  separate ``atom_hf`` and ``atom_thermal`` schemes.\n* ``atom_hf``: the experimental enthalpy of formation of the atom, in\n  ``scheme.units`` (Arkane: kcal/mol). Arkane adds ``count * value``\n  (``added``).\n* ``atom_thermal``: the atom's thermal enthalpy increment, in\n  ``scheme.units`` (Arkane: kcal/mol). Arkane's net term is\n  ``atom_hf - atom_thermal``, so it is ``subtracted``.\n* ``soc``: the atom's spin-orbit correction.",
+      "properties": {
+        "element": {
+          "maxLength": 3,
+          "minLength": 1,
+          "title": "Element",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "element",
+        "value"
+      ],
+      "title": "SchemeAtomParamPayload",
+      "type": "object"
+    },
+    "SchemeBondParamPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "bond_key": {
+          "minLength": 1,
+          "title": "Bond Key",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "bond_key",
+        "value"
+      ],
+      "title": "SchemeBondParamPayload",
+      "type": "object"
+    },
+    "SchemeComponentParamPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "component_kind": {
+          "$ref": "#/$defs/MeliusBacComponentKind"
+        },
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "component_kind",
+        "key",
+        "value"
+      ],
+      "title": "SchemeComponentParamPayload",
       "type": "object"
     },
     "ScientificSoftwareReleaseIdentity": {
@@ -2345,8 +3351,32 @@
     },
     "TSReactionParticipantUpload": {
       "additionalProperties": false,
-      "description": "One participant slot in the TS reaction description.\n\n:param species_entry: Species-entry identity payload to resolve or create.\n:param note: Optional note stored on the structured participant row.",
+      "description": "One participant slot in the TS reaction description.\n\n:param species_entry: Species-entry identity payload to resolve or create.\n:param note: Optional note stored on the structured participant row.\n:param key: Local name for this participant, which an ``atom_map`` uses to\n    say which participant a mapping is about. Required on every\n    participant when the request carries an ``atom_map`` and unused\n    otherwise. Unique within the request.\n:param geometry: The participant's own geometry, which an ``atom_map``\n    counts its atom indices into. Optional; a participant the map does not\n    map (or one with no atoms, such as a free electron) has none. Its\n    ``key`` is what the map's ``geometry_key`` names, and is unique within\n    the request. Stored as a geometry only; nothing is computed from it.",
       "properties": {
+        "geometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeometryIn"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        },
         "note": {
           "anyOf": [
             {
@@ -2427,14 +3457,108 @@
       "title": "TSReactionUpload",
       "type": "object"
     },
+    "TransitionStateComparedEnergy": {
+      "additionalProperties": false,
+      "description": "One energy an ``energy_ordering`` record compared.\n\n:param participant: Whose energy this is: ``\"ts\"`` for the saddle point, or\n    ``\"reactant:N\"`` / ``\"product:N\"`` for the N-th declared participant\n    of that side (1-based, in the order the reaction declares them).\n:param energy_kind: ``\"electronic\"`` for the electronic energy, or ``\"e0\"``\n    for the electronic energy plus the zero-point energy. They are\n    different quantities and are never compared with each other.\n:param energy_hartree: The absolute energy, in hartree: finite and not\n    positive. A bound system's total energy is below the zero of separated\n    nuclei and electrons, so a positive value is a relative energy (or a\n    unit slip) and is refused rather than stored where a reader would take\n    it for absolute. Zero is allowed because it is exact for the bare\n    proton (``[H+]``), a participant with atoms and no electrons. A side of the\n    reaction with several participants is compared by the sum of their\n    energies, so a participant is given its own and never a pre-summed\n    total: a total has no single calculation to name.\n:param source_calculation_key: Local key of the calculation this energy\n    was taken from, in the enclosing payload's calculation namespace. The\n    calculation must belong to the thing the energy is of: the saddle\n    point's own calculation for ``ts``, the participant species' own for a\n    reactant or product.",
+      "properties": {
+        "energy_hartree": {
+          "maximum": 0,
+          "title": "Energy Hartree",
+          "type": "number"
+        },
+        "energy_kind": {
+          "enum": [
+            "electronic",
+            "e0"
+          ],
+          "title": "Energy Kind",
+          "type": "string"
+        },
+        "participant": {
+          "pattern": "^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$",
+          "title": "Participant",
+          "type": "string"
+        },
+        "source_calculation_key": {
+          "minLength": 1,
+          "title": "Source Calculation Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant",
+        "energy_kind",
+        "energy_hartree",
+        "source_calculation_key"
+      ],
+      "title": "TransitionStateComparedEnergy",
+      "type": "object"
+    },
     "TransitionStateValidationEvidenceIn": {
       "additionalProperties": false,
-      "description": "Producer-declared IRC validation evidence for one TS candidate.\n\n:param source_calculation_key: Local key of the ``irc`` calculation that\n    reconstructed the path, in the enclosing payload's calculation\n    namespace. Omitted on the standalone transition-state upload, which\n    has no key namespace and binds to its single ``irc`` calculation.\n\nParticipant→atom mappings are optional, but when supplied alongside\n``passed=true`` they must be *complete*: a partial map proves nothing\nabout the atoms it omits, so it is never accepted as passing evidence.\nSupply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write —\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n— and it is legitimate only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.",
+      "description": "Producer-declared validation evidence for one TS candidate.\n\n:param kind: ``\"irc\"``, ``\"energy_ordering\"`` or ``\"imaginary_mode\"``; see\n    the module docstring. At most one record per kind.\n:param passed: The producer's verdict for this check.\n:param rationale: Why; free text, required.\n:param source_calculation_key: Local key of the calculation the evidence\n    comes from, in the enclosing payload's calculation namespace: the\n    ``irc`` calculation that reconstructed the path, or the ``freq``\n    calculation that found the imaginary mode. Omitted on the standalone\n    transition-state upload, which has no key namespace and binds to its\n    single calculation of the needed type. Not accepted on an\n    ``energy_ordering`` record, whose energies each name their own.\n:param energies: ``energy_ordering`` only. The energies compared.\n:param imaginary_frequency_count: ``imaginary_mode`` only. How many\n    imaginary modes the frequency calculation found.\n:param imaginary_frequency_cm1: ``imaginary_mode`` only. The value, in\n    cm^-1, of the imaginary mode taken as the reaction coordinate. Negative\n    by convention, as it is on a frequency result.\n:param mode_displacement_agrees: ``imaginary_mode`` only. The producer's\n    verdict on whether the mode's atom displacements agree with the bonds\n    the reaction breaks and forms. ``None`` means not assessed; it is not\n    ``False``.\n\nParticipant->atom mappings (``irc`` only) are optional, but when supplied\nalongside ``passed=true`` they must be *complete*: a partial map proves\nnothing about the atoms it omits, so it is never accepted as passing\nevidence. Supply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write --\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n-- and it is acceptable only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.\n\nA pass is refused when the record's own *stated* numbers contradict it: an\n``energy_ordering`` that passes with a saddle point that is not above a\nside (checked by :func:`validate_ts_evidence_set`, which knows the\nreaction's participants and so whether a side is complete), or an\n``imaginary_mode`` that passes having found no imaginary mode.\nThe reverse is not refused. A record that fails with numbers that look\nfine is a producer applying a criterion this model cannot see.",
       "properties": {
+        "energies": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TransitionStateComparedEnergy"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Energies"
+        },
+        "imaginary_frequency_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Imaginary Frequency Cm1"
+        },
+        "imaginary_frequency_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Imaginary Frequency Count"
+        },
         "kind": {
-          "const": "irc",
+          "enum": [
+            "irc",
+            "energy_ordering",
+            "imaginary_mode"
+          ],
           "title": "Kind",
           "type": "string"
+        },
+        "mode_displacement_agrees": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode Displacement Agrees"
         },
         "passed": {
           "title": "Passed",
@@ -2687,7 +3811,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Workflow-facing transition-state upload payload.\n\nThe backend resolves the reaction from the embedded content, creates a\n``TransitionState`` concept and ``TransitionStateEntry``, resolves the\ngeometry and calculation provenance, and optionally attaches additional\ncalculations.\n\n:param reaction: Reaction described by scientific content (reactants/products).\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity of the TS structure.\n:param unmapped_smiles: Optional SMILES for the TS (no atom maps).\n:param geometry: Saddle-point geometry payload (XYZ text).\n:param primary_opt: Required primary optimisation calculation.\n:param additional_calculations: Optional freq / sp / irc / path_search\n    calculations. A ``path_search`` additional calculation models a\n    TS-guess generator (NEB, GSM, ...) and is wired as the parent of\n    the primary opt via ``calculation_dependency.role = optimized_from``.\n:param label: Optional human-readable label for the TS concept.\n:param note: Optional free-text note on the TS concept.",
+  "description": "Workflow-facing transition-state upload payload.\n\nThe backend resolves the reaction from the embedded content, creates a\n``TransitionState`` concept and ``TransitionStateEntry``, resolves the\ngeometry and calculation provenance, and optionally attaches additional\ncalculations.\n\n:param reaction: Reaction described by scientific content (reactants/products).\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity of the TS structure.\n:param unmapped_smiles: Optional SMILES for the TS (no atom maps).\n:param geometry: Saddle-point geometry payload (XYZ text).\n:param primary_opt: Required primary optimisation calculation.\n:param additional_calculations: Optional freq / sp / irc / scan / path_search\n    calculations. A ``path_search`` additional calculation models a\n    TS-guess generator (NEB, GSM, ...) and is wired as the parent of\n    the primary opt via ``calculation_dependency.role = optimized_from``.\n:param geometry_key: Local name for ``geometry``, which the ``atom_map``\n    names as its ``ts_geometry_key``. Required when an ``atom_map`` is\n    supplied, unused otherwise.\n:param applied_energy_corrections: Applied energy corrections targeting\n    this transition state directly (AEC, BAC, SOC totals, with optional\n    component breakdowns). This payload has no calculation-key or\n    conformer-key namespace, so ``source_calculation_key`` and\n    ``source_conformer_key`` are not accepted, and neither is a frequency\n    scale factor, which is defined by the frequency calculation it was\n    applied to.\n:param atom_map: Which atom of each reactant and product is which atom of\n    the saddle point (ADR 0011), supplied and never derived. It names the\n    participants by their ``key`` and the geometries by the ``key`` of the\n    participant ``geometry`` it counts into; ``ts_geometry_key`` names\n    ``geometry_key``. Optional: a deposit without one succeeds and returns\n    a ``reaction_atom_map_absent`` upload warning.\n:param label: Optional human-readable label for the TS concept.\n:param note: Optional free-text note on the TS concept.",
   "examples": [
     {
       "charge": 0,
@@ -2751,12 +3875,44 @@
       "title": "Additional Calculations",
       "type": "array"
     },
+    "applied_energy_corrections": {
+      "items": {
+        "$ref": "#/$defs/AppliedEnergyCorrectionUploadPayload"
+      },
+      "title": "Applied Energy Corrections",
+      "type": "array"
+    },
+    "atom_map": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReactionAtomMapIn"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which atom of each reactant and product is which atom of the saddle point (ADR 0011). Supplied by the depositor and never derived. Requires 'geometry_key' on the request and a 'key' on every reaction participant; the participants' 'geometry' keys are what the map counts into. Optional: a deposit without one succeeds and returns a 'reaction_atom_map_absent' upload warning."
+    },
     "charge": {
       "title": "Charge",
       "type": "integer"
     },
     "geometry": {
       "$ref": "#/$defs/GeometryPayload"
+    },
+    "geometry_key": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Geometry Key"
     },
     "label": {
       "anyOf": [
@@ -2817,7 +3973,7 @@
       "title": "Unmapped Smiles"
     },
     "validation_evidence": {
-      "description": "Structured IRC evidence that this saddle point connects the declared reactants and products. Optional but strongly recommended: a deposit without it succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. This payload has no calculation-key namespace, so evidence binds to the upload's single 'irc' additional calculation; source_calculation_key must be omitted.",
+      "description": "Structured validation evidence, at most one record per kind. kind='irc' is evidence that this saddle point connects the declared reactants and products; optional but strongly recommended: a deposit without a passing one succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. kind='imaginary_mode' records what the frequency calculation found. This payload has no calculation-key namespace, so evidence binds to the upload's single additional calculation of the needed type ('irc' or 'freq'); source_calculation_key must be omitted. kind='energy_ordering' compares the saddle point with the wells' own calculations, which this payload does not carry, so it is accepted only on the computed-reaction upload.",
       "items": {
         "$ref": "#/$defs/TransitionStateValidationEvidenceIn"
       },

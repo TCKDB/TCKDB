@@ -17,6 +17,8 @@ See ``backend/docs/specs/scientific_transition_state_reads.md``.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -42,9 +44,11 @@ from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.reaction import ChemReaction, ReactionEntry, ReactionFamily
 from app.db.models.record_review import RecordReview
 from app.db.models.software import Software, SoftwareRelease
+from app.db.models.statmech import Statmech, StatmechSourceCalculation, StatmechTorsion
 from app.db.models.transition_state import (
     TransitionState,
     TransitionStateEntry,
+    TransitionStateValidationEnergy,
     TransitionStateValidationEvidence,
 )
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
@@ -65,18 +69,22 @@ from app.schemas.reads.scientific_transition_state import (
     ScientificTransitionStateEntryRecord,
     ScientificTransitionStateRecord,
     TransitionStateCalculationSummary,
+    TransitionStateComparedEnergySummary,
     TransitionStateCoreBlock,
     TransitionStateDetailRequest,
     TransitionStateEntriesSummary,
     TransitionStateEntryCoreBlock,
     TransitionStateEntryDetailRequest,
     TransitionStateEntryEvidenceSummary,
+    TransitionStateEntryStatmech,
     TransitionStateEntryValidationEvidence,
     TransitionStateEvidenceCoverage,
     TransitionStateEvidenceSummary,
     TransitionStateReactionContext,
     TransitionStateReviewEntry,
     TransitionStateSaddlePointEvidence,
+    TransitionStateStatmechSourceCalculation,
+    TransitionStateStatmechSummary,
     TransitionStateValidationDescriptor,
     TransitionStateValidationEvidenceSummary,
 )
@@ -119,6 +127,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "geometries",
     "review",
     "validation_evidence",
+    "statmech",
     "internal_ids",
     "all",
 }
@@ -383,6 +392,16 @@ def get_transition_state(
             session, SubmissionRecordType.transition_state, ts.id
         )
 
+    ts_statmech_block: list[TransitionStateEntryStatmech] | None = None
+    if "statmech" in includes:
+        ts_statmech_block = [
+            TransitionStateEntryStatmech(
+                transition_state_entry_ref=e.public_ref,
+                statmech=_build_statmech_summaries(session, e.id),
+            )
+            for e in entries
+        ]
+
     # ``validation_evidence`` was legal on this surface and produced nothing:
     # the concept record had no such field, while its own
     # ``available_sections`` advertised ``has_validation_evidence``. The
@@ -414,6 +433,7 @@ def get_transition_state(
         geometries=ts_geoms_block,
         review_history=ts_review_block,
         validation_evidence=ts_validation_block,
+        statmech=ts_statmech_block,
     )
 
     return ScientificTransitionStateDetailResponse(
@@ -617,6 +637,10 @@ def _build_entry_record(
     if "validation_evidence" in includes:
         validation_block = _build_validation_evidence(session, entry.id)
 
+    statmech_block: list[TransitionStateStatmechSummary] | None = None
+    if "statmech" in includes:
+        statmech_block = _build_statmech_summaries(session, entry.id)
+
     # ``entries`` on an entry-grained record answers "what else is under
     # this transition state" — the one piece of context an entry-grained
     # response cannot otherwise give. It was legal on this shape and did
@@ -673,6 +697,7 @@ def _build_entry_record(
         geometries=geoms_block,
         review_history=review_block,
         validation_evidence=validation_block,
+        statmech=statmech_block,
         trust=trust_block,
     )
 
@@ -1277,6 +1302,33 @@ def _build_validation_evidence(
         .where(TransitionStateValidationEvidence.transition_state_entry_id == entry_id)
         .order_by(TransitionStateValidationEvidence.id.asc())
     ).all()
+    # The compared energies of any energy_ordering rows, in one statement and
+    # only when there is such a row, so an entry with no such evidence costs
+    # what it always did.
+    energy_evidence_ids = [
+        row.TransitionStateValidationEvidence.id
+        for row in rows
+        if row.TransitionStateValidationEvidence.kind == "energy_ordering"
+    ]
+    energies_by_evidence: dict[int, list[TransitionStateComparedEnergySummary]] = {}
+    if energy_evidence_ids:
+        for energy, source_ref in session.execute(
+            select(TransitionStateValidationEnergy, Calculation.public_ref)
+            .join(
+                Calculation,
+                Calculation.id == TransitionStateValidationEnergy.source_calculation_id,
+            )
+            .where(TransitionStateValidationEnergy.evidence_id.in_(energy_evidence_ids))
+            .order_by(TransitionStateValidationEnergy.id.asc())
+        ).all():
+            energies_by_evidence.setdefault(energy.evidence_id, []).append(
+                TransitionStateComparedEnergySummary(
+                    participant=energy.participant,
+                    energy_kind=energy.energy_kind,
+                    energy_hartree=energy.energy_hartree,
+                    source_calculation_ref=source_ref,
+                )
+            )
     return [
         TransitionStateValidationEvidenceSummary(
             kind=row.TransitionStateValidationEvidence.kind,
@@ -1286,8 +1338,82 @@ def _build_validation_evidence(
             reactant_participant_mapping=row.TransitionStateValidationEvidence.reactant_participant_mapping,
             product_participant_mapping=row.TransitionStateValidationEvidence.product_participant_mapping,
             transition_state_geometry_ref=row.geometry_ref,
+            imaginary_frequency_count=row.TransitionStateValidationEvidence.imaginary_frequency_count,
+            imaginary_frequency_cm1=row.TransitionStateValidationEvidence.imaginary_frequency_cm1,
+            mode_displacement_agrees=row.TransitionStateValidationEvidence.mode_displacement_agrees,
+            compared_energies=(
+                energies_by_evidence.get(row.TransitionStateValidationEvidence.id, [])
+                if row.TransitionStateValidationEvidence.kind == "energy_ordering"
+                else None
+            ),
         )
         for row in rows
+    ]
+
+
+def _build_statmech_summaries(
+    session: Session, entry_id: int
+) -> list[TransitionStateStatmechSummary]:
+    """Project the statmech records a transition-state entry owns.
+
+    Three statements for the entry, whatever it holds: the records, their
+    source calculations, and their torsion counts. The full record, with its
+    torsions, electronic levels and scale factor, is the statmech detail read.
+    """
+    records = session.scalars(
+        select(Statmech)
+        .where(Statmech.transition_state_entry_id == entry_id)
+        .order_by(Statmech.id.asc())
+    ).all()
+    if not records:
+        return []
+    record_ids = [record.id for record in records]
+
+    sources: dict[int, list[TransitionStateStatmechSourceCalculation]] = {}
+    for statmech_id, role, calculation_ref in session.execute(
+        select(
+            StatmechSourceCalculation.statmech_id,
+            StatmechSourceCalculation.role,
+            Calculation.public_ref,
+        )
+        .join(Calculation, Calculation.id == StatmechSourceCalculation.calculation_id)
+        .where(StatmechSourceCalculation.statmech_id.in_(record_ids))
+        .order_by(Calculation.id.asc(), StatmechSourceCalculation.role.asc())
+    ).all():
+        sources.setdefault(statmech_id, []).append(
+            TransitionStateStatmechSourceCalculation(
+                role=role.value, calculation_ref=calculation_ref
+            )
+        )
+    torsion_counts: dict[int, int] = dict(
+        session.execute(
+            select(StatmechTorsion.statmech_id, func.count(StatmechTorsion.id))
+            .where(StatmechTorsion.statmech_id.in_(record_ids))
+            .group_by(StatmechTorsion.statmech_id)
+        ).all()
+    )
+    return [
+        TransitionStateStatmechSummary(
+            statmech_ref=record.public_ref,
+            scientific_origin=record.scientific_origin.value,
+            statmech_treatment=(
+                record.statmech_treatment.value if record.statmech_treatment else None
+            ),
+            rigid_rotor_kind=(
+                record.rigid_rotor_kind.value if record.rigid_rotor_kind else None
+            ),
+            point_group=record.point_group,
+            external_symmetry=record.external_symmetry,
+            optical_isomers=record.optical_isomers,
+            is_linear=record.is_linear,
+            uses_projected_frequencies=record.uses_projected_frequencies,
+            rotational_constant_a_cm1=record.rotational_constant_a_cm1,
+            rotational_constant_b_cm1=record.rotational_constant_b_cm1,
+            rotational_constant_c_cm1=record.rotational_constant_c_cm1,
+            source_calculations=sources.get(record.id, []),
+            torsion_count=torsion_counts.get(record.id, 0),
+        )
+        for record in records
     ]
 
 
@@ -1300,16 +1426,23 @@ def _build_validation_descriptor(
     warning), so the read surface must say ``absent`` rather than leave the
     caller to infer it from an empty optional block.
     """
-    passed_values = session.scalars(
-        select(TransitionStateValidationEvidence.passed).where(
-            TransitionStateValidationEvidence.transition_state_entry_id == entry_id,
-            TransitionStateValidationEvidence.kind == "irc",
-        )
+    rows = session.execute(
+        select(
+            TransitionStateValidationEvidence.kind,
+            TransitionStateValidationEvidence.passed,
+        ).where(TransitionStateValidationEvidence.transition_state_entry_id == entry_id)
     ).all()
-    if not passed_values:
-        return TransitionStateValidationDescriptor(irc="absent")
+
+    def _token(kind: str) -> Literal["present", "absent", "failed"]:
+        passed_values = [passed for row_kind, passed in rows if row_kind == kind]
+        if not passed_values:
+            return "absent"
+        return "present" if any(passed_values) else "failed"
+
     return TransitionStateValidationDescriptor(
-        irc="present" if any(passed_values) else "failed"
+        irc=_token("irc"),
+        energy_ordering=_token("energy_ordering"),
+        imaginary_mode=_token("imaginary_mode"),
     )
 
 
