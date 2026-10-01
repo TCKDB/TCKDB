@@ -1,6 +1,7 @@
 """Correction-scheme ``frequency_level_of_theory`` (composite-levels plan P6).
 
-Arkane keys Petersson and Melius BAC, and some atom-energy tables, on
+Arkane keys Petersson and Melius BAC (only those; atom energies are keyed on
+the energy level alone) on
 ``CompositeLevelOfTheory(freq=..., energy=...)``. A scheme held one level of
 theory, so the frequency half was lost: the same energy level with two
 different frequency levels was one scheme (identical tables) or a value
@@ -16,6 +17,7 @@ is exactly the old identity, so nothing deposited earlier changes meaning.
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -26,6 +28,9 @@ from app.schemas.fragments.refs import LevelOfTheoryRef
 from app.schemas.workflows.energy_correction_upload import EnergyCorrectionSchemeRef
 from app.services.calculation_resolution import _level_of_theory_hash
 from app.services.energy_correction_resolution import resolve_or_create_scheme
+from app.services.provenance_warnings import (
+    W_AMBIGUOUS_ENERGY_CORRECTION_SCHEME_WITHOUT_LITERATURE as W_AMBIGUOUS,
+)
 from app.services.public_refs import _canonical_energy_correction_scheme
 
 _ENERGY = {"method": "CCSD(T)-F12", "basis": "cc-pVTZ-F12"}
@@ -284,3 +289,91 @@ def test_the_identity_indexes_include_the_frequency_level(
             with pytest.raises(IntegrityError) as refused_null:
                 probe(None, "ecs_probe_null_again")
             assert refused_null.value.orig.diag.constraint_name == index
+
+
+# ---------------------------------------------------------------------------
+# Validation: what a frequency level may be attached to
+# ---------------------------------------------------------------------------
+
+
+def _refusal_code(**kwargs) -> str:
+    with pytest.raises(ValidationError) as refused:
+        EnergyCorrectionSchemeRef(**kwargs)
+    return refused.value.errors()[0]["ctx"]["error"].code
+
+
+@pytest.mark.parametrize("kind", ["atom_energy", "atom_hf", "atom_thermal", "soc", "isodesmic", "other"])
+def test_a_frequency_level_is_refused_on_every_kind_but_the_bacs(kind: str) -> None:
+    """Arkane keys only pbac and mbac on energy//freq; atom energies on the energy level."""
+    code = _refusal_code(
+        kind=kind,
+        name="x",
+        level_of_theory=dict(_ENERGY),
+        frequency_level_of_theory=dict(_FREQ_A),
+    )
+    assert code == "energy_correction_scheme_frequency_level_not_applicable"
+
+
+@pytest.mark.parametrize("kind", ["bac_petersson", "bac_melius"])
+def test_a_frequency_level_is_accepted_on_both_bac_kinds(kind: str) -> None:
+    ref = EnergyCorrectionSchemeRef(
+        kind=kind,
+        name="x",
+        level_of_theory=dict(_ENERGY),
+        frequency_level_of_theory=dict(_FREQ_A),
+    )
+    assert ref.frequency_level_of_theory is not None
+
+
+def test_a_frequency_level_without_an_energy_level_is_refused() -> None:
+    code = _refusal_code(
+        kind="bac_petersson", name="x", frequency_level_of_theory=dict(_FREQ_A)
+    )
+    assert code == "energy_correction_scheme_frequency_level_without_energy_level"
+
+
+def test_a_frequency_level_equal_to_the_energy_level_is_stored_as_absent(db_conn) -> None:
+    """``energy//energy`` is one level: it must not become a second scheme.
+
+    Normalised rather than refused: the payload says something true (the
+    frequencies were at the same level), and nothing in it contradicts
+    anything; it just names one level twice. Compared after resolution, so a
+    different spelling of the same level counts too.
+    """
+    with Session(db_conn) as session, session.begin():
+        bare = resolve_or_create_scheme(session, _bac())
+        same = resolve_or_create_scheme(session, _bac(dict(_ENERGY)))
+        respelled = resolve_or_create_scheme(
+            session, _bac({"method": "ccsd(t)-f12", "basis": "CC-PVTZ-F12"})
+        )
+        assert same.id == bare.id
+        assert respelled.id == bare.id
+        assert bare.frequency_level_of_theory_id is None
+        assert _count(session) == 1
+
+
+# ---------------------------------------------------------------------------
+# The ambiguous-uncited-sibling warning looks at the frequency level
+# ---------------------------------------------------------------------------
+
+
+def test_uncited_schemes_with_different_frequency_levels_are_not_called_ambiguous(
+    db_conn,
+) -> None:
+    """Two uncited BACs on one energy level that differ in frequency level are
+    distinguishable by identity, so the 'same correction twice?' warning would
+    be false. A same-frequency uncited sibling (a different name) is still
+    flagged, which is what shows the query is running at all.
+    """
+    with Session(db_conn) as session, session.begin():
+        resolve_or_create_scheme(session, _bac(_FREQ_A))
+
+        other_freq: list = []
+        resolve_or_create_scheme(session, _bac(_FREQ_B), warnings_out=other_freq)
+        assert W_AMBIGUOUS not in {w.code for w in other_freq}
+
+        same_freq: list = []
+        resolve_or_create_scheme(
+            session, _bac(_FREQ_A, name=_NAME + " twin"), warnings_out=same_freq
+        )
+        assert W_AMBIGUOUS in {w.code for w in same_freq}

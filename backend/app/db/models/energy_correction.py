@@ -67,8 +67,8 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     )
     #: The level of theory the *frequencies* were computed at, for a scheme
     #: keyed on an ``energy//frequency`` pair. Arkane keys Petersson and
-    #: Melius BAC (and some atom-energy tables) on
-    #: ``CompositeLevelOfTheory(freq=..., energy=...)``: the same energy level
+    #: Melius BAC (only those; atom energies are keyed on the energy level
+    #: alone) on ``CompositeLevelOfTheory(freq=..., energy=...)``: the same energy level
     #: with two different frequency levels is two parameter sets, because the
     #: parameters were fitted to energies at geometries and ZPEs from that
     #: frequency level. ``level_of_theory_id`` above is the energy half.

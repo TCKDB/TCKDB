@@ -206,6 +206,12 @@ def resolve_or_create_scheme(
         else None
     )
     freq_lot_id = freq_lot.id if freq_lot else None
+    if freq_lot_id is not None and freq_lot_id == lot_id:
+        # ``energy//energy`` is a table keyed on one level, which is what an
+        # absent frequency level already says. Compared after resolution, so
+        # two spellings or a merged duplicate of one level count as equal.
+        # Storing it would make one table two schemes by how it was spelled.
+        freq_lot_id = None
 
     literature = (
         resolve_or_create_literature(

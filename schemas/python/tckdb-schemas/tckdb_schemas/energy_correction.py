@@ -17,6 +17,7 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
+from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import (
     AppliedCorrectionComponentKind,
@@ -47,6 +48,25 @@ from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 _HEX_COMMIT = re.compile(r"[0-9a-fA-F]{7,64}")
 
 
+#: The scheme kinds Arkane keys on ``CompositeLevelOfTheory(freq, energy)``
+#: (RMG-database ``quantum_corrections/data.py``: ``pbac`` and ``mbac``).
+#: Atom energies are keyed on the energy level alone: Arkane's ``corr.py``
+#: strips the frequency half before an AEC lookup.
+_FREQUENCY_KEYED_KINDS: frozenset[EnergyCorrectionSchemeKind] = frozenset(
+    {
+        EnergyCorrectionSchemeKind.bac_petersson,
+        EnergyCorrectionSchemeKind.bac_melius,
+    }
+)
+
+CODE_FREQUENCY_LEVEL_NOT_APPLICABLE = (
+    "energy_correction_scheme_frequency_level_not_applicable"
+)
+CODE_FREQUENCY_LEVEL_WITHOUT_ENERGY_LEVEL = (
+    "energy_correction_scheme_frequency_level_without_energy_level"
+)
+
+
 class EnergyCorrectionSchemeRef(SchemaBase):
     """Upload-facing reference to a correction scheme.
 
@@ -55,9 +75,9 @@ class EnergyCorrectionSchemeRef(SchemaBase):
 
     * ``data_revision`` **absent**: ``(kind, name, level_of_theory,
       frequency_level_of_theory, source_literature, software_release,
-      workflow_tool_release)``. This is the original identity, unchanged, so
-      every scheme deposited before ``data_revision`` existed keeps its
-      identity and its public ref.
+      workflow_tool_release)``. This is the original identity plus the
+      frequency level, which is NULL for every scheme deposited before the
+      field existed, so each of those keeps its identity and its public ref.
     * ``data_revision`` **present**: ``(kind, name, level_of_theory,
       frequency_level_of_theory, source_literature, software_release,
       data_revision)``. The workflow tool build is *not* part of this
@@ -100,14 +120,26 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         is the **energy** level.
     :param frequency_level_of_theory: The level of theory the frequencies
         (and so the ZPE and thermal terms) were computed at, for a scheme
-        keyed on both. Arkane keys Petersson and Melius BAC, and some
-        atom-energy tables, on ``CompositeLevelOfTheory(freq=..., energy=...)``;
-        send the ``energy`` half in ``level_of_theory`` and the ``freq`` half
-        here. The same energy level with two different frequency levels is
-        two schemes. Resolved exactly like ``level_of_theory`` (a duplicate
+        keyed on both. Only bond-additivity schemes (``bac_petersson`` and
+        ``bac_melius``) are: Arkane keys those on
+        ``CompositeLevelOfTheory(freq=..., energy=...)``, and keys atom
+        energies (and every other kind) on the energy level alone. Send the
+        ``energy`` half in ``level_of_theory`` and the ``freq`` half here.
+        The same energy level with two different frequency levels is two
+        schemes. Resolved exactly like ``level_of_theory`` (a duplicate
         level that was merged resolves to the one that holds it). Optional:
         omit it for a scheme keyed on one level, and nothing is assumed. A
         scheme is never stored with an inferred frequency level.
+
+        Refused, because each is a contradiction and not a preference
+        (ADR 0008): a frequency level without ``level_of_theory``
+        (``energy_correction_scheme_frequency_level_without_energy_level``),
+        and a frequency level on any kind other than the two BAC kinds
+        (``energy_correction_scheme_frequency_level_not_applicable``).
+        A frequency level that resolves to the same level of theory as the
+        energy level is not a second key: it is stored as absent, so the
+        same table cannot become two schemes by spelling the one level
+        twice.
     :param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose
         data file was the proximate source, when the scheme was looked
         up from a tool table rather than directly from a paper. Mirrors
@@ -197,6 +229,46 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         if revision is not None and _HEX_COMMIT.fullmatch(revision):
             revision = revision.lower()
         self.data_revision = revision
+        return self
+
+    @model_validator(mode="after")
+    def validate_frequency_level(self) -> Self:
+        """Refuse a frequency level that cannot be half of an Arkane key.
+
+        Arkane keys only Petersson and Melius BAC on an
+        ``energy//frequency`` pair; every other kind is keyed on the energy
+        level alone. And a frequency half is a half: without the energy
+        level there is no pair. Both are contradictions in the payload, not
+        gaps in it, so they are refused with a code (ADR 0008).
+        """
+        if self.frequency_level_of_theory is None:
+            return self
+        if self.kind not in _FREQUENCY_KEYED_KINDS:
+            raise CodedValidationError(
+                CODE_FREQUENCY_LEVEL_NOT_APPLICABLE,
+                f"frequency_level_of_theory is only meaningful on a bond-"
+                f"additivity scheme (bac_petersson, bac_melius); a "
+                f"{self.kind.value} scheme is keyed on its level of theory "
+                "alone. Send it in level_of_theory and omit the frequency "
+                "level.",
+                context={
+                    "field": "frequency_level_of_theory",
+                    "scheme_kind": self.kind.value,
+                },
+                message_prefix=False,
+            )
+        if self.level_of_theory is None:
+            raise CodedValidationError(
+                CODE_FREQUENCY_LEVEL_WITHOUT_ENERGY_LEVEL,
+                "frequency_level_of_theory is the frequency half of an "
+                "energy//frequency key, so it needs level_of_theory (the "
+                "energy half) in the same scheme.",
+                context={
+                    "field": "frequency_level_of_theory",
+                    "requires": "level_of_theory",
+                },
+                message_prefix=False,
+            )
         return self
 
     @model_validator(mode="after")

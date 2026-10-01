@@ -5,8 +5,10 @@
 
 Why
 ---
-Arkane keys Petersson and Melius BAC, and some atom-energy tables, on
-``CompositeLevelOfTheory(freq=..., energy=...)``: the same energy level with
+Arkane keys Petersson and Melius BAC (only those: RMG-database
+``quantum_corrections/data.py`` uses ``CompositeLevelOfTheory`` for pbac and
+mbac, and Arkane's ``corr.py`` strips the frequency half before an atom-energy
+lookup) on ``CompositeLevelOfTheory(freq=..., energy=...)``: the same energy level with
 two different frequency levels is two parameter sets. A scheme held one level
 of theory (the energy half), so the frequency half was lost and two such
 schemes either collapsed into one row or were refused as a value conflict.
@@ -53,7 +55,7 @@ rows, when such rows exist, rather than deleting or merging them. It also
 prints how many stored frequency levels it is about to forget.
 
 Revision ID: c5e1a8d3f6b9
-Revises: a7d3f1c95e28
+Revises: f3b8d5a1c702
 Create Date: 2026-10-01
 """
 
@@ -66,7 +68,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c5e1a8d3f6b9"
-down_revision: Union[str, Sequence[str], None] = "a7d3f1c95e28"
+down_revision: Union[str, Sequence[str], None] = "f3b8d5a1c702"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -9,8 +9,8 @@ means what it meant.
 - **`EnergyCorrectionSchemeRef.frequency_level_of_theory`**
   (`LevelOfTheoryRef | null`). The level of theory the frequencies were computed
   at, for a scheme keyed on an `energy//frequency` pair. Arkane keys Petersson
-  and Melius BAC, and some atom-energy tables, on
-  `CompositeLevelOfTheory(freq=..., energy=...)`; a scheme held only one level of
+  and Melius BAC (and only those; atom energies are keyed on the energy level
+  alone) on `CompositeLevelOfTheory(freq=..., energy=...)`; a scheme held only one level of
   theory, so the frequency half was lost and two such schemes either collapsed
   into one row (identical tables) or were refused as a value conflict (different
   tables). Send the `energy` half in `level_of_theory` as before and the `freq`
@@ -20,8 +20,15 @@ means what it meant.
   never matches one that has it, keeps exactly the identity it had before the
   field existed, and keeps its public ref byte for byte. It is resolved like
   `level_of_theory`, so a level that was merged into another resolves to the one
-  that holds it. Adapters: for an Arkane `energy//freq`-keyed BAC or AEC, send
-  both halves; for a scheme keyed on one level, send nothing new.
+  that holds it. Adapters: for an Arkane `energy//freq`-keyed BAC, send both halves; for
+  an atom-energy scheme or a scheme keyed on one level, send nothing new.
+  Three rules, each stated where it applies: the field is **refused** on any
+  kind other than `bac_petersson` and `bac_melius`
+  (`energy_correction_scheme_frequency_level_not_applicable`) and without
+  `level_of_theory` (`energy_correction_scheme_frequency_level_without_energy_level`),
+  and a frequency level that resolves to the same level of theory as the energy
+  level is **stored as absent**, so one table cannot become two schemes by
+  spelling its level twice.
 - **`composite_delta_prefer_scheme_terms` warning.** A new applied correction
   with `application_role = "composite_delta"` is stored as sent and answered
   with this warning (field `application_role`). Focal-point deltas

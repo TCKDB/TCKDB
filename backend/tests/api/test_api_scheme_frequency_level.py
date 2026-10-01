@@ -20,6 +20,7 @@ from app.schemas.workflows.energy_correction_upload import EnergyCorrectionSchem
 from app.services.energy_correction_resolution import resolve_or_create_scheme
 from tests.workflows.test_computed_reaction_upload import (
     _aec_scheme_ref_rxn,
+    _bac_petersson_scheme_ref_rxn,
     _payload_with_aec_carriers,
 )
 
@@ -29,9 +30,19 @@ _FREQ_B = {"method": "wB97XD", "basis": "def2-TZVP"}
 _WARNING = "composite_delta_prefer_scheme_terms"
 
 
-def _correction(role: str = "aec_total", **scheme_overrides) -> dict:
+def _correction(
+    role: str = "aec_total", *, bac: bool = False, **scheme_overrides
+) -> dict:
+    """An applied correction. ``bac`` uses a Petersson BAC scheme (the only
+    kind a frequency level is accepted on), under the unconstrained
+    ``composite_delta`` role so no BAC component table is needed."""
+    scheme = (
+        _bac_petersson_scheme_ref_rxn(**scheme_overrides)
+        if bac
+        else _aec_scheme_ref_rxn(**scheme_overrides)
+    )
     return {
-        "scheme": _aec_scheme_ref_rxn(**scheme_overrides),
+        "scheme": scheme,
         "application_role": role,
         "value": -0.1,
         "value_unit": "hartree",
@@ -58,11 +69,15 @@ def test_a_bundle_scheme_with_a_frequency_level_is_stored_and_keyed_on_it(
     client, db_session: Session
 ) -> None:
     for freq in (_FREQ_A, _FREQ_B):
-        resp = _deposit(client, _correction(frequency_level_of_theory=freq))
+        resp = _deposit(
+            client, _correction("composite_delta", bac=True, frequency_level_of_theory=freq)
+        )
         assert resp.status_code == 201, resp.text[:800]
 
     schemes = db_session.scalars(
-        select(EnergyCorrectionScheme).where(EnergyCorrectionScheme.name == "AEC v1 (rxn)")
+        select(EnergyCorrectionScheme).where(
+            EnergyCorrectionScheme.name == "Petersson BAC v1 (rxn)"
+        )
     ).all()
     assert len(schemes) == 2
     assert {s.frequency_level_of_theory.method.lower() for s in schemes} == {"b3lyp", "wb97xd"}
@@ -81,6 +96,24 @@ def test_a_bundle_scheme_without_one_still_lands_on_the_old_identity(
     ).all()
     assert len(schemes) == 1
     assert schemes[0].frequency_level_of_theory_id is None
+
+
+def test_a_frequency_level_on_an_atom_energy_scheme_is_refused_with_a_code(client) -> None:
+    resp = _deposit(client, _correction(frequency_level_of_theory=_FREQ_A))
+    assert resp.status_code == 422, resp.text[:800]
+    body = resp.json()
+    assert body["code"] == "energy_correction_scheme_frequency_level_not_applicable", body
+    assert body["context"]["scheme_kind"] == "atom_energy", body
+
+
+def test_a_frequency_level_without_an_energy_level_is_refused_with_a_code(client) -> None:
+    correction = _correction("composite_delta", bac=True, frequency_level_of_theory=_FREQ_A)
+    del correction["scheme"]["level_of_theory"]
+    resp = _deposit(client, correction)
+    assert resp.status_code == 422, resp.text[:800]
+    body = resp.json()
+    assert body["code"] == "energy_correction_scheme_frequency_level_without_energy_level", body
+    assert body["context"]["requires"] == "level_of_theory", body
 
 
 def test_the_scheme_read_reports_the_frequency_level(client, db_session: Session) -> None:
