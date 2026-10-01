@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.106.0 - 2026-10-01
+
+Docs and help text only: README, `examples/query_cookbook.py` and
+`examples/scientific_reads.py` now say that `temperature_min` / `temperature_max`
+on the thermo and kinetics reads only fill each record's coverage field (they are
+not filters) and that the top record is chosen by review status, then newest. No
+API change.
+
 ## 0.105.0 - 2026-10-01
 
 Docstring-only: the thermo search recipe in `examples/query_cookbook.py` now

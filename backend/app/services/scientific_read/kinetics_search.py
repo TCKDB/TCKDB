@@ -10,10 +10,11 @@ Composition order (final response ordering):
    rules as ``search_reactions`` (``direction`` and ``match`` handling
    included, so ``match`` defaults to containment here too).
 2. For each surviving reaction_entry, fetch kinetics records using the
-   same per-record D9 ordering as ``get_reaction_kinetics``.
+   same per-record ordering as ``get_reaction_kinetics`` (review_rank,
+   created_at, id; coverage and evidence are displayed, not ranked).
 3. Group across reaction_entries deterministically: outer key is the
    reaction_entry's review rank then id; inner order is the kinetics
-   D9 chain already applied.
+   ordering already applied.
 4. Apply collapse and pagination to the flat list.
 
 Non-TS-backed kinetics surface here exactly as in the detail endpoint —
@@ -98,8 +99,7 @@ _KINETICS_LEGAL_INCLUDES_PASSTHROUGH = {
 
 _DEFAULT_SORT_ECHO = (
     "reaction_entry_review_rank,reaction_entry_id;"
-    "covers_requested_range,extrapolation_distance_k,review_rank,"
-    "evidence_completeness,created_at,id"
+    "review_rank,created_at,id"
 )
 
 
@@ -177,7 +177,7 @@ def search_kinetics(
     if not reaction_contexts:
         return _empty_response(request, includes, offset, limit)
 
-    # 2) Per entry, retrieve kinetics with D9 ordering already applied.
+    # 2) Per entry, retrieve kinetics with review-then-newest ordering already applied.
     inner_includes = sorted(includes & _KINETICS_LEGAL_INCLUDES_PASSTHROUGH)
 
     flat: list[KineticsSearchRecord] = []
@@ -220,22 +220,14 @@ def search_kinetics(
     if not flat:
         return _empty_response(request, includes, offset, limit)
 
-    # 3) Group by reaction_entry deterministically.
+    # 3) Group by reaction_entry deterministically. The per-entry kinetics
+    # order (review status, then newest; #648) comes from
+    # ``get_reaction_kinetics`` and is preserved because ``list.sort`` is
+    # stable and this key only compares reaction-level fields.
     def sort_key(rec: KineticsSearchRecord) -> tuple:
         return (
             REVIEW_RANK[rec.reaction.reaction_entry_review.status],
             -rec.reaction.reaction_entry_id,
-            -int(
-                rec.kinetics.temperature_coverage.covers_requested_range
-                if rec.kinetics.temperature_coverage is not None
-                else 0
-            ),
-            rec.kinetics.temperature_coverage.extrapolation_distance_k
-            if rec.kinetics.temperature_coverage is not None
-            else 0.0,
-            REVIEW_RANK[rec.kinetics.review.status],
-            -rec.kinetics.evidence_completeness.score,
-            -rec.kinetics.kinetics_id,
         )
 
     flat.sort(key=sort_key)

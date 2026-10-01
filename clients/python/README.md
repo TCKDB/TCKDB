@@ -439,7 +439,8 @@ same_lot = client.search_species_calculations(
 curation, or chaining off ids you already hold):
 
 ```python
-# Kinetics for a known reaction entry, sorted per the locked D9 chain
+# Kinetics for a known reaction entry, first record is the best-reviewed, then newest;
+# temperature_min/max only fill each record's coverage field
 kinetics = client.get_reaction_kinetics(
     reaction_entry_id=51,
     temperature_min=300,

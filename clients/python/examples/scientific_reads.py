@@ -112,13 +112,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--temperature-min",
         type=float,
         default=300.0,
-        help="Lower bound for temperature_coverage filter (Kelvin).",
+        help="Lower bound of the window used to fill each record's temperature_coverage field (Kelvin); not a filter.",
     )
     parser.add_argument(
         "--temperature-max",
         type=float,
         default=2000.0,
-        help="Upper bound for temperature_coverage filter (Kelvin).",
+        help="Upper bound of the window used to fill each record's temperature_coverage field (Kelvin); not a filter.",
     )
     parser.add_argument(
         "--level-of-theory-id",

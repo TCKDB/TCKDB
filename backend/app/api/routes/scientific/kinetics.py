@@ -70,14 +70,15 @@ def reaction_kinetics(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificReactionKineticsResponse:
-    """Return kinetics records for a reaction entry, sorted per D9.
+    """Return kinetics records for a reaction entry, sorted by review status, then newest.
 
     Path handle is strictly the reaction-entry resource: an integer
     ``reaction_entry.id`` or a public ref starting with ``rxe_``. A
     ``chem_reaction.id`` (or any other prefix) returns 422 / 404.
     Provenance keys are always present; TS-chain fields are populated
-    only for TS-backed records (Phase 2.2). Default sort is the locked
-    D9 chain. ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``
+    only for TS-backed records (Phase 2.2). Default sort is review
+    status, then newest, then id (temperature coverage and evidence are
+    reported per record, not ranked). ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``
     §Endpoint 3 and ``docs/specs/public_identifier_policy.md``.
     """
     # Validate the request (pressure alias conflict, etc.) before resolving

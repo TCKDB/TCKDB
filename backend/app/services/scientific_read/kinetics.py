@@ -53,16 +53,17 @@ from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
-    REVIEW_RANK,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
     LiteratureSummary,
     PathSearchSummary,
     SCFStabilitySummary,
     ScientificLevelsSummary,
+    SelectionPolicy,
     SoftwareReleaseSummary,
     ValidationSummary,
     WorkflowToolReleaseSummary,
+    simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_kinetics import (
     ArrheniusParameters,
@@ -204,8 +205,7 @@ _PDEP_EAGER_LOADS = (
 )
 
 _DEFAULT_SORT_ECHO = (
-    "covers_requested_range,extrapolation_distance_k,review_rank,"
-    "evidence_completeness,created_at,id"
+    "review_rank,created_at,id"
 )
 
 # Priority order for resolving the "primary" source calculation per spec.
@@ -305,13 +305,17 @@ def get_reaction_kinetics(
     reaction_entry_id: int,
     request: KineticsReadRequest,
 ) -> ScientificReactionKineticsResponse:
-    """Return kinetics records for a reaction entry, sorted per D9.
+    """Return kinetics records for a reaction entry, sorted by review status, then newest.
+
+    Order: review_rank ASC, created_at DESC, id DESC (the export's
+    ``simple_selection_sort_key``). Coverage and evidence are reported per
+    record but do not order them; ``temperature_min`` / ``temperature_max``
+    do not filter, they only fill ``temperature_coverage``.
 
     Filters apply shallow per D7. Provenance keys are always present, with
     null TS-chain fields for non-TS-backed records (Phase 2.2). TS-related
     evidence checklist items are ``False`` for non-TS-backed records but do
-    not gate visibility (the spec D9 sort places ``evidence_completeness``
-    behind temperature coverage and review rank).
+    not gate visibility or order.
 
     :param session: SQLAlchemy session.
     :param reaction_entry_id: ``reaction_entry.id`` (not ``chem_reaction.id``).
@@ -651,21 +655,25 @@ def get_reaction_kinetics(
 
     summary = review_summary(badges[k.id] for k in kinetics_rows)
 
-    # D9 sort.
+    # Sort: review status, then newest (#648 rule, extended to kinetics): review status, then newest,
+    # then id -- the same ``simple_selection_sort_key`` the export uses, so the
+    # read and the export pick the same record. ``evidence_completeness`` and
+    # ``temperature_coverage`` stay on each record as displayed fields but are
+    # not ranking inputs: the checklist is mostly TS / calculation
+    # traceability (an experimental record scores low by construction), and a
+    # record with no range counts as "not covering" whenever a bound is
+    # requested. ``temperature_min`` / ``temperature_max`` are not filters.
     created_at = {k.id: k.created_at for k in kinetics_rows}
+    review_status_by_id = {k.id: badges[k.id].status for k in kinetics_rows}
 
-    def sort_key(rec: KineticsRecord) -> tuple:
-        cov = rec.temperature_coverage
-        return (
-            -int(cov.covers_requested_range) if cov is not None else 0,
-            cov.extrapolation_distance_k if cov is not None else 0.0,
-            REVIEW_RANK[rec.review.status],
-            -rec.evidence_completeness.score,
-            -created_at[rec.kinetics_id].timestamp(),
-            -rec.kinetics_id,
+    records.sort(
+        key=lambda rec: simple_selection_sort_key(
+            rec.kinetics_id,
+            policy=SelectionPolicy.default,
+            review_status_by_id=review_status_by_id,
+            created_at_by_id=created_at,
         )
-
-    records.sort(key=sort_key)
+    )
 
     pre_collapse_total = len(records)
     collapse_first = request.collapse.value == "first"

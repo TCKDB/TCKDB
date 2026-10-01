@@ -422,8 +422,8 @@ returns 422 `unsupported_ranking_for_calculation_type` otherwise.
 
 Every other `/scientific/*` search endpoint relies on a *locked*
 deterministic L3-style ordering (e.g.
-`review_rank, created_at, id` on `/species-entries/{id}/thermo`; kinetics
-still uses a coverage and evidence chain). Client `sort=` is always rejected
+`review_rank, created_at, id` on `/species-entries/{id}/thermo` and
+`/reaction-entries/{id}/kinetics`). Client `sort=` is always rejected
 with 422 `client_sort_not_supported`. The semantics of "best" are
 therefore baked into the per-endpoint ordering, not chosen by the
 caller.
@@ -1136,8 +1136,8 @@ No cursor pagination. No endpoint advertises a `next` link.
 | Endpoint | Default sort | Client `sort=` |
 |---|---|---|
 | All `/scientific/*/search` | locked, deterministic per spec (e.g., `review_rank, has_entries, created_at, id` for species) | rejected with 422 `client_sort_not_supported` |
-| `/scientific/reaction-entries/{id}/kinetics` | `covers_requested_range, extrapolation_distance_k, review_rank, evidence_completeness, created_at, id` | rejected |
-| `/scientific/species-entries/{id}/thermo` | analogous L3 ordering | rejected |
+| `/scientific/reaction-entries/{id}/kinetics` | `review_rank, created_at, id` (coverage and evidence displayed, not ranked) | rejected |
+| `/scientific/species-entries/{id}/thermo` | `review_rank, created_at, id` | rejected |
 | `/scientific/reaction-entries/{id}/full` | sub-array ordering per spec | rejected |
 | Legacy `/calculations`, `/species`, `/reactions`, `/kinetics`, `/thermo`, etc. | not explicitly documented; relies on insertion order or implicit `id ASC` | not parameterized |
 | `/scientific/species-calculations/search` | controlled by `ranking` enum (`default\|latest\|earliest\|review_rank\|lowest_energy`); `lowest_energy` only legal with `calculation_type=sp\|opt` | `sort=` rejected |
