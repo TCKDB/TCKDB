@@ -33,6 +33,8 @@ not committed to this repo).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -43,7 +45,7 @@ from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
-from app.schemas.reads.scientific_common import ReviewStatusSummary
+from app.schemas.reads.scientific_common import CompositeSchemeSummary, ReviewStatusSummary
 from app.schemas.reads.scientific_level_of_theory import (
     AvailableLevelOfTheorySections,
     LevelOfTheoryCalculationUsageSummary,
@@ -143,8 +145,15 @@ def build_level_of_theory_record(
     *,
     lot: LevelOfTheory,
     includes: set[str],
+    composite_schemes: Mapping[int, CompositeSchemeSummary] | None = None,
 ) -> ScientificLevelOfTheoryRecord:
-    """Project one LevelOfTheory row into the public record shape."""
+    """Project one LevelOfTheory row into the public record shape.
+
+    :param composite_schemes: Bound levels of a whole page, from one
+        :func:`composite_scheme_summaries` call. ``None`` looks this level up
+        alone (the detail route); a search passes it so a page costs one
+        statement, not one per record.
+    """
     calc_usage_count = _count_calculation_usage(session, lot.id)
     has_schemes = _has_correction_schemes(session, lot.id)
     has_fsf = _has_frequency_scale_factors(session, lot.id)
@@ -183,7 +192,11 @@ def build_level_of_theory_record(
         keywords=lot.keywords,
         spin_treatment=lot.spin_treatment,
         lot_hash=lot.lot_hash,
-        composite_scheme=composite_scheme_summary(session, lot.id),
+        composite_scheme=(
+            composite_scheme_summary(session, lot.id)
+            if composite_schemes is None
+            else composite_schemes.get(lot.id)
+        ),
         created_at=lot.created_at,
     )
 

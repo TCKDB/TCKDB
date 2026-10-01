@@ -54,6 +54,7 @@ from app.services.scientific_read.common import (
     validate_includes,
     validate_pagination,
 )
+from app.services.scientific_read.composite_binding import composite_scheme_summaries
 from app.services.scientific_read.handles import (
     canonical_level_of_theory_id,
     resolve_filter_ref,
@@ -293,12 +294,15 @@ def _materialize_records(
         select(LevelOfTheory).where(LevelOfTheory.id.in_(page_ids))
     ).all()
     by_id = {r.id: r for r in rows}
+    schemes = composite_scheme_summaries(session, page_ids)
     out: list[ScientificLevelOfTheoryRecord] = []
     for lid in page_ids:
         lot = by_id.get(lid)
         if lot is None:  # pragma: no cover — race with delete
             continue
-        out.append(build_level_of_theory_record(session, lot=lot, includes=includes))
+        out.append(
+            build_level_of_theory_record(session, lot=lot, includes=includes, composite_schemes=schemes)
+        )
     return out
 
 

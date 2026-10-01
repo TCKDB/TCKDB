@@ -46,6 +46,23 @@ def composite_scheme_summaries(
     }
 
 
+#: ``session.info`` key of the per-session memo behind :func:`composite_scheme_summary`.
+MEMO_KEY = "composite_scheme_summary_by_lot"
+
+
 def composite_scheme_summary(session: Session, lot_id: int | None) -> CompositeSchemeSummary | None:
-    """The scheme one level of theory is bound to, or ``None`` when it is unbound."""
-    return composite_scheme_summaries(session, [lot_id]).get(lot_id) if lot_id is not None else None
+    """The scheme one level of theory is bound to, or ``None`` when it is unbound.
+
+    For the builders that summarise one level at a time, inside a loop over
+    records: the answer is remembered on the session (an unbound level too), so
+    a page of records on a few levels costs a few statements, not one per
+    record. A request's session is short-lived; the writer of a binding
+    (:func:`app.services.composite_scheme_resolution.ensure_named_method_binding`)
+    clears the memo, so a session that binds a level reads it back correctly.
+    """
+    if lot_id is None:
+        return None
+    memo: dict[int, CompositeSchemeSummary | None] = session.info.setdefault(MEMO_KEY, {})
+    if lot_id not in memo:
+        memo[lot_id] = composite_scheme_summaries(session, [lot_id]).get(lot_id)
+    return memo[lot_id]

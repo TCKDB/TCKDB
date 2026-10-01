@@ -167,6 +167,8 @@ def ensure_named_method_binding(session: Session, level: LevelOfTheory) -> Level
     binding = session.get(LevelOfTheoryComposite, level.id)
     if binding is not None:
         return binding
+    # A read memo on this session may hold "unbound" for this level.
+    session.info.pop("composite_scheme_summary_by_lot", None)
     scheme = get_or_create_named_method_scheme(session, entry)
     try:
         with session.begin_nested():
