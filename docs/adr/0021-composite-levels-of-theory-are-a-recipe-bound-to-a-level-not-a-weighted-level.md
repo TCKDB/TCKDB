@@ -249,7 +249,8 @@ Each phase is independently mergeable.
     `Energy - E0 = E(Thermal) - E(ZPE)` and the archive entry; every other method is
     refused rather than guessed. G4 and G4MP2 are declined too: in the Gaussian 16
     Rev A.03 logs we hold, the printed labels are shifted by one pair, so the number
-    under `G4(0 K)` is the 298 K energy, not E0) and
+    under `G4(0 K)` is the 298 K energy and the number under `G4MP2(0 K)` is the
+    298 K enthalpy, not E0) and
     reconciliation of a deposited `composite_result` against it, warning
     `composite_energy_log_mismatch` / `composite_log_method_mismatch`, and an
     informational `composite_energy_log_available` when nothing was deposited. Nothing is

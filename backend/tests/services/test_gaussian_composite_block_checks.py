@@ -204,3 +204,40 @@ def test_a_partial_block_followed_by_a_complete_one_refuses_the_whole_log():
     partial = block.replace(printed, " DE(Int)=                        0.032180")
     assert parse_gaussian_composite_summary(text) is not None
     assert parse_gaussian_composite_summary(text[:start] + partial + "\n" + text[start:]) is None
+
+
+# ---------------------------------------------------------------------------
+# Tolerance boundaries and an unreadable archive value
+# ---------------------------------------------------------------------------
+
+_QB3_ENERGY = "CBS-QB3 Energy=              -283.813741"
+_QB3_ARCHIVE = "\\CBSQB3=-283.8197747\\"
+
+
+def test_the_identity_tolerance_boundary_is_four_rounded_quantities():
+    """Gap 1.9e-6 is read, 2.1e-6 is refused: ``max(1e-6, 5e-7 * 4) = 2e-6``."""
+    text = _text(_QB3)
+    assert _QB3_ENERGY in text
+    # Energy - E0 equals E(Thermal) - E(ZPE) exactly here; move Energy by the gap.
+    just_under = text.replace(_QB3_ENERGY, "CBS-QB3 Energy=              -283.8137391")  # +1.9e-6
+    just_over = text.replace(_QB3_ENERGY, "CBS-QB3 Energy=              -283.8137389")  # +2.1e-6
+    assert parse_gaussian_composite_summary(just_under) is not None
+    assert parse_gaussian_composite_summary(just_over) is None
+
+
+def test_the_archive_tolerance_boundary_is_two_rounded_quantities():
+    """Archive 0.9e-6 off the printed E0 is accepted, 1.1e-6 off is refused."""
+    text = _text(_QB3)
+    assert _QB3_ARCHIVE in text
+    just_under = text.replace(_QB3_ARCHIVE, "\\CBSQB3=-283.8197741\\")  # E0 = -283.819775: +0.9e-6
+    just_over = text.replace(_QB3_ARCHIVE, "\\CBSQB3=-283.8197739\\")  # +1.1e-6
+    assert parse_gaussian_composite_summary(just_under) is not None
+    assert parse_gaussian_composite_summary(just_over) is None
+
+
+@pytest.mark.parametrize("value", ["abc", "", "-283.81x", "nan", "inf"])
+def test_an_unreadable_archive_value_refuses_the_log(value):
+    """Chosen behaviour: refuse, not skip. A non-numeric entry is not evidence of a match."""
+    text = _text(_QB3)
+    assert parse_gaussian_composite_summary(text) is not None
+    assert parse_gaussian_composite_summary(text.replace(_QB3_ARCHIVE, f"\\CBSQB3={value}\\")) is None

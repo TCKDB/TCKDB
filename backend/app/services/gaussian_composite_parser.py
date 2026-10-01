@@ -62,7 +62,10 @@ Checks every block must pass, or the log yields nothing
   G4 / G4MP2 blocks and that would reject any other mislabelled one.
 * **Archive cross-check.** When the log's archive entry states ``\\<METHOD>=value``
   (``CBSQB3`` for both CBS-QB3 and ROCBS-QB3, ``CBS4M``, ``G3``), it must equal
-  the parsed E0 within the tolerance for two rounded quantities.
+  the parsed E0 within the tolerance for two rounded quantities. An entry that
+  names the key with a value that is not a number (``\\CBSQB3=abc\\``) **refuses the
+  log**; it is not skipped, because an archive we cannot read is no evidence that
+  the block is right.
 * **Terms** (CBS family): exactly the printed labels in print order, summing to
   E0 with the ZPE added.
 * **One answer:** two blocks that disagree, or a partial block anywhere, refuse
@@ -257,9 +260,10 @@ def _archive_value(lines: list[str], after: int, archive_key: str) -> float | bo
     if match is None:
         return None
     try:
-        return float(match["value"])
+        value = float(match["value"])
     except ValueError:
         return False
+    return value if math.isfinite(value) else False
 
 
 def parse_gaussian_composite_summary(text: str | None) -> GaussianCompositeSummary | None:
