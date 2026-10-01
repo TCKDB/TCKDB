@@ -50,7 +50,7 @@ from tckdb_schemas.fragments.calculation import (
 )
 from tckdb_schemas import frequency_completeness as _frequency_completeness
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
-from tckdb_schemas.sp_energy_components import check_sp_energy_components
+from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 from tckdb_schemas.local_key_codes import (
@@ -166,7 +166,9 @@ class CalculationInBundle(SchemaBase):
     opt_result: OptResultPayload | None = None
     freq_result: FreqResultPayload | None = None
     sp_result: SPResultPayload | None = None
-    sp_energy_components: list[SPEnergyComponentPayload] = Field(default_factory=list)
+    sp_energy_components: list[SPEnergyComponentPayload] = Field(
+        default_factory=list, description=SP_ENERGY_COMPONENTS_DESCRIPTION
+    )
     irc_result: IRCResultPayload | None = None
     path_search_result: PathSearchResultPayload | None = None
     scan_result: CalculationScanResultCreate | None = None

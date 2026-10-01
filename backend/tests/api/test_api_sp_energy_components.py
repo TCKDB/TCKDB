@@ -124,19 +124,36 @@ def test_parts_that_disagree_by_more_than_one_microhartree_are_refused_and_nothi
     assert _component_rows(db_session) == before
 
 
-def test_without_the_energy_the_sum_cannot_be_checked_and_is_not_invented(client, db_session):
+def test_components_without_the_energy_are_refused_and_nothing_is_stored(client, db_session):
+    before = _component_rows(db_session)
     resp = client.post("/api/v1/uploads/conformers", json=_payload(_parts(REFERENCE, -0.5), energy=None))
-    assert resp.status_code in (200, 201), resp.text[:800]
-    calc = db_session.scalars(select(Calculation).order_by(Calculation.id.desc())).first()
-    assert calc.sp_result is None  # TCKDB did not store reference + correlation as the energy
-    assert len(calc.sp_energy_components) == 2
+    assert resp.status_code == 422, resp.text[:800]
+    assert resp.json()["code"] == "sp_energy_components_require_energy", resp.json()
+    assert _component_rows(db_session) == before
 
 
-def test_a_triples_part_makes_the_sum_rule_undecidable_so_it_is_not_applied(client, db_session):
-    parts = [*_parts(REFERENCE, -0.4), {"component": "triples", "value_hartree": -0.1}]
-    # reference + correlation (-76.3) differs from the energy (-76.4) by the triples part.
+def test_a_correlation_that_includes_triples_and_one_that_does_not_both_pass(client, db_session):
+    # ORCA: correlation (= total - SCF) already contains (T); the triples part is extra information.
+    including = [*_parts(REFERENCE, ENERGY - REFERENCE), {"component": "triples", "value_hartree": -0.1}]
+    assert client.post("/api/v1/uploads/conformers", json=_payload(including)).status_code in (200, 201)
+    # Molpro: CCSD and (T) printed separately; reference + CCSD + (T) is the energy.
+    separate = [*_parts(REFERENCE, ENERGY - REFERENCE + 0.1), {"component": "triples", "value_hartree": -0.1}]
+    assert client.post("/api/v1/uploads/conformers", json=_payload(separate, basis="cc-pVQZ")).status_code in (
+        200,
+        201,
+    )
+
+
+def test_a_triples_part_matching_neither_sum_is_refused_with_both_sums(client, db_session):
+    before = _component_rows(db_session)
+    parts = [*_parts(REFERENCE, ENERGY - REFERENCE + 0.3), {"component": "triples", "value_hartree": -0.1}]
     resp = client.post("/api/v1/uploads/conformers", json=_payload(parts))
-    assert resp.status_code in (200, 201), resp.text[:800]
+    assert resp.status_code == 422, resp.text[:800]
+    body = resp.json()
+    assert body["code"] == "sp_energy_components_do_not_sum", body
+    assert body["context"]["reference_plus_correlation_hartree"] == pytest.approx(ENERGY + 0.3)
+    assert body["context"]["reference_plus_correlation_plus_triples_hartree"] == pytest.approx(ENERGY + 0.2)
+    assert _component_rows(db_session) == before
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +204,7 @@ def test_a_total_that_differs_from_the_energy_is_refused(client, db_session):
 
 def test_a_non_finite_value_is_refused(client, db_session):
     parts = [{"component": "reference", "value_hartree": "NaN"}]
-    resp = client.post("/api/v1/uploads/conformers", json=_payload(parts, energy=None))
+    resp = client.post("/api/v1/uploads/conformers", json=_payload(parts))
     assert resp.status_code == 422, resp.text[:800]
 
 

@@ -6424,6 +6424,7 @@
             "title": "Sp Electronic Energy Hartree"
           },
           "sp_energy_components": {
+            "description": "The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed.",
             "items": {
               "$ref": "#/components/schemas/SPEnergyComponentPayload"
             },
@@ -6670,6 +6671,7 @@
             "$ref": "#/components/schemas/SoftwareReleaseRef"
           },
           "sp_energy_components": {
+            "description": "The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed.",
             "items": {
               "$ref": "#/components/schemas/SPEnergyComponentPayload"
             },
@@ -9732,7 +9734,7 @@
             "$ref": "#/components/schemas/SoftwareReleaseRef"
           },
           "sp_energy_components": {
-            "description": "The parts of this single point's electronic energy (reference, correlation, ...), as deposited. Single points only. One value per component; reference + correlation must equal sp_result.electronic_energy_hartree within 1e-6 Eh when all three are given.",
+            "description": "The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed.",
             "items": {
               "$ref": "#/components/schemas/SPEnergyComponentPayload"
             },
@@ -11191,6 +11193,7 @@
             "title": "Sp Electronic Energy Hartree"
           },
           "sp_energy_components": {
+            "description": "The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed.",
             "items": {
               "$ref": "#/components/schemas/SPEnergyComponentPayload"
             },
@@ -12073,7 +12076,7 @@
             "$ref": "#/components/schemas/SoftwareReleaseRef"
           },
           "sp_energy_components": {
-            "description": "The parts of this single point's electronic energy (reference, correlation, ...), as deposited. Single points only. One value per component; reference + correlation must equal sp_result.electronic_energy_hartree within 1e-6 Eh when all three are given.",
+            "description": "The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed.",
             "items": {
               "$ref": "#/components/schemas/SPEnergyComponentPayload"
             },

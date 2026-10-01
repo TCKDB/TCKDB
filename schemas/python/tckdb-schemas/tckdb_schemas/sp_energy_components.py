@@ -1,38 +1,47 @@
 """Block-tier checks for a single point's deposited energy components (ADR 0021).
 
 A single point may carry the parts of its electronic energy: the reference
-(SCF) energy, the correlation energy, a triples part, corrections. A composite
-level of theory (a CCSD(T)/CBS extrapolation, a focal-point scheme) consumes
-those parts, so they must be stored; they must also not contradict the energy
-they are parts of.
+(SCF / HF) energy, the correlation energy, a triples part, corrections. A
+composite level of theory (a CCSD(T)/CBS extrapolation, a focal-point scheme)
+consumes those parts, so they must be stored; they must also not contradict the
+energy they are parts of.
 
-What is checked, and what is not
---------------------------------
+What is checked
+---------------
 * **Component type.** Components belong to a single point and nowhere else.
 * **No duplicates.** One value per component per calculation.
-* **A ``total`` is the energy.** A deposited ``total`` must equal the
-  single point's ``electronic_energy_hartree``.
-* **Reference plus correlation is the energy.** When the reference part, the
-  correlation part and the energy are all present, ``reference + correlation``
-  must equal the energy within :data:`SUM_TOLERANCE_HARTREE`.
+* **The energy must be stated.** Components without the single point's
+  ``electronic_energy_hartree`` are refused
+  (``sp_energy_components_require_energy``). The parts come from the same
+  output as the energy, so a producer that has them can state it. Accepting
+  them without it would let a log fill the energy later, after every check
+  here had run, and store parts that contradict it.
+* **A ``total`` is the energy.** A deposited ``total`` must equal the energy.
+* **Reference plus correlation is the energy, under either convention.**
+  Programs differ on what "correlation" means for a CCSD(T) single point:
 
-Two rules the checks keep, both from ADR 0021:
+  - *Correlation includes the triples* (ORCA's "correlation energy"; the part
+    that is total minus SCF): ``reference + correlation`` is the energy, and no
+    ``triples`` component is sent.
+  - *Correlation is the CCSD part, triples separate* (Molpro prints CCSD and
+    (T) separately): ``reference + correlation + triples`` is the energy.
 
-1. **TCKDB never stores a value it computed.** The sum is formed here only to
-   be compared; it is returned nowhere and written nowhere. An absent part is
-   never filled in as ``energy - other``.
-2. **A check that cannot answer does not guess.** The sum rule is skipped when
-   a ``triples`` component is also deposited: programs differ on whether the
-   correlation energy they print includes the perturbative triples (ORCA's
-   "correlation energy" does, Molpro prints the CCSD part and the (T) part
-   separately), so ``reference + correlation`` is then not the energy by
-   definition and refusing it would refuse correct deposits. The rule is also
-   skipped when the energy is absent, which is the case until a log fills it.
+  When a ``triples`` component is sent, either sum may match; otherwise the
+  deposit is refused (``sp_energy_components_do_not_sum``) and both sums are
+  reported in the context.
 
-The tolerance, 1e-6 hartree, is the tolerance the single-point energy
-reconciliation and the planned composite-total check use: tight enough to
-catch a part from a different run, loose enough for the digits a program
-prints.
+TCKDB never stores a value it computed: the sums are formed only to be
+compared, returned nowhere and written nowhere, and an absent part is never
+filled in as ``energy - other``.
+
+For producers on F12 methods: ``reference`` must include the CABS-singles
+correction if the program's total energy does. A reference taken from the plain
+Hartree-Fock line, with the CABS correction left out, will not add up and is
+refused.
+
+The tolerance, 1e-6 hartree, is the one the single-point energy reconciliation
+uses: tight enough to catch a part from a different run, loose enough for the
+digits a program prints.
 
 The functions take plain values and raise :class:`CodedValidationError`, so the
 wire models, the client and the backend all run the same rule.
@@ -45,11 +54,27 @@ from collections.abc import Iterable
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import CalculationType, EnergyComponentKind
 
+#: Field description shared by every carrier, so the producer contract states the
+#: conventions where a producer reads the field.
+SP_ENERGY_COMPONENTS_DESCRIPTION = (
+    "The parts of this single point's electronic energy, as the program printed them. "
+    "Single points only, and only together with the energy: sp_result.electronic_energy_hartree "
+    "(or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. "
+    "One value per component. reference + correlation must equal the energy within 1e-6 Eh; "
+    "when a triples component is also sent, reference + correlation + triples may match instead. "
+    "ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints "
+    "CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, "
+    "reference must include the CABS-singles correction if the program's total does. A total "
+    "component must equal the energy. TCKDB compares and never stores a value it computed."
+)
+
 __all__ = [
+    "SP_ENERGY_COMPONENTS_DESCRIPTION",
     "SP_ENERGY_COMPONENT_DUPLICATE",
     "SP_ENERGY_COMPONENT_NOT_ON_SP",
     "SP_ENERGY_COMPONENT_TOTAL_MISMATCH",
     "SP_ENERGY_COMPONENTS_DO_NOT_SUM",
+    "SP_ENERGY_COMPONENTS_REQUIRE_ENERGY",
     "SUM_TOLERANCE_HARTREE",
     "check_sp_energy_components",
 ]
@@ -58,6 +83,7 @@ SP_ENERGY_COMPONENT_NOT_ON_SP = "sp_energy_component_not_on_sp"
 SP_ENERGY_COMPONENT_DUPLICATE = "sp_energy_component_duplicate"
 SP_ENERGY_COMPONENT_TOTAL_MISMATCH = "sp_energy_component_total_mismatch"
 SP_ENERGY_COMPONENTS_DO_NOT_SUM = "sp_energy_components_do_not_sum"
+SP_ENERGY_COMPONENTS_REQUIRE_ENERGY = "sp_energy_components_require_energy"
 
 #: Agreement required between ``reference + correlation`` (or ``total``) and the
 #: single point's electronic energy, in hartree.
@@ -116,7 +142,16 @@ def check_sp_energy_components(
         values[kind] = value
 
     if electronic_energy_hartree is None:
-        return
+        raise CodedValidationError(
+            SP_ENERGY_COMPONENTS_REQUIRE_ENERGY,
+            (
+                "sp_energy_components were sent without the single point's "
+                "electronic_energy_hartree. The parts come from the same output as the "
+                "energy; state it so the parts can be checked against it."
+            ),
+            context={"calculation_type": type_value},
+            message_prefix=False,
+        )
     energy = float(electronic_energy_hartree)
 
     total = values.get(EnergyComponentKind.total)
@@ -139,23 +174,37 @@ def check_sp_energy_components(
 
     reference = values.get(EnergyComponentKind.reference)
     correlation = values.get(EnergyComponentKind.correlation)
-    if reference is None or correlation is None or EnergyComponentKind.triples in values:
+    if reference is None or correlation is None:
         return
-    if abs((reference + correlation) - energy) > SUM_TOLERANCE_HARTREE:
-        raise CodedValidationError(
-            SP_ENERGY_COMPONENTS_DO_NOT_SUM,
-            (
-                f"The 'reference' ({reference!r} Eh) and 'correlation' ({correlation!r} Eh) "
-                f"components do not add up to the single point's electronic_energy_hartree "
-                f"({energy!r} Eh) within {SUM_TOLERANCE_HARTREE:g} Eh. They must be the parts "
-                "of that one energy; a part taken from a different run is refused rather "
-                "than stored."
-            ),
-            context={
-                "reference_hartree": reference,
-                "correlation_hartree": correlation,
-                "electronic_energy_hartree": energy,
-                "tolerance_hartree": SUM_TOLERANCE_HARTREE,
-            },
-            message_prefix=False,
-        )
+    triples = values.get(EnergyComponentKind.triples)
+    without_triples = reference + correlation
+    with_triples = None if triples is None else without_triples + triples
+    if abs(without_triples - energy) <= SUM_TOLERANCE_HARTREE:
+        return
+    if with_triples is not None and abs(with_triples - energy) <= SUM_TOLERANCE_HARTREE:
+        return
+    raise CodedValidationError(
+        SP_ENERGY_COMPONENTS_DO_NOT_SUM,
+        (
+            f"The 'reference' ({reference!r} Eh) and 'correlation' ({correlation!r} Eh) "
+            f"components do not add up to the single point's electronic_energy_hartree "
+            f"({energy!r} Eh) within {SUM_TOLERANCE_HARTREE:g} Eh"
+            + (
+                ", with or without the 'triples' component. "
+                if triples is not None
+                else ". "
+            )
+            + "They must be the parts of that one energy; a part taken from a different "
+            "run is refused rather than stored."
+        ),
+        context={
+            "reference_hartree": reference,
+            "correlation_hartree": correlation,
+            "triples_hartree": triples,
+            "reference_plus_correlation_hartree": without_triples,
+            "reference_plus_correlation_plus_triples_hartree": with_triples,
+            "electronic_energy_hartree": energy,
+            "tolerance_hartree": SUM_TOLERANCE_HARTREE,
+        },
+        message_prefix=False,
+    )

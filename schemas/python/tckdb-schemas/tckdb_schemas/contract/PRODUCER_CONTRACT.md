@@ -209,16 +209,23 @@ every payload accepted before is accepted unchanged and means the same thing.
   computed-reaction and network bundles) take a list of
   `{component, value_hartree}`, where `component` is one of `total`,
   `reference` (the SCF / HF energy), `correlation`, `triples`, `dboc` or
-  `scalar_relativistic`. The value is what the program printed. Four refusals,
-  each with a code and context: `sp_energy_component_not_on_sp` (the calculation
-  is not a single point), `sp_energy_component_duplicate` (one value per
-  component), `sp_energy_component_total_mismatch` (a `total` must equal the
-  single point's electronic energy within 1e-6 Eh) and
-  `sp_energy_components_do_not_sum` (`reference + correlation` must equal it
-  within 1e-6 Eh when all three are present; not applied when a `triples`
-  component is also sent, since programs differ on whether the printed
-  correlation energy includes the triples). The server compares and never stores
-  a value it computed: an absent part is not filled in. A single-point read
+  `scalar_relativistic`. The value is what the program printed. Five refusals,
+  each with a code and context:
+  - `sp_energy_component_not_on_sp`: the calculation is not a single point.
+  - `sp_energy_components_require_energy`: the single point's electronic energy
+    is not stated. The parts come from the same output as the energy, so state
+    it; a log can no longer fill the energy in after the parts were checked.
+  - `sp_energy_component_duplicate`: one value per component.
+  - `sp_energy_component_total_mismatch`: a `total` must equal the energy
+    within 1e-6 Eh.
+  - `sp_energy_components_do_not_sum`: `reference + correlation` must equal the
+    energy within 1e-6 Eh. When a `triples` component is also sent,
+    `reference + correlation + triples` may match instead (ORCA's correlation
+    energy already includes (T); Molpro prints CCSD and (T) separately). The
+    refusal reports both sums. On F12 methods, `reference` must include the
+    CABS-singles correction if the program's total does.
+
+  The server compares and never stores a value it computed. A single-point read
   returns the components under `results.sp.energy_components`.
 - **`LevelOfTheoryRef.core_treatment`** (optional): `frozen_core` or
   `all_electron`. State it only when the run says so. It is part of the level's
@@ -1257,6 +1264,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
 | [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
 | [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
+| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
 | [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
 | [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_key_undeclared`](#c-species-key-undeclared) | 422 | payload validation; route handler |
@@ -1569,6 +1577,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
 | [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
 | [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
+| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
 | [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
 | [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
@@ -1800,6 +1809,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
 | [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
 | [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
+| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
 | [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
 | [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
@@ -2428,6 +2438,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
 | [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
 | [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
+| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
 | [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
 | [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_key_undeclared`](#c-species-key-undeclared) | 422 | payload validation; route handler |
@@ -2824,6 +2835,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
 | [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
 | [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
+| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
 | [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
 | [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
@@ -3135,6 +3147,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
 | [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
 | [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
+| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
 | [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
 | [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
@@ -3516,6 +3529,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
 | [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
 | [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
+| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
 | [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
 | [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
@@ -3762,6 +3776,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
 | [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
 | [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
+| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
 | [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
 | [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
@@ -4044,6 +4059,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
 | [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
 | [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
+| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
 | [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
 | [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
@@ -5083,7 +5099,7 @@ Unknown keys are refused.
 | `literature` | [`LiteratureUploadRequest`](#m-literatureuploadrequest) \| null | no | `null` |  |  | Optional inline literature provenance, resolved (or created) by the workflow. Replaces the former ``literature_id``, which was a database primary key on an upload surface — usable only by a client that had already queried this database, which a depositor has not. Matches ``CalculationInBundle.literature`` on the species bundle, which took the inline fragment from the start. |
 | `execution_environment` | [`ExecutionEnvironmentManifestPayload`](#m-executionenvironmentmanifestpayload) \| null | no | `null` |  |  |  |
 | `sp_electronic_energy_hartree` | number \| null | no | `null` | hartree |  | SP result (if type=sp). |
-| `sp_energy_components` | array of [`SPEnergyComponentPayload`](#m-spenergycomponentpayload) | no | `[]` |  |  | The parts of the single point's electronic energy (reference, correlation, ...), single points only (ADR 0021). |
+| `sp_energy_components` | array of [`SPEnergyComponentPayload`](#m-spenergycomponentpayload) | no | `[]` |  |  | The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed. |
 | `opt_converged` | boolean \| null | no | `null` |  |  | Opt result (if type=opt). |
 | `opt_n_steps` | integer \| null | no | `null` |  | >= 0 | Opt result (if type=opt). |
 | `opt_final_energy_hartree` | number \| null | no | `null` | hartree |  | Opt result (if type=opt). |
@@ -5132,7 +5148,7 @@ Unknown keys are refused.
 | `opt_result` | [`OptResultPayload`](#m-optresultpayload) \| null | no | `null` |  |  |  |
 | `freq_result` | [`FreqResultPayload`](#m-freqresultpayload) \| null | no | `null` |  |  |  |
 | `sp_result` | [`SPResultPayload`](#m-spresultpayload) \| null | no | `null` |  |  |  |
-| `sp_energy_components` | array of [`SPEnergyComponentPayload`](#m-spenergycomponentpayload) | no | `[]` |  |  |  |
+| `sp_energy_components` | array of [`SPEnergyComponentPayload`](#m-spenergycomponentpayload) | no | `[]` |  |  | The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed. |
 | `irc_result` | [`IRCResultPayload`](#m-ircresultpayload) \| null | no | `null` |  |  |  |
 | `path_search_result` | [`PathSearchResultPayload`](#m-pathsearchresultpayload) \| null | no | `null` |  |  |  |
 | `scan_result` | [`CalculationScanResultCreate`](#m-calculationscanresultcreate) \| null | no | `null` |  |  |  |
@@ -5305,7 +5321,7 @@ Unknown keys are refused.
 | `opt_result` | [`OptResultPayload`](#m-optresultpayload) \| null | no | `null` |  |  | Inline optimisation result (type must be ``opt``). |
 | `freq_result` | [`FreqResultPayload`](#m-freqresultpayload) \| null | no | `null` |  |  | Inline frequency result (type must be ``freq``). |
 | `sp_result` | [`SPResultPayload`](#m-spresultpayload) \| null | no | `null` |  |  | Inline single-point result (type must be ``sp``). |
-| `sp_energy_components` | array of [`SPEnergyComponentPayload`](#m-spenergycomponentpayload) | no | `[]` |  |  | The parts of this single point's electronic energy (reference, correlation, ...), as deposited. Single points only. One value per component; reference + correlation must equal sp_result.electronic_energy_hartree within 1e-6 Eh when all three are given. |
+| `sp_energy_components` | array of [`SPEnergyComponentPayload`](#m-spenergycomponentpayload) | no | `[]` |  |  | The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed. |
 | `irc_result` | [`IRCResultPayload`](#m-ircresultpayload) \| null | no | `null` |  |  | Inline IRC result bundle (type must be ``irc``). |
 | `path_search_result` | [`PathSearchResultPayload`](#m-pathsearchresultpayload) \| null | no | `null` |  |  | Inline path-search result bundle (type must be ``path_search``). Carries NEB, GSM, and other path-based TS-search algorithms via ``path_search_result.method``. |
 | `scan_result` | [`CalculationScanResultCreate`](#m-calculationscanresultcreate) \| null | no | `null` |  |  | Inline scan result (type must be ``scan``): the stepped coordinates and the points along them. Whether a route accepts a ``scan`` calculation at all is that route's own allow-list; this field is only where the points go when it does. |
@@ -5429,7 +5445,7 @@ Unknown keys are refused.
 | `literature` | [`LiteratureUploadRequest`](#m-literatureuploadrequest) \| null | no | `null` |  |  | Optional inline literature provenance, resolved (or created) by the workflow. Replaces the former ``literature_id``, which was a database primary key on an upload surface — usable only by a client that had already queried this database, which a depositor has not. Matches ``CalculationInBundle.literature`` on the species bundle, which took the inline fragment from the start. |
 | `execution_environment` | [`ExecutionEnvironmentManifestPayload`](#m-executionenvironmentmanifestpayload) \| null | no | `null` |  |  |  |
 | `sp_electronic_energy_hartree` | number \| null | no | `null` | hartree |  | SP result (if type=sp). |
-| `sp_energy_components` | array of [`SPEnergyComponentPayload`](#m-spenergycomponentpayload) | no | `[]` |  |  | The parts of the single point's electronic energy (reference, correlation, ...), single points only (ADR 0021). |
+| `sp_energy_components` | array of [`SPEnergyComponentPayload`](#m-spenergycomponentpayload) | no | `[]` |  |  | The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed. |
 | `opt_converged` | boolean \| null | no | `null` |  |  | Opt result (if type=opt). |
 | `opt_n_steps` | integer \| null | no | `null` |  | >= 0 | Opt result (if type=opt). |
 | `opt_final_energy_hartree` | number \| null | no | `null` | hartree |  | Opt result (if type=opt). |
@@ -5527,7 +5543,7 @@ Unknown keys are refused.
 | `opt_result` | [`OptResultPayload`](#m-optresultpayload) \| null | no | `null` |  |  | Inline optimisation result (type must be ``opt``). |
 | `freq_result` | [`FreqResultPayload`](#m-freqresultpayload) \| null | no | `null` |  |  | Inline frequency result (type must be ``freq``). |
 | `sp_result` | [`SPResultPayload`](#m-spresultpayload) \| null | no | `null` |  |  | Inline single-point result (type must be ``sp``). |
-| `sp_energy_components` | array of [`SPEnergyComponentPayload`](#m-spenergycomponentpayload) | no | `[]` |  |  | The parts of this single point's electronic energy (reference, correlation, ...), as deposited. Single points only. One value per component; reference + correlation must equal sp_result.electronic_energy_hartree within 1e-6 Eh when all three are given. |
+| `sp_energy_components` | array of [`SPEnergyComponentPayload`](#m-spenergycomponentpayload) | no | `[]` |  |  | The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed. |
 | `irc_result` | [`IRCResultPayload`](#m-ircresultpayload) \| null | no | `null` |  |  | Inline IRC result bundle (type must be ``irc``). |
 | `path_search_result` | [`PathSearchResultPayload`](#m-pathsearchresultpayload) \| null | no | `null` |  |  | Inline path-search result bundle (type must be ``path_search``). Carries NEB, GSM, and other path-based TS-search algorithms via ``path_search_result.method``. |
 | `scan_result` | [`CalculationScanResultCreate`](#m-calculationscanresultcreate) \| null | no | `null` |  |  | Inline scan result (type must be ``scan``): the stepped coordinates and the points along them. Whether a route accepts a ``scan`` calculation at all is that route's own allow-list; this field is only where the points go when it does. |
@@ -8757,8 +8773,16 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py`.
 - The body's `context` names the things involved.
-- Message: "The 'reference' ({reference} Eh) and 'correlation' ({correlation} Eh) components do not add up to the single point's electronic_energy_hartree ({energy} Eh) within {SUM_TOLERANCE_HARTREE} Eh. They must be the parts of that one energy; a part taken from a different run is refused rather than stored."
+- Message: not found by the static search.
 - Note: reference + correlation differs from the single point's electronic_energy_hartree by more than 1e-6 Eh.
+
+<a id="c-sp-energy-components-require-energy"></a>
+
+#### `sp_energy_components_require_energy`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py`.
+- Message: "sp_energy_components were sent without the single point's electronic_energy_hartree. The parts come from the same output as the energy; state it so the parts can be checked against it."
+- Note: sp_energy_components sent without the single point's electronic_energy_hartree.
 
 <a id="c-species-geometry-composition-mismatch"></a>
 

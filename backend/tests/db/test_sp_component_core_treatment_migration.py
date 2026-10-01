@@ -202,7 +202,10 @@ def test_downgrade_refuses_while_a_level_states_a_core_treatment(harness):
     refused = _run_expecting_failure(harness, "downgrade", _MIGRATION.parent)
 
     assert refused.returncode != 0
-    assert "stated core_treatment" in refused.stderr + refused.stdout
+    message = refused.stderr + refused.stdout
+    assert "stated core_treatment" in message
+    # Actionable: nulling the column leaves a stale hash, so it says to re-key or merge.
+    assert "stale hash" in message and "merge" in message
     # Nothing was dropped.
     harness.run("upgrade", _MIGRATION.revision)  # a no-op that reopens the engine
     assert _has_column(harness.engine, "level_of_theory", "core_treatment")
@@ -230,7 +233,10 @@ def test_downgrade_refuses_while_components_exist(harness):
     refused = _run_expecting_failure(harness, "downgrade", _MIGRATION.parent)
 
     assert refused.returncode != 0
-    assert "calc_sp_energy_component row(s)" in refused.stderr + refused.stdout
+    message = refused.stderr + refused.stdout
+    assert "calc_sp_energy_component row(s)" in message
+    # Actionable: accepted rows cannot be deleted while the freeze trigger stands.
+    assert "trg_as_child_calc_sp_energy_component" in message and "freeze trigger" in message
     harness.run("upgrade", _MIGRATION.revision)
     assert _exists(harness.engine, "table", "calc_sp_energy_component")
     with harness.engine.connect() as conn:

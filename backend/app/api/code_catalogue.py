@@ -1983,10 +1983,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             note=(
                 "reference + correlation differs from the single point's "
-                "electronic_energy_hartree by more than 1e-6 Eh. Not applied "
-                "when a triples component is also sent, or when the energy is "
-                "absent. Context carries the three values and the tolerance. "
-                "TCKDB compares; it never stores a sum it formed (ADR 0021)."
+                "electronic_energy_hartree by more than 1e-6 Eh. When a "
+                "triples component is also sent, reference + correlation + "
+                "triples may match instead (programs differ on whether the "
+                "printed correlation includes (T)). Context carries the "
+                "values, both sums and the tolerance. TCKDB compares; it "
+                "never stores a sum it formed (ADR 0021)."
+            )),
+    ApiCode("sp_energy_components_require_energy", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py",
+            note=(
+                "sp_energy_components sent without the single point's "
+                "electronic_energy_hartree. The parts come from the same output "
+                "as the energy; without it a log could fill the energy after the "
+                "checks had run (ADR 0021)."
             )),
     ApiCode("species_entry_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",

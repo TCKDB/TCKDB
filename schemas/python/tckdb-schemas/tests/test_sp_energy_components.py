@@ -20,6 +20,7 @@ from tckdb_schemas.fragments.calculation import CalculationWithResultsPayload
 from tckdb_schemas.shared.calculation_in import CalculationIn, calculation_in_to_with_results_payload
 from tckdb_schemas.sp_energy_components import (
     SP_ENERGY_COMPONENT_DUPLICATE,
+    SP_ENERGY_COMPONENTS_REQUIRE_ENERGY,
     SP_ENERGY_COMPONENT_NOT_ON_SP,
     SP_ENERGY_COMPONENT_TOTAL_MISMATCH,
     SP_ENERGY_COMPONENTS_DO_NOT_SUM,
@@ -120,23 +121,31 @@ def test_a_total_must_equal_the_energy(build):
 
 
 @CARRIERS
-def test_nothing_is_checked_or_filled_when_the_energy_is_absent(build):
-    built = build(_parts(reference=-1.0, correlation=-2.0), energy=None)
-    assert len(built.sp_energy_components) == 2
+def test_components_without_the_energy_are_refused(build):
+    # A log could fill the energy later, after every check here had run, so the
+    # energy has to be stated with the parts.
+    with pytest.raises(ValidationError) as err:
+        build(_parts(reference=-1.0, correlation=-2.0), energy=None)
+    assert _code(err.value) == SP_ENERGY_COMPONENTS_REQUIRE_ENERGY
+
+
+@CARRIERS
+def test_a_calculation_with_no_components_needs_no_energy(build):
+    build([], energy=None)
 
 
 @CARRIERS
 def test_a_non_finite_value_is_refused(build):
     with pytest.raises(ValidationError):
-        build([{"component": "reference", "value_hartree": float("nan")}], energy=None)
+        build([{"component": "reference", "value_hartree": float("nan")}])
     with pytest.raises(ValidationError):
-        build([{"component": "reference", "value_hartree": float("inf")}], energy=None)
+        build([{"component": "reference", "value_hartree": float("inf")}])
 
 
 @CARRIERS
 def test_an_unknown_component_is_refused(build):
     with pytest.raises(ValidationError):
-        build([{"component": "mp2_pair_energy", "value_hartree": -0.1}], energy=None)
+        build([{"component": "mp2_pair_energy", "value_hartree": -0.1}])
 
 
 def test_the_flat_shape_forwards_components_to_the_primitive_payload():
@@ -148,11 +157,85 @@ def test_the_flat_shape_forwards_components_to_the_primitive_payload():
     assert primitive.sp_result is not None and primitive.sp_result.electronic_energy_hartree == ENERGY
 
 
-def test_a_triples_part_means_reference_plus_correlation_is_not_the_energy():
-    # Programs disagree on whether the printed correlation energy includes (T), so the rule
-    # does not apply once a triples part is sent; refusing would refuse correct deposits.
-    parts = _parts(correlation=-0.4) + [{"component": "triples", "value_hartree": -0.1}]
-    _primitive(parts)
+def _triples_parts(correlation, triples):
+    return [
+        {"component": "reference", "value_hartree": REFERENCE},
+        {"component": "correlation", "value_hartree": correlation},
+        {"component": "triples", "value_hartree": triples},
+    ]
+
+
+@CARRIERS
+def test_a_correlation_that_includes_the_triples_is_accepted_with_a_triples_part_beside_it(build):
+    # ORCA's convention: correlation = total - SCF already contains (T); the
+    # triples part is informational and reference + correlation is the energy.
+    build(_triples_parts(correlation=ENERGY - REFERENCE, triples=-0.01))
+
+
+@CARRIERS
+def test_a_ccsd_correlation_with_the_triples_separate_is_accepted(build):
+    # Molpro's convention: CCSD and (T) are printed separately and all three add up.
+    build(_triples_parts(correlation=ENERGY - REFERENCE + 0.01, triples=-0.01))
+
+
+@CARRIERS
+def test_a_triples_part_that_matches_neither_sum_is_refused_with_both_sums(build):
+    with pytest.raises(ValidationError) as err:
+        build(_triples_parts(correlation=ENERGY - REFERENCE + 0.2, triples=-0.01))
+    assert _code(err.value) == SP_ENERGY_COMPONENTS_DO_NOT_SUM
+
+
+def test_the_refusal_reports_both_sums_and_the_triples_value():
+    with pytest.raises(CodedValidationError) as err:
+        check_sp_energy_components(
+            [
+                (EnergyComponentKind.reference, REFERENCE),
+                (EnergyComponentKind.correlation, -0.3),
+                (EnergyComponentKind.triples, -0.01),
+            ],
+            calculation_type=CalculationType.sp,
+            electronic_energy_hartree=ENERGY,
+        )
+    ctx = err.value.context
+    assert ctx["reference_plus_correlation_hartree"] == pytest.approx(REFERENCE - 0.3)
+    assert ctx["reference_plus_correlation_plus_triples_hartree"] == pytest.approx(REFERENCE - 0.31)
+    assert ctx["triples_hartree"] == -0.01
+    assert ctx["tolerance_hartree"] == 1e-6
+
+
+def test_without_a_triples_part_only_reference_plus_correlation_counts():
+    with pytest.raises(CodedValidationError) as err:
+        check_sp_energy_components(
+            [(EnergyComponentKind.reference, REFERENCE), (EnergyComponentKind.correlation, -0.3)],
+            calculation_type=CalculationType.sp,
+            electronic_energy_hartree=ENERGY,
+        )
+    assert err.value.context["reference_plus_correlation_plus_triples_hartree"] is None
+    assert err.value.context["triples_hartree"] is None
+
+
+@pytest.mark.parametrize("off", [0.9e-6, -0.9e-6])
+def test_the_three_part_sum_has_the_same_tolerance(off):
+    check_sp_energy_components(
+        [
+            (EnergyComponentKind.reference, REFERENCE),
+            (EnergyComponentKind.correlation, ENERGY - REFERENCE + 0.01 + off),
+            (EnergyComponentKind.triples, -0.01),
+        ],
+        calculation_type=CalculationType.sp,
+        electronic_energy_hartree=ENERGY,
+    )
+    for bad in (1.1e-6, -1.1e-6):
+        with pytest.raises(CodedValidationError):
+            check_sp_energy_components(
+                [
+                    (EnergyComponentKind.reference, REFERENCE),
+                    (EnergyComponentKind.correlation, ENERGY - REFERENCE + 0.01 + bad),
+                    (EnergyComponentKind.triples, -0.01),
+                ],
+                calculation_type=CalculationType.sp,
+                electronic_energy_hartree=ENERGY,
+            )
 
 
 def test_core_treatment_is_optional_and_defaults_to_not_stated():

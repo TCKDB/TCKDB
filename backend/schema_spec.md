@@ -899,7 +899,7 @@ non-conforming deposit is corrected by re-depositing, not by migrating.
 - `component` (`EnergyComponentKind`: `total | reference | correlation | triples | dboc | scalar_relativistic`)
 - `value_hartree` (finite)
 
-Primary key `(calculation_id, component)`: one value per component. Single-point calculations only (refused on any other type by the wire models and again at the write). The value is what the depositor sent. At deposit, `reference + correlation` must equal `calc_sp_result.electronic_energy_hartree` within 1e-6 Eh when all three are present (not applied when a `triples` component is also sent, or when the energy is absent), and a `total` must equal it. TCKDB compares and never stores a sum it formed. Guarded as an ownership child of `calculation` like `calc_sp_result` (accepted-science freeze, TRUNCATE refused).
+Primary key `(calculation_id, component)`: one value per component. Single-point calculations only (refused on any other type by the wire models and again at the write). The value is what the depositor sent. Components are refused without the energy (`sp_energy_components_require_energy`). At deposit, `reference + correlation` must equal `calc_sp_result.electronic_energy_hartree` within 1e-6 Eh, or, when a `triples` component is also sent, `reference + correlation + triples` may match instead (ORCA's correlation includes (T); Molpro prints CCSD and (T) separately); a `total` must equal the energy. On F12 methods `reference` must include the CABS-singles correction if the program's total does. TCKDB compares and never stores a sum it formed. Guarded as an ownership child of `calculation` like `calc_sp_result` (accepted-science freeze, TRUNCATE refused).
 
 `calc_opt_result` fields:
 

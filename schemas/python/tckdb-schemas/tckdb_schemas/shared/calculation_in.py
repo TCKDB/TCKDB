@@ -43,7 +43,7 @@ from tckdb_schemas.fragments.refs import (
 )
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.literature import LiteratureUploadRequest
-from tckdb_schemas.sp_energy_components import check_sp_energy_components
+from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_transition_state_frequency,
@@ -126,7 +126,9 @@ class CalculationIn(SchemaBase):
 
     # Optional inline results (avoids separate result upload)
     sp_electronic_energy_hartree: float | None = None
-    sp_energy_components: list[SPEnergyComponentPayload] = Field(default_factory=list)
+    sp_energy_components: list[SPEnergyComponentPayload] = Field(
+        default_factory=list, description=SP_ENERGY_COMPONENTS_DESCRIPTION
+    )
 
     opt_converged: bool | None = None
     opt_n_steps: int | None = Field(default=None, ge=0)

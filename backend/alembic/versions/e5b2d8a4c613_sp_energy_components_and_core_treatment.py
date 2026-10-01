@@ -27,7 +27,8 @@ Two additions, both for composite levels of theory (docs/adr/0021).
 
 What this revision writes
 -------------------------
-* DDL: one enum type, one column, one table, five trigger objects.
+* DDL: one enum type, one column, one table, two triggers (``trg_as_child_calc_sp_energy_component``
+  and ``trg_as_truncate_calc_sp_energy_component``).
 * No data. No ``lot_hash`` is touched.
 
 The frozen alias revisions (``d0a7c3b91e4f`` .. ``b9e4c2a7d153``) hash a level
@@ -39,11 +40,20 @@ they can never see a stated value.
 Downgrade
 ---------
 Refuses while any ``level_of_theory.core_treatment`` is set or any
-``calc_sp_energy_component`` row exists. Both would be silent loss: dropping a
-stated core treatment would leave two levels with one hash's worth of identity
-and two rows, and dropping components deletes deposited results. Remove them
-first, deliberately. With neither present, downgrade restores the prior schema
-exactly and upgrade then downgrade then upgrade is a no-op on data.
+``calc_sp_energy_component`` row exists. Both would be silent loss, and each
+refusal says how to proceed:
+
+* Components are deposited results, and rows under an accepted calculation
+  cannot be deleted while the freeze trigger stands. The operator drops
+  ``trg_as_child_calc_sp_energy_component`` for the duration (or deletes the
+  rows of unaccepted calculations), then downgrades.
+* A stated core treatment is part of the level's hash. Setting it back to NULL
+  leaves a ``lot_hash`` that includes it, so the row would be stale under the
+  older formula. The operator re-keys or merges those levels (the merge script
+  regroups by the recomputed hash) before, or in the same step as, clearing it.
+
+With neither present, downgrade restores the prior schema exactly and upgrade
+then downgrade then upgrade is a no-op on data.
 
 Revision ID: e5b2d8a4c613
 Revises: d7a3f1b9c284
@@ -151,13 +161,13 @@ def upgrade() -> None:
         )
 
 
-def _refuse_if_any(description: str, query: str) -> None:
+def _refuse_if_any(description: str, query: str, how_to_proceed: str) -> None:
     count = op.get_bind().execute(sa.text(query)).scalar_one()
     if count:
         raise RuntimeError(
             f"Cannot downgrade: {count} {description}. The previous schema has no "
-            "place for them, and deleting them to make the downgrade succeed would "
-            "be a silent loss. Remove them first, deliberately."
+            f"place for them, and deleting them to make the downgrade succeed would "
+            f"be a silent loss. {how_to_proceed}"
         )
 
 
@@ -165,8 +175,19 @@ def downgrade() -> None:
     _refuse_if_any(
         "level_of_theory row(s) with a stated core_treatment",
         "SELECT count(*) FROM level_of_theory WHERE core_treatment IS NOT NULL",
+        "A stated core treatment is part of the level's lot_hash, so setting it back to NULL "
+        "leaves a stale hash: re-key those levels, or merge them into the level they duplicate "
+        "(scripts/ops/merge_duplicate_levels_of_theory.py regroups by the recomputed hash), "
+        "then clear the column and downgrade.",
     )
-    _refuse_if_any(f"{_TABLE} row(s)", f"SELECT count(*) FROM {_TABLE}")
+    _refuse_if_any(
+        f"{_TABLE} row(s)",
+        f"SELECT count(*) FROM {_TABLE}",
+        "Rows under an accepted calculation cannot be deleted while the freeze trigger "
+        "trg_as_child_calc_sp_energy_component stands: export them, drop that trigger "
+        "for the duration of the delete (and recreate it if you stop short of the downgrade), "
+        "then downgrade. Rows of unaccepted calculations can simply be deleted.",
+    )
 
     for table in _TRUNCATE_TABLES:
         op.execute(f"DROP TRIGGER IF EXISTS {_trigger_name('as_truncate', table)} ON public.{table}")

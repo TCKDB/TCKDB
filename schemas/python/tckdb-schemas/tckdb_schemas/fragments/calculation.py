@@ -27,7 +27,7 @@ from tckdb_schemas.fragments.refs import (
     WorkflowToolReleaseRef,
 )
 from tckdb_schemas.literature import LiteratureUploadRequest
-from tckdb_schemas.sp_energy_components import check_sp_energy_components
+from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.stationary_point import (
     ImaginaryMode,
     StationaryPointFinding,
@@ -989,13 +989,7 @@ class CalculationWithResultsPayload(CalculationPayload):
     freq_result: FreqResultPayload | None = None
     sp_result: SPResultPayload | None = None
     sp_energy_components: list[SPEnergyComponentPayload] = Field(
-        default_factory=list,
-        description=(
-            "The parts of this single point's electronic energy (reference, "
-            "correlation, ...), as deposited. Single points only. One value per "
-            "component; reference + correlation must equal sp_result."
-            "electronic_energy_hartree within 1e-6 Eh when all three are given."
-        ),
+        default_factory=list, description=SP_ENERGY_COMPONENTS_DESCRIPTION
     )
     irc_result: IRCResultPayload | None = None
     path_search_result: PathSearchResultPayload | None = None
