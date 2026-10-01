@@ -1819,10 +1819,99 @@
         "irc",
         "scan",
         "path_search",
-        "conf"
+        "conf",
+        "composite"
       ],
       "title": "CalculationType",
       "type": "string"
+    },
+    "CompositeAssembly": {
+      "enum": [
+        "program_run",
+        "assembled"
+      ],
+      "title": "CompositeAssembly",
+      "type": "string"
+    },
+    "CompositeResultPayload": {
+      "additionalProperties": false,
+      "description": "The energy of a ``composite`` calculation (ADR 0021).\n\nEvery energy is optional and ``null`` means *not stated*, never zero.\nTCKDB never stores a total it computed itself: these are the producer's\nnumbers (or the program's own output), and the two arithmetic checks below\nonly test them.\n\n:param assembly: ``program_run`` (a program printed the final number: a\n    named method such as CBS-QB3 or G4) or ``assembled`` (arithmetic over\n    other deposited calculations). Only ``program_run`` is accepted for\n    now; ``assembled`` is refused with ``composite_assembled_not_accepted``\n    until user-built schemes arrive.\n:param electronic_energy_hartree: ZPE-free energy with every term of the\n    recipe included (the empirical terms of a named method among them).\n    This is the number a correction layer is applied to.\n:param e0_hartree: The 0 K energy *including* the recipe's own scaled\n    zero-point energy (Gaussian's ``CBS-QB3 (0 K)``).\n:param recipe_zpe_hartree: The zero-point energy the recipe added, after\n    its own scale factor. Never negative.\n:param terms: The optional breakdown of ``electronic_energy_hartree``.",
+      "properties": {
+        "assembly": {
+          "$ref": "#/$defs/CompositeAssembly"
+        },
+        "e0_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "E0 Hartree"
+        },
+        "electronic_energy_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Electronic Energy Hartree"
+        },
+        "recipe_zpe_hartree": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recipe Zpe Hartree"
+        },
+        "terms": {
+          "items": {
+            "$ref": "#/$defs/CompositeTermPayload"
+          },
+          "title": "Terms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "assembly"
+      ],
+      "title": "CompositeResultPayload",
+      "type": "object"
+    },
+    "CompositeTermPayload": {
+      "additionalProperties": false,
+      "description": "One term of a composite energy's breakdown.\n\n:param term_position: Position of the term. Where the calculation's scheme\n    lists terms, this is one of their positions; a named method lists none\n    today, so it is then the producer's own ordering (0-based).\n:param value_hartree: The term's contribution to the ZPE-free energy.",
+      "properties": {
+        "term_position": {
+          "maximum": 32767,
+          "minimum": 0,
+          "title": "Term Position",
+          "type": "integer"
+        },
+        "value_hartree": {
+          "title": "Value Hartree",
+          "type": "number"
+        }
+      },
+      "required": [
+        "term_position",
+        "value_hartree"
+      ],
+      "title": "CompositeTermPayload",
+      "type": "object"
     },
     "ComputedReactionCalculationIn": {
       "additionalProperties": false,
@@ -1834,6 +1923,17 @@
           },
           "title": "Artifacts",
           "type": "array"
+        },
+        "composite_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompositeResultPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "conformer_key": {
           "anyOf": [

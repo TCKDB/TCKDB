@@ -1065,6 +1065,53 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("composed_search_pagination_stalled", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py",
             shape=Shape.relationship),
+    ApiCode("composite_assembled_not_accepted", 422, Surface.coded_exception,
+            "backend/app/services/composite_result_resolution.py",
+            note=(
+                "composite_result.assembly='assembled': an energy that is "
+                "arithmetic over other deposited calculations. Needs a "
+                "user-built scheme and its inputs, which arrive in a later "
+                "release (ADR 0021, phase P5); the wire accepts the value so "
+                "this refusal can say what it is. Deposit assembly='program_run' "
+                "at a catalogued named method until then."
+            )),
+    ApiCode("composite_e0_inconsistent", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            shape=Shape.relationship,
+            note=(
+                "e0_hartree differs from electronic_energy_hartree + "
+                "recipe_zpe_hartree by more than 1e-6 hartree, with all three "
+                "present. Context carries the difference and the tolerance."
+            )),
+    ApiCode("composite_level_not_scheme_bound", 422, Surface.coded_exception,
+            "backend/app/services/composite_result_resolution.py",
+            note=(
+                "A composite calculation's level of theory is bound to no "
+                "composite scheme. In this release only a catalogued named "
+                "method (app/chemistry/composite_methods.py) is bound."
+            )),
+    ApiCode("composite_program_run_requires_software", 422, Surface.coded_exception,
+            "backend/app/services/composite_result_resolution.py"),
+    ApiCode("composite_result_requires_composite_type", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
+    ApiCode("composite_term_position_unknown", 422, Surface.coded_exception,
+            "backend/app/services/composite_result_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "A deposited term names a position the calculation's scheme "
+                "does not have. Context carries the unknown positions and the "
+                "scheme's own."
+            )),
+    ApiCode("composite_terms_do_not_sum", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            shape=Shape.relationship,
+            note=(
+                "The deposited terms do not sum to electronic_energy_hartree "
+                "within 1e-6 hartree. Context carries the difference and the "
+                "tolerance."
+            )),
+    ApiCode("composite_type_requires_composite_result", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
     ApiCode("curation_policy_version_conflict", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             shape=Shape.relationship,
@@ -2013,6 +2060,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("statmech_energy_level_requires_sp", 422, Surface.coded_exception,
             "backend/app/services/calculation_levels.py",
             shape=Shape.relationship),
+    ApiCode("statmech_energy_sp_and_composite_linked", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
+            shape=Shape.relationship,
+            note=(
+                "A statmech record links both an 'sp' and a 'composite' as its "
+                "energy (ADR 0021, decision 4). A record has one energy."
+            )),
     ApiCode("statmech_role_duplicate", 422, Surface.coded_exception,
             "backend/app/services/calculation_levels.py",
             shape=Shape.relationship),
@@ -2076,6 +2130,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("thermo_energy_level_requires_sp", 422, Surface.coded_exception,
             "backend/app/services/calculation_levels.py",
             shape=Shape.relationship),
+    ApiCode("thermo_energy_sp_and_composite_linked", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
+            shape=Shape.relationship,
+            note=(
+                "Thermo's mirror of statmech_energy_sp_and_composite_linked -- "
+                "same rule (app/services/calculation_levels.py), own code per "
+                "product per the house convention."
+            )),
     ApiCode("thermo_role_duplicate", 422, Surface.coded_exception,
             "backend/app/services/calculation_levels.py",
             shape=Shape.relationship),

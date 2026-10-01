@@ -111,6 +111,14 @@ class RejectionCode(str, Enum):
     COMPOSED_SEARCH_INVALID_PAGE = "composed_search_invalid_page"
     COMPOSED_SEARCH_PAGINATION_CHANGED = "composed_search_pagination_changed"
     COMPOSED_SEARCH_PAGINATION_STALLED = "composed_search_pagination_stalled"
+    COMPOSITE_ASSEMBLED_NOT_ACCEPTED = "composite_assembled_not_accepted"
+    COMPOSITE_E0_INCONSISTENT = "composite_e0_inconsistent"
+    COMPOSITE_LEVEL_NOT_SCHEME_BOUND = "composite_level_not_scheme_bound"
+    COMPOSITE_PROGRAM_RUN_REQUIRES_SOFTWARE = "composite_program_run_requires_software"
+    COMPOSITE_RESULT_REQUIRES_COMPOSITE_TYPE = "composite_result_requires_composite_type"
+    COMPOSITE_TERM_POSITION_UNKNOWN = "composite_term_position_unknown"
+    COMPOSITE_TERMS_DO_NOT_SUM = "composite_terms_do_not_sum"
+    COMPOSITE_TYPE_REQUIRES_COMPOSITE_RESULT = "composite_type_requires_composite_result"
     CONFORMER_KEY_UNDECLARED = "conformer_key_undeclared"
     CURATION_POLICY_VERSION_CONFLICT = "curation_policy_version_conflict"
     CURATOR_TASK_NOT_FOUND = "curator_task_not_found"
@@ -236,6 +244,7 @@ class RejectionCode(str, Enum):
     STATMECH_ENERGY_LEVEL_AMBIGUOUS = "statmech_energy_level_ambiguous"
     STATMECH_ENERGY_LEVEL_CONTRADICTION = "statmech_energy_level_contradiction"
     STATMECH_ENERGY_LEVEL_REQUIRES_SP = "statmech_energy_level_requires_sp"
+    STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED = "statmech_energy_sp_and_composite_linked"
     STATMECH_ROLE_DUPLICATE = "statmech_role_duplicate"
     STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = "statmech_source_calculation_owner_mismatch"
     STATMECH_SOURCE_ROLE_TYPE_MISMATCH = "statmech_source_role_type_mismatch"
@@ -252,6 +261,7 @@ class RejectionCode(str, Enum):
     THERMO_ENERGY_LEVEL_AMBIGUOUS = "thermo_energy_level_ambiguous"
     THERMO_ENERGY_LEVEL_CONTRADICTION = "thermo_energy_level_contradiction"
     THERMO_ENERGY_LEVEL_REQUIRES_SP = "thermo_energy_level_requires_sp"
+    THERMO_ENERGY_SP_AND_COMPOSITE_LINKED = "thermo_energy_sp_and_composite_linked"
     THERMO_ROLE_DUPLICATE = "thermo_role_duplicate"
     THERMO_SOURCE_CALCULATION_OWNER_MISMATCH = "thermo_source_calculation_owner_mismatch"
     THERMO_SOURCE_ROLE_TYPE_MISMATCH = "thermo_source_role_type_mismatch"
@@ -329,6 +339,14 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.COMPOSED_SEARCH_INVALID_PAGE,
         RejectionCode.COMPOSED_SEARCH_PAGINATION_CHANGED,
         RejectionCode.COMPOSED_SEARCH_PAGINATION_STALLED,
+        RejectionCode.COMPOSITE_ASSEMBLED_NOT_ACCEPTED,
+        RejectionCode.COMPOSITE_E0_INCONSISTENT,
+        RejectionCode.COMPOSITE_LEVEL_NOT_SCHEME_BOUND,
+        RejectionCode.COMPOSITE_PROGRAM_RUN_REQUIRES_SOFTWARE,
+        RejectionCode.COMPOSITE_RESULT_REQUIRES_COMPOSITE_TYPE,
+        RejectionCode.COMPOSITE_TERM_POSITION_UNKNOWN,
+        RejectionCode.COMPOSITE_TERMS_DO_NOT_SUM,
+        RejectionCode.COMPOSITE_TYPE_REQUIRES_COMPOSITE_RESULT,
         RejectionCode.CONFORMER_KEY_UNDECLARED,
         RejectionCode.CURSOR_OFFSET_CONFLICT,
         RejectionCode.CURSOR_QUERY_MISMATCH,
@@ -423,6 +441,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STATMECH_ENERGY_LEVEL_AMBIGUOUS,
         RejectionCode.STATMECH_ENERGY_LEVEL_CONTRADICTION,
         RejectionCode.STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+        RejectionCode.STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED,
         RejectionCode.STATMECH_ROLE_DUPLICATE,
         RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH,
@@ -434,6 +453,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS,
         RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION,
         RejectionCode.THERMO_ENERGY_LEVEL_REQUIRES_SP,
+        RejectionCode.THERMO_ENERGY_SP_AND_COMPOSITE_LINKED,
         RejectionCode.THERMO_ROLE_DUPLICATE,
         RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH,
@@ -542,6 +562,14 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.COMPOSED_SEARCH_INVALID_PAGE: frozenset({422}),
     RejectionCode.COMPOSED_SEARCH_PAGINATION_CHANGED: frozenset({422}),
     RejectionCode.COMPOSED_SEARCH_PAGINATION_STALLED: frozenset({422}),
+    RejectionCode.COMPOSITE_ASSEMBLED_NOT_ACCEPTED: frozenset({422}),
+    RejectionCode.COMPOSITE_E0_INCONSISTENT: frozenset({422}),
+    RejectionCode.COMPOSITE_LEVEL_NOT_SCHEME_BOUND: frozenset({422}),
+    RejectionCode.COMPOSITE_PROGRAM_RUN_REQUIRES_SOFTWARE: frozenset({422}),
+    RejectionCode.COMPOSITE_RESULT_REQUIRES_COMPOSITE_TYPE: frozenset({422}),
+    RejectionCode.COMPOSITE_TERM_POSITION_UNKNOWN: frozenset({422}),
+    RejectionCode.COMPOSITE_TERMS_DO_NOT_SUM: frozenset({422}),
+    RejectionCode.COMPOSITE_TYPE_REQUIRES_COMPOSITE_RESULT: frozenset({422}),
     RejectionCode.CONFORMER_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.CURATION_POLICY_VERSION_CONFLICT: frozenset({409}),
     RejectionCode.CURATOR_TASK_NOT_FOUND: frozenset({404}),
@@ -667,6 +695,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STATMECH_ENERGY_LEVEL_AMBIGUOUS: frozenset({422}),
     RejectionCode.STATMECH_ENERGY_LEVEL_CONTRADICTION: frozenset({422}),
     RejectionCode.STATMECH_ENERGY_LEVEL_REQUIRES_SP: frozenset({422}),
+    RejectionCode.STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED: frozenset({422}),
     RejectionCode.STATMECH_ROLE_DUPLICATE: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),
@@ -683,6 +712,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_REQUIRES_SP: frozenset({422}),
+    RejectionCode.THERMO_ENERGY_SP_AND_COMPOSITE_LINKED: frozenset({422}),
     RejectionCode.THERMO_ROLE_DUPLICATE: frozenset({422}),
     RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),

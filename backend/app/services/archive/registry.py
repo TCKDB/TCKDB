@@ -29,6 +29,8 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "applied_group_additivity",
         "applied_group_additivity_component",
         "author",
+        "calc_composite_result",
+        "calc_composite_term",
         "calc_freq_mode",
         "calc_freq_result",
         "calc_geometry_validation",

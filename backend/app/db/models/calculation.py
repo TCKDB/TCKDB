@@ -36,6 +36,7 @@ from app.db.models.common import (
     CalculationInputGeometrySource,
     CalculationQuality,
     CalculationType,
+    CompositeAssembly,
     ConstraintKind,
     CoordinateUnit,
     HessianSource,
@@ -227,6 +228,16 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         back_populates="calculation",
         cascade="all, delete-orphan",
         uselist=False,
+    )
+    composite_result: Mapped[Optional["CalculationCompositeResult"]] = relationship(
+        back_populates="calculation",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    composite_terms: Mapped[list["CalculationCompositeTerm"]] = relationship(
+        back_populates="calculation",
+        cascade="all, delete-orphan",
+        order_by="CalculationCompositeTerm.term_position",
     )
     opt_result: Mapped[Optional["CalculationOptResult"]] = relationship(
         back_populates="calculation",
@@ -524,6 +535,88 @@ class CalculationSPResult(Base):
     )
 
     calculation: Mapped["Calculation"] = relationship(back_populates="sp_result")
+
+
+class CalculationCompositeResult(Base):
+    """The energy of a ``composite`` calculation (ADR 0021), 1:1 with ``calculation``.
+
+    All three energies are nullable and ``NULL`` means *not stated*, never
+    zero. TCKDB never stores a total it computed itself: a value here is one
+    the producer (or the program's own output) reported, and the checks in
+    :mod:`app.services.composite_result_resolution` only test it.
+
+    * ``electronic_energy_hartree`` -- ZPE-free, with every term of the
+      recipe included (the empirical terms of a named method among them). It
+      is the number a correction layer (AEC, BAC) is applied to.
+    * ``e0_hartree`` -- the 0 K energy *including* the recipe's own scaled
+      zero-point energy (Gaussian's ``CBS-QB3 (0 K)``).
+    * ``recipe_zpe_hartree`` -- the zero-point energy the recipe added, after
+      its own scale factor.
+    """
+
+    __tablename__ = "calc_composite_result"
+
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+    assembly: Mapped[CompositeAssembly] = mapped_column(
+        SAEnum(CompositeAssembly, name="composite_assembly"), nullable=False
+    )
+    electronic_energy_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
+    e0_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
+    recipe_zpe_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
+
+    calculation: Mapped["Calculation"] = relationship(back_populates="composite_result")
+
+    __table_args__ = (
+        CheckConstraint(
+            "electronic_energy_hartree IS NULL OR "
+            "(electronic_energy_hartree > '-Infinity'::float8 AND electronic_energy_hartree < 'Infinity'::float8)",
+            name="electronic_energy_finite",
+        ),
+        CheckConstraint(
+            "e0_hartree IS NULL OR (e0_hartree > '-Infinity'::float8 AND e0_hartree < 'Infinity'::float8)",
+            name="e0_finite",
+        ),
+        CheckConstraint(
+            "recipe_zpe_hartree IS NULL OR "
+            "(recipe_zpe_hartree >= 0 AND recipe_zpe_hartree < 'Infinity'::float8)",
+            name="recipe_zpe_non_negative_finite",
+        ),
+    )
+
+
+class CalculationCompositeTerm(Base):
+    """One term of a composite energy's breakdown (optional).
+
+    ``term_position`` is the position of a ``composite_scheme_term`` of the
+    calculation's scheme where the scheme has terms; a named-method scheme
+    has none today, so the position is then the producer's own ordering. The
+    values are reported, not derived: the check that they sum to the stated
+    total lives in the service, not here.
+    """
+
+    __tablename__ = "calc_composite_term"
+
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+    term_position: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    value_hartree: Mapped[float] = mapped_column(nullable=False)
+
+    calculation: Mapped["Calculation"] = relationship(back_populates="composite_terms")
+
+    __table_args__ = (
+        CheckConstraint("term_position >= 0", name="term_position_non_negative"),
+        CheckConstraint(
+            "value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8",
+            name="value_finite",
+        ),
+    )
 
 
 class CalculationOptResult(Base):

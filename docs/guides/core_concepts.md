@@ -82,15 +82,17 @@ Coordinate payloads are fetched explicitly via
 ### `calculation`
 
 The hub table for any computed result — `sp`, `opt`, `freq`, `scan`,
-`irc`, `path_search`, `conf`. It records what was run, by which
+`irc`, `path_search`, `conf`, `composite`. It records what was run, by which
 software at which level of theory, on which input geometry, with which
 parameters. Specific result rows (`calc_sp_result`, `calc_opt_result`,
 `calc_freq_result`, …) attach to the hub.
 
-A `composite` type (CBS-QB3, G4, W1BD and user-built extrapolations) is
-**planned, not built**: today a composite energy has no honest home and is
-deposited as an `sp` or `opt`. The decided model is in
-[ADR 0021](../adr/0021-composite-levels-of-theory-are-a-recipe-bound-to-a-level-not-a-weighted-level.md).
+A `composite` calculation is one composite energy at a scheme-bound level of
+theory. A program-run named method (CBS-QB3, G4, W1BD, ...) is accepted, with
+its energy in `calc_composite_result`; user-built extrapolations and an energy
+assembled from other calculations are **planned, not built**. A named composite
+deposited as an `sp` or `opt` still stores, with a warning. The decided model
+is in [ADR 0021](../adr/0021-composite-levels-of-theory-are-a-recipe-bound-to-a-level-not-a-weighted-level.md).
 
 ### Calculation dependencies
 

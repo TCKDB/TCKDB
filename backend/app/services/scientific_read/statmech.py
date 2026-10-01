@@ -84,6 +84,10 @@ from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
     composite_scheme_summary,
 )
+from app.services.scientific_read.composite_recipe import (
+    composite_role_facts,
+    composite_role_info,
+)
 from app.services.scientific_read.declared_levels import (
     load_declared_energy_summaries,
 )
@@ -526,7 +530,28 @@ def _build_levels(
         ).all()
     }
 
+    # Composite-role calculations also say where the geometry and frequency
+    # levels come from when no opt / freq is linked (ADR 0021, R1).
+    composite_facts = composite_role_facts(
+        session,
+        {
+            cid: calcs[cid].lot_id
+            for cid in role_calc_ids.get("composite", [])
+            if cid in calcs
+        },
+    )
+
     def infos(role: str) -> list[RoleCalcInfo]:
+        if role == "composite":
+            return [
+                composite_role_info(
+                    calc.lot_id,
+                    calc.freq_result is not None,
+                    composite_facts.get(cid),
+                )
+                for cid in role_calc_ids.get(role, [])
+                if (calc := calcs.get(cid)) is not None
+            ]
         return [
             RoleCalcInfo(
                 lot_id=calc.lot_id, carries_frequencies=calc.freq_result is not None
@@ -547,6 +572,8 @@ def _build_levels(
         frequency=_build_lot_summary(session, derived.frequency_lot_id),
         energy=_build_lot_summary(session, derived.energy_lot_id),
         energy_source=derived.energy_source,
+        geometry_source=derived.geometry_source,
+        frequency_source=derived.frequency_source,
         declared_energy=declared,
     )
 

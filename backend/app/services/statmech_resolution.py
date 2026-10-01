@@ -54,6 +54,7 @@ from app.services.calculation_levels import (
     W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
     W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
     W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+    W_STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED,
     W_STATMECH_ROLE_DUPLICATE,
     W_STATMECH_SP_GEOMETRY_MISMATCH,
     RoleLink,
@@ -522,7 +523,9 @@ def resolve_or_create_statmech(
         requires_sp_code=W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
         contradiction_code=W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
         ambiguous_code=W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+        sp_and_composite_code=W_STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED,
         subject="statmech",
+        warnings=warnings_out,
     )
 
     # Every check above has passed: only now does the row (and anything

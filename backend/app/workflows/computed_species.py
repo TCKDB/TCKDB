@@ -56,11 +56,13 @@ from app.services.calculation_levels import (
     W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
     W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
     W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+    W_STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED,
     W_STATMECH_ROLE_DUPLICATE,
     W_STATMECH_SP_GEOMETRY_MISMATCH,
     W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
     W_THERMO_ENERGY_LEVEL_CONTRADICTION,
     W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+    W_THERMO_ENERGY_SP_AND_COMPOSITE_LINKED,
     W_THERMO_ROLE_DUPLICATE,
     W_THERMO_SP_GEOMETRY_MISMATCH,
     RoleLink,
@@ -94,6 +96,7 @@ from app.services.calculation_scan_resolution import persist_calculation_scan
 from app.services.charge_multiplicity_extraction import (
     try_reconcile_charge_multiplicity_from_output_upload,
 )
+from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
@@ -211,6 +214,7 @@ def _to_calc_with_results_payload(
         opt_result=calc_in.opt_result,
         freq_result=calc_in.freq_result,
         sp_result=calc_in.sp_result,
+        composite_result=calc_in.composite_result,
         irc_result=calc_in.irc_result,
         path_search_result=calc_in.path_search_result,
         wavefunction_diagnostic=calc_in.wavefunction_diagnostic,
@@ -388,6 +392,7 @@ def persist_computed_species_upload(
             explicit_output_geometries=conf_in.primary_calculation.output_geometries,
             fallback_geometry_id=geometry.id,
             is_single_atom_primary=geometry.natoms == 1,
+            is_conformer_primary=True,
             context=(
                 f"calculation '{conf_in.primary_calculation.key}' "
                 f"(type='{primary_calc.type.value}')"
@@ -905,6 +910,9 @@ def persist_computed_species_upload(
     upload_warnings.extend(
         collect_converged_opt_energy_warnings(session, bundle_calc_ids)
     )
+    upload_warnings.extend(
+        collect_named_composite_deposit_warnings(session, bundle_calc_ids)
+    )
 
     return ComputedSpeciesUploadOutcome(
         species_entry_id=species_entry.id,
@@ -998,7 +1006,9 @@ def _persist_thermo_block(
         requires_sp_code=W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
         contradiction_code=W_THERMO_ENERGY_LEVEL_CONTRADICTION,
         ambiguous_code=W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
+        sp_and_composite_code=W_THERMO_ENERGY_SP_AND_COMPOSITE_LINKED,
         subject="thermo",
+        warnings=warnings,
     )
 
     synthetic = _build_synthetic_thermo_upload_request(
@@ -1282,7 +1292,9 @@ def _persist_statmech_block(
         requires_sp_code=W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
         contradiction_code=W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
         ambiguous_code=W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+        sp_and_composite_code=W_STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED,
         subject="statmech",
+        warnings=warnings,
     )
 
     statmech = Statmech(

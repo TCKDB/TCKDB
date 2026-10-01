@@ -890,6 +890,35 @@ non-conforming deposit is corrected by re-depositing, not by migrating.
 - `electronic_energy_hartree`
 - `electronic_energy_uncertainty_hartree`
 
+`calc_composite_result` fields (1:1 with a `calculation` of type `composite`; ADR 0021):
+
+- `calculation_id` (PK, FK)
+- `assembly` (`composite_assembly`: `program_run | assembled`; only `program_run` is accepted today)
+- `electronic_energy_hartree` (nullable; ZPE-free, every term of the recipe included)
+- `e0_hartree` (nullable; 0 K, including the recipe's scaled zero-point energy)
+- `recipe_zpe_hartree` (nullable; at least 0)
+
+`NULL` means not stated, never zero. TCKDB never stores a total it computed itself:
+`e0_hartree = electronic_energy_hartree + recipe_zpe_hartree` and
+`sum(terms) = electronic_energy_hartree` are checked (blocking, 1e-6 hartree) when
+the numbers they relate are all present
+(`composite_e0_inconsistent`, `composite_terms_do_not_sum`). All three energies are
+finite-checked at the database. The level of theory of a composite calculation
+must be bound to a composite scheme (`composite_level_not_scheme_bound`); only a
+catalogued named method is bound in this release. Both composite tables carry the
+accepted-science immutability guard `calc_sp_result` has (revision `f3b7d2a9c514`).
+
+`calc_composite_term` fields (the optional breakdown of the ZPE-free energy):
+
+- `calculation_id` (PK part, FK)
+- `term_position` (PK part; at least 0; a `composite_scheme_term.position` of the calculation's scheme where the scheme has terms, otherwise the producer's own ordering)
+- `value_hartree`
+
+The `calculation.type` enum (`calc_type`) gains `composite`. A `composite` calculation
+may be a conformer's primary calculation (it ran the optimisation that produced the
+geometry); a `freq`, `sp` or `scan` may depend on it (`freq_on`, `single_point_on`,
+`scan_parent`) when it has an output geometry.
+
 `calc_opt_result` fields:
 
 - `calculation_id`

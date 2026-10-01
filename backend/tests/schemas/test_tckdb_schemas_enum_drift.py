@@ -30,6 +30,7 @@ ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.CalculationGeometryRole, wire_enums.CalculationGeometryRole),
     (db_enums.CalculationQuality, wire_enums.CalculationQuality),
     (db_enums.CalculationType, wire_enums.CalculationType),
+    (db_enums.CompositeAssembly, wire_enums.CompositeAssembly),
     (db_enums.ConstraintKind, wire_enums.ConstraintKind),
     (db_enums.CoordinateUnit, wire_enums.CoordinateUnit),
     (db_enums.EnergyCorrectionApplicationRole, wire_enums.EnergyCorrectionApplicationRole),

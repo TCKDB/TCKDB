@@ -18,6 +18,7 @@ from app.services.calculation_resolution import (
     persist_additional_calculations,
     resolve_and_persist_calculation_with_results,
 )
+from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
@@ -130,6 +131,8 @@ def persist_conformer_upload(
         # A one-atom conformer's sp primary carries the atom as its final
         # geometry, as on the bundle routes (#610).
         is_single_atom_primary=geometry.natoms == 1,
+        # A named composite method's own optimisation produced the geometry.
+        is_conformer_primary=True,
     )
     # Producer-explicit input_geometries take precedence; otherwise the
     # freq/sp fallback links the conformer geometry. opt skips the
@@ -330,6 +333,12 @@ def persist_conformer_upload(
     energy_warnings = collect_converged_opt_energy_warnings(
         session,
         [calculation.id, *(c.id for c in additional_calcs)],
+    )
+    energy_warnings.extend(
+        collect_named_composite_deposit_warnings(
+            session,
+            [calculation.id, *(c.id for c in additional_calcs)],
+        )
     )
     if statmech_row is not None:
         energy_warnings.extend(

@@ -18,6 +18,8 @@ from app.chemistry.units import convert_energy_to_hartree
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
+    CalculationCompositeResult,
+    CalculationCompositeTerm,
     CalculationConstraint,
     CalculationDependency,
     CalculationFreqMode,
@@ -67,6 +69,8 @@ from app.schemas.reads.scientific_calculation import (
     AppliedEnergyCorrectionSummary,
     AvailableCalculationSections,
     CalculationArtifactSummary,
+    CalculationCompositeResultSummary,
+    CalculationCompositeTermSummary,
     CalculationConformerSummary,
     CalculationConstraintSummary,
     CalculationCoreBlock,
@@ -202,6 +206,7 @@ _TRUST_EAGER_LOADS = (
     selectinload(Calculation.input_geometries),
     selectinload(Calculation.output_geometries),
     selectinload(Calculation.sp_result),
+    selectinload(Calculation.composite_result),
     selectinload(Calculation.opt_result),
     selectinload(Calculation.freq_result),
     selectinload(Calculation.scan_result),
@@ -849,6 +854,7 @@ def _build_literature_summary(
 # for the not-yet-populated ``conf`` type.
 _PRIMARY_RESULT_TABLE: dict[CalculationType, type] = {
     CalculationType.sp: CalculationSPResult,
+    CalculationType.composite: CalculationCompositeResult,
     CalculationType.opt: CalculationOptResult,
     CalculationType.freq: CalculationFreqResult,
     CalculationType.scan: CalculationScanResult,
@@ -1228,6 +1234,39 @@ def _build_sp_summary(
             electronic_energy_uncertainty_hartree=(
                 row.electronic_energy_uncertainty_hartree
             ),
+        ),
+    )
+
+
+def _build_composite_summary(
+    session: Session, calculation_id: int
+) -> CalculationResultSummary | None:
+    """Project ``calc_composite_result`` and its terms (ADR 0021).
+
+    Two statements per record: the result row, and its terms, which are few
+    and read in position order.
+    """
+    row = session.get(CalculationCompositeResult, calculation_id)
+    if row is None:
+        return None
+    terms = session.scalars(
+        select(CalculationCompositeTerm)
+        .where(CalculationCompositeTerm.calculation_id == calculation_id)
+        .order_by(CalculationCompositeTerm.term_position)
+    ).all()
+    return CalculationResultSummary(
+        kind="composite",
+        composite=CalculationCompositeResultSummary(
+            assembly=row.assembly.value,
+            electronic_energy_hartree=row.electronic_energy_hartree,
+            e0_hartree=row.e0_hartree,
+            recipe_zpe_hartree=row.recipe_zpe_hartree,
+            terms=[
+                CalculationCompositeTermSummary(
+                    term_position=term.term_position, value_hartree=term.value_hartree
+                )
+                for term in terms
+            ],
         ),
     )
 
@@ -2614,6 +2653,7 @@ _RESULT_BUILDERS: dict[CalculationType, callable] = {
     CalculationType.scan: _build_scan_summary,
     CalculationType.irc: _build_irc_summary,
     CalculationType.path_search: _build_path_search_summary,
+    CalculationType.composite: _build_composite_summary,
 }
 
 

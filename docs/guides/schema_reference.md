@@ -944,6 +944,43 @@ the gap.
 | `orcid` | CHAR(19) | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 
+### `calc_composite_result`
+
+**Role:** role not stated on the model
+
+**Purpose:** The energy of a ``composite`` calculation (ADR 0021), 1:1 with ``calculation``.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+| `assembly` | CompositeAssembly (enum) | no | — | — | `program_run`, `assembled` | not documented |
+| `electronic_energy_hartree` | FLOAT | yes | — | — | — | ``electronic_energy_hartree`` -- ZPE-free, with every term of the recipe included (the empirical terms of a named method among them). It is the number a correction layer (AEC, BAC) is applied to. |
+| `e0_hartree` | FLOAT | yes | — | — | — | ``e0_hartree`` -- the 0 K energy *including* the recipe's own scaled zero-point energy (Gaussian's ``CBS-QB3 (0 K)``). |
+| `recipe_zpe_hartree` | FLOAT | yes | — | — | — | ``recipe_zpe_hartree`` -- the zero-point energy the recipe added, after its own scale factor. |
+
+**Check constraints:**
+
+- `ck_calc_composite_result_e0_finite`: `e0_hartree IS NULL OR (e0_hartree > '-Infinity'::float8 AND e0_hartree < 'Infinity'::float8)`
+- `ck_calc_composite_result_electronic_energy_finite`: `electronic_energy_hartree IS NULL OR (electronic_energy_hartree > '-Infinity'::float8 AND electronic_energy_hartree < 'Infinity'::float8)`
+- `ck_calc_composite_result_recipe_zpe_non_negative_finite`: `recipe_zpe_hartree IS NULL OR (recipe_zpe_hartree >= 0 AND recipe_zpe_hartree < 'Infinity'::float8)`
+
+### `calc_composite_term`
+
+**Role:** role not stated on the model
+
+**Purpose:** One term of a composite energy's breakdown (optional).
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+| `term_position` | SMALLINT | no | — | — | — | not documented |
+| `value_hartree` | FLOAT | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_calc_composite_term_term_position_non_negative`: `term_position >= 0`
+- `ck_calc_composite_term_value_finite`: `value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8`
+
 ### `calc_freq_mode`
 
 **Role:** role not stated on the model
@@ -1270,7 +1307,7 @@ the gap.
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
 | `id` | BIGINT | no | — | — | — | not documented |
-| `type` | CalculationType (enum) | no | — | — | `opt`, `freq`, `sp`, `irc`, `scan`, `path_search`, `conf` | not documented |
+| `type` | CalculationType (enum) | no | — | — | `opt`, `freq`, `sp`, `irc`, `scan`, `path_search`, `conf`, `composite` | not documented |
 | `quality` | CalculationQuality (enum) | no | raw | — | `raw`, `curated`, `rejected` | not documented |
 | `species_entry_id` | BIGINT | yes | — | species_entry.id | — | not documented |
 | `transition_state_entry_id` | BIGINT | yes | — | transition_state_entry.id | — | not documented |

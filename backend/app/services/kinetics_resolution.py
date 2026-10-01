@@ -44,19 +44,46 @@ from app.services.upload_reference import (
 #     workflow truly needs to reference a non-sp calculation as the
 #     supporting energy source.
 #
+#: The calculation types a kinetics *energy* role accepts: a single point, or a
+#: program-run composite energy (ADR 0021; composite outranks sp in every
+#: energy-level rule, ``app.services.calculation_levels``). Listed in the order
+#: a refusal names them.
+_ENERGY_CALCULATION_TYPES: frozenset[CalculationType] = frozenset(
+    {CalculationType.sp, CalculationType.composite}
+)
+
+#: The order an accepted-types phrase names types in, so a refusal about a role
+#: that accepts several reads the same on every run (a frozenset has no order).
+_TYPE_PHRASE_ORDER: tuple[CalculationType, ...] = (
+    CalculationType.sp,
+    CalculationType.composite,
+    CalculationType.freq,
+    CalculationType.irc,
+)
+
+
+def _accepted_type_phrase(allowed_types: object) -> str:
+    """``sp``, or ``sp or composite``: the accepted types, for a refusal message."""
+    if not isinstance(allowed_types, frozenset):
+        return "any"
+    ordered = [t for t in _TYPE_PHRASE_ORDER if t in allowed_types]
+    ordered += sorted((t for t in allowed_types if t not in _TYPE_PHRASE_ORDER), key=lambda t: t.value)
+    return " or ".join(t.value for t in ordered)
+
+
 _KINETICS_ROLE_COMPATIBILITY: dict[
     KineticsCalculationRole, dict[str, object]
 ] = {
     KineticsCalculationRole.reactant_energy: {
-        "calculation_types": frozenset({CalculationType.sp}),
+        "calculation_types": _ENERGY_CALCULATION_TYPES,
         "owner": "species_entry",
     },
     KineticsCalculationRole.product_energy: {
-        "calculation_types": frozenset({CalculationType.sp}),
+        "calculation_types": _ENERGY_CALCULATION_TYPES,
         "owner": "species_entry",
     },
     KineticsCalculationRole.ts_energy: {
-        "calculation_types": frozenset({CalculationType.sp}),
+        "calculation_types": _ENERGY_CALCULATION_TYPES,
         "owner": "transition_state_entry",
     },
     KineticsCalculationRole.freq: {
@@ -122,8 +149,7 @@ def assert_kinetics_source_role_compatible(
             if required_owner == "species_entry"
             else "any-owner"
         )
-        # Pick the single expected type label (all v0 strict roles bind one)
-        expected_type = next(iter(allowed_types)).value
+        expected_type = _accepted_type_phrase(allowed_types)
         raise ValueError(
             f"kinetics source role {role.value} requires a "
             f"{expected_owner_str} {expected_type} calculation; got "
@@ -132,9 +158,7 @@ def assert_kinetics_source_role_compatible(
         )
 
     if required_owner == "species_entry" and calculation.species_entry_id is None:
-        expected_type = (
-            next(iter(allowed_types)).value if allowed_types is not None else "any"
-        )
+        expected_type = _accepted_type_phrase(allowed_types)
         raise ValueError(
             f"kinetics source role {role.value} requires a species-owned "
             f"{expected_type} calculation; got {actual_owner} "
@@ -144,9 +168,7 @@ def assert_kinetics_source_role_compatible(
         required_owner == "transition_state_entry"
         and calculation.transition_state_entry_id is None
     ):
-        expected_type = (
-            next(iter(allowed_types)).value if allowed_types is not None else "any"
-        )
+        expected_type = _accepted_type_phrase(allowed_types)
         raise ValueError(
             f"kinetics source role {role.value} requires a "
             f"transition-state-owned {expected_type} calculation; got "

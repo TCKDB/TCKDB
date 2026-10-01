@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.69.0 - 2026-10-01
+
+Composite levels of theory, phase P3a (ADR 0021): a calculation of type
+`composite` records one program-run composite energy such as CBS-QB3 or G4.
+Every payload accepted before is accepted unchanged; this release only adds.
+
+- **New calculation type `composite`, with a `composite_result` block.**
+  `type: "composite"` is accepted wherever a calculation is (the conformer
+  upload, the computed-species and computed-reaction bundles, the network
+  upload's conformers). It carries `composite_result`: `assembly`
+  (`program_run`, or `assembled`, which the server refuses until user-built
+  schemes arrive), the optional energies `electronic_energy_hartree` (ZPE-free,
+  every recipe term included), `e0_hartree` (0 K, including the recipe's scaled
+  zero-point energy) and `recipe_zpe_hartree`, and an optional `terms` list of
+  `{term_position, value_hartree}`. A `null` energy means not stated. TCKDB never
+  stores a total it computed itself.
+- **The two always come together.** `composite_result` on any other type is
+  refused with `composite_result_requires_composite_type`, and a `composite`
+  calculation without it with `composite_type_requires_composite_result`.
+- **Two arithmetic checks, blocking, at 1e-6 hartree.** With all three energies
+  present, `e0_hartree` must equal `electronic_energy_hartree +
+  recipe_zpe_hartree` (`composite_e0_inconsistent`); with terms given and the
+  total present, the terms must sum to `electronic_energy_hartree`
+  (`composite_terms_do_not_sum`).
+- **Server-side refusals** (422): `composite_assembled_not_accepted` (the
+  assembled form arrives with user schemes), `composite_level_not_scheme_bound`
+  (the level of theory must be a catalogued named method such as `CBS-QB3`),
+  `composite_program_run_requires_software`, and
+  `composite_term_position_unknown` (a term names a position the scheme does not
+  have; a named method has none, so any position is accepted there).
+- **A composite may be a conformer's primary calculation.** A species of two or
+  more atoms may send, as `primary_calculation` / `calculation`, a program-run
+  named composite that produced the geometry, in place of the `opt` (the `opt`
+  rule is otherwise unchanged). With no `output_geometries` declared, the
+  conformer's geometry is its final output, as for an `opt`.
+- **A freq, sp or scan may depend on a composite that has an output geometry**
+  (`depends_on` role `freq_on`, `single_point_on`, `scan_parent`), as on an `opt`.
+- **Two energies refused.** A statmech or thermo record that links both an `sp`
+  and a `composite` as its energy is refused with
+  `statmech_energy_sp_and_composite_linked` /
+  `thermo_energy_sp_and_composite_linked`. The existing role-consistency rules
+  (`*_role_duplicate`, `*_sp_geometry_mismatch`, `*_energy_level_requires_sp`,
+  `*_energy_level_ambiguous`, `*_energy_level_contradiction`) now apply to a
+  linked `composite` as to an `sp`, and the energy level of a record is the
+  composite's when one is linked (composite, then sp, then opt, then imported).
+- **New warnings** (the upload is accepted): `named_composite_deposited_as_opt`
+  and `named_composite_deposited_as_sp` (an `opt` or `sp` at a named composite
+  method's level: send it as `composite`; refused once producers can),
+  `composite_role_on_non_composite_calculation` (the source role `composite` on
+  a calculation of another type) and
+  `composite_frequency_level_differs_from_recipe` (a linked `freq` at a level
+  other than the composite scheme's own frequency level).
+- **Reads:** a calculation read returns `composite` (assembly, energies, terms)
+  under `results`; a levels summary gains `geometry_source` and
+  `frequency_source` (`composite_recipe` when the level is the named method's own
+  internal level). Server responses, not producer payloads.
+- Not in this release: assembled composites and user-built schemes, energy
+  components on a single point, a Gaussian composite-log parser.
+
 ## 0.68.0 - 2026-10-01
 
 Composite levels of theory, phase P2 (ADR 0021): the server now records the

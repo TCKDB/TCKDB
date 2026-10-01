@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.108.0 - 2026-10-01
+
+`RejectionCode` gains ten codes, regenerated from the server's catalogue
+(ADR 0021, `tckdb-schemas` 0.69.0): `composite_assembled_not_accepted`,
+`composite_e0_inconsistent`, `composite_level_not_scheme_bound`,
+`composite_program_run_requires_software`,
+`composite_result_requires_composite_type`, `composite_term_position_unknown`,
+`composite_terms_do_not_sum`, `composite_type_requires_composite_result`,
+`statmech_energy_sp_and_composite_linked` and
+`thermo_energy_sp_and_composite_linked`. They are the refusals of the new
+`composite` calculation type, whose payload shape ships in `tckdb-schemas`. A
+conformer primary of type `composite` now passes the builders' primary-type
+check (the rule is `tckdb-schemas`'). The typed builders still build only
+`opt`, `freq` and `sp` calculations; send a composite calculation as a payload.
+Nothing else in the client changes.
+
 ## 0.107.0 - 2026-10-01
 
 `Client.get_composite_scheme(ref)` reads `GET /scientific/composite-schemes/{ref}`

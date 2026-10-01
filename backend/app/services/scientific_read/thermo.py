@@ -84,6 +84,12 @@ from app.services.scientific_read.common import (
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
 )
+from app.services.scientific_read.composite_recipe import (
+    CompositeRoleFacts,
+    composite_role_facts,
+    composite_role_info,
+    recipe_lot_ids,
+)
 from app.services.scientific_read.declared_levels import (
     load_declared_energy_summaries,
 )
@@ -179,10 +185,15 @@ _DEFAULT_SORT_ECHO = (
     "review_rank,created_at,id"
 )
 
-# Priority order per Phase 2.3 spec: sp → composite → freq → opt → any.
+# Priority order: composite → sp → freq → opt → any. The energy part of this
+# is R1's (``app.services.calculation_levels.derive_levels``: composite > sp >
+# opt, ADR 0021 decision 4); it used to read sp → composite and so named a
+# different calculation than the levels block of the same record. ``freq``
+# sits before ``opt`` as it always has: R1's energy chain has no ``freq`` in it,
+# this picker also chooses the record's software, and that part is unchanged.
 _LOT_FILTER_ROLE_PRIORITY = (
-    ThermoCalculationRole.sp,
     ThermoCalculationRole.composite,
+    ThermoCalculationRole.sp,
     ThermoCalculationRole.freq,
     ThermoCalculationRole.opt,
 )
@@ -357,6 +368,22 @@ def get_species_thermo(
         for meta in calc_meta.values()
         if meta["lot_id"] is not None
     }
+    # What each composite-role calculation says about the geometry and
+    # frequency levels (ADR 0021, R1): bulk, same id set as calc_meta. The
+    # recipe levels are levels no calculation of this request need be at, so
+    # their summaries are loaded here rather than found in calc_meta_by_lot_id.
+    composite_calc_ids = {
+        sc.calculation_id
+        for srcs in (*sources_by_thermo.values(), *statmech_sources_by_id.values())
+        for sc in srcs
+        if sc.role.value == "composite" and sc.calculation_id in calc_meta
+    }
+    composite_facts = composite_role_facts(
+        session, {cid: calc_meta[cid]["lot_id"] for cid in composite_calc_ids}
+    )
+    recipe_level_summaries = load_declared_energy_summaries(
+        session, recipe_lot_ids(composite_facts.values())
+    )
     # The conformer this thermo record traces to, resolved one hop past
     # the primary calculation. Loaded for every calc the primary picker
     # can possibly land on (same id set as calc_meta/calc_refs above).
@@ -483,6 +510,8 @@ def get_species_thermo(
             calc_meta=calc_meta,
             calc_meta_by_lot_id=calc_meta_by_lot_id,
             freq_calc_ids=freq_calc_ids,
+            composite_facts=composite_facts,
+            recipe_level_summaries=recipe_level_summaries,
         )
         declared_lot_id = (
             t.energy_level_of_theory_id
@@ -1302,12 +1331,17 @@ def _thermo_role_calc_id_lists(
 
 
 def _lot_summary_from_id(
-    calc_meta_by_lot_id: dict[int, dict], lot_id: int | None
+    calc_meta_by_lot_id: dict[int, dict],
+    lot_id: int | None,
+    fallback: dict[int, LevelOfTheorySummary] | None = None,
 ) -> LevelOfTheorySummary | None:
     if lot_id is None:
         return None
     meta = calc_meta_by_lot_id.get(lot_id)
-    return _lot_summary(meta) if meta is not None else None
+    if meta is not None:
+        return _lot_summary(meta)
+    # A level no linked calculation ran at (a composite recipe's internal level).
+    return (fallback or {}).get(lot_id)
 
 
 def _build_levels_thermo(
@@ -1317,6 +1351,8 @@ def _build_levels_thermo(
     calc_meta: dict[int, dict],
     calc_meta_by_lot_id: dict[int, dict],
     freq_calc_ids: set[int],
+    composite_facts: dict[int, CompositeRoleFacts],
+    recipe_level_summaries: dict[int, LevelOfTheorySummary],
 ) -> ScientificLevelsSummary:
     """R1 for one thermo record: derive its geometry/frequency/energy levels.
 
@@ -1332,6 +1368,14 @@ def _build_levels_thermo(
     role_calc_ids = _thermo_role_calc_id_lists(sources, statmech_sources)
 
     def infos(role: str) -> list[RoleCalcInfo]:
+        if role == "composite":
+            return [
+                composite_role_info(
+                    calc_meta[cid]["lot_id"], cid in freq_calc_ids, composite_facts.get(cid)
+                )
+                for cid in role_calc_ids.get(role, [])
+                if cid in calc_meta
+            ]
         return [
             RoleCalcInfo(
                 lot_id=calc_meta[cid]["lot_id"],
@@ -1349,10 +1393,16 @@ def _build_levels_thermo(
         importeds=infos("imported"),
     )
     return ScientificLevelsSummary(
-        geometry=_lot_summary_from_id(calc_meta_by_lot_id, derived.geometry_lot_id),
-        frequency=_lot_summary_from_id(calc_meta_by_lot_id, derived.frequency_lot_id),
+        geometry=_lot_summary_from_id(
+            calc_meta_by_lot_id, derived.geometry_lot_id, recipe_level_summaries
+        ),
+        frequency=_lot_summary_from_id(
+            calc_meta_by_lot_id, derived.frequency_lot_id, recipe_level_summaries
+        ),
         energy=_lot_summary_from_id(calc_meta_by_lot_id, derived.energy_lot_id),
         energy_source=derived.energy_source,
+        geometry_source=derived.geometry_source,
+        frequency_source=derived.frequency_source,
     )
 
 

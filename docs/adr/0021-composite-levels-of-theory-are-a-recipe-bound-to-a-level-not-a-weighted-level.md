@@ -220,9 +220,17 @@ Each phase is independently mergeable.
 - **P2.** Identity tables (`composite_scheme`, terms, inputs,
   `level_of_theory_composite`), lazy catalogue rows, binding at resolve time, the
   scheme read.
-- **P3.** Program-run named composite: the `composite` type,
-  `calc_composite_result`, the wire `composite_result`, a Gaussian composite
-  parser, R1 and R2'-R5, widened dependency parents, kinetics lookup, role pinning.
+- **P3.** Program-run named composite, in two parts.
+  - **P3a (built).** The `composite` type, `calc_composite_result` and
+    `calc_composite_term`, the wire `composite_result`, a composite conformer
+    primary, R1 and R2'-R5 (with `geometry_source` / `frequency_source`
+    `composite_recipe`), the thermo provenance picker aligned to R1, widened
+    dependency parents, kinetics lookup, and decision 7 as warnings
+    (`named_composite_deposited_as_opt` / `_sp`,
+    `composite_role_on_non_composite_calculation`). Only `assembly =
+    program_run` is accepted; `assembled` is refused by name
+    (`composite_assembled_not_accepted`) until P5.
+  - **P3b (not built).** The Gaussian composite-log parser.
 - **P4.** `calc_sp_energy_component` and the core-treatment field.
 - **P5.** User schemes: the inline definition, the hash branch,
   `calc_composite_input`, the `composite_input` role, the checks.

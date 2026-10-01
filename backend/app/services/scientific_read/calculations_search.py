@@ -46,6 +46,7 @@ from sqlalchemy.orm import Session
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
+    CalculationCompositeResult,
     CalculationDependency,
     CalculationFreqResult,
     CalculationGeometryValidation,
@@ -177,6 +178,7 @@ def _quality_rank_expr(quality_column):
 # Per-calc-type primary result table — drives the ``has_result`` filter.
 _PRIMARY_RESULT_TABLE: dict[CalculationType, type] = {
     CalculationType.sp: CalculationSPResult,
+    CalculationType.composite: CalculationCompositeResult,
     CalculationType.opt: CalculationOptResult,
     CalculationType.freq: CalculationFreqResult,
     CalculationType.scan: CalculationScanResult,

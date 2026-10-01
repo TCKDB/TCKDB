@@ -26,6 +26,7 @@ from app.services.calculation_levels import (
     W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
     W_THERMO_ENERGY_LEVEL_CONTRADICTION,
     W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+    W_THERMO_ENERGY_SP_AND_COMPOSITE_LINKED,
     W_THERMO_ROLE_DUPLICATE,
     W_THERMO_SP_GEOMETRY_MISMATCH,
     RoleLink,
@@ -429,7 +430,9 @@ def persist_thermo_upload(
         requires_sp_code=W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
         contradiction_code=W_THERMO_ENERGY_LEVEL_CONTRADICTION,
         ambiguous_code=W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
+        sp_and_composite_code=W_THERMO_ENERGY_SP_AND_COMPOSITE_LINKED,
         subject="thermo",
+        warnings=warnings_out,
     )
 
     thermo_create = resolve_thermo_upload(

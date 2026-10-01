@@ -303,6 +303,34 @@ class CalculationSPResultSummary(BaseModel):
     electronic_energy_uncertainty_hartree: float | None = None
 
 
+class CalculationCompositeTermSummary(BaseModel):
+    """One term of a composite energy's breakdown (``calc_composite_term``)."""
+
+    term_position: int
+    value_hartree: float
+
+
+class CalculationCompositeResultSummary(BaseModel):
+    """Summary projection of a ``calc_composite_result`` row and its terms (ADR 0021).
+
+    Every energy is ``null`` when the depositor did not state it, never zero.
+    The numbers are the producer's: TCKDB never stores a total it computed.
+
+    * ``electronic_energy_hartree`` -- ZPE-free, every term of the recipe
+      included. The number an atom- or bond-correction is applied to.
+    * ``e0_hartree`` -- the 0 K energy including the recipe's own scaled
+      zero-point energy.
+    * ``recipe_zpe_hartree`` -- the zero-point energy the recipe added.
+    * ``terms`` -- the optional breakdown, by ``term_position``.
+    """
+
+    assembly: Literal["program_run", "assembled"]
+    electronic_energy_hartree: float | None = None
+    e0_hartree: float | None = None
+    recipe_zpe_hartree: float | None = None
+    terms: list[CalculationCompositeTermSummary] = []
+
+
 class CalculationOptResultSummary(BaseModel):
     """Summary projection of a ``calc_opt_result`` row."""
 
@@ -1271,9 +1299,10 @@ class CalculationResultSummary(BaseModel):
     """
 
     kind: Literal[
-        "sp", "opt", "freq", "scan", "irc", "path_search"
+        "sp", "opt", "freq", "scan", "irc", "path_search", "composite"
     ]
     sp: CalculationSPResultSummary | None = None
+    composite: CalculationCompositeResultSummary | None = None
     opt: CalculationOptResultSummary | None = None
     freq: CalculationFreqResultSummary | None = None
     scan: CalculationScanResultSummary | None = None
@@ -1447,6 +1476,8 @@ __all__ = [
     "AppliedEnergyCorrectionSummary",
     "AvailableCalculationSections",
     "CalculationArtifactSummary",
+    "CalculationCompositeResultSummary",
+    "CalculationCompositeTermSummary",
     "CalculationConformerSummary",
     "CalculationConstraintSummary",
     "CalculationCoreBlock",

@@ -8,8 +8,9 @@ species, transition state, micro reactions) stay backend-side.
 """
 
 from datetime import datetime
+from typing import Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import (
@@ -23,6 +24,7 @@ from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.calculation import (
     CalculationParameterObservation,
     CalculationWithResultsPayload,
+    CompositeResultPayload,
     FreqResultPayload,
     FrequencyModePayload,
     HessianPayload,
@@ -32,6 +34,7 @@ from tckdb_schemas.fragments.calculation import (
     SpinDiagnosticPayload,
     SPResultPayload,
     WavefunctionDiagnosticPayload,
+    assert_composite_result_matches_type,
 )
 from tckdb_schemas.fragments.refs import (
     LevelOfTheoryRef,
@@ -87,6 +90,9 @@ class CalculationIn(SchemaBase):
         depositor has not. Matches ``CalculationInBundle.literature`` on the
         species bundle, which took the inline fragment from the start.
     :param sp_electronic_energy_hartree: SP result (if type=sp).
+    :param composite_result: Composite energy (type must be ``composite``, and a
+        ``composite`` calculation must carry it). See
+        :class:`~tckdb_schemas.fragments.calculation.CompositeResultPayload`.
     :param opt_converged: Opt result (if type=opt).
     :param opt_n_steps: Opt result (if type=opt).
     :param opt_final_energy_hartree: Opt result (if type=opt).
@@ -120,6 +126,10 @@ class CalculationIn(SchemaBase):
 
     # Optional inline results (avoids separate result upload)
     sp_electronic_energy_hartree: float | None = None
+
+    #: The composite energy block (ADR 0021): the one result that is a block
+    #: rather than flat fields, because it carries a list of terms.
+    composite_result: CompositeResultPayload | None = None
 
     opt_converged: bool | None = None
     opt_n_steps: int | None = Field(default=None, ge=0)
@@ -159,6 +169,12 @@ class CalculationIn(SchemaBase):
 
     # Optional file artifacts
     artifacts: list[ArtifactIn] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_composite_result_matches_type(self) -> Self:
+        """``type: "composite"`` and ``composite_result`` come together or not at all."""
+        assert_composite_result_matches_type(self.type, self.composite_result)
+        return self
 
 
 def freq_evidence(calc_in: "CalculationIn") -> tuple[int | None, float | None]:
@@ -352,6 +368,7 @@ def calculation_in_to_with_results_payload(
         opt_result=opt_result,
         freq_result=freq_result,
         sp_result=sp_result,
+        composite_result=calc_in.composite_result,
         hessian=calc_in.hessian,
         wavefunction_diagnostic=calc_in.wavefunction_diagnostic,
         spin_diagnostic=calc_in.spin_diagnostic,

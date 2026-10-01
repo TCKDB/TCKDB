@@ -105,6 +105,12 @@ enum CalculationType {
   scan
   path_search
   conf
+  composite
+}
+
+enum CompositeAssembly {
+  program_run
+  assembled
 }
 
 enum CompositeBindingSource {
@@ -1054,6 +1060,39 @@ Table author {
   indexes {
     orcid [unique, name: 'uq_author_orcid']
   }
+}
+
+Table calc_composite_result {
+  calculation_id bigint [pk, not null, ref: > calculation.id]
+  assembly CompositeAssembly [not null]
+  electronic_energy_hartree double
+  e0_hartree double
+  recipe_zpe_hartree double
+
+  checks {
+    `e0_hartree IS NULL OR (e0_hartree > '-Infinity'::float8 AND e0_hartree < 'Infinity'::float8)` [name: 'ck_calc_composite_result_e0_finite']
+    `electronic_energy_hartree IS NULL OR (electronic_energy_hartree > '-Infinity'::float8 AND electronic_energy_hartree < 'Infinity'::float8)` [name: 'ck_calc_composite_result_electronic_energy_finite']
+    `recipe_zpe_hartree IS NULL OR (recipe_zpe_hartree >= 0 AND recipe_zpe_hartree < 'Infinity'::float8)` [name: 'ck_calc_composite_result_recipe_zpe_non_negative_finite']
+  }
+
+  Note: 'The energy of a ``composite`` calculation (ADR 0021), 1:1 with ``calculation``.'
+}
+
+Table calc_composite_term {
+  calculation_id bigint [not null, ref: > calculation.id]
+  term_position int [not null]
+  value_hartree double [not null]
+
+  indexes {
+    (calculation_id, term_position) [pk]
+  }
+
+  checks {
+    `term_position >= 0` [name: 'ck_calc_composite_term_term_position_non_negative']
+    `value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8` [name: 'ck_calc_composite_term_value_finite']
+  }
+
+  Note: 'One term of a composite energy\'s breakdown (optional).'
 }
 
 Table calc_freq_mode {

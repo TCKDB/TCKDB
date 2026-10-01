@@ -7,7 +7,7 @@ from typing import Iterable
 
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 from sqlalchemy.sql import ColumnElement
 from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 
@@ -71,6 +71,7 @@ from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
 )
 from app.services.calculation_scan_resolution import persist_calculation_scan
+from app.services.composite_result_resolution import persist_composite_result
 from app.services.composite_scheme_resolution import ensure_named_method_binding
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
@@ -1298,6 +1299,9 @@ def persist_calculation_result(
             )
         )
 
+    if calc_upload.composite_result is not None:
+        persist_composite_result(session, calculation, calc_upload.composite_result)
+
     if calc_upload.irc_result is not None:
         if calculation.type != CalculationType.irc:
             raise ValueError(
@@ -1576,6 +1580,21 @@ _DEPENDENCY_ROLE_TO_PARENT_TYPE: dict[
     CalculationDependencyRole.scan_parent: CalculationType.opt,
     CalculationDependencyRole.irc_followup: CalculationType.irc,
 }
+# Roles whose parent may also be a ``composite`` calculation that has an output
+# geometry of its own (ADR 0021). A program-run named composite (CBS-QB3, G4, ...)
+# optimises the geometry as the first step of its recipe, so for a conformer
+# whose geometry came from one, the frequency, single-point or scan that ran on
+# that geometry hangs off the composite exactly as it would off an ``opt``. A
+# composite with no output geometry produced no geometry for anything to run on,
+# so it is still refused as a parent. ``irc_start`` is deliberately not here: an
+# IRC starts from a saddle point an ``opt`` found.
+_COMPOSITE_PARENT_ROLES: frozenset[CalculationDependencyRole] = frozenset(
+    {
+        CalculationDependencyRole.freq_on,
+        CalculationDependencyRole.single_point_on,
+        CalculationDependencyRole.scan_parent,
+    }
+)
 # Note: ``optimized_from`` is intentionally *not* pinned to a single
 # parent type. Its parent may be either ``opt`` (a previous geometry
 # optimisation that the next opt restarts from) or ``path_search`` (a
@@ -1624,7 +1643,27 @@ def dependency_role_type_compatible(
     expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE.get(role)
     if expected is None:
         return True
-    return parent_calc.type == expected
+    if parent_calc.type == expected:
+        return True
+    return (
+        role in _COMPOSITE_PARENT_ROLES
+        and parent_calc.type == CalculationType.composite
+        and _has_output_geometry(parent_calc)
+    )
+
+
+def _has_output_geometry(calc: Calculation) -> bool:
+    """Whether ``calc`` has an output geometry, linked yet or still pending.
+
+    The link is written with ``session.add`` and may not be on the loaded
+    ``output_geometries`` collection yet, so this asks the session the same way
+    :func:`attach_calculation_output_geometries` does when it checks for a
+    duplicate.
+    """
+    session = object_session(calc)
+    if session is None or calc.id is None:
+        return bool(calc.output_geometries)
+    return bool(_pending_output_geometry_ids(session, calc.id))
 
 
 def assert_dependency_role_type_compatible(
@@ -1649,6 +1688,12 @@ def assert_dependency_role_type_compatible(
             f"{context}: role='optimized_from' requires a parent of "
             f"type 'opt' or 'path_search', got "
             f"'{parent_calc.type.value}'."
+        )
+    if role in _COMPOSITE_PARENT_ROLES and parent_calc.type == CalculationType.composite:
+        raise ValueError(
+            f"{context}: role='{role.value}' accepts a parent of type 'opt', or "
+            f"a 'composite' that has an output geometry; this 'composite' declares "
+            f"none, so nothing ran on a geometry it produced."
         )
     raise ValueError(
         f"{context}: role='{role.value}' is incompatible with the "
@@ -1868,6 +1913,7 @@ def attach_calculation_output_geometries(
     fallback_geometry_id: int | None,
     context: str,
     is_single_atom_primary: bool = False,
+    is_conformer_primary: bool = False,
 ) -> None:
     """Attach ``calculation_output_geometry`` rows for one calc.
 
@@ -1897,6 +1943,14 @@ def attach_calculation_output_geometries(
     relabelled ``opt`` used to avoid by accident. Only an ``sp`` qualifies,
     and only the primary of a one-atom conformer: any other calculation
     still gets no invented output.
+
+    A second exception, for a conformer's primary calculation when it is a
+    ``composite`` (``is_conformer_primary``, ADR 0021). A named composite
+    method (CBS-QB3, G4, ...) optimises the geometry as the first step of its
+    own recipe, so the one program run that produced the conformer's geometry
+    is the composite, exactly as an ``opt`` primary's is. Only the primary
+    qualifies: a composite deposited as an additional calculation still gets
+    no invented output, because nothing says it produced *this* geometry.
 
     The two paths are mutually exclusive — declaring even one explicit
     output geometry suppresses the fallback for that calc.
@@ -1933,8 +1987,10 @@ def attach_calculation_output_geometries(
             )
         return
 
-    fallback_applies = calc.type in _OUTPUT_GEOMETRY_TYPES or (
-        is_single_atom_primary and calc.type is CalculationType.sp
+    fallback_applies = (
+        calc.type in _OUTPUT_GEOMETRY_TYPES
+        or (is_single_atom_primary and calc.type is CalculationType.sp)
+        or (is_conformer_primary and calc.type is CalculationType.composite)
     )
     if fallback_geometry_id is not None and fallback_applies:
         if fallback_geometry_id not in _pending_output_geometry_ids(
