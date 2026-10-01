@@ -231,6 +231,8 @@ Notes:
 - `solvent`
 - `solvent_model`
 - `keywords`
+- `spin_treatment` (nullable)
+- `core_treatment` (nullable: `frozen_core | all_electron`)
 - `lot_hash`
 - `created_at`
 
@@ -241,6 +243,7 @@ Notes:
 - workflow-tool release dedupe is enforced on `(workflow_tool_id, version, git_commit)`
 - `lot_hash` is unique
 - `lot_hash` hashes each basis name (`basis`, `aux_basis`, `cabs_basis`) by its identity key, not verbatim: lower case, with the family hyphen in `def2-` and `cc-p` restored (`app/chemistry/basis_set_names.py`, #574). `def2tzvp` and `def2-TZVP` are one level of theory; `6-31G*` and `6-31G**` stay two. The row stores the first spelling it was uploaded with.
+- `core_treatment` (ADR 0021) joins the `lot_hash` payload **only when it is set**. A NULL adds no key, so every level that did not state it keeps the hash it had before the column existed; no row was re-keyed. `frozen_core` and `all_electron` are two levels, and "not stated" is a third that is neither. A partial core treatment (an energy window, Gaussian `FC=1`) has no value; it stays NULL and is described in `keywords`. The column is in `snapshot_defaults.UNCHANGED_DEFAULTS` so a whole-row digest of a level does not go stale for a NULL. `scripts/ops/merge_duplicate_levels_of_theory.py` regroups by the recomputed hash and lists the column, so it never folds one treatment into the other.
 - A level of theory's `public_ref` is minted from `lot_hash` **once, at insert**, and never recomputed. Revision `38b06819f099` re-keyed every row whose basis spelling differs from its identity key and left `public_ref` alone, so for those rows `public_ref` is no longer what their content would mint on a fresh instance. A LOT ref identifies a row; it is not re-derivable from content after a re-key.
 - `lot_hash` values of re-keyed rows changed in `38b06819f099`. Anything holding an old value (a `lot_hash=` query, an ML export row, a stored consistency-check snapshot) no longer matches.
 
@@ -900,7 +903,7 @@ non-conforming deposit is corrected by re-depositing, not by migrating.
 
 `NULL` means not stated, never zero. TCKDB never stores a total it computed itself:
 `e0_hartree = electronic_energy_hartree + recipe_zpe_hartree` and
-`sum(terms) = electronic_energy_hartree` are checked (blocking, 1e-6 hartree) when
+`sum(terms) = electronic_energy_hartree` are checked (blocking, to printed precision: `max(1e-6, 5e-7 * n)` hartree for `n` rounded quantities, 3 for e0 and `len(terms) + 1` for the terms) when
 the numbers they relate are all present
 (`composite_e0_inconsistent`, `composite_terms_do_not_sum`). All three energies are
 finite-checked at the database. The level of theory of a composite calculation
@@ -918,6 +921,14 @@ The `calculation.type` enum (`calc_type`) gains `composite`. A `composite` calcu
 may be a conformer's primary calculation (it ran the optimisation that produced the
 geometry); a `freq`, `sp` or `scan` may depend on it (`freq_on`, `single_point_on`,
 `scan_parent`) when it has an output geometry.
+
+`calc_sp_energy_component` fields (ADR 0021; a child of a single-point calculation):
+
+- `calculation_id`
+- `component` (`EnergyComponentKind`: `total | reference | correlation | triples | dboc | scalar_relativistic`)
+- `value_hartree` (finite)
+
+Primary key `(calculation_id, component)`: one value per component. Single-point calculations only (refused on any other type by the wire models and again at the write). The value is what the depositor sent. Components are refused without the energy (`sp_energy_components_require_energy`). At deposit, `reference + correlation` must equal `calc_sp_result.electronic_energy_hartree` within 1e-6 Eh, or, when a `triples` component is also sent, `reference + correlation + triples` may match instead (ORCA's correlation includes (T); Molpro prints CCSD and (T) separately); a `total` must equal the energy. On F12 methods `reference` must include the CABS-singles correction if the program's total does. TCKDB compares and never stores a sum it formed. Guarded as an ownership child of `calculation` like `calc_sp_result` (accepted-science freeze, TRUNCATE refused).
 
 `calc_opt_result` fields:
 

@@ -16,6 +16,7 @@ from tckdb_schemas.fragments.calculation import (
     COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE,
     CalculationWithResultsPayload,
     CompositeResultPayload,
+    composite_arithmetic_tolerance_hartree,
 )
 from tckdb_schemas.shared.calculation_in import CalculationIn
 from tckdb_schemas.workflows.computed_species_upload import (
@@ -50,25 +51,30 @@ def _coded(exc_info: pytest.ExceptionInfo[ValidationError]) -> CodedValidationEr
     return original
 
 
-def test_the_tolerance_is_one_micro_hartree():
+def test_the_tolerance_is_printed_precision_with_a_micro_hartree_floor():
+    """``max(1e-6, 5e-7 * n)``: half a unit of the sixth decimal per rounded number."""
     assert COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE == 1e-6
+    assert composite_arithmetic_tolerance_hartree(1) == 1e-6
+    assert composite_arithmetic_tolerance_hartree(2) == 1e-6
+    assert composite_arithmetic_tolerance_hartree(3) == pytest.approx(1.5e-6)
+    assert composite_arithmetic_tolerance_hartree(8) == pytest.approx(4e-6)
 
 
 # -- e0 = electronic + recipe ZPE ------------------------------------------
 
 
-@pytest.mark.parametrize("offset", [0.0, 0.9e-6, -0.9e-6])
+@pytest.mark.parametrize("offset", [0.0, 1.4e-6, -1.4e-6])
 def test_an_e0_within_the_tolerance_passes(offset):
     CompositeResultPayload(**_result(e0_hartree=_E0 + offset))
 
 
-@pytest.mark.parametrize("offset", [1.1e-6, -1.1e-6, 1e-3])
+@pytest.mark.parametrize("offset", [1.6e-6, -1.6e-6, 1e-3])
 def test_an_e0_beyond_the_tolerance_blocks_with_its_code(offset):
     with pytest.raises(ValidationError) as err:
         CompositeResultPayload(**_result(e0_hartree=_E0 + offset))
     coded = _coded(err)
     assert coded.code == "composite_e0_inconsistent"
-    assert coded.context["tolerance_hartree"] == 1e-6
+    assert coded.context["tolerance_hartree"] == pytest.approx(1.5e-6)
     assert coded.context["difference_hartree"] == pytest.approx(offset, abs=1e-9)
 
 
@@ -90,18 +96,41 @@ def _terms(total: float, split: float = -0.25):
     ]
 
 
-@pytest.mark.parametrize("offset", [0.0, 0.9e-6, -0.9e-6])
+@pytest.mark.parametrize("offset", [0.0, 1.4e-6, -1.4e-6])
 def test_terms_within_the_tolerance_sum_to_the_total(offset):
     CompositeResultPayload(**_result(terms=_terms(_ELECTRONIC + offset)))
 
 
-@pytest.mark.parametrize("offset", [1.1e-6, -1.1e-6, 0.5])
+@pytest.mark.parametrize("offset", [1.6e-6, -1.6e-6, 0.5])
 def test_terms_beyond_the_tolerance_block_with_their_code(offset):
     with pytest.raises(ValidationError) as err:
         CompositeResultPayload(**_result(terms=_terms(_ELECTRONIC + offset)))
     coded = _coded(err)
     assert coded.code == "composite_terms_do_not_sum"
-    assert coded.context["tolerance_hartree"] == 1e-6
+    assert coded.context["tolerance_hartree"] == pytest.approx(1.5e-6)
+
+
+def _seven_terms(drift: float):
+    """Seven CBS-QB3-sized terms, printed to six decimals, summing to the total plus ``drift``."""
+    values = [-75.123457, -0.234568, -0.012346, 0.003457, -0.045679, 0.000001, 0.005679]
+    total = round(sum(values), 6)
+    values[-1] += (total + drift) - sum(values)
+    return [{"term_position": i, "value_hartree": v} for i, v in enumerate(values)], total
+
+
+def test_seven_printed_terms_may_drift_by_their_rounding_without_being_refused():
+    """The case a fixed 1e-6 spuriously refuses: 7 terms + the total = 8 rounded numbers, 4e-6."""
+    terms, total = _seven_terms(drift=3.5e-6)
+    CompositeResultPayload(**_result(electronic_energy_hartree=total, e0_hartree=None, terms=terms))
+
+
+def test_seven_terms_are_still_refused_beyond_their_rounding():
+    terms, total = _seven_terms(drift=4.4e-6)
+    with pytest.raises(ValidationError) as err:
+        CompositeResultPayload(**_result(electronic_energy_hartree=total, e0_hartree=None, terms=terms))
+    coded = _coded(err)
+    assert coded.code == "composite_terms_do_not_sum"
+    assert coded.context["tolerance_hartree"] == pytest.approx(4e-6)
 
 
 def test_the_terms_check_needs_the_total():

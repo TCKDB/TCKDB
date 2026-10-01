@@ -45,6 +45,7 @@ from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
     resolve_level_of_theory_ref,
 )
+from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -371,6 +372,15 @@ def persist_thermo_upload(
             context=context,
         )
         calculations_by_key[calc_in.key] = calc_row
+
+    # An inline opt or sp at a named composite method's level is the same
+    # misshapen deposit the bundle routes warn about (ADR 0021, decision 7).
+    if warnings_out is not None:
+        warnings_out.extend(
+            collect_named_composite_deposit_warnings(
+                session, [calc.id for calc in calculations_by_key.values()]
+            )
+        )
 
     # Resolve source_calculation links. Each entry uses either a local
     # calculation_key (inline path) or an existing_calculation_id (DR-0028

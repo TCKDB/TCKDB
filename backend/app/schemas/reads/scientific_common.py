@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.db.models.common import (
     CompositeSchemeKind,
+    CoreTreatment,
     ProfileRecommendation,
     ReadProfile,
     RecordReviewStatus,
@@ -271,6 +272,11 @@ class LevelOfTheorySummary(BaseModel):
     #: ``unknown`` member -- see ``LevelOfTheory.spin_treatment``. Part of
     #: LOT identity and folded into ``lot_hash``; not builders' to omit.
     spin_treatment: SpinTreatment | None = None
+    #: Frozen-core or all-electron (ADR 0021). ``None`` means the producer did
+    #: not state it, never "frozen core by default". Part of LOT identity only
+    #: when set. Every builder passes it explicitly
+    #: (``tests/invariants/test_level_summary_carries_composite_scheme.py``).
+    core_treatment: CoreTreatment | None = None
     label: str | None = None
     #: The composite recipe this level names, or ``None`` when the level is an
     #: ordinary one. Bound by TCKDB for a catalogued named composite method

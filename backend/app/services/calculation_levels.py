@@ -212,6 +212,7 @@ def derive_levels(
     sps: Sequence[RoleCalcInfo] = (),
     composites: Sequence[RoleCalcInfo] = (),
     importeds: Sequence[RoleCalcInfo] = (),
+    legacy_composites: Sequence[RoleCalcInfo] = (),
 ) -> DerivedLevels:
     """R1: derive geometry / frequency / energy levels from role links.
 
@@ -249,6 +250,12 @@ def derive_levels(
         lowest id first.
     :param importeds: The record's ``imported``-role calculation infos,
         lowest id first.
+    :param legacy_composites: Calculations linked under the role ``composite``
+        whose *type* is not ``composite`` (the shape from before the type
+        existed). They keep the slot they always had -- below an ``opt``, above
+        ``imported``, source ``"composite"`` -- and supply no recipe levels:
+        nothing says a plain ``sp`` or ``opt`` ran a recipe. Only a calculation
+        of type ``composite`` belongs in ``composites``.
     :returns: The derived levels. Any field may be ``None`` when nothing
         linked can answer that question.
     """
@@ -293,6 +300,8 @@ def derive_levels(
         energy_lot_id, energy_source = sps[0].lot_id, "sp"
     elif opt is not None:
         energy_lot_id, energy_source = opt.lot_id, "opt"
+    elif legacy_composites:
+        energy_lot_id, energy_source = legacy_composites[0].lot_id, "composite"
     elif importeds:
         energy_lot_id, energy_source = importeds[0].lot_id, "imported"
     else:

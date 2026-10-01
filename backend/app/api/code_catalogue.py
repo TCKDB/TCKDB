@@ -1080,7 +1080,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             note=(
                 "e0_hartree differs from electronic_energy_hartree + "
-                "recipe_zpe_hartree by more than 1e-6 hartree, with all three "
+                "recipe_zpe_hartree by more than the printed-precision tolerance "
+                "(1.5e-6 hartree), with all three "
                 "present. Context carries the difference and the tolerance."
             )),
     ApiCode("composite_level_not_scheme_bound", 422, Surface.coded_exception,
@@ -1107,7 +1108,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             note=(
                 "The deposited terms do not sum to electronic_energy_hartree "
-                "within 1e-6 hartree. Context carries the difference and the "
+                "within the printed-precision tolerance, max(1e-6, 5e-7 * "
+                "(terms + 1)) hartree. Context carries the difference and the "
                 "tolerance."
             )),
     ApiCode("composite_type_requires_composite_result", 422, Surface.coded_exception,
@@ -2007,6 +2009,43 @@ CATALOGUE: tuple[ApiCode, ...] = (
             note=(
                 "A required source pin file (environment.yml, uv.lock, Dockerfile, licences, CITATION.cff) is absent. "
                 "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("sp_energy_component_duplicate", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py"),
+    ApiCode("sp_energy_component_not_on_sp", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py",
+            note=(
+                "sp_energy_components sent on a calculation whose type is not "
+                "'sp'. The parts of an electronic energy belong to the single "
+                "point that produced them (ADR 0021)."
+            )),
+    ApiCode("sp_energy_component_total_mismatch", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py",
+            shape=Shape.relationship,
+            note=(
+                "A 'total' component differs from the single point's "
+                "electronic_energy_hartree by more than 1e-6 Eh. Context "
+                "carries both values and the tolerance (ADR 0021)."
+            )),
+    ApiCode("sp_energy_components_do_not_sum", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py",
+            shape=Shape.relationship,
+            note=(
+                "reference + correlation differs from the single point's "
+                "electronic_energy_hartree by more than 1e-6 Eh. When a "
+                "triples component is also sent, reference + correlation + "
+                "triples may match instead (programs differ on whether the "
+                "printed correlation includes (T)). Context carries the "
+                "values, both sums and the tolerance. TCKDB compares; it "
+                "never stores a sum it formed (ADR 0021)."
+            )),
+    ApiCode("sp_energy_components_require_energy", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py",
+            note=(
+                "sp_energy_components sent without the single point's "
+                "electronic_energy_hartree. The parts come from the same output "
+                "as the energy; without it a log could fill the energy after the "
+                "checks had run (ADR 0021)."
             )),
     ApiCode("species_entry_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",

@@ -176,6 +176,11 @@ enum CoordinateUnit {
   degree
 }
 
+enum CoreTreatment {
+  frozen_core
+  all_electron
+}
+
 enum DatasetReleaseStatus {
   draft
   published
@@ -1390,6 +1395,22 @@ Table calc_scf_stability {
   Note: 'SCF wavefunction stability evidence for a calculation.'
 }
 
+Table calc_sp_energy_component {
+  calculation_id bigint [not null, ref: > calculation.id]
+  component EnergyComponentKind [not null]
+  value_hartree double [not null]
+
+  indexes {
+    (calculation_id, component) [pk]
+  }
+
+  checks {
+    `value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8` [name: 'ck_calc_sp_energy_component_value_hartree_finite']
+  }
+
+  Note: 'One deposited part of a single point\'s electronic energy (ADR 0021).'
+}
+
 Table calc_sp_result {
   calculation_id bigint [pk, not null, ref: > calculation.id]
   electronic_energy_hartree double
@@ -2344,6 +2365,7 @@ Table level_of_theory {
   solvent_model text
   keywords text
   spin_treatment SpinTreatment
+  core_treatment CoreTreatment
   lot_hash varchar(64) [not null]
   created_at timestamp [not null, default: 'now']
   public_ref string [not null]

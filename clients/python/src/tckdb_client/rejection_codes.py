@@ -232,6 +232,11 @@ class RejectionCode(str, Enum):
     SELECTION_ALREADY_SUPERSEDED = "selection_already_superseded"
     SELECTION_NO_LONGER_APPROVED = "selection_no_longer_approved"
     SMILES_TOO_LONG = "smiles_too_long"
+    SP_ENERGY_COMPONENT_DUPLICATE = "sp_energy_component_duplicate"
+    SP_ENERGY_COMPONENT_NOT_ON_SP = "sp_energy_component_not_on_sp"
+    SP_ENERGY_COMPONENT_TOTAL_MISMATCH = "sp_energy_component_total_mismatch"
+    SP_ENERGY_COMPONENTS_DO_NOT_SUM = "sp_energy_components_do_not_sum"
+    SP_ENERGY_COMPONENTS_REQUIRE_ENERGY = "sp_energy_components_require_energy"
     SPECIES_ENTRY_HANDLE_CONFLICT = "species_entry_handle_conflict"
     SPECIES_GEOMETRY_COMPOSITION_MISMATCH = "species_geometry_composition_mismatch"
     SPECIES_GEOMETRY_ISOTOPE_MISMATCH = "species_geometry_isotope_mismatch"
@@ -430,6 +435,11 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH,
         RejectionCode.SELECTION_NO_LONGER_APPROVED,
         RejectionCode.SMILES_TOO_LONG,
+        RejectionCode.SP_ENERGY_COMPONENT_DUPLICATE,
+        RejectionCode.SP_ENERGY_COMPONENT_NOT_ON_SP,
+        RejectionCode.SP_ENERGY_COMPONENT_TOTAL_MISMATCH,
+        RejectionCode.SP_ENERGY_COMPONENTS_DO_NOT_SUM,
+        RejectionCode.SP_ENERGY_COMPONENTS_REQUIRE_ENERGY,
         RejectionCode.SPECIES_ENTRY_HANDLE_CONFLICT,
         RejectionCode.SPECIES_GEOMETRY_COMPOSITION_MISMATCH,
         RejectionCode.SPECIES_GEOMETRY_ISOTOPE_MISMATCH,
@@ -683,6 +693,11 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.SELECTION_ALREADY_SUPERSEDED: frozenset({409}),
     RejectionCode.SELECTION_NO_LONGER_APPROVED: frozenset({422}),
     RejectionCode.SMILES_TOO_LONG: frozenset({422}),
+    RejectionCode.SP_ENERGY_COMPONENT_DUPLICATE: frozenset({422}),
+    RejectionCode.SP_ENERGY_COMPONENT_NOT_ON_SP: frozenset({422}),
+    RejectionCode.SP_ENERGY_COMPONENT_TOTAL_MISMATCH: frozenset({422}),
+    RejectionCode.SP_ENERGY_COMPONENTS_DO_NOT_SUM: frozenset({422}),
+    RejectionCode.SP_ENERGY_COMPONENTS_REQUIRE_ENERGY: frozenset({422}),
     RejectionCode.SPECIES_ENTRY_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.SPECIES_GEOMETRY_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.SPECIES_GEOMETRY_ISOTOPE_MISMATCH: frozenset({422}),

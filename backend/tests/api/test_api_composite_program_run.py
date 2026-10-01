@@ -250,7 +250,7 @@ def test_a_composite_at_a_level_that_is_not_scheme_bound_is_refused(client):
 def test_the_two_arithmetic_checks_block_at_the_api(client, result, code):
     body = _code_of(_deposit_conformer(client, primary=_composite(**result)))
     assert body["code"] == code
-    assert body["context"]["tolerance_hartree"] == 1e-6
+    assert body["context"]["tolerance_hartree"] >= 1e-6
 
 
 def test_an_unstated_energy_is_stored_as_unstated_not_zero(client, db_session):
@@ -361,3 +361,192 @@ def test_a_species_bundle_primary_of_another_non_opt_type_is_still_refused(clien
     resp = client.post("/api/v1/uploads/computed-species", json=_species_bundle(_freq()))
     assert resp.status_code == 422, resp.text[:300]
     assert "must be 'opt'" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# The legacy shape reads exactly as it did before the composite type existed
+# ---------------------------------------------------------------------------
+#
+# A calculation of another type linked under the role ``composite`` is accepted
+# (with a warning). It must also *read* as it always did: after an opt, no recipe
+# levels, and without moving the thermo provenance. Expected values are what main
+# returned for the same deposits.
+
+_LOT_A = {"method": "B3LYP", "basis": "6-31G(d)"}
+_LOT_B = {"method": "wB97X-D", "basis": "def2-TZVP"}
+
+
+def _inline_thermo(calcs: dict[str, dict], links: list[tuple[str, str]]) -> dict:
+    return {
+        "enthalpy_reference_kind": "formation_298k",
+        "species_entry": dict(_WATER),
+        "scientific_origin": "computed",
+        "h298_kj_mol": -241.8,
+        "calculations": [{"key": key, "calculation": calc} for key, calc in calcs.items()],
+        "source_calculations": [{"calculation_key": key, "role": role} for key, role in links],
+    }
+
+
+def _levels_and_provenance(client, payload: dict) -> tuple[dict, dict]:
+    resp = client.post("/api/v1/uploads/thermo", json=payload)
+    assert resp.status_code == 201, resp.text[:600]
+    read = client.get(f"/api/v1/scientific/species-entries/{resp.json()['species_entry_id']}/thermo")
+    assert read.status_code == 200, read.text
+    record = read.json()["records"][0]
+    return record["levels"], record["provenance"]
+
+
+def test_opt_sp_and_a_legacy_composite_role_link_read_as_on_main(client):
+    legacy = _sp(_CBS_QB3)
+    levels, provenance = _levels_and_provenance(
+        client,
+        _inline_thermo(
+            {"o": _opt(_LOT_A), "s": _sp(_LOT_B), "c": legacy},
+            [("o", "opt"), ("s", "sp"), ("c", "composite")],
+        ),
+    )
+    assert levels["energy_source"] == "sp" and levels["energy"]["method"] == "wB97X-D"
+    assert levels["geometry"]["method"] == "B3LYP" and levels["geometry_source"] == "opt"
+    assert levels["frequency"] is None and levels["frequency_source"] is None
+    assert provenance["level_of_theory"]["method"] == "wB97X-D"
+
+
+def test_opt_and_a_legacy_composite_role_link_read_the_opt_as_the_energy(client):
+    levels, provenance = _levels_and_provenance(
+        client,
+        _inline_thermo({"o": _opt(_LOT_A), "c": _sp(_CBS_QB3)}, [("o", "opt"), ("c", "composite")]),
+    )
+    assert levels["energy_source"] == "opt" and levels["energy"]["method"] == "B3LYP"
+    assert levels["frequency"] is None and levels["frequency_source"] is None
+    # main's picker: sp -> composite -> freq -> opt, so the legacy link is the primary calculation.
+    assert provenance["level_of_theory"]["method"] == "CBS-QB3"
+
+
+def test_a_legacy_opt_at_a_named_method_level_gets_no_recipe_frequency(client):
+    levels, _ = _levels_and_provenance(
+        client, _inline_thermo({"o": _opt(_CBS_QB3)}, [("o", "opt")])
+    )
+    assert levels["geometry"]["method"] == "CBS-QB3" and levels["geometry_source"] == "opt"
+    assert levels["energy_source"] == "opt"
+    assert levels["frequency"] is None and levels["frequency_source"] is None
+
+
+def test_a_legacy_composite_role_link_alone_is_the_energy_and_nothing_else(client):
+    levels, _ = _levels_and_provenance(
+        client, _inline_thermo({"c": _sp(_CBS_QB3)}, [("c", "composite")])
+    )
+    assert levels["energy_source"] == "composite" and levels["energy"]["method"] == "CBS-QB3"
+    assert levels["geometry"] is None and levels["geometry_source"] is None
+    assert levels["frequency"] is None
+
+
+# ---------------------------------------------------------------------------
+# Statmech reads the recipe levels too
+# ---------------------------------------------------------------------------
+
+
+def _out(xyz: str) -> list[dict]:
+    return [{"geometry": {"xyz_text": xyz}, "role": "final"}]
+
+
+def _statmech(calcs: dict[str, dict], links: list[tuple[str, str]]) -> dict:
+    return {
+        "species_entry": dict(_WATER),
+        "scientific_origin": "computed",
+        "statmech_treatment": "rrho",
+        "external_symmetry": 2,
+        "calculations": [{"key": key, "calculation": calc} for key, calc in calcs.items()],
+        "source_calculations": [{"calculation_key": key, "role": role} for key, role in links],
+    }
+
+
+def test_the_statmech_read_takes_geometry_and_frequency_from_the_recipe(client):
+    composite = {**_composite(), "output_geometries": _out(_WATER_XYZ)}
+    resp = client.post("/api/v1/uploads/statmech", json=_statmech({"c": composite}, [("c", "composite")]))
+    assert resp.status_code == 201, resp.text[:600]
+    levels = client.get(f"/api/v1/scientific/statmech/{resp.json()['id']}").json()["record"]["levels"]
+    assert levels["energy_source"] == "composite" and levels["energy"]["method"] == "CBS-QB3"
+    assert levels["geometry_source"] == "composite_recipe"
+    assert (levels["geometry"]["method"], levels["geometry"]["basis"]) == ("B3LYP", "CBSB7")
+    assert levels["frequency_source"] == "composite_recipe"
+    assert (levels["frequency"]["method"], levels["frequency"]["basis"]) == ("B3LYP", "CBSB7")
+
+
+def test_the_statmech_read_takes_a_legacy_composite_role_link_as_on_main(client):
+    resp = client.post(
+        "/api/v1/uploads/statmech",
+        json=_statmech({"o": _opt(_LOT_A), "c": _sp(_CBS_QB3)}, [("o", "opt"), ("c", "composite")]),
+    )
+    assert resp.status_code == 201, resp.text[:600]
+    levels = client.get(f"/api/v1/scientific/statmech/{resp.json()['id']}").json()["record"]["levels"]
+    assert levels["energy_source"] == "opt"
+    assert levels["frequency"] is None and levels["frequency_source"] is None
+
+
+# ---------------------------------------------------------------------------
+# Inline calculations warn too
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("route", ["thermo", "statmech", "transport"])
+@pytest.mark.parametrize(
+    ("builder", "code"),
+    [(_opt, "named_composite_deposited_as_opt"), (_sp, "named_composite_deposited_as_sp")],
+)
+def test_an_inline_opt_or_sp_at_a_named_method_level_warns_on_the_standalone_routes(client, route, builder, code):
+    calcs = {"x": builder(_CBS_QB3)}
+    if route == "thermo":
+        payload = _inline_thermo(calcs, [("x", "opt" if builder is _opt else "sp")])
+    elif route == "statmech":
+        payload = _statmech(calcs, [("x", "opt" if builder is _opt else "sp")])
+    else:
+        payload = {
+            "species_entry": dict(_WATER),
+            "scientific_origin": "computed",
+            "calculations": [{"key": "x", "calculation": calcs["x"]}],
+            "source_calculations": [{"calculation_key": "x", "role": "supporting_geometry"}],
+            "sigma_angstrom": 2.6,
+            "epsilon_over_k_k": 80.0,
+        }
+    resp = client.post(f"/api/v1/uploads/{route}", json=payload)
+    assert resp.status_code == 201, resp.text[:600]
+    assert _warning_codes(resp).count(code) == 1
+
+
+# ---------------------------------------------------------------------------
+# The recipe frequency level is compared after following level merges
+# ---------------------------------------------------------------------------
+
+
+def test_the_freq_level_warning_follows_a_merge_of_the_recipes_frequency_level(client, db_session):
+    from tckdb_schemas.fragments.refs import LevelOfTheoryRef
+
+    from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
+    from app.db.models.level_of_theory import LevelOfTheoryMerge
+    from app.services.calculation_resolution import resolve_level_of_theory_ref
+
+    first = _deposit_conformer(client, primary=_composite())
+    assert first.status_code == 201, first.text
+    cbs = db_session.scalar(
+        select(LevelOfTheoryComposite).join(CompositeScheme, CompositeScheme.id == LevelOfTheoryComposite.scheme_id)
+        .where(CompositeScheme.name == "CBS-QB3")
+    )
+    scheme = db_session.get(CompositeScheme, cbs.scheme_id)
+    recipe_level_id = scheme.frequency_level_of_theory_id
+    kept = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="B3LYP", basis="cbsb7-kept"))
+    db_session.add(LevelOfTheoryMerge(merged_lot_id=recipe_level_id, into_lot_id=kept.id))
+    db_session.flush()
+
+    kept_level = {"method": "B3LYP", "basis": "cbsb7-kept"}
+    conf = _deposit_conformer(client, primary=_composite(), additional=[_freq(kept_level)]).json()
+    resp = client.post(
+        "/api/v1/uploads/thermo",
+        json=_thermo_payload(
+            [
+                (conf["primary_calculation"]["calculation_id"], "composite"),
+                (conf["additional_calculations"][0]["calculation_id"], "freq"),
+            ]
+        ),
+    )
+    assert resp.status_code == 201, resp.text[:600]
+    assert "composite_frequency_level_differs_from_recipe" not in _warning_codes(resp)

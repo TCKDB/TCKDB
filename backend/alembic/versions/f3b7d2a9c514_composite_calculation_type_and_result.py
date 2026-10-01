@@ -43,7 +43,7 @@ drops ``composite_assembly``, and rebuilds ``calc_type`` without ``composite``
 drop), the precedent ``b8f3d6a1c9e4`` set for ``molecule_kind``.
 
 Revision ID: f3b7d2a9c514
-Revises: d7a3f1b9c284
+Revises: e5b2d8a4c613
 Create Date: 2026-10-01
 """
 
@@ -57,7 +57,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "f3b7d2a9c514"
-down_revision: Union[str, Sequence[str], None] = "d7a3f1b9c284"
+down_revision: Union[str, Sequence[str], None] = "e5b2d8a4c613"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

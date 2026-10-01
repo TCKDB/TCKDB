@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.69.0 - 2026-10-01
+## 0.70.0 - 2026-10-01
 
 Composite levels of theory, phase P3a (ADR 0021): a calculation of type
 `composite` records one program-run composite energy such as CBS-QB3 or G4.
@@ -21,7 +21,10 @@ Every payload accepted before is accepted unchanged; this release only adds.
 - **The two always come together.** `composite_result` on any other type is
   refused with `composite_result_requires_composite_type`, and a `composite`
   calculation without it with `composite_type_requires_composite_result`.
-- **Two arithmetic checks, blocking, at 1e-6 hartree.** With all three energies
+- **Two arithmetic checks, blocking, to printed precision.** The tolerance is
+  `max(1e-6, 5e-7 * n)` hartree, where `n` counts the rounded numbers in the
+  equation (Gaussian prints each to six decimals): 3 for e0, `len(terms) + 1`
+  for the terms. With all three energies
   present, `e0_hartree` must equal `electronic_energy_hartree +
   recipe_zpe_hartree` (`composite_e0_inconsistent`); with terms given and the
   total present, the terms must sum to `electronic_energy_hartree`
@@ -60,6 +63,45 @@ Every payload accepted before is accepted unchanged; this release only adds.
   internal level). Server responses, not producer payloads.
 - Not in this release: assembled composites and user-built schemes, energy
   components on a single point, a Gaussian composite-log parser.
+
+## 0.69.0 - 2026-10-01
+
+Composite levels of theory, phase P4 (ADR 0021): energy components on single
+points, and a core-treatment field on the level of theory. Both are additions;
+every payload accepted before is accepted unchanged and means the same thing.
+
+- **`sp_energy_components[]` on single points.** `CalculationWithResultsPayload`,
+  the computed-species `CalculationInBundle` and the flat `CalculationIn` (the
+  computed-reaction and network bundles) take a list of
+  `{component, value_hartree}`, where `component` is one of `total`,
+  `reference` (the SCF / HF energy), `correlation`, `triples`, `dboc` or
+  `scalar_relativistic`. The value is what the program printed. Five refusals,
+  each with a code and context:
+  - `sp_energy_component_not_on_sp`: the calculation is not a single point.
+  - `sp_energy_components_require_energy`: the single point's electronic energy
+    is not stated. The parts come from the same output as the energy, so state
+    it; a log can no longer fill the energy in after the parts were checked.
+  - `sp_energy_component_duplicate`: one value per component.
+  - `sp_energy_component_total_mismatch`: a `total` must equal the energy
+    within 1e-6 Eh.
+  - `sp_energy_components_do_not_sum`: `reference + correlation` must equal the
+    energy within 1e-6 Eh. When a `triples` component is also sent,
+    `reference + correlation + triples` may match instead (ORCA's correlation
+    energy already includes (T); Molpro prints CCSD and (T) separately). The
+    refusal reports both sums. On F12 methods, `reference` must include the
+    CABS-singles correction if the program's total does.
+
+  The server compares and never stores a value it computed. A single-point read
+  returns the components under `results.sp.energy_components`.
+- **`LevelOfTheoryRef.core_treatment`** (optional): `frozen_core` or
+  `all_electron`. State it only when the run says so. It is part of the level's
+  identity **only when stated**, so a payload that omits it resolves to exactly
+  the level it always did. Frozen-core and all-electron CCSD(T)/cc-pCVTZ are now
+  two levels instead of one. A partial treatment (an energy window, Gaussian's
+  `FC=1`) has no value yet; leave the field out and describe it in `keywords`.
+- New public enums `CoreTreatment` and `EnergyComponentKind`.
+- Reads: `LevelOfTheorySummary` and the level-of-theory detail carry
+  `core_treatment` (`null` = not stated).
 
 ## 0.68.0 - 2026-10-01
 

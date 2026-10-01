@@ -45,6 +45,10 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "calc_scan_point_coordinate_value",
         "calc_scan_result",
         "calc_scf_stability",
+        # Deposited parts of a single point's electronic energy (ADR 0021).
+        # Results, not state: a restore that dropped them would hand back a
+        # single point whose SCF/correlation split a composite scheme cites.
+        "calc_sp_energy_component",
         "calc_sp_result",
         "calc_spin_diagnostic",
         "calc_wavefunction_diagnostic",

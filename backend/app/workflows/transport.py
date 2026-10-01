@@ -25,6 +25,7 @@ from app.services.calculation_ownership import (
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
+from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.record_review import (
     RecordRef,
@@ -87,6 +88,15 @@ def persist_transport_upload(
             species_entry_id=species_entry.id,
         )
         calculations_by_key[calc_in.key] = calc_row
+
+    # An inline opt or sp at a named composite method's level is the same
+    # misshapen deposit the bundle routes warn about (ADR 0021, decision 7).
+    if warnings_out is not None:
+        warnings_out.extend(
+            collect_named_composite_deposit_warnings(
+                session, [calc.id for calc in calculations_by_key.values()]
+            )
+        )
 
     resolved_source_calcs = [
         TransportSourceCalculationCreate(

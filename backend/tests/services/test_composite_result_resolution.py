@@ -13,6 +13,7 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.fragments.calculation import (
     CalculationWithResultsPayload,
     CompositeResultPayload,
@@ -107,10 +108,11 @@ def test_a_program_run_composite_is_stored_with_its_terms(db_conn) -> None:
         session.rollback()
 
 
-def test_the_seam_refuses_a_composite_result_on_a_calculation_of_another_type(db_conn) -> None:
+def test_the_seam_refuses_a_composite_result_on_a_calculation_of_another_type_first(db_conn) -> None:
     with Session(db_conn) as session, session.begin():
-        with pytest.raises(ValueError, match="only allowed on composite calculations"):
+        with pytest.raises(CodedValidationError) as err:
             _persist(session, _block(), {"method": "B3LYP", "basis": "6-31G(d)"}, calc_type=CalculationType.sp)
+        assert err.value.code == "composite_result_requires_composite_type"
         session.rollback()
 
 
@@ -274,7 +276,7 @@ def test_a_composite_calculation_is_never_warned_about(db_conn) -> None:
 )
 def test_the_result_table_refuses_what_it_can_check(db_conn, values) -> None:
     with Session(db_conn) as session, session.begin():
-        calc = _persist(session, None)
+        calc = _calc_at(session, CalculationType.sp, {"method": "B3LYP", "basis": "6-31G(d)"})
         session.flush()
         with pytest.raises(IntegrityError):
             with session.begin_nested():
@@ -287,7 +289,7 @@ def test_the_result_table_refuses_what_it_can_check(db_conn, values) -> None:
 @pytest.mark.parametrize("values", [{"term_position": -1, "value_hartree": 1.0}, {"term_position": 0, "value_hartree": float("nan")}])
 def test_the_term_table_refuses_what_it_can_check(db_conn, values) -> None:
     with Session(db_conn) as session, session.begin():
-        calc = _persist(session, None)
+        calc = _calc_at(session, CalculationType.sp, {"method": "B3LYP", "basis": "6-31G(d)"})
         session.flush()
         with pytest.raises(IntegrityError):
             with session.begin_nested():
@@ -328,4 +330,24 @@ def test_the_reproducibility_snapshot_of_a_composite_calculation_carries_its_res
         assert other != snapshot
         # No energy and no terms: the result row exists but says nothing.
         assert _typed_output_snapshot(empty)[0] is False
+        session.rollback()
+
+
+# -- the pairing rule is re-run at the write ---------------------------------
+
+
+def test_the_seam_refuses_a_composite_calculation_that_skipped_the_wire_with_no_result(db_conn) -> None:
+    """``model_copy`` skips validators: no result must not mean no checks."""
+    with Session(db_conn) as session, session.begin():
+        with pytest.raises(CodedValidationError) as err:
+            _persist(session, None, {"method": "B3LYP", "basis": "CBSB7"})
+        assert err.value.code == "composite_type_requires_composite_result"
+        session.rollback()
+
+
+def test_the_seam_refuses_a_composite_result_on_another_type_with_a_code(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
+        with pytest.raises(CodedValidationError) as err:
+            _persist(session, _block(), {"method": "B3LYP", "basis": "6-31G(d)"}, calc_type=CalculationType.sp)
+        assert err.value.code == "composite_result_requires_composite_type"
         session.rollback()

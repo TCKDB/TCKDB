@@ -25,7 +25,8 @@ definition rather than an expectation:
   the level is resolved (``resolve_level_of_theory_ref``), so a level with no
   binding is one the catalogue does not know.
 * ``composite_e0_inconsistent`` / ``composite_terms_do_not_sum`` -- the stated
-  numbers contradict each other beyond 1e-6 hartree. The functions live in the
+  numbers contradict each other beyond printed precision (``max(1e-6, 5e-7 * n)``
+  hartree for ``n`` rounded quantities). The functions live in the
   wire package (:func:`assert_composite_result_arithmetic`) and run on parse; they
   run again here because a payload built with ``model_copy`` skips validators.
 * ``composite_term_position_unknown`` -- the calculation's scheme lists terms and

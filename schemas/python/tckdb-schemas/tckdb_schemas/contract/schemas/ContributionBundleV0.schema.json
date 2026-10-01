@@ -1121,7 +1121,7 @@
     },
     "CalculationWithResultsPayload": {
       "additionalProperties": false,
-      "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan\nresult fields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param composite_result: Inline composite energy (type must be ``composite``,\n    and a ``composite`` calculation must carry it). See\n    :class:`CompositeResultPayload`.\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param scan_result: Inline scan result (type must be ``scan``): the\n    stepped coordinates and the points along them. Whether a route accepts\n    a ``scan`` calculation at all is that route's own allow-list; this\n    field is only where the points go when it does.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
+      "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan\nresult fields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param composite_result: Inline composite energy (type must be ``composite``,\n    and a ``composite`` calculation must carry it). See\n    :class:`CompositeResultPayload`.\n:param sp_energy_components: Inline parts of the single point's\n    electronic energy (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param scan_result: Inline scan result (type must be ``scan``): the\n    stepped coordinates and the points along them. Whether a route accepts\n    a ``scan`` calculation at all is that route's own allow-list; this\n    field is only where the points go when it does.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
       "properties": {
         "composite_result": {
           "anyOf": [
@@ -1319,6 +1319,14 @@
         },
         "software_release": {
           "$ref": "#/$defs/SoftwareReleaseRef"
+        },
+        "sp_energy_components": {
+          "description": "The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed.",
+          "items": {
+            "$ref": "#/$defs/SPEnergyComponentPayload"
+          },
+          "title": "Sp Energy Components",
+          "type": "array"
         },
         "sp_result": {
           "anyOf": [
@@ -1677,6 +1685,15 @@
       "title": "CoordinateUnit",
       "type": "string"
     },
+    "CoreTreatment": {
+      "description": "Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).\n\n``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:\nevery electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron\nare different levels (their difference is the core-valence term of a\nfocal-point scheme). Part of the level identity only when stated: a level\nthat does not say stays ``NULL`` and keeps the hash it always had.\n\nTwo members on purpose. A partial treatment (Gaussian ``FC=1`` /\n``FreezeInnerNobleGasCore``, an ORCA ``FC_EWIN`` energy window, an explicit\norbital range) is real but has no agreed name across codes; it is left\n``NULL`` and described in ``keywords`` until a producer needs it named.",
+      "enum": [
+        "frozen_core",
+        "all_electron"
+      ],
+      "title": "CoreTreatment",
+      "type": "string"
+    },
     "DepositRights": {
       "additionalProperties": false,
       "description": "Deposit-time agreement that the records may be licensed as stated.",
@@ -1742,6 +1759,19 @@
       ],
       "title": "DescribedRuntime",
       "type": "object"
+    },
+    "EnergyComponentKind": {
+      "description": "Which part of an electronic energy a value is (ADR 0021).\n\nNamed generically because it is shared: a scheme term says which\ncomponent of an input energy it consumes, and a single-point energy\ncomponent says which component it stores. ``total`` is the whole\nelectronic energy; ``reference`` the reference-determinant (SCF / HF)\npart; ``correlation`` the correlation part; ``triples`` the perturbative\ntriples part; ``dboc`` the diagonal Born-Oppenheimer correction;\n``scalar_relativistic`` the scalar-relativistic correction. The wire enum\nin ``tckdb_schemas.enums`` carries this exact text, so the OpenAPI schema\nfor the two is one schema, not two.",
+      "enum": [
+        "total",
+        "reference",
+        "correlation",
+        "triples",
+        "dboc",
+        "scalar_relativistic"
+      ],
+      "title": "EnergyComponentKind",
+      "type": "string"
     },
     "EnergyCorrectionApplicationRole": {
       "enum": [
@@ -3926,6 +3956,17 @@
           "default": null,
           "title": "Cabs Basis"
         },
+        "core_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "dispersion": {
           "anyOf": [
             {
@@ -4797,6 +4838,25 @@
       ],
       "title": "SCFStabilityStatus",
       "type": "string"
+    },
+    "SPEnergyComponentPayload": {
+      "additionalProperties": false,
+      "description": "One deposited part of a single point's electronic energy (ADR 0021).\n\n:param component: Which part: ``reference`` (the SCF / HF energy),\n    ``correlation``, ``triples``, ``dboc``, ``scalar_relativistic``, or\n    ``total`` (the whole electronic energy).\n:param value_hartree: The part's value in hartree, as the program printed\n    it. TCKDB checks it against the single point's energy but never\n    derives or fills one.",
+      "properties": {
+        "component": {
+          "$ref": "#/$defs/EnergyComponentKind"
+        },
+        "value_hartree": {
+          "title": "Value Hartree",
+          "type": "number"
+        }
+      },
+      "required": [
+        "component",
+        "value_hartree"
+      ],
+      "title": "SPEnergyComponentPayload",
+      "type": "object"
     },
     "SPResultPayload": {
       "additionalProperties": false,

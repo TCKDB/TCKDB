@@ -215,6 +215,8 @@ def _to_calc_with_results_payload(
         freq_result=calc_in.freq_result,
         sp_result=calc_in.sp_result,
         composite_result=calc_in.composite_result,
+
+        sp_energy_components=list(calc_in.sp_energy_components),
         irc_result=calc_in.irc_result,
         path_search_result=calc_in.path_search_result,
         wavefunction_diagnostic=calc_in.wavefunction_diagnostic,

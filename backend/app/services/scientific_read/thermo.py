@@ -5,6 +5,8 @@ See docs/specs/read_api_mvp.md §Endpoint 4.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -18,6 +20,7 @@ from app.db.models.calculation import (
     CalculationSCFStability,
 )
 from app.db.models.common import (
+    CalculationType,
     RecordReviewStatus,
     SCFStabilityStatus,
     StatmechCalculationRole,
@@ -185,15 +188,17 @@ _DEFAULT_SORT_ECHO = (
     "review_rank,created_at,id"
 )
 
-# Priority order: composite → sp → freq → opt → any. The energy part of this
-# is R1's (``app.services.calculation_levels.derive_levels``: composite > sp >
-# opt, ADR 0021 decision 4); it used to read sp → composite and so named a
-# different calculation than the levels block of the same record. ``freq``
-# sits before ``opt`` as it always has: R1's energy chain has no ``freq`` in it,
-# this picker also chooses the record's software, and that part is unchanged.
+# Priority order for links that are not a typed composite: sp → composite →
+# freq → opt → any. A calculation of *type* ``composite`` ranks above all of
+# these (``_primary_calc_id`` takes it first), which is R1's energy order
+# (``app.services.calculation_levels.derive_levels``: composite > sp > opt,
+# ADR 0021 decision 4); the ``composite`` entry here is only the legacy shape,
+# a calculation of another type linked under that role, which keeps the place it
+# always had. ``freq`` sits before ``opt`` as ever: R1's energy chain has no
+# ``freq`` in it and this picker also chooses the record's software.
 _LOT_FILTER_ROLE_PRIORITY = (
-    ThermoCalculationRole.composite,
     ThermoCalculationRole.sp,
+    ThermoCalculationRole.composite,
     ThermoCalculationRole.freq,
     ThermoCalculationRole.opt,
 )
@@ -376,7 +381,9 @@ def get_species_thermo(
         sc.calculation_id
         for srcs in (*sources_by_thermo.values(), *statmech_sources_by_id.values())
         for sc in srcs
-        if sc.role.value == "composite" and sc.calculation_id in calc_meta
+        if sc.role.value == "composite"
+        and sc.calculation_id in calc_meta
+        and calc_meta[sc.calculation_id]["type"] == CalculationType.composite
     }
     composite_facts = composite_role_facts(
         session, {cid: calc_meta[cid]["lot_id"] for cid in composite_calc_ids}
@@ -860,6 +867,9 @@ def _statmech_primary_calc_id(
     """Pick a primary calculation id from statmech sources using the same
     role priority the thermo service uses (sp → composite → freq → opt).
     """
+    for sc in statmech_sources:
+        if _is_composite_link(sc):
+            return sc.calculation_id
     for role in (
         StatmechCalculationRole.sp,
         StatmechCalculationRole.composite,
@@ -921,6 +931,7 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
             SoftwareRelease.version,
             CalculationGeometryValidation.validation_status,
             CalculationSCFStability.status,
+            LevelOfTheory.core_treatment,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -958,6 +969,7 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
             "software_version": row[11],
             "geometry_validation": row[12],
             "scf_stability": row[13],
+            "lot_core_treatment": row[14],
         }
         for row in rows
     }
@@ -1116,7 +1128,23 @@ def _fallback_temperature_range(
     return row_min, row_max
 
 
+def _is_composite_link(sc: Any) -> bool:
+    """A source link whose role is ``composite`` *and* whose calculation is one."""
+    calculation = getattr(sc, "calculation", None)
+    return (
+        sc.role.value == "composite"
+        and calculation is not None
+        and calculation.type == CalculationType.composite
+    )
+
+
 def _primary_calc_id(sources: list[ThermoSourceCalculation]) -> int | None:
+    # A calculation of type ``composite`` is the record's energy and so comes first
+    # (R1, ADR 0021). A calculation of another type linked under the role
+    # ``composite`` is the legacy shape and keeps its old place in the priority.
+    for sc in sources:
+        if _is_composite_link(sc):
+            return sc.calculation_id
     for role in _LOT_FILTER_ROLE_PRIORITY:
         for sc in sources:
             if sc.role == role:
@@ -1280,6 +1308,7 @@ def _lot_summary(meta: dict) -> LevelOfTheorySummary | None:
         basis=meta["lot_basis"],
         dispersion=meta["lot_dispersion"],
         solvent=meta["lot_solvent"],
+        core_treatment=meta["lot_core_treatment"],
         label="/".join(p for p in label_parts if p),
         composite_scheme=meta.get("composite_scheme"),
     )
@@ -1367,14 +1396,19 @@ def _build_levels_thermo(
     """
     role_calc_ids = _thermo_role_calc_id_lists(sources, statmech_sources)
 
+    def is_composite(cid: int) -> bool:
+        return calc_meta[cid]["type"] == CalculationType.composite
+
     def infos(role: str) -> list[RoleCalcInfo]:
         if role == "composite":
+            # Only a calculation of type ``composite`` is a composite energy;
+            # the legacy shape is read through ``legacy_infos``.
             return [
                 composite_role_info(
                     calc_meta[cid]["lot_id"], cid in freq_calc_ids, composite_facts.get(cid)
                 )
                 for cid in role_calc_ids.get(role, [])
-                if cid in calc_meta
+                if cid in calc_meta and is_composite(cid)
             ]
         return [
             RoleCalcInfo(
@@ -1391,6 +1425,11 @@ def _build_levels_thermo(
         sps=infos("sp"),
         composites=infos("composite"),
         importeds=infos("imported"),
+        legacy_composites=[
+            RoleCalcInfo(lot_id=calc_meta[cid]["lot_id"], carries_frequencies=cid in freq_calc_ids)
+            for cid in role_calc_ids.get("composite", [])
+            if cid in calc_meta and not is_composite(cid)
+        ],
     )
     return ScientificLevelsSummary(
         geometry=_lot_summary_from_id(

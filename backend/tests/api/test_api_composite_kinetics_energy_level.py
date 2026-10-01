@@ -165,3 +165,13 @@ def test_an_explicit_energy_role_may_cite_a_composite_calculation(client):
         }
     # And nothing else widened.
     assert _KINETICS_ROLE_COMPATIBILITY[KineticsCalculationRole.freq]["calculation_types"] == {CalculationType.freq}
+
+
+def test_a_composite_at_another_level_is_not_found_for_the_declared_energy_level(client):
+    """Only a composite at the declared level counts; a G4 composite is not a CBS-QB3 one."""
+    g4 = {"method": "G4"}
+    for species in (_METHYL, _H_ATOM, _METHANE):
+        _deposit(client, species, primary=_composite_calc(g4))
+    resp = _kinetics(client, energy_level=_CBS_QB3)
+    assert resp.status_code == 422, resp.text[:600]
+    assert "No SP calculation found" in resp.text

@@ -31,7 +31,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.db.models.common import CalculationType, FrequencyScaleKind, SpinTreatment
+from app.db.models.common import CalculationType, CoreTreatment, FrequencyScaleKind, SpinTreatment
 from app.schemas.reads.scientific_common import (
     CompositeSchemeSummary,
     ProfiledRequestEcho,
@@ -91,6 +91,8 @@ class LevelOfTheoryCoreBlock(BaseModel):
     solvent_model: str | None = None
     keywords: str | None = None
     spin_treatment: SpinTreatment | None = None
+    #: Frozen-core or all-electron; ``None`` = not stated (ADR 0021).
+    core_treatment: CoreTreatment | None = None
     lot_hash: str
     #: The composite recipe this level names (ADR 0021), or ``None`` for an
     #: ordinary level. Not part of ``lot_hash``.

@@ -27,6 +27,7 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationDependencyRole,
     CalculationType,
+    CoreTreatment,
     KineticsCalculationRole,
     KineticsDegeneracyConvention,
     KineticsModelKind,
@@ -853,7 +854,7 @@ def _build_provenance(
     ts_freq_calc_id = _first_calc_with_type(
         by_role, calc_meta, CalculationType.freq
     )
-    ts_sp_calc_id = _first_calc_with_type(by_role, calc_meta, CalculationType.sp)
+    ts_sp_calc_id = _ts_energy_calc(by_role, calc_meta)
 
     path_search_calc = _first_path_search_calc(by_role, calc_meta)
     path_search_summary: PathSearchSummary | None = None
@@ -1048,6 +1049,7 @@ class _CalcMeta:
         "composite_scheme",
         "id",
         "lot_basis",
+        "lot_core_treatment",
         "lot_dispersion",
         "lot_id",
         "lot_method",
@@ -1080,6 +1082,7 @@ class _CalcMeta:
         software_version: str | None,
         parameters_json: dict | None,
         composite_scheme: CompositeSchemeSummary | None = None,
+        lot_core_treatment: CoreTreatment | None = None,
     ):
         self.composite_scheme = composite_scheme
         self.id = id
@@ -1091,6 +1094,7 @@ class _CalcMeta:
         self.lot_basis = lot_basis
         self.lot_dispersion = lot_dispersion
         self.lot_solvent = lot_solvent
+        self.lot_core_treatment = lot_core_treatment
         self.software_release_id = software_release_id
         self.software_release_ref = software_release_ref
         self.software_name = software_name
@@ -1135,6 +1139,7 @@ def _calc_metadata(
             SoftwareRelease.public_ref,
             Software.name,
             SoftwareRelease.version,
+            LevelOfTheory.core_treatment,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -1163,6 +1168,7 @@ def _calc_metadata(
             software_name=row[12],
             software_version=row[13],
             composite_scheme=schemes.get(row[3]),
+            lot_core_treatment=row[14],
         )
         for row in rows
     }
@@ -1581,6 +1587,24 @@ def _first_calc_with_type(
     return None
 
 
+def _ts_energy_calc(
+    by_role: dict[KineticsCalculationRole, list[KineticsSourceCalculation]],
+    calc_meta: dict[int, _CalcMeta],
+) -> int | None:
+    """The calculation cited as the transition state's energy.
+
+    Taken from the ``ts_energy`` role only, and only if it is a single point or
+    a composite energy. It used to be the first ``sp`` found under *any* role,
+    so a reactant's single point (role ``reactant_energy``) was reported as the
+    transition state's whenever it was listed first.
+    """
+    for sc in by_role.get(KineticsCalculationRole.ts_energy, []):
+        meta = calc_meta.get(sc.calculation_id)
+        if meta is not None and meta.type in (CalculationType.sp, CalculationType.composite):
+            return sc.calculation_id
+    return None
+
+
 def _first_path_search_calc(
     by_role: dict[KineticsCalculationRole, list[KineticsSourceCalculation]],
     calc_meta: dict[int, _CalcMeta],
@@ -1612,6 +1636,7 @@ def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None
         basis=meta.lot_basis,
         dispersion=meta.lot_dispersion,
         solvent=meta.lot_solvent,
+        core_treatment=meta.lot_core_treatment,
         label="/".join(p for p in label_parts if p),
         composite_scheme=meta.composite_scheme,
     )

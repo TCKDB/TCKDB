@@ -11,6 +11,7 @@ from tckdb_schemas.enums import (
     CalculationType,
     CompositeAssembly,
     ConstraintKind,
+    EnergyComponentKind,
     HessianSource,
     ImaginaryModeDisposition,
     IRCDirection,
@@ -27,6 +28,7 @@ from tckdb_schemas.fragments.refs import (
     WorkflowToolReleaseRef,
 )
 from tckdb_schemas.literature import LiteratureUploadRequest
+from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.stationary_point import (
     ImaginaryMode,
     StationaryPointFinding,
@@ -418,10 +420,36 @@ COMPOSITE_E0_INCONSISTENT = "composite_e0_inconsistent"
 #: terms are given and the total is present.
 COMPOSITE_TERMS_DO_NOT_SUM = "composite_terms_do_not_sum"
 
-#: Tolerance, in hartree, of the two arithmetic checks above (ADR 0021: 1e-6 Eh).
-#: A deposit that differs by more than this is blocked; TCKDB never replaces a
-#: stated number with one it computed.
+#: Floor, in hartree, of the tolerance of the two arithmetic checks above
+#: (ADR 0021: 1e-6 Eh). A deposit that differs by more than the tolerance is
+#: blocked; TCKDB never replaces a stated number with one it computed.
 COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE = 1e-6
+
+#: Rounding error of one number as a program prints it: half a unit of its
+#: last digit. Gaussian prints every energy of a composite method to six
+#: decimals, so each printed quantity is wrong by up to 5e-7 hartree.
+COMPOSITE_PRINTED_ROUNDING_HARTREE = 5e-7
+
+#: Slack for the binary representation of the two sides of a comparison, so a
+#: gap that is exactly the tolerance on paper is not refused because of how
+#: it is stored. Far below any printed digit.
+_FLOAT_NOISE = 1e-12
+
+
+def composite_arithmetic_tolerance_hartree(rounded_quantities: int) -> float:
+    """The tolerance of an equation among ``rounded_quantities`` printed numbers.
+
+    ``max(1e-6, 5e-7 * n)``: an equation in which ``n`` numbers were each
+    rounded to six decimals can disagree by up to ``n * 5e-7`` hartree without
+    anything being wrong, so seven CBS-QB3 terms and their total (n = 8) may
+    differ by 4e-6. The fixed 1e-6 floor still applies to short equations.
+    The check is for a number that is *wrong*, not for printed precision.
+
+    :param rounded_quantities: How many numbers in the equation are rounded
+        values: ``len(terms) + 1`` for the terms and their total, 3 for
+        ``e0 = electronic + zpe``.
+    """
+    return max(COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE, COMPOSITE_PRINTED_ROUNDING_HARTREE * rounded_quantities)
 
 
 class CompositeTermPayload(SchemaBase):
@@ -476,7 +504,7 @@ class CompositeResultPayload(SchemaBase):
 
     @model_validator(mode="after")
     def validate_arithmetic(self) -> Self:
-        """The stated composite energies must agree with each other, within 1e-6 hartree.
+        """The stated composite energies must agree with each other, to printed precision.
 
         With ``e0_hartree``, ``electronic_energy_hartree`` and
         ``recipe_zpe_hartree`` all present, ``e0_hartree`` must be their sum
@@ -499,10 +527,12 @@ def assert_composite_result_arithmetic(result: "CompositeResultPayload") -> None
 
     * ``composite_e0_inconsistent``: when ``e0_hartree``,
       ``electronic_energy_hartree`` and ``recipe_zpe_hartree`` are all present,
-      ``|e0 - (electronic + zpe)|`` must be at most 1e-6 hartree.
+      ``|e0 - (electronic + zpe)|`` must be within
+      :func:`composite_arithmetic_tolerance_hartree` of three rounded quantities
+      (1.5e-6 hartree).
     * ``composite_terms_do_not_sum``: when terms are given and
       ``electronic_energy_hartree`` is present, ``|sum(terms) - electronic|``
-      must be at most 1e-6 hartree.
+      must be within the tolerance of ``len(terms) + 1`` rounded quantities.
 
     :raises CodedValidationError: on either contradiction.
     """
@@ -511,38 +541,40 @@ def assert_composite_result_arithmetic(result: "CompositeResultPayload") -> None
     zpe = result.recipe_zpe_hartree
     if electronic is not None and e0 is not None and zpe is not None:
         gap = e0 - (electronic + zpe)
-        if abs(gap) > COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE:
+        tolerance = composite_arithmetic_tolerance_hartree(3)
+        if abs(gap) > tolerance + _FLOAT_NOISE:
             raise CodedValidationError(
                 COMPOSITE_E0_INCONSISTENT,
                 f"In composite_result, e0_hartree ({e0!r}) is not electronic_energy_hartree "
                 f"({electronic!r}) plus recipe_zpe_hartree ({zpe!r}); they differ by "
                 f"{gap:.3e} hartree and the tolerance is "
-                f"{COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE:.0e}. The 0 K energy includes the "
+                f"{tolerance:.2e}. The 0 K energy includes the "
                 "recipe's scaled zero-point energy and the electronic energy does not, so the "
                 "three numbers must agree. Send the values the program printed, or omit the one "
                 "you did not read.",
                 context={
                     "field": "composite_result",
                     "difference_hartree": gap,
-                    "tolerance_hartree": COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE,
+                    "tolerance_hartree": tolerance,
                 },
                 message_prefix=False,
             )
     if result.terms and electronic is not None:
         total = sum(t.value_hartree for t in result.terms)
         gap = total - electronic
-        if abs(gap) > COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE:
+        tolerance = composite_arithmetic_tolerance_hartree(len(result.terms) + 1)
+        if abs(gap) > tolerance + _FLOAT_NOISE:
             raise CodedValidationError(
                 COMPOSITE_TERMS_DO_NOT_SUM,
                 f"In composite_result, the terms sum to {total!r} hartree but "
                 f"electronic_energy_hartree is {electronic!r}; they differ by {gap:.3e} hartree "
-                f"and the tolerance is {COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE:.0e}. The terms "
+                f"and the tolerance is {tolerance:.2e}. The terms "
                 "are a breakdown of the ZPE-free energy with every recipe term included. Send "
                 "every term, or omit the terms.",
                 context={
                     "field": "composite_result.terms",
                     "difference_hartree": gap,
-                    "tolerance_hartree": COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE,
+                    "tolerance_hartree": tolerance,
                 },
                 message_prefix=False,
             )
@@ -580,6 +612,21 @@ def assert_composite_result_matches_type(
             context={"field": "composite_result", "calculation_type": calc_type.value},
             message_prefix=False,
         )
+
+
+class SPEnergyComponentPayload(SchemaBase):
+    """One deposited part of a single point's electronic energy (ADR 0021).
+
+    :param component: Which part: ``reference`` (the SCF / HF energy),
+        ``correlation``, ``triples``, ``dboc``, ``scalar_relativistic``, or
+        ``total`` (the whole electronic energy).
+    :param value_hartree: The part's value in hartree, as the program printed
+        it. TCKDB checks it against the single point's energy but never
+        derives or fills one.
+    """
+
+    component: EnergyComponentKind
+    value_hartree: float = Field(allow_inf_nan=False)
 
 
 class SCFStabilityBase(SchemaBase):
@@ -1136,6 +1183,8 @@ class CalculationWithResultsPayload(CalculationPayload):
     :param composite_result: Inline composite energy (type must be ``composite``,
         and a ``composite`` calculation must carry it). See
         :class:`CompositeResultPayload`.
+    :param sp_energy_components: Inline parts of the single point's
+        electronic energy (type must be ``sp``).
     :param irc_result: Inline IRC result bundle (type must be ``irc``).
     :param path_search_result: Inline path-search result bundle (type
         must be ``path_search``). Carries NEB, GSM, and other path-based
@@ -1157,6 +1206,9 @@ class CalculationWithResultsPayload(CalculationPayload):
     freq_result: FreqResultPayload | None = None
     sp_result: SPResultPayload | None = None
     composite_result: CompositeResultPayload | None = None
+    sp_energy_components: list[SPEnergyComponentPayload] = Field(
+        default_factory=list, description=SP_ENERGY_COMPONENTS_DESCRIPTION
+    )
     irc_result: IRCResultPayload | None = None
     path_search_result: PathSearchResultPayload | None = None
     # Resolved at the foot of this module: ``fragments.scan`` imports
@@ -1315,6 +1367,18 @@ class CalculationWithResultsPayload(CalculationPayload):
                     f"Expected '{allowed_field}' or no result."
                 )
         assert_composite_result_matches_type(self.type, self.composite_result)
+        return self
+
+    @model_validator(mode="after")
+    def validate_sp_energy_components(self) -> Self:
+        """Components sit on a single point and agree with its energy (ADR 0021)."""
+        check_sp_energy_components(
+            [(c.component, c.value_hartree) for c in self.sp_energy_components],
+            calculation_type=self.type,
+            electronic_energy_hartree=(
+                self.sp_result.electronic_energy_hartree if self.sp_result is not None else None
+            ),
+        )
         return self
 
     @model_validator(mode="after")

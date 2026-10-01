@@ -36,6 +36,7 @@ _GUARD_REVISIONS = (
     "b6c1f4a8e703_freeze_declared_atom_maps.py",
     "a1f6c3e9b527_freeze_evidence_under_accepted_roots.py",
     "a7d3f1c95e28_ts_evidence_kinds_and_unstated_irc_direction.py",
+    "e5b2d8a4c613_sp_energy_components_and_core_treatment.py",
     "f3b7d2a9c514_composite_calculation_type_and_result.py",
 )
 
@@ -145,3 +146,15 @@ def test_every_levels_reader_states_its_composites_and_the_session_ones_load_the
     for name in ("thermo.py", "statmech.py"):
         path = _APP / "services" / "scientific_read" / name
         assert "composite_role_facts" in path.read_text(), f"{name} never loads composite_role_facts"
+
+
+def test_every_workflow_that_persists_a_calculation_reports_named_composite_deposits() -> None:
+    """Inline calculations too: thermo, statmech, transport and network persist their own."""
+    persisting = set()
+    for name in ("resolve_and_persist_calculation_with_results", "persist_additional_calculations", "_persist_calculation"):
+        persisting |= {path for path, _ in _calls(name) if path.parent.name == "workflows"}
+    reporting = {path for path, _ in _calls("collect_named_composite_deposit_warnings")}
+    # conformer, thermo, statmech, transport, network, computed-species, computed-reaction, transition-state.
+    assert len(persisting) >= 7, sorted(p.name for p in persisting)
+    missing = sorted(p.name for p in persisting - reporting)
+    assert not missing, f"persist calculations but never report named-composite deposits: {missing}"

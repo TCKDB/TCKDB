@@ -24,6 +24,7 @@ from app.db.models.common import (
     CalculationType,
     ConstraintKind,
     CoordinateUnit,
+    EnergyComponentKind,
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
     EnergyUnit,
@@ -296,11 +297,29 @@ class CalculationEvidenceProvenanceSummary(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class CalculationSPEnergyComponentSummary(BaseModel):
+    """One deposited part of a single point's electronic energy (ADR 0021).
+
+    The value is what the depositor sent; TCKDB checked it against the
+    single point's energy at deposit and never derived it.
+    """
+
+    component: EnergyComponentKind
+    value_hartree: float
+
+
 class CalculationSPResultSummary(BaseModel):
-    """Summary projection of a ``calc_sp_result`` row."""
+    """Summary projection of a ``calc_sp_result`` row.
+
+    ``energy_components`` lists the parts of the electronic energy the
+    depositor sent (reference, correlation, ...), in the order of
+    :class:`~app.db.models.common.EnergyComponentKind`. Empty when none were
+    sent: an empty list says "no split deposited", never "no correlation".
+    """
 
     electronic_energy_hartree: float | None = None
     electronic_energy_uncertainty_hartree: float | None = None
+    energy_components: list[CalculationSPEnergyComponentSummary] = Field(default_factory=list)
 
 
 class CalculationCompositeTermSummary(BaseModel):
@@ -1498,6 +1517,7 @@ __all__ = [
     "CalculationResultSummary",
     "CalculationReviewEntry",
     "CalculationSCFStabilitySummary",
+    "CalculationSPEnergyComponentSummary",
     "CalculationSPResultSummary",
     "CalculationScanResultSummary",
     "CalculationScanSummary",

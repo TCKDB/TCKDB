@@ -178,6 +178,7 @@ def _build(
         LevelOfTheory.basis,
         LevelOfTheory.dispersion,
         LevelOfTheory.solvent,
+        LevelOfTheory.core_treatment,
     ).select_from(Calculation)
     if join is not None:
         target, onclause = join
@@ -206,6 +207,7 @@ def _build(
             basis=row.basis,
             dispersion=row.dispersion,
             solvent=row.solvent,
+            core_treatment=row.core_treatment,
             label=None,
             composite_scheme=schemes.get(row.id),
         )

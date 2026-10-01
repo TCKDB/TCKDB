@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_valid
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
-from tckdb_schemas.enums import FrequencyScaleKind, SpinTreatment
+from tckdb_schemas.enums import CoreTreatment, FrequencyScaleKind, SpinTreatment
 from tckdb_schemas.upload_warning import UploadWarning
 from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 
@@ -499,6 +499,10 @@ class LevelOfTheoryRef(SchemaBase):
     solvent_model: str | None = None
     keywords: str | None = None
     spin_treatment: SpinTreatment | None = None
+    #: Frozen-core or all-electron (ADR 0021). State it only when the run
+    #: says so; leave it out otherwise. It joins the level's identity only
+    #: when given, so a payload that omits it is the level it always was.
+    core_treatment: CoreTreatment | None = None
 
     # Bookkeeping, as on ``SoftwareReleaseRef``: not wire fields, read back
     # through ``method_warning()``.

@@ -9,6 +9,8 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.sql import ColumnElement
+from tckdb_schemas.fragments.calculation import assert_composite_result_matches_type
+from tckdb_schemas.sp_energy_components import check_sp_energy_components
 from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 
 from app.api.error_contract import CodedValueError
@@ -33,6 +35,7 @@ from app.db.models.calculation import (
     CalculationPathSearchPoint,
     CalculationPathSearchResult,
     CalculationSCFStability,
+    CalculationSPEnergyComponent,
     CalculationSpinDiagnostic,
     CalculationSPResult,
     CalculationWavefunctionDiagnostic,
@@ -164,6 +167,13 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
             or "unknown"
         ),
     }
+    # ADR 0021: core treatment (frozen-core vs all-electron) is identity only
+    # when stated. A NULL adds no key, so every level that exists today keeps
+    # the exact hash it has. Do not fold NULL to a placeholder the way
+    # spin_treatment does: that would re-key every row.
+    core_treatment = getattr(ref.core_treatment, "value", ref.core_treatment)
+    if core_treatment is not None:
+        payload["core_treatment"] = core_treatment
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
@@ -256,6 +266,7 @@ def resolve_level_of_theory_ref(
                     solvent_model=ref.solvent_model,
                     keywords=ref.keywords,
                     spin_treatment=ref.spin_treatment,
+                    core_treatment=ref.core_treatment,
                     lot_hash=lot_hash,
                 )
                 session.add(level_of_theory)
@@ -1299,8 +1310,37 @@ def persist_calculation_result(
             )
         )
 
+    # The wire validators refuse a mismatch first. A payload built with
+    # ``model_copy`` skips them, and without this a ``composite`` calculation
+    # with no result would be stored with no binding, software or assembly
+    # check, and a result on another type would be dropped silently.
+    assert_composite_result_matches_type(calculation.type, calc_upload.composite_result)
     if calc_upload.composite_result is not None:
         persist_composite_result(session, calculation, calc_upload.composite_result)
+
+    if calc_upload.sp_energy_components:
+        # The wire models refuse these on a non-sp and on a contradictory set
+        # before they reach here (``check_sp_energy_components``). This is the
+        # same rule re-run at the write, so a caller that builds a payload
+        # without validation cannot store one (ADR 0021). Values are stored as
+        # deposited; nothing is derived.
+        check_sp_energy_components(
+            [(c.component, c.value_hartree) for c in calc_upload.sp_energy_components],
+            calculation_type=calculation.type,
+            electronic_energy_hartree=(
+                calc_upload.sp_result.electronic_energy_hartree
+                if calc_upload.sp_result is not None
+                else None
+            ),
+        )
+        for component in calc_upload.sp_energy_components:
+            session.add(
+                CalculationSPEnergyComponent(
+                    calculation_id=calculation.id,
+                    component=component.component,
+                    value_hartree=component.value_hartree,
+                )
+            )
 
     if calc_upload.irc_result is not None:
         if calculation.type != CalculationType.irc:

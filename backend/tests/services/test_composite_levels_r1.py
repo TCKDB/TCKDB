@@ -120,8 +120,16 @@ def test_the_first_composite_with_a_geometry_supplies_the_recipe():
 # -- the thermo provenance picker aligns with R1 --------------------------
 
 
-def _link(role: ThermoCalculationRole, calculation_id: int):
-    return SimpleNamespace(role=role, calculation_id=calculation_id, calculation=None)
+def _link(role: ThermoCalculationRole, calculation_id: int, calc_type: CalculationType | None = None):
+    """A source link; ``calc_type`` is the type of the calculation it points at."""
+    if calc_type is None:
+        calc_type = {
+            ThermoCalculationRole.composite: CalculationType.composite,
+            ThermoCalculationRole.sp: CalculationType.sp,
+            ThermoCalculationRole.freq: CalculationType.freq,
+            ThermoCalculationRole.opt: CalculationType.opt,
+        }[role]
+    return SimpleNamespace(role=role, calculation_id=calculation_id, calculation=SimpleNamespace(type=calc_type))
 
 
 @pytest.mark.parametrize("composite_first", [True, False])
@@ -141,14 +149,61 @@ def test_the_thermo_picker_still_prefers_the_sp_to_freq_and_opt():
     assert _primary_calc_id(links) == 3
 
 
-def test_the_thermo_picker_energy_order_is_the_r1_energy_order():
-    """composite before sp before opt, in the same order ``derive_levels`` ranks them."""
-    energy_roles = [r for r in _LOT_FILTER_ROLE_PRIORITY if r is not ThermoCalculationRole.freq]
-    assert energy_roles == [
-        ThermoCalculationRole.composite,
+def test_a_legacy_composite_role_link_keeps_its_old_place_in_the_thermo_picker():
+    """A calculation of another type under role ``composite`` is not a composite energy.
+
+    On main the order is sp -> composite -> freq -> opt; for the legacy shape that is
+    unchanged, so an sp still outranks it and it still outranks freq and opt.
+    """
+    legacy = _link(ThermoCalculationRole.composite, 12, CalculationType.sp)
+    assert _primary_calc_id([legacy, _link(ThermoCalculationRole.sp, 11)]) == 11
+    assert _primary_calc_id([_link(ThermoCalculationRole.opt, 1), legacy]) == 12
+    assert _primary_calc_id([_link(ThermoCalculationRole.freq, 2), legacy]) == 12
+
+
+def test_a_typed_composite_outranks_a_legacy_composite_and_an_sp():
+    typed = _link(ThermoCalculationRole.composite, 13)
+    legacy = _link(ThermoCalculationRole.composite, 12, CalculationType.sp)
+    assert _primary_calc_id([legacy, _link(ThermoCalculationRole.sp, 11), typed]) == 13
+
+
+def test_the_non_composite_part_of_the_thermo_priority_is_the_pre_existing_one():
+    assert list(_LOT_FILTER_ROLE_PRIORITY) == [
         ThermoCalculationRole.sp,
+        ThermoCalculationRole.composite,
+        ThermoCalculationRole.freq,
         ThermoCalculationRole.opt,
     ]
+
+
+def test_the_statmech_picker_takes_the_same_split():
+    from app.db.models.common import StatmechCalculationRole
+    from app.services.scientific_read.thermo import _statmech_primary_calc_id
+
+    def link(role, calculation_id, calc_type):
+        return SimpleNamespace(role=role, calculation_id=calculation_id, calculation=SimpleNamespace(type=calc_type))
+
+    sp = link(StatmechCalculationRole.sp, 11, CalculationType.sp)
+    legacy = link(StatmechCalculationRole.composite, 12, CalculationType.sp)
+    typed = link(StatmechCalculationRole.composite, 13, CalculationType.composite)
+    assert _statmech_primary_calc_id([legacy, sp]) == 11
+    assert _statmech_primary_calc_id([sp, typed]) == 13
+    assert _statmech_primary_calc_id([legacy]) == 12
+
+
+# -- the legacy slot of derive_levels --------------------------------------
+
+
+def test_a_legacy_composite_ranks_below_an_opt_and_an_sp_and_supplies_no_recipe():
+    legacy = RoleCalcInfo(lot_id=3, has_output_geometry=True, recipe_geometry_lot_id=5, recipe_frequency_lot_id=6)
+    with_sp = derive_levels(opts=[OPT], sps=[SP], legacy_composites=[legacy])
+    assert (with_sp.energy_lot_id, with_sp.energy_source) == (2, "sp")
+    with_opt = derive_levels(opts=[OPT], legacy_composites=[legacy])
+    assert (with_opt.energy_lot_id, with_opt.energy_source) == (1, "opt")
+    alone = derive_levels(legacy_composites=[legacy], importeds=[IMPORTED])
+    assert (alone.energy_lot_id, alone.energy_source) == (3, "composite")
+    # Nothing says a plain calculation ran a recipe: no geometry / frequency from it.
+    assert (alone.geometry_lot_id, alone.geometry_source, alone.frequency_lot_id) == (None, None, None)
 
 
 # -- the kinetics read maps a ts_energy citation of a composite to composite ----

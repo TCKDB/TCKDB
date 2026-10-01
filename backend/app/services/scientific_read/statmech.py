@@ -532,13 +532,13 @@ def _build_levels(
 
     # Composite-role calculations also say where the geometry and frequency
     # levels come from when no opt / freq is linked (ADR 0021, R1).
+    typed_composite_ids = [
+        cid
+        for cid in role_calc_ids.get("composite", [])
+        if cid in calcs and calcs[cid].type == CalculationType.composite
+    ]
     composite_facts = composite_role_facts(
-        session,
-        {
-            cid: calcs[cid].lot_id
-            for cid in role_calc_ids.get("composite", [])
-            if cid in calcs
-        },
+        session, {cid: calcs[cid].lot_id for cid in typed_composite_ids}
     )
 
     def infos(role: str) -> list[RoleCalcInfo]:
@@ -549,7 +549,7 @@ def _build_levels(
                     calc.freq_result is not None,
                     composite_facts.get(cid),
                 )
-                for cid in role_calc_ids.get(role, [])
+                for cid in typed_composite_ids
                 if (calc := calcs.get(cid)) is not None
             ]
         return [
@@ -566,6 +566,13 @@ def _build_levels(
         sps=infos("sp"),
         composites=infos("composite"),
         importeds=infos("imported"),
+        # The legacy shape: a calculation of another type linked under the role
+        # ``composite`` keeps the slot it had before the type existed.
+        legacy_composites=[
+            RoleCalcInfo(lot_id=calc.lot_id, carries_frequencies=calc.freq_result is not None)
+            for cid in role_calc_ids.get("composite", [])
+            if (calc := calcs.get(cid)) is not None and cid not in typed_composite_ids
+        ],
     )
     return ScientificLevelsSummary(
         geometry=_build_lot_summary(session, derived.geometry_lot_id),
@@ -727,6 +734,7 @@ def _build_lot_summary(
         dispersion=lot.dispersion,
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
+        core_treatment=lot.core_treatment,
         label=None,
         composite_scheme=composite_scheme_summary(session, lot.id),
     )
@@ -886,6 +894,7 @@ def _bulk_lot_summaries(
             dispersion=lot.dispersion,
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
+            core_treatment=lot.core_treatment,
             label=None,
             composite_scheme=schemes.get(lot.id),
         )

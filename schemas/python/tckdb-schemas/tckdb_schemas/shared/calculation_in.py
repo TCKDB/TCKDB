@@ -32,6 +32,7 @@ from tckdb_schemas.fragments.calculation import (
     SCFStabilityContent,
     SCFStabilityPayload,
     SpinDiagnosticPayload,
+    SPEnergyComponentPayload,
     SPResultPayload,
     WavefunctionDiagnosticPayload,
     assert_composite_result_matches_type,
@@ -43,6 +44,7 @@ from tckdb_schemas.fragments.refs import (
 )
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.literature import LiteratureUploadRequest
+from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_transition_state_frequency,
@@ -93,6 +95,8 @@ class CalculationIn(SchemaBase):
     :param composite_result: Composite energy (type must be ``composite``, and a
         ``composite`` calculation must carry it). See
         :class:`~tckdb_schemas.fragments.calculation.CompositeResultPayload`.
+    :param sp_energy_components: The parts of the single point's electronic
+        energy (reference, correlation, ...), single points only (ADR 0021).
     :param opt_converged: Opt result (if type=opt).
     :param opt_n_steps: Opt result (if type=opt).
     :param opt_final_energy_hartree: Opt result (if type=opt).
@@ -126,6 +130,9 @@ class CalculationIn(SchemaBase):
 
     # Optional inline results (avoids separate result upload)
     sp_electronic_energy_hartree: float | None = None
+    sp_energy_components: list[SPEnergyComponentPayload] = Field(
+        default_factory=list, description=SP_ENERGY_COMPONENTS_DESCRIPTION
+    )
 
     #: The composite energy block (ADR 0021): the one result that is a block
     #: rather than flat fields, because it carries a list of terms.
@@ -174,6 +181,16 @@ class CalculationIn(SchemaBase):
     def validate_composite_result_matches_type(self) -> Self:
         """``type: "composite"`` and ``composite_result`` come together or not at all."""
         assert_composite_result_matches_type(self.type, self.composite_result)
+        return self
+
+    @model_validator(mode="after")
+    def validate_sp_energy_components(self) -> Self:
+        """Components sit on a single point and agree with its energy (ADR 0021)."""
+        check_sp_energy_components(
+            [(c.component, c.value_hartree) for c in self.sp_energy_components],
+            calculation_type=self.type,
+            electronic_energy_hartree=self.sp_electronic_energy_hartree,
+        )
         return self
 
 
@@ -369,6 +386,7 @@ def calculation_in_to_with_results_payload(
         freq_result=freq_result,
         sp_result=sp_result,
         composite_result=calc_in.composite_result,
+        sp_energy_components=list(calc_in.sp_energy_components),
         hessian=calc_in.hessian,
         wavefunction_diagnostic=calc_in.wavefunction_diagnostic,
         spin_diagnostic=calc_in.spin_diagnostic,

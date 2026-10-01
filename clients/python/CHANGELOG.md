@@ -1,9 +1,9 @@
 # Changelog
 
-## 0.108.0 - 2026-10-01
+## 0.109.0 - 2026-10-01
 
 `RejectionCode` gains ten codes, regenerated from the server's catalogue
-(ADR 0021, `tckdb-schemas` 0.69.0): `composite_assembled_not_accepted`,
+(ADR 0021, `tckdb-schemas` 0.70.0): `composite_assembled_not_accepted`,
 `composite_e0_inconsistent`, `composite_level_not_scheme_bound`,
 `composite_program_run_requires_software`,
 `composite_result_requires_composite_type`, `composite_term_position_unknown`,
@@ -15,6 +15,17 @@ conformer primary of type `composite` now passes the builders' primary-type
 check (the rule is `tckdb-schemas`'). The typed builders still build only
 `opt`, `freq` and `sp` calculations; send a composite calculation as a payload.
 Nothing else in the client changes.
+
+## 0.108.0 - 2026-10-01
+
+`RejectionCode` gains `sp_energy_component_not_on_sp`,
+`sp_energy_components_require_energy`, `sp_energy_component_duplicate`, `sp_energy_component_total_mismatch` and
+`sp_energy_components_do_not_sum`, regenerated from the server's catalogue
+(ADR 0021, `tckdb-schemas` 0.69.0). They are the refusals for the new
+`sp_energy_components[]` field on single points. Reads of a level of theory now carry
+`core_treatment` (`frozen_core`, `all_electron` or `null`) and a single point's
+result carries `energy_components`; both arrive in the existing JSON shapes. The
+client's request builders are unchanged.
 
 ## 0.107.0 - 2026-10-01
 

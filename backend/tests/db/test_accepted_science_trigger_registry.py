@@ -48,10 +48,15 @@ _COMPOSITE_RESULT_REVISION = _VERSIONS / "f3b7d2a9c514_composite_calculation_typ
 #: The revisions that extend ``c6f2a9d4e7b1``'s regime by adding guards under
 #: their own ``_trigger_name``. Both halves of this test iterate this list, so
 #: a fourth such revision is wired in by adding it here once.
+#: ``e5b2d8a4c613`` adds ``calc_sp_energy_component``, an ownership child of
+#: ``calculation`` guarded like ``calc_sp_result``, with the TRUNCATE refusal.
+_SP_COMPONENT_REVISION = _VERSIONS / "e5b2d8a4c613_sp_energy_components_and_core_treatment.py"
+
 _EXTENSION_REVISIONS = (
     _ATOM_MAP_REVISION,
     _EVIDENCE_REVISION,
     _EVIDENCE_KINDS_REVISION,
+    _SP_COMPONENT_REVISION,
     _COMPOSITE_RESULT_REVISION,
 )
 

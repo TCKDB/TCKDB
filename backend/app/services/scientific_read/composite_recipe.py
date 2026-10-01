@@ -9,7 +9,7 @@ the composite scheme its level of theory is bound to (the levels the named
 method runs inside itself). Every reader that calls ``derive_levels`` (thermo,
 statmech, kinetics) gets them here, in two bulk statements, so the three cannot
 answer "where does a composite record's geometry level come from" differently.
-``backend/tests/invariants/test_composite_recipe_levels_everywhere.py`` fails a
+``backend/tests/invariants/test_composite_p3a_invariants.py`` fails a
 caller of ``derive_levels`` that does not.
 """
 
