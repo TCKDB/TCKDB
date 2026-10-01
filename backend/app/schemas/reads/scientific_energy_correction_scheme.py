@@ -194,7 +194,14 @@ class ScientificEnergyCorrectionSchemeRecord(BaseModel):
     """One ECS row projected as a scientific record."""
 
     energy_correction_scheme: EnergyCorrectionSchemeCoreBlock
+    #: The level of theory the parameters belong to; for a scheme keyed on
+    #: an ``energy//frequency`` pair, the energy half.
     level_of_theory: LevelOfTheorySummary | None = None
+    #: The frequency half of an ``energy//frequency`` key (Arkane's
+    #: ``CompositeLevelOfTheory(freq=..., energy=...)``), or ``null`` when
+    #: the scheme is keyed on one level. Part of the scheme's identity, so
+    #: two schemes that differ only here are two schemes.
+    frequency_level_of_theory: LevelOfTheorySummary | None = None
     software_release: SoftwareReleaseSummary | None = None
     workflow_tool_release: WorkflowToolReleaseSummary | None = None
     literature: LiteratureSummary | None = None

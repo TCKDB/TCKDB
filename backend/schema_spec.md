@@ -1539,7 +1539,8 @@ Notes:
 - `id`
 - `kind`
 - `name`
-- `level_of_theory_id`
+- `level_of_theory_id` (the energy level of an `energy//frequency` key)
+- `frequency_level_of_theory_id` (the frequency level of an `energy//frequency` key; part of identity; NULL when the scheme is keyed on one level)
 - `source_literature_id`
 - `software_release_id`
 - `workflow_tool_release_id`

@@ -54,12 +54,19 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     scheme is created. Identity has two forms, chosen by ``data_revision``:
 
     * ``data_revision`` **absent**: ``(kind, name, level_of_theory,
-      source_literature, software_release, workflow_tool_release)``. This is
-      the original identity, unchanged, so every scheme deposited before
-      ``data_revision`` existed keeps its identity and its public ref.
+      frequency_level_of_theory, source_literature, software_release,
+      workflow_tool_release)``. This is the original identity, unchanged, so
+      every scheme deposited before ``data_revision`` existed keeps its
+      identity and its public ref.
     * ``data_revision`` **present**: ``(kind, name, level_of_theory,
-      source_literature, software_release, data_revision)``. The workflow
-      tool build is *not* part of this identity; see below.
+      frequency_level_of_theory, source_literature, software_release,
+      data_revision)``. The workflow tool build is *not* part of this
+      identity; see below.
+
+    ``frequency_level_of_theory`` is part of identity in both forms, and an
+    absent value is a value of its own: a scheme sent without one never
+    matches a scheme that has one, and keeps exactly the identity it had
+    before the field existed.
 
     A scheme deposited without ``data_revision`` never matches one
     deposited with it, even when the tables are identical: absence says
@@ -88,6 +95,19 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,
         which are physical/reference constants. Strongly advised for the
         three software-scoped kinds, never required.
+    :param level_of_theory: The level of theory the correction parameters
+        belong to. For a scheme keyed on an ``energy//frequency`` pair this
+        is the **energy** level.
+    :param frequency_level_of_theory: The level of theory the frequencies
+        (and so the ZPE and thermal terms) were computed at, for a scheme
+        keyed on both. Arkane keys Petersson and Melius BAC, and some
+        atom-energy tables, on ``CompositeLevelOfTheory(freq=..., energy=...)``;
+        send the ``energy`` half in ``level_of_theory`` and the ``freq`` half
+        here. The same energy level with two different frequency levels is
+        two schemes. Resolved exactly like ``level_of_theory`` (a duplicate
+        level that was merged resolves to the one that holds it). Optional:
+        omit it for a scheme keyed on one level, and nothing is assumed. A
+        scheme is never stored with an inferred frequency level.
     :param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose
         data file was the proximate source, when the scheme was looked
         up from a tool table rather than directly from a paper. Mirrors
@@ -134,6 +154,7 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     kind: EnergyCorrectionSchemeKind
     name: str = Field(min_length=1)
     level_of_theory: LevelOfTheoryRef | None = None
+    frequency_level_of_theory: LevelOfTheoryRef | None = None
     source_literature: LiteratureUploadRequest | None = None
     software: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None

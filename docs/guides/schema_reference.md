@@ -1454,6 +1454,7 @@ the gap.
 | `kind` | EnergyCorrectionSchemeKind (enum) | no | — | — | `atom_energy`, `atom_hf`, `atom_thermal`, `soc`, `bac_petersson`, `bac_melius`, `isodesmic`, `other` | not documented |
 | `name` | TEXT | no | — | — | — | not documented |
 | `level_of_theory_id` | BIGINT | yes | — | level_of_theory.id | — | not documented |
+| `frequency_level_of_theory_id` | BIGINT | yes | — | level_of_theory.id | — | not documented |
 | `source_literature_id` | BIGINT | yes | — | literature.id | — | not documented |
 | `software_release_id` | BIGINT | yes | — | software_release.id | — | not documented |
 | `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |

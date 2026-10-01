@@ -145,6 +145,7 @@ def build_energy_correction_scheme_record(
     )
 
     lot_summary = _build_lot_summary(session, ecs.level_of_theory_id)
+    freq_lot_summary = _build_lot_summary(session, ecs.frequency_level_of_theory_id)
     sw_summary = _build_software_release_summary(session, ecs.software_release_id)
     wf_summary = _build_workflow_release_summary(
         session, ecs.workflow_tool_release_id
@@ -174,6 +175,7 @@ def build_energy_correction_scheme_record(
     return ScientificEnergyCorrectionSchemeRecord(
         energy_correction_scheme=core,
         level_of_theory=lot_summary,
+        frequency_level_of_theory=freq_lot_summary,
         software_release=sw_summary,
         workflow_tool_release=wf_summary,
         literature=lit_summary,

@@ -47,6 +47,7 @@ from app.services.calculation_resolution import (
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_declared_key
 from app.services.provenance_warnings import (
+    collect_composite_delta_warnings,
     collect_energy_correction_scheme_provenance_warnings,
 )
 from app.services.software_resolution import resolve_software_release_ref
@@ -145,7 +146,9 @@ def resolve_or_create_scheme(
     """Resolve or create an energy correction scheme.
 
     Dedup key, in two forms selected by ``ref.data_revision`` (migration
-    ``f2c8a5d1e9b7``):
+    ``f2c8a5d1e9b7``), each also carrying ``frequency_level_of_theory_id``
+    (migration ``c5e1a8d3f6b9``; NULL is a value, matched with ``IS NULL``, so
+    a deposit with no frequency level behaves exactly as before the column):
 
     * **No data revision**: ``(kind, name, level_of_theory_id,
       source_literature_id, software_release_id, workflow_tool_release_id)``
@@ -194,6 +197,16 @@ def resolve_or_create_scheme(
     )
     lot_id = lot.id if lot else None
 
+    # The frequency half of an ``energy//frequency`` key is resolved exactly
+    # like the energy half (``resolve_level_of_theory_ref`` follows
+    # ``level_of_theory_merge``), so a merged duplicate lands on its holder.
+    freq_lot = (
+        resolve_level_of_theory_ref(session, ref.frequency_level_of_theory)
+        if ref.frequency_level_of_theory is not None
+        else None
+    )
+    freq_lot_id = freq_lot.id if freq_lot else None
+
     literature = (
         resolve_or_create_literature(
             session,
@@ -220,7 +233,8 @@ def resolve_or_create_scheme(
         return col == val if val is not None else col.is_(None)
 
     # Neither `version` (dropped) nor `units` is matched on: this chain must
-    # mirror the two identity indexes exactly (a7d4e2b9c351, f2c8a5d1e9b7),
+    # mirror the two identity indexes exactly (a7d4e2b9c351, f2c8a5d1e9b7,
+    # c5e1a8d3f6b9),
     # or the indexes and the resolver disagree about what a duplicate is. A
     # deposit in a second unit is meant to land on the existing row; the
     # parameter comparison converts before it compares.
@@ -228,6 +242,7 @@ def resolve_or_create_scheme(
         EnergyCorrectionScheme.kind == ref.kind,
         EnergyCorrectionScheme.name == ref.name,
         _match(EnergyCorrectionScheme.level_of_theory_id, lot_id),
+        _match(EnergyCorrectionScheme.frequency_level_of_theory_id, freq_lot_id),
         _match(EnergyCorrectionScheme.source_literature_id, lit_id),
         _match(EnergyCorrectionScheme.software_release_id, software_release_id),
     ]
@@ -248,6 +263,7 @@ def resolve_or_create_scheme(
             kind=ref.kind,
             name=ref.name,
             level_of_theory_id=lot_id,
+            frequency_level_of_theory_id=freq_lot_id,
             source_literature_id=lit_id,
             software_release_id=software_release_id,
             workflow_tool_release_id=wtr_id,
@@ -817,6 +833,9 @@ def create_applied_energy_correction(
     )
     session.add(applied)
     session.flush()
+
+    if warnings_out is not None:
+        warnings_out.extend(collect_composite_delta_warnings(payload.application_role))
 
     for comp in payload.components:
         session.add(

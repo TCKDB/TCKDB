@@ -966,6 +966,9 @@ def test_narrowing_drops_version_and_keeps_units_as_a_column(
                 "kind",
                 "name",
                 "level_of_theory_id",
+                # Added by c5e1a8d3f6b9 (composite-levels P6): the frequency
+                # half of an energy//frequency key. Units still not in it.
+                "frequency_level_of_theory_id",
                 "source_literature_id",
                 "software_release_id",
                 "workflow_tool_release_id",
