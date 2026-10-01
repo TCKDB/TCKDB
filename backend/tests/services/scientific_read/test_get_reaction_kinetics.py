@@ -229,16 +229,24 @@ def test_temperature_coverage_metadata_returned(db_session):
     assert cov.extrapolation_distance_k == 500.0
 
 
-def test_d9_ordering_full_coverage_wins_over_partial(db_session):
+def test_coverage_is_reported_but_does_not_order_full_vs_partial(db_session):
+    """Changed for the #648 rule (review status, then newest): temperature
+    coverage is displayed on each record but no longer ranks them. The fully
+    covering record is OLDER, so the old coverage-first order would have put
+    it first; the newer partial record now leads."""
+    from datetime import datetime, timedelta, timezone
+
     entry = _setup_entry(db_session)
-    # Partial cover (lower tmax)
-    k_partial = make_kinetics(
-        db_session, reaction_entry=entry, tmin_k=300.0, tmax_k=1500.0
-    )
-    # Full cover
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
     k_full = make_kinetics(
         db_session, reaction_entry=entry, tmin_k=300.0, tmax_k=2500.0
     )
+    k_full.created_at = t0 - timedelta(days=5)
+    k_partial = make_kinetics(
+        db_session, reaction_entry=entry, tmin_k=300.0, tmax_k=1500.0
+    )
+    k_partial.created_at = t0 - timedelta(days=1)
+    db_session.flush()
 
     response = get_reaction_kinetics(
         db_session,
@@ -246,27 +254,38 @@ def test_d9_ordering_full_coverage_wins_over_partial(db_session):
         request=KineticsReadRequest(temperature_min=300.0, temperature_max=2000.0),
     )
 
-    ordered_ids = [r.kinetics_id for r in response.records]
-    assert ordered_ids.index(k_full.id) < ordered_ids.index(k_partial.id)
+    assert [r.kinetics_id for r in response.records] == [k_partial.id, k_full.id]
+    by_id = {r.kinetics_id: r.temperature_coverage for r in response.records}
+    assert by_id[k_full.id].covers_requested_range is True
+    assert by_id[k_partial.id].covers_requested_range is False
 
 
-def test_d9_ordering_extrapolation_distance_breaks_partial_ties(db_session):
+def test_extrapolation_distance_is_reported_but_does_not_order(db_session):
+    """Changed for #648: the closer-to-covering record is older and no longer
+    wins on extrapolation distance; the distance is still reported."""
+    from datetime import datetime, timedelta, timezone
+
     entry = _setup_entry(db_session)
-    # Both partial; one closer to fully covering.
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
     k_close = make_kinetics(
         db_session, reaction_entry=entry, tmin_k=300.0, tmax_k=1900.0
     )
+    k_close.created_at = t0 - timedelta(days=5)
     k_far = make_kinetics(
         db_session, reaction_entry=entry, tmin_k=300.0, tmax_k=1000.0
     )
+    k_far.created_at = t0 - timedelta(days=1)
+    db_session.flush()
 
     response = get_reaction_kinetics(
         db_session,
         reaction_entry_id=entry.id,
         request=KineticsReadRequest(temperature_min=300.0, temperature_max=2000.0),
     )
-    ordered_ids = [r.kinetics_id for r in response.records]
-    assert ordered_ids.index(k_close.id) < ordered_ids.index(k_far.id)
+    assert [r.kinetics_id for r in response.records] == [k_far.id, k_close.id]
+    by_id = {r.kinetics_id: r.temperature_coverage for r in response.records}
+    assert by_id[k_close.id].extrapolation_distance_k == 100.0
+    assert by_id[k_far.id].extrapolation_distance_k == 1000.0
 
 
 # ---------------------------------------------------------------------------

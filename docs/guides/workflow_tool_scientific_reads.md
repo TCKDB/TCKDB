@@ -400,8 +400,8 @@ highest id. That is the same order the export uses. The client does not
 define "best thermo" — it only returns what the backend ranked first.
 `temperature_coverage` and `evidence_completeness` are displayed, not ranked.
 Experimental thermo scores low on `evidence_completeness` by construction
-(most predicates are calculation traceability), which is why the thermo order
-ignores the score. `temperature_min` / `temperature_max` are not filters on
+(most predicates are calculation traceability), which is why the thermo and
+kinetics orders ignore the score. `temperature_min` / `temperature_max` are not filters on
 this read; they only fill each record's `temperature_coverage`.
 
 ## Reaction lookup (discovery-only)
@@ -495,7 +495,7 @@ Each record carries:
   kinetics* below)
 
 Temperature coverage, review rank, evidence completeness, and
-tie-breaking are all computed by TCKDB (for thermo only review rank and
+tie-breaking are all computed by TCKDB (for thermo and kinetics only review rank and
 recency order the records; the other two are displayed). The client only serializes the
 request and returns the response — it never re-ranks records on the
 client side.
@@ -631,11 +631,11 @@ Important rules:
   client-supplied sort value with 422 (`client_sort_not_supported`).
 - **`collapse="first"` is not a "best" selector.** It returns the first
   record under TCKDB's documented deterministic backend ordering. The
-  ordering rules are spelled out in the spec (for thermo: review rank, then
-  `created_at`, then `id`, matching the export; for kinetics, the
-  D9 chain orders by temperature coverage first, then extrapolation
-  distance, then review rank, then evidence completeness, then
-  `created_at`, then `id`).
+  ordering rules are spelled out in the spec: for thermo and kinetics,
+  review rank, then `created_at` (newest first), then `id`, matching the
+  export. Temperature coverage and `evidence_completeness` are reported on
+  each record but do not order them, and `temperature_min` /
+  `temperature_max` are not filters.
 - `pagination.total` is the **pre-collapse, post-filter** match count.
 - `pagination.post_collapse_total` is the count **after collapse and before
   offset/limit slicing**. It equals `total` for `collapse="all"` and is 0 or 1
@@ -673,7 +673,9 @@ present. They must not synthesize TS links from non-TS-backed records.
 And they should interpret the `evidence_completeness` checklist together
 with `scientific_origin`: a low score on a non-TS-backed record means
 the *computational* checklist does not apply, not that the record is
-invalid.
+invalid. The same holds for the kinetics order: the checklist is displayed,
+not ranked, so a non-TS-backed record is not pushed below TS-backed ones by
+its score (review status, then newest).
 
 ## Handling empty results
 
