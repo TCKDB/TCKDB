@@ -305,3 +305,92 @@ def test_accepting_the_cited_calculation_freezes_nothing_about_the_composite(db_
     _approve(db_session, sp)
     db_session.delete(row)
     db_session.flush()
+
+
+# -- energy_component_kind gains correlation_excluding_triples ---------------
+
+_COMPONENT = "correlation_excluding_triples"
+
+
+def _component_labels(engine) -> list[str]:
+    with engine.connect() as conn:
+        return list(conn.scalars(text("SELECT unnest(enum_range(NULL::energy_component_kind))::text")))
+
+
+def _seed_scheme_term(conn, component: str) -> None:
+    scheme_id = conn.scalar(
+        text(
+            "INSERT INTO composite_scheme (kind, name, definition_hash, public_ref) "
+            "VALUES (CAST('extrapolation' AS composite_scheme_kind), 'x', repeat('a', 64), 'csch_migration_probe') "
+            "RETURNING id"
+        )
+    )
+    conn.execute(
+        text(
+            "INSERT INTO composite_scheme_term (scheme_id, position, operation, energy_component) "
+            "VALUES (:s, 0, CAST('value' AS composite_term_operation), CAST(:c AS energy_component_kind))"
+        ),
+        {"s": scheme_id, "c": component},
+    )
+
+
+def test_the_component_enum_gains_the_ccsd_only_member_and_downgrade_restores_it(harness):
+    harness.run("upgrade", _MIGRATION.parent)
+    before = _component_labels(harness.engine)
+    assert _COMPONENT not in before
+    harness.run("upgrade", _MIGRATION.revision)
+    assert _component_labels(harness.engine) == [*before, _COMPONENT]
+    harness.run("downgrade", _MIGRATION.parent)
+    assert _component_labels(harness.engine) == before
+    harness.run("upgrade", _MIGRATION.revision)
+    assert _COMPONENT in _component_labels(harness.engine)
+    harness.run("upgrade", "head")
+    checked = _alembic(harness, "check")
+    assert checked.returncode == 0, checked.stderr[-2000:] + checked.stdout[-2000:]
+
+
+def test_downgrade_keeps_rows_that_use_the_older_components_through_the_recast(harness):
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        sp_id, _ = _seed_two_calculations(conn)
+        conn.execute(
+            text(
+                "INSERT INTO calc_sp_energy_component (calculation_id, component, value_hartree) "
+                "VALUES (:c, CAST('correlation' AS energy_component_kind), -0.3)"
+            ),
+            {"c": sp_id},
+        )
+        _seed_scheme_term(conn, "correlation")
+    harness.run("downgrade", _MIGRATION.parent)
+    with harness.engine.connect() as conn:
+        assert conn.scalar(text("SELECT component::text FROM calc_sp_energy_component")) == "correlation"
+        assert conn.scalar(text("SELECT energy_component::text FROM composite_scheme_term")) == "correlation"
+
+
+def test_downgrade_refuses_while_a_scheme_term_reads_the_ccsd_only_component(harness):
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        _seed_scheme_term(conn, _COMPONENT)
+    refused = _alembic(harness, "downgrade", _MIGRATION.parent)
+    assert refused.returncode != 0
+    assert f"composite_scheme_term.energy_component value(s) '{_COMPONENT}'" in refused.stderr + refused.stdout
+    with harness.engine.connect() as conn:
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == _MIGRATION.revision
+        assert conn.scalar(text("SELECT count(*) FROM composite_scheme_term")) == 1
+
+
+def test_downgrade_refuses_while_a_single_point_stores_the_derived_component(harness):
+    """The wire never lets one in; the refusal is for a row that got there past it."""
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        sp_id, _ = _seed_two_calculations(conn)
+        conn.execute(
+            text(
+                "INSERT INTO calc_sp_energy_component (calculation_id, component, value_hartree) "
+                "VALUES (:c, CAST(:k AS energy_component_kind), -0.3)"
+            ),
+            {"c": sp_id, "k": _COMPONENT},
+        )
+    refused = _alembic(harness, "downgrade", _MIGRATION.parent)
+    assert refused.returncode != 0
+    assert f"calc_sp_energy_component.component value(s) '{_COMPONENT}'" in refused.stderr + refused.stdout

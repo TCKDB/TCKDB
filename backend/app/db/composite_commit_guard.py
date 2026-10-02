@@ -16,6 +16,8 @@ raises on a programming error, never on data.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
@@ -36,7 +38,23 @@ def refuse_unfinished_composites(session: Session) -> None:
         )
 
 
+def forget_pending_composites_on_rollback(session: Session, previous_transaction: Any) -> None:
+    """``after_soft_rollback``: a rolled-back request leaves no pending composite behind.
+
+    The pending entries name calculations that the rollback just undid. Left in
+    ``session.info`` they survive into the next transaction of the same session and
+    make the guard above refuse an unrelated commit (a worker recording a job's
+    failure, say). Only the root transaction's rollback clears them: a savepoint
+    rolled back mid-request (a best-effort enrichment) undoes none of the composite's
+    own rows.
+    """
+    if getattr(previous_transaction, "parent", None) is None:
+        session.info.pop(PENDING_COMPOSITE_KEY, None)
+
+
 def install_composite_commit_guard() -> None:
-    """Register the guard on every session. Idempotent."""
+    """Register the guard and the rollback clean-up on every session. Idempotent."""
     if not event.contains(Session, "before_commit", refuse_unfinished_composites):
         event.listen(Session, "before_commit", refuse_unfinished_composites)
+    if not event.contains(Session, "after_soft_rollback", forget_pending_composites_on_rollback):
+        event.listen(Session, "after_soft_rollback", forget_pending_composites_on_rollback)

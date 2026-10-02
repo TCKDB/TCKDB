@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 108 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 38 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 246 | `backend/app/api/code_catalogue.py` |
-| **total** | **537** | |
+| Refusal codes a caller can receive | 249 | `backend/app/api/code_catalogue.py` |
+| **total** | **540** | |
 
 ## How a record is named
 
@@ -710,7 +710,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (193 codes)
+### HTTP 422 (196 codes)
 
 | Code | Names |
 | --- | --- |
@@ -742,6 +742,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `composed_search_invalid_page` | a relationship — read `context` |
 | `composed_search_pagination_changed` | a relationship — read `context` |
 | `composed_search_pagination_stalled` | a relationship — read `context` |
+| `composite_assembled_cannot_be_primary` | a thing |
 | `composite_assembled_not_accepted` | a thing |
 | `composite_e0_inconsistent` | a relationship — read `context` |
 | `composite_input_duplicate` | a relationship — read `context` |
@@ -763,6 +764,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `composite_term_position_unknown` | a relationship — read `context` |
 | `composite_terms_do_not_sum` | a relationship — read `context` |
 | `composite_total_mismatch` | a relationship — read `context` |
+| `composite_total_required` | a thing |
 | `composite_type_requires_composite_result` | a thing |
 | `conformer_key_undeclared` | a thing |
 | `cursor_offset_conflict` | a relationship — read `context` |
@@ -849,6 +851,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `scf_stability_source_geometry_mismatch` | a relationship — read `context` |
 | `selection_no_longer_approved` | a thing |
 | `smiles_too_long` | a relationship — read `context` |
+| `sp_energy_component_derived` | a thing |
 | `sp_energy_component_duplicate` | a thing |
 | `sp_energy_component_not_on_sp` | a thing |
 | `sp_energy_component_total_mismatch` | a relationship — read `context` |

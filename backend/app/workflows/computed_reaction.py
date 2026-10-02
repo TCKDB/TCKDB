@@ -188,6 +188,7 @@ def _persist_calculation(
     sp_energy_warnings: list[UploadWarning] | None = None,
     is_single_atom_primary: bool = False,
     is_conformer_primary: bool = False,
+    as_primary: bool = False,
 ) -> Calculation:
     """Persist one bundle-local calculation through the shared calculation seam.
 
@@ -230,6 +231,7 @@ def _persist_calculation(
         species_entry_id=species_entry_id,
         transition_state_entry_id=transition_state_entry_id,
         created_by=created_by,
+        as_primary=as_primary or is_conformer_primary,
     )
 
     for artifact_in in calc_in.artifacts:
@@ -816,6 +818,7 @@ def persist_computed_reaction_upload(
             geometry_key_map=geometry_key_to_id,
             created_by=created_by,
             sp_energy_warnings=sp_energy_warnings,
+            as_primary=True,
         )
         calculation_key_to_id[ts_in.calculation.key] = ts_calc.id
         review_targets.append(

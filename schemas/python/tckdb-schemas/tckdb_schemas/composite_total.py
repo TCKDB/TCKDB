@@ -25,29 +25,45 @@ components allow two conventions when a ``triples`` part is also stored (see
 :mod:`tckdb_schemas.sp_energy_components`): ORCA's correlation energy already
 includes (T) (``reference + correlation = energy``); Molpro's is the CCSD part and
 (T) is separate (``reference + correlation + triples = energy``). A scheme term
-that reads ``correlation`` means the **whole** correlation energy, (T) included,
-so under the second convention the term's value is ``correlation + triples``. The
-convention is read off the stored row, never assumed: whichever of the two sums
-equals the stored energy within the single-point tolerance
+can ask for either meaning, by naming the component:
+
+* ``correlation`` is the **whole** correlation energy, (T) included: the stored
+  ``correlation`` under the ORCA convention, ``correlation + triples`` under the
+  Molpro one;
+* ``correlation_excluding_triples`` is the CCSD part: the stored ``correlation``
+  under the Molpro convention, ``correlation - triples`` under the ORCA one.
+
+The textbook scheme (extrapolate the CCSD correlation energy, add (T) from a
+smaller basis as its own ``triples`` term) is written with
+``correlation_excluding_triples`` and a ``triples`` term, and counts (T) once
+whichever program produced each input. ``correlation_excluding_triples`` is
+derived, so it is never a stored single-point component.
+
+The convention is read off the stored row, never assumed: whichever of the two
+sums equals the stored energy within the single-point tolerance
 (:data:`~tckdb_schemas.sp_energy_components.SUM_TOLERANCE_HARTREE`, 1e-6 Eh) is
 the row's convention, and |(T)| is far larger than that tolerance. If both sums
-match (|(T)| below the tolerance) the stored ``correlation`` is used. If neither
-does, or the reference or the energy is not stated, the convention cannot be
-determined and the total is *unverifiable*, never guessed. A scheme that reads
-``triples`` as its own term reads the stored ``triples`` as it is, so a producer
-who wants (T) at a different basis than the rest of the correlation energy sends
-inputs under the separate convention (``correlation`` = CCSD) and gives (T) its
-own terms.
+match (|(T)| below the tolerance) the stored ``correlation`` is used for either
+meaning. If neither does, or the reference or the energy is not stated, the
+convention cannot be determined and the total is *unverifiable*, never guessed;
+so is a ``correlation_excluding_triples`` read under the ORCA convention from a
+row that stores no ``triples`` to subtract. A term that reads ``triples`` reads
+the stored component as it is.
 
 The tolerance
 -------------
-``max(1e-6, 5e-7 * n)`` hartree (:func:`composite_arithmetic_tolerance_hartree`),
-with ``n`` the number of rounded quantities in the equation: the deposited total
-and every stored number the recomputation consumed. The count is of numbers, not
-weighted by how much a formula amplifies them: an extrapolation weights its
-larger-basis energy by more than one, so a total computed from inputs printed to
-six decimals can sit just outside the tolerance in the worst case. Energies
-printed to nine or more decimals (ORCA, Molpro) are far inside it.
+``max(1e-6, 5e-7 * (1 + sum_i |d total / d x_i|))`` hartree
+(:func:`composite_arithmetic_tolerance_hartree`), the sum running over every
+stored number ``x_i`` the recomputation consumed. The weight of a number is how far
+a rounding error in it can move the total: 1 for a value or base input and for
+either side of a difference, the extrapolation's own weight for an extrapolated
+input (``|d E_CBS / d E_i|``, :func:`~tckdb_schemas.composite_formulas.extrapolation_weights`),
+and 1 for each number summed into a ``correlation`` that needs two. A larger-basis
+energy enters an inverse-power extrapolation with a weight above 1, so a total
+computed from inputs printed to six decimals stays inside the tolerance it earns.
+When every weight is 1 this is the rule of the composite results
+(``max(1e-6, 5e-7 * n)``, ``n`` the number of rounded quantities). The deposited
+total counts as one number of weight 1.
 """
 
 from __future__ import annotations
@@ -57,7 +73,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from tckdb_schemas.coded_error import CodedValidationError
-from tckdb_schemas.composite_formulas import ExtrapolationError, extrapolate
+from tckdb_schemas.composite_formulas import ExtrapolationError, extrapolate, extrapolation_weights
 from tckdb_schemas.enums import (
     CompositeExtrapolationFormula,
     CompositeInputSlot,
@@ -121,8 +137,26 @@ def _kind(component: object) -> EnergyComponentKind:
     return component if isinstance(component, EnergyComponentKind) else EnergyComponentKind(component)
 
 
+def _convention(energies: InputEnergies) -> str | None:
+    """``"includes"``, ``"separate"``, ``"both"`` (|(T)| under the tolerance) or ``None`` (unreadable)."""
+    reference = energies.components.get(EnergyComponentKind.reference)
+    stored = energies.components.get(EnergyComponentKind.correlation)
+    triples = energies.components.get(EnergyComponentKind.triples)
+    if stored is None or reference is None or energies.total is None:
+        return None
+    includes = abs(reference + stored - energies.total) <= SUM_TOLERANCE_HARTREE
+    separate = triples is not None and abs(reference + stored + triples - energies.total) <= SUM_TOLERANCE_HARTREE
+    if includes and separate:
+        return "both"
+    if includes:
+        return "includes"
+    if separate:
+        return "separate"
+    return None
+
+
 def component_value(energies: InputEnergies, component: EnergyComponentKind | str) -> ComponentValue:
-    """Read ``component`` off an input, resolving the triples convention for ``correlation``.
+    """Read ``component`` off an input, resolving the triples convention for the correlation kinds.
 
     :param energies: The input's stored energies.
     :param component: The component a scheme term reads.
@@ -134,26 +168,30 @@ def component_value(energies: InputEnergies, component: EnergyComponentKind | st
         if energies.total is None:
             return ComponentValue(None, 0, REASON_INPUT_ENERGY_NOT_STATED)
         return ComponentValue(energies.total, 1)
-    stored = energies.components.get(kind)
-    if kind is not EnergyComponentKind.correlation:
+    if kind not in (EnergyComponentKind.correlation, EnergyComponentKind.correlation_excluding_triples):
+        stored = energies.components.get(kind)
         if stored is None:
             return ComponentValue(None, 0, REASON_COMPONENT_NOT_STATED)
         return ComponentValue(stored, 1)
 
-    reference = energies.components.get(EnergyComponentKind.reference)
+    correlation = energies.components.get(EnergyComponentKind.correlation)
     triples = energies.components.get(EnergyComponentKind.triples)
-    if stored is None:
+    if correlation is None:
         return ComponentValue(None, 0, REASON_COMPONENT_NOT_STATED)
-    if reference is None or energies.total is None:
+    convention = _convention(energies)
+    if convention is None:
         return ComponentValue(None, 0, REASON_CORRELATION_CONVENTION_UNDETERMINABLE)
-    includes_triples = abs(reference + stored - energies.total) <= SUM_TOLERANCE_HARTREE
-    separate_triples = triples is not None and abs(reference + stored + triples - energies.total) <= SUM_TOLERANCE_HARTREE
-    if includes_triples:
-        return ComponentValue(stored, 1)
-    if separate_triples:
-        assert triples is not None
-        return ComponentValue(stored + triples, 2)
-    return ComponentValue(None, 0, REASON_CORRELATION_CONVENTION_UNDETERMINABLE)
+    if kind is EnergyComponentKind.correlation:
+        if convention == "separate":
+            assert triples is not None
+            return ComponentValue(correlation + triples, 2)
+        return ComponentValue(correlation, 1)
+    # correlation_excluding_triples
+    if convention in ("separate", "both"):
+        return ComponentValue(correlation, 1)
+    if triples is None:
+        return ComponentValue(None, 0, REASON_COMPONENT_NOT_STATED)
+    return ComponentValue(correlation - triples, 2)
 
 
 @dataclass(frozen=True)
@@ -172,6 +210,8 @@ class TotalCheck:
     quantities: int
     reason: str | None = None
     term_key: str | None = None
+    #: ``1 + sum |weight|`` over the consumed numbers: what the tolerance is ``5e-7 *``.
+    weighted_quantities: float = 0.0
 
 
 def _unverifiable(deposited: float | None, reason: str, term_key: str | None = None) -> TotalCheck:
@@ -197,6 +237,7 @@ def check_composite_total(
         return _unverifiable(None, REASON_NO_TOTAL_DEPOSITED)
     total = 0.0
     quantities = 0
+    weight_sum = 0.0
     for position, term in enumerate(definition.terms):  # type: ignore[attr-defined]
         operation = CompositeTermOperation(getattr(term.operation, "value", term.operation))
         component = _kind(getattr(term.energy_component, "value", term.energy_component))
@@ -214,28 +255,35 @@ def check_composite_total(
             quantities += read.quantities
         if operation in (CompositeTermOperation.base, CompositeTermOperation.value):
             term_value = values[(CompositeInputSlot.value, None)].value
+            weight_sum += sum(read.quantities for read in values.values())
         elif operation is CompositeTermOperation.difference:
             high = values[(CompositeInputSlot.high, None)].value
             low = values[(CompositeInputSlot.low, None)].value
             assert high is not None and low is not None
             term_value = high - low
+            weight_sum += sum(read.quantities for read in values.values())
         elif operation is CompositeTermOperation.extrapolation:
-            points = [(cardinal, read.value) for (slot, cardinal), read in values.items() if cardinal is not None and read.value is not None]
+            by_cardinal = {c: read for (_, c), read in values.items() if c is not None and read.value is not None}
+            points = [(c, read.value) for c, read in by_cardinal.items() if read.value is not None]
             formula = CompositeExtrapolationFormula(getattr(term.formula, "value", term.formula))
             try:
                 term_value = extrapolate(formula, points, term.exponent)
+                weights = extrapolation_weights(formula, points, term.exponent)
             except ExtrapolationError:
                 return _unverifiable(deposited_total, REASON_EXTRAPOLATION_DEGENERATE, term.key)
+            for (cardinal, _), weight in zip(sorted(points, key=lambda point: point[0]), weights, strict=True):
+                weight_sum += weight * by_cardinal[cardinal].quantities
         else:  # empirical: nothing to recompute it from
             return _unverifiable(deposited_total, REASON_COMPONENT_NOT_STATED, term.key)
         assert term_value is not None
         if not math.isfinite(term_value):
             return _unverifiable(deposited_total, REASON_EXTRAPOLATION_DEGENERATE, term.key)
         total += term_value
-    tolerance = composite_arithmetic_tolerance_hartree(quantities + 1)
+    weighted = 1.0 + weight_sum
+    tolerance = composite_arithmetic_tolerance_hartree(weighted)
     gap = deposited_total - total
     status = "ok" if abs(gap) <= tolerance + 1e-12 else "mismatch"
-    return TotalCheck(status, deposited_total, total, gap, tolerance, quantities)
+    return TotalCheck(status, deposited_total, total, gap, tolerance, quantities, weighted_quantities=weighted)
 
 
 def assert_composite_total_recomputes(check: TotalCheck) -> None:

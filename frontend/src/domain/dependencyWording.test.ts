@@ -46,7 +46,7 @@ import {
  * also allows `path_search`), so its wording is type-neutral about the
  * parent.
  */
-describe("DEPENDENCY_ROLE_WORDING — every one of the seven roles, pinned literally", () => {
+describe("DEPENDENCY_ROLE_WORDING — every one of the eight roles, pinned literally", () => {
     it("optimized_from — parent is the geometry source (opt OR path_search, per _OPTIMIZED_FROM_PARENT_TYPES -- neither wording may name its type), child is the optimisation that used it", () => {
         expect(DEPENDENCY_ROLE_WORDING.optimized_from).toEqual({
             childSentence: "This is the fine optimisation; its starting geometry came from {link}",
@@ -103,10 +103,19 @@ describe("DEPENDENCY_ROLE_WORDING — every one of the seven roles, pinned liter
         })
     })
 
-    it("carries all seven CalculationDependencyRole values -- no more, no fewer", () => {
+    it("composite_input — parent is the single point (or opt) whose energy an assembled composite read, child is the composite", () => {
+        expect(DEPENDENCY_ROLE_WORDING.composite_input).toEqual({
+            childSentence: "This composite energy was assembled using the energy from {link}",
+            parentSentence: "The energy from this calculation was used by {link} to assemble a composite",
+            edgeLabel: "input to the composite",
+        })
+    })
+
+    it("carries all eight CalculationDependencyRole values -- no more, no fewer", () => {
         expect(Object.keys(DEPENDENCY_ROLE_WORDING).sort()).toEqual(
             [
                 "arkane_source",
+                "composite_input",
                 "freq_on",
                 "irc_followup",
                 "irc_start",

@@ -208,7 +208,7 @@ def test_a_stored_core_treatment_is_visible_on_the_scheme_read(client, db_sessio
     calc = client.get(f"/api/v1/scientific/calculations/{composite.public_ref}").json()["record"]
     scheme_ref = calc["level_of_theory"]["composite_scheme"]["composite_scheme_ref"]
     record = client.get(f"/api/v1/scientific/composite-schemes/{scheme_ref}").json()["record"]
-    dcv = next(t for t in record["terms"] if t["position"] == 1)
+    dcv = next(t for t in record["terms"] if any(i["level_of_theory"]["core_treatment"] for i in t["inputs"]))
     cores = {i["slot"]: i["level_of_theory"]["core_treatment"] for i in dcv["inputs"]}
     assert cores == {"high": "all_electron", "low": "frozen_core"}
 
@@ -264,9 +264,9 @@ def test_a_missing_component_warns(client):
     assert "component" in warning["message"]
 
 
-def test_no_deposited_total_warns_there_is_nothing_to_check(client):
-    body = _ok(client, f.bundle_b(total=None))
-    assert "composite_total_unverifiable" in _warning_codes(body)
+def test_an_assembled_composite_must_deposit_its_total(client):
+    """Owner decision 5: the total is deposited and only checked; there is no unverifiable-by-absence."""
+    _refused(client, f.bundle_b(total=None), "composite_total_required")
 
 
 # ---------------------------------------------------------------------------

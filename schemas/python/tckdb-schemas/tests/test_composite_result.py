@@ -174,9 +174,15 @@ def test_the_assembled_form_needs_its_inputs():
     """Until P5 the form parsed bare so the server could refuse it by name; now it must say what it assembles."""
     with pytest.raises(ValidationError) as exc:
         CompositeResultPayload(assembly="assembled")
+    assert _coded(exc).code == "composite_total_required"
+    with pytest.raises(ValidationError) as exc:
+        CompositeResultPayload(assembly="assembled", electronic_energy_hartree=-1.0)
     assert _coded(exc).code == "composite_input_missing"
     inputs = [{"term_key": "x", "slot": "value", "calculation_key": "a"}]
-    assert CompositeResultPayload(assembly="assembled", inputs=inputs).assembly.value == "assembled"
+    assert (
+        CompositeResultPayload(assembly="assembled", electronic_energy_hartree=-1.0, inputs=inputs).assembly.value
+        == "assembled"
+    )
 
 
 # -- type pairing, in every payload shape ---------------------------------

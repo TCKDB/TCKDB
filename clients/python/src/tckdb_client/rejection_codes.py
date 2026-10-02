@@ -112,6 +112,7 @@ class RejectionCode(str, Enum):
     COMPOSED_SEARCH_INVALID_PAGE = "composed_search_invalid_page"
     COMPOSED_SEARCH_PAGINATION_CHANGED = "composed_search_pagination_changed"
     COMPOSED_SEARCH_PAGINATION_STALLED = "composed_search_pagination_stalled"
+    COMPOSITE_ASSEMBLED_CANNOT_BE_PRIMARY = "composite_assembled_cannot_be_primary"
     COMPOSITE_ASSEMBLED_NOT_ACCEPTED = "composite_assembled_not_accepted"
     COMPOSITE_E0_INCONSISTENT = "composite_e0_inconsistent"
     COMPOSITE_INPUT_DUPLICATE = "composite_input_duplicate"
@@ -133,6 +134,7 @@ class RejectionCode(str, Enum):
     COMPOSITE_TERM_POSITION_UNKNOWN = "composite_term_position_unknown"
     COMPOSITE_TERMS_DO_NOT_SUM = "composite_terms_do_not_sum"
     COMPOSITE_TOTAL_MISMATCH = "composite_total_mismatch"
+    COMPOSITE_TOTAL_REQUIRED = "composite_total_required"
     COMPOSITE_TYPE_REQUIRES_COMPOSITE_RESULT = "composite_type_requires_composite_result"
     CONFORMER_KEY_UNDECLARED = "conformer_key_undeclared"
     CURATION_POLICY_VERSION_CONFLICT = "curation_policy_version_conflict"
@@ -249,6 +251,7 @@ class RejectionCode(str, Enum):
     SELECTION_ALREADY_SUPERSEDED = "selection_already_superseded"
     SELECTION_NO_LONGER_APPROVED = "selection_no_longer_approved"
     SMILES_TOO_LONG = "smiles_too_long"
+    SP_ENERGY_COMPONENT_DERIVED = "sp_energy_component_derived"
     SP_ENERGY_COMPONENT_DUPLICATE = "sp_energy_component_duplicate"
     SP_ENERGY_COMPONENT_NOT_ON_SP = "sp_energy_component_not_on_sp"
     SP_ENERGY_COMPONENT_TOTAL_MISMATCH = "sp_energy_component_total_mismatch"
@@ -362,6 +365,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.COMPOSED_SEARCH_INVALID_PAGE,
         RejectionCode.COMPOSED_SEARCH_PAGINATION_CHANGED,
         RejectionCode.COMPOSED_SEARCH_PAGINATION_STALLED,
+        RejectionCode.COMPOSITE_ASSEMBLED_CANNOT_BE_PRIMARY,
         RejectionCode.COMPOSITE_ASSEMBLED_NOT_ACCEPTED,
         RejectionCode.COMPOSITE_E0_INCONSISTENT,
         RejectionCode.COMPOSITE_INPUT_DUPLICATE,
@@ -383,6 +387,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.COMPOSITE_TERM_POSITION_UNKNOWN,
         RejectionCode.COMPOSITE_TERMS_DO_NOT_SUM,
         RejectionCode.COMPOSITE_TOTAL_MISMATCH,
+        RejectionCode.COMPOSITE_TOTAL_REQUIRED,
         RejectionCode.COMPOSITE_TYPE_REQUIRES_COMPOSITE_RESULT,
         RejectionCode.CONFORMER_KEY_UNDECLARED,
         RejectionCode.CURSOR_OFFSET_CONFLICT,
@@ -469,6 +474,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH,
         RejectionCode.SELECTION_NO_LONGER_APPROVED,
         RejectionCode.SMILES_TOO_LONG,
+        RejectionCode.SP_ENERGY_COMPONENT_DERIVED,
         RejectionCode.SP_ENERGY_COMPONENT_DUPLICATE,
         RejectionCode.SP_ENERGY_COMPONENT_NOT_ON_SP,
         RejectionCode.SP_ENERGY_COMPONENT_TOTAL_MISMATCH,
@@ -607,6 +613,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.COMPOSED_SEARCH_INVALID_PAGE: frozenset({422}),
     RejectionCode.COMPOSED_SEARCH_PAGINATION_CHANGED: frozenset({422}),
     RejectionCode.COMPOSED_SEARCH_PAGINATION_STALLED: frozenset({422}),
+    RejectionCode.COMPOSITE_ASSEMBLED_CANNOT_BE_PRIMARY: frozenset({422}),
     RejectionCode.COMPOSITE_ASSEMBLED_NOT_ACCEPTED: frozenset({422}),
     RejectionCode.COMPOSITE_E0_INCONSISTENT: frozenset({422}),
     RejectionCode.COMPOSITE_INPUT_DUPLICATE: frozenset({422}),
@@ -628,6 +635,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.COMPOSITE_TERM_POSITION_UNKNOWN: frozenset({422}),
     RejectionCode.COMPOSITE_TERMS_DO_NOT_SUM: frozenset({422}),
     RejectionCode.COMPOSITE_TOTAL_MISMATCH: frozenset({422}),
+    RejectionCode.COMPOSITE_TOTAL_REQUIRED: frozenset({422}),
     RejectionCode.COMPOSITE_TYPE_REQUIRES_COMPOSITE_RESULT: frozenset({422}),
     RejectionCode.CONFORMER_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.CURATION_POLICY_VERSION_CONFLICT: frozenset({409}),
@@ -744,6 +752,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.SELECTION_ALREADY_SUPERSEDED: frozenset({409}),
     RejectionCode.SELECTION_NO_LONGER_APPROVED: frozenset({422}),
     RejectionCode.SMILES_TOO_LONG: frozenset({422}),
+    RejectionCode.SP_ENERGY_COMPONENT_DERIVED: frozenset({422}),
     RejectionCode.SP_ENERGY_COMPONENT_DUPLICATE: frozenset({422}),
     RejectionCode.SP_ENERGY_COMPONENT_NOT_ON_SP: frozenset({422}),
     RejectionCode.SP_ENERGY_COMPONENT_TOTAL_MISMATCH: frozenset({422}),

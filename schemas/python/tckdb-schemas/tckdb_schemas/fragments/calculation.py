@@ -451,7 +451,7 @@ COMPOSITE_PRINTED_ROUNDING_HARTREE = 5e-7
 _FLOAT_NOISE = 1e-12
 
 
-def composite_arithmetic_tolerance_hartree(rounded_quantities: int) -> float:
+def composite_arithmetic_tolerance_hartree(rounded_quantities: float) -> float:
     """The tolerance of an equation among ``rounded_quantities`` printed numbers.
 
     ``max(1e-6, 5e-7 * n)``: an equation in which ``n`` numbers were each
@@ -462,7 +462,10 @@ def composite_arithmetic_tolerance_hartree(rounded_quantities: int) -> float:
 
     :param rounded_quantities: How many numbers in the equation are rounded
         values: ``len(terms) + 1`` for the terms and their total, 3 for
-        ``e0 = electronic + zpe``.
+        ``e0 = electronic + zpe``. An assembled composite's total passes a weighted
+        count, ``1 + sum |d total / d x_i|`` over the stored numbers it consumed (see
+        ``tckdb_schemas.composite_total``), which equals the plain count when every
+        weight is 1.
     """
     return max(COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE, COMPOSITE_PRINTED_ROUNDING_HARTREE * rounded_quantities)
 
@@ -483,6 +486,14 @@ class CompositeTermPayload(SchemaBase):
 #: ``composite_result.inputs[]`` names a calculation by both a local key and a
 #: ref, or by neither.
 COMPOSITE_INPUT_REFERENCE_INVALID = "composite_input_reference_invalid"
+
+#: An ``assembled`` composite deposited no ``electronic_energy_hartree`` (owner
+#: decision 5: the total is deposited and only checked by recomputation).
+COMPOSITE_TOTAL_REQUIRED = "composite_total_required"
+
+#: An ``assembled`` composite is a conformer's (or transition state's) primary
+#: calculation. Only a program-run composite that produced the geometry may be one.
+COMPOSITE_ASSEMBLED_CANNOT_BE_PRIMARY = "composite_assembled_cannot_be_primary"
 
 #: ``composite_result.inputs`` on a ``program_run`` composite: a program printed
 #: that number, so there is no arithmetic over other calculations to evidence.
@@ -594,6 +605,17 @@ class CompositeResultPayload(SchemaBase):
                     "calculations to evidence."
                 ),
                 context={"field": "composite_result.inputs", "assembly": self.assembly.value},
+                message_prefix=False,
+            )
+        if self.assembly == CompositeAssembly.assembled and self.electronic_energy_hartree is None:
+            raise CodedValidationError(
+                COMPOSITE_TOTAL_REQUIRED,
+                (
+                    "an assembled composite must deposit its total, composite_result.electronic_energy_hartree. "
+                    "TCKDB recomputes the total from the inputs only to check yours and never stores a value it "
+                    "computed; without yours there is nothing to check and no energy to record."
+                ),
+                context={"field": "composite_result.electronic_energy_hartree"},
                 message_prefix=False,
             )
         if not self.inputs and self.assembly == CompositeAssembly.assembled:
@@ -716,6 +738,32 @@ def assert_composite_result_matches_type(
             "electronic_energy_hartree, e0_hartree and recipe_zpe_hartree the program reported "
             "(each may be null).",
             context={"field": "composite_result", "calculation_type": calc_type.value},
+            message_prefix=False,
+        )
+
+
+def assert_assembled_not_primary(composite_result: "CompositeResultPayload | None", *, subject: str) -> None:
+    """Refuse an assembled composite as a conformer's or transition state's primary calculation.
+
+    The primary is the one run that produced the geometry. A program-run named
+    composite did (its first step is an optimisation); an assembled composite is
+    arithmetic over other calculations and produced nothing, so it has no
+    geometry and no program to name.
+
+    :param composite_result: The primary's ``composite_result`` (``None`` for any other type).
+    :param subject: The field, named as the refusal should read it.
+    :raises CodedValidationError: ``composite_assembled_cannot_be_primary``.
+    """
+    if composite_result is not None and composite_result.assembly == CompositeAssembly.assembled:
+        raise CodedValidationError(
+            COMPOSITE_ASSEMBLED_CANNOT_BE_PRIMARY,
+            (
+                f"{subject} is an assembled composite. A primary calculation is the run that produced the "
+                "conformer's geometry: an optimisation, or a program-run composite such as CBS-QB3 whose first "
+                "step is one. An assembled composite is arithmetic over other calculations; send it as an "
+                "additional calculation instead."
+            ),
+            context={"field": subject},
             message_prefix=False,
         )
 

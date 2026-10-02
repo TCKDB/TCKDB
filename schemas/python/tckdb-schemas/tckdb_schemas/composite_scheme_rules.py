@@ -63,6 +63,7 @@ __all__ = [
     "assert_composite_scheme_definition",
     "MatchedInput",
     "assert_method_xor_composite_scheme",
+    "assert_no_method_fields_with_composite_scheme",
     "match_inputs_to_definition",
 ]
 
@@ -129,6 +130,45 @@ def assert_method_xor_composite_scheme(method: object, composite_scheme: object)
             "level_of_theory needs either method (a program's own method) or composite_scheme "
             "(your own recipe); neither was sent.",
             context={"field": "level_of_theory"},
+            message_prefix=False,
+        )
+
+
+#: The fields that describe one method's run, which a level naming a ``composite_scheme`` must not carry.
+_METHOD_LEVEL_FIELDS = (
+    "basis",
+    "aux_basis",
+    "cabs_basis",
+    "dispersion",
+    "solvent",
+    "solvent_model",
+    "keywords",
+    "spin_treatment",
+    "core_treatment",
+)
+
+
+def assert_no_method_fields_with_composite_scheme(ref: Any) -> None:
+    """Refuse method-level fields (basis, dispersion, ...) sent next to a ``composite_scheme``.
+
+    They describe a single method's run; a scheme's levels are stated on its inputs, and
+    a stray ``basis`` would be stored nowhere and hashed nowhere.
+
+    :param ref: A ``LevelOfTheoryRef`` (or any object with its attributes).
+    :raises CodedValidationError: ``composite_scheme_malformed``, ``rule = ordinary_fields_with_scheme``.
+    """
+    if getattr(ref, "composite_scheme", None) is None:
+        return
+    ordinary = sorted(name for name in _METHOD_LEVEL_FIELDS if getattr(ref, name, None) is not None)
+    if ordinary:
+        raise CodedValidationError(
+            COMPOSITE_SCHEME_MALFORMED,
+            (
+                f"level_of_theory carries composite_scheme together with {', '.join(ordinary)}. These describe a "
+                "single method's run; a composite scheme's levels are stated on its inputs. Remove them from the "
+                "level of theory and put them on the scheme's input levels."
+            ),
+            context={"field": "level_of_theory", "rule": "ordinary_fields_with_scheme", "fields": ordinary},
             message_prefix=False,
         )
 
@@ -223,6 +263,17 @@ def _assert_term(term: Any, operation: CompositeTermOperation) -> None:
                 "formula_on_non_extrapolation",
                 f"{where}: formula and exponent belong to an 'extrapolation' term only "
                 f"(this term is '{operation.value}').",
+                term_key=key,
+            )
+
+    if operation is not CompositeTermOperation.extrapolation:
+        stray = [i.cardinal_number for i in inputs if i.cardinal_number is not None]
+        if stray:
+            raise _malformed(
+                "cardinal_on_non_cardinal_slot",
+                f"{where}: cardinal_number belongs to the 'cardinal' slots of an 'extrapolation' term; a "
+                f"'{operation.value}' term states none (got {stray}). It would change the scheme's identity "
+                "without changing the number.",
                 term_key=key,
             )
 

@@ -1714,6 +1714,20 @@ class ContractBuilder:
             self._by_code_cache = self.traced_codes()
         return self._by_code_cache
 
+    #: A refusal code traced on at least this many surfaces is printed once, in a shared
+    #: table, instead of in every surface's own table: ten surfaces carry a level of theory
+    #: and a calculation, so every rule about those repeated verbatim ten times.
+    SHARED_CODE_MIN_SURFACES = 8
+
+    def widely_shared_codes(self) -> dict[str, int]:
+        """code -> number of surfaces that can return it, for codes on enough surfaces to print once."""
+        common = set(self.global_trace.code_sites)
+        return {
+            code: len(titles)
+            for code, titles in self._surfaces_by_code().items()
+            if code not in common and len(titles) >= self.SHARED_CODE_MIN_SURFACES
+        }
+
     def shared_checks(self) -> dict[str, tuple[ScientificCheck, list[str]]]:
         """Register checks two or more surfaces' workflows reach: printed once."""
         reached: dict[str, list[str]] = {}
@@ -1989,6 +2003,25 @@ class ContractBuilder:
             ]
             if check.escape_hatch:
                 out += [f"If your chemistry is legitimate: {_one_line(check.escape_hatch)}", ""]
+        shared = self.widely_shared_codes()
+        total = len(self.surfaces)
+        out += [
+            '<a id="codes-most-surfaces-share"></a>',
+            "",
+            "### Codes most surfaces share",
+            "",
+            f"Refusal codes that {self.SHARED_CODE_MIN_SURFACES} or more of the {total} surfaces can return, printed"
+            " here once instead of in each surface's own table. They come from rules every payload that carries a"
+            " calculation or a level of theory meets. Each links to its entry in the"
+            " [refusal code reference](#refusal-code-reference); `traced` counts the surfaces.",
+            "",
+            "| Code | Status | Surfaces traced |",
+            "|---|---|---|",
+        ]
+        for code in sorted(shared):
+            statuses = ", ".join(str(s) for s in sorted({e.status for e in self.catalogue[code]}))
+            out.append(f"| [`{code}`](#{_anchor('c', code)}) | {statuses} | {shared[code]} of {total} |")
+        out.append("")
         return out
 
     def _render_surface(self, surface: Surface) -> list[str]:
@@ -2088,14 +2121,16 @@ class ContractBuilder:
     def _render_surface_codes(self, surface: Surface) -> list[str]:
         traced = self.surface_codes(surface)
         common = set(self.global_trace.code_sites)
-        specific = {code: how for code, how in traced.items() if code not in common}
+        shared = self.widely_shared_codes()
+        specific = {code: how for code, how in traced.items() if code not in common and code not in shared}
         out = [
             "### Refusal codes this surface can return",
             "",
             "Traced statically from the payload validators, route handlers and route dependencies:"
             " reachable from the route, not necessarily for every payload; a code raised through"
             " dynamic dispatch can be missing. Codes every request can receive are listed"
-            " [once](#every-producer-route).",
+            " [once](#every-producer-route); codes most surfaces can return (calculation, level of"
+            " theory and composite rules) are listed [once](#codes-most-surfaces-share).",
             "",
         ]
         if not specific:

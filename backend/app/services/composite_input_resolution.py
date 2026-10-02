@@ -68,7 +68,7 @@ from tckdb_schemas.composite_total import (
 )
 from tckdb_schemas.enums import CompositeInputSlot as WireSlot
 from tckdb_schemas.enums import EnergyComponentKind as WireComponent
-from tckdb_schemas.fragments.calculation import CompositeResultPayload
+from tckdb_schemas.fragments.calculation import COMPOSITE_INPUT_REFERENCE_INVALID, CompositeResultPayload
 
 from app.api.error_contract import CodedValueError
 from app.db.composite_commit_guard import PENDING_COMPOSITE_KEY
@@ -95,6 +95,7 @@ from app.db.models.composite_scheme import (
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.schemas.upload_warning import UploadWarning
 from app.services.calculation_ownership import W_COMPOSITE_INPUT_OWNER_MISMATCH, assert_calculation_owned_by
+from app.services.composite_scheme_resolution import term_positions_for
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.upload_reference import W_UNKNOWN_CALCULATION_REF, unknown_reference
 
@@ -167,6 +168,15 @@ def _resolve_input_calculation(
     calculations_by_key: Mapping[str, Any] | None,
 ) -> Calculation:
     deposited = matched.input
+    # The wire rule (exactly one of key and ref), re-run for a payload built without validation.
+    if (deposited.calculation_key is None) == (deposited.calculation_ref is None):
+        raise CodedValueError(
+            COMPOSITE_INPUT_REFERENCE_INVALID,
+            f"composite_result.inputs[{index}] must name its calculation by exactly one of calculation_key "
+            "(a calculation declared in this request) or calculation_ref (a calc_... ref from an earlier deposit).",
+            context={"field": f"composite_result.inputs[{index}]", "term_key": deposited.term_key},
+            message_prefix=False,
+        )
     if deposited.calculation_key is not None:
         field = f"composite_result.inputs[{index}].calculation_key"
         target = resolve_calculation_key(deposited.calculation_key, calculations_by_key or {}, field=field)
@@ -334,8 +344,12 @@ def _finalize_one(
     assert composite is not None
     payload = item.payload
     warnings: list[UploadWarning] = []
+    # The producer's term order is not identity: map the positions it used to the canonical ones.
+    positions = term_positions_for(session, item.definition)
 
     # The wire matcher ran on parse; a payload built with ``model_copy`` skipped it.
+    # ``entry.term_position`` is where the producer listed the term (what the total check, which walks
+    # the definition as sent, indexes by); ``positions[...]`` is its canonical, stored position.
     matched = match_inputs_to_definition(item.definition, payload.inputs)
 
     binding = session.get(LevelOfTheoryComposite, composite.lot_id) if composite.lot_id is not None else None
@@ -375,7 +389,7 @@ def _finalize_one(
         )
 
         cardinal = entry.cardinal_number if entry.slot == WireSlot.cardinal else None
-        expected_id = _follow_merge(session, slot_levels[(entry.term_position, entry.slot, cardinal)])
+        expected_id = _follow_merge(session, slot_levels[(positions[entry.term_position], entry.slot, cardinal)])
         actual_id = _follow_merge(session, calculation.lot_id) if calculation.lot_id is not None else None
         if actual_id != expected_id:
             expected_label = _level_label(session, expected_id)
@@ -407,7 +421,7 @@ def _finalize_one(
         session.add(
             CalculationCompositeInput(
                 calculation_id=composite.id,
-                term_position=entry.term_position,
+                term_position=positions[entry.term_position],
                 slot=CompositeInputSlot(entry.slot.value),
                 input_calculation_id=calculation.id,
                 cardinal_number=cardinal,
@@ -424,6 +438,7 @@ def _finalize_one(
             child_calculation_id=composite.id,
             dependency_role=CalculationDependencyRole.composite_input,
             context=f"composite_result.inputs ({entry.term_key}/{entry.slot.value})",
+            derived=True,
         )
     session.flush()
 

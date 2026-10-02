@@ -53,6 +53,8 @@ from tckdb_schemas.fragments.calculation import (
     COMPOSITE_ASSEMBLED_NOT_ACCEPTED as _WIRE_COMPOSITE_ASSEMBLED_NOT_ACCEPTED,
 )
 from tckdb_schemas.fragments.calculation import (
+    COMPOSITE_INPUTS_REQUIRE_ASSEMBLED,
+    COMPOSITE_TOTAL_REQUIRED,
     CompositeResultPayload,
     assert_composite_result_arithmetic,
 )
@@ -77,6 +79,7 @@ from app.db.models.composite_scheme import (
 from app.db.models.level_of_theory import LevelOfTheory
 from app.schemas.upload_warning import UploadWarning
 from app.services.composite_input_resolution import register_pending_composite
+from app.services.composite_scheme_resolution import term_positions_for
 
 #: An assembled composite is not at a user-built scheme. Defined with the wire
 #: rule that raises it first (``tckdb_schemas.fragments.calculation``).
@@ -150,6 +153,23 @@ def persist_composite_result(
             f"(got type '{calculation.type.value}')."
         )
     assembled = payload.assembly == CompositeAssembly.assembled
+    # Wire rules, re-run here for a payload built without validation.
+    if not assembled and payload.inputs:
+        raise CodedValueError(
+            COMPOSITE_INPUTS_REQUIRE_ASSEMBLED,
+            "composite_result.inputs is only allowed with assembly='assembled'. A program_run composite is a "
+            "number a program printed; it has no deposited calculations to evidence.",
+            context={"field": "composite_result.inputs", "assembly": payload.assembly.value},
+            message_prefix=False,
+        )
+    if assembled and payload.electronic_energy_hartree is None:
+        raise CodedValueError(
+            COMPOSITE_TOTAL_REQUIRED,
+            "an assembled composite must deposit its total, composite_result.electronic_energy_hartree. TCKDB "
+            "recomputes the total from the inputs only to check yours and never stores a value it computed.",
+            context={"field": "composite_result.electronic_energy_hartree"},
+            message_prefix=False,
+        )
     if not assembled and calculation.software_release_id is None:
         raise CodedValueError(
             COMPOSITE_PROGRAM_RUN_REQUIRES_SOFTWARE,
@@ -195,6 +215,26 @@ def persist_composite_result(
     # The wire validator ran these on parse; a payload built with model_copy skipped it.
     assert_composite_result_arithmetic(payload)
 
+    # An assembled composite's breakdown names terms by the position the producer listed
+    # them at; the stored scheme orders its terms canonically, so map them across.
+    term_values = [(t.term_position, t.value_hartree) for t in payload.terms]
+    if assembled and definition is not None and payload.terms:
+        mapping = term_positions_for(session, definition)
+        unknown_listed = sorted({p for p, _ in term_values if not 0 <= p < len(mapping)})
+        if unknown_listed:
+            raise CodedValueError(
+                COMPOSITE_TERM_POSITION_UNKNOWN,
+                f"composite_result.terms names position(s) {', '.join(str(p) for p in unknown_listed)}, but the "
+                f"scheme lists {len(mapping)} terms (positions 0 to {len(mapping) - 1}, in the order you sent them).",
+                context={
+                    "field": "composite_result.terms",
+                    "unknown_term_positions": unknown_listed,
+                    "scheme_term_positions": list(range(len(mapping))),
+                },
+                message_prefix=False,
+            )
+        term_values = [(mapping[p], value) for p, value in term_values]
+
     if payload.terms:
         scheme_positions = set(
             session.scalars(
@@ -202,7 +242,7 @@ def persist_composite_result(
             ).all()
         )
         if scheme_positions:
-            unknown = sorted({t.term_position for t in payload.terms} - scheme_positions)
+            unknown = sorted({p for p, _ in term_values} - scheme_positions)
             if unknown:
                 raise CodedValueError(
                     COMPOSITE_TERM_POSITION_UNKNOWN,
@@ -226,12 +266,12 @@ def persist_composite_result(
         recipe_zpe_hartree=payload.recipe_zpe_hartree,
     )
     session.add(result)
-    for term in payload.terms:
+    for position, value in term_values:
         session.add(
             CalculationCompositeTerm(
                 calculation_id=calculation.id,
-                term_position=term.term_position,
-                value_hartree=term.value_hartree,
+                term_position=position,
+                value_hartree=value,
             )
         )
     if assembled:

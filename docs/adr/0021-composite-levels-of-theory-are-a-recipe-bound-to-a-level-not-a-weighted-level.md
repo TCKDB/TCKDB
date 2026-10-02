@@ -227,10 +227,17 @@ plan left a choice:
   group's sources (five ORCA manual values, reproduced to the printed digits); the
   others are tested by recovering a known limit from the model they invert.
 - **Identity.** `definition_hash` is a SHA-256 over the canonical JSON of `kind`
-  and the ordered terms, each with operation, component, formula, exponent and its
-  inputs (sorted by slot then cardinal number) as slot, declared cardinal number and
-  the `lot_hash` of the resolved level (merges followed). Term keys, literature and
-  the label are not in it. The level of theory's `lot_hash` is a SHA-256 over
+  and the terms **in canonical order**, each with operation, component, formula,
+  exponent and its inputs (sorted by slot then cardinal number) as slot, declared
+  cardinal number and the `lot_hash` of the resolved level (merges followed). The
+  total is a sum, so the order a producer listed the terms in is not identity:
+  terms are ordered by operation (base, value, extrapolation, difference), energy
+  component, formula, exponent and their inputs, and a term's stored `position` is
+  its place in that order. The positions a producer uses (`composite_result.terms`)
+  are mapped to the canonical ones at the write. Term keys, literature and the
+  label are not in the hash, and a `cardinal_number` on a slot that is not a
+  `cardinal` slot is refused (it would change the hash and not the number). The
+  level of theory's `lot_hash` is a SHA-256 over
   `{"composite_scheme": <definition_hash>}`; a normal level's payload always has a
   `method` key, so the two cannot be equal. Every replica agrees: the resolver is
   the only writer, and `merge_duplicate_levels_of_theory.py` **recomputes** a
@@ -250,23 +257,57 @@ plan left a choice:
 - **Correlation and triples (pinned).** Single-point components allow two
   conventions when `triples` is stored: ORCA's correlation includes (T)
   (`reference + correlation` equals the energy), Molpro's is the CCSD part
-  (`reference + correlation + triples` equals the energy). A scheme term that reads
-  `correlation` means the **whole** correlation energy, (T) included. The
-  recomputation reads the convention off the stored row: whichever sum equals the
+  (`reference + correlation + triples` equals the energy). A scheme term can ask for
+  either meaning by naming it. `correlation` is the **whole** correlation energy,
+  (T) included: the stored value under ORCA's convention, `correlation + triples`
+  under Molpro's. `correlation_excluding_triples` (a new `EnergyComponentKind`
+  member) is the CCSD part: the stored value under Molpro's, `correlation -
+  triples` under ORCA's. The textbook scheme (extrapolate the CCSD correlation
+  energy, add (T) at a smaller basis as its own `triples` term) is written with
+  `correlation_excluding_triples` and counts (T) once whichever program produced
+  each input. The convention is read off the stored row: whichever sum equals the
   stored energy within the single-point tolerance (1e-6 Eh; |(T)| is far larger)
-  decides, so the value is `correlation` or `correlation + triples`. If both match
-  the stored `correlation` is used; if neither does, or the reference or the energy
-  is not stated, the total is `composite_total_unverifiable`, never guessed. A term
-  that reads `triples` reads the stored component as it is.
+  decides. If both match, the stored `correlation` is used for either meaning; if
+  neither does, or the reference or the energy is not stated, or an ORCA-convention
+  row stores no `triples` to subtract, the total is `composite_total_unverifiable`,
+  never guessed. A term that reads `triples` reads the stored component as it is.
+  `correlation_excluding_triples` is **derived and never stored** as a
+  single-point component (`sp_energy_component_derived`): it would be a number
+  TCKDB computed, and it follows from `correlation` and `triples` under the row's
+  own convention. The enum value is added to `energy_component_kind` by the P5
+  revision, which rebuilds the enum on downgrade and refuses while any row uses it.
 - **The check and its tolerance.** `composite_total_mismatch` recomputes the total
   from the inputs' stored energies and compares it with the deposited
-  `electronic_energy_hartree` at `max(1e-6, 5e-7 * n)` hartree, `n` counting the
-  deposited total and every stored number consumed (a separate (T) counts as one
-  more). The count is of numbers, not weighted by an extrapolation's amplification
-  (a larger-basis energy enters `inverse_power` with weight above 1): inputs printed
-  to six decimals can sit just outside the tolerance in the worst case, while nine
-  or more decimals (ORCA, Molpro) are far inside it. The recomputed value is formed,
-  compared and discarded.
+  `electronic_energy_hartree` at `max(1e-6, 5e-7 * (1 + sum_i |d total / d x_i|))`
+  hartree, the sum over every stored number the recomputation consumed. The weight
+  of a number is how far a rounding error in it can move the total: 1 for a value
+  or base input and for either side of a difference, the extrapolation's own weight
+  for an extrapolated input (closed form for the two-point formulas, e.g. 27/37 and
+  64/37 for x^-3 at cardinals 3 and 4; the analytic partial derivatives
+  `(d2/D)^2`, `2 d1 d2 / D^2`, `(d1/D)^2` for the three-point exponential), and 1 for
+  each number behind a two-number correlation. When every weight is 1 this is the
+  rule of the composite results, `max(1e-6, 5e-7 * n)` with `n` the number of rounded
+  quantities. The weighted form is the honest one: a larger-basis energy enters an
+  inverse-power extrapolation with a weight above 1, so a total built from inputs
+  printed to six decimals was refused by the plain count at a gap of 2.08e-6 against
+  2.0e-6 and is accepted at the weighted bound of 2.23e-6. The recomputed value is
+  formed, compared and discarded.
+- **The total must be deposited.** An assembled composite with no
+  `electronic_energy_hartree` is refused (`composite_total_required`) rather than
+  warned about: owner decision 5 says the total is deposited and only checked, so
+  there is no unverifiable-by-absence.
+- **An assembled composite is never a primary.** A conformer's or transition state's
+  primary is the run that produced the geometry; a program-run named composite did,
+  an assembled one is arithmetic and produced nothing
+  (`composite_assembled_cannot_be_primary`, at the wire and in
+  `resolve_and_persist_calculation_with_results(as_primary=True)`).
+- **The `composite_input` edge is derived.** `add_dependency_edge_idempotent`
+  refuses it unless the caller is the input writer
+  (`composite_input_edge_is_derived`), so no site that wires declared edges can
+  write one, present or future.
+- **Numerical stability.** The three-point exponential is evaluated as
+  `E_{n+2} - d2^2 / (d1 - d2)`, which does not cancel at large |E| (the product form
+  loses every digit at 5300 Eh).
 - **Assembled composites are not accepted at a named method.** The one remaining
   meaning of `composite_assembled_not_accepted`: an assembled composite whose level
   of theory is not a user scheme sent inline.

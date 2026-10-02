@@ -39,13 +39,15 @@ The four formulas (names are the ``CompositeExtrapolationFormula`` members)
     The three-point exponential of D. Feller, J. Chem. Phys. 96, 6104 (1992);
     Molpro 2026 manual, ``EXTRAPOLATE`` ``E_n = E_CBS + A exp(-C n)``. For
     consecutive cardinal numbers ``n, n+1, n+2`` the three equations give
-    ``E_CBS = (E_n * E_{n+2} - E_{n+1}**2) / (E_n + E_{n+2} - 2 E_{n+1})``.
+    ``E_CBS = (E_n * E_{n+2} - E_{n+1}**2) / (E_n + E_{n+2} - 2 E_{n+1})``, which
+    is evaluated as ``E_{n+2} - d2**2 / (d1 - d2)`` (``d1 = E_n - E_{n+1}``,
+    ``d2 = E_{n+1} - E_{n+2}``) so it does not cancel at large ``|E|``.
 
 What is checked against published numbers
 -----------------------------------------
 ``inverse_power`` reproduces five extrapolated correlation energies printed in
 the ORCA 5.0.4 and 6.1 manuals to the digits printed
-(``backend`` and wire tests: ``test_composite_formulas.py``). The other three
+(``tests/test_composite_formulas.py``). The other three
 have no worked number in the sources the group's knowledge base holds, so they
 are tested by recovering a known ``E_CBS`` from energies generated with the
 stated model, and by a hand-computed case.
@@ -67,6 +69,7 @@ __all__ = [
     "extrapolate_inverse_power",
     "extrapolate_inverse_power_shifted_half",
     "extrapolate_karton_martin_scf",
+    "extrapolation_weights",
 ]
 
 #: Formulas whose scheme term must state an exponent, and the ones that must not.
@@ -121,11 +124,66 @@ def extrapolate_karton_martin_scf(x: int, e_x: float, y: int, e_y: float) -> flo
 
 
 def extrapolate_exponential_three_point(n: int, e_n: float, e_n1: float, e_n2: float) -> float:
-    """``E_n = E_CBS + A exp(-C n)`` through cardinals ``n, n+1, n+2``."""
-    denominator = e_n + e_n2 - 2.0 * e_n1
+    """``E_n = E_CBS + A exp(-C n)`` through cardinals ``n, n+1, n+2``.
+
+    Written in the cancellation-stable form ``E_{n+2} - d2**2 / (d1 - d2)`` with
+    ``d1 = E_n - E_{n+1}`` and ``d2 = E_{n+1} - E_{n+2}``. It is algebraically the
+    closed form ``(E_n E_{n+2} - E_{n+1}**2) / (E_n + E_{n+2} - 2 E_{n+1})`` but
+    it never subtracts two products of absolute energies, which at ``|E|`` in the
+    thousands of hartree loses every digit of the answer.
+    """
+    d1 = e_n - e_n1
+    d2 = e_n1 - e_n2
+    denominator = d1 - d2
     if denominator == 0.0:
         raise ExtrapolationError("the three energies are collinear, so the exponential has no limit")
-    return (e_n * e_n2 - e_n1 * e_n1) / denominator
+    return e_n2 - (d2 * d2) / denominator
+
+
+def extrapolation_weights(
+    formula: CompositeExtrapolationFormula | str,
+    points: Sequence[tuple[int, float]],
+    exponent: float | None = None,
+) -> list[float]:
+    """Absolute sensitivity ``|d E_CBS / d E_i|`` of the limit to each input energy.
+
+    Returned in the order of ``points`` sorted by cardinal number (the order
+    :func:`extrapolate` uses). They say how much a rounding error of one stored
+    energy can move the extrapolated value, and set the tolerance of the total
+    check (``composite_total``). The two-point formulas are linear, so the weights
+    are constants of the cardinals and exponent; the three-point exponential is
+    not, and its weights are the analytic partial derivatives
+    ``(d2/D)**2``, ``2 d1 d2 / D**2`` and ``(d1/D)**2`` for ``E_n``, ``E_{n+1}``,
+    ``E_{n+2}`` with ``D = d1 - d2`` (they sum to 1).
+
+    :raises ExtrapolationError: as :func:`extrapolate`.
+    """
+    kind = formula if isinstance(formula, CompositeExtrapolationFormula) else CompositeExtrapolationFormula(formula)
+    ordered = sorted(points, key=lambda point: point[0])
+    if len(ordered) != FORMULA_POINT_COUNT[kind]:
+        raise ExtrapolationError(f"{kind.value} takes {FORMULA_POINT_COUNT[kind]} points, got {len(ordered)}")
+    if kind is CompositeExtrapolationFormula.exponential_three_point:
+        (_, a), (_, b), (_, c) = ordered
+        d1, d2 = a - b, b - c
+        denominator = d1 - d2
+        if denominator == 0.0:
+            raise ExtrapolationError("the three energies are collinear, so the exponential has no limit")
+        return [(d2 / denominator) ** 2, abs(2.0 * d1 * d2) / denominator**2, (d1 / denominator) ** 2]
+    (x, _), (y, _) = ordered
+    if kind is CompositeExtrapolationFormula.inverse_power:
+        if exponent is None:
+            raise ExtrapolationError(f"{kind.value} needs an exponent")
+        f_x, f_y = float(x) ** -exponent, float(y) ** -exponent
+    elif kind is CompositeExtrapolationFormula.inverse_power_shifted_half:
+        if exponent is None:
+            raise ExtrapolationError(f"{kind.value} needs an exponent")
+        f_x, f_y = (x + 0.5) ** -exponent, (y + 0.5) ** -exponent
+    else:
+        f_x, f_y = _karton_martin(x), _karton_martin(y)
+    denominator = f_y - f_x
+    if denominator == 0.0:
+        raise ExtrapolationError("the two cardinal numbers give the same basis-set function")
+    return [abs(f_y / denominator), abs(f_x / denominator)]
 
 
 def extrapolate(

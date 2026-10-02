@@ -192,16 +192,35 @@ def test_no_deposited_total_leaves_nothing_to_verify():
 # ---------------------------------------------------------------------------
 
 
+#: Weights of the recipe: the deposited total, the QZ reference, and the two correlation energies, which
+#: enter the x^-3 extrapolation with |dE/dE_TZ| = 27/37 and |dE/dE_QZ| = 64/37.
+WEIGHTED_B = 1 + 1 + 27 / 37 + 64 / 37
+TOL_B = 5e-7 * WEIGHTED_B  # 2.23e-6, above the unweighted 2.0e-6
+
+
 @pytest.mark.parametrize(
     ("offset", "status"),
-    [(0.0, "ok"), (1.9e-6, "ok"), (-1.9e-6, "ok"), (2.1e-6, "mismatch"), (-2.1e-6, "mismatch"), (1e-3, "mismatch")],
+    [(0.0, "ok"), (2.1e-6, "ok"), (-2.1e-6, "ok"), (2.35e-6, "mismatch"), (-2.35e-6, "mismatch"), (1e-3, "mismatch")],
 )
-def test_the_boundary_for_four_rounded_quantities_is_two_microhartree(offset, status):
-    """The total plus three consumed numbers: n = 4, so max(1e-6, 5e-7 * 4) = 2e-6 Eh."""
+def test_the_boundary_is_the_weighted_count_not_the_plain_one(offset, status):
+    """5e-7 * (1 + sum |weight|): the larger-basis energy counts for 64/37 of itself, not 1."""
     check = check_composite_total(SCHEME, _lookup(_including(R_T, C_T), _including(R_Q, C_Q)), TOTAL + offset)
-    assert check.quantities == 3
-    assert check.tolerance == pytest.approx(2e-6)
+    assert check.quantities == 3  # numbers consumed
+    assert check.weighted_quantities == pytest.approx(WEIGHTED_B)
+    assert check.tolerance == pytest.approx(TOL_B)
     assert check.status == status
+
+
+def test_the_reviewers_printed_to_six_decimals_case_is_inside_the_weighted_tolerance_and_outside_the_plain_one():
+    """Stored to six decimals, the QZ reference and both correlation energies, total deposited from them."""
+    ref_q, corr_t, corr_q = -76.064382, -0.275378, -0.295325
+    deposited = -76.374265
+    tz = InputEnergies(total=-76.056728 + corr_t, components={K.reference: -76.056728, K.correlation: corr_t})
+    qz = InputEnergies(total=ref_q + corr_q, components={K.reference: ref_q, K.correlation: corr_q})
+    check = check_composite_total(SCHEME, _lookup(tz, qz), deposited)
+    assert 2.0e-6 < abs(check.gap) < 2.23e-6  # the gap the plain n * 5e-7 rule (2.0e-6) would refuse
+    assert check.status == "ok"
+    assert check.tolerance == pytest.approx(2.2297e-6, rel=1e-3)
 
 
 def test_the_tolerance_counts_triples_under_the_separate_convention_as_two_numbers():
@@ -211,7 +230,8 @@ def test_the_tolerance_counts_triples_under_the_separate_convention_as_two_numbe
         SCHEME, _lookup(_separate(R_T, ccsd_t, tri_t), _separate(R_Q, ccsd_q, tri_q)), TOTAL
     )
     assert check.quantities == 5  # the reference, and CCSD + (T) at each cardinal
-    assert check.tolerance == pytest.approx(3e-6)
+    # Each of the two numbers behind a cardinal's correlation carries that cardinal's weight.
+    assert check.tolerance == pytest.approx(5e-7 * (1 + 1 + 2 * 27 / 37 + 2 * 64 / 37))
 
 
 def test_a_mismatch_is_refused_with_its_code_and_the_recomputed_value_only_in_the_refusal():
@@ -222,7 +242,7 @@ def test_a_mismatch_is_refused_with_its_code_and_the_recomputed_value_only_in_th
     assert error.code == "composite_total_mismatch"
     assert error.context["deposited_hartree"] == pytest.approx(TOTAL + 1e-3)
     assert error.context["recomputed_hartree"] == pytest.approx(TOTAL, abs=1e-12)
-    assert error.context["tolerance_hartree"] == pytest.approx(2e-6)
+    assert error.context["tolerance_hartree"] == pytest.approx(TOL_B)
 
 
 # ---------------------------------------------------------------------------

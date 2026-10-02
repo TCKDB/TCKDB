@@ -24,8 +24,9 @@ R_Q, C_Q = -76.064381269, -0.295324345
 #: (4^3 C_Q - 3^3 C_T) / (4^3 - 3^3) = -11.465416648 / 37, by hand.
 CORR_CBS_X3 = -0.3098761256216216
 TOTAL_B = R_Q + CORR_CBS_X3  # -76.37425739462162
-#: Quantities in the recomputation: the QZ reference and two correlation energies, plus the total.
-TOL_B = 2e-6
+#: The weighted rounded quantities of the recomputation: the deposited total (1), the QZ reference (1) and
+#: the two correlation energies, which enter the x^-3 extrapolation with weights 27/37 and 64/37.
+TOL_B = 5e-7 * (2 + 27 / 37 + 64 / 37)
 
 LABEL_B = "CBS[ref:CCSD(T)/cc-pVQZ + corr:CCSD(T)/cc-pV{T,Q}Z; inverse_power x=3; n=3,4]"
 
@@ -138,7 +139,7 @@ E_REL_HIGH, E_REL_LOW = -76.43, -76.42
 E_HF, DBOC = -76.02, 0.0027
 #: base + (ae - fc) + (tq_high - tq_low) + (rel_high - rel_low) + dboc.
 TOTAL_C = E_BASE + (E_AE - E_FC) + (E_TQ_HIGH - E_TQ_LOW) + (E_REL_HIGH - E_REL_LOW) + DBOC
-#: Eight consumed numbers plus the total: max(1e-6, 5e-7 * 9).
+#: Eight consumed numbers of weight 1 plus the total: max(1e-6, 5e-7 * 9).
 TOL_C = 4.5e-6
 
 SCHEME_C = {

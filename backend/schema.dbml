@@ -195,6 +195,7 @@ enum EnergyComponentKind {
   triples
   dboc
   scalar_relativistic
+  correlation_excluding_triples
 }
 
 enum EnergyCorrectionApplicationRole {

@@ -1073,6 +1073,15 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("composed_search_pagination_stalled", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py",
             shape=Shape.relationship),
+    ApiCode("composite_assembled_cannot_be_primary", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            note=(
+                "An assembled composite was sent as a conformer's or "
+                "transition state's primary calculation. The primary is the "
+                "run that produced the geometry; only a program-run composite "
+                "can be one. Send the assembled composite as an additional "
+                "calculation."
+            )),
     ApiCode("composite_assembled_not_accepted", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
             note=(
@@ -1234,6 +1243,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "= the deposited total plus every stored number consumed). "
                 "Context carries both totals, the difference and the "
                 "tolerance; the recomputed value is never stored."
+            )),
+    ApiCode("composite_total_required", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            note=(
+                "An assembled composite deposited no "
+                "electronic_energy_hartree. The total is deposited and only "
+                "checked by recomputation (ADR 0021, owner decision 5); TCKDB "
+                "stores no value it computed."
             )),
     ApiCode("composite_type_requires_composite_result", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
@@ -2146,6 +2163,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
             note=(
                 "A required source pin file (environment.yml, uv.lock, Dockerfile, licences, CITATION.cff) is absent. "
                 "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("sp_energy_component_derived", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py",
+            note=(
+                "correlation_excluding_triples was sent as a stored "
+                "single-point component. It is derived from correlation and "
+                "triples under the row's own convention; a composite scheme "
+                "term may read it by name, but nothing stores it."
             )),
     ApiCode("sp_energy_component_duplicate", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py"),

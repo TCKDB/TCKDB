@@ -148,6 +148,7 @@ def _persist_calculation(
     geometry_id: int | None = None,
     geometry_key_map: dict[str, int],
     created_by: int | None = None,
+    as_primary: bool = False,
 ) -> Calculation:
     """Persist one bundle-local calculation through the shared calculation seam.
 
@@ -184,6 +185,7 @@ def _persist_calculation(
         species_entry_id=species_entry_id,
         transition_state_entry_id=transition_state_entry_id,
         created_by=created_by,
+        as_primary=as_primary,
     )
 
     if effective_geometry_id is not None:
@@ -317,6 +319,7 @@ def persist_network_pdep_upload(
                 geometry_id=geometry.id,
                 geometry_key_map=geometry_key_to_id,
                 created_by=created_by,
+                as_primary=True,
             )
             calculation_key_to_id[conf.calculation.key] = calculation.id
             calculation_key_to_calc[conf.calculation.key] = calculation
@@ -539,6 +542,7 @@ def persist_network_pdep_upload(
             geometry_id=ts_geometry.id,
             geometry_key_map=geometry_key_to_id,
             created_by=created_by,
+            as_primary=True,
         )
         calculation_key_to_id[ts_in.calculation.key] = ts_calc.id
         calculation_key_to_calc[ts_in.calculation.key] = ts_calc

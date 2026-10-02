@@ -112,6 +112,7 @@ def persist_conformer_upload(
         request.calculation,
         species_entry_id=species_entry.id,
         created_by=created_by,
+        as_primary=True,
     )
 
     # Producer-explicit output_geometries take precedence. Otherwise the

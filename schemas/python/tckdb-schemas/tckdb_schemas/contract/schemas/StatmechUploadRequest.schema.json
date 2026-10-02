@@ -1430,14 +1430,15 @@
       "type": "object"
     },
     "EnergyComponentKind": {
-      "description": "Which part of an electronic energy a value is (ADR 0021).\n\nNamed generically because it is shared: a scheme term says which\ncomponent of an input energy it consumes, and a single-point energy\ncomponent says which component it stores. ``total`` is the whole\nelectronic energy; ``reference`` the reference-determinant (SCF / HF)\npart; ``correlation`` the correlation part; ``triples`` the perturbative\ntriples part; ``dboc`` the diagonal Born-Oppenheimer correction;\n``scalar_relativistic`` the scalar-relativistic correction. The wire enum\nin ``tckdb_schemas.enums`` carries this exact text, so the OpenAPI schema\nfor the two is one schema, not two.",
+      "description": "Which part of an electronic energy a value is (ADR 0021).\n\nNamed generically because it is shared: a scheme term says which\ncomponent of an input energy it consumes, and a single-point energy\ncomponent says which component it stores. ``total`` is the whole\nelectronic energy; ``reference`` the reference-determinant (SCF / HF)\npart; ``correlation`` the correlation part; ``triples`` the perturbative\ntriples part; ``dboc`` the diagonal Born-Oppenheimer correction;\n``scalar_relativistic`` the scalar-relativistic correction;\n``correlation_excluding_triples`` the correlation energy *without* the\nperturbative triples (the CCSD part), a quantity a scheme term can read but a\nsingle point never stores: it is derived from the stored ``correlation`` and\n``triples`` under the row's own convention (``tckdb_schemas.composite_total``). The wire enum\nin ``tckdb_schemas.enums`` carries this exact text, so the OpenAPI schema\nfor the two is one schema, not two.",
       "enum": [
         "total",
         "reference",
         "correlation",
         "triples",
         "dboc",
-        "scalar_relativistic"
+        "scalar_relativistic",
+        "correlation_excluding_triples"
       ],
       "title": "EnergyComponentKind",
       "type": "string"

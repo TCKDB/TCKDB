@@ -211,7 +211,7 @@ the gap.
 | `scheme_id` | BIGINT | no | — | composite_scheme.id | — | not documented |
 | `position` | SMALLINT | no | — | — | — | not documented |
 | `operation` | CompositeTermOperation (enum) | no | — | — | `base`, `extrapolation`, `difference`, `value`, `empirical` | not documented |
-| `energy_component` | EnergyComponentKind (enum) | no | — | — | `total`, `reference`, `correlation`, `triples`, `dboc`, `scalar_relativistic` | not documented |
+| `energy_component` | EnergyComponentKind (enum) | no | — | — | `total`, `reference`, `correlation`, `triples`, `dboc`, `scalar_relativistic`, `correlation_excluding_triples` | not documented |
 | `formula` | CompositeExtrapolationFormula (enum) | yes | — | — | `inverse_power`, `inverse_power_shifted_half`, `karton_martin_scf`, `exponential_three_point` | not documented |
 | `exponent` | DOUBLE PRECISION | yes | — | — | — | not documented |
 
@@ -1318,7 +1318,7 @@ the gap.
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
 | `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
-| `component` | EnergyComponentKind (enum) | no | — | — | `total`, `reference`, `correlation`, `triples`, `dboc`, `scalar_relativistic` | not documented |
+| `component` | EnergyComponentKind (enum) | no | — | — | `total`, `reference`, `correlation`, `triples`, `dboc`, `scalar_relativistic`, `correlation_excluding_triples` | not documented |
 | `value_hartree` | FLOAT | no | — | — | — | not documented |
 
 **Check constraints:**

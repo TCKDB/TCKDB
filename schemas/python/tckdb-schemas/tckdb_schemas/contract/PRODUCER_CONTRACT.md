@@ -247,20 +247,35 @@ for two complete examples (CCSD(T)/CBS from a TZ/QZ pair, and a focal-point sum)
   `composite_input` dependency role is written by the server and cannot be
   declared in `depends_on`), `composite_input_type_invalid` (an input is not a
   single point or optimisation), `composite_input_level_mismatch`,
-  `composite_input_owner_mismatch`, `composite_input_geometry_mismatch` and
-  `composite_total_mismatch` (the deposited total is not what the scheme gives
-  for the inputs' stored energies, beyond `max(1e-6, 5e-7 * n)` hartree, `n`
-  counting the deposited total and every stored number consumed). TCKDB
-  recomputes the total only to check it; it never stores the recomputed value.
-  Warnings: `composite_input_geometry_undeclared` and
-  `composite_total_unverifiable` (a needed energy or component is not stated, the
-  correlation convention cannot be determined, or no total was deposited).
+  `composite_input_owner_mismatch`, `composite_input_geometry_mismatch`,
+  `composite_total_required` (an assembled composite deposits its total; there is
+  no unverifiable-by-absence), `composite_assembled_cannot_be_primary` (an
+  assembled composite is not the run that produced a geometry; send it as an
+  additional calculation) and `composite_total_mismatch` (the deposited total is not
+  what the scheme gives for the inputs' stored energies, beyond
+  `max(1e-6, 5e-7 * (1 + sum |weight|))` hartree, the sum over the stored numbers
+  consumed: weight 1 for a value, base or difference input, the extrapolation's own
+  weight for an extrapolated one, so `max(1e-6, 5e-7 * n)` when every weight is 1).
+  TCKDB recomputes the total only to check it; it never stores the recomputed value.
+  Warnings: `composite_input_geometry_undeclared` and `composite_total_unverifiable`
+  (a needed energy or component is not stated, the correlation convention cannot be
+  determined, or an extrapolation is degenerate).
 - **Correlation and triples.** A `correlation` term reads the whole correlation
-  energy, (T) included. For an input whose stored `triples` is separate (Molpro,
-  `reference + correlation + triples` equals the energy) that is `correlation +
-  triples`; for one whose `correlation` already includes (T) (ORCA) it is
-  `correlation`. The convention is read off the stored row; an input where it
-  cannot be read makes the total unverifiable.
+  energy, (T) included: the stored `correlation` where it already includes (T)
+  (ORCA: `reference + correlation` equals the energy), `correlation + triples`
+  where triples are stored separately (Molpro). The new
+  `EnergyComponentKind.correlation_excluding_triples` reads the CCSD part: the
+  stored `correlation` under Molpro's convention, `correlation - triples` under
+  ORCA's. The textbook scheme (CCSD correlation extrapolated, (T) at a smaller
+  basis as its own `triples` term) is written with it and counts (T) once. It is
+  derived and never a stored single-point component (`sp_energy_component_derived`).
+  The convention is read off the stored row; where it cannot be read the total is
+  unverifiable, never guessed.
+- **Term order is not identity.** The total is a sum, so terms sent in any order are
+  one scheme; stored positions are canonical and the positions in
+  `composite_result.terms` are mapped to them. A `cardinal_number` on a slot that is
+  not a `cardinal` slot is refused (`composite_scheme_malformed`,
+  `rule: cardinal_on_non_cardinal_slot`).
 - **New public modules.** `tckdb_schemas.composite_formulas` (the four formulas,
   checked against the correlation energies printed in the ORCA manuals),
   `composite_total` (the recomputation, pure arithmetic a producer can run before
@@ -1146,6 +1161,68 @@ A van der Waals complex is formally a minimum, so an imaginary mode on one is re
 
 If your chemistry is legitimate: This *is* the escape hatch for the blocking minimum rule. Its own cost is that a genuinely mislabelled saddle point deposited as a van der Waals complex is accepted with a warning.
 
+<a id="codes-most-surfaces-share"></a>
+
+### Codes most surfaces share
+
+Refusal codes that 8 or more of the 16 surfaces can return, printed here once instead of in each surface's own table. They come from rules every payload that carries a calculation or a level of theory meets. Each links to its entry in the [refusal code reference](#refusal-code-reference); `traced` counts the surfaces.
+
+| Code | Status | Surfaces traced |
+|---|---|---|
+| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | 10 of 16 |
+| [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | 10 of 16 |
+| [`calculation_key_undeclared`](#c-calculation-key-undeclared) | 422 | 9 of 16 |
+| [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | 9 of 16 |
+| [`calculation_software_release_required`](#c-calculation-software-release-required) | 422 | 9 of 16 |
+| [`composite_assembled_cannot_be_primary`](#c-composite-assembled-cannot-be-primary) | 422 | 9 of 16 |
+| [`composite_assembled_not_accepted`](#c-composite-assembled-not-accepted) | 422 | 9 of 16 |
+| [`composite_e0_inconsistent`](#c-composite-e0-inconsistent) | 422 | 9 of 16 |
+| [`composite_input_duplicate`](#c-composite-input-duplicate) | 422 | 9 of 16 |
+| [`composite_input_geometry_mismatch`](#c-composite-input-geometry-mismatch) | 422 | 9 of 16 |
+| [`composite_input_level_mismatch`](#c-composite-input-level-mismatch) | 422 | 9 of 16 |
+| [`composite_input_missing`](#c-composite-input-missing) | 422 | 9 of 16 |
+| [`composite_input_owner_mismatch`](#c-composite-input-owner-mismatch) | 422 | 9 of 16 |
+| [`composite_input_reference_invalid`](#c-composite-input-reference-invalid) | 422 | 9 of 16 |
+| [`composite_input_slot_unknown`](#c-composite-input-slot-unknown) | 422 | 9 of 16 |
+| [`composite_input_type_invalid`](#c-composite-input-type-invalid) | 422 | 9 of 16 |
+| [`composite_inputs_require_assembled`](#c-composite-inputs-require-assembled) | 422 | 9 of 16 |
+| [`composite_level_not_scheme_bound`](#c-composite-level-not-scheme-bound) | 422 | 9 of 16 |
+| [`composite_program_run_requires_software`](#c-composite-program-run-requires-software) | 422 | 9 of 16 |
+| [`composite_result_requires_composite_type`](#c-composite-result-requires-composite-type) | 422 | 9 of 16 |
+| [`composite_scheme_malformed`](#c-composite-scheme-malformed) | 422 | 10 of 16 |
+| [`composite_scheme_named_method_not_sendable`](#c-composite-scheme-named-method-not-sendable) | 422 | 10 of 16 |
+| [`composite_scheme_nested`](#c-composite-scheme-nested) | 422 | 10 of 16 |
+| [`composite_term_position_unknown`](#c-composite-term-position-unknown) | 422 | 9 of 16 |
+| [`composite_terms_do_not_sum`](#c-composite-terms-do-not-sum) | 422 | 9 of 16 |
+| [`composite_total_mismatch`](#c-composite-total-mismatch) | 422 | 9 of 16 |
+| [`composite_total_required`](#c-composite-total-required) | 422 | 9 of 16 |
+| [`composite_type_requires_composite_result`](#c-composite-type-requires-composite-result) | 422 | 9 of 16 |
+| [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | 9 of 16 |
+| [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | 9 of 16 |
+| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | 12 of 16 |
+| [`level_of_theory_method_with_composite_scheme`](#c-level-of-theory-method-with-composite-scheme) | 422 | 10 of 16 |
+| [`level_of_theory_requires_method_or_composite_scheme`](#c-level-of-theory-requires-method-or-composite-scheme) | 422 | 10 of 16 |
+| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | 11 of 16 |
+| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | 14 of 16 |
+| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | 14 of 16 |
+| [`rights_license_blank`](#c-rights-license-blank) | 422 | 14 of 16 |
+| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | 14 of 16 |
+| [`sp_energy_component_derived`](#c-sp-energy-component-derived) | 422 | 9 of 16 |
+| [`sp_energy_component_duplicate`](#c-sp-energy-component-duplicate) | 422 | 9 of 16 |
+| [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | 9 of 16 |
+| [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | 9 of 16 |
+| [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | 9 of 16 |
+| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | 9 of 16 |
+| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | 12 of 16 |
+| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | 12 of 16 |
+| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | 12 of 16 |
+| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | 12 of 16 |
+| [`statmech_subject_not_exactly_one`](#c-statmech-subject-not-exactly-one) | 409 | 8 of 16 |
+| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | 16 of 16 |
+| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | 16 of 16 |
+| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | 16 of 16 |
+| [`unknown_calculation_ref`](#c-unknown-calculation-ref) | 404 | 10 of 16 |
+
 ## Worked payloads: user-built composite energies
 
 A composite energy you build yourself (a CCSD(T)/CBS extrapolation, a focal-point sum) is sent as an **assembled** composite: the other calculations are ordinary single points, and the composite is a calculation of type `composite` whose `level_of_theory` carries the recipe inline as `composite_scheme` (send `method` **or** `composite_scheme`, never both) and whose `composite_result.inputs` name, by bundle-local `key` or by `calc_...` ref, the calculation that fills each slot. The server names the level of theory itself and never stores a total it computed: it recomputes `electronic_energy_hartree` from the stored energies of the inputs to **check** yours, blocking beyond `max(1e-6, 5e-7 * n)` hartree (`composite_total_mismatch`) and warning (`composite_total_unverifiable`) when an input energy or component is not stated.
@@ -1640,7 +1717,7 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
@@ -1650,39 +1727,13 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`atom_map_atoms_unaccounted_for`](#c-atom-map-atoms-unaccounted-for) | 422 | payload validation; route handler |
 | [`atom_map_contradicts_irc_mapping`](#c-atom-map-contradicts-irc-mapping) | 422 | route handler |
 | [`atom_map_element_not_conserved`](#c-atom-map-element-not-conserved) | 409, 422 | heuristic: the handler names table `reaction_atom_map_pair`, constraint `ck_reaction_atom_map_pair_element_matches`; payload validation; route handler |
-| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | payload validation; route handler |
 | [`atom_map_indices_not_geometry_relative`](#c-atom-map-indices-not-geometry-relative) | 422 | payload validation; route handler |
 | [`atom_map_inferred_requires_note`](#c-atom-map-inferred-requires-note) | 422 | payload validation; route handler |
 | [`atom_map_not_a_bijection`](#c-atom-map-not-a-bijection) | 409, 422 | heuristic: the handler names table `reaction_atom_map_pair`, constraint `uq_reaction_atom_map_pair_atom_map_id`; heuristic: the handler names table `reaction_atom_map_pair`, constraint `uq_reaction_atom_map_pair_ts_atom_index`; payload validation; route handler |
 | [`atom_map_participant_not_declared`](#c-atom-map-participant-not-declared) | 422 | payload validation; route handler |
 | [`atom_map_without_transition_state`](#c-atom-map-without-transition-state) | 422 | payload validation; route handler |
 | [`bac_total_requires_components`](#c-bac-total-requires-components) | 422 | route handler |
-| [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | route handler |
-| [`calculation_key_undeclared`](#c-calculation-key-undeclared) | 422 | payload validation; route handler |
-| [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | route handler |
-| [`calculation_software_release_required`](#c-calculation-software-release-required) | 422 | payload validation; route handler |
-| [`composite_assembled_not_accepted`](#c-composite-assembled-not-accepted) | 422 | payload validation; route handler |
-| [`composite_e0_inconsistent`](#c-composite-e0-inconsistent) | 422 | payload validation; route handler |
-| [`composite_input_duplicate`](#c-composite-input-duplicate) | 422 | payload validation; route handler |
-| [`composite_input_edge_is_derived`](#c-composite-input-edge-is-derived) | 422 | payload validation |
-| [`composite_input_geometry_mismatch`](#c-composite-input-geometry-mismatch) | 422 | route handler |
-| [`composite_input_level_mismatch`](#c-composite-input-level-mismatch) | 422 | route handler |
-| [`composite_input_missing`](#c-composite-input-missing) | 422 | payload validation; route handler |
-| [`composite_input_owner_mismatch`](#c-composite-input-owner-mismatch) | 422 | route handler |
-| [`composite_input_reference_invalid`](#c-composite-input-reference-invalid) | 422 | payload validation |
-| [`composite_input_slot_unknown`](#c-composite-input-slot-unknown) | 422 | payload validation; route handler |
-| [`composite_input_type_invalid`](#c-composite-input-type-invalid) | 422 | route handler |
-| [`composite_inputs_require_assembled`](#c-composite-inputs-require-assembled) | 422 | payload validation; route handler |
-| [`composite_level_not_scheme_bound`](#c-composite-level-not-scheme-bound) | 422 | route handler |
-| [`composite_program_run_requires_software`](#c-composite-program-run-requires-software) | 422 | route handler |
-| [`composite_result_requires_composite_type`](#c-composite-result-requires-composite-type) | 422 | payload validation; route handler |
-| [`composite_scheme_malformed`](#c-composite-scheme-malformed) | 422 | payload validation; route handler |
-| [`composite_scheme_named_method_not_sendable`](#c-composite-scheme-named-method-not-sendable) | 422 | payload validation; route handler |
-| [`composite_scheme_nested`](#c-composite-scheme-nested) | 422 | payload validation; route handler |
-| [`composite_term_position_unknown`](#c-composite-term-position-unknown) | 422 | route handler |
-| [`composite_terms_do_not_sum`](#c-composite-terms-do-not-sum) | 422 | payload validation; route handler |
-| [`composite_total_mismatch`](#c-composite-total-mismatch) | 422 | route handler |
-| [`composite_type_requires_composite_result`](#c-composite-type-requires-composite-result) | 422 | payload validation; route handler |
+| [`composite_input_edge_is_derived`](#c-composite-input-edge-is-derived) | 422 | payload validation; route handler |
 | [`conformer_key_undeclared`](#c-conformer-key-undeclared) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_not_applicable`](#c-energy-correction-scheme-frequency-level-not-applicable) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_without_energy_level`](#c-energy-correction-scheme-frequency-level-without-energy-level) | 422 | payload validation; route handler |
@@ -1691,33 +1742,14 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`enthalpy_quantity_not_storable_here`](#c-enthalpy-quantity-not-storable-here) | 422 | route handler |
 | [`enthalpy_reference_kind_unrecognized`](#c-enthalpy-reference-kind-unrecognized) | 422 | route handler |
 | [`freq_list_exceeds_geometry_degrees_of_freedom`](#c-freq-list-exceeds-geometry-degrees-of-freedom) | 422 | payload validation |
-| [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation; route handler |
-| [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation; route handler |
 | [`geometry_key_unresolved`](#c-geometry-key-unresolved) | 422 | payload validation; route handler |
 | [`kinetics_interpretation_conformer_selection_owner_mismatch`](#c-kinetics-interpretation-conformer-selection-owner-mismatch) | 422 | route handler |
 | [`kinetics_interpretation_statmech_owner_mismatch`](#c-kinetics-interpretation-statmech-owner-mismatch) | 422 | route handler |
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
-| [`level_of_theory_method_with_composite_scheme`](#c-level-of-theory-method-with-composite-scheme) | 422 | payload validation; route handler |
-| [`level_of_theory_requires_method_or_composite_scheme`](#c-level-of-theory-requires-method-or-composite-scheme) | 422 | payload validation; route handler |
-| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
 | [`scf_stability_source_calculation_owner_mismatch`](#c-scf-stability-source-calculation-owner-mismatch) | 422 | payload validation; route handler |
 | [`scf_stability_source_geometry_mismatch`](#c-scf-stability-source-geometry-mismatch) | 422 | payload validation; route handler |
-| [`sp_energy_component_duplicate`](#c-sp-energy-component-duplicate) | 422 | payload validation; route handler |
-| [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
-| [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
-| [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
-| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_key_undeclared`](#c-species-key-undeclared) | 422 | payload validation; route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
 | [`statmech_energy_level_ambiguous`](#c-statmech-energy-level-ambiguous) | 422 | route handler |
 | [`statmech_energy_level_contradiction`](#c-statmech-energy-level-contradiction) | 422 | route handler |
 | [`statmech_energy_level_requires_sp`](#c-statmech-energy-level-requires-sp) | 422 | route handler |
@@ -1726,12 +1758,8 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`statmech_source_calculation_owner_mismatch`](#c-statmech-source-calculation-owner-mismatch) | 422 | route handler |
 | [`statmech_source_role_type_mismatch`](#c-statmech-source-role-type-mismatch) | 422 | route handler |
 | [`statmech_sp_geometry_mismatch`](#c-statmech-sp-geometry-mismatch) | 422 | route handler |
-| [`statmech_subject_not_exactly_one`](#c-statmech-subject-not-exactly-one) | 409 | heuristic: the handler names table `statmech`, constraint `ck_statmech_statmech_exactly_one_subject` |
 | [`statmech_torsion_scan_calculation_owner_mismatch`](#c-statmech-torsion-scan-calculation-owner-mismatch) | 422 | route handler |
 | [`stored_species_smiles_unparseable`](#c-stored-species-smiles-unparseable) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
 | [`thermo_energy_level_ambiguous`](#c-thermo-energy-level-ambiguous) | 422 | route handler |
 | [`thermo_energy_level_contradiction`](#c-thermo-energy-level-contradiction) | 422 | route handler |
 | [`thermo_energy_level_requires_sp`](#c-thermo-energy-level-requires-sp) | 422 | route handler |
@@ -1749,7 +1777,6 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`transport_source_calculation_owner_mismatch`](#c-transport-source-calculation-owner-mismatch) | 422 | payload validation; route handler |
 | [`ts_validation_source_calculation_owner_mismatch`](#c-ts-validation-source-calculation-owner-mismatch) | 422 | route handler |
 | [`unknown_calculation_artifact_ref`](#c-unknown-calculation-artifact-ref) | 404 | route handler |
-| [`unknown_calculation_ref`](#c-unknown-calculation-ref) | 404 | route handler |
 | [`unknown_conformer_group_ref`](#c-unknown-conformer-group-ref) | 404 | route handler |
 | [`unknown_conformer_selection`](#c-unknown-conformer-selection) | 404 | route handler |
 | [`unknown_network_kinetics_ref`](#c-unknown-network-kinetics-ref) | 404 | route handler |
@@ -2003,67 +2030,22 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
 | [`applied_energy_correction_source_calculation_owner_mismatch`](#c-applied-energy-correction-source-calculation-owner-mismatch) | 422 | route handler |
 | [`applied_energy_correction_source_key_undeclared`](#c-applied-energy-correction-source-key-undeclared) | 422 | payload validation; route handler |
-| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | route handler |
 | [`bac_total_requires_components`](#c-bac-total-requires-components) | 422 | route handler |
-| [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | route handler |
-| [`calculation_key_undeclared`](#c-calculation-key-undeclared) | 422 | payload validation; route handler |
-| [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | route handler |
-| [`calculation_software_release_required`](#c-calculation-software-release-required) | 422 | payload validation; route handler |
-| [`composite_assembled_not_accepted`](#c-composite-assembled-not-accepted) | 422 | payload validation; route handler |
-| [`composite_e0_inconsistent`](#c-composite-e0-inconsistent) | 422 | payload validation; route handler |
-| [`composite_input_duplicate`](#c-composite-input-duplicate) | 422 | payload validation; route handler |
-| [`composite_input_edge_is_derived`](#c-composite-input-edge-is-derived) | 422 | payload validation |
-| [`composite_input_geometry_mismatch`](#c-composite-input-geometry-mismatch) | 422 | route handler |
-| [`composite_input_level_mismatch`](#c-composite-input-level-mismatch) | 422 | route handler |
-| [`composite_input_missing`](#c-composite-input-missing) | 422 | payload validation; route handler |
-| [`composite_input_owner_mismatch`](#c-composite-input-owner-mismatch) | 422 | route handler |
-| [`composite_input_reference_invalid`](#c-composite-input-reference-invalid) | 422 | payload validation |
-| [`composite_input_slot_unknown`](#c-composite-input-slot-unknown) | 422 | payload validation; route handler |
-| [`composite_input_type_invalid`](#c-composite-input-type-invalid) | 422 | route handler |
-| [`composite_inputs_require_assembled`](#c-composite-inputs-require-assembled) | 422 | payload validation; route handler |
-| [`composite_level_not_scheme_bound`](#c-composite-level-not-scheme-bound) | 422 | route handler |
-| [`composite_program_run_requires_software`](#c-composite-program-run-requires-software) | 422 | route handler |
-| [`composite_result_requires_composite_type`](#c-composite-result-requires-composite-type) | 422 | payload validation; route handler |
-| [`composite_scheme_malformed`](#c-composite-scheme-malformed) | 422 | payload validation; route handler |
-| [`composite_scheme_named_method_not_sendable`](#c-composite-scheme-named-method-not-sendable) | 422 | payload validation; route handler |
-| [`composite_scheme_nested`](#c-composite-scheme-nested) | 422 | payload validation; route handler |
-| [`composite_term_position_unknown`](#c-composite-term-position-unknown) | 422 | route handler |
-| [`composite_terms_do_not_sum`](#c-composite-terms-do-not-sum) | 422 | payload validation; route handler |
-| [`composite_total_mismatch`](#c-composite-total-mismatch) | 422 | route handler |
-| [`composite_type_requires_composite_result`](#c-composite-type-requires-composite-result) | 422 | payload validation; route handler |
+| [`composite_input_edge_is_derived`](#c-composite-input-edge-is-derived) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_not_applicable`](#c-energy-correction-scheme-frequency-level-not-applicable) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_without_energy_level`](#c-energy-correction-scheme-frequency-level-without-energy-level) | 422 | payload validation; route handler |
 | [`enthalpy_declaration_absent`](#c-enthalpy-declaration-absent) | 422 | route handler |
 | [`enthalpy_declaration_without_content`](#c-enthalpy-declaration-without-content) | 422 | route handler |
 | [`enthalpy_quantity_not_storable_here`](#c-enthalpy-quantity-not-storable-here) | 422 | route handler |
 | [`enthalpy_reference_kind_unrecognized`](#c-enthalpy-reference-kind-unrecognized) | 422 | route handler |
-| [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation |
-| [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
-| [`level_of_theory_method_with_composite_scheme`](#c-level-of-theory-method-with-composite-scheme) | 422 | payload validation; route handler |
-| [`level_of_theory_requires_method_or_composite_scheme`](#c-level-of-theory-requires-method-or-composite-scheme) | 422 | payload validation; route handler |
-| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
 | [`scf_stability_source_calculation_owner_mismatch`](#c-scf-stability-source-calculation-owner-mismatch) | 422 | route handler |
 | [`scf_stability_source_geometry_mismatch`](#c-scf-stability-source-geometry-mismatch) | 422 | payload validation; route handler |
-| [`sp_energy_component_duplicate`](#c-sp-energy-component-duplicate) | 422 | payload validation; route handler |
-| [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
-| [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
-| [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
-| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
 | [`statmech_energy_level_ambiguous`](#c-statmech-energy-level-ambiguous) | 422 | route handler |
 | [`statmech_energy_level_contradiction`](#c-statmech-energy-level-contradiction) | 422 | route handler |
 | [`statmech_energy_level_requires_sp`](#c-statmech-energy-level-requires-sp) | 422 | route handler |
@@ -2072,11 +2054,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`statmech_source_calculation_owner_mismatch`](#c-statmech-source-calculation-owner-mismatch) | 422 | route handler |
 | [`statmech_source_role_type_mismatch`](#c-statmech-source-role-type-mismatch) | 422 | route handler |
 | [`statmech_sp_geometry_mismatch`](#c-statmech-sp-geometry-mismatch) | 422 | route handler |
-| [`statmech_subject_not_exactly_one`](#c-statmech-subject-not-exactly-one) | 409 | heuristic: the handler names table `statmech`, constraint `ck_statmech_statmech_exactly_one_subject` |
 | [`statmech_torsion_scan_calculation_owner_mismatch`](#c-statmech-torsion-scan-calculation-owner-mismatch) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
 | [`thermo_energy_level_ambiguous`](#c-thermo-energy-level-ambiguous) | 422 | route handler |
 | [`thermo_energy_level_contradiction`](#c-thermo-energy-level-contradiction) | 422 | route handler |
 | [`thermo_energy_level_requires_sp`](#c-thermo-energy-level-requires-sp) | 422 | route handler |
@@ -2086,7 +2064,6 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`thermo_source_role_type_mismatch`](#c-thermo-source-role-type-mismatch) | 422 | route handler |
 | [`thermo_sp_geometry_mismatch`](#c-thermo-sp-geometry-mismatch) | 422 | route handler |
 | [`transport_source_calculation_owner_mismatch`](#c-transport-source-calculation-owner-mismatch) | 422 | route handler |
-| [`unknown_calculation_ref`](#c-unknown-calculation-ref) | 404 | route handler |
 
 ### Minimal valid example
 
@@ -2230,6 +2207,7 @@ Nested models (56; fields and rules in the [model reference](#model-reference)):
 
 ### Rules the payload model enforces
 
+- **ConformerUploadRequest.validate_primary_is_not_an_assembled_composite** (model, after; can refuse via `assert_assembled_not_primary`): The primary produced the geometry; an assembled composite produced nothing (ADR 0021).
 - **ConformerUploadRequest.normalize_optional_text_fields** (model, after): applies `normalize_optional_text` to `note`, `label`, `conformer_key`: Trim optional text inputs and collapse blank strings to None.
 - **ConformerUploadRequest.validate_unique_calculation_keys** (model, after; can refuse): Conformer upload calculation keys must be unique within the request.
 - **ConformerUploadRequest.validate_statmech_calculation_keys_resolve** (model, after; can refuse):
@@ -2277,59 +2255,14 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
 | [`applied_energy_correction_source_key_undeclared`](#c-applied-energy-correction-source-key-undeclared) | 422 | route handler |
-| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | route handler |
 | [`bac_total_requires_components`](#c-bac-total-requires-components) | 422 | route handler |
-| [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | route handler |
-| [`calculation_key_undeclared`](#c-calculation-key-undeclared) | 422 | route handler |
-| [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | route handler |
-| [`calculation_software_release_required`](#c-calculation-software-release-required) | 422 | payload validation; route handler |
-| [`composite_assembled_not_accepted`](#c-composite-assembled-not-accepted) | 422 | payload validation; route handler |
-| [`composite_e0_inconsistent`](#c-composite-e0-inconsistent) | 422 | payload validation; route handler |
-| [`composite_input_duplicate`](#c-composite-input-duplicate) | 422 | payload validation; route handler |
-| [`composite_input_geometry_mismatch`](#c-composite-input-geometry-mismatch) | 422 | route handler |
-| [`composite_input_level_mismatch`](#c-composite-input-level-mismatch) | 422 | route handler |
-| [`composite_input_missing`](#c-composite-input-missing) | 422 | payload validation; route handler |
-| [`composite_input_owner_mismatch`](#c-composite-input-owner-mismatch) | 422 | route handler |
-| [`composite_input_reference_invalid`](#c-composite-input-reference-invalid) | 422 | payload validation |
-| [`composite_input_slot_unknown`](#c-composite-input-slot-unknown) | 422 | payload validation; route handler |
-| [`composite_input_type_invalid`](#c-composite-input-type-invalid) | 422 | route handler |
-| [`composite_inputs_require_assembled`](#c-composite-inputs-require-assembled) | 422 | payload validation; route handler |
-| [`composite_level_not_scheme_bound`](#c-composite-level-not-scheme-bound) | 422 | route handler |
-| [`composite_program_run_requires_software`](#c-composite-program-run-requires-software) | 422 | route handler |
-| [`composite_result_requires_composite_type`](#c-composite-result-requires-composite-type) | 422 | payload validation; route handler |
-| [`composite_scheme_malformed`](#c-composite-scheme-malformed) | 422 | payload validation; route handler |
-| [`composite_scheme_named_method_not_sendable`](#c-composite-scheme-named-method-not-sendable) | 422 | payload validation; route handler |
-| [`composite_scheme_nested`](#c-composite-scheme-nested) | 422 | payload validation; route handler |
-| [`composite_term_position_unknown`](#c-composite-term-position-unknown) | 422 | route handler |
-| [`composite_terms_do_not_sum`](#c-composite-terms-do-not-sum) | 422 | payload validation; route handler |
-| [`composite_total_mismatch`](#c-composite-total-mismatch) | 422 | route handler |
-| [`composite_type_requires_composite_result`](#c-composite-type-requires-composite-result) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_not_applicable`](#c-energy-correction-scheme-frequency-level-not-applicable) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_without_energy_level`](#c-energy-correction-scheme-frequency-level-without-energy-level) | 422 | payload validation; route handler |
-| [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation; route handler |
-| [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation; route handler |
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
-| [`level_of_theory_method_with_composite_scheme`](#c-level-of-theory-method-with-composite-scheme) | 422 | payload validation; route handler |
-| [`level_of_theory_requires_method_or_composite_scheme`](#c-level-of-theory-requires-method-or-composite-scheme) | 422 | payload validation; route handler |
-| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`sp_energy_component_duplicate`](#c-sp-energy-component-duplicate) | 422 | payload validation; route handler |
-| [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
-| [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
-| [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
-| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
 | [`statmech_calculation_key_undeclared`](#c-statmech-calculation-key-undeclared) | 422 | payload validation; route handler |
 | [`statmech_energy_level_ambiguous`](#c-statmech-energy-level-ambiguous) | 422 | route handler |
 | [`statmech_energy_level_contradiction`](#c-statmech-energy-level-contradiction) | 422 | route handler |
@@ -2339,11 +2272,6 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`statmech_source_calculation_owner_mismatch`](#c-statmech-source-calculation-owner-mismatch) | 422 | route handler |
 | [`statmech_source_role_type_mismatch`](#c-statmech-source-role-type-mismatch) | 422 | route handler |
 | [`statmech_sp_geometry_mismatch`](#c-statmech-sp-geometry-mismatch) | 422 | route handler |
-| [`statmech_subject_not_exactly_one`](#c-statmech-subject-not-exactly-one) | 409 | heuristic: the handler names table `statmech`, constraint `ck_statmech_statmech_exactly_one_subject` |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
-| [`unknown_calculation_ref`](#c-unknown-calculation-ref) | 404 | route handler |
 
 ### Minimal valid example
 
@@ -2548,39 +2476,18 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
 | [`ambiguous_conformer_selection_locator`](#c-ambiguous-conformer-selection-locator) | 422 | route handler |
 | [`arrhenius_a_units_molecularity_mismatch`](#c-arrhenius-a-units-molecularity-mismatch) | 422 | payload validation; route handler |
-| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | route handler |
-| [`composite_scheme_malformed`](#c-composite-scheme-malformed) | 422 | payload validation; route handler |
-| [`composite_scheme_named_method_not_sendable`](#c-composite-scheme-named-method-not-sendable) | 422 | payload validation; route handler |
-| [`composite_scheme_nested`](#c-composite-scheme-nested) | 422 | payload validation; route handler |
 | [`kinetics_interpretation_conformer_selection_owner_mismatch`](#c-kinetics-interpretation-conformer-selection-owner-mismatch) | 422 | route handler |
 | [`kinetics_interpretation_statmech_owner_mismatch`](#c-kinetics-interpretation-statmech-owner-mismatch) | 422 | route handler |
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
-| [`level_of_theory_method_with_composite_scheme`](#c-level-of-theory-method-with-composite-scheme) | 422 | payload validation; route handler |
-| [`level_of_theory_requires_method_or_composite_scheme`](#c-level-of-theory-requires-method-or-composite-scheme) | 422 | payload validation; route handler |
-| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | route handler |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
-| [`statmech_subject_not_exactly_one`](#c-statmech-subject-not-exactly-one) | 409 | heuristic: the handler names table `statmech`, constraint `ck_statmech_statmech_exactly_one_subject` |
 | [`stored_species_smiles_unparseable`](#c-stored-species-smiles-unparseable) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
 | [`unknown_calculation_artifact_ref`](#c-unknown-calculation-artifact-ref) | 404 | route handler |
-| [`unknown_calculation_ref`](#c-unknown-calculation-ref) | 404 | route handler |
 | [`unknown_conformer_group_ref`](#c-unknown-conformer-group-ref) | 404 | route handler |
 | [`unknown_conformer_selection`](#c-unknown-conformer-selection) | 404 | route handler |
 | [`unknown_network_kinetics_ref`](#c-unknown-network-kinetics-ref) | 404 | route handler |
@@ -2701,25 +2608,13 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | route handler |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
 | [`stored_species_smiles_unparseable`](#c-stored-species-smiles-unparseable) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
 
 ### Minimal valid example
 
@@ -2934,73 +2829,28 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
 | [`atom_map_contradicts_irc_mapping`](#c-atom-map-contradicts-irc-mapping) | 422 | route handler |
 | [`atom_map_element_not_conserved`](#c-atom-map-element-not-conserved) | 409, 422 | heuristic: the handler names table `reaction_atom_map_pair`, constraint `ck_reaction_atom_map_pair_element_matches`; route handler |
-| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | payload validation; route handler |
 | [`atom_map_indices_not_geometry_relative`](#c-atom-map-indices-not-geometry-relative) | 422 | route handler |
 | [`atom_map_inferred_requires_note`](#c-atom-map-inferred-requires-note) | 422 | route handler |
 | [`atom_map_not_a_bijection`](#c-atom-map-not-a-bijection) | 409, 422 | heuristic: the handler names table `reaction_atom_map_pair`, constraint `uq_reaction_atom_map_pair_atom_map_id`; heuristic: the handler names table `reaction_atom_map_pair`, constraint `uq_reaction_atom_map_pair_ts_atom_index` |
 | [`atom_map_participant_not_declared`](#c-atom-map-participant-not-declared) | 422 | route handler |
 | [`atom_map_without_transition_state`](#c-atom-map-without-transition-state) | 422 | route handler |
-| [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | route handler |
-| [`calculation_key_undeclared`](#c-calculation-key-undeclared) | 422 | payload validation; route handler |
-| [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | route handler |
-| [`calculation_software_release_required`](#c-calculation-software-release-required) | 422 | payload validation; route handler |
-| [`composite_assembled_not_accepted`](#c-composite-assembled-not-accepted) | 422 | payload validation; route handler |
-| [`composite_e0_inconsistent`](#c-composite-e0-inconsistent) | 422 | payload validation; route handler |
-| [`composite_input_duplicate`](#c-composite-input-duplicate) | 422 | payload validation; route handler |
-| [`composite_input_geometry_mismatch`](#c-composite-input-geometry-mismatch) | 422 | route handler |
-| [`composite_input_level_mismatch`](#c-composite-input-level-mismatch) | 422 | route handler |
-| [`composite_input_missing`](#c-composite-input-missing) | 422 | payload validation; route handler |
-| [`composite_input_owner_mismatch`](#c-composite-input-owner-mismatch) | 422 | route handler |
-| [`composite_input_reference_invalid`](#c-composite-input-reference-invalid) | 422 | payload validation |
-| [`composite_input_slot_unknown`](#c-composite-input-slot-unknown) | 422 | payload validation; route handler |
-| [`composite_input_type_invalid`](#c-composite-input-type-invalid) | 422 | route handler |
-| [`composite_inputs_require_assembled`](#c-composite-inputs-require-assembled) | 422 | payload validation; route handler |
-| [`composite_level_not_scheme_bound`](#c-composite-level-not-scheme-bound) | 422 | route handler |
-| [`composite_program_run_requires_software`](#c-composite-program-run-requires-software) | 422 | route handler |
-| [`composite_result_requires_composite_type`](#c-composite-result-requires-composite-type) | 422 | payload validation; route handler |
-| [`composite_scheme_malformed`](#c-composite-scheme-malformed) | 422 | payload validation; route handler |
-| [`composite_scheme_named_method_not_sendable`](#c-composite-scheme-named-method-not-sendable) | 422 | payload validation; route handler |
-| [`composite_scheme_nested`](#c-composite-scheme-nested) | 422 | payload validation; route handler |
-| [`composite_term_position_unknown`](#c-composite-term-position-unknown) | 422 | route handler |
-| [`composite_terms_do_not_sum`](#c-composite-terms-do-not-sum) | 422 | payload validation; route handler |
-| [`composite_total_mismatch`](#c-composite-total-mismatch) | 422 | route handler |
-| [`composite_type_requires_composite_result`](#c-composite-type-requires-composite-result) | 422 | payload validation; route handler |
 | [`conformer_key_undeclared`](#c-conformer-key-undeclared) | 422 | payload validation; route handler |
 | [`energy_transfer_scope_columns_disagree`](#c-energy-transfer-scope-columns-disagree) | 409 | heuristic: the handler names table `network_solve_energy_transfer`, constraint `ck_network_solve_energy_transfer_scope_columns_agree` |
 | [`freq_list_exceeds_geometry_degrees_of_freedom`](#c-freq-list-exceeds-geometry-degrees-of-freedom) | 422 | payload validation |
-| [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation; route handler |
-| [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation; route handler |
 | [`geometry_key_unresolved`](#c-geometry-key-unresolved) | 422 | payload validation; route handler |
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
-| [`level_of_theory_method_with_composite_scheme`](#c-level-of-theory-method-with-composite-scheme) | 422 | payload validation; route handler |
-| [`level_of_theory_requires_method_or_composite_scheme`](#c-level-of-theory-requires-method-or-composite-scheme) | 422 | payload validation; route handler |
 | [`micro_reaction_key_undeclared`](#c-micro-reaction-key-undeclared) | 422 | payload validation; route handler |
-| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation |
 | [`network_channel_key_undeclared`](#c-network-channel-key-undeclared) | 422 | payload validation; route handler |
 | [`network_solve_reported_requires_literature`](#c-network-solve-reported-requires-literature) | 409 | heuristic: the handler names table `network_solve`, constraint `ck_network_solve_reported_requires_literature` |
 | [`network_state_key_undeclared`](#c-network-state-key-undeclared) | 422 | payload validation; route handler |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`sp_energy_component_duplicate`](#c-sp-energy-component-duplicate) | 422 | payload validation; route handler |
-| [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
-| [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
-| [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
-| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_key_undeclared`](#c-species-key-undeclared) | 422 | payload validation; route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
 | [`statmech_energy_level_ambiguous`](#c-statmech-energy-level-ambiguous) | 422 | route handler |
 | [`statmech_energy_level_contradiction`](#c-statmech-energy-level-contradiction) | 422 | route handler |
 | [`statmech_energy_level_requires_sp`](#c-statmech-energy-level-requires-sp) | 422 | route handler |
@@ -3009,12 +2859,8 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`statmech_source_calculation_owner_mismatch`](#c-statmech-source-calculation-owner-mismatch) | 422 | route handler |
 | [`statmech_source_role_type_mismatch`](#c-statmech-source-role-type-mismatch) | 422 | route handler |
 | [`statmech_sp_geometry_mismatch`](#c-statmech-sp-geometry-mismatch) | 422 | route handler |
-| [`statmech_subject_not_exactly_one`](#c-statmech-subject-not-exactly-one) | 409 | heuristic: the handler names table `statmech`, constraint `ck_statmech_statmech_exactly_one_subject` |
 | [`statmech_torsion_scan_calculation_owner_mismatch`](#c-statmech-torsion-scan-calculation-owner-mismatch) | 422 | route handler |
 | [`stored_species_smiles_unparseable`](#c-stored-species-smiles-unparseable) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
 | [`transition_state_charge_mismatch`](#c-transition-state-charge-mismatch) | 422 | route handler |
 | [`transition_state_composition_mismatch`](#c-transition-state-composition-mismatch) | 422 | route handler |
 | [`transition_state_irc_mapping_element_mismatch`](#c-transition-state-irc-mapping-element-mismatch) | 422 | route handler |
@@ -3023,7 +2869,6 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`transition_state_reaction_coordinate_ambiguous`](#c-transition-state-reaction-coordinate-ambiguous) | 422 | payload validation |
 | [`transition_state_reaction_coordinate_not_designated`](#c-transition-state-reaction-coordinate-not-designated) | 422 | payload validation |
 | [`ts_validation_source_calculation_owner_mismatch`](#c-ts-validation-source-calculation-owner-mismatch) | 422 | route handler |
-| [`unknown_calculation_ref`](#c-unknown-calculation-ref) | 404 | route handler |
 
 ### Minimal valid example
 
@@ -3124,27 +2969,13 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
-| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | route handler |
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | route handler |
-| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | route handler |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
 | [`stored_species_smiles_unparseable`](#c-stored-species-smiles-unparseable) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
 
 ### Minimal valid example
 
@@ -3381,55 +3212,10 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
-| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | route handler |
-| [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | route handler |
-| [`calculation_key_undeclared`](#c-calculation-key-undeclared) | 422 | route handler |
-| [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | route handler |
-| [`calculation_software_release_required`](#c-calculation-software-release-required) | 422 | payload validation; route handler |
-| [`composite_assembled_not_accepted`](#c-composite-assembled-not-accepted) | 422 | payload validation; route handler |
-| [`composite_e0_inconsistent`](#c-composite-e0-inconsistent) | 422 | payload validation; route handler |
-| [`composite_input_duplicate`](#c-composite-input-duplicate) | 422 | payload validation; route handler |
-| [`composite_input_geometry_mismatch`](#c-composite-input-geometry-mismatch) | 422 | route handler |
-| [`composite_input_level_mismatch`](#c-composite-input-level-mismatch) | 422 | route handler |
-| [`composite_input_missing`](#c-composite-input-missing) | 422 | payload validation; route handler |
-| [`composite_input_owner_mismatch`](#c-composite-input-owner-mismatch) | 422 | route handler |
-| [`composite_input_reference_invalid`](#c-composite-input-reference-invalid) | 422 | payload validation |
-| [`composite_input_slot_unknown`](#c-composite-input-slot-unknown) | 422 | payload validation; route handler |
-| [`composite_input_type_invalid`](#c-composite-input-type-invalid) | 422 | route handler |
-| [`composite_inputs_require_assembled`](#c-composite-inputs-require-assembled) | 422 | payload validation; route handler |
-| [`composite_level_not_scheme_bound`](#c-composite-level-not-scheme-bound) | 422 | route handler |
-| [`composite_program_run_requires_software`](#c-composite-program-run-requires-software) | 422 | route handler |
-| [`composite_result_requires_composite_type`](#c-composite-result-requires-composite-type) | 422 | payload validation; route handler |
-| [`composite_scheme_malformed`](#c-composite-scheme-malformed) | 422 | payload validation; route handler |
-| [`composite_scheme_named_method_not_sendable`](#c-composite-scheme-named-method-not-sendable) | 422 | payload validation; route handler |
-| [`composite_scheme_nested`](#c-composite-scheme-nested) | 422 | payload validation; route handler |
-| [`composite_term_position_unknown`](#c-composite-term-position-unknown) | 422 | route handler |
-| [`composite_terms_do_not_sum`](#c-composite-terms-do-not-sum) | 422 | payload validation; route handler |
-| [`composite_total_mismatch`](#c-composite-total-mismatch) | 422 | route handler |
-| [`composite_type_requires_composite_result`](#c-composite-type-requires-composite-result) | 422 | payload validation; route handler |
-| [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation |
-| [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
-| [`level_of_theory_method_with_composite_scheme`](#c-level-of-theory-method-with-composite-scheme) | 422 | payload validation; route handler |
-| [`level_of_theory_requires_method_or_composite_scheme`](#c-level-of-theory-requires-method-or-composite-scheme) | 422 | payload validation; route handler |
-| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`sp_energy_component_duplicate`](#c-sp-energy-component-duplicate) | 422 | payload validation; route handler |
-| [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
-| [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
-| [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
-| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
 | [`statmech_calculation_key_undeclared`](#c-statmech-calculation-key-undeclared) | 422 | payload validation; route handler |
 | [`statmech_energy_level_ambiguous`](#c-statmech-energy-level-ambiguous) | 422 | route handler |
 | [`statmech_energy_level_contradiction`](#c-statmech-energy-level-contradiction) | 422 | route handler |
@@ -3439,11 +3225,6 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`statmech_source_calculation_owner_mismatch`](#c-statmech-source-calculation-owner-mismatch) | 422 | route handler |
 | [`statmech_source_role_type_mismatch`](#c-statmech-source-role-type-mismatch) | 422 | route handler |
 | [`statmech_sp_geometry_mismatch`](#c-statmech-sp-geometry-mismatch) | 422 | route handler |
-| [`statmech_subject_not_exactly_one`](#c-statmech-subject-not-exactly-one) | 409 | heuristic: the handler names table `statmech`, constraint `ck_statmech_statmech_exactly_one_subject` |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
-| [`unknown_calculation_ref`](#c-unknown-calculation-ref) | 404 | route handler |
 
 ### Minimal valid example
 
@@ -3716,68 +3497,19 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
 | [`applied_energy_correction_source_calculation_owner_mismatch`](#c-applied-energy-correction-source-calculation-owner-mismatch) | 422 | route handler |
 | [`applied_energy_correction_source_key_undeclared`](#c-applied-energy-correction-source-key-undeclared) | 422 | payload validation; route handler |
-| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | route handler |
 | [`bac_total_requires_components`](#c-bac-total-requires-components) | 422 | route handler |
-| [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | route handler |
-| [`calculation_key_undeclared`](#c-calculation-key-undeclared) | 422 | payload validation; route handler |
-| [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | route handler |
-| [`calculation_software_release_required`](#c-calculation-software-release-required) | 422 | payload validation; route handler |
-| [`composite_assembled_not_accepted`](#c-composite-assembled-not-accepted) | 422 | payload validation; route handler |
-| [`composite_e0_inconsistent`](#c-composite-e0-inconsistent) | 422 | payload validation; route handler |
-| [`composite_input_duplicate`](#c-composite-input-duplicate) | 422 | payload validation; route handler |
-| [`composite_input_geometry_mismatch`](#c-composite-input-geometry-mismatch) | 422 | route handler |
-| [`composite_input_level_mismatch`](#c-composite-input-level-mismatch) | 422 | route handler |
-| [`composite_input_missing`](#c-composite-input-missing) | 422 | payload validation; route handler |
-| [`composite_input_owner_mismatch`](#c-composite-input-owner-mismatch) | 422 | route handler |
-| [`composite_input_reference_invalid`](#c-composite-input-reference-invalid) | 422 | payload validation |
-| [`composite_input_slot_unknown`](#c-composite-input-slot-unknown) | 422 | payload validation; route handler |
-| [`composite_input_type_invalid`](#c-composite-input-type-invalid) | 422 | route handler |
-| [`composite_inputs_require_assembled`](#c-composite-inputs-require-assembled) | 422 | payload validation; route handler |
-| [`composite_level_not_scheme_bound`](#c-composite-level-not-scheme-bound) | 422 | route handler |
-| [`composite_program_run_requires_software`](#c-composite-program-run-requires-software) | 422 | route handler |
-| [`composite_result_requires_composite_type`](#c-composite-result-requires-composite-type) | 422 | payload validation; route handler |
-| [`composite_scheme_malformed`](#c-composite-scheme-malformed) | 422 | payload validation; route handler |
-| [`composite_scheme_named_method_not_sendable`](#c-composite-scheme-named-method-not-sendable) | 422 | payload validation; route handler |
-| [`composite_scheme_nested`](#c-composite-scheme-nested) | 422 | payload validation; route handler |
-| [`composite_term_position_unknown`](#c-composite-term-position-unknown) | 422 | route handler |
-| [`composite_terms_do_not_sum`](#c-composite-terms-do-not-sum) | 422 | payload validation; route handler |
-| [`composite_total_mismatch`](#c-composite-total-mismatch) | 422 | route handler |
-| [`composite_type_requires_composite_result`](#c-composite-type-requires-composite-result) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_not_applicable`](#c-energy-correction-scheme-frequency-level-not-applicable) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_without_energy_level`](#c-energy-correction-scheme-frequency-level-without-energy-level) | 422 | payload validation; route handler |
 | [`enthalpy_declaration_absent`](#c-enthalpy-declaration-absent) | 422 | route handler |
 | [`enthalpy_declaration_without_content`](#c-enthalpy-declaration-without-content) | 422 | route handler |
 | [`enthalpy_quantity_not_storable_here`](#c-enthalpy-quantity-not-storable-here) | 422 | route handler |
 | [`enthalpy_reference_kind_unrecognized`](#c-enthalpy-reference-kind-unrecognized) | 422 | route handler |
-| [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation |
-| [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
-| [`level_of_theory_method_with_composite_scheme`](#c-level-of-theory-method-with-composite-scheme) | 422 | payload validation; route handler |
-| [`level_of_theory_requires_method_or_composite_scheme`](#c-level-of-theory-requires-method-or-composite-scheme) | 422 | payload validation; route handler |
-| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`sp_energy_component_duplicate`](#c-sp-energy-component-duplicate) | 422 | payload validation; route handler |
-| [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
-| [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
-| [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
-| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
-| [`statmech_subject_not_exactly_one`](#c-statmech-subject-not-exactly-one) | 409 | heuristic: the handler names table `statmech`, constraint `ck_statmech_statmech_exactly_one_subject` |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
 | [`thermo_energy_level_ambiguous`](#c-thermo-energy-level-ambiguous) | 422 | route handler |
 | [`thermo_energy_level_contradiction`](#c-thermo-energy-level-contradiction) | 422 | route handler |
 | [`thermo_energy_level_requires_sp`](#c-thermo-energy-level-requires-sp) | 422 | route handler |
@@ -3787,7 +3519,6 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`thermo_source_role_type_mismatch`](#c-thermo-source-role-type-mismatch) | 422 | route handler |
 | [`thermo_sp_geometry_mismatch`](#c-thermo-sp-geometry-mismatch) | 422 | route handler |
 | [`thermo_statmech_owner_mismatch`](#c-thermo-statmech-owner-mismatch) | 422 | route handler |
-| [`unknown_calculation_ref`](#c-unknown-calculation-ref) | 404 | route handler |
 | [`unknown_statmech_ref`](#c-unknown-statmech-ref) | 404 | route handler |
 
 ### Minimal valid example
@@ -3904,17 +3635,10 @@ No marked rule or register check is reached from these handlers.
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
 | [`thermoml_doi_conflict`](#c-thermoml-doi-conflict) | 422 | route handler |
 | [`thermoml_file_too_large`](#c-thermoml-file-too-large) | 422 | route handler |
 | [`thermoml_invalid_base64`](#c-thermoml-invalid-base64) | 422 | route handler |
@@ -4126,77 +3850,28 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
 | [`atom_map_atoms_unaccounted_for`](#c-atom-map-atoms-unaccounted-for) | 422 | payload validation; route handler |
 | [`atom_map_contradicts_irc_mapping`](#c-atom-map-contradicts-irc-mapping) | 422 | route handler |
 | [`atom_map_element_not_conserved`](#c-atom-map-element-not-conserved) | 409, 422 | heuristic: the handler names table `reaction_atom_map_pair`, constraint `ck_reaction_atom_map_pair_element_matches`; payload validation; route handler |
-| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | payload validation; route handler |
 | [`atom_map_indices_not_geometry_relative`](#c-atom-map-indices-not-geometry-relative) | 422 | payload validation; route handler |
 | [`atom_map_inferred_requires_note`](#c-atom-map-inferred-requires-note) | 422 | payload validation; route handler |
 | [`atom_map_not_a_bijection`](#c-atom-map-not-a-bijection) | 409, 422 | heuristic: the handler names table `reaction_atom_map_pair`, constraint `uq_reaction_atom_map_pair_atom_map_id`; heuristic: the handler names table `reaction_atom_map_pair`, constraint `uq_reaction_atom_map_pair_ts_atom_index`; payload validation; route handler |
 | [`atom_map_participant_not_declared`](#c-atom-map-participant-not-declared) | 422 | payload validation; route handler |
 | [`atom_map_without_transition_state`](#c-atom-map-without-transition-state) | 422 | payload validation; route handler |
 | [`bac_total_requires_components`](#c-bac-total-requires-components) | 422 | route handler |
-| [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | route handler |
-| [`calculation_key_undeclared`](#c-calculation-key-undeclared) | 422 | route handler |
-| [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | route handler |
-| [`calculation_software_release_required`](#c-calculation-software-release-required) | 422 | payload validation; route handler |
-| [`composite_assembled_not_accepted`](#c-composite-assembled-not-accepted) | 422 | payload validation; route handler |
-| [`composite_e0_inconsistent`](#c-composite-e0-inconsistent) | 422 | payload validation; route handler |
-| [`composite_input_duplicate`](#c-composite-input-duplicate) | 422 | payload validation; route handler |
-| [`composite_input_geometry_mismatch`](#c-composite-input-geometry-mismatch) | 422 | route handler |
-| [`composite_input_level_mismatch`](#c-composite-input-level-mismatch) | 422 | route handler |
-| [`composite_input_missing`](#c-composite-input-missing) | 422 | payload validation; route handler |
-| [`composite_input_owner_mismatch`](#c-composite-input-owner-mismatch) | 422 | route handler |
-| [`composite_input_reference_invalid`](#c-composite-input-reference-invalid) | 422 | payload validation |
-| [`composite_input_slot_unknown`](#c-composite-input-slot-unknown) | 422 | payload validation; route handler |
-| [`composite_input_type_invalid`](#c-composite-input-type-invalid) | 422 | route handler |
-| [`composite_inputs_require_assembled`](#c-composite-inputs-require-assembled) | 422 | payload validation; route handler |
-| [`composite_level_not_scheme_bound`](#c-composite-level-not-scheme-bound) | 422 | route handler |
-| [`composite_program_run_requires_software`](#c-composite-program-run-requires-software) | 422 | route handler |
-| [`composite_result_requires_composite_type`](#c-composite-result-requires-composite-type) | 422 | payload validation; route handler |
-| [`composite_scheme_malformed`](#c-composite-scheme-malformed) | 422 | payload validation; route handler |
-| [`composite_scheme_named_method_not_sendable`](#c-composite-scheme-named-method-not-sendable) | 422 | payload validation; route handler |
-| [`composite_scheme_nested`](#c-composite-scheme-nested) | 422 | payload validation; route handler |
-| [`composite_term_position_unknown`](#c-composite-term-position-unknown) | 422 | route handler |
-| [`composite_terms_do_not_sum`](#c-composite-terms-do-not-sum) | 422 | payload validation; route handler |
-| [`composite_total_mismatch`](#c-composite-total-mismatch) | 422 | route handler |
-| [`composite_type_requires_composite_result`](#c-composite-type-requires-composite-result) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_not_applicable`](#c-energy-correction-scheme-frequency-level-not-applicable) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_without_energy_level`](#c-energy-correction-scheme-frequency-level-without-energy-level) | 422 | payload validation; route handler |
-| [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation |
-| [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
-| [`level_of_theory_method_with_composite_scheme`](#c-level-of-theory-method-with-composite-scheme) | 422 | payload validation; route handler |
-| [`level_of_theory_requires_method_or_composite_scheme`](#c-level-of-theory-requires-method-or-composite-scheme) | 422 | payload validation; route handler |
-| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | route handler |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`sp_energy_component_duplicate`](#c-sp-energy-component-duplicate) | 422 | payload validation; route handler |
-| [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
-| [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
-| [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
-| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
 | [`stored_species_smiles_unparseable`](#c-stored-species-smiles-unparseable) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
 | [`transition_state_charge_mismatch`](#c-transition-state-charge-mismatch) | 422 | route handler |
 | [`transition_state_composition_mismatch`](#c-transition-state-composition-mismatch) | 422 | route handler |
 | [`transition_state_irc_mapping_element_mismatch`](#c-transition-state-irc-mapping-element-mismatch) | 422 | route handler |
 | [`ts_validation_source_calculation_owner_mismatch`](#c-ts-validation-source-calculation-owner-mismatch) | 422 | route handler |
-| [`unknown_calculation_ref`](#c-unknown-calculation-ref) | 404 | route handler |
 
 ### Minimal valid example
 
@@ -4418,60 +4093,11 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
-| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | route handler |
-| [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | route handler |
-| [`calculation_key_undeclared`](#c-calculation-key-undeclared) | 422 | payload validation; route handler |
-| [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | route handler |
-| [`calculation_software_release_required`](#c-calculation-software-release-required) | 422 | payload validation; route handler |
-| [`composite_assembled_not_accepted`](#c-composite-assembled-not-accepted) | 422 | payload validation; route handler |
-| [`composite_e0_inconsistent`](#c-composite-e0-inconsistent) | 422 | payload validation; route handler |
-| [`composite_input_duplicate`](#c-composite-input-duplicate) | 422 | payload validation; route handler |
-| [`composite_input_geometry_mismatch`](#c-composite-input-geometry-mismatch) | 422 | route handler |
-| [`composite_input_level_mismatch`](#c-composite-input-level-mismatch) | 422 | route handler |
-| [`composite_input_missing`](#c-composite-input-missing) | 422 | payload validation; route handler |
-| [`composite_input_owner_mismatch`](#c-composite-input-owner-mismatch) | 422 | route handler |
-| [`composite_input_reference_invalid`](#c-composite-input-reference-invalid) | 422 | payload validation |
-| [`composite_input_slot_unknown`](#c-composite-input-slot-unknown) | 422 | payload validation; route handler |
-| [`composite_input_type_invalid`](#c-composite-input-type-invalid) | 422 | route handler |
-| [`composite_inputs_require_assembled`](#c-composite-inputs-require-assembled) | 422 | payload validation; route handler |
-| [`composite_level_not_scheme_bound`](#c-composite-level-not-scheme-bound) | 422 | route handler |
-| [`composite_program_run_requires_software`](#c-composite-program-run-requires-software) | 422 | route handler |
-| [`composite_result_requires_composite_type`](#c-composite-result-requires-composite-type) | 422 | payload validation; route handler |
-| [`composite_scheme_malformed`](#c-composite-scheme-malformed) | 422 | payload validation; route handler |
-| [`composite_scheme_named_method_not_sendable`](#c-composite-scheme-named-method-not-sendable) | 422 | payload validation; route handler |
-| [`composite_scheme_nested`](#c-composite-scheme-nested) | 422 | payload validation; route handler |
-| [`composite_term_position_unknown`](#c-composite-term-position-unknown) | 422 | route handler |
-| [`composite_terms_do_not_sum`](#c-composite-terms-do-not-sum) | 422 | payload validation; route handler |
-| [`composite_total_mismatch`](#c-composite-total-mismatch) | 422 | route handler |
-| [`composite_type_requires_composite_result`](#c-composite-type-requires-composite-result) | 422 | payload validation; route handler |
-| [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation |
-| [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
-| [`level_of_theory_method_with_composite_scheme`](#c-level-of-theory-method-with-composite-scheme) | 422 | payload validation; route handler |
-| [`level_of_theory_requires_method_or_composite_scheme`](#c-level-of-theory-requires-method-or-composite-scheme) | 422 | payload validation; route handler |
-| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`sp_energy_component_duplicate`](#c-sp-energy-component-duplicate) | 422 | payload validation; route handler |
-| [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
-| [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
-| [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
-| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
 | [`transport_source_calculation_owner_mismatch`](#c-transport-source-calculation-owner-mismatch) | 422 | route handler |
-| [`unknown_calculation_ref`](#c-unknown-calculation-ref) | 404 | route handler |
 
 ### Minimal valid example
 
@@ -4718,7 +4344,7 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
@@ -4728,65 +4354,17 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`arrhenius_a_units_molecularity_mismatch`](#c-arrhenius-a-units-molecularity-mismatch) | 422 | payload validation; route handler |
 | [`bac_total_requires_components`](#c-bac-total-requires-components) | 422 | route handler |
 | [`bundle_too_many_records`](#c-bundle-too-many-records) | 422 | route handler |
-| [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | route handler |
-| [`calculation_key_undeclared`](#c-calculation-key-undeclared) | 422 | payload validation; route handler |
-| [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) | 422 | route handler |
-| [`calculation_software_release_required`](#c-calculation-software-release-required) | 422 | payload validation; route handler |
-| [`composite_assembled_not_accepted`](#c-composite-assembled-not-accepted) | 422 | payload validation; route handler |
-| [`composite_e0_inconsistent`](#c-composite-e0-inconsistent) | 422 | payload validation; route handler |
-| [`composite_input_duplicate`](#c-composite-input-duplicate) | 422 | payload validation; route handler |
-| [`composite_input_geometry_mismatch`](#c-composite-input-geometry-mismatch) | 422 | route handler |
-| [`composite_input_level_mismatch`](#c-composite-input-level-mismatch) | 422 | route handler |
-| [`composite_input_missing`](#c-composite-input-missing) | 422 | payload validation; route handler |
-| [`composite_input_owner_mismatch`](#c-composite-input-owner-mismatch) | 422 | route handler |
-| [`composite_input_reference_invalid`](#c-composite-input-reference-invalid) | 422 | payload validation |
-| [`composite_input_slot_unknown`](#c-composite-input-slot-unknown) | 422 | payload validation; route handler |
-| [`composite_input_type_invalid`](#c-composite-input-type-invalid) | 422 | route handler |
-| [`composite_inputs_require_assembled`](#c-composite-inputs-require-assembled) | 422 | payload validation; route handler |
-| [`composite_level_not_scheme_bound`](#c-composite-level-not-scheme-bound) | 422 | route handler |
-| [`composite_program_run_requires_software`](#c-composite-program-run-requires-software) | 422 | route handler |
-| [`composite_result_requires_composite_type`](#c-composite-result-requires-composite-type) | 422 | payload validation; route handler |
-| [`composite_scheme_malformed`](#c-composite-scheme-malformed) | 422 | payload validation; route handler |
-| [`composite_scheme_named_method_not_sendable`](#c-composite-scheme-named-method-not-sendable) | 422 | payload validation; route handler |
-| [`composite_scheme_nested`](#c-composite-scheme-nested) | 422 | payload validation; route handler |
-| [`composite_term_position_unknown`](#c-composite-term-position-unknown) | 422 | route handler |
-| [`composite_terms_do_not_sum`](#c-composite-terms-do-not-sum) | 422 | payload validation; route handler |
-| [`composite_total_mismatch`](#c-composite-total-mismatch) | 422 | route handler |
-| [`composite_type_requires_composite_result`](#c-composite-type-requires-composite-result) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_not_applicable`](#c-energy-correction-scheme-frequency-level-not-applicable) | 422 | payload validation; route handler |
 | [`energy_correction_scheme_frequency_level_without_energy_level`](#c-energy-correction-scheme-frequency-level-without-energy-level) | 422 | payload validation; route handler |
 | [`enthalpy_declaration_absent`](#c-enthalpy-declaration-absent) | 422 | route handler |
 | [`enthalpy_declaration_without_content`](#c-enthalpy-declaration-without-content) | 422 | route handler |
 | [`enthalpy_quantity_not_storable_here`](#c-enthalpy-quantity-not-storable-here) | 422 | route handler |
 | [`enthalpy_reference_kind_unrecognized`](#c-enthalpy-reference-kind-unrecognized) | 422 | route handler |
-| [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) | 422 | payload validation |
-| [`freq_n_imag_disagrees_with_modes`](#c-freq-n-imag-disagrees-with-modes) | 422 | payload validation |
 | [`kinetics_interpretation_conformer_selection_owner_mismatch`](#c-kinetics-interpretation-conformer-selection-owner-mismatch) | 422 | route handler |
 | [`kinetics_interpretation_statmech_owner_mismatch`](#c-kinetics-interpretation-statmech-owner-mismatch) | 422 | route handler |
-| [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) | 422 | payload validation; route handler |
-| [`level_of_theory_method_with_composite_scheme`](#c-level-of-theory-method-with-composite-scheme) | 422 | payload validation; route handler |
-| [`level_of_theory_requires_method_or_composite_scheme`](#c-level-of-theory-requires-method-or-composite-scheme) | 422 | payload validation; route handler |
-| [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) | 422 | payload validation; route handler |
 | [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) | 422 | route handler |
 | [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) | 422 | route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`sp_energy_component_duplicate`](#c-sp-energy-component-duplicate) | 422 | payload validation; route handler |
-| [`sp_energy_component_not_on_sp`](#c-sp-energy-component-not-on-sp) | 422 | payload validation; route handler |
-| [`sp_energy_component_total_mismatch`](#c-sp-energy-component-total-mismatch) | 422 | payload validation; route handler |
-| [`sp_energy_components_do_not_sum`](#c-sp-energy-components-do-not-sum) | 422 | payload validation; route handler |
-| [`sp_energy_components_require_energy`](#c-sp-energy-components-require-energy) | 422 | payload validation; route handler |
-| [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
-| [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
-| [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
-| [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) | 422 | route handler |
-| [`statmech_subject_not_exactly_one`](#c-statmech-subject-not-exactly-one) | 409 | heuristic: the handler names table `statmech`, constraint `ck_statmech_statmech_exactly_one_subject` |
 | [`stored_species_smiles_unparseable`](#c-stored-species-smiles-unparseable) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency |
 | [`thermo_energy_level_ambiguous`](#c-thermo-energy-level-ambiguous) | 422 | route handler |
 | [`thermo_energy_level_contradiction`](#c-thermo-energy-level-contradiction) | 422 | route handler |
 | [`thermo_energy_level_requires_sp`](#c-thermo-energy-level-requires-sp) | 422 | route handler |
@@ -4797,7 +4375,6 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`thermo_sp_geometry_mismatch`](#c-thermo-sp-geometry-mismatch) | 422 | route handler |
 | [`thermo_statmech_owner_mismatch`](#c-thermo-statmech-owner-mismatch) | 422 | route handler |
 | [`unknown_calculation_artifact_ref`](#c-unknown-calculation-artifact-ref) | 404 | route handler |
-| [`unknown_calculation_ref`](#c-unknown-calculation-ref) | 404 | route handler |
 | [`unknown_conformer_group_ref`](#c-unknown-conformer-group-ref) | 404 | route handler |
 | [`unknown_conformer_selection`](#c-unknown-conformer-selection) | 404 | route handler |
 | [`unknown_network_kinetics_ref`](#c-unknown-network-kinetics-ref) | 404 | route handler |
@@ -4931,17 +4508,13 @@ Found by tracing each route's handler through its direct calls: every function r
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
-| [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | route handler |
 | [`handle_not_found`](#c-handle-not-found) | 404 | route handler |
 | [`handle_type_mismatch`](#c-handle-type-mismatch) | 422 | route handler |
 | [`invalid_handle`](#c-invalid-handle) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency; route handler |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency; route handler |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency; route handler |
 
 ### Example (shape only)
 
@@ -5023,20 +4596,13 @@ No marked rule or register check is reached from these handlers.
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
 | [`handle_not_found`](#c-handle-not-found) | 404 | route handler |
 | [`handle_type_mismatch`](#c-handle-type-mismatch) | 422 | route handler |
 | [`invalid_handle`](#c-invalid-handle) | 422 | route handler |
-| [`rights_attestation_not_depositor`](#c-rights-attestation-not-depositor) | 403 | route handler |
-| [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
-| [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
-| [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency; route handler |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency; route handler |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency; route handler |
 
 ### Example (shape only)
 
@@ -5107,14 +4673,11 @@ No marked rule or register check is reached from these handlers.
 
 ### Refusal codes this surface can return
 
-Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route).
+Traced statically from the payload validators, route handlers and route dependencies: reachable from the route, not necessarily for every payload; a code raised through dynamic dispatch can be missing. Codes every request can receive are listed [once](#every-producer-route); codes most surfaces can return (calculation, level of theory and composite rules) are listed [once](#codes-most-surfaces-share).
 
 | Code | Status | Traced via |
 |---|---|---|
 | [`submission_supersede_not_owner`](#c-submission-supersede-not-owner) | 403 | route handler |
-| [`tckdb_client_version_invalid`](#c-tckdb-client-version-invalid) | 426 | route dependency; route handler |
-| [`tckdb_client_version_missing`](#c-tckdb-client-version-missing) | 426 | route dependency; route handler |
-| [`tckdb_client_version_unsupported`](#c-tckdb-client-version-unsupported) | 426 | route dependency; route handler |
 
 ### Example (shape only)
 
@@ -5718,6 +5281,7 @@ Unknown keys are refused.
 | `label` | string \| null | no | `null` |  |  | Optional label. |
 | `note` | string \| null | no | `null` |  |  | Optional note. |
 
+- **BundleTransitionStateIn.validate_primary_is_not_an_assembled_composite** (model, after; can refuse via `assert_assembled_not_primary`): The saddle point's primary produced its geometry; an assembled composite produced nothing.
 - **BundleTransitionStateIn.normalize_text** (model, after): applies `normalize_optional_text` to `label`, `note`, `unmapped_smiles`: Trim optional text inputs and collapse blank strings to None.
 - **BundleTransitionStateIn.validate_primary_is_opt** (model, after; can refuse): TS primary calculation must be type 'opt', got '{self.calculation.type.value}'.
 - **BundleTransitionStateIn.validate_reaction_coordinate_contract** (model, after; can refuse via `raise_for_blocking_findings`):
@@ -6275,7 +5839,7 @@ Unknown keys are refused.
 |---|---|---|---|---|---|---|
 | `key` | string | yes |  |  | length >= 1 | Your name for the term (for example ``"corr"``, ``"dcv"``). Local to this definition and **not part of the scheme's identity**: the calculation's ``composite_result.inputs`` name terms by it, and two depositors who key the same recipe differently get the same scheme. |
 | `operation` | `CompositeTermOperation` | yes |  |  | `base`, `extrapolation`, `difference`, `value`, `empirical` | ``base`` / ``value`` (one input taken as it is), ``extrapolation``, or ``difference`` (high minus low). ``empirical`` is refused. |
-| `energy_component` | `EnergyComponentKind` | yes |  |  | `total`, `reference`, `correlation`, `triples`, `dboc`, `scalar_relativistic` | Which part of the input energy the term reads: ``total``, ``reference``, ``correlation`` (the whole correlation energy, triples included), ``triples``, ``dboc``, ``scalar_relativistic``. |
+| `energy_component` | `EnergyComponentKind` | yes |  |  | `total`, `reference`, `correlation`, `triples`, `dboc`, `scalar_relativistic`, `correlation_excluding_triples` | Which part of the input energy the term reads: ``total``, ``reference``, ``correlation`` (the whole correlation energy, triples included), ``triples``, ``dboc``, ``scalar_relativistic``. |
 | `formula` | `CompositeExtrapolationFormula` \| null | no | `null` |  | `inverse_power`, `inverse_power_shifted_half`, `karton_martin_scf`, `exponential_three_point` | The extrapolation formula (``extrapolation`` terms only). |
 | `exponent` | number \| null | no | `null` |  |  | The formula's exponent where it has one (``inverse_power``, ``inverse_power_shifted_half``). Part of the identity: exponent 3 and 3.4 are two schemes. |
 | `inputs` | array of [`CompositeSchemeTermInputIn`](#m-compositeschemeterminputin) | yes |  |  | length >= 1 | The levels the term reads, each filling a slot. |
@@ -7393,7 +6957,11 @@ Unknown keys are refused.
   Never refuses and never rewrites: the verbatim name is what is stored,
   and it is a different identity from the method it is a table for.
 
-- **LevelOfTheoryRef.validate_method_xor_composite_scheme** (model, after; can refuse): level_of_theory carries composite_scheme together with {', '.join(sorted(ordinary))}. These describe a single method's run; a composite scheme's levels are stated on its inputs. Remove them from the level of theory and put them on the scheme's input levels.
+- **LevelOfTheoryRef.validate_method_xor_composite_scheme** (model, after; can refuse via `assert_method_xor_composite_scheme`):
+
+  - applies `assert_method_xor_composite_scheme`: Exactly one of ``method`` and ``composite_scheme`` names the level.
+  - applies `assert_no_method_fields_with_composite_scheme`: Refuse method-level fields (basis, dispersion, ...) sent next to a ``composite_scheme``.
+
 - **LevelOfTheoryRef.normalize_method** (field, after on `method`; can refuse):
 
   - level_of_theory.method={value} contains '//', which writes an energy level and a geometry level as one name (energy//geometry). That is two levels of theory, not one method. Send the single-point and the optimization levels as separate calculations, each with its own level of theory.
@@ -8090,7 +7658,7 @@ Unknown keys are refused.
 
 | Field | Type | Req | Default | Unit | Values / constraints | Description |
 |---|---|---|---|---|---|---|
-| `component` | `EnergyComponentKind` | yes |  |  | `total`, `reference`, `correlation`, `triples`, `dboc`, `scalar_relativistic` | Which part: ``reference`` (the SCF / HF energy), ``correlation``, ``triples``, ``dboc``, ``scalar_relativistic``, or ``total`` (the whole electronic energy). |
+| `component` | `EnergyComponentKind` | yes |  |  | `total`, `reference`, `correlation`, `triples`, `dboc`, `scalar_relativistic`, `correlation_excluding_triples` | Which part: ``reference`` (the SCF / HF energy), ``correlation``, ``triples``, ``dboc``, ``scalar_relativistic``, or ``total`` (the whole electronic energy). |
 | `value_hartree` | number | yes |  | hartree |  | The part's value in hartree, as the program printed it. TCKDB checks it against the single point's energy but never derives or fills one. |
 
 <a id="m-spresultpayload"></a>
@@ -9284,6 +8852,14 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Message: "software_release is required: it names the program that produced this calculation's numbers. Only an assembled composite (arithmetic over other deposited calculations, run by no program) may omit it."
 - Note: A calculation names no software_release.
 
+<a id="c-composite-assembled-cannot-be-primary"></a>
+
+#### `composite_assembled_cannot_be_primary`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py`.
+- Message: "{subject} is an assembled composite. A primary calculation is the run that produced the conformer's geometry: an optimisation, or a program-run composite such as CBS-QB3 whose first step is one. An assembled composite is arithmetic over other calculations; send it as an additional calculation instead."
+- Note: An assembled composite was sent as a conformer's or transition state's primary calculation.
+
 <a id="c-composite-assembled-not-accepted"></a>
 
 #### `composite_assembled_not_accepted`
@@ -9415,7 +8991,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py`.
 - The body's `context` names the things involved.
-- Message: "level_of_theory carries composite_scheme together with {', '.join(sorted(ordinary))}. These describe a single method's run; a composite scheme's levels are stated on its inputs. Remove them from the level of theory and put them on the scheme's input levels."
+- Message: "level_of_theory carries composite_scheme together with {', '.join(ordinary)}. These describe a single method's run; a composite scheme's levels are stated on its inputs. Remove them from the level of theory and put them on the scheme's input levels."
 - Note: A user-built composite scheme's shape is wrong: a formula without its exponent, a slot the operation does not take, a duplicate term key, an empirical term, a kind that does not match its terms, or method-level fields sent next to the scheme. context.rule names which (ADR 0021).
 
 <a id="c-composite-scheme-named-method-not-sendable"></a>
@@ -9441,7 +9017,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/composite_result_resolution.py`.
 - The body's `context` names the things involved.
-- Message: "composite_result.terms names position(s) {', '.join((str(p) for p in unknown))}, which the scheme of level of theory {_lot_label(session.get(LevelOfTheory, calculation.lot_id))} does not have; its terms are at position(s) {', '.join((str(p) for p in sorted(scheme_positions)))}."
+- Message: "composite_result.terms names position(s) {', '.join((str(p) for p in unknown_listed))}, but the scheme lists {len(mapping)} terms (positions 0 to {len(mapping) - 1}, in the order you sent them)."
 - Note: A deposited term names a position the calculation's scheme does not have.
 
 <a id="c-composite-terms-do-not-sum"></a>
@@ -9461,6 +9037,14 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: 'composite_result.electronic_energy_hartree ({check.deposited} Eh) is not what the scheme gives for the energies of the calculations it names: recomputed from them the total is {check.recomputed} Eh, a difference of {check.gap} Eh against a tolerance of {check.tolerance} Eh. The recomputed value is not stored; fix the deposited total, the scheme, or the input that disagrees.'
 - Note: An assembled composite's deposited electronic_energy_hartree is not what its scheme gives for the stored energies of the calculations it names, beyond max(1e-6, 5e-7 * n) hartree (n = the deposited total plus every stored number consumed).
+
+<a id="c-composite-total-required"></a>
+
+#### `composite_total_required`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py`.
+- Message: 'an assembled composite must deposit its total, composite_result.electronic_energy_hartree. TCKDB recomputes the total from the inputs only to check yours and never stores a value it computed; without yours there is nothing to check and no energy to record.'
+- Note: An assembled composite deposited no electronic_energy_hartree.
 
 <a id="c-composite-type-requires-composite-result"></a>
 
@@ -9855,6 +9439,14 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "{field}='{key}' names a calculation on a different conformer than '{carrier_key}'. A stability analysis describes one wavefunction at one geometry, so the job that measured a verdict must be on the same conformer as the calculation that carries it."
 - Note: The job named by scf_stability.source_calculation_key ran on another conformer than the calculation carrying the verdict.
+
+<a id="c-sp-energy-component-derived"></a>
+
+#### `sp_energy_component_derived`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py`.
+- Message: "'correlation_excluding_triples' is not a stored component: it is derived from the 'correlation' and 'triples' you send, under the convention your reference, correlation and energy imply. Send 'correlation' (and 'triples' where the program prints it separately); a composite scheme term may then read the CCSD part by name."
+- Note: correlation_excluding_triples was sent as a stored single-point component.
 
 <a id="c-sp-energy-component-duplicate"></a>
 

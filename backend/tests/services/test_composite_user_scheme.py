@@ -53,6 +53,11 @@ def _resolve(session: Session, scheme: dict) -> LevelOfTheory:
     return resolve_level_of_theory_ref(session, LevelOfTheoryRef(composite_scheme=scheme))
 
 
+def _core_valence_term(scheme: CompositeScheme):
+    """The stored term whose inputs differ by core treatment (positions are canonical, not as sent)."""
+    return next(t for t in scheme.terms if any(i.level_of_theory.core_treatment is not None for i in t.inputs))
+
+
 def _scheme_row(session: Session, level: LevelOfTheory) -> CompositeScheme:
     return session.get(CompositeScheme, session.get(LevelOfTheoryComposite, level.id).scheme_id)
 
@@ -93,7 +98,31 @@ def test_term_keys_are_not_identity_but_formula_exponent_and_cardinals_are(db_se
     differs(lambda s: s["terms"][1].update(formula="inverse_power_shifted_half"))
     differs(lambda s: s["terms"][1]["inputs"][0].update(cardinal_number=2))  # declared cardinal
     differs(lambda s: s["terms"][0].update(energy_component="total"))  # which component is read
-    differs(lambda s: s["terms"].reverse())  # term order is position, and position is identity
+
+
+def test_the_order_the_terms_were_listed_in_is_not_identity_but_the_stored_positions_are_canonical(db_session):
+    """The total is a sum: reversing the terms changes the number not at all, so it must not change the level."""
+    base = _resolve(db_session, f.SCHEME_B)
+    reversed_terms = copy.deepcopy(f.SCHEME_B)
+    reversed_terms["terms"].reverse()
+    other = _resolve(db_session, reversed_terms)
+    assert other.id == base.id and other.method == base.method
+    # The same holds for the focal-point scheme, whose terms have no natural order.
+    shuffled = copy.deepcopy(f.SCHEME_C)
+    shuffled["terms"] = [shuffled["terms"][i] for i in (4, 2, 0, 3, 1)]
+    assert _resolve(db_session, shuffled).id == _resolve(db_session, f.SCHEME_C).id
+    scheme = _scheme_row(db_session, base)
+    assert [(t.position, t.operation.value) for t in scheme.terms] == [(0, "value"), (1, "extrapolation")]
+
+
+def test_deposited_term_positions_map_to_the_canonical_ones(db_session):
+    from app.services.composite_scheme_resolution import term_positions_for
+
+    definition = CompositeSchemeDefinition(**f.SCHEME_B)
+    assert term_positions_for(db_session, definition) == [0, 1]
+    swapped = CompositeSchemeDefinition(**{**f.SCHEME_B, "terms": list(reversed(f.SCHEME_B["terms"]))})
+    # Listed first, the extrapolation is canonically second; listed second, the value term is canonically first.
+    assert term_positions_for(db_session, swapped) == [1, 0]
 
 
 def test_the_order_of_inputs_within_a_term_is_not_identity(db_session):
@@ -125,14 +154,18 @@ def test_core_treatment_is_identity_through_the_input_levels(db_session):
     # Without the core treatment the two inputs are one level of theory and a ΔCV term is inexpressible.
     level = _resolve(db_session, dropped)
     scheme = _scheme_row(db_session, level)
-    dcv_term = next(t for t in scheme.terms if t.position == 1)
+    dcv_term = next(
+        t
+        for t in scheme.terms
+        if t.operation.value == "difference" and t.inputs[0].level_of_theory_id == t.inputs[1].level_of_theory_id
+    )
     assert dcv_term.inputs[0].level_of_theory_id == dcv_term.inputs[1].level_of_theory_id
     assert level.id != _resolve(db_session, f.SCHEME_C).id
 
 
 def test_term_input_levels_carry_their_core_treatment(db_session):
     scheme = _scheme_row(db_session, _resolve(db_session, f.SCHEME_C))
-    dcv = next(t for t in scheme.terms if t.position == 1)
+    dcv = _core_valence_term(scheme)
     cores = {i.slot.value: i.level_of_theory.core_treatment.value for i in dcv.inputs}
     assert cores == {"high": "all_electron", "low": "frozen_core"}
 
@@ -207,13 +240,14 @@ def test_normal_level_hashes_are_unchanged_by_this_phase():
 def test_the_two_worked_labels(db_session):
     assert _resolve(db_session, f.SCHEME_B).method == f.LABEL_B
     c = _resolve(db_session, f.SCHEME_C).method
+    # Terms are in canonical order (base, value, extrapolation, difference), not the order they were sent.
     assert c == (
-        "Additive[CCSD(T)/cc-pVQZ"
-        " + dE:CCSD(T)/cc-pCVTZ ae - CCSD(T)/cc-pCVTZ fc"
+        "Additive[base CCSD(T)/cc-pVQZ"
+        " + DBOC:HF/cc-pVDZ"
         " + dE:CCSDT(Q)/cc-pVDZ - CCSD(T)/cc-pVDZ"
         " + dE:CCSD(T)/cc-pVTZ-DK (kw=DKH2) - CCSD(T)/cc-pVTZ"
-        " + DBOC:HF/cc-pVDZ]"
-    ).replace("CCSD(T)/cc-pVQZ", "base CCSD(T)/cc-pVQZ", 1)
+        " + dE:CCSD(T)/cc-pCVTZ ae - CCSD(T)/cc-pCVTZ fc]"
+    )
 
 
 def test_a_label_is_a_function_of_the_definition_only():

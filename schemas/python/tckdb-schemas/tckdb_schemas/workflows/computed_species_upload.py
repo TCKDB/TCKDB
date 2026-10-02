@@ -49,6 +49,7 @@ from tckdb_schemas.fragments.calculation import (
     SPEnergyComponentPayload,
     SPResultPayload,
     WavefunctionDiagnosticPayload,
+    assert_assembled_not_primary,
     assert_composite_calculation_shape,
 )
 from tckdb_schemas import frequency_completeness as _frequency_completeness
@@ -372,6 +373,7 @@ def require_opt_primary_unless_monatomic(
     xyz_text: str,
     *,
     subject: str,
+    primary_composite_result: object | None = None,
 ) -> None:
     """Refuse a conformer primary that is not an ``opt``, unless the geometry is one atom.
 
@@ -406,7 +408,11 @@ def require_opt_primary_unless_monatomic(
     :raises ValueError: for a non-``opt`` primary on anything but a single atom
         (or a ``composite``).
     """
-    if primary_type is CalculationType.opt or primary_type is CalculationType.composite:
+    if primary_type is CalculationType.composite:
+        # Only a program-run composite produced the geometry (ADR 0021, P5).
+        assert_assembled_not_primary(primary_composite_result, subject=subject)  # type: ignore[arg-type]
+        return
+    if primary_type is CalculationType.opt:
         return
     # Looked up by name on purpose. The counter raises
     # ``atom_map_geometry_unparseable`` internally and swallows it (returning
@@ -470,6 +476,7 @@ class ConformerInBundle(SchemaBase):
             self.primary_calculation.type,
             self.geometry.xyz_text,
             subject="ConformerInBundle.primary_calculation.type",
+            primary_composite_result=self.primary_calculation.composite_result,
         )
         return self
 

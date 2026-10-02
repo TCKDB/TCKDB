@@ -9,8 +9,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.sql import ColumnElement
+from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.fragments.calculation import (
     CALCULATION_SOFTWARE_RELEASE_REQUIRED,
+    assert_assembled_not_primary,
     assert_composite_calculation_shape,
     assert_composite_result_matches_type,
 )
@@ -1810,6 +1812,12 @@ def assert_dependency_role_type_compatible(
     )
 
 
+#: A ``composite_input`` edge was declared (``depends_on``) rather than written from
+#: an assembled composite's ``composite_result.inputs``. Same literal as the wire
+#: refusal; this is its re-run at the seam every edge goes through.
+COMPOSITE_INPUT_EDGE_IS_DERIVED = "composite_input_edge_is_derived"
+
+
 def add_dependency_edge_idempotent(
     session: Session,
     *,
@@ -1817,6 +1825,7 @@ def add_dependency_edge_idempotent(
     child_calculation_id: int,
     dependency_role: CalculationDependencyRole,
     context: str,
+    derived: bool = False,
 ) -> CalculationDependency:
     """Insert a ``CalculationDependency`` edge idempotently.
 
@@ -1840,6 +1849,17 @@ def add_dependency_edge_idempotent(
     edges are not flushed mid-check and racing the duplicate-insert
     this helper exists to prevent.
     """
+    if dependency_role == CalculationDependencyRole.composite_input and not derived:
+        # The slot a composite_input edge stands for lives in calc_composite_input; an edge
+        # declared by a producer would be evidence with no slot behind it. Only
+        # ``finalize_composite_inputs`` (derived=True) writes one.
+        raise CodedValueError(
+            COMPOSITE_INPUT_EDGE_IS_DERIVED,
+            f"{context}: role 'composite_input' cannot be declared. The server writes that edge from the "
+            "assembled composite's composite_result.inputs, one per slot. Name the calculation there instead.",
+            context={"field": "depends_on", "role": dependency_role.value},
+            message_prefix=False,
+        )
     if parent_calculation_id == child_calculation_id:
         raise ValueError(
             f"{context}: a calculation cannot depend on itself."
@@ -2128,6 +2148,7 @@ def resolve_and_persist_calculation_with_results(
     species_entry_id: int | None = None,
     transition_state_entry_id: int | None = None,
     created_by: int | None = None,
+    as_primary: bool = False,
 ) -> Calculation:
     """Resolve provenance, persist a calculation, and attach typed results.
 
@@ -2136,8 +2157,17 @@ def resolve_and_persist_calculation_with_results(
     :param species_entry_id: Owner species-entry id (mutually exclusive with TS).
     :param transition_state_entry_id: Owner TS-entry id.
     :param created_by: Optional application user id.
+    :param as_primary: ``True`` for a conformer's or transition state's primary
+        calculation, the run that produced its geometry. An assembled composite
+        produced none and is refused there
+        (``composite_assembled_cannot_be_primary``).
     :returns: Persisted ``Calculation`` row.
     """
+    if as_primary:
+        try:
+            assert_assembled_not_primary(calc_upload.composite_result, subject="primary calculation")
+        except CodedValidationError as exc:
+            raise CodedValueError(exc.code, exc.detail, context=exc.context, message_prefix=False) from exc
 
     # Every wire rule that ties the block, the level and the software together
     # (ADR 0021): software required unless an assembled composite, and an

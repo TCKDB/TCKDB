@@ -11,6 +11,12 @@ Schema
   (``ALTER TYPE ... ADD VALUE``; nothing in this revision uses the new value,
   which PostgreSQL requires when the statement runs in the migration
   transaction).
+* ``energy_component_kind`` gains ``correlation_excluding_triples``: the CCSD part
+  of a correlation energy, which a scheme term can read (``composite_scheme_term.energy_component``)
+  and a single point never stores (the wire refuses it as a stored component; it is
+  derived from ``correlation`` and ``triples``). A CHECK on ``calc_sp_energy_component``
+  cannot say so here, because PostgreSQL refuses to use an enum value in the
+  transaction that added it.
 * ``calc_composite_input`` -- one row per slot an assembled composite filled:
   ``(calculation_id, term_position, slot, input_calculation_id)`` is the primary
   key, ``cardinal_number`` is set only on a ``cardinal`` slot, and
@@ -28,20 +34,22 @@ accepted its inputs can be neither added to, edited nor removed.
 ``trg_as_child_<table>`` / ``trg_as_truncate_<table>`` follow ``b6c1f4a8e703``.
 
 No rows are written
--------------------------------------------------
+-------------------
 Pure DDL. A composite with inputs could not be deposited before this revision
 (``assembled`` was refused), so there is nothing to backfill, and no existing
 table gains a column (so nothing joins ``snapshot_defaults.UNCHANGED_DEFAULTS``).
 
 Downgrade
 ---------
-Refuses, with counts, while any ``calc_composite_input`` row or any
+Refuses, with counts, while any ``calc_composite_input`` row, any scheme term or
+single-point component using ``correlation_excluding_triples``, or any
 ``calculation_dependency`` edge with the ``composite_input`` role exists: dropping
-either would delete the evidence that an assembled energy rests on the
+any of them would delete the evidence that an assembled energy rests on the
 calculations it names. It deletes nothing; remove the assembled composite
 calculations first. Otherwise it drops the triggers and the table and rebuilds
 ``calculation_dependency_role`` without ``composite_input`` (PostgreSQL cannot
-remove an enum value in place: rename, recreate, recast, drop). The four partial
+remove an enum value in place: rename, recreate, recast, drop; done for both enums,
+``energy_component_kind`` recast on its two columns). The four partial
 unique indexes whose predicates name the column are dropped around the recast and
 recreated verbatim, because an index predicate cannot be re-parsed against a
 retyped column.
@@ -79,6 +87,19 @@ _PRIOR_ROLE_VALUES = (
 )
 
 _TABLE = "calc_composite_input"
+
+_COMPONENT_TYPE = "energy_component_kind"
+_COMPONENT_NEW_VALUE = "correlation_excluding_triples"
+_PRIOR_COMPONENT_VALUES = (
+    "total",
+    "reference",
+    "correlation",
+    "triples",
+    "dboc",
+    "scalar_relativistic",
+)
+#: ``(table, column)`` using ``energy_component_kind``.
+_COMPONENT_COLUMNS = (("composite_scheme_term", "energy_component"), ("calc_sp_energy_component", "component"))
 
 _SLOT = postgresql.ENUM("value", "high", "low", "cardinal", name="composite_input_slot", create_type=False)
 
@@ -122,6 +143,7 @@ def upgrade() -> None:
     # ADD VALUE is safe inside Alembic's transaction on PostgreSQL 12+ as long
     # as the value is not used in the same transaction, which it is not.
     op.execute(f"ALTER TYPE {_ROLE_TYPE} ADD VALUE IF NOT EXISTS '{_NEW_VALUE}'")
+    op.execute(f"ALTER TYPE {_COMPONENT_TYPE} ADD VALUE IF NOT EXISTS '{_COMPONENT_NEW_VALUE}'")
 
     op.create_table(
         _TABLE,
@@ -212,6 +234,12 @@ def downgrade() -> None:
         f"SELECT count(*) FROM calculation_dependency WHERE dependency_role = '{_NEW_VALUE}'",
     )
 
+    for table, column in _COMPONENT_COLUMNS:
+        _refuse_if_any(
+            f"{table}.{column} value(s) '{_COMPONENT_NEW_VALUE}'",
+            f"SELECT count(*) FROM {table} WHERE {column} = '{_COMPONENT_NEW_VALUE}'",
+        )
+
     for table in _TRUNCATE_TABLES:
         op.execute(f"DROP TRIGGER IF EXISTS {_trigger_name('as_truncate', table)} ON public.{table}")
     for table, _, _ in _child_groups():
@@ -241,3 +269,14 @@ def downgrade() -> None:
             unique=True,
             postgresql_where=sa.text(f"dependency_role = '{role}'"),
         )
+
+    # The same rebuild for ``energy_component_kind``, recast on both columns that use it.
+    prior_components = ", ".join(f"'{value}'" for value in _PRIOR_COMPONENT_VALUES)
+    op.execute(f"ALTER TYPE {_COMPONENT_TYPE} RENAME TO {_COMPONENT_TYPE}_old")
+    op.execute(f"CREATE TYPE {_COMPONENT_TYPE} AS ENUM ({prior_components})")
+    for table, column in _COMPONENT_COLUMNS:
+        op.execute(
+            f"ALTER TABLE {table} ALTER COLUMN {column} "
+            f"TYPE {_COMPONENT_TYPE} USING {column}::text::{_COMPONENT_TYPE}"
+        )
+    op.execute(f"DROP TYPE {_COMPONENT_TYPE}_old")

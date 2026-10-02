@@ -6,7 +6,7 @@ silently does without it, and an assembled composite is stored with no inputs an
 a total nobody checked. Each guard counts what it found before it asserts
 anything about it, so a scan that stopped matching cannot pass empty.
 
-1. Every workflow that reports named-composite deposits also finalises assembled
+1. Every workflow that persists a calculation also finalises assembled
    composites' inputs, and does so **before** the review policy runs (the policy
    can accept the composite, which freezes the rows being written).
 2. ``calc_composite_input`` rows are written in exactly one place, and that
@@ -54,16 +54,26 @@ def _own_calls(function: ast.FunctionDef, name: str) -> list[ast.Call]:
     return found
 
 
-def test_every_workflow_that_reports_named_composite_deposits_finalises_assembled_inputs_first() -> None:
-    reporting = [
+#: The calls that persist a calculation. The rule is anchored here, on persistence, and not on a sibling
+#: warning collector: a workflow that stopped reporting one finding must not escape this one.
+_PERSISTING_CALLS = (
+    "resolve_and_persist_calculation_with_results",
+    "persist_additional_calculations",
+    "_persist_calculation",
+    "persist_ts_calculations",
+)
+
+
+def test_every_workflow_that_persists_a_calculation_finalises_assembled_inputs_before_the_review_policy() -> None:
+    persisting = [
         path
         for path in sorted(_WORKFLOWS.glob("*.py"))
-        if any(_own_calls(f, "collect_named_composite_deposit_warnings") for f in _functions(path))
+        if any(_own_calls(f, name) for f in _functions(path) for name in _PERSISTING_CALLS)
     ]
     # conformer, thermo, statmech, transport, network_pdep, computed_species, computed_reaction, transition_state.
-    assert len(reporting) >= 8, [p.name for p in reporting]
+    assert len(persisting) >= 8, [p.name for p in persisting]
     missing, late = [], []
-    for path in reporting:
+    for path in persisting:
         finalising = [f for f in _functions(path) if _own_calls(f, "finalize_composite_inputs")]
         if not finalising:
             missing.append(path.name)
@@ -73,8 +83,20 @@ def test_every_workflow_that_reports_named_composite_deposits_finalises_assemble
             policy = [c.lineno for c in _own_calls(function, "apply_review_policy")]
             if policy and min(policy) < finalize_line:
                 late.append(f"{path.name}:{function.name}")
-    assert not missing, f"report named-composite deposits but never finalise assembled inputs: {missing}"
+    assert not missing, f"persist calculations but never finalise assembled inputs: {missing}"
     assert not late, f"finalise assembled inputs after the review policy (which can freeze them): {late}"
+
+
+def test_a_finalise_call_is_never_handed_an_empty_literal() -> None:
+    """``finalize_composite_inputs(session, [])`` is the mutation that used to survive: it finalises nothing."""
+    calls = 0
+    for path in sorted(_WORKFLOWS.glob("*.py")):
+        for function in _functions(path):
+            for call in _own_calls(function, "finalize_composite_inputs"):
+                calls += 1
+                ids = call.args[1] if len(call.args) > 1 else None
+                assert not (isinstance(ids, (ast.List, ast.Tuple)) and not ids.elts), f"{path.name}:{call.lineno}"
+    assert calls >= 8
 
 
 def test_composite_inputs_are_written_in_one_place_with_their_edge() -> None:

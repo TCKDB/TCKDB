@@ -377,6 +377,7 @@ def persist_computed_species_upload(
             _to_calc_with_results_payload(conf_in.primary_calculation),
             species_entry_id=species_entry.id,
             created_by=created_by,
+            as_primary=True,
         )
         primary_calc.conformer_observation_id = observation.id
         # Producer-explicit output_geometries take precedence. Otherwise

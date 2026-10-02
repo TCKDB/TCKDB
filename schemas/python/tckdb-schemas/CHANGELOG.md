@@ -48,20 +48,35 @@ for two complete examples (CCSD(T)/CBS from a TZ/QZ pair, and a focal-point sum)
   `composite_input` dependency role is written by the server and cannot be
   declared in `depends_on`), `composite_input_type_invalid` (an input is not a
   single point or optimisation), `composite_input_level_mismatch`,
-  `composite_input_owner_mismatch`, `composite_input_geometry_mismatch` and
-  `composite_total_mismatch` (the deposited total is not what the scheme gives
-  for the inputs' stored energies, beyond `max(1e-6, 5e-7 * n)` hartree, `n`
-  counting the deposited total and every stored number consumed). TCKDB
-  recomputes the total only to check it; it never stores the recomputed value.
-  Warnings: `composite_input_geometry_undeclared` and
-  `composite_total_unverifiable` (a needed energy or component is not stated, the
-  correlation convention cannot be determined, or no total was deposited).
+  `composite_input_owner_mismatch`, `composite_input_geometry_mismatch`,
+  `composite_total_required` (an assembled composite deposits its total; there is
+  no unverifiable-by-absence), `composite_assembled_cannot_be_primary` (an
+  assembled composite is not the run that produced a geometry; send it as an
+  additional calculation) and `composite_total_mismatch` (the deposited total is not
+  what the scheme gives for the inputs' stored energies, beyond
+  `max(1e-6, 5e-7 * (1 + sum |weight|))` hartree, the sum over the stored numbers
+  consumed: weight 1 for a value, base or difference input, the extrapolation's own
+  weight for an extrapolated one, so `max(1e-6, 5e-7 * n)` when every weight is 1).
+  TCKDB recomputes the total only to check it; it never stores the recomputed value.
+  Warnings: `composite_input_geometry_undeclared` and `composite_total_unverifiable`
+  (a needed energy or component is not stated, the correlation convention cannot be
+  determined, or an extrapolation is degenerate).
 - **Correlation and triples.** A `correlation` term reads the whole correlation
-  energy, (T) included. For an input whose stored `triples` is separate (Molpro,
-  `reference + correlation + triples` equals the energy) that is `correlation +
-  triples`; for one whose `correlation` already includes (T) (ORCA) it is
-  `correlation`. The convention is read off the stored row; an input where it
-  cannot be read makes the total unverifiable.
+  energy, (T) included: the stored `correlation` where it already includes (T)
+  (ORCA: `reference + correlation` equals the energy), `correlation + triples`
+  where triples are stored separately (Molpro). The new
+  `EnergyComponentKind.correlation_excluding_triples` reads the CCSD part: the
+  stored `correlation` under Molpro's convention, `correlation - triples` under
+  ORCA's. The textbook scheme (CCSD correlation extrapolated, (T) at a smaller
+  basis as its own `triples` term) is written with it and counts (T) once. It is
+  derived and never a stored single-point component (`sp_energy_component_derived`).
+  The convention is read off the stored row; where it cannot be read the total is
+  unverifiable, never guessed.
+- **Term order is not identity.** The total is a sum, so terms sent in any order are
+  one scheme; stored positions are canonical and the positions in
+  `composite_result.terms` are mapped to them. A `cardinal_number` on a slot that is
+  not a `cardinal` slot is refused (`composite_scheme_malformed`,
+  `rule: cardinal_on_non_cardinal_slot`).
 - **New public modules.** `tckdb_schemas.composite_formulas` (the four formulas,
   checked against the correlation energies printed in the ORCA manuals),
   `composite_total` (the recomputation, pure arithmetic a producer can run before

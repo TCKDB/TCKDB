@@ -688,7 +688,7 @@ class CalculationCompositeInput(Base):
     ``calculation_id``). The edge is what the graph, the review queue and the
     accepted-science guard already walk; the row is what carries the slot. The
     service that writes one writes the other
-    (:func:`app.services.composite_input_resolution.persist_composite_inputs`).
+    (:func:`app.services.composite_input_resolution.finalize_composite_inputs`).
 
     ``term_position`` is the term's place in the scheme's ``terms`` (the
     depositor's ``term_key`` is not stored: it is not part of the scheme's

@@ -10,6 +10,7 @@ from tckdb_schemas.composite_scheme_rules import (
     COMPOSITE_SCHEME_NESTED,
     assert_composite_scheme_definition,
     assert_method_xor_composite_scheme,
+    assert_no_method_fields_with_composite_scheme,
 )
 from tckdb_schemas.enums import (
     CompositeExtrapolationFormula,
@@ -744,38 +745,7 @@ class LevelOfTheoryRef(OrdinaryLevelOfTheoryRef):
     @model_validator(mode="after")
     def validate_method_xor_composite_scheme(self) -> Self:
         assert_method_xor_composite_scheme(self.method, self.composite_scheme)
-        if self.composite_scheme is not None:
-            ordinary = {
-                name: getattr(self, name)
-                for name in (
-                    "basis",
-                    "aux_basis",
-                    "cabs_basis",
-                    "dispersion",
-                    "solvent",
-                    "solvent_model",
-                    "keywords",
-                    "spin_treatment",
-                    "core_treatment",
-                )
-                if getattr(self, name) is not None
-            }
-            if ordinary:
-                raise CodedValidationError(
-                    "composite_scheme_malformed",
-                    (
-                        "level_of_theory carries composite_scheme together with "
-                        f"{', '.join(sorted(ordinary))}. These describe a single method's run; a "
-                        "composite scheme's levels are stated on its inputs. Remove them from the "
-                        "level of theory and put them on the scheme's input levels."
-                    ),
-                    context={
-                        "field": "level_of_theory",
-                        "rule": "ordinary_fields_with_scheme",
-                        "fields": sorted(ordinary),
-                    },
-                    message_prefix=False,
-                )
+        assert_no_method_fields_with_composite_scheme(self)
         return self
 
 

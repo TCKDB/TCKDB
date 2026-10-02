@@ -9,7 +9,7 @@ must read like the recipe and be the same every time.
 
 Format
 ------
-``<head>[<term> + <term> + ...]`` where the head is ``CBS`` for an
+``<head>[<term> + <term> + ...]`` (terms in canonical order, not the order the producer listed them) where the head is ``CBS`` for an
 ``extrapolation`` scheme and ``Additive`` for an ``additive`` one, and a term is:
 
 * a base or value term: ``[base ][<component>:]<level>``;
@@ -52,6 +52,7 @@ _COMPONENT_ALIAS: dict[EnergyComponentKind, str] = {
     EnergyComponentKind.triples: "(T)",
     EnergyComponentKind.dboc: "DBOC",
     EnergyComponentKind.scalar_relativistic: "rel",
+    EnergyComponentKind.correlation_excluding_triples: "ccsd",
 }
 
 _HEAD: dict[CompositeSchemeKind, str] = {

@@ -57,6 +57,7 @@ from sqlalchemy.orm import Session
 from tckdb_schemas.composite_scheme_rules import (
     COMPOSITE_SCHEME_NESTED,
     assert_composite_scheme_definition,
+    assert_no_method_fields_with_composite_scheme,
 )
 from tckdb_schemas.enums import CoreTreatment
 
@@ -368,41 +369,94 @@ def _sorted_inputs(inputs: list[_ResolvedInput]) -> list[_ResolvedInput]:
     return sorted(inputs, key=lambda i: (slot_rank[i.slot], -1 if i.cardinal_number is None else i.cardinal_number))
 
 
+_OPERATION_RANK = {
+    CompositeTermOperation.base: 0,
+    CompositeTermOperation.value: 1,
+    CompositeTermOperation.extrapolation: 2,
+    CompositeTermOperation.difference: 3,
+    CompositeTermOperation.empirical: 4,
+}
+
+
+def _term_entry(term: Any, inputs: list[_ResolvedInput]) -> dict[str, Any]:
+    """One term as the canonical form states it (no key, no position)."""
+    return {
+        "operation": _enum_value(term.operation),
+        "energy_component": _enum_value(term.energy_component),
+        "formula": None if term.formula is None else _enum_value(term.formula),
+        "exponent": None if term.exponent is None else float(term.exponent),
+        "inputs": [
+            {
+                "slot": i.slot.value,
+                "cardinal_number": i.cardinal_number,
+                "level_of_theory": i.level.lot_hash,
+            }
+            for i in _sorted_inputs(inputs)
+        ],
+    }
+
+
+def canonical_term_order(definition: Any, resolved: list[list[_ResolvedInput]]) -> list[int]:
+    """The canonical order of a definition's terms, as indices into the deposited list.
+
+    The total of a scheme is a sum, so the order a producer happened to list its
+    terms in does not change the number and must not change the identity. Terms
+    are ordered by operation (base, value, extrapolation, difference), energy
+    component, formula, exponent and then their inputs' canonical JSON, with the
+    deposited position as the last tie-break (two terms equal in every other
+    respect are interchangeable). The stored ``position`` of a term is its place
+    in this order, and a deposited ``term_position`` / ``term_key`` is mapped to it.
+    """
+
+    def key(index: int) -> tuple[Any, ...]:
+        term = definition.terms[index]
+        entry = _term_entry(term, resolved[index])
+        return (
+            _OPERATION_RANK[CompositeTermOperation(entry["operation"])],
+            entry["energy_component"],
+            entry["formula"] or "",
+            entry["exponent"] if entry["exponent"] is not None else 0.0,
+            json.dumps(entry["inputs"], sort_keys=True, separators=(",", ":")),
+            index,
+        )
+
+    return sorted(range(len(definition.terms)), key=key)
+
+
+def deposited_to_canonical_positions(definition: Any, resolved: list[list[_ResolvedInput]]) -> list[int]:
+    """``result[i]`` is the canonical position of the term the producer listed ``i``-th."""
+    order = canonical_term_order(definition, resolved)
+    positions = [0] * len(order)
+    for canonical, deposited in enumerate(order):
+        positions[deposited] = canonical
+    return positions
+
+
+def term_positions_for(session: Session, definition: Any) -> list[int]:
+    """:func:`deposited_to_canonical_positions` for a definition, resolving its input levels."""
+    return deposited_to_canonical_positions(definition, _resolve_scheme_inputs(session, definition))
+
+
 def scheme_definition_canonical_json(definition: Any, resolved: list[list[_ResolvedInput]]) -> str:
     """The canonical JSON a user scheme's ``definition_hash`` is taken over.
 
-    What is in it (ADR 0021, section 2.4): the ``kind``; for each term, **in
-    order**, its operation, energy component, formula and exponent; and for each
-    input, sorted by slot then cardinal number, its slot, its declared cardinal
-    number and the ``lot_hash`` of the level it resolved to (merges followed, so
-    two spellings of one level are one input). Anything that changes the number
-    for fixed component energies is identity: the formula, the exponent and the
-    cardinals.
+    What is in it (ADR 0021, section 2.4): the ``kind``; the terms **in canonical
+    order** (:func:`canonical_term_order`: a sum has no order, so none is imposed by
+    the depositor), each with its operation, energy component, formula and exponent;
+    and for each input, sorted by slot then cardinal number, its slot, its declared
+    cardinal number and the ``lot_hash`` of the level it resolved to (merges
+    followed, so two spellings of one level are one input). Anything that changes the
+    number for fixed component energies is identity: the formula, the exponent and
+    the cardinals.
 
-    What is not: a term's ``key`` (a local name), the literature (provenance),
-    and the generated label.
+    What is not: a term's ``key`` (a local name), the order the terms were listed in,
+    the literature, and the generated label.
 
     :param definition: The ``CompositeSchemeDefinition``.
     :param resolved: Its input levels, from :func:`_resolve_scheme_inputs`.
     """
-    terms = []
-    for term, inputs in zip(definition.terms, resolved, strict=True):
-        terms.append(
-            {
-                "operation": _enum_value(term.operation),
-                "energy_component": _enum_value(term.energy_component),
-                "formula": None if term.formula is None else _enum_value(term.formula),
-                "exponent": None if term.exponent is None else float(term.exponent),
-                "inputs": [
-                    {
-                        "slot": i.slot.value,
-                        "cardinal_number": i.cardinal_number,
-                        "level_of_theory": i.level.lot_hash,
-                    }
-                    for i in _sorted_inputs(inputs)
-                ],
-            }
-        )
+    order = canonical_term_order(definition, resolved)
+    terms = [_term_entry(definition.terms[i], resolved[i]) for i in order]
     payload = {"kind": _enum_value(definition.kind), "terms": terms}
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
@@ -416,7 +470,8 @@ def _label_for(definition: Any, resolved: list[list[_ResolvedInput]], definition
     from app.services.composite_scheme_label import LabelInput, LabelTerm, build_scheme_label
 
     terms = []
-    for term, inputs in zip(definition.terms, resolved, strict=True):
+    for index in canonical_term_order(definition, resolved):
+        term, inputs = definition.terms[index], resolved[index]
         label_inputs = []
         for item in _sorted_inputs(inputs):
             level = item.level
@@ -480,7 +535,8 @@ def _get_or_create_user_scheme(
             )
             session.add(scheme)
             session.flush()
-            for position, (term, inputs) in enumerate(zip(definition.terms, resolved, strict=True)):
+            for position, index in enumerate(canonical_term_order(definition, resolved)):
+                term, inputs = definition.terms[index], resolved[index]
                 term_row = CompositeSchemeTerm(
                     scheme_id=scheme.id,
                     position=position,
@@ -540,6 +596,7 @@ def resolve_declared_scheme_level(session: Session, ref: Any) -> LevelOfTheory:
         from tckdb_schemas.composite_scheme_rules import assert_method_xor_composite_scheme
 
         assert_method_xor_composite_scheme(ref.method, definition)
+    assert_no_method_fields_with_composite_scheme(ref)
     assert_composite_scheme_definition(definition)
 
     resolved = _resolve_scheme_inputs(session, definition)
