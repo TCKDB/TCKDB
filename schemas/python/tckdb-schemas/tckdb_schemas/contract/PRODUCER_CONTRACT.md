@@ -211,6 +211,10 @@ accepted unchanged; this release only adds.
   `POST /uploads/kinetics` return for the same record, each with the upload's `local_ref`.
   The producer contract's rule listing gains `ContributionBundleV0` as a place the linearity check
   applies.
+- **Contract listing, not a new refusal.** The regenerated contract lists `atom_map_geometry_unparseable`
+  on 11 of 16 surfaces (it was 10). That is the contract generator's call tracer reaching a code that
+  `atom_count_of_xyz` swallows; no endpoint newly refuses anything. #663 fixes the tracer, so whichever
+  of #663 and this release lands second must regenerate the contract.
 
 ### 0.74.0 - 2026-10-03
 

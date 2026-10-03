@@ -19,11 +19,13 @@ caller owns and may extend. It never touches the database.
 
 from __future__ import annotations
 
+from tckdb_schemas.workflows.transition_state_upload import TSReactionUpload
+
 from app.schemas.fragments.refs import collect_ref_warnings
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
 from app.schemas.workflows.conformer_upload import ConformerUploadRequest
-from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
+from app.schemas.workflows.kinetics_upload import KineticsReactionUpload, KineticsUploadRequest
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 from app.schemas.workflows.network_upload import NetworkUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
@@ -49,7 +51,9 @@ from app.services.upload_reconciliation import (
 )
 
 
-def _prefixed_reaction_warnings(reaction, *, prefix: str = "reaction") -> list[UploadWarning]:
+def _prefixed_reaction_warnings(
+    reaction: KineticsReactionUpload | TSReactionUpload, *, prefix: str = "reaction"
+) -> list[UploadWarning]:
     """Reconcile every reactant and product species entry of ``reaction``."""
     warnings: list[UploadWarning] = []
     for i, p in enumerate(reaction.reactants):
