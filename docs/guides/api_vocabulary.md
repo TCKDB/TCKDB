@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 38 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 259 | `backend/app/api/code_catalogue.py` |
-| **total** | **560** | |
+| Refusal codes a caller can receive | 260 | `backend/app/api/code_catalogue.py` |
+| **total** | **561** | |
 
 ## How a record is named
 
@@ -747,7 +747,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (206 codes)
+### HTTP 422 (207 codes)
 
 | Code | Names |
 | --- | --- |

@@ -292,18 +292,18 @@ def assert_geometry_isotopes_match_identity(
     if from_smiles == from_geometry:
         return
 
-    smiles_text = render_isotope_substitutions(from_smiles)
-    geometry_text = render_isotope_substitutions(from_geometry)
+    want = render_isotope_substitutions(from_smiles)
+    got = render_isotope_substitutions(from_geometry)
     raise CodedValueError(
         W_SPECIES_GEOMETRY_ISOTOPE_MISMATCH,
         "Isotope substitution declared in species_entry.smiles does not match "
         "the uploaded geometry. "
-        f"smiles={smiles_text}; geometry.isotopes={geometry_text}. "
+        f"smiles={want}; geometry.isotopes={got}. "
         "Declare the same substitution on both: use SMILES isotope notation "
         "(e.g. [2H]) for identity and geometry.isotopes for the per-atom masses.",
         context={
-            "smiles_substitutions": smiles_text,
-            "geometry_substitutions": geometry_text,
+            "smiles_substitutions": want,
+            "geometry_substitutions": got,
         },
         message_prefix=False,
     )

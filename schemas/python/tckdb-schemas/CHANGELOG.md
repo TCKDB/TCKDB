@@ -2,7 +2,7 @@
 
 ## 0.86.0 - 2026-10-03
 
-New code `calculation_geometry_isotope_mismatch` (#666); TS `geometry.isotopes` is now read.
+New isotope refusal code.
 
 The layout of `PRODUCER_CONTRACT.md` changed; its content did not (#681). No field, rule, code or enum
 changes. What a rule, a refusal code or a nested model says is now printed once and linked from each
