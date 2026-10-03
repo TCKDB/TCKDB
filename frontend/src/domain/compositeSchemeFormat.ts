@@ -32,6 +32,31 @@ export function asFraction(value: number, maxDenominator = 1000): { numerator: n
     return null
 }
 
+/**
+ * A short page title for a recipe, from its kind. The server's own label for
+ * a user-built recipe spells out every term (`CBS[ref:CCSD(T)/cc-pVQZ + ...]`)
+ * and is far too long for a heading; it is shown beneath the title instead.
+ * A named method (CBS-QB3, G4) keeps its own short name.
+ */
+export function schemeTitle(scheme: { kind: string; name: string }): string {
+    switch (scheme.kind) {
+        case "named_method":
+            return `${scheme.name} recipe`
+        case "extrapolation":
+            return "Basis-set extrapolation recipe"
+        case "additive":
+            return "Additive (focal-point) recipe"
+        default:
+            return "Composite recipe"
+    }
+}
+
+/** The recipe's name when it is a short, catalogued one (a named method); `null`
+ *  for a user-built recipe, whose label is a long spelled-out formula. */
+export function shortRecipeName(scheme: { kind: string; name: string }): string | null {
+    return scheme.kind === "named_method" ? scheme.name : null
+}
+
 const SIGN_MINUS = "−"
 
 /** A coefficient as it should read: `+1`, `-1`, or `-27/37 (-0.729730)`; the

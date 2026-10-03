@@ -25,6 +25,13 @@
     max-width: var(--measure-note);
 }
 
+/* The notation headline (ProductLevels.tsx) can carry a long recipe label. */
+[data-levels-notation] dd,
+[data-levels-notation] code {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
 .composite-verification-lead {
     color: var(--warning);
     font: var(--type-label-strong-font);

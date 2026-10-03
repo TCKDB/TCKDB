@@ -16,6 +16,7 @@ import {
     linearSummary,
     linearityText,
     operationLabel,
+    schemeTitle,
     slotLabel,
     termExpression,
 } from "../domain/compositeSchemeFormat"
@@ -55,6 +56,7 @@ export default function CompositeSchemePage() {
 
 function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
     const scheme = record.composite_scheme
+    const title = schemeTitle(scheme)
     return (
         <section className="conformer-page methods-page">
             <nav className="record-breadcrumbs" aria-label="Breadcrumb">
@@ -62,7 +64,7 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                 <span aria-hidden="true">/</span>
                 <Link to="/methods">Methods</Link>
                 <span aria-hidden="true">/</span>
-                <span aria-current="page">{scheme.name}</span>
+                <span aria-current="page">{title}</span>
             </nav>
 
             <PageShell
@@ -72,7 +74,8 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                             <div className="record-identity-kicker-row">
                                 <span className="t-kicker record-identity-kicker">Composite recipe · provenance vocabulary</span>
                             </div>
-                            <h1 className="t-display-1 record-identity-title">{scheme.name}</h1>
+                            <h1 className="t-display-1 record-identity-title">{title}</h1>
+                            <p className="composite-label"><code className="data">{scheme.name}</code></p>
                             <p className="t-body section-intro">
                                 How one composite energy is put together from the energies of other calculations,
                                 and which levels of theory name it.
@@ -231,7 +234,7 @@ function BoundLevelsSection({ record }: { record: CompositeSchemeRecord }) {
                         <tbody>
                             {rows.map((row) => (
                                 <tr key={row.level_of_theory.level_of_theory_ref ?? row.level_of_theory.method}>
-                                    <td data-label="Level of theory"><LevelOfTheoryLink levelOfTheory={row.level_of_theory} /></td>
+                                    <td data-label="Level of theory" className="composite-label"><LevelOfTheoryLink levelOfTheory={row.level_of_theory} /></td>
                                     <td data-label="How it is bound">{bindingSourceLabel(row.binding_source)}</td>
                                 </tr>
                             ))}

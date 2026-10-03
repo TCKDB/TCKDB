@@ -523,7 +523,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
                             <div>
                                 <dt>Level of theory</dt>
-                                <dd>
+                                <dd className="composite-label">
                                     {lot ? <LevelOfTheoryLink levelOfTheory={lot} /> : "not recorded"}
                                     {lot?.composite_scheme && <div className="note"><CompositeSchemeLink scheme={lot.composite_scheme} /></div>}
                                 </dd>
@@ -904,7 +904,7 @@ function CompositeResultDetail({ composite, verification, compositeScheme }: {
             ) : (
                 <p className="empty-projection">No term values are recorded for this calculation.</p>
             )}
-            {compositeScheme && <p className="note">What each term is: see the <CompositeSchemeLink scheme={compositeScheme} />.</p>}
+            {compositeScheme && <p className="note">What each term is: <CompositeSchemeLink scheme={compositeScheme} />.</p>}
             {composite.assembly === "assembled" && (
                 <>
                     <h3 className="t-heading-2">Inputs</h3>

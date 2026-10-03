@@ -4,6 +4,7 @@ import { CompositeSchemeLink } from "./CompositeSchemeLink"
 import { EnergyVerification } from "./CompositeVerification"
 import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { legacyShapeText } from "../domain/compositeVerification"
+import { shortRecipeName } from "../domain/compositeSchemeFormat"
 import { compositeSchemePath } from "../domain/methodsLinks"
 import { productLevelsAgree, type ProductLevels } from "../domain/productLevels"
 
@@ -92,10 +93,11 @@ const COMPOSITE_RECIPE = "composite_recipe"
 function recipeSourceNote(source: string | null | undefined, energy: ProductLevels["energy"]): ReactNode | null {
     if (source !== COMPOSITE_RECIPE) return null
     const scheme = energy?.composite_scheme ?? null
+    const name = scheme ? shortRecipeName(scheme) : null
     return (
         <div className="note">
             {"from the "}
-            {scheme ? <Link to={compositeSchemePath(scheme.composite_scheme_ref)}>{scheme.name}</Link> : "composite"}
+            {scheme ? <Link to={compositeSchemePath(scheme.composite_scheme_ref)}>{name ?? "composite"}</Link> : "composite"}
             {" recipe"}
         </div>
     )

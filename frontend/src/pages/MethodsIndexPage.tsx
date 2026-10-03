@@ -269,7 +269,7 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
                                 stretched-link mechanic, which those components need
                                 because a `<li class="card">` has many other clickable-
                                 looking children to disambiguate from; a `<td>` does not. */}
-                            <td data-label="Level of theory">
+                            <td data-label="Level of theory" className="composite-label">
                                 <LevelOfTheoryLink levelOfTheory={record.level_of_theory} />
                                 {record.level_of_theory.composite_scheme && (
                                     <div className="note"><CompositeSchemeLink scheme={record.level_of_theory.composite_scheme} /></div>

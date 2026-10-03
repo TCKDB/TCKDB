@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest"
-import { asFraction, formatCoefficient, linearSummary, linearityText, termExpression } from "./compositeSchemeFormat"
+import { asFraction, formatCoefficient, linearSummary, linearityText, schemeTitle, shortRecipeName, termExpression } from "./compositeSchemeFormat"
+
+describe("schemeTitle", () => {
+    const long = "CBS[ref:CCSD(T)/cc-pVQZ + corr:CCSD(T)/cc-pV{T,Q}Z; inverse_power x=3; n=3,4]"
+
+    it("uses a short title from the kind, never the long server label", () => {
+        expect(schemeTitle({ kind: "named_method", name: "CBS-QB3" })).toBe("CBS-QB3 recipe")
+        expect(schemeTitle({ kind: "extrapolation", name: long })).toBe("Basis-set extrapolation recipe")
+        expect(schemeTitle({ kind: "additive", name: "Additive[...]" })).toBe("Additive (focal-point) recipe")
+        expect(schemeTitle({ kind: "extrapolation", name: long })).not.toContain("CBS[")
+    })
+
+    it("names a recipe in a note only when it is a catalogued method", () => {
+        expect(shortRecipeName({ kind: "named_method", name: "G4" })).toBe("G4")
+        expect(shortRecipeName({ kind: "extrapolation", name: long })).toBeNull()
+    })
+})
 
 const lot = (basis: string) => ({ method: "CCSD(T)", basis, display: `CCSD(T)/${basis}`, level_of_theory_ref: `lot_${basis}` })
 

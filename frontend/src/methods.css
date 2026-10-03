@@ -155,6 +155,30 @@
 /* `CompositeSchemePage` -- one block per recipe term: a heading, its facts,
    and its inputs table, spaced like the other stacked groups on this page
    (`.fsf-group`). */
+/* A recipe's own label can be a long spelled-out formula with few break
+   points; it wraps anywhere rather than widening the page. */
+.composite-label,
+.composite-label a,
+.composite-label code {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.composite-label {
+    margin: 0;
+}
+
+.data-table td.composite-label a,
+.data-table td.composite-label {
+    white-space: normal;
+}
+
+/* Wrapping anywhere would otherwise let the auto table layout squeeze this
+   column to a few characters on a phone; the table scrolls instead. */
+.data-table td.composite-label {
+    min-width: 15rem;
+}
+
 .composite-term {
     display: grid;
     gap: var(--s-2);
