@@ -29,8 +29,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
+from app.chemistry.level_label import render_level_label
 from app.db.models.common import CalculationType, CoreTreatment, FrequencyScaleKind, SpinTreatment
 from app.schemas.reads.scientific_common import (
     CompositeSchemeSummary,
@@ -98,6 +99,28 @@ class LevelOfTheoryCoreBlock(BaseModel):
     #: ordinary level. Not part of ``lot_hash``.
     composite_scheme: CompositeSchemeSummary | None = None
     created_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def label(self) -> str:
+        """The level written in full, for display (ADR 0021, P7b).
+
+        The same text as ``LevelOfTheorySummary.label``: ``method/basis`` then each stated part of
+        the level's identity, from :func:`app.chemistry.level_label.render_level_label`. Derived, never
+        stored, never accepted on input. It is what the methods index prints, so two levels that differ
+        only in core treatment (all-electron and frozen-core ``CCSD(T)/cc-pCVTZ``) never read alike.
+        """
+        return render_level_label(
+            method=self.method,
+            basis=self.basis,
+            aux_basis=self.aux_basis,
+            cabs_basis=self.cabs_basis,
+            dispersion=self.dispersion,
+            solvent=self.solvent,
+            solvent_model=self.solvent_model,
+            spin_treatment=self.spin_treatment,
+            core_treatment=self.core_treatment,
+        )
 
 
 # ---------------------------------------------------------------------------

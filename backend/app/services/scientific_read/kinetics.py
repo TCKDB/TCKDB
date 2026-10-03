@@ -1661,9 +1661,6 @@ def _first_ts_entry_id(
 def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None:
     if meta is None or meta.lot_id is None:
         return None
-    label_parts = [meta.lot_method or ""]
-    if meta.lot_basis:
-        label_parts.append(meta.lot_basis)
     return LevelOfTheorySummary(
         level_of_theory_id=meta.lot_id,
         level_of_theory_ref=meta.lot_ref,
@@ -1676,7 +1673,6 @@ def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None
         cabs_basis=meta.lot_cabs_basis,
         solvent_model=meta.lot_solvent_model,
         spin_treatment=meta.lot_spin_treatment,
-        label="/".join(p for p in label_parts if p),
         composite_scheme=meta.composite_scheme,
     )
 

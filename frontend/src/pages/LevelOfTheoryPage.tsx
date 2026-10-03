@@ -109,10 +109,10 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                     <div><dt>Dispersion</dt><dd>{lot.dispersion ?? "none"}</dd></div>
                                     <div><dt>Solvent</dt><dd>{lot.solvent ?? "gas phase"}{lot.solvent_model ? ` (${lot.solvent_model})` : ""}</dd></div>
                                     <div><dt>Spin treatment</dt><dd>{lot.spin_treatment ? words(lot.spin_treatment) : "not recorded"}</dd></div>
-                                    {/* Core treatment is stated-or-absent (ADR 0021, P7a): a
-                                        row only when the deposit says, never "all electron" by
-                                        default for a level that does not. */}
-                                    {lot.core_treatment && <div><dt>Core treatment</dt><dd>{words(lot.core_treatment)}</dd></div>}
+                                    {/* Core treatment is stated-or-absent (ADR 0021, P7a): always
+                                        a row, like spin treatment, and "not recorded" rather than
+                                        "all electron" for a level that does not say. */}
+                                    <div><dt>Core treatment</dt><dd>{lot.core_treatment ? words(lot.core_treatment) : "not recorded"}</dd></div>
                                     {lot.aux_basis && <div><dt>Auxiliary basis</dt><dd>{lot.aux_basis}</dd></div>}
                                     {lot.cabs_basis && <div><dt>CABS basis</dt><dd>{lot.cabs_basis}</dd></div>}
                                     {lot.keywords && <div><dt>Keywords</dt><dd>{lot.keywords}</dd></div>}

@@ -20,7 +20,7 @@ import { levelOfTheoryPath } from "../domain/methodsLinks"
  * response degrades to today's plain text instead of a broken link.
  */
 export function LevelOfTheoryLink({ levelOfTheory }: {
-    levelOfTheory: { method: string; basis?: string | null; display?: string; level_of_theory_ref?: string }
+    levelOfTheory: { method: string; basis?: string | null; display?: string; label?: string | null; level_of_theory_ref?: string }
 }) {
     const label = lotLabel(levelOfTheory)
     if (!levelOfTheory.level_of_theory_ref) return <>{label}</>

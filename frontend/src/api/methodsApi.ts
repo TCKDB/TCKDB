@@ -228,6 +228,9 @@ const levelOfTheoryCoreSchema = z.object({
     core_treatment: z.string().nullable().optional(),
     // The composite recipe this level is bound to, or `null`.
     composite_scheme: compositeSchemeSummarySchema.nullable().optional(),
+    // The level written in full by the server (`method/basis (core=...)`), so
+    // two levels differing only in core treatment read differently.
+    label: z.string().nullable().optional(),
     lot_hash: z.string(),
     created_at: z.string(),
 }).passthrough()

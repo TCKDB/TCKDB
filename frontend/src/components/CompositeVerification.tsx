@@ -44,6 +44,16 @@ export function CompositeVerificationBadge({ verification }: { verification: Com
     )
 }
 
+/** Beside a headline energy whose verification is a contradiction: a short warning that links to the
+ *  verification block on the same page, so the number is never read without the evidence against it. */
+export function ContradictionMarker({ targetId }: { targetId: string }) {
+    return (
+        <a className="composite-verification-marker" href={`#${targetId}`} data-contradiction-marker="">
+            Contradiction: see verification
+        </a>
+    )
+}
+
 /** The badge for a record's energy level: shown whenever the server sent a
  *  verification, and, when the energy is a composite but the server sent
  *  none, an honest muted "not recorded" rather than silence. Nothing at all

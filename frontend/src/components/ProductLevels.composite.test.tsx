@@ -3,7 +3,8 @@ import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it } from "vitest"
 import type { LevelOfTheory } from "../api/scientificSchemas"
 import { allProductLevelsAgree, EMPTY_PRODUCT_LEVELS, type ProductLevels } from "../domain/productLevels"
-import { ProductLevelsFact } from "./ProductLevels"
+import { lotLabel } from "../api/scientificSchemas"
+import { ProductLevelsFact, ProductLevelsTableCells } from "./ProductLevels"
 
 const b3lyp: LevelOfTheory = { method: "B3LYP", basis: "CBSB7", display: "B3LYP/CBSB7", level_of_theory_ref: "lot_g" }
 const cbs: LevelOfTheory = {
@@ -77,5 +78,33 @@ describe("an identical-values group", () => {
         expect(allProductLevelsAgree([a, { ...a }])).toBe(true)
         expect(allProductLevelsAgree([a, { ...a, notation: "other" }])).toBe(false)
         expect(allProductLevelsAgree([a, { ...a, composite_energy_verification: { state: "unverifiable" } }])).toBe(false)
+    })
+})
+
+describe("ProductLevelsTableCells notation column", () => {
+    function cells(value: ProductLevels) {
+        return render(<MemoryRouter><table><tbody><tr><ProductLevelsTableCells levels={value} showNotation /></tr></tbody></table></MemoryRouter>)
+    }
+
+    it("shows the notation, and 'not recorded' (never blank) when it is null", () => {
+        const withNotation = cells(levels({ notation: "CBS-QB3" }))
+        expect(withNotation.container.querySelector("td[data-label='Level of theory']")?.textContent).toBe("CBS-QB3")
+        withNotation.unmount()
+        const without = cells(levels({ notation: null }))
+        expect(without.container.querySelector("td[data-label='Level of theory']")?.textContent).toBe("not recorded")
+    })
+
+    it("adds the column only when asked", () => {
+        const { container } = render(<MemoryRouter><table><tbody><tr><ProductLevelsTableCells levels={levels({ notation: "x" })} /></tr></tbody></table></MemoryRouter>)
+        expect(container.querySelector("td[data-label='Level of theory']")).toBeNull()
+    })
+})
+
+describe("lotLabel", () => {
+    it("prefers the server's full label, so two core treatments read differently, and falls back without one", () => {
+        const base = { method: "CCSD(T)", basis: "cc-pCVTZ", display: "CCSD(T)/cc-pCVTZ" }
+        expect(lotLabel({ ...base, label: "CCSD(T)/cc-pCVTZ (core=all_electron)" })).toBe("CCSD(T)/cc-pCVTZ (core=all_electron)")
+        expect(lotLabel({ ...base, label: null })).toBe("CCSD(T)/cc-pCVTZ")
+        expect(lotLabel({ method: "AM1" })).toBe("AM1")
     })
 })

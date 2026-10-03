@@ -22995,6 +22995,12 @@
             ],
             "title": "Keywords"
           },
+          "label": {
+            "description": "The level written in full, for display (ADR 0021, P7b).\n\nThe same text as ``LevelOfTheorySummary.label``: ``method/basis`` then each stated part of\nthe level's identity, from :func:`app.chemistry.level_label.render_level_label`. Derived, never\nstored, never accepted on input. It is what the methods index prints, so two levels that differ\nonly in core treatment (all-electron and frozen-core ``CCSD(T)/cc-pCVTZ``) never read alike.",
+            "readOnly": true,
+            "title": "Label",
+            "type": "string"
+          },
           "level_of_theory_id": {
             "anyOf": [
               {
@@ -23056,7 +23062,8 @@
           "level_of_theory_ref",
           "method",
           "lot_hash",
-          "created_at"
+          "created_at",
+          "label"
         ],
         "title": "LevelOfTheoryCoreBlock",
         "type": "object"
@@ -23732,15 +23739,10 @@
             "type": "string"
           },
           "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
+            "description": "The level written in full, for display: ``method/basis`` then each stated part of its identity.\n\nDerived, never stored and never accepted on input. It is the text of\n:func:`app.chemistry.level_label.render_level_label`, the same renderer behind the\nnotation of a record's levels and the ML-dataset export's ``label``, so\nall-electron and frozen-core ``CCSD(T)/cc-pCVTZ`` read ``... (core=all_electron)`` and\n``... (core=frozen_core)`` rather than identically. ``display`` is the short form (method and\nbasis only). Like ``display``, it is for reading: ``level_of_theory_ref`` is the handle to compare on.\nThis replaces the earlier stored ``label``, which every builder left ``null`` or filled with a\nslash-joined method and basis.",
+            "readOnly": true,
+            "title": "Label",
+            "type": "string"
           },
           "level_of_theory_id": {
             "title": "Level Of Theory Id",
@@ -23791,7 +23793,8 @@
         "required": [
           "level_of_theory_ref",
           "method",
-          "display"
+          "display",
+          "label"
         ],
         "title": "LevelOfTheorySummary",
         "type": "object"

@@ -1256,9 +1256,6 @@ def _build_frequency_block(
 def _lot_summary_from_row(row: _CalcRow) -> LevelOfTheorySummary | None:
     if row.lot_id is None:
         return None
-    label_parts = [row.lot_method or ""]
-    if row.lot_basis:
-        label_parts.append(row.lot_basis)
     return LevelOfTheorySummary(
         level_of_theory_id=row.lot_id,
         level_of_theory_ref=row.lot_ref,
@@ -1271,7 +1268,6 @@ def _lot_summary_from_row(row: _CalcRow) -> LevelOfTheorySummary | None:
         cabs_basis=row.lot_cabs_basis,
         solvent_model=row.lot_solvent_model,
         spin_treatment=row.lot_spin_treatment,
-        label="/".join(p for p in label_parts if p),
         composite_scheme=row.composite_scheme,
     )
 

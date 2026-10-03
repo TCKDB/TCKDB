@@ -32,6 +32,23 @@
     word-break: break-word;
 }
 
+.composite-verification-marker {
+    display: inline-block;
+    margin-top: var(--s-2);
+    padding: .15rem .5rem;
+    border: 1px solid var(--warning);
+    border-radius: .3rem;
+    color: var(--warning);
+    font: var(--type-ui-font);
+    text-decoration: none;
+}
+
+.composite-verification-marker:hover,
+.composite-verification-marker:focus-visible {
+    background: var(--surface-sunken);
+    text-decoration: underline;
+}
+
 .composite-verification-lead {
     color: var(--warning);
     font: var(--type-label-strong-font);

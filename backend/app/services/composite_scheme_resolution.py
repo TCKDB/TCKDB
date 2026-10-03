@@ -160,8 +160,8 @@ def get_or_create_named_method_scheme(session: Session, entry: CompositeMethod) 
                 frequency_level_of_theory_id=frequency_id,
                 recipe_zpe_scale_factor=entry.recipe_zpe_scale_factor,
                 note=(
-                    f"Defining paper: doi:{entry.paper_doi}. Values as catalogued in "
-                    "app/chemistry/composite_methods.py when the row was written."
+                    f"Defining paper: doi:{entry.paper_doi}. Values as catalogued by TCKDB "
+                    "when the row was written."
                 ),
             )
             session.add(scheme)

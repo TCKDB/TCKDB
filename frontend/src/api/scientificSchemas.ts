@@ -35,17 +35,23 @@ export const levelOfTheorySchema = z.object({
     core_treatment: z.string().nullable().optional(),
     spin_treatment: z.string().nullable().optional(),
     composite_scheme: compositeSchemeSummarySchema.nullable().optional(),
+    // The level written in full by the server (ADR 0021, P7b): `method/basis`
+    // then each stated part of its identity, e.g. `CCSD(T)/cc-pCVTZ
+    // (core=all_electron)`. The same renderer as the notation of a record's
+    // levels, so the two never disagree. Not composed on the client.
+    label: z.string().nullable().optional(),
 }).passthrough()
 
 /**
- * The compact "method/basis" (or explicit `display`) label shared by every
- * surface that shows a level of theory inline. Deliberately excludes
- * `dispersion`/`solvent`/`level_of_theory_ref` — see the schema comment
- * above; a caller that needs to distinguish two same-label rows renders
- * those fields itself alongside this label, it does not fold them in here.
+ * The text every surface prints for a level of theory. The server's own
+ * full `label` when it sent one (so two levels that differ only in core
+ * treatment, dispersion, solvent or spin never read alike, e.g. the two
+ * sides of a core-valence difference); otherwise the older `display`, then
+ * `method/basis`. The fallbacks serve payloads that predate `label`; the
+ * client never builds a label itself.
  */
-export function lotLabel(value: { method: string; basis?: string | null; display?: string }): string {
-    return value.display ?? (value.basis ? `${value.method}/${value.basis}` : value.method)
+export function lotLabel(value: { method: string; basis?: string | null; display?: string; label?: string | null }): string {
+    return value.label ?? value.display ?? (value.basis ? `${value.method}/${value.basis}` : value.method)
 }
 
 export type LevelOfTheory = z.infer<typeof levelOfTheorySchema>

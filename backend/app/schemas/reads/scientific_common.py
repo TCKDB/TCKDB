@@ -327,7 +327,6 @@ class LevelOfTheorySummary(BaseModel):
     aux_basis: str | None = None
     cabs_basis: str | None = None
     solvent_model: str | None = None
-    label: str | None = None
     #: The composite recipe this level names, or ``None`` when the level is an
     #: ordinary one. Bound by TCKDB for a catalogued named composite method
     #: (CBS-QB3, G4, ...). ``None`` never means "composite but unknown": an
@@ -356,6 +355,22 @@ class LevelOfTheorySummary(BaseModel):
         if self.basis:
             return f"{self.method}/{self.basis}"
         return self.method
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def label(self) -> str:
+        """The level written in full, for display: ``method/basis`` then each stated part of its identity.
+
+        Derived, never stored and never accepted on input. It is the text of
+        :func:`app.chemistry.level_label.render_level_label`, the same renderer behind the
+        notation of a record's levels and the ML-dataset export's ``label``, so
+        all-electron and frozen-core ``CCSD(T)/cc-pCVTZ`` read ``... (core=all_electron)`` and
+        ``... (core=frozen_core)`` rather than identically. ``display`` is the short form (method and
+        basis only). Like ``display``, it is for reading: ``level_of_theory_ref`` is the handle to compare on.
+        This replaces the earlier stored ``label``, which every builder left ``null`` or filled with a
+        slash-joined method and basis.
+        """
+        return level_label(self)
 
 
 class ScientificLevelsSummary(BaseModel):

@@ -1183,7 +1183,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             note=(
                 "A composite calculation's level of theory is bound to no "
                 "composite scheme. In this release only a catalogued named "
-                "method (app/chemistry/composite_methods.py) is bound."
+                "composite method is bound."
             )),
     ApiCode("composite_program_run_requires_software", 422, Surface.coded_exception,
             "backend/app/services/composite_result_resolution.py"),

@@ -165,8 +165,8 @@ export function componentLabel(component: string): string {
 
 const SLOT_WORDS: Record<string, string> = {
     value: "value",
-    high: "high (larger basis)",
-    low: "low (smaller basis)",
+    high: "high side",
+    low: "low side",
     cardinal: "cardinal",
 }
 

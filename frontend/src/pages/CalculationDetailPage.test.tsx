@@ -1445,7 +1445,9 @@ describe("CalculationDetailPage", () => {
         page()
         await findLoaded("Frequency")
         expect(screen.getByRole("link", { name: "cobs_demo" })).toHaveAttribute("href", "/conformer-observations/cobs_demo")
-        expect(screen.getByRole("link", { name: "basin-1" })).toHaveAttribute("href", "/conformer-groups/cg_demo")
+        // The group is named by its ref: the depositor's own label ("basin-1") is never shown.
+        expect(screen.getByRole("link", { name: "group cg_demo" })).toHaveAttribute("href", "/conformer-groups/cg_demo")
+        expect(screen.queryByText("basin-1")).not.toBeInTheDocument()
     })
 
     it("renders no conformer row at all when the calculation has no linked observation", async () => {

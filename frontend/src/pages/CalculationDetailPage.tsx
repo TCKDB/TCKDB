@@ -27,7 +27,7 @@ import {
 import { ArtifactDownloadButton } from "../components/ArtifactDownloadButton"
 import { CalculationDependencyGraph } from "../components/CalculationDependencyGraph"
 import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
-import { CompositeVerificationBadge } from "../components/CompositeVerification"
+import { CompositeVerificationBadge, ContradictionMarker } from "../components/CompositeVerification"
 import { Disclosure } from "../components/Disclosure"
 import { EnergyDisplay } from "../components/EnergyDisplay"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
@@ -40,7 +40,7 @@ import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { typeLabel } from "../domain/calculationTypeFormat"
-import { legacyShapeText } from "../domain/compositeVerification"
+import { isContradiction, legacyShapeText } from "../domain/compositeVerification"
 import { correctionSchemePath, frequencyScaleFactorPath } from "../domain/methodsLinks"
 import {
     OPTIMISATION_STAGE_UNKNOWN_KICKER_SUFFIX,
@@ -113,6 +113,9 @@ const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not re
 // kept in this ONE place (not four separate ternaries) so a future
 // reversal is a one-line edit, not a hunt through the coverage checklist
 // below.
+/** Anchor of the verification block, which the headline energy's contradiction marker links to. */
+const VERIFICATION_ID = "composite-verification"
+
 const EVIDENCE_ABSENT_LABEL = "absent"
 
 /**
@@ -483,6 +486,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                         {headline && (
                             <div className="calc-headline-energy">
                                 <HeadlineEnergy label={headline.label} valueHartree={headline.valueHartree} />
+                                {isContradiction(calculation.composite_energy_verification) && <ContradictionMarker targetId={VERIFICATION_ID} />}
                             </div>
                         )}
 
@@ -690,10 +694,12 @@ function StageAndConformerNote({ ownRef, stage, conformer }: {
                             <code className="data">{conformer.conformer_observation_ref}</code>
                         </Link>
                         {" · "}
+                        {/* The group is named by its ref. `conformer_group_label` is
+                            the depositor's own text ("conformer_1") and the calculation
+                            read has no server-computed label for a group, so none is
+                            shown: no depositor-typed labels on public pages. */}
                         <Link to={`/conformer-groups/${conformer.conformer_group_ref}`}>
-                            {conformer.conformer_group_label
-                                ? conformer.conformer_group_label
-                                : <code className="data">{conformer.conformer_group_ref}</code>}
+                            group <code className="data">{conformer.conformer_group_ref}</code>
                         </Link>
                     </dd>
                 </div>
@@ -782,8 +788,16 @@ function ResultsSection({ results, type, availability, contradicted, verificatio
                     contradicted={contradicted}
                 />
             )}
+            {(verification || type === "composite" || results?.kind === "composite") && (
+                <div className="composite-result" id={VERIFICATION_ID}>
+                    <h3 className="t-heading-2">Verification</h3>
+                    {verification
+                        ? <CompositeVerificationBadge verification={verification} />
+                        : <p className="note">Verification is not recorded for this calculation.</p>}
+                </div>
+            )}
             {results?.kind === "composite" && results.composite && (
-                <CompositeResultDetail composite={results.composite} verification={verification} compositeScheme={compositeScheme} />
+                <CompositeResultDetail composite={results.composite} compositeScheme={compositeScheme} />
             )}
             {legacyText && <p className="note" data-legacy-composite-shape={legacyShape ?? undefined}>{legacyText}</p>}
         </section>
@@ -871,19 +885,14 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
  * verification is the server's own (`composite_energy_verification`); a
  * calculation with none reads "not recorded", never a silent gap.
  */
-function CompositeResultDetail({ composite, verification, compositeScheme }: {
+function CompositeResultDetail({ composite, compositeScheme }: {
     composite: NonNullable<NonNullable<CalculationRecord["results"]>["composite"]>
-    verification: CalculationRecord["composite_energy_verification"]
     compositeScheme: NonNullable<CalculationRecord["level_of_theory"]>["composite_scheme"]
 }) {
     const terms = composite.terms ?? []
     const inputs = composite.inputs ?? []
     return (
         <div className="composite-result">
-            <h3 className="t-heading-2">Verification</h3>
-            {verification
-                ? <CompositeVerificationBadge verification={verification} />
-                : <p className="note">Verification is not recorded for this calculation.</p>}
             <h3 className="t-heading-2">Terms</h3>
             {terms.length > 0 ? (
                 <div className="table-scroll">
@@ -894,7 +903,7 @@ function CompositeResultDetail({ composite, verification, compositeScheme }: {
                         <tbody>
                             {terms.map((term) => (
                                 <tr key={term.term_position}>
-                                    <td data-label="Term">{term.term_position}</td>
+                                    <td data-label="Term">{term.term_position + 1}</td>
                                     <td data-label="Value (hartree)" className="num">{term.value_hartree}</td>
                                 </tr>
                             ))}
@@ -922,7 +931,7 @@ function CompositeResultDetail({ composite, verification, compositeScheme }: {
                                 <tbody>
                                     {inputs.map((input, index) => (
                                         <tr key={`${input.term_position}-${input.slot}-${index}`}>
-                                            <td data-label="Term">{input.term_position}</td>
+                                            <td data-label="Term">{input.term_position + 1}</td>
                                             <td data-label="Slot">{slotLabel(input.slot)}</td>
                                             <td data-label="Cardinal number">{input.cardinal_number ?? "none"}</td>
                                             <td data-label="Calculation">

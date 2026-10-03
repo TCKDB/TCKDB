@@ -151,9 +151,11 @@ function TermsSection({ record }: { record: CompositeSchemeRecord }) {
             >
                 Terms
             </SectionHeading>
-            <p className="note" data-linear-in-energies={String(record.linear_in_energies ?? null)}>
-                {linearSummary(record.linear_in_energies)}
-            </p>
+            {record.terms.length > 0 && (
+                <p className="note" data-linear-in-energies={String(record.linear_in_energies ?? null)}>
+                    {linearSummary(record.linear_in_energies)}
+                </p>
+            )}
             {record.terms.length === 0 ? (
                 <p className="empty-projection">This recipe states no terms. The energy it names is one number a program reports.</p>
             ) : (
@@ -168,7 +170,7 @@ function TermBlock({ term }: { term: CompositeSchemeTerm }) {
     const formula = formulaLabel(term.formula)
     return (
         <div className="composite-term" data-term-position={term.position} data-term-linearity={term.linearity}>
-            <h3 className="t-heading-2">Term {term.position}</h3>
+            <h3 className="t-heading-2">Term {term.position + 1}</h3>
             <dl className="kv-list">
                 <div><dt>Operation</dt><dd>{operationLabel(term.operation)}</dd></div>
                 <div><dt>Energy component</dt><dd>{componentLabel(term.energy_component)}</dd></div>
@@ -178,7 +180,7 @@ function TermBlock({ term }: { term: CompositeSchemeTerm }) {
                 {expression && <div className="kv-list--wide"><dt>As a sum</dt><dd><code className="data">{expression}</code></dd></div>}
             </dl>
             <div className="table-scroll">
-                <table className="data-table" aria-label={`Inputs of term ${term.position}`}>
+                <table className="data-table" aria-label={`Inputs of term ${term.position + 1}`}>
                     <thead>
                         <tr>
                             <th scope="col">Input level of theory</th>
