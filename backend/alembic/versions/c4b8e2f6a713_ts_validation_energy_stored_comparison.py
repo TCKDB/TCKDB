@@ -25,7 +25,7 @@ Three nullable columns on ``transition_state_validation_energy``:
   ``zpe_scaling_unstated``.
 * ``zpe_scale_factor`` -- ``e0`` only: the factor the producer multiplied the
   stored (unscaled) zero-point energy by in forming the stated E0. NULL is "none
-  stated", never 1.0 (``ck_..._zpe_scale_factor_e0_positive``).
+  stated", never 1.0 (``ck_..._zpe_scale_factor_e0``).
 
 No backfill
 -----------
@@ -65,7 +65,7 @@ _TABLE = "transition_state_validation_energy"
 _STATUS_CHECK = "ck_transition_state_validation_energy_stored_energy_comparison"
 _REASON_CHECK = "ck_transition_state_validation_energy_not_compared_reason_shape"
 _TOKEN_CHECK = "ck_transition_state_validation_energy_not_compared_reason_token"
-_SCALE_CHECK = "ck_transition_state_validation_energy_zpe_scale_factor_e0_positive"
+_SCALE_CHECK = "ck_transition_state_validation_energy_zpe_scale_factor_e0"
 
 
 def upgrade() -> None:

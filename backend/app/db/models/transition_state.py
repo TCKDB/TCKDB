@@ -407,7 +407,7 @@ class TransitionStateValidationEnergy(Base):
         CheckConstraint(
             "zpe_scale_factor IS NULL OR (energy_kind = 'e0' AND zpe_scale_factor > 0 "
             "AND zpe_scale_factor < 'Infinity'::float8)",
-            name="zpe_scale_factor_e0_positive",
+            name="zpe_scale_factor_e0",
         ),
         CheckConstraint(
             "participant ~ '^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$'",
