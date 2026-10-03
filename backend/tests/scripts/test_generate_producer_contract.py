@@ -86,6 +86,27 @@ def surface_section(markdown: str, model_name: str) -> str:
     return markdown[start:end] if end != -1 else markdown[start:]
 
 
+def shared_entries(markdown: str, heading: str) -> dict[str, str]:
+    """anchor id -> text, for every ``<a id=...>`` entry of the ``## heading`` section."""
+    start = markdown.index(f"\n## {heading}\n")
+    end = markdown.find("\n## ", start + 1)
+    body = markdown[start:end] if end != -1 else markdown[start:]
+    parts = re.split(r'<a id="([^"]+)"></a>\n', body)
+    return {parts[i]: parts[i + 1] for i in range(1, len(parts), 2)}
+
+
+def section_with_linked_rules(markdown: str, model_name: str) -> str:
+    """A surface's section plus the shared rule entries it links: what a producer reaches by reading it.
+
+    A rule several surfaces reach is printed once, in "Checks several surfaces apply", and linked from
+    each surface; following the link is part of reading the surface.
+    """
+    section = surface_section(markdown, model_name)
+    entries = shared_entries(markdown, "Checks several surfaces apply")
+    linked = [entries[anchor] for anchor in re.findall(r"\]\(#(k-[^)]+)\)", section) if anchor in entries]
+    return "\n".join([section, *linked])
+
+
 #: What the thermo section must say, each paired with the phrase in the
 #: *source* that says it. The phrases are lifted from
 #: ``tckdb_schemas.enthalpy_reference.enthalpy_reference_error``'s docstring,
@@ -105,7 +126,7 @@ THERMO_REQUIREMENTS: dict[str, str] = {
 
 
 def thermo_rule_gaps(markdown: str) -> list[str]:
-    section = surface_section(markdown, "ThermoUploadRequest")
+    section = section_with_linked_rules(markdown, "ThermoUploadRequest")
     return [name for name, phrase in THERMO_REQUIREMENTS.items() if phrase not in section]
 
 
@@ -333,24 +354,20 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 #: The contract was ~1 MB before it was trimmed; an agent cannot read that
 #: whole. This is a ceiling to notice regrowth, not a target.
 #:
-#: The composite-scheme work (ADR 0021, P5) grew the file by about 14 KB net: its refusal codes are
-#: traced on ten surfaces, so codes on eight or more surfaces are printed once in a shared table
-#: (``ContractBuilder.widely_shared_codes``) instead of ten times, which is what keeps the ceiling
-#: where it was.
+#: History, each step a trim or a raise: 700_000 with codes on eight or more surfaces printed once
+#: (composite-scheme work, ADR 0021); 705_000 for #638 (every register check printed per function);
+#: 708_500 for the thermo target and protocol declarations (#671), after a first trim to a four-surface
+#: threshold. Every one of them was a fight with a layout that printed a rule, a refusal code and a
+#: nested-model list once per upload surface.
 #:
-#: Raised 700_000 -> 705_000 for #638: ``check_by_func`` kept only the last register check per function,
-#: so three functions silently printed one of their checks (the TS evidence seam enforces four, the
-#: transition-state composition check two, the frequency evaluator two). Printing all of them, grouped
-#: per function, is about 5 KB of content that was always supposed to be there; the E0 rules add ~1 KB.
-#:
-#: The thermo target and protocol declarations (H298 selection, change 1) add two optional blocks and
-#: seven nested models to each of four surfaces. Trimmed first, by about 18 KB: the shared-code table now
-#: starts at four surfaces (``SHARED_CODE_MIN_SURFACES``), a marked producer rule reached by four surfaces
-#: is printed once (``SHARED_RULE_MIN_SURFACES``; the enthalpy rule stays in full on each by design), and
-#: the changelog, field descriptions and code notes were cut to a line each. What remains is intrinsic
-#: (the model reference and the per-surface links to it), which leaves the file 3.2 KB over the 705 KB it
-#: had on main; the ceiling is that file rounded up, 3.5 KB above main's.
-MARKDOWN_BYTE_CEILING = 708_500
+#: #681 ended that: anything two or more surfaces share (a check, a marked rule, a refusal code, a
+#: nested model) is printed once and linked, at any surface count. The file went from 708_183 to
+#: 677_741 bytes, 4.3 percent, with no change to what any surface lists (the equivalence tests below).
+#: The ceiling is that size plus about 3 percent, 700_000. The margin is deliberately not 10 percent:
+#: a ceiling exists to notice regrowth, and 10 percent (68 KB) is about eight of the contract-touching
+#: pull requests that each hit the old one, so none would be asked to trim. 22 KB covers two such
+#: pull requests landing together; a third has to find savings first.
+MARKDOWN_BYTE_CEILING = 700_000
 
 
 def test_the_contract_stays_readable_in_pieces(committed_markdown: str) -> None:
@@ -358,6 +375,215 @@ def test_the_contract_stays_readable_in_pieces(committed_markdown: str) -> None:
     assert size < MARKDOWN_BYTE_CEILING, f"{size} bytes; trim before raising the ceiling"
     longest = max(len(line) for line in committed_markdown.splitlines() if not line.lstrip().startswith('"content_base64"'))
     assert longest < 2000, longest
+
+
+# ---------------------------------------------------------------------------
+# Printed once, listed everywhere (#681)
+#
+# A rule, a refusal code or a nested model that several surfaces share is printed once and linked from
+# each of them. What each surface *says it has* must not change with that: the helpers below read the
+# rendered markdown back, following the links, and compare it with what the generator knows.
+# ---------------------------------------------------------------------------
+
+
+def _subsection(section: str, heading: str) -> str:
+    start = section.index(f"\n### {heading}\n")
+    end = section.find("\n### ", start + 1)
+    return section[start:end] if end != -1 else section[start:]
+
+
+def listed_by_surface(markdown: str, title: str) -> dict[str, list[str]]:
+    """What a surface's section lists, read back from the markdown with its shared links followed.
+
+    ``codes``: its own table plus every row of each code group it links. ``rules``: the function key of
+    every rule bullet, a linked one resolved through its shared entry. ``models``: its own nested-model
+    bullets plus every bullet of each model group it links. Lists, not sets, so a double listing shows.
+    """
+    section = surface_section(markdown, title)
+    code_groups = shared_entries(markdown, "Refusal codes several surfaces share")
+    model_groups = shared_entries(markdown, "Nested models several surfaces share")
+    rule_entries = shared_entries(markdown, "Checks several surfaces apply")
+
+    codes_text = _subsection(section, "Refusal codes this surface can return")
+    codes = re.findall(r"(?m)^\| \[`([^`]+)`\]", codes_text)
+    for anchor in re.findall(r"\]\(#(cg-\d+)\)", codes_text):
+        codes += re.findall(r"(?m)^\| \[`([^`]+)`\]", code_groups[anchor])
+
+    rules_text = _subsection(section, "Rules the workflow applies")
+    rules = re.findall(r"(?m)^- \*\*`([^`]+)`\*\*", rules_text)
+    for anchor in re.findall(r"(?m)^- \[`[^`]+`\]\(#(k-[^)]+)\)", rules_text):
+        rules.append(re.search(r"(?m)^`([^`]+)`[. ]", rule_entries[anchor]).group(1))
+
+    fields_text = _subsection(section, "Payload fields")
+    models: list[str] = []
+    if "Nested models (" in fields_text:
+        nested = fields_text[fields_text.index("Nested models (") :]
+        models = re.findall(r"(?m)^- \[`([^`]+)`\]\(#m-", nested)
+        for anchor in re.findall(r"\]\(#(mg-\d+)\)", nested):
+            models += re.findall(r"(?m)^- \[`([^`]+)`\]", model_groups[anchor])
+    return {"codes": codes, "rules": rules, "models": models}
+
+
+def listing_gaps(builder, markdown: str) -> list[str]:
+    """Every difference between what each surface lists and what the generator's model says it has."""
+    common = set(builder.global_trace.code_sites)
+    gaps: list[str] = []
+    for surface in builder.surfaces:
+        expected = {
+            "codes": {code for code in builder.surface_codes(surface) if code not in common},
+            "rules": {key for key, _func, _check in surface.workflow_rules},
+            "models": {builder.names.display(model) for model in surface.closure[1:]},
+        }
+        listed = listed_by_surface(markdown, surface.title)
+        for kind, want in expected.items():
+            got = listed[kind]
+            if len(got) != len(set(got)):
+                gaps.append(f"{surface.title}: {kind} listed twice: {sorted(c for c in set(got) if got.count(c) > 1)}")
+            if set(got) != want:
+                gaps.append(
+                    f"{surface.title}: {kind} missing {sorted(want - set(got))} extra {sorted(set(got) - want)}"
+                )
+    return gaps
+
+
+def test_every_surface_lists_exactly_the_codes_checks_and_models_it_has(builder, committed_markdown: str) -> None:
+    """The equivalence proof: sharing a block changed the layout, not what any surface lists."""
+    assert listing_gaps(builder, committed_markdown) == []
+    # Not vacuous: the comparison covers real, shared content.
+    listed = [listed_by_surface(committed_markdown, s.title) for s in builder.surfaces]
+    assert len(listed) >= 16
+    assert sum(len(item["codes"]) for item in listed) > 400
+    assert sum(len(item["rules"]) for item in listed) > 100
+    assert sum(len(item["models"]) for item in listed) > 600
+
+
+def test_every_shared_group_is_carried_by_every_surface_it_names(builder) -> None:
+    for groups, _alone in (builder.code_groups(), builder.model_groups()):
+        assert groups
+        for group in groups:
+            assert len(group.titles) >= 2 and group.items
+        # A group is the whole of what its surfaces have in common: no item is in two groups.
+        items = [item for group in groups for item in group.items]
+        assert len(items) == len(set(items))
+    for group in builder.code_groups()[0]:
+        for title in group.titles:
+            surface = next(s for s in builder.surfaces if s.title == title)
+            assert set(group.items) <= set(builder.surface_codes(surface))
+
+
+def _drop_first_line_matching(markdown: str, title: str, subsection: str, pattern: str) -> str:
+    """Delete one line of a surface's subsection, so the surface no longer lists one thing."""
+    section = surface_section(markdown, title)
+    block = _subsection(section, subsection)
+    lines = block.split("\n")
+    index = next(i for i, line in enumerate(lines) if re.search(pattern, line))
+    mutated_block = "\n".join(lines[:index] + lines[index + 1 :])
+    return markdown.replace(block, mutated_block, 1)
+
+
+@pytest.mark.parametrize(
+    ("subsection", "pattern"),
+    [
+        ("Rules the workflow applies", r"^- \[`[^`]+`\]\(#k-"),
+        ("Refusal codes this surface can return", r"\]\(#cg-\d+\)"),
+        ("Payload fields", r"\]\(#mg-\d+\)"),
+    ],
+    ids=["shared rule", "code group", "model group"],
+)
+def test_a_surface_dropping_its_link_to_a_shared_block_is_caught(
+    builder, committed_markdown: str, subsection: str, pattern: str
+) -> None:
+    """Mutation: one surface loses its reference to a shared block; the equivalence check must fail."""
+    mutated = _drop_first_line_matching(committed_markdown, "ThermoUploadRequest", subsection, pattern)
+    assert mutated != committed_markdown
+    assert listing_gaps(builder, mutated), "the surface lost a reference and nothing noticed"
+
+
+def test_a_code_listed_twice_on_a_surface_is_caught(builder, committed_markdown: str) -> None:
+    """Mutation: a code in a group the surface links is also put in its own table."""
+    title = "ThermoUploadRequest"
+    groups = shared_entries(committed_markdown, "Refusal codes several surfaces share")
+    codes_text = _subsection(surface_section(committed_markdown, title), "Refusal codes this surface can return")
+    anchor = re.search(r"\]\(#(cg-\d+)\)", codes_text).group(1)
+    row = re.search(r"(?m)^\| \[`[^`]+`\].*$", groups[anchor]).group(0)
+    mutated = committed_markdown.replace(codes_text, codes_text.rstrip("\n") + "\n" + row + "\n", 1)
+    assert any("listed twice" in gap for gap in listing_gaps(builder, mutated))
+
+
+def repeated_bodies(builder, markdown: str) -> list[str]:
+    """Shared rule bodies printed other than exactly once, in the shared section and nowhere else.
+
+    The shared section carries each body once; a surface section carrying it again is the repeat
+    sharing exists to prevent.
+    """
+    start = markdown.index("\n## Checks several surfaces apply\n")
+    shared = markdown[start : markdown.index("\n## ", start + 1)]
+    surfaces = markdown[markdown.index("\n## Surface `") : markdown.index("\n## Model reference\n")]
+    found: list[str] = []
+    for key, (func_checks, _titles) in builder.shared_checks().items():
+        for check in func_checks:
+            text = generator._one_line(check.asserts)
+            if shared.count(text) != 1 or text in surfaces:
+                found.append(f"{key}: check body")
+    for key, (func, _titles) in builder.shared_producer_rules().items():
+        text = "\n".join(generator._indent_block(generator._own_doc(func) or ""))
+        if shared.count(text) != 1 or text in surfaces:
+            found.append(f"{key}: rule body")
+    return found
+
+
+def test_a_shared_rule_body_is_printed_once(builder, committed_markdown: str) -> None:
+    assert repeated_bodies(builder, committed_markdown) == []
+    # Not vacuous: there are shared checks and shared marked rules to count, including the enthalpy
+    # rule that used to be printed in full on every thermo surface.
+    assert len(builder.shared_checks()) >= 10
+    assert "tckdb_schemas.enthalpy_reference:enthalpy_reference_error" in builder.shared_producer_rules()
+
+
+def test_printing_a_shared_body_twice_is_caught(builder, committed_markdown: str) -> None:
+    """Mutation: a surface prints a shared body itself, as the generator did before #681; or the shared section does."""
+    rule_key, (func, _titles) = next(iter(builder.shared_producer_rules().items()))
+    rule_body = "\n".join(generator._indent_block(generator._own_doc(func) or ""))
+    check_key, (func_checks, _t) = next(iter(builder.shared_checks().items()))
+    check_body = generator._one_line(func_checks[0].asserts)
+    in_a_surface = "### Rules the workflow applies\n"
+    for body, expected in ((rule_body, f"{rule_key}: rule body"), (check_body, f"{check_key}: check body")):
+        mutated = committed_markdown.replace(in_a_surface, in_a_surface + "\n" + body + "\n", 1)
+        assert mutated != committed_markdown
+        assert expected in repeated_bodies(builder, mutated)
+        in_the_shared_section = committed_markdown.replace(body, body + "\n\n" + body, 1)
+        assert expected in repeated_bodies(builder, in_the_shared_section)
+
+
+def dangling_links(markdown: str) -> set[str]:
+    anchors = set(re.findall(r'<a id="([^"]+)"', markdown))
+    headings = {re.sub(r"[^a-z0-9]+", "-", h.lower()).strip("-") for h in re.findall(r"(?m)^#+ (.*)$", markdown)}
+    return {link for link in re.findall(r"\]\(#([^)]+)\)", markdown) if link not in anchors | headings}
+
+
+def test_every_link_to_a_shared_block_resolves(committed_markdown: str) -> None:
+    """A surface that links a group or a rule is only as good as the entry the link reaches.
+
+    Links to a refusal code (``#c-...``) are left out: a check's code that no producer route was traced to
+    has no entry in the reference, and the shared check entries have always linked it regardless.
+    """
+    unresolved = {link for link in dangling_links(committed_markdown) if not link.startswith("c-")}
+    assert unresolved == set()
+    links = re.findall(r"\]\(#((?:k|cg|mg|s|m)-[^)]+)\)", committed_markdown)
+    assert len(links) > 800, len(links)
+
+
+def test_a_link_to_a_missing_group_is_caught(committed_markdown: str) -> None:
+    """Mutation: a group entry is renamed away; the links to it dangle."""
+    mutated = committed_markdown.replace('<a id="cg-1"></a>', "", 1)
+    assert "cg-1" in dangling_links(mutated)
+
+
+def test_a_repeated_body_would_breach_the_ceiling(committed_markdown: str) -> None:
+    """Mutation: print every shared entry once more per surface; the size test must fail."""
+    entries = shared_entries(committed_markdown, "Checks several surfaces apply")
+    extra = "".join(entries.values()) * 16
+    assert len((committed_markdown + extra).encode("utf-8")) >= MARKDOWN_BYTE_CEILING
 
 
 def test_the_thermo_rules_are_within_a_screen_of_the_top(committed_markdown: str) -> None:
@@ -437,7 +663,7 @@ def test_the_thermo_section_states_the_rules_the_adapter_never_learned(committed
     ["ComputedSpeciesUploadRequest", "ComputedReactionUploadRequest", "ContributionBundleV0"],
 )
 def test_every_surface_that_carries_thermo_states_the_enthalpy_rule(committed_markdown: str, model_name: str) -> None:
-    section = surface_section(committed_markdown, model_name)
+    section = section_with_linked_rules(committed_markdown, model_name)
     assert THERMO_REQUIREMENTS["enthalpy content requires the declaration"] in section
     assert THERMO_REQUIREMENTS["a point Gibbs energy is enthalpy content"] in section
 
