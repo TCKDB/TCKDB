@@ -133,6 +133,33 @@ The Python client refuses the same cases when you build the payload, before
 anything is sent, so you see the message locally rather than after a round
 trip.
 
+**`thermo_role_duplicate`** (and `statmech_role_duplicate`)
+
+A record may link at most one single point (`sp`) per optimisation. When the
+record links **no `opt` at all**, there is no optimisation to count against,
+so the rule applies to the structure instead: two `sp` links on one structure
+are refused. This applies on every route that links calculations by role,
+including the standalone `/uploads/thermo` and `/uploads/statmech` routes with a
+polyatomic species whose only linked calculations are `sp`s.
+
+- **Polyatomic species.** "One structure" means one stored geometry. Two
+  `sp` links on the same geometry are refused; two on genuinely different
+  geometries are not.
+- **A single atom.** An atom has no geometry to differ in, so "one
+  structure" means the same element and the same stated isotope mass number (`D` and
+  `T` count as hydrogen, as they do everywhere else elements are compared). A second `sp` on a shifted copy of the
+  atom (`1\nH\nH 1.0 0.0 0.0` beside `1\nH\nH 0.0 0.0 0.0`) is refused exactly
+  like one on the identical geometry.
+- **No geometry declared.** An `sp` that declares no geometry is not
+  compared: with nothing to compare, the rule does not guess.
+- **Composite energies.** A linked `composite` calculation counts as the
+  record's energy in place of an `sp`, so two of them on one structure are
+  refused the same way, under the same code.
+
+The fix is to link one `sp`, or give each its own optimisation. The extra
+calculation can still be uploaded and stored; it just may not be linked as a
+second energy for the same record.
+
 ## Three worked shapes
 
 A scalar deposit with an enthalpy:

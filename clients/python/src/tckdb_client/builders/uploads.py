@@ -129,7 +129,22 @@ class ComputedSpeciesUpload:
             )
         if self.primary_calculation.type != "opt":
             # Only a one-atom geometry may anchor on an sp (#610); the
-            # geometry is the one ``to_payload`` will send.
+            # geometry is the one ``to_payload`` will send. With no geometry
+            # declared there is nothing to count, so the useful answer is the
+            # one about the type (a polyatomic species needs an opt), not the
+            # geometry message, which would hide that (#623).
+            if (
+                self.primary_calculation.output_geometry is None
+                and self.primary_calculation.input_geometry is None
+            ):
+                raise TCKDBBuilderValidationError(
+                    "ComputedSpeciesUpload.primary_calculation.type must be "
+                    f"'opt', got {self.primary_calculation.type!r}; the "
+                    "bundle endpoint anchors each conformer on an opt. A "
+                    "single atom may anchor on an sp instead, but only when "
+                    "that sp declares the atom's geometry "
+                    "(output_geometry or input_geometry)."
+                )
             _require_opt_primary_unless_monatomic(
                 self.primary_calculation,
                 self._conformer_geometry(),
@@ -1321,9 +1336,21 @@ class ComputedReactionUpload:
 
         primary_opt = self._pick_species_primary_opt(sp, sp_calcs)
         sp_label = sp.label or sp.smiles or "<species>"
-        conformer_geom = self._resolve_species_geometry(
-            sp_calcs, primary_opt, sp_label=sp_label,
-        )
+        try:
+            conformer_geom = self._resolve_species_geometry(
+                sp_calcs, primary_opt, sp_label=sp_label,
+            )
+        except TCKDBBuilderValidationError as exc:
+            if primary_opt.type == "opt":
+                raise
+            # No opt and no geometry to count: say a polyatomic species needs
+            # an opt, which the geometry message would hide (#623).
+            raise TCKDBBuilderValidationError(
+                f"species_calculations[{sp_label!r}] must contain at "
+                "least one opt calculation (a single atom may use its sp, "
+                "but only when a calculation declares the atom's geometry); "
+                "other calcs need an opt to anchor a conformer."
+            ) from exc
         if primary_opt.type != "opt":
             _require_opt_primary_unless_monatomic(
                 primary_opt,

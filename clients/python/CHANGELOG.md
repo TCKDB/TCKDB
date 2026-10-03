@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.112.0 - 2026-10-03
+
+A polyatomic species whose only calculation is a single point that declares no geometry is told what
+is actually wrong again (#623). `ComputedSpeciesUpload` and `ComputedReactionUpload` now raise
+"primary_calculation.type must be 'opt', got 'sp'; the bundle endpoint anchors each conformer on an
+opt" (species) and "must contain at least one opt calculation" (reaction), as they did before the
+one-atom `sp` primary was accepted, instead of "must declare output_geometry or input_geometry".
+Both messages now also say that a single atom may anchor on its `sp` when that `sp` declares the
+atom's geometry. Builders raise `TCKDBBuilderValidationError`, which carries no code, so no code
+changes. A calculation that does declare a geometry is judged exactly as before, and an `opt`
+primary without a geometry still gets the geometry message.
+
 ## 0.111.0 - 2026-10-03
 
 Reads gain the composite annotations of ADR 0021, phase P7a (`tckdb-schemas` 0.73.0).

@@ -52,8 +52,7 @@ from tckdb_schemas.fragments.calculation import (
     assert_assembled_not_primary,
     assert_composite_calculation_shape,
 )
-from tckdb_schemas import frequency_completeness as _frequency_completeness
-from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
+from tckdb_schemas.frequency_completeness import atom_count_of_xyz, evaluate_deposited_frequency_list
 from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
@@ -414,11 +413,11 @@ def require_opt_primary_unless_monatomic(
         return
     if primary_type is CalculationType.opt:
         return
-    # Looked up by name on purpose. The counter raises
-    # ``atom_map_geometry_unparseable`` internally and swallows it (returning
-    # None), so the code is never this rule's refusal; a direct reference
-    # would make the producer-contract tracer list it as one.
-    n_atoms = getattr(_frequency_completeness, "atom_count_of_xyz")(xyz_text)
+    # The counter reaches no coded refusal (it counts through
+    # ``xyz_block_shape`` and returns None for a block it cannot count), so a
+    # direct call does not make the producer-contract tracer list
+    # ``atom_map_geometry_unparseable`` against this rule (#623).
+    n_atoms = atom_count_of_xyz(xyz_text)
     if primary_type is CalculationType.sp and n_atoms == 1:
         return
     if primary_type is CalculationType.sp and n_atoms is not None:
