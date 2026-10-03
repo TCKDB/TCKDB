@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.db.models.common import SpinTreatment
+from app.db.models.common import CoreTreatment, SpinTreatment
 from app.schemas.reads._field_bounds import (
     MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
 )
@@ -66,6 +66,9 @@ class LevelOfTheorySearchRequest(BaseModel):
     )
     solvent: str | None = Field(default=None, max_length=_MAX_SOLVENT_LENGTH)
     spin_treatment: SpinTreatment | None = None
+    #: Frozen-core or all-electron (ADR 0021). Matches only levels that *state* it; a level whose
+    #: producer did not say is never "frozen core by default", so it matches neither value.
+    core_treatment: CoreTreatment | None = None
 
     # --- evidence filters ----------------------------------------------------
     has_correction_schemes: bool | None = None
@@ -121,6 +124,9 @@ class LevelOfTheoryBrowseRequest(BaseModel):
     )
     solvent: str | None = Field(default=None, max_length=_MAX_SOLVENT_LENGTH)
     spin_treatment: SpinTreatment | None = None
+    #: Frozen-core or all-electron (ADR 0021). Matches only levels that *state* it; a level whose
+    #: producer did not say is never "frozen core by default", so it matches neither value.
+    core_treatment: CoreTreatment | None = None
 
     # --- evidence filters ----------------------------------------------------
     has_correction_schemes: bool | None = None

@@ -29,6 +29,7 @@ from app.db.models.common import (
     TransportCalculationRole,
 )
 from app.db.models.composite_scheme import CompositeScheme, CompositeSchemeTerm
+from app.db.models.level_of_theory import LevelOfTheory
 from app.services.calculation_resolution import resolve_level_of_theory_ref
 from app.services.composite_scheme_resolution import add_scheme_term_input, named_method_definition_hash
 from tests.services.scientific_read._factories import (
@@ -148,6 +149,8 @@ def test_named_method_scheme_content(client, db_session):
         "composite_scheme_ref": scheme.public_ref,
         "kind": "named_method",
         "name": "CBS-QB3",
+        # P7a: the recipe's own geometry level, by ref, so a record's notation can tell whether its geometry is it.
+        "geometry_level_of_theory_ref": core["geometry_level_of_theory"]["level_of_theory_ref"],
     }
 
 
@@ -245,10 +248,13 @@ def test_summary_names_the_scheme_for_a_bound_level(client, db_session):
 
     record = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}").json()["record"]
 
+    geometry_level = db_session.get(LevelOfTheory, scheme.geometry_level_of_theory_id)
     assert record["level_of_theory"]["composite_scheme"] == {
         "composite_scheme_ref": scheme.public_ref,
         "kind": "named_method",
         "name": "CBS-QB3",
+        # P7a: the recipe's own geometry level, by ref (what a record's notation compares against).
+        "geometry_level_of_theory_ref": geometry_level.public_ref,
     }
 
 
@@ -298,7 +304,20 @@ def test_summary_field_is_always_present(client, db_session, path):
 
 
 def _expected(scheme):
-    return {"composite_scheme_ref": scheme.public_ref, "kind": "named_method", "name": "CBS-QB3"}
+    # ``geometry_level_of_theory_ref`` (P7a): the recipe's own geometry level, by ref. The catalogue states B3LYP/CBSB7.
+    return {
+        "composite_scheme_ref": scheme.public_ref,
+        "kind": "named_method",
+        "name": "CBS-QB3",
+        "geometry_level_of_theory_ref": _geometry_ref(scheme),
+    }
+
+
+def _geometry_ref(scheme):
+    from sqlalchemy import inspect
+
+    session = inspect(scheme).session
+    return session.get(LevelOfTheory, scheme.geometry_level_of_theory_id).public_ref
 
 
 def test_frequency_scale_factor_read_names_the_scheme_of_a_bound_level(client, db_session):

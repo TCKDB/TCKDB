@@ -30,6 +30,7 @@ from app.db.models.common import (
     EnergyUnit,
     ImaginaryModeDisposition,
     IRCDirection,
+    LegacyCompositeShape,
     PathSearchMethod,
     RecordReviewStatus,
     ScanCoordinateKind,
@@ -41,6 +42,7 @@ from app.db.models.common import (
 )
 from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from app.schemas.reads.scientific_common import (
+    CompositeEnergyVerification,
     GeometryValidationStatus,
     LevelOfTheorySummary,
     LiteratureSummary,
@@ -1474,6 +1476,17 @@ class ScientificCalculationRecord(BaseModel):
     provenance: CalculationEvidenceProvenanceSummary
     available_sections: AvailableCalculationSections
     results: CalculationResultSummary | None = None
+    #: How far a ``composite`` calculation's energy has been checked (ADR 0021, P7a),
+    #: derived on every read: an assembled composite is recomputed from its stored
+    #: inputs, a program run is read from the log check recorded at upload. ``null``
+    #: for every other calculation type. Never behind an ``include=`` token, and never
+    #: stored. See :class:`~app.schemas.reads.scientific_common.CompositeEnergyVerification`.
+    composite_energy_verification: CompositeEnergyVerification | None = None
+    #: ``named_method_level_on_non_composite_calculation`` when this ``opt``, ``freq`` or ``sp``
+    #: ran at the level of a catalogued named composite method (CBS-QB3, G4, ...): the shape
+    #: depositors used before the ``composite`` type existed. An annotation only; the
+    #: calculation, its type and its level are exactly as deposited.
+    legacy_composite_shape: LegacyCompositeShape | None = None
     #: ``include=energy_corrections``. Every ``applied_energy_correction``
     #: row sourced from this calculation, with the applied magnitude. An
     #: empty list means the caller asked and the calculation has none;

@@ -82,6 +82,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "dispersion",
     "solvent",
     "spin_treatment",
+    "core_treatment",
     "has_correction_schemes",
     "has_frequency_scale_factors",
 )
@@ -210,6 +211,8 @@ def _run_lot_query(
         stmt = stmt.where(solvent_matches(request.solvent))
     if request.spin_treatment is not None:
         stmt = stmt.where(LevelOfTheory.spin_treatment == request.spin_treatment)
+    if request.core_treatment is not None:
+        stmt = stmt.where(LevelOfTheory.core_treatment == request.core_treatment)
     if request.has_correction_schemes is not None:
         ex = exists().where(
             EnergyCorrectionScheme.level_of_theory_id == LevelOfTheory.id

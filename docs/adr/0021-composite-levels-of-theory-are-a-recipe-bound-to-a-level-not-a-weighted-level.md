@@ -319,6 +319,49 @@ plan left a choice:
   workflow that forgets.
 - **Software is optional only for an assembled composite.** No program ran it.
 
+## Reads and trust (P7a)
+
+Backend reads only. Everything below is derived at read time from stored rows; nothing
+computed is stored (decision 5).
+
+- **`notation`.** `ScientificLevelsSummary.notation` is the chemist's shorthand for the energy
+  and geometry levels. Rules, in order: either level absent -> no notation (never a partial
+  one); the same level for both (by ref) -> that level written once (a composite level as its
+  recipe's label); a composite energy on another level -> the label, then `//geometry` unless
+  the geometry is the recipe's own (compared by ref against
+  `composite_scheme.geometry_level_of_theory_ref`; a recipe that states none has no own
+  geometry); otherwise `energy//geometry`. It is a computed field, so it is derived from
+  `energy` and `geometry` wherever a summary is built, and a builder passing it is refused by an
+  invariant test.
+- **`composite_energy_verification`.** On a composite calculation read, and on `levels` of a
+  record whose energy source is a composite (the least verified of its linked composites).
+  `recomputed` / `recompute_mismatch`: an assembled composite, recomputed on every read from its
+  stored inputs with the arithmetic of `composite_total_mismatch` (so an input filled or changed
+  later shows, and nothing is cached). `log_reconciled` / `program_reported`: a program run, from
+  the conclusion the upload hook recorded for each attached log. `unverifiable`: an input or
+  component is missing, a triples convention cannot be determined, or no energy was stated.
+  A log that disagreed is `program_reported` with `reason` `log_mismatch` /
+  `log_method_mismatch`, so it is named and not hidden.
+- **The log conclusion had to be recorded.** P3b compared a deposited number with the log and
+  answered with a warning only; nothing persisted, and a read must not parse a log. Revision
+  `a9c3e7b1d5f2` adds `calc_composite_log_check` (one row per calculation and log digest, the
+  outcome and nothing else). A calculation whose log was uploaded earlier reads as
+  `program_reported` until the log is deposited again.
+- **Reproducibility propagates from the inputs.** An assembled composite ran no program, so the
+  reproducibility rubric grades it on the calculations it cites: each is graded by the same
+  rubric and the composite reaches a level only when all of them do, and only while its stated
+  total still follows from them. No other record's checks change.
+- **Scheme read.** Each term says whether it is linear in its inputs' energies and, if so, each
+  input carries its coefficient (+1 for a value or base, +1 / -1 for a difference, the closed-form
+  weights of a two-point extrapolation). `exponential_three_point` is not linear and gives none.
+- **Legacy shapes** are annotated (`legacy_composite_shape`) and never re-read: the derived
+  levels of those records are exactly what they were.
+- **Deferred.** Cross-method comparisons (CBS-QB3 against G4 for one species) belong to machine
+  review. A check on the deterministic calculation trust rubric
+  (`computed_calculation_v1`) is deferred too: adding a check name to it changes every
+  calculation's machine-review context digest, so it needs its own decision and a plan for the
+  reviews already recorded.
+
 ## Rejected shapes
 
 - **Components with role and weight on `level_of_theory`.** See decision 1.
@@ -377,7 +420,9 @@ Each phase is independently mergeable.
   `calc_composite_input`, the `composite_input` role, the checks. Details under
   "User-built schemes (P5)" below.
 - **P6.** Correction-scheme frequency level and the `composite_delta` warning.
-- **P7.** Reads and trust (`composite_energy_verification`).
+- **P7a (built).** Reads and trust, backend only: `notation`, `composite_energy_verification`,
+  scheme coefficients, `legacy_composite_shape`, and the read gaps (see "Reads and trust (P7a)").
+  **P7b** is the website.
 - **P8.** Producers (ARC exports the composite log path; the adapter sends the
   program-run composite and the correction frequency level).
 

@@ -265,6 +265,10 @@ def _lot_block(
             "spin_treatment": (
                 lot.spin_treatment.value if lot.spin_treatment is not None else None
             ),
+            # ``None`` means the producer did not say, never "frozen core by default" (ADR 0021).
+            "core_treatment": (
+                lot.core_treatment.value if lot.core_treatment is not None else None
+            ),
             "label": _lot_label(lot),
         }
     cache[lot_id] = block

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+from app.db.models.common import CoreTreatment, SpinTreatment
 from app.schemas.common import SchemaBase, TimestampedReadSchema
 
 
@@ -39,3 +40,9 @@ class LevelOfTheoryRead(LevelOfTheoryBase, TimestampedReadSchema):
     """Read schema returned by the API."""
 
     lot_hash: str
+    #: Restricted / unrestricted / restricted-open. ``None`` means the producer did not state it,
+    #: which is not the same as the enum's own ``unknown`` member. Part of the level's identity.
+    spin_treatment: SpinTreatment | None = None
+    #: Frozen-core or all-electron (ADR 0021). ``None`` means the producer did not state it, never
+    #: "frozen core by default". Part of the level's identity only when set.
+    core_treatment: CoreTreatment | None = None

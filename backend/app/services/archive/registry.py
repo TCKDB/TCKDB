@@ -33,6 +33,10 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         # calculation fills. Evidence: a restore that dropped them would hand back
         # a composite energy with no recipe slots behind it.
         "calc_composite_input",
+        # What comparing a program-run composite with its output log concluded
+        # (ADR 0021, P7a). Evidence: a restore that dropped it would hand back
+        # confirmed energies reading as unchecked.
+        "calc_composite_log_check",
         "calc_composite_result",
         "calc_composite_term",
         "calc_freq_mode",

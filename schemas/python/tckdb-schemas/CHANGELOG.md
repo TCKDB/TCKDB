@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.73.0 - 2026-10-03
+
+Composite levels of theory, phase P7a (ADR 0021): the wire package gains the closed-form
+coefficients of the linear extrapolation formulas. Nothing a producer sends changes and every
+payload accepted before is accepted unchanged; this release only adds.
+
+- **`composite_formulas.extrapolation_coefficients(formula, cardinals, exponent)`.** The signed
+  weights `c_i` with `E_CBS = sum_i c_i * E_i` for the linear formulas (`inverse_power`,
+  `inverse_power_shifted_half`, `karton_martin_scf`), in ascending cardinal order. They sum to 1 and
+  their absolute values are what `extrapolation_weights` already returned. For
+  `exponential_three_point`, whose limit is a ratio of differences of the energies and so has no fixed
+  weights, it returns `None`; a degenerate or mis-shaped input raises `ExtrapolationError` like its
+  siblings.
+- **`composite_formulas.is_linear_formula(formula)`.** `True` for the three two-point formulas,
+  `False` for `exponential_three_point`.
+- The producer contract is unchanged except for its version line.
+
 ## 0.72.0 - 2026-10-02
 
 Composite levels of theory, phase P5 (ADR 0021): a composite energy you build

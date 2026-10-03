@@ -38,6 +38,7 @@ from app.db.models.common import (
     CalculationType,
     CompositeAssembly,
     CompositeInputSlot,
+    CompositeLogOutcome,
     ConstraintKind,
     CoordinateUnit,
     EnergyComponentKind,
@@ -745,6 +746,41 @@ class CalculationCompositeInput(Base):
             postgresql_nulls_not_distinct=True,
         ),
         Index("ix_calc_composite_input_input_calculation_id", "input_calculation_id"),
+    )
+
+
+class CalculationCompositeLogCheck(Base, TimestampMixin):
+    """What comparing a composite calculation with one attached output log concluded (ADR 0021, P7a).
+
+    An observation, appended when the log is uploaded: the upload hook
+    (:func:`app.services.composite_energy_extraction.try_reconcile_composite_energy_from_output_log`)
+    parses the log's composite summary block once and records the outcome here,
+    so a read can report ``composite_energy_verification`` without opening a log.
+    It records a *conclusion*, never a number: nothing the log stated is stored,
+    and the deposited energies are left exactly as sent.
+
+    Keyed by ``(calculation_id, artifact_sha256)``: the outcome is a function of
+    the calculation's (immutable) result and the log's bytes, so the same bytes
+    uploaded twice conclude the same thing and the second observation is dropped.
+    ``artifact_sha256`` is the digest of the log, matching how custody
+    observations (``artifact_integrity_event``) are keyed; it is not a foreign key
+    because the content-addressed object may be shared by other calculations.
+    """
+
+    __tablename__ = "calc_composite_log_check"
+
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+    artifact_sha256: Mapped[str] = mapped_column(CHAR(64), primary_key=True)
+    outcome: Mapped[CompositeLogOutcome] = mapped_column(
+        SAEnum(CompositeLogOutcome, name="composite_log_outcome"), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("artifact_sha256 ~ '^[0-9a-f]{64}$'", name="artifact_sha256_hex"),
     )
 
 

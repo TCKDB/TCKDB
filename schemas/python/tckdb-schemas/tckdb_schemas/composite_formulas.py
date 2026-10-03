@@ -69,7 +69,9 @@ __all__ = [
     "extrapolate_inverse_power",
     "extrapolate_inverse_power_shifted_half",
     "extrapolate_karton_martin_scf",
+    "extrapolation_coefficients",
     "extrapolation_weights",
+    "is_linear_formula",
 ]
 
 #: Formulas whose scheme term must state an exponent, and the ones that must not.
@@ -87,6 +89,12 @@ FORMULA_POINT_COUNT: dict[CompositeExtrapolationFormula, int] = {
     CompositeExtrapolationFormula.karton_martin_scf: 2,
     CompositeExtrapolationFormula.exponential_three_point: 3,
 }
+
+
+#: Formulas whose limit is a fixed linear combination of the input energies. The
+#: three-point exponential is the one that is not: its coefficients depend on the
+#: energies themselves.
+NONLINEAR_FORMULAS = frozenset({CompositeExtrapolationFormula.exponential_three_point})
 
 
 class ExtrapolationError(ValueError):
@@ -184,6 +192,68 @@ def extrapolation_weights(
     if denominator == 0.0:
         raise ExtrapolationError("the two cardinal numbers give the same basis-set function")
     return [abs(f_y / denominator), abs(f_x / denominator)]
+
+
+def is_linear_formula(formula: CompositeExtrapolationFormula | str) -> bool:
+    """Whether the limit is a fixed linear combination of the input energies.
+
+    ``True`` for the three two-point formulas, ``False`` for
+    ``exponential_three_point``.
+    """
+    kind = formula if isinstance(formula, CompositeExtrapolationFormula) else CompositeExtrapolationFormula(formula)
+    return kind not in NONLINEAR_FORMULAS
+
+
+def extrapolation_coefficients(
+    formula: CompositeExtrapolationFormula | str,
+    cardinals: Sequence[int],
+    exponent: float | None = None,
+) -> list[float] | None:
+    """Signed weights ``c_i`` with ``E_CBS = sum_i c_i * E_i`` for a linear formula.
+
+    Returned in the order of ``cardinals`` sorted ascending (the order
+    :func:`extrapolate` uses). For the two-point formulas, with ``f`` the
+    formula's basis-set function of the cardinal number
+    (:func:`extrapolate_inverse_power` and its siblings), the limit is
+    ``(E_X f_Y - E_Y f_X) / (f_Y - f_X)``, so the smaller cardinal ``X`` has
+    coefficient ``f_Y / (f_Y - f_X)`` and the larger ``Y`` has
+    ``-f_X / (f_Y - f_X)``. They sum to 1, and their absolute values are the
+    sensitivities :func:`extrapolation_weights` returns.
+
+    :param formula: The formula.
+    :param cardinals: The declared cardinal numbers of the inputs (two for the
+        two-point formulas).
+    :param exponent: The exponent; required by ``inverse_power`` and
+        ``inverse_power_shifted_half``.
+    :returns: The coefficients, or ``None`` for ``exponential_three_point``,
+        which is not linear in the energies (its limit is a ratio of them), so no
+        fixed coefficients exist and none are invented.
+    :raises ExtrapolationError: when the cardinal count does not fit the formula, the
+        cardinals repeat, an exponent is missing, or the arithmetic is degenerate.
+    """
+    kind = formula if isinstance(formula, CompositeExtrapolationFormula) else CompositeExtrapolationFormula(formula)
+    ordered = sorted(cardinals)
+    if len(ordered) != FORMULA_POINT_COUNT[kind]:
+        raise ExtrapolationError(f"{kind.value} takes {FORMULA_POINT_COUNT[kind]} points, got {len(ordered)}")
+    if len(set(ordered)) != len(ordered):
+        raise ExtrapolationError("the cardinal numbers must be distinct")
+    if kind in NONLINEAR_FORMULAS:
+        return None
+    x, y = ordered
+    if kind is CompositeExtrapolationFormula.inverse_power:
+        if exponent is None:
+            raise ExtrapolationError(f"{kind.value} needs an exponent")
+        f_x, f_y = float(x) ** -exponent, float(y) ** -exponent
+    elif kind is CompositeExtrapolationFormula.inverse_power_shifted_half:
+        if exponent is None:
+            raise ExtrapolationError(f"{kind.value} needs an exponent")
+        f_x, f_y = (x + 0.5) ** -exponent, (y + 0.5) ** -exponent
+    else:
+        f_x, f_y = _karton_martin(x), _karton_martin(y)
+    denominator = f_y - f_x
+    if denominator == 0.0:
+        raise ExtrapolationError("the two cardinal numbers give the same basis-set function")
+    return [f_y / denominator, -f_x / denominator]
 
 
 def extrapolate(

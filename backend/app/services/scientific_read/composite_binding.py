@@ -12,9 +12,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
+from app.db.models.level_of_theory import LevelOfTheory
 from app.schemas.reads.scientific_common import CompositeSchemeSummary
 
 
@@ -30,19 +31,24 @@ def composite_scheme_summaries(
     wanted = {i for i in lot_ids if i is not None}
     if not wanted:
         return {}
+    geometry_level = aliased(LevelOfTheory)
     rows = session.execute(
         select(
             LevelOfTheoryComposite.level_of_theory_id,
             CompositeScheme.public_ref,
             CompositeScheme.kind,
             CompositeScheme.name,
+            geometry_level.public_ref,
         )
         .join(CompositeScheme, CompositeScheme.id == LevelOfTheoryComposite.scheme_id)
+        .outerjoin(geometry_level, geometry_level.id == CompositeScheme.geometry_level_of_theory_id)
         .where(LevelOfTheoryComposite.level_of_theory_id.in_(wanted))
     ).all()
     return {
-        lot_id: CompositeSchemeSummary(composite_scheme_ref=ref, kind=kind, name=name)
-        for lot_id, ref, kind, name in rows
+        lot_id: CompositeSchemeSummary(
+            composite_scheme_ref=ref, kind=kind, name=name, geometry_level_of_theory_ref=geometry_ref
+        )
+        for lot_id, ref, kind, name, geometry_ref in rows
     }
 
 

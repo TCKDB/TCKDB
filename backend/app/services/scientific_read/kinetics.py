@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from collections.abc import Mapping
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased, selectinload
@@ -54,6 +55,7 @@ from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
+    CompositeEnergyVerification,
     CompositeSchemeSummary,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
@@ -86,6 +88,7 @@ from app.schemas.reads.scientific_kinetics import (
     ThirdBodyEfficiencyBlock,
 )
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
+from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -97,6 +100,10 @@ from app.services.scientific_read.common import (
     validate_pagination,
     validate_temperature_range,
     visible_statuses,
+)
+from app.services.scientific_read.composite_annotations import (
+    legacy_composite_shape,
+    record_composite_verification,
 )
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
@@ -459,6 +466,12 @@ def get_reaction_kinetics(
         sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs
     }
     calc_meta = _calc_metadata(session, all_source_calc_ids)
+    # How far each cited composite energy has been checked (ADR 0021, P7a): derived now,
+    # in bulk for the whole entry.
+    composite_verifications = verify_composite_calculations(
+        session,
+        [cid for cid, meta in calc_meta.items() if meta.type == CalculationType.composite],
+    )
     geometry_validations = _geometry_validations(session, all_source_calc_ids)
     scf_stabilities = _scf_stabilities(session, all_source_calc_ids)
     calc_refs = _calc_refs(session, all_source_calc_ids)
@@ -589,6 +602,7 @@ def get_reaction_kinetics(
             ts_freq_calc_id=ts_freq_calc_id,
             ts_sp_calc_id=ts_sp_calc_id,
             calc_meta=calc_meta,
+            composite_verifications=composite_verifications,
         )
 
         evidence = _evidence_breakdown(
@@ -1648,6 +1662,7 @@ def _build_kinetics_levels(
     ts_freq_calc_id: int | None,
     ts_sp_calc_id: int | None,
     calc_meta: dict[int, "_CalcMeta"],
+    composite_verifications: Mapping[int, CompositeEnergyVerification],
 ) -> ScientificLevelsSummary:
     """R1 kinetics mapping: ``ts_opt``/``ts_freq``/``ts_sp`` -> derive_levels' opt/freq/sp.
 
@@ -1731,13 +1746,32 @@ def _build_kinetics_levels(
     else:
         energy_meta = None
 
+    geometry = _lot_summary_for_calc(calc_meta.get(ts_opt_calc_id))
+    frequency = _lot_summary_for_calc(calc_meta.get(ts_freq_calc_id))
+    energy_summary = _lot_summary_for_calc(energy_meta)
     return ScientificLevelsSummary(
-        geometry=_lot_summary_for_calc(calc_meta.get(ts_opt_calc_id)),
-        frequency=_lot_summary_for_calc(calc_meta.get(ts_freq_calc_id)),
-        energy=_lot_summary_for_calc(energy_meta),
+        geometry=geometry,
+        frequency=frequency,
+        energy=energy_summary,
         energy_source=derived.energy_source,
         geometry_source=derived.geometry_source,
         frequency_source=derived.frequency_source,
+        composite_energy_verification=record_composite_verification(
+            energy_source=derived.energy_source,
+            typed_composite_ids=[ts_sp_calc_id] if ts_sp_calc_id is not None and energy_is_composite else [],
+            verifications=composite_verifications,
+        ),
+        # A kinetics citation never links a non-``composite`` calculation under a composite role
+        # (the role does not exist here), so only the named-method-level shape can occur.
+        legacy_composite_shape=legacy_composite_shape(
+            composite_role_on_non_composite=False,
+            geometry=geometry,
+            geometry_source=derived.geometry_source,
+            frequency=frequency,
+            frequency_source=derived.frequency_source,
+            energy=energy_summary,
+            energy_source=derived.energy_source,
+        ),
     )
 
 

@@ -58,6 +58,11 @@ _SP_COMPONENT_REVISION = _VERSIONS / "e5b2d8a4c613_sp_energy_components_and_core
 #: the TRUNCATE refusal.
 _COMPOSITE_INPUT_REVISION = _VERSIONS / "b4d8e2f6a1c9_composite_inputs_and_dependency_role.py"
 
+#: ``a9c3e7b1d5f2`` adds ``calc_composite_log_check``, what comparing a program-run
+#: composite with an attached output log concluded. An ownership child of the
+#: calculation (guarded on ``calculation_id``), with the TRUNCATE refusal.
+_COMPOSITE_LOG_CHECK_REVISION = _VERSIONS / "a9c3e7b1d5f2_composite_log_check.py"
+
 _EXTENSION_REVISIONS = (
     _ATOM_MAP_REVISION,
     _EVIDENCE_REVISION,
@@ -65,6 +70,7 @@ _EXTENSION_REVISIONS = (
     _SP_COMPONENT_REVISION,
     _COMPOSITE_RESULT_REVISION,
     _COMPOSITE_INPUT_REVISION,
+    _COMPOSITE_LOG_CHECK_REVISION,
 )
 
 #: ``d4e9b1c7a253`` narrows the regime instead of extending it: it removes one

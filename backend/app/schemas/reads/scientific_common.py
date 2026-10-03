@@ -16,8 +16,11 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.db.models.common import (
+    CompositeAssembly,
+    CompositeEnergyVerificationState,
     CompositeSchemeKind,
     CoreTreatment,
+    LegacyCompositeShape,
     ProfileRecommendation,
     ReadProfile,
     RecordReviewStatus,
@@ -251,6 +254,43 @@ class CompositeSchemeSummary(BaseModel):
     composite_scheme_ref: str
     kind: CompositeSchemeKind
     name: str
+    #: The ref of the level of theory the recipe runs its geometry at (for CBS-QB3,
+    #: B3LYP/CBSB7), or ``None`` when the recipe does not state one -- never "the
+    #: energy level". Lets a reader tell whether a record's geometry level is the
+    #: recipe's own, which is what ``ScientificLevelsSummary.notation`` needs.
+    geometry_level_of_theory_ref: str | None = None
+
+
+class CompositeEnergyVerification(BaseModel):
+    """How far a composite energy has been checked (ADR 0021, P7a). Derived at read time, never stored.
+
+    ``state``
+        * ``recomputed`` -- an ``assembled`` composite whose stored inputs, run
+          through its scheme *at read time*, give its stated total within the
+          weighted tolerance. Recomputed on every read, so an input energy
+          deposited later is picked up and nothing about the check is stale.
+        * ``recompute_mismatch`` -- the same recomputation disagrees. Possible when
+          an input changed after the composite was accepted. Surfaced, never hidden;
+          ``difference_hartree`` (stated minus recomputed) and ``tolerance_hartree``
+          say by how much.
+        * ``log_reconciled`` -- a ``program_run`` whose attached output log was
+          compared at upload and confirmed every number the deposit stated.
+        * ``program_reported`` -- a ``program_run`` with no confirming log: no log was
+          attached, or one was attached that could not confirm it (see ``reason``).
+        * ``unverifiable`` -- the check cannot be made: an input or component is
+          missing, the triples convention of an input cannot be determined, or no
+          energy was stated at all (see ``reason``).
+
+    ``reason`` is a stable machine token, ``None`` when there is nothing to add.
+    The recomputed total itself is never returned or stored; only its distance from
+    the stated one is.
+    """
+
+    state: CompositeEnergyVerificationState
+    assembly: CompositeAssembly
+    reason: str | None = None
+    difference_hartree: float | None = None
+    tolerance_hartree: float | None = None
 
 
 class LevelOfTheorySummary(BaseModel):
@@ -352,6 +392,19 @@ class ScientificLevelsSummary(BaseModel):
     only a ``freq`` link, for instance, reports a ``frequency`` level and
     ``geometry``/``energy`` both ``null``.
 
+    ``notation`` is the chemist's shorthand for the two levels that matter to a
+    number, derived from ``energy`` and ``geometry`` on every read and never
+    stored (see :func:`levels_notation` for the exact rules).
+
+    ``composite_energy_verification`` is set when the record's energy comes from
+    a ``composite`` calculation (``energy_source="composite"``): how far that
+    energy has been checked. ``null`` for every other source, and for a record
+    whose composite energy is ``"ambiguous"``.
+
+    ``legacy_composite_shape`` annotates a record built the way depositors did
+    before the ``composite`` calculation type existed. It is an annotation only:
+    the levels above are derived exactly as they always were.
+
     ``declared_energy`` is the one exception to "derived at read time": see
     its field comment.
     """
@@ -373,6 +426,67 @@ class ScientificLevelsSummary(BaseModel):
     #: ``energy``. A thermo record derived from a statmech record reports
     #: its own declaration when it has one, else that statmech record's.
     declared_energy: LevelOfTheorySummary | None = None
+    #: See the class docstring. Every builder passes this explicitly
+    #: (``tests/invariants/test_levels_summary_notation_and_verification.py``): the
+    #: default ``None`` reads as "not a composite energy", so a builder that forgot it
+    #: would silently report an unchecked composite as ordinary.
+    composite_energy_verification: CompositeEnergyVerification | None = None
+    #: See the class docstring. Explicit in every builder, like the field above.
+    legacy_composite_shape: LegacyCompositeShape | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def notation(self) -> str | None:
+        """``energy//geometry`` written the way a chemist writes it; ``null`` when it cannot be.
+
+        Derived from ``energy`` and ``geometry`` on every read; never stored,
+        never accepted on input, and never passed by a builder (an AST invariant
+        forbids it). See :func:`levels_notation`.
+        """
+        return levels_notation(energy=self.energy, geometry=self.geometry)
+
+
+def levels_notation(*, energy: LevelOfTheorySummary | None, geometry: LevelOfTheorySummary | None) -> str | None:
+    """The notation of a record's energy and geometry levels, e.g. ``CCSD(T)-F12/cc-pVTZ-F12//wB97X-D/def2-TZVP``.
+
+    The rules, exactly (ADR 0021, plan section 2.6), applied in this order:
+
+    * **Either level absent: no notation** (``None``). Never a partial one: ``x``
+      alone would claim the geometry is at ``x`` too, which is a fact nobody
+      stated. A record whose energy is ambiguous across levels has no energy level
+      and so no notation.
+    * **The same level for both** (compared by ref, not by text: two rows can render
+      alike and differ in dispersion or solvent): that level written once. A level
+      bound to a recipe is written as the recipe's label (``composite_scheme.name``),
+      any other as ``method/basis`` (``method`` alone when it has no basis), the way
+      :attr:`LevelOfTheorySummary.display` renders it.
+    * **A composite energy level** (one bound to a recipe, ``energy.composite_scheme``
+      set; the role that supplied it does not matter) on another level: the composite's
+      label followed by ``//`` and the geometry level, **unless the geometry is the
+      recipe's own**, when the label stands alone. The geometry is the recipe's own
+      when it is the level the recipe runs internally
+      (``composite_scheme.geometry_level_of_theory_ref``), compared by ref. When the
+      recipe states no geometry level, no geometry is its own, so the geometry is
+      written.
+    * **Otherwise** ``energy//geometry``.
+
+    The frequency level is not part of the notation.
+
+    :param energy: The record's energy level.
+    :param geometry: The record's geometry level.
+    :returns: The notation, or ``None`` when either level is absent.
+    """
+    if energy is None or geometry is None:
+        return None
+    scheme = energy.composite_scheme
+    if energy.level_of_theory_ref == geometry.level_of_theory_ref:
+        return scheme.name if scheme is not None else energy.display
+    if scheme is not None:
+        own_geometry = scheme.geometry_level_of_theory_ref
+        if own_geometry is not None and own_geometry == geometry.level_of_theory_ref:
+            return scheme.name
+        return f"{scheme.name}//{geometry.display}"
+    return f"{energy.display}//{geometry.display}"
 
 
 class SoftwareReleaseSummary(BaseModel):

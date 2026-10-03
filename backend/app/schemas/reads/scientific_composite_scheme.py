@@ -29,6 +29,7 @@ from app.db.models.common import (
     CompositeExtrapolationFormula,
     CompositeInputSlot,
     CompositeSchemeKind,
+    CompositeTermLinearity,
     CompositeTermOperation,
     EnergyComponentKind,
 )
@@ -72,6 +73,13 @@ class CompositeSchemeTermInputRecord(BaseModel):
     slot: CompositeInputSlot
     cardinal_number: int | None = None
     level_of_theory: LevelOfTheorySummary
+    #: The weight of this input's ``energy_component`` in the term's value, for a term whose
+    #: ``linearity`` is ``linear``: ``+1`` for a ``base`` / ``value`` input, ``+1`` (``high``) and
+    #: ``-1`` (``low``) for a ``difference``, and the closed-form weight of the extrapolation
+    #: for an extrapolated input (the two weights sum to 1). ``null`` when the term is not
+    #: linear: no coefficient is invented for a non-linear formula. Derived on read from the
+    #: stored operation, formula, exponent and cardinal numbers; never stored.
+    coefficient: float | None = None
 
 
 class CompositeSchemeTermRecord(BaseModel):
@@ -82,6 +90,9 @@ class CompositeSchemeTermRecord(BaseModel):
     energy_component: EnergyComponentKind
     formula: CompositeExtrapolationFormula | None = None
     exponent: float | None = None
+    #: Whether the term is a fixed linear combination of its inputs' energies, so that
+    #: ``coefficient`` is meaningful on each input. Derived on read.
+    linearity: CompositeTermLinearity
     inputs: list[CompositeSchemeTermInputRecord]
 
 
@@ -97,6 +108,11 @@ class ScientificCompositeSchemeRecord(BaseModel):
 
     composite_scheme: CompositeSchemeCoreBlock
     terms: list[CompositeSchemeTermRecord]
+    #: ``true`` when the scheme has terms and every term computed from inputs is linear, so
+    #: the total is a fixed linear combination of the input energies; ``false`` when any term is
+    #: non-linear (``exponential_three_point``); ``null`` when the scheme states no terms (a
+    #: named method), where nothing can be said. Derived on read.
+    linear_in_energies: bool | None = None
     bound_levels_of_theory: list[CompositeSchemeBoundLevel]
 
 

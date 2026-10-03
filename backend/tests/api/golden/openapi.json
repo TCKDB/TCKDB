@@ -10822,6 +10822,68 @@
         "title": "CompositeBindingSource",
         "type": "string"
       },
+      "CompositeEnergyVerification": {
+        "description": "How far a composite energy has been checked (ADR 0021, P7a). Derived at read time, never stored.\n\n``state``\n    * ``recomputed`` -- an ``assembled`` composite whose stored inputs, run\n      through its scheme *at read time*, give its stated total within the\n      weighted tolerance. Recomputed on every read, so an input energy\n      deposited later is picked up and nothing about the check is stale.\n    * ``recompute_mismatch`` -- the same recomputation disagrees. Possible when\n      an input changed after the composite was accepted. Surfaced, never hidden;\n      ``difference_hartree`` (stated minus recomputed) and ``tolerance_hartree``\n      say by how much.\n    * ``log_reconciled`` -- a ``program_run`` whose attached output log was\n      compared at upload and confirmed every number the deposit stated.\n    * ``program_reported`` -- a ``program_run`` with no confirming log: no log was\n      attached, or one was attached that could not confirm it (see ``reason``).\n    * ``unverifiable`` -- the check cannot be made: an input or component is\n      missing, the triples convention of an input cannot be determined, or no\n      energy was stated at all (see ``reason``).\n\n``reason`` is a stable machine token, ``None`` when there is nothing to add.\nThe recomputed total itself is never returned or stored; only its distance from\nthe stated one is.",
+        "properties": {
+          "assembly": {
+            "$ref": "#/components/schemas/CompositeAssembly"
+          },
+          "difference_hartree": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference Hartree"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "state": {
+            "$ref": "#/components/schemas/CompositeEnergyVerificationState"
+          },
+          "tolerance_hartree": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tolerance Hartree"
+          }
+        },
+        "required": [
+          "state",
+          "assembly"
+        ],
+        "title": "CompositeEnergyVerification",
+        "type": "object"
+      },
+      "CompositeEnergyVerificationState": {
+        "description": "How far a composite energy has been checked, as a read reports it (ADR 0021, P7a).\n\nDerived at read time and never stored; a read-only vocabulary with no\ndatabase type. ``recomputed`` and ``recompute_mismatch`` apply to an\n``assembled`` composite (arithmetic over stored inputs), ``log_reconciled`` and\n``program_reported`` to a ``program_run`` one; ``unverifiable`` to either.",
+        "enum": [
+          "recomputed",
+          "recompute_mismatch",
+          "log_reconciled",
+          "program_reported",
+          "unverifiable"
+        ],
+        "title": "CompositeEnergyVerificationState",
+        "type": "string"
+      },
       "CompositeExtrapolationFormula-Input": {
         "enum": [
           "inverse_power",
@@ -11259,6 +11321,17 @@
             "title": "Composite Scheme Ref",
             "type": "string"
           },
+          "geometry_level_of_theory_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geometry Level Of Theory Ref"
+          },
           "kind": {
             "$ref": "#/components/schemas/CompositeSchemeKind-Output"
           },
@@ -11374,6 +11447,17 @@
             ],
             "title": "Cardinal Number"
           },
+          "coefficient": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coefficient"
+          },
           "level_of_theory": {
             "$ref": "#/components/schemas/LevelOfTheorySummary"
           },
@@ -11422,6 +11506,9 @@
             "title": "Inputs",
             "type": "array"
           },
+          "linearity": {
+            "$ref": "#/components/schemas/CompositeTermLinearity"
+          },
           "operation": {
             "$ref": "#/components/schemas/CompositeTermOperation-Output"
           },
@@ -11434,10 +11521,21 @@
           "position",
           "operation",
           "energy_component",
+          "linearity",
           "inputs"
         ],
         "title": "CompositeSchemeTermRecord",
         "type": "object"
+      },
+      "CompositeTermLinearity": {
+        "description": "Whether a scheme term is a fixed linear combination of its inputs' energies (ADR 0021, P7a).\n\nRead-only vocabulary derived from a term's operation and formula; no database type.\n``linear``: ``base``, ``value`` and ``difference`` terms and the two-point extrapolations,\nwhose per-input coefficients are reported. ``nonlinear``: ``exponential_three_point``,\nwhose limit is a ratio of the energies, so it has no fixed coefficients and none are\ninvented. ``not_applicable``: an ``empirical`` term, which is not computed from inputs.",
+        "enum": [
+          "linear",
+          "nonlinear",
+          "not_applicable"
+        ],
+        "title": "CompositeTermLinearity",
+        "type": "string"
       },
       "CompositeTermOperation-Input": {
         "enum": [
@@ -22736,6 +22834,15 @@
         "title": "KineticsUploadResult",
         "type": "object"
       },
+      "LegacyCompositeShape": {
+        "description": "A record shape from before the ``composite`` calculation type existed (ADR 0021, P7a).\n\nAnnotated on reads, never repaired: the derived levels of such a record are\nexactly what they were, so a depositor's data is not silently re-read as\nsomething it did not claim to be.\n\n``composite_role_on_non_composite_calculation``: a calculation of another type\nis linked under the role ``composite``.\n``named_method_level_on_non_composite_calculation``: an ``opt`` or ``sp`` ran at\nthe level of a catalogued named composite method (CBS-QB3, G4, ...).",
+        "enum": [
+          "composite_role_on_non_composite_calculation",
+          "named_method_level_on_non_composite_calculation"
+        ],
+        "title": "LegacyCompositeShape",
+        "type": "string"
+      },
       "LevelOfTheoryCalculationUsageSummary": {
         "description": "One calculation attributing this level of theory.\n\nBounded, ordered-by-id projection -- the same shape and limit\ndiscipline as ``EnergyCorrectionSchemeUsageSummary`` /\n``FrequencyScaleFactorUsageSummary``. A caller wanting the full,\npaginated set should use\n``/scientific/calculations/search?lot_ref=...`` instead; this section\nexists so the LOT detail page does not need a second round trip for a\nfirst look.",
         "properties": {
@@ -23106,6 +23213,16 @@
             ],
             "title": "Cabs Basis"
           },
+          "core_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoreTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -23167,6 +23284,16 @@
               }
             ],
             "title": "Solvent Model"
+          },
+          "spin_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpinTreatment-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -23319,6 +23446,16 @@
               }
             ],
             "title": "Basis"
+          },
+          "core_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoreTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "dispersion": {
             "anyOf": [
@@ -36952,6 +37089,16 @@
           "calculation": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_calculation__CalculationCoreBlock"
           },
+          "composite_energy_verification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompositeEnergyVerification"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "conformer": {
             "anyOf": [
               {
@@ -37084,6 +37231,16 @@
               }
             ],
             "x-tckdb-include-gated": "irc"
+          },
+          "legacy_composite_shape": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LegacyCompositeShape"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "level_of_theory": {
             "anyOf": [
@@ -37382,6 +37539,17 @@
           },
           "composite_scheme": {
             "$ref": "#/components/schemas/CompositeSchemeCoreBlock"
+          },
+          "linear_in_energies": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linear In Energies"
           },
           "terms": {
             "items": {
@@ -38257,8 +38425,18 @@
         "type": "object"
       },
       "ScientificLevelsSummary": {
-        "description": "Geometry / frequency / energy levels of theory, derived at read time.\n\n``geometry``, ``frequency``, ``energy`` and ``energy_source`` are never\nstored, and never behind an ``include=`` token: recomputed on\nevery read from whichever ``opt``/``freq``/``sp``/``composite``/\n``imported`` source calculations the record links right now, per\n``app.services.calculation_levels.derive_levels`` (R1):\n\n* ``geometry`` — the ``opt`` role's level of theory; when no ``opt``\n  is linked, the internal geometry level of a linked program-run\n  ``composite`` that has an output geometry of its own (its scheme's\n  recipe level), ``geometry_source=\"composite_recipe\"``.\n* ``frequency`` — the ``freq`` role's level, or the ``opt``'s own\n  level when no separate ``freq`` is linked but the optimisation\n  calculation itself carries frequency results; failing both, the\n  internal frequency level of that composite's scheme\n  (``frequency_source=\"composite_recipe\"``).\n* ``energy`` — a linked ``composite``'s level when exactly one\n  composite level is linked; otherwise the linked ``sp``s' shared\n  level when they agree; otherwise the ``opt``'s own level (an\n  optimisation's final energy *is* the single-point value at its own\n  level of theory); otherwise a linked ``imported`` calculation's\n  level; ``null`` when linked ``sp``s (or ``composite``s) disagree on\n  level of theory (see ``energy_source=\"ambiguous\"`` below).\n* ``energy_source`` names which role answered ``energy`` -- ``'composite'``,\n  ``'sp'``, ``'opt'``, or ``'imported'`` -- or ``'ambiguous'``\n  when two or more linked ``sp`` calculations (a multi-conformer\n  ensemble's per-conformer single points, say) or two or more linked\n  ``composite`` calculations run at different\n  levels of theory, so no single energy level of theory can be\n  reported for the record as a whole; or ``null`` when nothing\n  linked can answer it.\n* ``geometry_source`` is ``'opt'`` or ``'composite_recipe'`` (or ``null``\n  when ``geometry`` is); ``frequency_source`` is ``'freq'``, ``'opt'``\n  or ``'composite_recipe'`` (or ``null`` when ``frequency`` is). A\n  ``'composite_recipe'`` level is what the named method runs\n  internally, stated by the method's catalogue entry, not a\n  calculation anybody deposited.\n\nAny field may be ``null`` independently of the others: a record with\nonly a ``freq`` link, for instance, reports a ``frequency`` level and\n``geometry``/``energy`` both ``null``.\n\n``declared_energy`` is the one exception to \"derived at read time\": see\nits field comment.",
+        "description": "Geometry / frequency / energy levels of theory, derived at read time.\n\n``geometry``, ``frequency``, ``energy`` and ``energy_source`` are never\nstored, and never behind an ``include=`` token: recomputed on\nevery read from whichever ``opt``/``freq``/``sp``/``composite``/\n``imported`` source calculations the record links right now, per\n``app.services.calculation_levels.derive_levels`` (R1):\n\n* ``geometry`` — the ``opt`` role's level of theory; when no ``opt``\n  is linked, the internal geometry level of a linked program-run\n  ``composite`` that has an output geometry of its own (its scheme's\n  recipe level), ``geometry_source=\"composite_recipe\"``.\n* ``frequency`` — the ``freq`` role's level, or the ``opt``'s own\n  level when no separate ``freq`` is linked but the optimisation\n  calculation itself carries frequency results; failing both, the\n  internal frequency level of that composite's scheme\n  (``frequency_source=\"composite_recipe\"``).\n* ``energy`` — a linked ``composite``'s level when exactly one\n  composite level is linked; otherwise the linked ``sp``s' shared\n  level when they agree; otherwise the ``opt``'s own level (an\n  optimisation's final energy *is* the single-point value at its own\n  level of theory); otherwise a linked ``imported`` calculation's\n  level; ``null`` when linked ``sp``s (or ``composite``s) disagree on\n  level of theory (see ``energy_source=\"ambiguous\"`` below).\n* ``energy_source`` names which role answered ``energy`` -- ``'composite'``,\n  ``'sp'``, ``'opt'``, or ``'imported'`` -- or ``'ambiguous'``\n  when two or more linked ``sp`` calculations (a multi-conformer\n  ensemble's per-conformer single points, say) or two or more linked\n  ``composite`` calculations run at different\n  levels of theory, so no single energy level of theory can be\n  reported for the record as a whole; or ``null`` when nothing\n  linked can answer it.\n* ``geometry_source`` is ``'opt'`` or ``'composite_recipe'`` (or ``null``\n  when ``geometry`` is); ``frequency_source`` is ``'freq'``, ``'opt'``\n  or ``'composite_recipe'`` (or ``null`` when ``frequency`` is). A\n  ``'composite_recipe'`` level is what the named method runs\n  internally, stated by the method's catalogue entry, not a\n  calculation anybody deposited.\n\nAny field may be ``null`` independently of the others: a record with\nonly a ``freq`` link, for instance, reports a ``frequency`` level and\n``geometry``/``energy`` both ``null``.\n\n``notation`` is the chemist's shorthand for the two levels that matter to a\nnumber, derived from ``energy`` and ``geometry`` on every read and never\nstored (see :func:`levels_notation` for the exact rules).\n\n``composite_energy_verification`` is set when the record's energy comes from\na ``composite`` calculation (``energy_source=\"composite\"``): how far that\nenergy has been checked. ``null`` for every other source, and for a record\nwhose composite energy is ``\"ambiguous\"``.\n\n``legacy_composite_shape`` annotates a record built the way depositors did\nbefore the ``composite`` calculation type existed. It is an annotation only:\nthe levels above are derived exactly as they always were.\n\n``declared_energy`` is the one exception to \"derived at read time\": see\nits field comment.",
         "properties": {
+          "composite_energy_verification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompositeEnergyVerification"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "declared_energy": {
             "anyOf": [
               {
@@ -38347,8 +38525,34 @@
               }
             ],
             "title": "Geometry Source"
+          },
+          "legacy_composite_shape": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LegacyCompositeShape"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "``energy//geometry`` written the way a chemist writes it; ``null`` when it cannot be.\n\nDerived from ``energy`` and ``geometry`` on every read; never stored,\nnever accepted on input, and never passed by a builder (an AST invariant\nforbids it). See :func:`levels_notation`.",
+            "readOnly": true,
+            "title": "Notation"
           }
         },
+        "required": [
+          "notation"
+        ],
         "title": "ScientificLevelsSummary",
         "type": "object"
       },
@@ -63600,6 +63804,22 @@
           },
           {
             "in": "query",
+            "name": "core_treatment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CoreTreatment"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Core Treatment"
+            }
+          },
+          {
+            "in": "query",
             "name": "lot_hash",
             "required": false,
             "schema": {
@@ -74815,6 +75035,22 @@
           },
           {
             "in": "query",
+            "name": "core_treatment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CoreTreatment"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Core Treatment"
+            }
+          },
+          {
+            "in": "query",
             "name": "has_correction_schemes",
             "required": false,
             "schema": {
@@ -75112,6 +75348,22 @@
                 }
               ],
               "title": "Spin Treatment"
+            }
+          },
+          {
+            "in": "query",
+            "name": "core_treatment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CoreTreatment"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Core Treatment"
             }
           },
           {

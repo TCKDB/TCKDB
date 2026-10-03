@@ -14,8 +14,15 @@ from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.composite_formulas import ExtrapolationError, extrapolation_coefficients, is_linear_formula
 
 from app.api.errors import not_found
+from app.db.models.common import (
+    CompositeExtrapolationFormula,
+    CompositeInputSlot,
+    CompositeTermLinearity,
+    CompositeTermOperation,
+)
 from app.db.models.composite_scheme import (
     CompositeScheme,
     CompositeSchemeTerm,
@@ -102,15 +109,9 @@ def get_composite_scheme(
     }
     levels = _level_summaries(session, lot_ids)
 
-    inputs_by_term: dict[int, list[CompositeSchemeTermInputRecord]] = {}
+    inputs_by_term: dict[int, list[CompositeSchemeTermInput]] = {}
     for inp in inputs:
-        inputs_by_term.setdefault(inp.term_id, []).append(
-            CompositeSchemeTermInputRecord(
-                slot=inp.slot,
-                cardinal_number=inp.cardinal_number,
-                level_of_theory=levels[inp.level_of_theory_id],
-            )
-        )
+        inputs_by_term.setdefault(inp.term_id, []).append(inp)
 
     core = CompositeSchemeCoreBlock(
         composite_scheme_ref=scheme.public_ref,
@@ -132,19 +133,34 @@ def get_composite_scheme(
         note=scheme.note,
         created_at=scheme.created_at,
     )
-    record = ScientificCompositeSchemeRecord(
-        composite_scheme=core,
-        terms=[
+    term_records = []
+    for t in terms:
+        term_inputs = inputs_by_term.get(t.id, [])
+        linearity = term_linearity(t.operation, t.formula)
+        coefficients = term_coefficients(t.operation, t.formula, t.exponent, term_inputs)
+        term_records.append(
             CompositeSchemeTermRecord(
                 position=t.position,
                 operation=t.operation,
                 energy_component=t.energy_component,
                 formula=t.formula,
                 exponent=t.exponent,
-                inputs=inputs_by_term.get(t.id, []),
+                linearity=linearity,
+                inputs=[
+                    CompositeSchemeTermInputRecord(
+                        slot=inp.slot,
+                        cardinal_number=inp.cardinal_number,
+                        level_of_theory=levels[inp.level_of_theory_id],
+                        coefficient=coefficients.get(inp.id),
+                    )
+                    for inp in term_inputs
+                ],
             )
-            for t in terms
-        ],
+        )
+    record = ScientificCompositeSchemeRecord(
+        composite_scheme=core,
+        linear_in_energies=scheme_linearity([r.linearity for r in term_records]),
+        terms=term_records,
         bound_levels_of_theory=[
             CompositeSchemeBoundLevel(level_of_theory=levels[b.level_of_theory_id], binding_source=b.binding_source)
             for b in bindings
@@ -182,3 +198,66 @@ def _level_summaries(session: Session, lot_ids: set[int]) -> dict[int, LevelOfTh
         )
         for lot in rows
     }
+
+
+def term_linearity(
+    operation: CompositeTermOperation, formula: CompositeExtrapolationFormula | None
+) -> CompositeTermLinearity:
+    """Whether a term is a fixed linear combination of its inputs' energies.
+
+    ``base``, ``value`` and ``difference`` always are; an ``extrapolation`` is when its formula is
+    (:func:`tckdb_schemas.composite_formulas.is_linear_formula`); an ``empirical`` term is not
+    computed from inputs at all.
+    """
+    if operation is CompositeTermOperation.empirical:
+        return CompositeTermLinearity.not_applicable
+    if operation is CompositeTermOperation.extrapolation:
+        if formula is None:
+            return CompositeTermLinearity.not_applicable
+        return CompositeTermLinearity.linear if is_linear_formula(formula) else CompositeTermLinearity.nonlinear
+    return CompositeTermLinearity.linear
+
+
+def term_coefficients(
+    operation: CompositeTermOperation,
+    formula: CompositeExtrapolationFormula | None,
+    exponent: float | None,
+    inputs: list[CompositeSchemeTermInput],
+) -> dict[int, float]:
+    """``{term input id: coefficient}`` for a linear term; empty when the term is not linear.
+
+    A coefficient is the weight of the input's ``energy_component`` in the term's value:
+    ``+1`` for a ``base`` / ``value`` input, ``+1`` / ``-1`` for the ``high`` / ``low`` input of a
+    ``difference``, and the signed closed-form weights of a two-point extrapolation (smaller
+    cardinal first; they sum to 1). A term that cannot be read as stored (an extrapolation whose
+    inputs do not fit its formula) gets no coefficients rather than a guess.
+    """
+    if operation in (CompositeTermOperation.base, CompositeTermOperation.value):
+        return {i.id: 1.0 for i in inputs if i.slot is CompositeInputSlot.value}
+    if operation is CompositeTermOperation.difference:
+        signs = {CompositeInputSlot.high: 1.0, CompositeInputSlot.low: -1.0}
+        return {i.id: signs[i.slot] for i in inputs if i.slot in signs}
+    if operation is CompositeTermOperation.extrapolation and formula is not None:
+        cardinal_inputs = [i for i in inputs if i.slot is CompositeInputSlot.cardinal and i.cardinal_number is not None]
+        cardinals = [i.cardinal_number for i in cardinal_inputs if i.cardinal_number is not None]
+        try:
+            weights = extrapolation_coefficients(formula, cardinals, exponent)
+        except ExtrapolationError:
+            return {}
+        if weights is None:
+            return {}
+        ordered = sorted(cardinal_inputs, key=lambda i: i.cardinal_number or 0)
+        return {i.id: w for i, w in zip(ordered, weights, strict=True)}
+    return {}
+
+
+def scheme_linearity(term_linearities: list[CompositeTermLinearity]) -> bool | None:
+    """``None`` with no terms; ``False`` when any term is non-linear; else ``True``.
+
+    Terms that are ``not_applicable`` (empirical) are not computed from inputs and do not decide it;
+    a scheme of only such terms says nothing (``None``).
+    """
+    relevant = [x for x in term_linearities if x is not CompositeTermLinearity.not_applicable]
+    if not relevant:
+        return None
+    return all(x is CompositeTermLinearity.linear for x in relevant)

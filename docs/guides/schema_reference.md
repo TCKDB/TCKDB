@@ -634,6 +634,23 @@ the gap.
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
 
+### `calc_composite_log_check`
+
+**Role:** result
+
+**Purpose:** What comparing a composite calculation with one attached output log concluded (ADR 0021, P7a).
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+| `artifact_sha256` | CHAR(64) | no | — | — | — | not documented |
+| `outcome` | CompositeLogOutcome (enum) | no | — | — | `confirmed`, `mismatch`, `method_mismatch`, `available`, `unverifiable`, `absent` | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_calc_composite_log_check_artifact_sha256_hex`: `artifact_sha256 ~ '^[0-9a-f]{64}$'`
+
 ### `calc_scf_stability`
 
 **Role:** result

@@ -49,6 +49,7 @@ from app.db.models.thermo import (
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
+    CompositeEnergyVerification,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
     ScientificLevelsSummary,
@@ -72,6 +73,7 @@ from app.schemas.reads.scientific_thermo import (
     ThermoWilhoitBlock,
 )
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
+from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -83,6 +85,10 @@ from app.services.scientific_read.common import (
     validate_pagination,
     validate_temperature_range,
     visible_statuses,
+)
+from app.services.scientific_read.composite_annotations import (
+    legacy_composite_shape,
+    record_composite_verification,
 )
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
@@ -388,6 +394,9 @@ def get_species_thermo(
     composite_facts = composite_role_facts(
         session, {cid: calc_meta[cid]["lot_id"] for cid in composite_calc_ids}
     )
+    # How far each linked composite energy has been checked (ADR 0021, P7a): derived
+    # now from the stored inputs / recorded log checks, in bulk for the whole request.
+    composite_verifications = verify_composite_calculations(session, composite_calc_ids)
     recipe_level_summaries = load_declared_energy_summaries(
         session, recipe_lot_ids(composite_facts.values())
     )
@@ -519,6 +528,7 @@ def get_species_thermo(
             freq_calc_ids=freq_calc_ids,
             composite_facts=composite_facts,
             recipe_level_summaries=recipe_level_summaries,
+            composite_verifications=composite_verifications,
         )
         declared_lot_id = (
             t.energy_level_of_theory_id
@@ -1382,6 +1392,7 @@ def _build_levels_thermo(
     freq_calc_ids: set[int],
     composite_facts: dict[int, CompositeRoleFacts],
     recipe_level_summaries: dict[int, LevelOfTheorySummary],
+    composite_verifications: dict[int, CompositeEnergyVerification],
 ) -> ScientificLevelsSummary:
     """R1 for one thermo record: derive its geometry/frequency/energy levels.
 
@@ -1431,17 +1442,34 @@ def _build_levels_thermo(
             if cid in calc_meta and not is_composite(cid)
         ],
     )
+    geometry = _lot_summary_from_id(calc_meta_by_lot_id, derived.geometry_lot_id, recipe_level_summaries)
+    frequency = _lot_summary_from_id(calc_meta_by_lot_id, derived.frequency_lot_id, recipe_level_summaries)
+    energy = _lot_summary_from_id(calc_meta_by_lot_id, derived.energy_lot_id)
     return ScientificLevelsSummary(
-        geometry=_lot_summary_from_id(
-            calc_meta_by_lot_id, derived.geometry_lot_id, recipe_level_summaries
-        ),
-        frequency=_lot_summary_from_id(
-            calc_meta_by_lot_id, derived.frequency_lot_id, recipe_level_summaries
-        ),
-        energy=_lot_summary_from_id(calc_meta_by_lot_id, derived.energy_lot_id),
+        geometry=geometry,
+        frequency=frequency,
+        energy=energy,
         energy_source=derived.energy_source,
         geometry_source=derived.geometry_source,
         frequency_source=derived.frequency_source,
+        composite_energy_verification=record_composite_verification(
+            energy_source=derived.energy_source,
+            typed_composite_ids=[
+                cid for cid in role_calc_ids.get("composite", []) if cid in calc_meta and is_composite(cid)
+            ],
+            verifications=composite_verifications,
+        ),
+        legacy_composite_shape=legacy_composite_shape(
+            composite_role_on_non_composite=any(
+                cid in calc_meta and not is_composite(cid) for cid in role_calc_ids.get("composite", [])
+            ),
+            geometry=geometry,
+            geometry_source=derived.geometry_source,
+            frequency=frequency,
+            frequency_source=derived.frequency_source,
+            energy=energy,
+            energy_source=derived.energy_source,
+        ),
     )
 
 

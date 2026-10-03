@@ -39,6 +39,7 @@ _GUARD_REVISIONS = (
     "e5b2d8a4c613_sp_energy_components_and_core_treatment.py",
     "f3b7d2a9c514_composite_calculation_type_and_result.py",
     "b4d8e2f6a1c9_composite_inputs_and_dependency_role.py",
+    "a9c3e7b1d5f2_composite_log_check.py",
 )
 
 
