@@ -69,3 +69,19 @@ def test_every_construction_site_passes_every_part_the_notation_writes():
     for keyword in _NOTATION_PARTS:
         missing = [f"{p.relative_to(_APP.parent)}:{line}" for p, line, ok in _calls(keyword) if not ok]
         assert missing == [], f"LevelOfTheorySummary built without {keyword} at: {missing}"
+
+
+def test_no_construction_site_passes_label():
+    """``label`` is derived on read (the one renderer behind the notation and the ML label), never passed (P7b).
+
+    It used to be a stored field that every builder left ``None`` or filled with a slash-joined method and
+    basis; as a computed field a passed ``label=`` is silently ignored, so a builder that kept one would look
+    as if it set the label while setting nothing.
+    """
+    passed = [f"{p.relative_to(_APP.parent)}:{line}" for p, line, ok in _calls("label") if ok]
+    assert passed == [], f"LevelOfTheorySummary.label is derived and must not be passed at: {passed}"
+
+
+def test_the_label_walk_sees_the_same_sites_as_the_composite_scheme_walk():
+    # Not vacuous: a keyword typo in the walk would make "no site passes it" true of nothing.
+    assert [(p, line) for p, line, _ in _calls("label")] == [(p, line) for p, line, _ in _calls()]

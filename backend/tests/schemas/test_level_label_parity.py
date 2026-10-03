@@ -13,7 +13,7 @@ import pytest
 from app.chemistry.level_label import render_level_label
 from app.db.models.common import CoreTreatment, SpinTreatment
 from app.db.models.level_of_theory import LevelOfTheory
-from app.schemas.reads.scientific_common import LevelOfTheorySummary, level_label
+from app.schemas.reads.scientific_common import LevelOfTheorySummary, level_label, levels_notation
 from app.services.scientific_read.ml_dataset import _lot_label
 
 BASE = {"method": "B3LYP", "basis": "def2-TZVP"}
@@ -138,3 +138,42 @@ def test_an_unstated_part_is_omitted_not_defaulted_and_empty_strings_count_as_un
     )
     # A solvent model with no solvent writes nothing.
     assert render_level_label(method="M", solvent_model="smd") == "M"
+
+
+@pytest.mark.parametrize("fields", SPREAD, ids=lambda f: "-".join(sorted(f)))
+def test_the_summary_label_field_is_the_same_text_as_the_ml_label_and_the_notation(fields):
+    """``LevelOfTheorySummary.label`` (ADR 0021, P7b) is one more reader of the one renderer."""
+    summary = _summary(fields)
+    assert summary.label == _lot_label(_row(fields)) == level_label(summary)
+    assert summary.model_dump()["label"] == summary.label
+    # A level that is its own energy and geometry has the label as its notation.
+    assert levels_notation(energy=summary, geometry=summary) == summary.label
+
+
+def test_all_electron_and_frozen_core_of_one_method_and_basis_have_different_labels():
+    """The core-valence term of a focal-point scheme is ``E(AE) - E(FC)`` at one method and basis."""
+    fc = _summary({"method": "CCSD(T)", "basis": "cc-pCVTZ", "core_treatment": CoreTreatment.frozen_core})
+    ae = _summary({"method": "CCSD(T)", "basis": "cc-pCVTZ", "core_treatment": CoreTreatment.all_electron})
+    assert fc.display == ae.display  # the short form cannot tell them apart
+    assert fc.label == "CCSD(T)/cc-pCVTZ (core=frozen_core)"
+    assert ae.label == "CCSD(T)/cc-pCVTZ (core=all_electron)"
+
+
+def test_the_label_is_not_an_input():
+    summary = LevelOfTheorySummary(
+        level_of_theory_id=1, level_of_theory_ref="lot_x", method="B3LYP", composite_scheme=None, label="forged"
+    )
+    assert summary.label == "B3LYP"
+
+
+@pytest.mark.parametrize("fields", SPREAD, ids=lambda f: "-".join(sorted(f)))
+def test_the_level_of_theory_detail_block_label_is_the_same_text_too(fields):
+    """The methods index prints ``LevelOfTheoryCoreBlock.label``; it must be the summary's text."""
+    from datetime import datetime, timezone
+
+    from app.schemas.reads.scientific_level_of_theory import LevelOfTheoryCoreBlock
+
+    block = LevelOfTheoryCoreBlock(
+        level_of_theory_ref="lot_x", lot_hash="0" * 64, created_at=datetime.now(timezone.utc), **fields
+    )
+    assert block.label == _summary(fields).label == _lot_label(_row(fields))

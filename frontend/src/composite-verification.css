@@ -1,0 +1,68 @@
+/* `components/CompositeVerification.tsx` -- how far a composite energy has
+ * been checked (ADR 0021, P7a). Owns its own stylesheet, imported once from
+ * the component, like `EvidenceChecklist`/`ReviewNote`.
+ *
+ * Confirmed and neutral states reuse the site's pill primitives
+ * (`.value-pill`, `.value-pill.value-pill--muted`, design-system.css) and
+ * add nothing here. Only a CONTRADICTION gets a style of its own: a
+ * bordered block in the `--warning` (failure) register, never a pill and
+ * never muted, so a number the archive holds evidence against cannot be
+ * mistaken for one that is merely unconfirmed. Tokens only, so it
+ * retints with the theme (light and dark) like everything else. */
+.composite-verification {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    align-items: flex-start;
+}
+
+.composite-verification--contradiction {
+    padding: var(--s-3);
+    border: 1px solid var(--warning);
+    border-left-width: 4px;
+    border-radius: .3rem;
+    background: var(--surface-sunken);
+    max-width: var(--measure-note);
+}
+
+/* The notation headline (ProductLevels.tsx) can carry a long recipe label. */
+[data-levels-notation] dd,
+[data-levels-notation] code {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.composite-verification-marker {
+    display: inline-block;
+    margin-top: var(--s-2);
+    padding: .15rem .5rem;
+    border: 1px solid var(--warning);
+    border-radius: .3rem;
+    color: var(--warning);
+    font: var(--type-ui-font);
+    text-decoration: none;
+}
+
+.composite-verification-marker:hover,
+.composite-verification-marker:focus-visible {
+    background: var(--surface-sunken);
+    text-decoration: underline;
+}
+
+.composite-verification-lead {
+    color: var(--warning);
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+    text-transform: none;
+}
+
+.composite-verification-headline {
+    color: var(--ink);
+    font: var(--type-ui-font);
+}
+
+.composite-verification-figures {
+    margin: 0;
+    color: var(--ink-2);
+    font: var(--type-data-font);
+}

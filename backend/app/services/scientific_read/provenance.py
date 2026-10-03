@@ -916,7 +916,6 @@ def _build_calculations_section(
                     cabs_basis=row[17],
                     solvent_model=row[18],
                     spin_treatment=row[19],
-                    label="/".join(p for p in (row[5] or "", row[6]) if p),
                     composite_scheme=schemes.get(row[3]),
                 )
                 if row[3] is not None

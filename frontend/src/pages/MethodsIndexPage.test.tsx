@@ -140,7 +140,12 @@ describe("MethodsIndexPage: loads and renders the three provenance-vocabulary ta
         const table = await screen.findByRole("table", { name: "Levels of theory" })
         expect(within(table).getByText("none")).toBeVisible()
         expect(within(table).getByText("gas phase")).toBeVisible()
-        expect(within(table).queryByText("not recorded")).not.toBeInTheDocument()
+        // Dispersion and solvent are optional method choices ("none"/"gas phase"); only the
+        // core and spin treatment columns, which a level may simply not state, read "not recorded".
+        expect(table.querySelector('td[data-label="Dispersion"]')?.textContent).toBe("none")
+        expect(table.querySelector('td[data-label="Solvent"]')?.textContent).toBe("gas phase")
+        expect(table.querySelector('td[data-label="Core treatment"]')?.textContent).toBe("not recorded")
+        expect(table.querySelector('td[data-label="Spin treatment"]')?.textContent).toBe("not recorded")
     })
 })
 

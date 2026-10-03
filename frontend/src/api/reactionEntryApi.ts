@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { levelOfTheorySchema, recordReviewSchema } from "./scientificSchemas"
+import { levelOfTheorySchema, productLevelsSchema, recordReviewSchema } from "./scientificSchemas"
 import { parseScientificResponse, requestScientificJson, ScientificApiError } from "./scientificTransport"
 
 /**
@@ -48,17 +48,12 @@ const literatureSummarySchema = z.object({
 }).passthrough()
 
 // `ScientificLevelsSummary` -- geometry/frequency/energy levels of theory
-// plus `energy_source`, the SAME shape `productLevelsSchema`
-// (`scientificSchemas.ts`) already models for statmech/thermo records; the
-// backend schema's fields (`geometry`, `frequency`, `energy`,
-// `energy_source`) line up field-for-field, so this reuses that schema
-// rather than a duplicate.
-const levelsSummarySchema = z.object({
-    geometry: levelOfTheorySchema.nullable().optional(),
-    frequency: levelOfTheorySchema.nullable().optional(),
-    energy: levelOfTheorySchema.nullable().optional(),
-    energy_source: z.string().nullable().optional(),
-}).passthrough()
+// plus `energy_source`, and (ADR 0021, P7a) `notation`, the `*_source`
+// fields, `composite_energy_verification` and `legacy_composite_shape`:
+// the SAME shape `productLevelsSchema` (`scientificSchemas.ts`) models for
+// statmech/thermo records, so this reuses that schema rather than a
+// duplicate that would drift from it.
+const levelsSummarySchema = productLevelsSchema
 
 // ---------------------------------------------------------------------------
 // reaction_entry header

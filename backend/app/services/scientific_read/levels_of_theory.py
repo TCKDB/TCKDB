@@ -216,7 +216,6 @@ def _build(
             cabs_basis=row.cabs_basis,
             solvent_model=row.solvent_model,
             spin_treatment=row.spin_treatment,
-            label=None,
             composite_scheme=schemes.get(row.id),
         )
 

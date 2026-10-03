@@ -3,8 +3,10 @@ import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../record-identity-header.css"
 import "../methods.css"
+import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
 import { CorrectionSchemeTable } from "../components/CorrectionSchemeTable"
 import { Disclosure } from "../components/Disclosure"
+import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
@@ -57,7 +59,10 @@ export default function LevelOfTheoryPage() {
 
 function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
     const lot = record.level_of_theory
-    const title = lot.basis ? `${lot.method}/${lot.basis}` : lot.method
+    // The server's full label (ADR 0021, P7b) names the level the way its identity reads, so the
+    // all-electron and frozen-core pages of one method and basis are told apart in the heading and
+    // the breadcrumb. Older payloads have none: they keep `method/basis`.
+    const title = lot.label ?? (lot.basis ? `${lot.method}/${lot.basis}` : lot.method)
 
     return (
         <section className="conformer-page methods-page">
@@ -107,9 +112,22 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                     <div><dt>Dispersion</dt><dd>{lot.dispersion ?? "none"}</dd></div>
                                     <div><dt>Solvent</dt><dd>{lot.solvent ?? "gas phase"}{lot.solvent_model ? ` (${lot.solvent_model})` : ""}</dd></div>
                                     <div><dt>Spin treatment</dt><dd>{lot.spin_treatment ? words(lot.spin_treatment) : "not recorded"}</dd></div>
+                                    {/* Core treatment is stated-or-absent (ADR 0021, P7a): always
+                                        a row, like spin treatment, and "not recorded" rather than
+                                        "all electron" for a level that does not say. */}
+                                    <div><dt>Core treatment</dt><dd>{lot.core_treatment ? words(lot.core_treatment) : "not recorded"}</dd></div>
                                     {lot.aux_basis && <div><dt>Auxiliary basis</dt><dd>{lot.aux_basis}</dd></div>}
                                     {lot.cabs_basis && <div><dt>CABS basis</dt><dd>{lot.cabs_basis}</dd></div>}
                                     {lot.keywords && <div><dt>Keywords</dt><dd>{lot.keywords}</dd></div>}
+                                    {lot.composite_scheme && (
+                                        <div>
+                                            <dt>Composite recipe</dt>
+                                            <dd>
+                                                <CompositeSchemeLink scheme={lot.composite_scheme} />{" "}
+                                                <span className="value-pill value-pill--muted">{words(lot.composite_scheme.kind)}</span>
+                                            </dd>
+                                        </div>
+                                    )}
                                 </dl>
                             </div>
                         </div>
@@ -120,7 +138,7 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                         <Disclosure summary="Level-of-theory hash" defaultOpen={false} className="lot-hash-disclosure">
                             <p className="note">
                                 A content hash over method, basis, auxiliary/CABS basis, dispersion, solvent,
-                                solvent model, keywords, and spin treatment — two deposits with the same six
+                                solvent model, keywords, spin treatment, and core treatment (when stated) — two deposits with the same six
                                 displayed facts above but a different hash differ in one of the fields not shown
                                 inline (most often spin treatment). Not an identifier a reader looks up by; shown
                                 for exact-identity comparison only.
@@ -446,6 +464,18 @@ function CorrectionSchemeBox({ scheme }: { scheme: EnergyCorrectionSchemeRecord 
                 {scheme.energy_correction_scheme.note && (
                     <div><dt>Note</dt><dd>{scheme.energy_correction_scheme.note}</dd></div>
                 )}
+                {/* ADR 0021 / P6: the level the scheme's own frequencies were
+                    computed at is part of its identity. Always a row: an
+                    unstated one reads "not recorded", never the scheme's
+                    energy level standing in for it. */}
+                <div>
+                    <dt>Frequency level</dt>
+                    <dd>
+                        {scheme.frequency_level_of_theory
+                            ? <LevelOfTheoryLink levelOfTheory={scheme.frequency_level_of_theory} />
+                            : "not recorded"}
+                    </dd>
+                </div>
                 <div><dt>Applied to</dt><dd>{scheme.evidence_summary.applied_usage_count} entries</dd></div>
             </dl>
             <CorrectionSchemeTable

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.77.0 - 2026-10-03
+
+Composite levels of theory, phase P7b (ADR 0021): a read-shape note only. No upload payload field is
+added, removed or changed, and every payload accepted before is accepted unchanged.
+
+- Reads: `LevelOfTheorySummary.label` is now always the full rendered label of the level, a string,
+  never `null`: `method/basis` then each stated part of its identity, for example
+  `CCSD(T)/cc-pCVTZ (core=all_electron)`. It is the same text as the notation of a record's levels and
+  the ML export's label. Before, it was `null` on most reads and a slash-joined `method/basis` on a few,
+  so a caller that treated it as the short form should read `display` instead (unchanged: `method/basis`).
+- Reads: `LevelOfTheoryCoreBlock.label` is new, with the same text. The level-of-theory detail and browse
+  reads carry it.
+- The producer contract is unchanged except for its version line and this entry.
+
 ## 0.76.0 - 2026-10-03
 
 Network solve energy sources are typed (#642). No field or enum member changes; the `source_calculation_key` of a state energy and of a channel

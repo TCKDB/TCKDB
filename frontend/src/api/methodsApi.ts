@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
-import { levelOfTheorySchema } from "./scientificSchemas"
+import { compositeSchemeSummarySchema, levelOfTheorySchema } from "./scientificSchemas"
 
 // ---------------------------------------------------------------------------
 // The methods surface (`docs/plans/methods-surface.md` §5.1-5.1,
@@ -113,6 +113,10 @@ const ecsAvailableSectionsSchema = z.object({
 export const energyCorrectionSchemeRecordSchema = z.object({
     energy_correction_scheme: ecsCoreSchema,
     level_of_theory: lotSummarySchema.nullable().optional(),
+    // ADR 0021 / P6: the level the scheme's own frequencies were computed
+    // at, part of the scheme's identity. `null`/absent means the deposit did
+    // not state one, never "the same as the level above".
+    frequency_level_of_theory: lotSummarySchema.nullable().optional(),
     // Added by #439 (deployed). Release-grained since correction-scheme-
     // provenance plan v2 §4/#459: the scheme row stores a real
     // `software_release_id` FK, and `_build_software_release_summary`
@@ -219,6 +223,14 @@ const levelOfTheoryCoreSchema = z.object({
     solvent_model: z.string().nullable().optional(),
     keywords: z.string().nullable().optional(),
     spin_treatment: z.string().nullable().optional(),
+    // ADR 0021 / P7a: `frozen_core`/`all_electron`, or `null` when the
+    // deposit does not state it (never defaulted to either).
+    core_treatment: z.string().nullable().optional(),
+    // The composite recipe this level is bound to, or `null`.
+    composite_scheme: compositeSchemeSummarySchema.nullable().optional(),
+    // The level written in full by the server (`method/basis (core=...)`), so
+    // two levels differing only in core treatment read differently.
+    label: z.string().nullable().optional(),
     lot_hash: z.string(),
     created_at: z.string(),
 }).passthrough()
@@ -320,6 +332,24 @@ export type LevelOfTheoryBrowseResult = { records: LevelOfTheoryRecord[]; pagina
 
 const LEVEL_OF_THEORY_DETAIL_INCLUDES = ["correction_schemes", "frequency_scale_factors", "software", "used_by"]
 
+/** The server-side filters the `/methods` index sends. `coreTreatment` is the
+ *  API's own `core_treatment` filter (ADR 0021, P7a): it matches only levels
+ *  that STATE their core treatment, so a level that does not say is listed
+ *  under neither value. Anything else the index narrows in the browser. */
+export type CoreTreatmentValue = "frozen_core" | "all_electron"
+export interface LevelOfTheoryBrowseFilter {
+    coreTreatment?: CoreTreatmentValue | "" | null
+}
+
+/** The query string for the browse call: `limit=200` always, `core_treatment`
+ *  only when a value is chosen (an empty choice sends nothing, never an empty
+ *  parameter the API would reject). */
+export function levelOfTheoryBrowseQuery(filter: LevelOfTheoryBrowseFilter = {}): URLSearchParams {
+    const query = new URLSearchParams({ limit: "200" })
+    if (filter.coreTreatment) query.set("core_treatment", filter.coreTreatment)
+    return query
+}
+
 /**
  * `/methods` index data -- unfiltered, every level of theory with >=1
  * attributing calculation (§4.1). `limit=200` (the endpoint's own cap) is
@@ -327,9 +357,11 @@ const LEVEL_OF_THEORY_DETAIL_INCLUDES = ["correction_schemes", "frequency_scale_
  * this index does not paginate (§4.1: "the index itself stays exactly as
  * small as v1 planned").
  */
-export async function loadLevelOfTheoryBrowse(signal?: AbortSignal): Promise<LevelOfTheoryBrowseResult> {
-    const query = new URLSearchParams({ limit: "200" })
-    const endpoint = `/api/v1/scientific/level-of-theories/browse?${query}`
+export async function loadLevelOfTheoryBrowse(
+    signal?: AbortSignal,
+    filter: LevelOfTheoryBrowseFilter = {},
+): Promise<LevelOfTheoryBrowseResult> {
+    const endpoint = `/api/v1/scientific/level-of-theories/browse?${levelOfTheoryBrowseQuery(filter)}`
     const payload = await requestScientificJson(endpoint, signal)
     const parsed = parseScientificResponse(lotBrowseResponseSchema, payload, "level-of-theory browse")
     return { records: parsed.records, pagination: parsed.pagination }
@@ -377,4 +409,77 @@ export async function loadFrequencyScaleFactor(
     const endpoint = `/api/v1/scientific/frequency-scale-factors/${encodeURIComponent(ref)}?${query}`
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(fsfDetailResponseSchema, payload, "frequency scale factor").record
+}
+
+// --- composite scheme (ADR 0021, P7a) -------------------------------------
+//
+// `GET /scientific/composite-schemes/{ref}`. Shapes read from the OpenAPI
+// golden (`ScientificCompositeSchemeRecord`), not guessed. Enum-like fields
+// stay plain strings so a token this client has not met never fails to
+// parse; `domain/compositeSchemeFormat.ts` words the known ones.
+
+const compositeSchemeCoreSchema = z.object({
+    composite_scheme_ref: z.string(),
+    kind: z.string(),
+    name: z.string(),
+    definition_hash: z.string().optional(),
+    // The levels the RECIPE runs internally. `null` means the source does
+    // not state it, never "the same as the energy level".
+    geometry_level_of_theory: lotSummarySchema.nullable().optional(),
+    frequency_level_of_theory: lotSummarySchema.nullable().optional(),
+    // `null` unless a source is cited; a reader must not substitute 1.0.
+    recipe_zpe_scale_factor: z.number().nullable().optional(),
+    source_literature_ref: z.string().nullable().optional(),
+    note: z.string().nullable().optional(),
+    created_at: z.string(),
+}).passthrough()
+
+const compositeSchemeTermInputSchema = z.object({
+    slot: z.string(),
+    cardinal_number: z.number().nullable().optional(),
+    level_of_theory: lotSummarySchema,
+    // `null` for a term that is not linear: no coefficient is invented.
+    coefficient: z.number().nullable().optional(),
+}).passthrough()
+
+const compositeSchemeTermSchema = z.object({
+    position: z.number(),
+    operation: z.string(),
+    energy_component: z.string(),
+    formula: z.string().nullable().optional(),
+    exponent: z.number().nullable().optional(),
+    linearity: z.string(),
+    inputs: z.array(compositeSchemeTermInputSchema),
+}).passthrough()
+
+const compositeSchemeBoundLevelSchema = z.object({
+    level_of_theory: lotSummarySchema,
+    binding_source: z.string(),
+}).passthrough()
+
+export const compositeSchemeRecordSchema = z.object({
+    composite_scheme: compositeSchemeCoreSchema,
+    terms: z.array(compositeSchemeTermSchema),
+    // `null` when the scheme states no terms (a named method).
+    linear_in_energies: z.boolean().nullable().optional(),
+    bound_levels_of_theory: z.array(compositeSchemeBoundLevelSchema),
+}).passthrough()
+
+export type CompositeSchemeRecord = z.infer<typeof compositeSchemeRecordSchema>
+export type CompositeSchemeTerm = z.infer<typeof compositeSchemeTermSchema>
+export type CompositeSchemeTermInput = z.infer<typeof compositeSchemeTermInputSchema>
+
+const compositeSchemeDetailResponseSchema = z.object({
+    record: compositeSchemeRecordSchema,
+}).passthrough()
+
+/** `/methods/composite-schemes/:schemeRef` -- the composite recipe page. */
+export async function loadCompositeScheme(
+    ref: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<CompositeSchemeRecord> {
+    const endpoint = `/api/v1/scientific/composite-schemes/${encodeURIComponent(ref)}`
+    const payload = await requestScientificJson(endpoint, signal, onRateLimited)
+    return parseScientificResponse(compositeSchemeDetailResponseSchema, payload, "composite scheme").record
 }

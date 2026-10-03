@@ -1,4 +1,4 @@
-import type { LevelOfTheory } from "../api/scientificSchemas"
+import type { CompositeEnergyVerification, LevelOfTheory } from "../api/scientificSchemas"
 
 // ---------------------------------------------------------------------------
 // A statmech or thermo record can use different levels of theory for its
@@ -25,6 +25,22 @@ export interface ProductLevels {
     frequency: LevelOfTheory | null
     energy: LevelOfTheory | null
     energy_source: EnergySource | null
+    /** The server's own `energy//geometry` shorthand (ADR 0021, P7a), or
+     *  `null`/absent when either level is. Never composed on the client:
+     *  a partial notation would assert a level the record does not state.
+     *  Optional so a record built from `source_calculations[]` (no server
+     *  `levels` at all) simply has none. */
+    notation?: string | null
+    /** `"opt"`/`"composite_recipe"` (geometry) and `"freq"`/`"opt"`/
+     *  `"composite_recipe"` (frequency): where that level came from. Plain
+     *  strings so an unknown future value still renders (as no note). */
+    geometry_source?: string | null
+    frequency_source?: string | null
+    /** Present only when the energy comes from a composite calculation. */
+    composite_energy_verification?: CompositeEnergyVerification | null
+    /** Set when the record was deposited the way depositors did before the
+     *  `composite` calculation type existed. Annotation only. */
+    legacy_composite_shape?: string | null
 }
 
 /** One `source_calculations[]` row's role and level of theory — the subset
@@ -42,6 +58,11 @@ export const EMPTY_PRODUCT_LEVELS: ProductLevels = {
     frequency: null,
     energy: null,
     energy_source: null,
+    notation: null,
+    geometry_source: null,
+    frequency_source: null,
+    composite_energy_verification: null,
+    legacy_composite_shape: null,
 }
 
 /** First `source_calculations` row for `role`, or `null` if none is
@@ -107,6 +128,11 @@ export function resolveProductLevels(
             frequency: levels.frequency ?? null,
             energy: levels.energy ?? null,
             energy_source: levels.energy_source ?? null,
+            notation: levels.notation ?? null,
+            geometry_source: levels.geometry_source ?? null,
+            frequency_source: levels.frequency_source ?? null,
+            composite_energy_verification: levels.composite_energy_verification ?? null,
+            legacy_composite_shape: levels.legacy_composite_shape ?? null,
         }
     }
     return deriveProductLevelsFromSourceCalculations(sourceCalculations)
@@ -176,5 +202,29 @@ export function allProductLevelsAgree(levelsList: ProductLevels[]): boolean {
         levelsOfTheoryEqual(levels.geometry, first.geometry)
         && levelsOfTheoryEqual(levels.frequency, first.frequency)
         && levelsOfTheoryEqual(levels.energy, first.energy)
+        && compositeFactsEqual(levels, first)
     ))
+}
+
+/** Whether any row of a table has a server notation: the "Level of theory"
+ *  column is added only then, so a table where no row has one shows no
+ *  empty column. */
+export function anyNotation(levelsList: ProductLevels[]): boolean {
+    return levelsList.some((levels) => Boolean(levels.notation))
+}
+
+/** The P7a facts a group's one shared display would otherwise state for
+ *  every member: the notation, where each level came from, the legacy
+ *  annotation, and the composite verification (state, reason, difference).
+ *  Two members that differ in any of these are never shown as one. */
+function compositeFactsEqual(a: ProductLevels, b: ProductLevels): boolean {
+    const va = a.composite_energy_verification ?? null
+    const vb = b.composite_energy_verification ?? null
+    return (a.notation ?? null) === (b.notation ?? null)
+        && (a.geometry_source ?? null) === (b.geometry_source ?? null)
+        && (a.frequency_source ?? null) === (b.frequency_source ?? null)
+        && (a.legacy_composite_shape ?? null) === (b.legacy_composite_shape ?? null)
+        && (va?.state ?? null) === (vb?.state ?? null)
+        && (va?.reason ?? null) === (vb?.reason ?? null)
+        && (va?.difference_hartree ?? null) === (vb?.difference_hartree ?? null)
 }

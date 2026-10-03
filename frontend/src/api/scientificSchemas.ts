@@ -1,5 +1,19 @@
 import { z } from "zod"
 
+/**
+ * The composite recipe a level of theory is bound to (ADR 0021): refs and
+ * names only. `geometry_level_of_theory_ref` is the level the recipe runs
+ * its own geometry at, `null` when the recipe states none.
+ */
+export const compositeSchemeSummarySchema = z.object({
+    composite_scheme_ref: z.string(),
+    kind: z.string(),
+    name: z.string(),
+    geometry_level_of_theory_ref: z.string().nullable().optional(),
+}).passthrough()
+
+export type CompositeSchemeSummary = z.infer<typeof compositeSchemeSummarySchema>
+
 export const levelOfTheorySchema = z.object({
     method: z.string(),
     basis: z.string().nullable().optional(),
@@ -12,20 +26,51 @@ export const levelOfTheorySchema = z.object({
     level_of_theory_ref: z.string().optional(),
     dispersion: z.string().nullable().optional(),
     solvent: z.string().nullable().optional(),
+    // ADR 0021 / P7a: stated-or-null facts of the level itself and the
+    // recipe it is bound to. Each is `null`/absent when nothing is stated,
+    // and renders as absent -- never as a default (`all_electron`, say).
+    solvent_model: z.string().nullable().optional(),
+    aux_basis: z.string().nullable().optional(),
+    cabs_basis: z.string().nullable().optional(),
+    core_treatment: z.string().nullable().optional(),
+    spin_treatment: z.string().nullable().optional(),
+    composite_scheme: compositeSchemeSummarySchema.nullable().optional(),
+    // The level written in full by the server (ADR 0021, P7b): `method/basis`
+    // then each stated part of its identity, e.g. `CCSD(T)/cc-pCVTZ
+    // (core=all_electron)`. The same renderer as the notation of a record's
+    // levels, so the two never disagree. Not composed on the client.
+    label: z.string().nullable().optional(),
 }).passthrough()
 
 /**
- * The compact "method/basis" (or explicit `display`) label shared by every
- * surface that shows a level of theory inline. Deliberately excludes
- * `dispersion`/`solvent`/`level_of_theory_ref` — see the schema comment
- * above; a caller that needs to distinguish two same-label rows renders
- * those fields itself alongside this label, it does not fold them in here.
+ * The text every surface prints for a level of theory. The server's own
+ * full `label` when it sent one (so two levels that differ only in core
+ * treatment, dispersion, solvent or spin never read alike, e.g. the two
+ * sides of a core-valence difference); otherwise the older `display`, then
+ * `method/basis`. The fallbacks serve payloads that predate `label`; the
+ * client never builds a label itself.
  */
-export function lotLabel(value: { method: string; basis?: string | null; display?: string }): string {
-    return value.display ?? (value.basis ? `${value.method}/${value.basis}` : value.method)
+export function lotLabel(value: { method: string; basis?: string | null; display?: string; label?: string | null }): string {
+    return value.label ?? value.display ?? (value.basis ? `${value.method}/${value.basis}` : value.method)
 }
 
 export type LevelOfTheory = z.infer<typeof levelOfTheorySchema>
+
+/**
+ * How far a composite energy has been checked (ADR 0021, P7a). `state` is
+ * kept a plain string on the wire so a state this client has not met never
+ * fails to parse; `domain/compositeVerification.ts` maps the five known
+ * ones and degrades an unknown one to a neutral "not recognised" line.
+ */
+export const compositeEnergyVerificationSchema = z.object({
+    state: z.string(),
+    assembly: z.string().optional(),
+    reason: z.string().nullable().optional(),
+    difference_hartree: z.number().nullable().optional(),
+    tolerance_hartree: z.number().nullable().optional(),
+}).passthrough()
+
+export type CompositeEnergyVerification = z.infer<typeof compositeEnergyVerificationSchema>
 
 /**
  * A statmech/thermo record's up-to-three levels of theory — geometry
@@ -44,6 +89,16 @@ export const productLevelsSchema = z.object({
     frequency: levelOfTheorySchema.nullable().optional(),
     energy: levelOfTheorySchema.nullable().optional(),
     energy_source: z.string().nullable().optional(),
+    // ADR 0021 / P7a. `notation` is the SERVER's chemist's shorthand
+    // (`energy//geometry`), never composed on the client; `null` when
+    // either level is absent. `geometry_source`/`frequency_source` say
+    // when a level is what a composite recipe runs internally
+    // (`composite_recipe`) rather than a deposited calculation.
+    notation: z.string().nullable().optional(),
+    geometry_source: z.string().nullable().optional(),
+    frequency_source: z.string().nullable().optional(),
+    composite_energy_verification: compositeEnergyVerificationSchema.nullable().optional(),
+    legacy_composite_shape: z.string().nullable().optional(),
 }).passthrough()
 
 export type ProductLevelsWire = z.infer<typeof productLevelsSchema>

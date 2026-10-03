@@ -26,6 +26,8 @@ import {
 } from "../api/calculationApi"
 import { ArtifactDownloadButton } from "../components/ArtifactDownloadButton"
 import { CalculationDependencyGraph } from "../components/CalculationDependencyGraph"
+import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
+import { CompositeVerificationBadge, ContradictionMarker } from "../components/CompositeVerification"
 import { Disclosure } from "../components/Disclosure"
 import { EnergyDisplay } from "../components/EnergyDisplay"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
@@ -38,6 +40,7 @@ import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { typeLabel } from "../domain/calculationTypeFormat"
+import { isContradiction, legacyShapeText } from "../domain/compositeVerification"
 import { correctionSchemePath, frequencyScaleFactorPath } from "../domain/methodsLinks"
 import {
     OPTIMISATION_STAGE_UNKNOWN_KICKER_SUFFIX,
@@ -45,7 +48,8 @@ import {
     optimisationStage,
     type OptimisationStage,
 } from "../domain/optimisationStage"
-import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
+import { slotLabel } from "../domain/compositeSchemeFormat"
+import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
 import { reviewPillClass } from "../domain/reviewPillFormat"
@@ -109,6 +113,9 @@ const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not re
 // kept in this ONE place (not four separate ternaries) so a future
 // reversal is a one-line edit, not a hunt through the coverage checklist
 // below.
+/** Anchor of the verification block, which the headline energy's contradiction marker links to. */
+const VERIFICATION_ID = "composite-verification"
+
 const EVIDENCE_ABSENT_LABEL = "absent"
 
 /**
@@ -180,6 +187,9 @@ function headlineEnergy(
             label: "Electronic energy at final geometry",
             valueHartree: results?.opt?.final_energy_hartree ?? null,
         }
+    }
+    if (kind === "composite") {
+        return { label: "Composite electronic energy", valueHartree: results?.composite?.electronic_energy_hartree ?? null }
     }
     return null
 }
@@ -476,6 +486,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                         {headline && (
                             <div className="calc-headline-energy">
                                 <HeadlineEnergy label={headline.label} valueHartree={headline.valueHartree} />
+                                {isContradiction(calculation.composite_energy_verification) && <ContradictionMarker targetId={VERIFICATION_ID} />}
                             </div>
                         )}
 
@@ -514,7 +525,13 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             simply don't carry. */}
                         <dl className="kv-list record-context">
                             <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
-                            <div><dt>Level of theory</dt><dd>{lot ? <LevelOfTheoryLink levelOfTheory={lot} /> : "not recorded"}</dd></div>
+                            <div>
+                                <dt>Level of theory</dt>
+                                <dd className="composite-label">
+                                    {lot ? <LevelOfTheoryLink levelOfTheory={lot} /> : "not recorded"}
+                                    {lot?.composite_scheme && <div className="note"><CompositeSchemeLink scheme={lot.composite_scheme} /></div>}
+                                </dd>
+                            </div>
                             <div>
                                 <dt>Software</dt>
                                 <dd>{softwareLabel(software) ?? "not recorded"}</dd>
@@ -593,6 +610,9 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
             </section>
 
             <ResultsSection
+                verification={calculation.composite_energy_verification ?? null}
+                legacyShape={calculation.legacy_composite_shape ?? null}
+                compositeScheme={lot?.composite_scheme ?? null}
                 results={calculation.results ?? null}
                 type={core.type}
                 availability={resultsAvailability}
@@ -674,10 +694,12 @@ function StageAndConformerNote({ ownRef, stage, conformer }: {
                             <code className="data">{conformer.conformer_observation_ref}</code>
                         </Link>
                         {" · "}
+                        {/* The group is named by its ref. `conformer_group_label` is
+                            the depositor's own text ("conformer_1") and the calculation
+                            read has no server-computed label for a group, so none is
+                            shown: no depositor-typed labels on public pages. */}
                         <Link to={`/conformer-groups/${conformer.conformer_group_ref}`}>
-                            {conformer.conformer_group_label
-                                ? conformer.conformer_group_label
-                                : <code className="data">{conformer.conformer_group_ref}</code>}
+                            group <code className="data">{conformer.conformer_group_ref}</code>
                         </Link>
                     </dd>
                 </div>
@@ -733,12 +755,16 @@ function OptimisationStageBox({ kind, calcRef, selected }: {
 // Eager sections
 // ---------------------------------------------------------------------------
 
-function ResultsSection({ results, type, availability, contradicted }: {
+function ResultsSection({ results, type, availability, contradicted, verification, legacyShape, compositeScheme }: {
     results: CalculationRecord["results"]
     type: string
     availability: SectionAvailability
     contradicted: boolean
+    verification: CalculationRecord["composite_energy_verification"]
+    legacyShape: CalculationRecord["legacy_composite_shape"]
+    compositeScheme: NonNullable<CalculationRecord["level_of_theory"]>["composite_scheme"]
 }) {
+    const legacyText = legacyShapeText(legacyShape)
     // The heading names the same source ResultBody dispatches on
     // (`results.kind`) rather than `type`, so the two can never disagree —
     // falling back to `type` only when there is no result to read a kind
@@ -762,6 +788,18 @@ function ResultsSection({ results, type, availability, contradicted }: {
                     contradicted={contradicted}
                 />
             )}
+            {(verification || type === "composite" || results?.kind === "composite") && (
+                <div className="composite-result" id={VERIFICATION_ID}>
+                    <h3 className="t-heading-2">Verification</h3>
+                    {verification
+                        ? <CompositeVerificationBadge verification={verification} />
+                        : <p className="note">Verification is not recorded for this calculation.</p>}
+                </div>
+            )}
+            {results?.kind === "composite" && results.composite && (
+                <CompositeResultDetail composite={results.composite} compositeScheme={compositeScheme} />
+            )}
+            {legacyText && <p className="note" data-legacy-composite-shape={legacyShape ?? undefined}>{legacyText}</p>}
         </section>
     )
 }
@@ -806,6 +844,14 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
         // reads "not recorded" like every other absent value, not
         // "not determinable" (which claimed something about the data).
         pairs.push(["Imaginary modes above the noise floor (τ)", results.freq.n_imag_at_or_above_tau ?? "not recorded"])
+    } else if (results.kind === "composite" && results.composite) {
+        const composite = results.composite
+        pairs.push(["Assembly", composite.assembly === "assembled" ? "assembled from other calculations" : composite.assembly === "program_run" ? "one program run" : words(composite.assembly) ?? "not recorded"])
+        pairs.push(["Electronic energy (hartree)", composite.electronic_energy_hartree === null || composite.electronic_energy_hartree === undefined
+            ? "not recorded"
+            : <QuantityValue value={formatQuantity("calculation_electronic_energy_hartree", composite.electronic_energy_hartree, null)} />])
+        pairs.push(["E0 (hartree)", composite.e0_hartree ?? "not recorded"])
+        pairs.push(["Recipe ZPE (hartree)", composite.recipe_zpe_hartree ?? "not recorded"])
     } else if (results.kind === "scan" && results.scan) {
         pairs.push(["Dimension", results.scan.dimension ?? "not recorded"])
         pairs.push(["Relaxed scan", boolLabel(results.scan.is_relaxed)])
@@ -830,6 +876,79 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
     return <dl className="kv-list">{pairs.map(([label, value]) => (
         <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
     ))}</dl>
+}
+
+/**
+ * What a composite calculation adds beneath its facts (ADR 0021, P7b): how
+ * far the energy has been checked, the value of each recipe term, and, for
+ * an assembled composite, the calculations it was built from as links. The
+ * verification is the server's own (`composite_energy_verification`); a
+ * calculation with none reads "not recorded", never a silent gap.
+ */
+function CompositeResultDetail({ composite, compositeScheme }: {
+    composite: NonNullable<NonNullable<CalculationRecord["results"]>["composite"]>
+    compositeScheme: NonNullable<CalculationRecord["level_of_theory"]>["composite_scheme"]
+}) {
+    const terms = composite.terms ?? []
+    const inputs = composite.inputs ?? []
+    return (
+        <div className="composite-result">
+            <h3 className="t-heading-2">Terms</h3>
+            {terms.length > 0 ? (
+                <div className="table-scroll">
+                    <table className="data-table" aria-label="Recipe terms of this composite calculation">
+                        <thead>
+                            <tr><th scope="col">Term</th><th scope="col">Value (hartree)</th></tr>
+                        </thead>
+                        <tbody>
+                            {terms.map((term) => (
+                                <tr key={term.term_position}>
+                                    <td data-label="Term">{term.term_position + 1}</td>
+                                    <td data-label="Value (hartree)" className="num">{term.value_hartree}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <p className="empty-projection">No term values are recorded for this calculation.</p>
+            )}
+            {compositeScheme && <p className="note">What each term is: <CompositeSchemeLink scheme={compositeScheme} />.</p>}
+            {composite.assembly === "assembled" && (
+                <>
+                    <h3 className="t-heading-2">Inputs</h3>
+                    {inputs.length > 0 ? (
+                        <div className="table-scroll">
+                            <table className="data-table" aria-label="Calculations this composite is built from">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Term</th>
+                                        <th scope="col">Slot</th>
+                                        <th scope="col">Cardinal number</th>
+                                        <th scope="col">Calculation</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {inputs.map((input, index) => (
+                                        <tr key={`${input.term_position}-${input.slot}-${index}`}>
+                                            <td data-label="Term">{input.term_position + 1}</td>
+                                            <td data-label="Slot">{slotLabel(input.slot)}</td>
+                                            <td data-label="Cardinal number">{input.cardinal_number ?? "none"}</td>
+                                            <td data-label="Calculation">
+                                                <Link to={`/calculations/${input.calculation_ref}`}><code className="data">{input.calculation_ref}</code></Link>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <p className="empty-projection">No input calculations are recorded for this composite.</p>
+                    )}
+                </>
+            )}
+        </div>
+    )
 }
 
 function boolLabel(value: boolean | null | undefined) {

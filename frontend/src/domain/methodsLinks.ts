@@ -23,3 +23,9 @@ export function correctionSchemePath(ref: string): string {
 export function frequencyScaleFactorPath(ref: string): string {
     return `/methods/frequency-scale-factors/${ref}`
 }
+
+/** A composite recipe (CBS-QB3, a CCSD(T)/CBS extrapolation, ...): ADR 0021, P7b.
+ *  `GET /scientific/composite-schemes/{ref}` is its read; this is its page. */
+export function compositeSchemePath(ref: string): string {
+    return `/methods/composite-schemes/${ref}`
+}
