@@ -121,11 +121,14 @@ def validate_thermo_selection_rules() -> None:
     """
     # Imported here: the services package pulls in the ORM and RDKit, which this module
     # otherwise avoids at import time.
+    from app.chemistry.thermo_rules.e1_manifest import ManifestError
     from app.services.thermo_selection.rules import default_rules
 
+    # Narrow on purpose: a manifest that fails its pin or its audit (ManifestError), or one that is
+    # missing from the package (OSError). Anything else is a defect and should surface as itself.
     try:
         default_rules()
-    except Exception as exc:
+    except (ManifestError, OSError) as exc:
         raise ThermoSelectionRulesError(
             f"thermo selection rule registry failed to load ({type(exc).__name__}: {exc}); "
             "the packaged E1 manifest does not match the digest pinned in the rule."
