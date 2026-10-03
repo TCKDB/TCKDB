@@ -10,8 +10,8 @@ TS energy-ordering energies are held against the stored energies (#638). No fiel
   energy), `e0` against the same participant's stored `electronic` energy plus the cited `freq`'s ZPE, when
   both are at one geometry. Tolerance `max(1e-6, 5e-7 * n)` hartree, n = 2 (electronic) or 3 (E0).
 - **`zpe_scale_factor` (optional, `e0` energies only).** TCKDB stores your ZPE unscaled. An `e0` built as
-  `E_electronic + s * ZPE` states `s` and is held to that sum (n = 2 + s + 100 * ZPE, covering `s` printed
-  to four decimals). With no factor, an `e0` equal to `electronic + ZPE` agrees; any other is not refused
+  `E_electronic + s * ZPE` states `s` and is held to that sum (n = 2 + s + 100 * ZPE, which assumes `s` has
+  at least four decimals: state it as multiplied, since 0.954 for a true 0.953649 can be refused). With no factor, an `e0` equal to `electronic + ZPE` agrees; any other is not refused
   but stored `not_compared` with reason `zpe_scaling_unstated`.
 - **`transition_state_energy_ordering_not_compared` (warning).** An energy that cannot be compared (stored
   energy or ZPE not stated, no electronic energy to pair an E0 with, geometries not pairable) is accepted

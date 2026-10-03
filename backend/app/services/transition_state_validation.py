@@ -103,8 +103,9 @@ NOT_COMPARED_NO_ELECTRONIC_ENERGY_TO_PAIR = "no_electronic_energy_to_pair"
 NOT_COMPARED_GEOMETRY_NOT_PAIRED = "geometry_not_paired"
 NOT_COMPARED_ZPE_SCALING_UNSTATED = "zpe_scaling_unstated"
 
-#: A stated ``zpe_scale_factor`` is a printed number of at most four decimals, so it carries up
-#: to half a unit of the last place, 5e-5, as relative error.
+#: A stated ``zpe_scale_factor`` is expected to carry at least four decimals (or be exactly the
+#: multiplier used), so its rounding error is at most half a unit of the fourth place, 5e-5. A
+#: factor stated to fewer decimals can exceed this and is then refused.
 _ZPE_SCALE_FACTOR_PRINTED_ERROR = 5e-5
 
 #: Two printed values are in every comparison of a stated electronic energy with
@@ -390,8 +391,8 @@ def _compare_stated_energies_with_stored(
         if scale is not None:
             # The producer states how it scaled the zero-point energy, so the sum is known and a
             # disagreement is a contradiction. Rounded quantities: the E0, the electronic energy,
-            # the ZPE (weight ``scale``), and the factor itself, printed to at most four decimals
-            # (half a unit, 5e-5, of relative error), which moves the sum by ``5e-5 * zpe``.
+            # the ZPE (weight ``scale``), and the factor itself, stated to at least four decimals
+            # (at most half a unit, 5e-5, of relative error), which moves the sum by ``5e-5 * zpe``.
             stored_e0 = electronic + scale * zpe
             rounded = (
                 _ROUNDED_QUANTITIES_E0 - 1
@@ -931,7 +932,8 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
         "A stated energy-ordering energy should be the energy TCKDB stores for "
         "its cited calculation: the single point's (or optimisation's) energy, "
         "or for an E0 the paired electronic energy plus the cited frequency's "
-        "ZPE, scaled by the stated ``zpe_scale_factor``."
+        "ZPE, scaled by the stated ``zpe_scale_factor``. An E0 with no stated "
+        "factor is never refused."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,

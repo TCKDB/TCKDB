@@ -84,7 +84,9 @@ class TransitionStateComparedEnergy(SchemaBase):
         multiplied the stored zero-point energy by in forming this E0
         (``E0 = E_electronic + s * ZPE``), for example a published ZPE scale
         factor for the level of theory. Provenance the producer states, never
-        inferred. Omit it when the E0 uses the zero-point energy as stored
+        inferred. State it exactly as multiplied, or to at least four decimals:
+        the tolerance assumes a rounding error of at most 5e-5, so a factor
+        rounded to three decimals (0.954 for 0.953649) can be refused. Omit it when the E0 uses the zero-point energy as stored
         (an unscaled E0), not ``1.0``-as-a-guess: ``1.0`` is a claim that the
         sum is unscaled, and is held to the stored values like any other
         stated factor. Finite and positive.

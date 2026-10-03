@@ -226,6 +226,15 @@ def test_the_unscaled_e0_tolerance_is_the_helpers_with_three_quantities(db_sessi
     assert _stored(db_session)[("ts", "e0")] == ("agrees", None)
 
 
+def test_the_top_of_the_unscaled_agreeing_band_is_the_three_quantity_tolerance(db_session) -> None:
+    """A slightly scaled E0 just past Tol(3), with no factor, is not an agreement."""
+    fx = _fixture(db_session, "TOP0")
+    stored_e0 = _ELECTRONIC["ts"] + _ZPE
+    _persist(db_session, fx, _record(e0={"ts": stored_e0 + 1.01 * _TOL_E0}))
+    db_session.flush()
+    assert _stored(db_session)[("ts", "e0")] == ("not_compared", "zpe_scaling_unstated")
+
+
 def test_the_scaled_e0_tolerance_covers_the_sum_and_the_factors_printed_precision(db_session) -> None:
     scale = 0.98
     fx = _fixture(db_session, "TOLS")

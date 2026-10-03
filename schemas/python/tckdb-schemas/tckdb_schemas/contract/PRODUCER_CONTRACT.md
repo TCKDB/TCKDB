@@ -140,7 +140,8 @@ three validation records, at most one per `kind`, every one optional:
   zero-point energy unscaled, so an `e0` built with a scaled one
   (`E0 = E_electronic + s * ZPE`) must state `zpe_scale_factor` (`s`, positive,
   `e0` entries only); the E0 is then held to `electronic + s * ZPE`, with a
-  tolerance that also covers `s` printed to four decimals. A contradiction is
+  tolerance that assumes `s` has at least four decimals, so state it exactly as
+  multiplied (0.954 for a true 0.953649 can be refused). A contradiction is
   refused with `ts_energy_ordering_stated_energy_mismatch` (`context`: the
   participant, kind, both values, tolerance, and for an E0 the stored ZPE and
   factor). With no factor, an `e0` equal to `electronic + ZPE` agrees; any
@@ -228,8 +229,8 @@ TS energy-ordering energies are held against the stored energies (#638). No fiel
   energy), `e0` against the same participant's stored `electronic` energy plus the cited `freq`'s ZPE, when
   both are at one geometry. Tolerance `max(1e-6, 5e-7 * n)` hartree, n = 2 (electronic) or 3 (E0).
 - **`zpe_scale_factor` (optional, `e0` energies only).** TCKDB stores your ZPE unscaled. An `e0` built as
-  `E_electronic + s * ZPE` states `s` and is held to that sum (n = 2 + s + 100 * ZPE, covering `s` printed
-  to four decimals). With no factor, an `e0` equal to `electronic + ZPE` agrees; any other is not refused
+  `E_electronic + s * ZPE` states `s` and is held to that sum (n = 2 + s + 100 * ZPE, which assumes `s` has
+  at least four decimals: state it as multiplied, since 0.954 for a true 0.953649 can be refused). With no factor, an `e0` equal to `electronic + ZPE` agrees; any other is not refused
   but stored `not_compared` with reason `zpe_scaling_unstated`.
 - **`transition_state_energy_ordering_not_compared` (warning).** An energy that cannot be compared (stored
   energy or ZPE not stated, no electronic energy to pair an E0 with, geometries not pairable) is accepted
@@ -1299,7 +1300,7 @@ If your chemistry is legitimate: Deposit no geometry. An explicitly declared *st
   If your chemistry is legitimate: None needed — the warning is the accommodation. Note the warning fires on absence of a *passing* ``irc`` record, so an IRC that was run and failed is stored and still warns, and so does a deposit whose only evidence is an energy ordering or an imaginary mode: neither shows the saddle point connects the declared endpoints.
 - **warn; codes [`transition_state_energy_ordering_mixed_levels`](#c-transition-state-energy-ordering-mixed-levels).** The energies an energy-ordering record compares should be taken at one level of theory per energy kind.
   If your chemistry is legitimate: None needed: the warning is the accommodation. Take every energy of a kind at one level, or accept the warning.
-- **block; codes [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch).** A stated energy-ordering energy should be the energy TCKDB stores for its cited calculation: the single point's (or optimisation's) energy, or for an E0 the paired electronic energy plus the cited frequency's ZPE, scaled by the stated ``zpe_scale_factor``.
+- **block; codes [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch).** A stated energy-ordering energy should be the energy TCKDB stores for its cited calculation: the single point's (or optimisation's) energy, or for an E0 the paired electronic energy plus the cited frequency's ZPE, scaled by the stated ``zpe_scale_factor``. An E0 with no stated factor is never refused.
   If your chemistry is legitimate: State the stored energy, or cite the calculation the number came from. An E0 built with a scaled ZPE states ``zpe_scale_factor``.
 - **warn; codes [`transition_state_energy_ordering_not_compared`](#c-transition-state-energy-ordering-not-compared).** Every energy an energy-ordering record states should be comparable with the energy TCKDB stores for its calculation.
   If your chemistry is legitimate: None needed: the warning is the accommodation. Deposit the cited energy (and the ZPE, at the electronic energy's geometry) to compare.
@@ -2627,7 +2628,7 @@ Found by tracing each route's handler through its direct calls: every function r
 - [`assert_declared_kind_matches_stored`](#k-app-services-species-resolution-assert-declared-kind-matches-stored) (block; `species_kind_conflict`)
 - [`assert_geometry_composition_matches_identity`](#k-app-services-species-resolution-assert-geometry-composition-matches-identity) (block; `species_geometry_composition_mismatch`)
 - [`assert_geometry_isotopes_match_identity`](#k-app-services-species-resolution-assert-geometry-isotopes-match-identity) (block; `species_geometry_isotope_mismatch`)
-- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (block/warn; `n_imag_contradicts_minimum`, `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
+- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (block/warn; `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
 
 ### Refusal codes this surface can return
 
@@ -3123,7 +3124,7 @@ Found by tracing each route's handler through its direct calls: every function r
 - [`assert_declared_kind_matches_stored`](#k-app-services-species-resolution-assert-declared-kind-matches-stored) (block; `species_kind_conflict`)
 - [`assert_geometry_composition_matches_identity`](#k-app-services-species-resolution-assert-geometry-composition-matches-identity) (block; `species_geometry_composition_mismatch`)
 - [`assert_geometry_isotopes_match_identity`](#k-app-services-species-resolution-assert-geometry-isotopes-match-identity) (block; `species_geometry_isotope_mismatch`)
-- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (block/warn; `n_imag_contradicts_minimum`, `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
+- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (block/warn; `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
 
 ### Refusal codes this surface can return
 
@@ -4004,7 +4005,7 @@ Found by tracing each route's handler through its direct calls: every function r
 - [`assert_geometry_composition_matches_identity`](#k-app-services-species-resolution-assert-geometry-composition-matches-identity) (block; `species_geometry_composition_mismatch`)
 - [`assert_geometry_isotopes_match_identity`](#k-app-services-species-resolution-assert-geometry-isotopes-match-identity) (block; `species_geometry_isotope_mismatch`)
 - [`persist_transition_state_validation_evidence`](#k-app-services-transition-state-validation-persist-transition-state-validation-evidence) (warn/block; `transition_state_missing_irc_evidence`, `transition_state_energy_ordering_mixed_levels`, `ts_energy_ordering_stated_energy_mismatch`, `transition_state_energy_ordering_not_compared`)
-- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (block/warn; `n_imag_contradicts_minimum`, `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
+- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (block/warn; `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
 
 ### Refusal codes this surface can return
 
@@ -8491,7 +8492,7 @@ Unknown keys are refused.
 | `energy_kind` | "electronic" \| "e0" | yes |  |  | `electronic`, `e0` | ``"electronic"`` for the electronic energy, or ``"e0"`` for the electronic energy plus the zero-point energy. They are different quantities and are never compared with each other. |
 | `energy_hartree` | number | yes |  | hartree | <= 0 | The absolute energy, in hartree: finite and not positive. A bound system's total energy is below the zero of separated nuclei and electrons, so a positive value is a relative energy (or a unit slip) and is refused rather than stored where a reader would take it for absolute. Zero is allowed because it is exact for the bare proton (``[H+]``), a participant with atoms and no electrons. A side of the reaction with several participants is compared by the sum of their energies, so a participant is given its own and never a pre-summed total: a total has no single calculation to name. |
 | `source_calculation_key` | string | yes |  |  | length >= 1 | Local key of the calculation this energy was taken from, in the enclosing payload's calculation namespace. The calculation must belong to the thing the energy is of: the saddle point's own calculation for ``ts``, the participant species' own for a reactant or product. |
-| `zpe_scale_factor` | number \| null | no | `null` |  | > 0 | ``e0`` only. The factor ``s`` the producer multiplied the stored zero-point energy by in forming this E0 (``E0 = E_electronic + s * ZPE``), for example a published ZPE scale factor for the level of theory. Provenance the producer states, never inferred. Omit it when the E0 uses the zero-point energy as stored (an unscaled E0), not ``1.0``-as-a-guess: ``1.0`` is a claim that the sum is unscaled, and is held to the stored values like any other stated factor. Finite and positive. |
+| `zpe_scale_factor` | number \| null | no | `null` |  | > 0 | ``e0`` only. The factor ``s`` the producer multiplied the stored zero-point energy by in forming this E0 (``E0 = E_electronic + s * ZPE``), for example a published ZPE scale factor for the level of theory. Provenance the producer states, never inferred. State it exactly as multiplied, or to at least four decimals: the tolerance assumes a rounding error of at most 5e-5, so a factor rounded to three decimals (0.954 for 0.953649) can be refused. Omit it when the E0 uses the zero-point energy as stored (an unscaled E0), not ``1.0``-as-a-guess: ``1.0`` is a claim that the sum is unscaled, and is held to the stored values like any other stated factor. Finite and positive. |
 
 - **TransitionStateComparedEnergy.validate_zpe_scale_factor_is_for_e0** (model, after; can refuse): zpe_scale_factor scales the zero-point energy in an E0 and is accepted only on energy_kind='e0', not '{self.energy_kind}'.
 
