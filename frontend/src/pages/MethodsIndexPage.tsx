@@ -243,10 +243,10 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
                 <thead>
                     <tr>
                         <th scope="col">Level of theory</th>
-                        <th scope="col">Dispersion</th>
-                        <th scope="col">Solvent</th>
                         <th scope="col">Core treatment</th>
                         <th scope="col">Calculations</th>
+                        <th scope="col">Dispersion</th>
+                        <th scope="col">Solvent</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -275,10 +275,10 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
                                     <div className="note"><CompositeSchemeLink scheme={record.level_of_theory.composite_scheme} /></div>
                                 )}
                             </td>
-                            <td data-label="Dispersion">{record.level_of_theory.dispersion ?? NO_DISPERSION_TEXT}</td>
-                            <td data-label="Solvent">{record.level_of_theory.solvent ?? NO_SOLVENT_TEXT}</td>
                             <td data-label="Core treatment">{record.level_of_theory.core_treatment ? words(record.level_of_theory.core_treatment) : "not stated"}</td>
                             <td data-label="Calculations" className="num">{record.evidence_summary.calculation_usage_count}</td>
+                            <td data-label="Dispersion">{record.level_of_theory.dispersion ?? NO_DISPERSION_TEXT}</td>
+                            <td data-label="Solvent">{record.level_of_theory.solvent ?? NO_SOLVENT_TEXT}</td>
                         </tr>
                     ))}
                 </tbody>

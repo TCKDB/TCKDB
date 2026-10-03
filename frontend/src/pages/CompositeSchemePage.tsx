@@ -182,25 +182,25 @@ function TermBlock({ term }: { term: CompositeSchemeTerm }) {
                     <thead>
                         <tr>
                             <th scope="col">Input level of theory</th>
+                            <th scope="col">Coefficient</th>
                             <th scope="col">Slot</th>
                             <th scope="col">Cardinal number</th>
-                            <th scope="col">Coefficient</th>
                         </tr>
                     </thead>
                     <tbody>
                         {term.inputs.map((input, index) => (
                             <tr key={`${input.slot}-${index}`}>
                                 <td data-label="Input level of theory"><LevelOfTheoryLink levelOfTheory={input.level_of_theory} /></td>
+                                <td data-label="Coefficient" className="num">
+                                    {input.coefficient === null || input.coefficient === undefined
+                                        ? "none, not a fixed weight"
+                                        : formatCoefficient(input.coefficient)}
+                                </td>
                                 <td data-label="Slot">{slotLabel(input.slot)}</td>
                                 <td data-label="Cardinal number">
                                     {input.cardinal_number === null || input.cardinal_number === undefined
                                         ? "none"
                                         : `${input.cardinal_number} (${cardinalLabel(input.cardinal_number)})`}
-                                </td>
-                                <td data-label="Coefficient" className="num">
-                                    {input.coefficient === null || input.coefficient === undefined
-                                        ? "none, not a fixed weight"
-                                        : formatCoefficient(input.coefficient)}
                                 </td>
                             </tr>
                         ))}
