@@ -27,9 +27,21 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import SubmissionStatus, UploadJobKind, UploadJobStatus
 from app.db.models.submission import Submission
 from app.db.models.upload_job import UploadJob
+from app.schemas.upload_warning import UploadWarning
 from app.services.public_refs import public_refs_by_id
 from app.services.record_review import ReviewPolicy
 from app.services.submission import mark_ingestion_failed, mark_ingestion_succeeded
+from app.services.upload_request_warnings import (
+    computed_reaction_request_warnings,
+    conformer_request_warnings,
+    kinetics_request_warnings,
+    network_pdep_request_warnings,
+    network_request_warnings,
+    reaction_request_warnings,
+    thermo_request_warnings,
+    transition_state_request_warnings,
+    transport_request_warnings,
+)
 from app.services.upload_submission import review_policy_for_submission
 
 logger = logging.getLogger(__name__)
@@ -163,7 +175,24 @@ class _LeaseHeartbeat:
 
 # ---------------------------------------------------------------------------
 # Handlers — one per upload kind, each returns a JSON-serialisable dict
+#
+# Every handler reports the warnings the direct ``POST /uploads/<kind>`` route
+# would return for the same record, under ``result["warnings"]`` and in the
+# same order (#647). Each builds its own fresh list on every call, so a retry
+# after a rolled-back attempt starts from nothing and cannot double a warning.
+# The structural guard in tests/workers/test_upload_worker_warnings.py fails if
+# a handler calls a ``persist_*`` workflow that accepts a warnings sink without
+# passing one.
 # ---------------------------------------------------------------------------
+
+def _warnings_json(warnings: list[UploadWarning]) -> list[dict]:
+    """Serialise warnings for the JSONB ``result`` column.
+
+    ``UploadWarning`` objects cannot be stored as-is; ``mode="json"`` yields
+    the same ``{field, code, message}`` the direct routes' responses carry.
+    """
+    return [w.model_dump(mode="json") for w in warnings]
+
 
 def _run_computed_reaction(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
     from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
@@ -177,6 +206,9 @@ def _run_computed_reaction(session: Session, job: UploadJob, review_policy: Revi
     # (the sibling-ref rule): a depositor polling the job result needs the ref
     # to address the calculation in the second-phase artifact upload.
     key_to_id = result.get("calculation_keys") or {}
+    # Request-derived warnings first, then the workflow's own: the order the
+    # direct route merges them in.
+    warnings = [*computed_reaction_request_warnings(request), *result.get("warnings", [])]
     refs = public_refs_by_id(session, Calculation, key_to_id.values())
     return {
         **result,
@@ -185,7 +217,7 @@ def _run_computed_reaction(session: Session, job: UploadJob, review_policy: Revi
         # warning used to finish with a "result_unavailable" placeholder.
         "warnings": [
             w.model_dump(mode="json") if hasattr(w, "model_dump") else w
-            for w in result.get("warnings", [])
+            for w in warnings
         ],
         "calculation_key_refs": {
             key: refs[cid] for key, cid in key_to_id.items() if cid in refs
@@ -198,9 +230,12 @@ def _run_conformer(session: Session, job: UploadJob, review_policy: ReviewPolicy
     from app.workflows.conformer import persist_conformer_upload
 
     request = ConformerUploadRequest.model_validate(job.payload)
+    warnings = conformer_request_warnings(request)
     outcome = persist_conformer_upload(
         session, request, created_by=job.created_by, review_policy=review_policy
     )
+    # This workflow reports its warnings on the outcome rather than into a sink.
+    warnings.extend(outcome.warnings)
     obs = outcome.observation
     calc_refs = public_refs_by_id(
         session,
@@ -232,6 +267,7 @@ def _run_conformer(session: Session, job: UploadJob, review_policy: ReviewPolicy
             }
             for ref in outcome.additional_calculations
         ],
+        "warnings": _warnings_json(warnings),
     }
 
 
@@ -240,11 +276,13 @@ def _run_reaction(session: Session, job: UploadJob, review_policy: ReviewPolicy)
     from app.workflows.reaction import persist_reaction_upload
 
     request = ReactionUploadRequest.model_validate(job.payload)
+    warnings = reaction_request_warnings(request)
     entry = persist_reaction_upload(session, request, created_by=job.created_by, review_policy=review_policy)
     return {
         "type": "reaction_entry",
         "id": entry.id,
         "reaction_id": entry.reaction_id,
+        "warnings": _warnings_json(warnings),
     }
 
 
@@ -253,11 +291,15 @@ def _run_kinetics(session: Session, job: UploadJob, review_policy: ReviewPolicy)
     from app.workflows.kinetics import persist_kinetics_upload
 
     request = KineticsUploadRequest.model_validate(job.payload)
-    kinetics = persist_kinetics_upload(session, request, created_by=job.created_by, review_policy=review_policy)
+    warnings = kinetics_request_warnings(request)
+    kinetics = persist_kinetics_upload(
+        session, request, created_by=job.created_by, review_policy=review_policy, warnings=warnings
+    )
     return {
         "type": "kinetics",
         "id": kinetics.id,
         "reaction_entry_id": kinetics.reaction_entry_id,
+        "warnings": _warnings_json(warnings),
     }
 
 
@@ -266,8 +308,11 @@ def _run_network(session: Session, job: UploadJob, review_policy: ReviewPolicy) 
     from app.workflows.network import persist_network_upload
 
     request = NetworkUploadRequest.model_validate(job.payload)
-    network = persist_network_upload(session, request, created_by=job.created_by, review_policy=review_policy)
-    return {"type": "network", "id": network.id}
+    warnings = network_request_warnings(request)
+    network = persist_network_upload(
+        session, request, created_by=job.created_by, review_policy=review_policy, warnings_out=warnings
+    )
+    return {"type": "network", "id": network.id, "warnings": _warnings_json(warnings)}
 
 
 def _run_network_pdep(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
@@ -275,7 +320,7 @@ def _run_network_pdep(session: Session, job: UploadJob, review_policy: ReviewPol
     from app.workflows.network_pdep import persist_network_pdep_upload
 
     request = NetworkPDepUploadRequest.model_validate(job.payload)
-    warnings: list = []
+    warnings = network_pdep_request_warnings(request)
     network = persist_network_pdep_upload(
         session,
         request,
@@ -288,7 +333,7 @@ def _run_network_pdep(session: Session, job: UploadJob, review_policy: ReviewPol
         "type": "network_pdep",
         "id": network.id,
         "solve_id": solve_id,
-        "warnings": [w.model_dump(mode="json") for w in warnings],
+        "warnings": _warnings_json(warnings),
     }
 
 
@@ -297,11 +342,15 @@ def _run_thermo(session: Session, job: UploadJob, review_policy: ReviewPolicy) -
     from app.workflows.thermo import persist_thermo_upload
 
     request = ThermoUploadRequest.model_validate(job.payload)
-    thermo = persist_thermo_upload(session, request, created_by=job.created_by, review_policy=review_policy)
+    warnings = thermo_request_warnings(request)
+    thermo = persist_thermo_upload(
+        session, request, created_by=job.created_by, review_policy=review_policy, warnings_out=warnings
+    )
     return {
         "type": "thermo",
         "id": thermo.id,
         "species_entry_id": thermo.species_entry_id,
+        "warnings": _warnings_json(warnings),
     }
 
 
@@ -310,12 +359,16 @@ def _run_transition_state(session: Session, job: UploadJob, review_policy: Revie
     from app.workflows.transition_state import persist_transition_state_upload
 
     request = TransitionStateUploadRequest.model_validate(job.payload)
-    ts_entry = persist_transition_state_upload(session, request, created_by=job.created_by, review_policy=review_policy)
+    warnings = transition_state_request_warnings(request)
+    ts_entry = persist_transition_state_upload(
+        session, request, created_by=job.created_by, review_policy=review_policy, warnings=warnings
+    )
     return {
         "type": "transition_state_entry",
         "id": ts_entry.id,
         "transition_state_id": ts_entry.transition_state_id,
         "reaction_entry_id": ts_entry.transition_state.reaction_entry_id,
+        "warnings": _warnings_json(warnings),
     }
 
 
@@ -324,11 +377,15 @@ def _run_transport(session: Session, job: UploadJob, review_policy: ReviewPolicy
     from app.workflows.transport import persist_transport_upload
 
     request = TransportUploadRequest.model_validate(job.payload)
-    transport = persist_transport_upload(session, request, created_by=job.created_by, review_policy=review_policy)
+    warnings = transport_request_warnings(request)
+    transport = persist_transport_upload(
+        session, request, created_by=job.created_by, review_policy=review_policy, warnings_out=warnings
+    )
     return {
         "type": "transport",
         "id": transport.id,
         "species_entry_id": transport.species_entry_id,
+        "warnings": _warnings_json(warnings),
     }
 
 

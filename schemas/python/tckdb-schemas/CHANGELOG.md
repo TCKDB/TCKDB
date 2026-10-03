@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.75.0 - 2026-10-03
+
+The producer contract now records that `/bundles/submit` and `/bundles/dry-run` apply the
+frequency-list linearity check to the records in a bundle, and that a bundle reports the upload
+warnings each record earns. Nothing a producer sends changes and every payload accepted before is
+accepted unchanged; this release only adds.
+
+- **Bundle warnings.** `/bundles/submit` and `/bundles/dry-run` return, in `messages`, the same
+  upload warnings (code, message, field, order) that `POST /uploads/thermo` and
+  `POST /uploads/kinetics` return for the same record, each with the upload's `local_ref`.
+  The producer contract's rule listing gains `ContributionBundleV0` as a place the linearity check
+  applies.
+
 ## 0.74.0 - 2026-10-03
 
 A shifted copy of an atom is no longer a way round the no-optimisation duplicate rule (#623).

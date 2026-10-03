@@ -45,6 +45,7 @@ from app.db.models.thermo import Thermo
 from app.schemas.contribution_bundle_dry_run import (
     ContributionBundleDryRunResult,
     DryRunMessageLevel,
+    DryRunRecordType,
 )
 from app.schemas.contribution_bundle_submit import (
     ContributionBundleSubmitMessage,
@@ -55,6 +56,7 @@ from app.schemas.contribution_bundle_submit import (
     SubmittedRecordAction,
     SubmittedRecordType,
 )
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.contribution_bundle import (
     BundleKind,
     ContributionBundleV0,
@@ -69,6 +71,10 @@ from app.services.submission import (
     create_submission,
     link_record,
     mark_ingestion_succeeded,
+)
+from app.services.upload_request_warnings import (
+    kinetics_request_warnings,
+    thermo_request_warnings,
 )
 from app.workflows.kinetics import persist_kinetics_upload
 from app.workflows.rehearsal import discard_unflushed_writes, rehearsal
@@ -184,6 +190,31 @@ def _carry_forward_messages(
     ]
 
 
+def _import_warning_messages(
+    warnings: list[UploadWarning],
+    *,
+    local_ref: str,
+    record_type: DryRunRecordType,
+) -> list[ContributionBundleSubmitMessage]:
+    """Render one upload's warnings as bundle messages.
+
+    The warning's own ``field``, ``code`` and ``message`` are kept exactly as
+    the direct upload route returns them (``field`` is relative to that one
+    upload); ``local_ref`` says which upload of the bundle it belongs to.
+    """
+    return [
+        ContributionBundleSubmitMessage(
+            level=DryRunMessageLevel.warning,
+            code=w.code,
+            message=w.message,
+            field=w.field,
+            local_ref=local_ref,
+            record_type=record_type,
+        )
+        for w in warnings
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Per-family import
 # ---------------------------------------------------------------------------
@@ -195,19 +226,34 @@ def _import_thermo_bundle(
     *,
     actor_id: int,
     review_policy: ReviewPolicy,
+    messages_out: list[ContributionBundleSubmitMessage],
 ) -> list[ContributionBundleSubmittedRecord]:
     """Import every thermo upload in ``bundle`` and return submitted-record rows.
 
     Each upload produces one ``imported`` row for the new ``thermo`` and one
     ``linked`` row for its parent ``species_entry`` (the immediate parent
     decided in Decision 1).
+
+    The warnings each upload earns -- the request-derived ones and the ones
+    the workflow appends -- are the ones ``POST /uploads/thermo`` returns for
+    the same record, in the same order, and are appended to ``messages_out``.
     """
     records: list[ContributionBundleSubmittedRecord] = []
     for index, upload in enumerate(bundle.records.thermo_uploads):
-        thermo: Thermo = persist_thermo_upload(
-            session, upload, created_by=actor_id, review_policy=review_policy
-        )
         local_ref = f"thermo_uploads[{index}]"
+        warnings = thermo_request_warnings(upload)
+        thermo: Thermo = persist_thermo_upload(
+            session,
+            upload,
+            created_by=actor_id,
+            review_policy=review_policy,
+            warnings_out=warnings,
+        )
+        messages_out.extend(
+            _import_warning_messages(
+                warnings, local_ref=local_ref, record_type=DryRunRecordType.thermo
+            )
+        )
         records.append(
             ContributionBundleSubmittedRecord(
                 record_type=SubmittedRecordType.thermo,
@@ -233,18 +279,32 @@ def _import_kinetics_bundle(
     *,
     actor_id: int,
     review_policy: ReviewPolicy,
+    messages_out: list[ContributionBundleSubmitMessage],
 ) -> list[ContributionBundleSubmittedRecord]:
     """Import every kinetics upload in ``bundle`` and return submitted-record rows.
 
     Each upload produces one ``imported`` row for the new ``kinetics`` and
     one ``linked`` row for its parent ``reaction_entry``.
+
+    Warnings are collected exactly as :func:`_import_thermo_bundle` does, and
+    match ``POST /uploads/kinetics``.
     """
     records: list[ContributionBundleSubmittedRecord] = []
     for index, upload in enumerate(bundle.records.kinetics_uploads):
-        kinetics: Kinetics = persist_kinetics_upload(
-            session, upload, created_by=actor_id, review_policy=review_policy
-        )
         local_ref = f"kinetics_uploads[{index}]"
+        warnings = kinetics_request_warnings(upload)
+        kinetics: Kinetics = persist_kinetics_upload(
+            session,
+            upload,
+            created_by=actor_id,
+            review_policy=review_policy,
+            warnings=warnings,
+        )
+        messages_out.extend(
+            _import_warning_messages(
+                warnings, local_ref=local_ref, record_type=DryRunRecordType.kinetics
+            )
+        )
         records.append(
             ContributionBundleSubmittedRecord(
                 record_type=SubmittedRecordType.kinetics,
@@ -355,13 +415,22 @@ def submit_contribution_bundle(
         status=RecordReviewStatus.not_reviewed,
         submission_id=submission.id,
     )
+    import_messages: list[ContributionBundleSubmitMessage] = []
     if bundle.bundle_kind is BundleKind.thermo:
         records = _import_thermo_bundle(
-            session, bundle, actor_id=actor.id, review_policy=review_policy
+            session,
+            bundle,
+            actor_id=actor.id,
+            review_policy=review_policy,
+            messages_out=import_messages,
         )
     else:
         records = _import_kinetics_bundle(
-            session, bundle, actor_id=actor.id, review_policy=review_policy
+            session,
+            bundle,
+            actor_id=actor.id,
+            review_policy=review_policy,
+            messages_out=import_messages,
         )
 
     # 4. Create record links — products and immediate identity parents,
@@ -413,7 +482,11 @@ def submit_contribution_bundle(
     # 6. Carry warnings forward; add an ingestion_succeeded info note so
     #    the client renders the same message clients already see in
     #    server-side audit logs.
+    #    The upload warnings the import produced come between the two: the
+    #    gate's messages first, as before, then each upload's own warnings in
+    #    upload order, then the closing note.
     messages = _carry_forward_messages(dry_run)
+    messages.extend(import_messages)
     messages.append(
         ContributionBundleSubmitMessage(
             level=DryRunMessageLevel.info,
@@ -425,7 +498,7 @@ def submit_contribution_bundle(
         )
     )
 
-    return ContributionBundleSubmitResult(
+    result = ContributionBundleSubmitResult(
         submission_id=submission.id,
         submission_ref=submission.public_ref,
         status=submission.status,
@@ -441,6 +514,12 @@ def submit_contribution_bundle(
         records=records,
         messages=messages,
     )
+    # Which of ``messages`` the import produced, as opposed to the dry-run
+    # gate's own: a dry run that rehearses this function needs just those, to
+    # add to a preview that already holds the gate's. A private attribute, so
+    # it is not part of the response schema.
+    result._import_messages = import_messages
+    return result
 
 
 def _literature_requests(node: object) -> Iterator[LiteratureUploadRequest]:
@@ -463,6 +542,7 @@ def rehearse_contribution_bundle_submit(
     bundle: ContributionBundleV0,
     *,
     actor: AppUser,
+    import_warnings_out: list[ContributionBundleSubmitMessage] | None = None,
 ) -> Exception | None:
     """Run :func:`submit_contribution_bundle` and undo it; return its refusal.
 
@@ -489,6 +569,9 @@ def rehearse_contribution_bundle_submit(
     rehearsal's own lookup does not repeat the failed request while holding its
     locks; nothing outside this call can see it.
 
+    :param import_warnings_out: Filled with the upload warnings submit would
+        return for this bundle, so the dry run can report them (#647). Left
+        empty when submit would refuse.
     :returns: ``None`` when submit would succeed, otherwise the exception it
         raised -- rendered by the caller through the app's own handlers --
         or the rehearsal's own contention or commit-refusal error.
@@ -498,7 +581,9 @@ def rehearse_contribution_bundle_submit(
         prefetch_literature_metadata(session, _literature_requests(bundle.records))
         try:
             with rehearsal(session):
-                submit_contribution_bundle(session, bundle, actor=actor)
+                result = submit_contribution_bundle(session, bundle, actor=actor)
+                if import_warnings_out is not None:
+                    import_warnings_out.extend(getattr(result, "_import_messages", ()))
         except Exception as exc:  # every failure is the verdict, whatever its type
             return exc
     return None

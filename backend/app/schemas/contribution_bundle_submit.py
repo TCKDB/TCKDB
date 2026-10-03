@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from app.db.models.common import SubmissionStatus
 from app.schemas.common import SchemaBase
@@ -137,3 +137,8 @@ class ContributionBundleSubmitResult(SchemaBase):
     summary: ContributionBundleSubmitSummary
     records: list[ContributionBundleSubmittedRecord] = Field(default_factory=list)
     messages: list[ContributionBundleSubmitMessage] = Field(default_factory=list)
+
+    # Not part of the response: the messages in ``messages`` that the import
+    # itself produced (its upload warnings), kept so a dry run that rehearses
+    # the submit can report them without repeating the gate's own messages.
+    _import_messages: list[ContributionBundleSubmitMessage] = PrivateAttr(default_factory=list)

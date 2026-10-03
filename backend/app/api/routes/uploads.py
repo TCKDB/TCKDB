@@ -56,21 +56,14 @@ from app.services.artifact_storage import (
 )
 from app.services.atomic_electronic_warnings import collect_atomic_electronic_warnings
 from app.services.frequency_geometry_linearity import (
-    computed_reaction_linearity_warnings,
     computed_species_linearity_warnings,
     inline_calculation_linearity_warnings,
-    network_pdep_linearity_warnings,
-    transition_state_upload_linearity_warnings,
 )
 from app.services.idempotency import IDEMPOTENCY_HEADER
 from app.services.monatomic import single_atom_element, statmech_subject_is_polyatomic
 from app.services.provenance_warnings import (
-    collect_kinetics_content_warnings,
-    collect_kinetics_provenance_warnings,
     collect_statmech_content_warnings,
     collect_statmech_provenance_warnings,
-    collect_thermo_provenance_warnings,
-    collect_transport_provenance_warnings,
 )
 from app.services.public_refs import public_refs_by_id
 from app.services.statmech_resolution import (
@@ -83,8 +76,18 @@ from app.services.thermoml_cp_import import (
 )
 from app.services.upload_reconciliation import (
     reconcile_species_entry,
-    reconcile_species_entry_full,
     stationary_point_warnings,
+)
+from app.services.upload_request_warnings import (
+    computed_reaction_request_warnings,
+    conformer_request_warnings,
+    kinetics_request_warnings,
+    network_pdep_request_warnings,
+    network_request_warnings,
+    reaction_request_warnings,
+    thermo_request_warnings,
+    transition_state_request_warnings,
+    transport_request_warnings,
 )
 from app.services.upload_submission import (
     audit_sync_upload_failure,
@@ -295,21 +298,11 @@ def upload_conformer(
 ):
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    # ``reconcile_species_entry_full`` already runs the stationary-point
-    # check as part of its Layer-1 pass, so this route deliberately does
-    # *not* also call ``request.stationary_point_findings()`` — that would
-    # emit each finding twice under two different ``field`` paths. The
-    # other species routes do call it, because their
-    # ``reconcile_species_entry`` call has no frequency evidence to work
-    # from.
-    warnings = reconcile_species_entry_full(
-        request.species_entry,
-        primary_calc=request.calculation,
-        additional_calcs=request.additional_calculations,
-        statmech=request.statmech,
-        reference_xyz_text=request.geometry.xyz_text,
-    )
-    warnings.extend(collect_ref_warnings(request))
+    # The request-derived warnings are assembled in one place, shared with the
+    # bundle importer and the job worker (#647); see
+    # ``conformer_request_warnings`` for why the stationary-point check is
+    # not repeated there.
+    warnings = conformer_request_warnings(request)
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -373,18 +366,7 @@ def upload_reaction(
 ):
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    warnings: list[UploadWarning] = []
-    for i, p in enumerate(request.reactants):
-        if p.species_entry is not None:
-            ws = reconcile_species_entry(p.species_entry)
-            for w in ws:
-                warnings.append(w.model_copy(update={"field": f"reactants[{i}].{w.field}"}))
-    for i, p in enumerate(request.products):
-        if p.species_entry is not None:
-            ws = reconcile_species_entry(p.species_entry)
-            for w in ws:
-                warnings.append(w.model_copy(update={"field": f"products[{i}].{w.field}"}))
-    warnings.extend(collect_ref_warnings(request))
+    warnings = reaction_request_warnings(request)
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -420,18 +402,7 @@ def upload_kinetics(
 ):
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    warnings: list[UploadWarning] = []
-    for i, p in enumerate(request.reaction.reactants):
-        ws = reconcile_species_entry(p.species_entry)
-        for w in ws:
-            warnings.append(w.model_copy(update={"field": f"reaction.reactants[{i}].{w.field}"}))
-    for i, p in enumerate(request.reaction.products):
-        ws = reconcile_species_entry(p.species_entry)
-        for w in ws:
-            warnings.append(w.model_copy(update={"field": f"reaction.products[{i}].{w.field}"}))
-    warnings.extend(collect_kinetics_provenance_warnings(request))
-    warnings.extend(collect_kinetics_content_warnings(request))
-    warnings.extend(collect_ref_warnings(request))
+    warnings = kinetics_request_warnings(request)
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -471,7 +442,7 @@ def upload_network(
 ):
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    warnings = collect_ref_warnings(request)
+    warnings = network_request_warnings(request)
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -516,11 +487,7 @@ def upload_network_pdep(
         kind=SubmissionKind.network_pdep,
         rights=request.rights,
     )
-    pdep_warnings: list[UploadWarning] = stationary_point_warnings(
-        request.stationary_point_findings()
-    )
-    pdep_warnings.extend(network_pdep_linearity_warnings(request))
-    pdep_warnings.extend(collect_ref_warnings(request))
+    pdep_warnings = network_pdep_request_warnings(request)
     network = persist_network_pdep_upload(
         session,
         request,
@@ -636,11 +603,7 @@ def upload_thermo(
 ):
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    warnings = reconcile_species_entry(request.species_entry)
-    warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
-    warnings.extend(inline_calculation_linearity_warnings(request.calculations))
-    warnings.extend(collect_thermo_provenance_warnings(request))
-    warnings.extend(collect_ref_warnings(request))
+    warnings = thermo_request_warnings(request)
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -680,18 +643,7 @@ def upload_transition_state(
 ):
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    warnings: list[UploadWarning] = []
-    for i, p in enumerate(request.reaction.reactants):
-        ws = reconcile_species_entry(p.species_entry)
-        for w in ws:
-            warnings.append(w.model_copy(update={"field": f"reaction.reactants[{i}].{w.field}"}))
-    for i, p in enumerate(request.reaction.products):
-        ws = reconcile_species_entry(p.species_entry)
-        for w in ws:
-            warnings.append(w.model_copy(update={"field": f"reaction.products[{i}].{w.field}"}))
-    warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
-    warnings.extend(transition_state_upload_linearity_warnings(request))
-    warnings.extend(collect_ref_warnings(request))
+    warnings = transition_state_request_warnings(request)
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -739,11 +691,7 @@ def upload_transport(
     """
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    warnings = reconcile_species_entry(request.species_entry)
-    warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
-    warnings.extend(inline_calculation_linearity_warnings(request.calculations))
-    warnings.extend(collect_transport_provenance_warnings(request))
-    warnings.extend(collect_ref_warnings(request))
+    warnings = transport_request_warnings(request)
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -892,9 +840,7 @@ def upload_computed_reaction(
     # persisted rows, so they are merged on top of whatever the workflow
     # reported rather than being produced inside it.
     result_dict["warnings"] = [
-        *stationary_point_warnings(request.stationary_point_findings()),
-        *computed_reaction_linearity_warnings(request),
-        *collect_ref_warnings(request),
+        *computed_reaction_request_warnings(request),
         *result_dict.get("warnings", []),
     ]
     result = ComputedReactionUploadResult(
