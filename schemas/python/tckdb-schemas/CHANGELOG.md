@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.78.0 - 2026-10-03
+## 0.79.0 - 2026-10-03
 
 Network solve energy sources must belong to the subject they state an energy for (#668). No field or
 enum member changes; the `source_calculation_key` description of a state energy and of a channel

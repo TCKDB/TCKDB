@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.115.0 - 2026-10-03
+## 0.116.0 - 2026-10-03
 
-Adds the `RejectionCode.NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH` member (`tckdb-schemas` 0.78.0, #668):
+Adds the `RejectionCode.NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH` member (`tckdb-schemas` 0.79.0, #668):
 the network-PDep upload now refuses a state energy, barrier or `well_energy` / `barrier_energy` source
 link whose cited calculation belongs to another subject than the one the energy is stated for (a
 species outside the state, another transition state, or a species calculation for a barrier). Nothing
