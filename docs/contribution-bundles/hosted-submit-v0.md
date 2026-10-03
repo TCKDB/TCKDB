@@ -91,6 +91,15 @@ Warnings are **not** blocking. Dry-run warnings are carried forward into
 the submit response so the client can surface them, but the import still
 commits.
 
+The upload warnings each record earns are reported too: the same ones, in the
+same order, that `POST /uploads/thermo` or `POST /uploads/kinetics` returns for
+that record. They arrive in `messages` as `warning` entries with the upload's
+`local_ref` (for example `thermo_uploads[0]`); `code`, `message` and `field` are
+the direct route's own, and `field` is relative to that one upload. They follow
+the carried-forward dry-run messages and precede the closing
+`ingestion_succeeded` note. `/bundles/dry-run` reports the same entries when the
+bundle would be accepted, so a depositor sees them before submitting.
+
 ## Transaction behavior
 
 The route uses the existing `get_write_db` dependency, which wraps the
