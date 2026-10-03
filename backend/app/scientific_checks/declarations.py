@@ -81,7 +81,6 @@ from app.scientific_checks import (
 )
 from app.scientific_checks import external_comparison as external_comparison_checks
 from app.services import (
-    calc_isotopes,
     calculation_geometry_composition,
     charge_multiplicity_reconciliation,
     frequency_geometry_linearity,
@@ -1300,7 +1299,6 @@ CHECK_REPRODUCIBILITY_IS_ITS_OWN_JUDGEMENT = ScientificCheck(
 #: listed here, so forgetting to register a module is caught rather than
 #: silently omitted from the register.
 DECLARING_MODULES: tuple[ModuleType, ...] = (
-    calc_isotopes,
     calculation_geometry_composition,
     chemistry_species,
     chemistry_units,
