@@ -6083,7 +6083,7 @@
     },
     "TransitionStateComparedEnergy": {
       "additionalProperties": false,
-      "description": "One energy an ``energy_ordering`` record compared.\n\n:param participant: Whose energy this is: ``\"ts\"`` for the saddle point, or\n    ``\"reactant:N\"`` / ``\"product:N\"`` for the N-th declared participant\n    of that side (1-based, in the order the reaction declares them).\n:param energy_kind: ``\"electronic\"`` for the electronic energy, or ``\"e0\"``\n    for the electronic energy plus the zero-point energy. They are\n    different quantities and are never compared with each other.\n:param energy_hartree: The absolute energy, in hartree: finite and not\n    positive. A bound system's total energy is below the zero of separated\n    nuclei and electrons, so a positive value is a relative energy (or a\n    unit slip) and is refused rather than stored where a reader would take\n    it for absolute. Zero is allowed because it is exact for the bare\n    proton (``[H+]``), a participant with atoms and no electrons. A side of the\n    reaction with several participants is compared by the sum of their\n    energies, so a participant is given its own and never a pre-summed\n    total: a total has no single calculation to name.\n:param source_calculation_key: Local key of the calculation this energy\n    was taken from, in the enclosing payload's calculation namespace. The\n    calculation must belong to the thing the energy is of: the saddle\n    point's own calculation for ``ts``, the participant species' own for a\n    reactant or product.",
+      "description": "One energy an ``energy_ordering`` record compared.\n\n:param participant: Whose energy this is: ``\"ts\"`` for the saddle point, or\n    ``\"reactant:N\"`` / ``\"product:N\"`` for the N-th declared participant\n    of that side (1-based, in the order the reaction declares them).\n:param energy_kind: ``\"electronic\"`` for the electronic energy, or ``\"e0\"``\n    for the electronic energy plus the zero-point energy. They are\n    different quantities and are never compared with each other.\n\n    An ``e0`` is held against the *stored* values of the calculations it\n    rests on: the stored electronic energy of this participant's\n    ``electronic`` entry plus the zero-point energy stored on the cited\n    ``freq`` calculation, which is the producer's own unscaled value (the\n    program's raw zero-point correction). With ``zpe_scale_factor`` stated\n    the sum is ``electronic + zpe_scale_factor * zpe``; without it the\n    sum is ``electronic + zpe``, and an E0 that does not match that sum is\n    not refused (the producer may have scaled the zero-point energy and not\n    said so) but recorded as not compared.\n:param zpe_scale_factor: ``e0`` only. The factor ``s`` the producer\n    multiplied the stored zero-point energy by in forming this E0\n    (``E0 = E_electronic + s * ZPE``), for example a published ZPE scale\n    factor for the level of theory. Provenance the producer states, never\n    inferred. Omit it when the E0 uses the zero-point energy as stored\n    (an unscaled E0), not ``1.0``-as-a-guess: ``1.0`` is a claim that the\n    sum is unscaled, and is held to the stored values like any other\n    stated factor. Finite and positive.\n:param energy_hartree: The absolute energy, in hartree: finite and not\n    positive. A bound system's total energy is below the zero of separated\n    nuclei and electrons, so a positive value is a relative energy (or a\n    unit slip) and is refused rather than stored where a reader would take\n    it for absolute. Zero is allowed because it is exact for the bare\n    proton (``[H+]``), a participant with atoms and no electrons. A side of the\n    reaction with several participants is compared by the sum of their\n    energies, so a participant is given its own and never a pre-summed\n    total: a total has no single calculation to name.\n:param source_calculation_key: Local key of the calculation this energy\n    was taken from, in the enclosing payload's calculation namespace. The\n    calculation must belong to the thing the energy is of: the saddle\n    point's own calculation for ``ts``, the participant species' own for a\n    reactant or product.",
       "properties": {
         "energy_hartree": {
           "maximum": 0,
@@ -6107,6 +6107,19 @@
           "minLength": 1,
           "title": "Source Calculation Key",
           "type": "string"
+        },
+        "zpe_scale_factor": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zpe Scale Factor"
         }
       },
       "required": [

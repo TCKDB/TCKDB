@@ -57,10 +57,11 @@ def test_an_e0_whose_freq_stores_no_zpe_is_accepted_warned_and_read_back_as_not_
     assert {v for k, v in compared.items() if k != ("ts", "e0")} == {("agrees", None)}
 
 
-def test_a_stated_e0_that_forgets_the_zpe_is_refused(client) -> None:
+def test_a_stated_e0_that_contradicts_its_declared_scaling_is_refused(client) -> None:
     record = _energy_ordering()
-    # reactant:1's E0 stated as its electronic energy: the stored ZPE is missing from it.
-    record["energies"][5] = dict(record["energies"][5], energy_hartree=-39.75)
+    # reactant:1's E0 stated as its electronic energy, with the factor 1.0 claiming the sum is
+    # unscaled: the stored ZPE (0.05) is missing from it.
+    record["energies"][5] = dict(record["energies"][5], energy_hartree=-39.75, zpe_scale_factor=1.0)
     response = _post_bundle(client, _bundle([record]))
     assert response.status_code == 422, response.text[:800]
     body = response.json()
@@ -69,3 +70,39 @@ def test_a_stated_e0_that_forgets_the_zpe_is_refused(client) -> None:
     assert body["context"]["energy_kind"] == "e0", body
     assert abs(body["context"]["stored_hartree"] - (-39.70)) < 1e-9, body
     assert body["context"]["stored_zpe_hartree"] == 0.05, body
+    assert body["context"]["zpe_scale_factor"] == 1.0, body
+
+
+def test_a_scaled_e0_states_its_factor_and_reads_back(client, db_session) -> None:
+    record = _energy_ordering()
+    # ZPE 0.05 scaled by 0.98: -39.75 + 0.049 = -39.701.
+    record["energies"][5] = dict(record["energies"][5], energy_hartree=-39.701, zpe_scale_factor=0.98)
+    result = _ok(_post_bundle(client, _bundle([record])))
+    assert _NOT_COMPARED not in _codes(result)
+    entry = _entry_read(client, _entry_ref(db_session, result["transition_state_entry_id"]), "validation_evidence")
+    energies = {
+        (e["participant"], e["energy_kind"]): e
+        for e in _evidence_by_kind(entry)["energy_ordering"]["compared_energies"]
+    }
+    scaled = energies[("reactant:1", "e0")]
+    assert (scaled["stored_energy_comparison"], scaled["zpe_scale_factor"]) == ("agrees", 0.98)
+    assert energies[("ts", "e0")]["zpe_scale_factor"] is None
+
+
+def test_a_scaled_e0_without_its_factor_is_accepted_and_reads_back_as_not_compared(
+    client, db_session
+) -> None:
+    record = _energy_ordering()
+    record["energies"][5] = dict(record["energies"][5], energy_hartree=-39.701)
+    result = _ok(_post_bundle(client, _bundle([record])))
+    (warning,) = [w for w in result["warnings"] if w["code"] == _NOT_COMPARED]
+    assert "zpe_scale_factor" in warning["message"]
+    compared = _compared(client, db_session, result["transition_state_entry_id"])
+    assert compared[("reactant:1", "e0")] == ("not_compared", "zpe_scaling_unstated")
+
+
+def test_a_scale_factor_on_an_electronic_energy_is_refused(client) -> None:
+    record = _energy_ordering()
+    record["energies"][0] = dict(record["energies"][0], zpe_scale_factor=0.98)
+    response = _post_bundle(client, _bundle([record]))
+    assert response.status_code == 422, response.text[:800]

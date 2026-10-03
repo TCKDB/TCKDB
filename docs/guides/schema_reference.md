@@ -3157,14 +3157,17 @@ the gap.
 | `source_calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
 | `stored_energy_comparison` | TEXT | yes | — | — | — | not documented |
 | `not_compared_reason` | TEXT | yes | — | — | — | not documented |
+| `zpe_scale_factor` | FLOAT | yes | — | — | — | not documented |
 
 **Check constraints:**
 
 - `ck_transition_state_validation_energy_energy_finite_le_zero`: `energy_hartree <= 0 AND energy_hartree > '-Infinity'::float8`
 - `ck_transition_state_validation_energy_energy_kind`: `energy_kind IN ('electronic', 'e0')`
 - `ck_transition_state_validation_energy_not_compared_reason_shape`: `(stored_energy_comparison IS NOT DISTINCT FROM 'not_compared') = (not_compared_reason IS NOT NULL)`
+- `ck_transition_state_validation_energy_not_compared_reason_token`: `not_compared_reason IS NULL OR not_compared_reason IN ('stored_energy_not_stated', 'zpe_not_stated', 'no_electronic_energy_to_pair', 'geometry_not_paired', 'zpe_scaling_unstated')`
 - `ck_transition_state_validation_energy_participant_shape`: `participant ~ '^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$'`
 - `ck_transition_state_validation_energy_stored_energy_comparison`: `stored_energy_comparison IS NULL OR stored_energy_comparison IN ('agrees', 'not_compared')`
+- `ck_transition_state_validation_energy_zpe_scale_factor_e0_positive`: `zpe_scale_factor IS NULL OR (energy_kind = 'e0' AND zpe_scale_factor > 0 AND zpe_scale_factor < 'Infinity'::float8)`
 
 ### `transport`
 

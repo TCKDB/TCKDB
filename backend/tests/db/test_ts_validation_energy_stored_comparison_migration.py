@@ -6,7 +6,8 @@ The revision adds two nullable columns to ``transition_state_validation_energy``
 * upgrade writes nothing: an energy deposited before keeps both columns NULL, which reads as
   "the comparison did not exist" and never as a pass;
 * the shape is enforced by the database: a status outside the two values, a ``not_compared`` with
-  no reason, and a reason on any other status are all refused;
+  no reason, a reason on any other status, a reason outside the fixed token set, and a ZPE scale
+  factor that is not positive or sits on an ``electronic`` energy are all refused;
 * downgrade refuses, with a count, while a row records an outcome, and deletes nothing; once the
   outcome is cleared it removes the columns, and upgrade again converges;
 * ``alembic check`` is clean at head (the model and the revision agree).
@@ -25,7 +26,7 @@ from tests.db.test_ts_evidence_kinds_migration import _Harness, _seed_ts_with_ir
 
 _MIGRATION = revision_under_test("c4b8e2f6a713")
 _TABLE = "transition_state_validation_energy"
-_COLUMNS = {"stored_energy_comparison", "not_compared_reason"}
+_COLUMNS = {"stored_energy_comparison", "not_compared_reason", "zpe_scale_factor"}
 
 
 @pytest.fixture
@@ -104,6 +105,25 @@ def test_upgrade_leaves_earlier_energies_unrecorded_and_enforces_the_shape(harne
         _refused(conn, insert, {**base, "p": "product:1", "s": "agrees", "r": "zpe_not_stated"})
         # An unrecorded status may not carry a reason either.
         _refused(conn, insert, {**base, "p": "product:1", "s": None, "r": "zpe_not_stated"})
+        # The reason is one of a fixed set of tokens, the new one among them.
+        _refused(conn, insert, {**base, "p": "product:1", "s": "not_compared", "r": "because"})
+        with conn.begin_nested():
+            conn.execute(
+                text(insert), {**base, "p": "product:1", "s": "not_compared", "r": "zpe_scaling_unstated"}
+            )
+
+        # A ZPE scale factor belongs to an E0 and is positive and finite.
+        scaled = (
+            f"INSERT INTO {_TABLE} (evidence_id, participant, energy_kind, energy_hartree, "
+            "source_calculation_id, zpe_scale_factor) "
+            "SELECT evidence_id, 'product:2', :k, -1.0, source_calculation_id, :f FROM "
+            f"{_TABLE} WHERE id = :i"
+        )
+        with conn.begin_nested():
+            conn.execute(text(scaled), {"i": legacy_id, "k": "e0", "f": 0.98})
+        _refused(conn, scaled, {"i": legacy_id, "k": "electronic", "f": 0.98})
+        _refused(conn, scaled, {"i": legacy_id, "k": "e0", "f": 0.0})
+        _refused(conn, scaled, {"i": legacy_id, "k": "e0", "f": -1.0})
 
     harness.run("upgrade", "head")
     checked = subprocess.run(

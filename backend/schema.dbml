@@ -3896,6 +3896,7 @@ Table transition_state_validation_energy {
   source_calculation_id bigint [not null, ref: > calculation.id]
   stored_energy_comparison text
   not_compared_reason text
+  zpe_scale_factor double
 
   indexes {
     source_calculation_id [name: 'ix_ts_validation_energy_source_calc']
@@ -3906,8 +3907,10 @@ Table transition_state_validation_energy {
     `energy_hartree <= 0 AND energy_hartree > '-Infinity'::float8` [name: 'ck_transition_state_validation_energy_energy_finite_le_zero']
     `energy_kind IN ('electronic', 'e0')` [name: 'ck_transition_state_validation_energy_energy_kind']
     `(stored_energy_comparison IS NOT DISTINCT FROM 'not_compared') = (not_compared_reason IS NOT NULL)` [name: 'ck_transition_state_validation_energy_not_compared_reason_shape']
+    `not_compared_reason IS NULL OR not_compared_reason IN ('stored_energy_not_stated', 'zpe_not_stated', 'no_electronic_energy_to_pair', 'geometry_not_paired', 'zpe_scaling_unstated')` [name: 'ck_transition_state_validation_energy_not_compared_reason_token']
     `participant ~ '^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$'` [name: 'ck_transition_state_validation_energy_participant_shape']
     `stored_energy_comparison IS NULL OR stored_energy_comparison IN ('agrees', 'not_compared')` [name: 'ck_transition_state_validation_energy_stored_energy_comparison']
+    `zpe_scale_factor IS NULL OR (energy_kind = 'e0' AND zpe_scale_factor > 0 AND zpe_scale_factor < 'Infinity'::float8)` [name: 'ck_transition_state_validation_energy_zpe_scale_factor_e0_positive']
   }
 
   Note: 'One energy an ``energy_ordering`` evidence row compared.'

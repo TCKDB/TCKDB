@@ -35,7 +35,10 @@ from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from tckdb_schemas.fragments.calculation import composite_arithmetic_tolerance_hartree
+from tckdb_schemas.fragments.calculation import (
+    COMPOSITE_PRINTED_ROUNDING_HARTREE,
+    composite_arithmetic_tolerance_hartree,
+)
 from tckdb_schemas.fragments.ts_validation_evidence import (
     TransitionStateValidationEvidenceIn,
 )
@@ -98,6 +101,11 @@ NOT_COMPARED_STORED_ENERGY_NOT_STATED = "stored_energy_not_stated"
 NOT_COMPARED_ZPE_NOT_STATED = "zpe_not_stated"
 NOT_COMPARED_NO_ELECTRONIC_ENERGY_TO_PAIR = "no_electronic_energy_to_pair"
 NOT_COMPARED_GEOMETRY_NOT_PAIRED = "geometry_not_paired"
+NOT_COMPARED_ZPE_SCALING_UNSTATED = "zpe_scaling_unstated"
+
+#: A stated ``zpe_scale_factor`` is a printed number of at most four decimals, so it carries up
+#: to half a unit of the last place, 5e-5, as relative error.
+_ZPE_SCALE_FACTOR_PRINTED_ERROR = 5e-5
 
 #: Two printed values are in every comparison of a stated electronic energy with
 #: a stored one (the stated value and the stored one), three in an E0 (E0,
@@ -247,6 +255,7 @@ def _stated_energy_mismatch(
     stored: float,
     tolerance: float,
     stored_zpe: float | None = None,
+    zpe_scale_factor: float | None = None,
 ) -> CodedValueError:
     """The refusal for a stated energy the cited calculation does not store.
 
@@ -255,6 +264,10 @@ def _stated_energy_mismatch(
 
     what = (
         "the stored electronic energy plus the stored zero-point energy of the "
+        "frequency calculation it cites, scaled by the stated zpe_scale_factor "
+        f"{zpe_scale_factor!r}"
+        if energy_kind == "e0" and zpe_scale_factor is not None
+        else "the stored electronic energy plus the stored zero-point energy of the "
         "frequency calculation it cites"
         if energy_kind == "e0"
         else "the energy stored for the calculation it cites"
@@ -269,6 +282,8 @@ def _stated_energy_mismatch(
     }
     if stored_zpe is not None:
         context["stored_zpe_hartree"] = stored_zpe
+    if zpe_scale_factor is not None:
+        context["zpe_scale_factor"] = zpe_scale_factor
     return CodedValueError(
         E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH,
         (
@@ -302,6 +317,12 @@ def _compare_stated_energies_with_stored(
       ``freq``'s ZPE, and only when the two calculations are at one geometry
       (the ``sp``'s input, the ``opt``'s final, the ``freq``'s input), each
       declared exactly once. Anything less is not a pairing, and is not guessed.
+      TCKDB stores the producer's unscaled ZPE. With the energy's
+      ``zpe_scale_factor`` stated the sum is ``electronic + s * zpe`` and a
+      disagreement raises; with none stated it is ``electronic + zpe`` and a
+      disagreement is returned as ``not_compared`` / ``zpe_scaling_unstated``,
+      because a scaled ZPE cannot be told from a wrong number and only a
+      stated convention makes a contradiction provable.
 
     A stored value that contradicts the stated one raises
     ``ts_energy_ordering_stated_energy_mismatch``. A comparison that cannot be
@@ -366,18 +387,42 @@ def _compare_stated_energies_with_stored(
                 COMPARISON_NOT_COMPARED, NOT_COMPARED_GEOMETRY_NOT_PAIRED
             )
             continue
+        scale = energy.zpe_scale_factor
+        if scale is not None:
+            # The producer states how it scaled the zero-point energy, so the sum is known and a
+            # disagreement is a contradiction. Rounded quantities: the E0, the electronic energy,
+            # the ZPE (weight ``scale``), and the factor itself, printed to at most four decimals
+            # (half a unit, 5e-5, of relative error), which moves the sum by ``5e-5 * zpe``.
+            stored_e0 = electronic + scale * zpe
+            rounded = (
+                _ROUNDED_QUANTITIES_E0 - 1
+                + scale
+                + abs(zpe) * _ZPE_SCALE_FACTOR_PRINTED_ERROR / COMPOSITE_PRINTED_ROUNDING_HARTREE
+            )
+            tolerance = composite_arithmetic_tolerance_hartree(rounded)
+            if abs(energy.energy_hartree - stored_e0) > tolerance + _TOLERANCE_FLOAT_SLACK:
+                raise _stated_energy_mismatch(
+                    field=f"{field_path}[{record_index}].energies[{index}]",
+                    participant=energy.participant,
+                    energy_kind="e0",
+                    stated=energy.energy_hartree,
+                    stored=stored_e0,
+                    tolerance=tolerance,
+                    stored_zpe=zpe,
+                    zpe_scale_factor=scale,
+                )
+            results[index] = _AGREES
+            continue
+        # No factor stated: the sum is electronic + ZPE as stored. TCKDB stores the producer's
+        # unscaled ZPE, so an E0 built with a scaled one cannot be told from a wrong number here;
+        # that is not a contradiction it can prove, so it is recorded, never refused.
         stored_e0 = electronic + zpe
         tolerance = composite_arithmetic_tolerance_hartree(_ROUNDED_QUANTITIES_E0)
         if abs(energy.energy_hartree - stored_e0) > tolerance + _TOLERANCE_FLOAT_SLACK:
-            raise _stated_energy_mismatch(
-                field=f"{field_path}[{record_index}].energies[{index}]",
-                participant=energy.participant,
-                energy_kind="e0",
-                stated=energy.energy_hartree,
-                stored=stored_e0,
-                tolerance=tolerance,
-                stored_zpe=zpe,
+            results[index] = StoredEnergyComparison(
+                COMPARISON_NOT_COMPARED, NOT_COMPARED_ZPE_SCALING_UNSTATED
             )
+            continue
         results[index] = _AGREES
 
     return [result for result in results if result is not None]
@@ -403,6 +448,13 @@ def _warn_energies_not_compared(
     ]
     if not skipped:
         return
+    scaling_hint = (
+        " An E0 that is not the stored electronic energy plus the stored (unscaled) zero-point "
+        "energy was not refused, because a scaled zero-point energy cannot be told from a wrong "
+        "number; if you scaled it, state zpe_scale_factor on that energy and it will be checked."
+        if any(c.reason == NOT_COMPARED_ZPE_SCALING_UNSTATED for c in comparisons)
+        else ""
+    )
     warnings.append(
         UploadWarning(
             field=f"{field_path}[{record_index}].energies",
@@ -411,7 +463,7 @@ def _warn_energies_not_compared(
                 f"Transition state '{subject_label}' energy_ordering states energies that could "
                 f"not be compared with the energies TCKDB stores for the calculations they cite: "
                 f"{'; '.join(skipped)}. They are stored as not compared, and the ordering rests on "
-                "the stated numbers for them."
+                f"the stated numbers for them.{scaling_hint}"
             ),
         )
     )
@@ -755,6 +807,7 @@ def persist_transition_state_validation_evidence(
                     source_calculation_id=source_calculation_id,
                     stored_energy_comparison=comparison.status,
                     not_compared_reason=comparison.reason,
+                    zpe_scale_factor=energy.zpe_scale_factor,
                 )
             )
 
@@ -880,7 +933,9 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
         "the energy TCKDB stores for the calculation the record cites: the "
         "cited single point's electronic energy (or the optimisation's final "
         "energy), or, for an E0, the paired stored electronic energy plus the "
-        "cited frequency calculation's zero-point energy."
+        "cited frequency calculation's zero-point energy, scaled by the "
+        "``zpe_scale_factor`` the record states (a record that states none is "
+        "held to the unscaled sum only as far as agreement, never refused)."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -911,7 +966,8 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
     escape_hatch=(
         "State the energy the cited calculation stores, or cite the "
         "calculation the number came from. Where the stored energy is not "
-        "stated the energy is not compared and the upload warns."
+        "stated the energy is not compared and the upload warns. An E0 built "
+        "with a scaled zero-point energy states ``zpe_scale_factor``."
     ),
 )
 

@@ -13,13 +13,22 @@ for the calculation it cites.
   the two calculations are at one geometry). The tolerance is the printed-precision one,
   `max(1e-6, 5e-7 * n)` hartree with n = 2 (electronic) or 3 (E0). `context` carries the field, the
   participant, the energy kind, both values and the tolerance.
+- **`zpe_scale_factor` (new, optional, `e0` energies only).** TCKDB stores your zero-point energy
+  unscaled. An `e0` built as `E_electronic + s * ZPE` (Arkane-style) states `s` on that energy, and is
+  then held to `electronic + s * ZPE`; the tolerance also covers `s` printed to four decimals, so it is
+  `max(1e-6, 5e-7 * n)` with `n = 2 + s + 100 * ZPE`. Finite and positive; refused on an `electronic`
+  energy. An `e0` with no factor stated that is not `electronic + ZPE` is **not refused**: a scaled ZPE
+  cannot be told from a wrong number, so it is stored as `not_compared` with reason
+  `zpe_scaling_unstated` and the warning below. An `e0` equal to `electronic + ZPE` is recorded as
+  agreeing.
 - **`transition_state_energy_ordering_not_compared` (warning).** An energy that cannot be compared (the
   stored energy or zero-point energy is not stated, no electronic entry exists to pair an E0 with, or the
   geometries cannot be paired) is accepted and reported, never read as agreement.
 - Reads: each compared energy of an `energy_ordering` record gains `stored_energy_comparison` (`agrees` or
-  `not_compared`, null on a record deposited earlier) and `not_compared_reason`.
-- Uploads only: stored records read exactly as before. A record whose stated energies disagree with the
-  stored ones must state the stored values or cite the calculation the numbers came from.
+  `not_compared`, null on a record deposited earlier), `not_compared_reason` (`stored_energy_not_stated`,
+  `zpe_not_stated`, `no_electronic_energy_to_pair`, `geometry_not_paired`, `zpe_scaling_unstated`) and
+  `zpe_scale_factor`.
+- Uploads only: stored records read exactly as before.
 
 ## 0.77.0 - 2026-10-03
 

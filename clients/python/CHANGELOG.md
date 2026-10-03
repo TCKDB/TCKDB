@@ -4,7 +4,8 @@
 
 Adds the `RejectionCode.TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH` member (`tckdb-schemas` 0.81.0, #638):
 a transition-state `energy_ordering` energy that contradicts the energy TCKDB stores for the calculation
-it cites is refused. Nothing in the client's code changes.
+it cites is refused. An `e0` energy built with a scaled zero-point energy states the new optional
+`zpe_scale_factor` (same release). Nothing in the client's code changes.
 
 ## 0.113.0 - 2026-10-03
 

@@ -1332,6 +1332,7 @@ def _build_validation_evidence(
                     source_calculation_ref=source_ref,
                     stored_energy_comparison=energy.stored_energy_comparison,
                     not_compared_reason=energy.not_compared_reason,
+                    zpe_scale_factor=energy.zpe_scale_factor,
                 )
             )
     return [

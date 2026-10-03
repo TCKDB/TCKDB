@@ -570,7 +570,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None needed: the warning is the accommodation. Take every energy of a kind at one level, or accept the warning.
 
-### 23. An energy an energy-ordering record states for a participant should be the energy TCKDB stores for the calculation the record cites: the cited single point's electronic energy (or the optimisation's final energy), or, for an E0, the paired stored electronic energy plus the cited frequency calculation's zero-point energy.
+### 23. An energy an energy-ordering record states for a participant should be the energy TCKDB stores for the calculation the record cites: the cited single point's electronic energy (or the optimisation's final energy), or, for an E0, the paired stored electronic energy plus the cited frequency calculation's zero-point energy, scaled by the `zpe_scale_factor` the record states (a record that states none is held to the unscaled sum only as far as agreement, never refused).
 
 | Field | Value |
 | --- | --- |
@@ -586,7 +586,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py::persist_transition_state_validation_evidence`
   *Runs in the shared evidence seam, so the PDep bundle, the computed-reaction bundle and the standalone upload enforce it alike, and it holds for a payload that bypassed the wire schemas. Wire-level checks cannot do it: the stored energies are in the database.*
 
-**Escape hatch.** State the energy the cited calculation stores, or cite the calculation the number came from. Where the stored energy is not stated the energy is not compared and the upload warns.
+**Escape hatch.** State the energy the cited calculation stores, or cite the calculation the number came from. Where the stored energy is not stated the energy is not compared and the upload warns. An E0 built with a scaled zero-point energy states `zpe_scale_factor`.
 
 ### 24. Every energy an energy-ordering record states should be comparable with the energy TCKDB stores for its calculation.
 

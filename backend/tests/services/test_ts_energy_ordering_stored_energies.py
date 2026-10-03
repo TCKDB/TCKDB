@@ -111,16 +111,19 @@ def _keys(fx) -> dict[str, int]:
     return keys
 
 
-def _energy(participant, kind, value, source):
-    return {
+def _energy(participant, kind, value, source, scale=None):
+    energy = {
         "participant": participant,
         "energy_kind": kind,
         "energy_hartree": value,
         "source_calculation_key": f"{participant}-{source}",
     }
+    if scale is not None:
+        energy["zpe_scale_factor"] = scale
+    return energy
 
 
-def _record(*, electronic=None, e0=None, passed=True) -> TransitionStateValidationEvidenceIn:
+def _record(*, electronic=None, e0=None, scale=None, passed=True) -> TransitionStateValidationEvidenceIn:
     """Electronic energies from the sps and E0s from the freqs; defaults agree with ``_fixture``."""
     energies = []
     if electronic is not False:
@@ -128,7 +131,15 @@ def _record(*, electronic=None, e0=None, passed=True) -> TransitionStateValidati
             energies.append(_energy(participant, "electronic", value, "sp"))
     if e0 is not None:
         for participant in _ELECTRONIC:
-            energies.append(_energy(participant, "e0", e0.get(participant, _ELECTRONIC[participant] + _ZPE), "freq"))
+            energies.append(
+                _energy(
+                    participant,
+                    "e0",
+                    e0.get(participant, _ELECTRONIC[participant] + _ZPE),
+                    "freq",
+                    (scale or {}).get(participant),
+                )
+            )
     return TransitionStateValidationEvidenceIn(
         kind="energy_ordering", passed=passed, rationale="TS above both wells", energies=energies
     )
@@ -205,18 +216,29 @@ def test_the_electronic_tolerance_is_the_helpers_with_two_quantities(db_session)
     assert caught.value.context["tolerance_hartree"] == _TOL_ELECTRONIC
 
 
-def test_the_e0_tolerance_is_the_helpers_with_three_quantities(db_session) -> None:
-    """1.2 Tol(2) is refused for an electronic energy and accepted for an E0 sum."""
+def test_the_unscaled_e0_tolerance_is_the_helpers_with_three_quantities(db_session) -> None:
+    """1.2 Tol(2) is outside for an electronic energy and inside for an E0 sum (no factor stated)."""
     assert _TOL_E0 > _TOL_ELECTRONIC
     fx = _fixture(db_session, "TOL0")
     stored_e0 = _ELECTRONIC["ts"] + _ZPE
-    inside = _record(e0={"ts": stored_e0 + 0.99 * _TOL_E0})
-    _persist(db_session, fx, inside)
-    outside = _record(e0={"ts": stored_e0 + 1.01 * _TOL_E0}, passed=False)
+    _persist(db_session, fx, _record(e0={"ts": stored_e0 + 0.99 * _TOL_E0}))
+    db_session.flush()
+    assert _stored(db_session)[("ts", "e0")] == ("agrees", None)
+
+
+def test_the_scaled_e0_tolerance_covers_the_sum_and_the_factors_printed_precision(db_session) -> None:
+    scale = 0.98
+    fx = _fixture(db_session, "TOLS")
+    rounded = 2 + scale + _ZPE * 5e-5 / 5e-7
+    tolerance = composite_arithmetic_tolerance_hartree(rounded)
+    assert tolerance > _TOL_E0
+    stored_e0 = _ELECTRONIC["ts"] + scale * _ZPE
+    _persist(db_session, fx, _record(e0={"ts": stored_e0 + 0.99 * tolerance}, scale={"ts": scale}))
+    outside = _record(e0={"ts": stored_e0 + 1.01 * tolerance}, scale={"ts": scale}, passed=False)
     with pytest.raises(CodedValueError) as caught:
         _persist(db_session, fx, outside)
     assert caught.value.code == _MISMATCH
-    assert caught.value.context["tolerance_hartree"] == _TOL_E0
+    assert caught.value.context["tolerance_hartree"] == tolerance
 
 
 # ---------------------------------------------------------------------------
@@ -224,9 +246,34 @@ def test_the_e0_tolerance_is_the_helpers_with_three_quantities(db_session) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_an_e0_is_compared_with_the_electronic_energy_plus_the_zpe(db_session) -> None:
+def test_an_unscaled_e0_with_no_factor_agrees(db_session) -> None:
     fx = _fixture(db_session, "E0SUM")
-    wrong = _record(e0={"reactant:1": _ELECTRONIC["reactant:1"]})  # the electronic energy, ZPE forgotten
+    _persist(db_session, fx, _record(e0={}))
+    db_session.flush()
+    assert _stored(db_session)[("reactant:1", "e0")] == ("agrees", None)
+
+
+def test_a_scaled_e0_with_its_factor_agrees_and_the_factor_is_stored(db_session) -> None:
+    scale = 0.98
+    fx = _fixture(db_session, "SCALED")
+    e0 = {p: _ELECTRONIC[p] + scale * _ZPE for p in _ELECTRONIC}
+    _persist(db_session, fx, _record(e0=e0, scale=dict.fromkeys(_ELECTRONIC, scale)))
+    db_session.flush()
+    assert _stored(db_session)[("reactant:1", "e0")] == ("agrees", None)
+    factors = {
+        e.participant: e.zpe_scale_factor
+        for e in db_session.scalars(select(TransitionStateValidationEnergy))
+        if e.energy_kind == "e0"
+    }
+    assert factors == dict.fromkeys(_ELECTRONIC, scale)
+
+
+def test_an_e0_with_a_wrong_factor_is_refused(db_session) -> None:
+    """E0 built with 0.98 but stating 1.0: the sum the producer declared is not the one it used."""
+    fx = _fixture(db_session, "WRONGS")
+    wrong = _record(
+        e0={"reactant:1": _ELECTRONIC["reactant:1"] + 0.98 * _ZPE}, scale={"reactant:1": 1.0}
+    )
     with pytest.raises(CodedValueError) as caught:
         _persist(db_session, fx, wrong)
     context = caught.value.context
@@ -234,10 +281,37 @@ def test_an_e0_is_compared_with_the_electronic_energy_plus_the_zpe(db_session) -
     assert (context["participant"], context["energy_kind"]) == ("reactant:1", "e0")
     assert context["stored_hartree"] == pytest.approx(_ELECTRONIC["reactant:1"] + _ZPE)
     assert context["stored_zpe_hartree"] == _ZPE
-    assert context["stated_hartree"] == _ELECTRONIC["reactant:1"]
-    _persist(db_session, fx, _record(e0={}))
+    assert context["zpe_scale_factor"] == 1.0
+    assert _stored(db_session) == {}
+
+
+def test_a_scaled_e0_with_no_factor_is_recorded_not_refused_and_warns(db_session) -> None:
+    fx = _fixture(db_session, "NOFACTOR")
+    warnings: list[UploadWarning] = []
+    e0 = {"reactant:1": _ELECTRONIC["reactant:1"] + 0.98 * _ZPE}
+    _persist(db_session, fx, _record(e0=e0), warnings=warnings)
     db_session.flush()
-    assert _stored(db_session)[("reactant:1", "e0")] == ("agrees", None)
+    stored = _stored(db_session)
+    assert stored[("reactant:1", "e0")] == ("not_compared", "zpe_scaling_unstated")
+    assert stored[("ts", "e0")] == ("agrees", None)
+    (warning,) = [w for w in warnings if w.code == _NOT_COMPARED]
+    assert "zpe_scale_factor" in warning.message
+    assert "'reactant:1' e0 (zpe_scaling_unstated)" in warning.message
+
+
+def test_the_e0_refusal_names_a_non_zero_record_and_energy_index(db_session) -> None:
+    fx = _fixture(db_session, "E0INDEX")
+    ts_freq = fx["calcs"]["ts"][1]
+    mode = TransitionStateValidationEvidenceIn(
+        kind="imaginary_mode", passed=True, rationale="r", imaginary_frequency_count=1
+    )
+    ordering = _record(e0={"product:1": -2.0}, scale={"product:1": 1.0})
+    with pytest.raises(CodedValueError) as caught:
+        _persist(db_session, fx, [mode, ordering], reconstruction=[ts_freq.id, None])
+    assert caught.value.code == _MISMATCH
+    # Electronic energies are indexes 0-2, the E0s 3-5 in participant order: product:1 is 5.
+    assert caught.value.context["field"] == "validation_evidence[1].energies[5]"
+    assert caught.value.context["energy_kind"] == "e0"
 
 
 def test_an_e0_is_paired_with_an_opt_at_the_same_geometry(db_session) -> None:

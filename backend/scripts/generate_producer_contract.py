@@ -1331,15 +1331,21 @@ three validation records, at most one per `kind`, every one optional:
   `sp`'s electronic energy (or the cited `opt`'s final energy), `n` = 2; an
   `e0` against the stored electronic energy of the same participant's
   `electronic` entry plus the cited `freq`'s zero-point energy, `n` = 3, and
-  only when those two calculations are at one geometry. A stated energy that
-  contradicts the stored one is refused with
-  `ts_energy_ordering_stated_energy_mismatch` (its `context` carries the
-  participant, the kind, both values and the tolerance). An energy that
-  cannot be compared (the stored energy or zero-point energy is not stated,
-  there is no electronic entry to pair an E0 with, or the geometries cannot be
-  paired) is accepted, stored as `not_compared` with a reason, and reported
-  with a `transition_state_energy_ordering_not_compared` warning; it is never
-  read as agreement. Taking one
+  only when those two calculations are at one geometry. TCKDB stores your
+  zero-point energy unscaled, so an `e0` built with a scaled one
+  (`E0 = E_electronic + s * ZPE`) must state `zpe_scale_factor` (`s`, positive,
+  `e0` entries only); the E0 is then held to `electronic + s * ZPE`, with a
+  tolerance that also covers `s` printed to four decimals. A contradiction is
+  refused with `ts_energy_ordering_stated_energy_mismatch` (`context`: the
+  participant, kind, both values, tolerance, and for an E0 the stored ZPE and
+  factor). With no factor, an `e0` equal to `electronic + ZPE` agrees; any
+  other is **not refused** (a scaled ZPE cannot be told from a wrong number)
+  but stored as `not_compared`, reason `zpe_scaling_unstated`. An energy that
+  cannot be compared at all (a stored energy or ZPE not stated, no electronic
+  entry to pair an E0 with, geometries that cannot be paired) is accepted,
+  stored as `not_compared` with a reason, and reported with a
+  `transition_state_energy_ordering_not_compared` warning, never read as
+  agreement. Taking one
   `energy_kind` from calculations at more than one level of theory is accepted
   with a `transition_state_energy_ordering_mixed_levels` warning. It is
   accepted on the computed-reaction and pressure-dependent bundles; the
@@ -1582,7 +1588,7 @@ class ContractBuilder:
             self.catalogue.setdefault(entry.code, []).append(entry)
         self.tracer = Tracer(frozenset(self.catalogue))
         self.register = register()
-        self.check_by_func: dict[str, ScientificCheck] = {}
+        self.check_by_func: dict[str, list[ScientificCheck]] = {}
         self.check_by_code: dict[str, ScientificCheck] = {}
         self.constraints_by_table: dict[str, list[DatabaseConstraint]] = {}
         for check in self.register:
@@ -1590,7 +1596,9 @@ class ContractBuilder:
                 self.check_by_code.setdefault(code, check)
             for site in check.enforced_by:
                 if isinstance(site, PythonCheck):
-                    self.check_by_func[_key(inspect.unwrap(site.func))] = check
+                    funcs = self.check_by_func.setdefault(_key(inspect.unwrap(site.func)), [])
+                    if check not in funcs:
+                        funcs.append(check)
                 elif isinstance(site, DatabaseConstraint) and site.rejection_code:
                     self.constraints_by_table.setdefault(site.table, []).append(site)
                     self.check_by_code.setdefault(site.rejection_code, check)
@@ -1649,9 +1657,14 @@ class ContractBuilder:
                 func = handler_trace.functions[key]
                 if key in payload_trace.functions:
                     continue
-                check = self.check_by_func.get(key)
-                if is_producer_rule(func) or check is not None:
-                    workflow_rules.append((key, func, check))
+                checks = self.check_by_func.get(key, [])
+                if is_producer_rule(func):
+                    # Printed once in full, whatever number of checks it also carries.
+                    workflow_rules.append((key, func, checks[-1] if checks else None))
+                else:
+                    # One entry per check: a function may enforce several (the TS evidence seam
+                    # enforces five), and a single-valued map kept only the last one registered.
+                    workflow_rules.extend((key, func, check) for check in checks)
             surfaces.append(
                 Surface(
                     model=model,
@@ -1741,16 +1754,22 @@ class ContractBuilder:
             if code not in common and len(titles) >= self.SHARED_CODE_MIN_SURFACES
         }
 
-    def shared_checks(self) -> dict[str, tuple[ScientificCheck, list[str]]]:
-        """Register checks two or more surfaces' workflows reach: printed once."""
+    def shared_checks(self) -> dict[str, tuple[list[ScientificCheck], list[str]]]:
+        """Functions two or more surfaces' workflows reach, with every register check each enforces: printed once.
+
+        Keyed by the function, because a function may enforce several checks (the transition-state
+        evidence seam enforces four) and all of them are reached whenever it is.
+        """
         reached: dict[str, list[str]] = {}
-        checks: dict[str, ScientificCheck] = {}
+        checks: dict[str, list[ScientificCheck]] = {}
         for surface in self.surfaces:
             for key, func, check in surface.workflow_rules:
                 if check is None or is_producer_rule(func):
                     continue
-                reached.setdefault(key, []).append(surface.title)
-                checks[key] = check
+                if surface.title not in reached.setdefault(key, []):
+                    reached[key].append(surface.title)
+                if check not in checks.setdefault(key, []):
+                    checks[key].append(check)
         return {key: (checks[key], titles) for key, titles in sorted(reached.items()) if len(titles) > 1}
 
     def top_refusals(self, surface: Surface, limit: int = TOP_REFUSALS) -> list[str]:
@@ -2000,22 +2019,23 @@ class ContractBuilder:
             " printed in full on every surface that reaches it.",
             "",
         ]
-        for key, (check, titles) in self.shared_checks().items():
-            codes = ", ".join(f"[`{code}`](#{_anchor('c', code)})" for code in check.codes) or "none"
-            out += [
-                f'<a id="{_anchor("k", key)}"></a>',
-                "",
-                f"### `{key.split(':', 1)[1]}`",
-                "",
-                f"`{key}`. {check.tier.value}; codes {codes}. Applied on: "
-                + ", ".join(f"[`{t}`](#{_anchor('s', t)})" for t in titles)
-                + ".",
-                "",
-                _one_line(check.asserts),
-                "",
-            ]
-            if check.escape_hatch:
-                out += [f"If your chemistry is legitimate: {_one_line(check.escape_hatch)}", ""]
+        for key, (func_checks, titles) in self.shared_checks().items():
+            applied = "Applied on: " + ", ".join(f"[`{t}`](#{_anchor('s', t)})" for t in titles) + "."
+            out += [f'<a id="{_anchor("k", key)}"></a>', "", f"### `{key.split(':', 1)[1]}`", ""]
+            if len(func_checks) == 1:
+                (check,) = func_checks
+                codes = ", ".join(f"[`{code}`](#{_anchor('c', code)})" for code in check.codes) or "none"
+                out += [f"`{key}`. {check.tier.value}; codes {codes}. {applied}", "", _one_line(check.asserts), ""]
+                if check.escape_hatch:
+                    out += [f"If your chemistry is legitimate: {_one_line(check.escape_hatch)}", ""]
+                continue
+            out += [f"`{key}` enforces {len(func_checks)} checks. {applied}", ""]
+            for check in func_checks:
+                codes = ", ".join(f"[`{code}`](#{_anchor('c', code)})" for code in check.codes) or "none"
+                out += [f"- **{check.tier.value}; codes {codes}.** {_one_line(check.asserts)}"]
+                if check.escape_hatch:
+                    out += [f"  If your chemistry is legitimate: {_one_line(check.escape_hatch)}"]
+            out.append("")
         shared = self.widely_shared_codes()
         total = len(self.surfaces)
         out += [
@@ -2114,14 +2134,20 @@ class ContractBuilder:
         ]
         if not surface.workflow_rules:
             out += ["No marked rule or register check is reached from these handlers.", ""]
+        listed_shared: set[str] = set()
         for key, func, check in surface.workflow_rules:
             routes = [label for label, reached in sorted(surface.rules_by_route.items()) if key in reached]
             via = ", ".join(f"`{label}`" for label in routes)
             if is_producer_rule(func):
                 out += [f"- **`{key}`** (reached from {via}):", "", *_indent_block(_own_doc(func) or ""), ""]
             elif check is not None and key in shared:
-                codes = ", ".join(f"`{code}`" for code in check.codes) or "no code"
-                out.append(f"- [`{key.split(':', 1)[1]}`](#{_anchor('k', key)}) ({check.tier.value}; {codes})")
+                if key in listed_shared:
+                    continue  # one bullet per function, however many checks it enforces
+                listed_shared.add(key)
+                func_checks = shared[key][0]
+                tiers = "/".join(dict.fromkeys(c.tier.value for c in func_checks))
+                codes = ", ".join(f"`{code}`" for c in func_checks for code in c.codes) or "no code"
+                out.append(f"- [`{key.split(':', 1)[1]}`](#{_anchor('k', key)}) ({tiers}; {codes})")
             elif check is not None:
                 codes = ", ".join(f"`{code}`" for code in check.codes) or "no code"
                 out.append(f"- **`{key}`** (reached from {via}; {check.tier.value}; {codes}): {_one_line(check.asserts)}")
@@ -2259,7 +2285,7 @@ class ContractBuilder:
             out.append(f"- Message: {facts.message!r}" if facts.message else "- Message: not found by the static search.")
             for note in sorted({e.note for e in entries if e.note}):
                 out.append(f"- Note: {_first_sentence(note)}")
-            shared_key = next((key for key, (check, _) in shared.items() if check is facts.check), None)
+            shared_key = next((key for key, (checks, _) in shared.items() if facts.check in checks), None)
             if shared_key is not None:
                 out.append(f"- Scientific check: [`{shared_key.split(':', 1)[1]}`](#{_anchor('k', shared_key)}).")
             elif facts.check is not None:

@@ -154,17 +154,18 @@ class TestMixedLevelsWarn:
 
 
 def _bare_proton_bundle() -> dict:
-    """An electronic-only ordering with a zero-energy reactant, stored as stated.
+    """An ordering with a zero-energy reactant, stored as stated.
 
-    Electronic only, because a bare proton's E0 cannot sit above zero and so
-    cannot carry a zero-point energy; the cited single points store what the
-    record states (issue #638).
+    ``[H+]`` has no electrons, so its electronic energy is exactly 0, and no
+    vibrations, so its zero-point energy is 0 and its E0 is 0.0 as well. The
+    cited calculations store what the record states (issue #638).
     """
     record = _energy_ordering()
-    record["energies"] = [e for e in record["energies"] if e["energy_kind"] == "electronic"]
     record["energies"][0] = _energy("ts", "electronic", -39.5, "ts-sp")
     record["energies"][2] = _energy("reactant:2", "electronic", 0.0, "h-sp")
-    return _bundle([record], sp={"ts-sp": -39.5, "h-sp": 0.0})
+    record["energies"][4] = _energy("ts", "e0", -39.48, "ts-freq")
+    record["energies"][6] = _energy("reactant:2", "e0", 0.0, "h-freq")
+    return _bundle([record], sp={"ts-sp": -39.5, "h-sp": 0.0}, zpe={"h-freq": 0.0})
 
 
 class TestTheBareProton:
@@ -178,10 +179,12 @@ class TestTheBareProton:
 
     def test_the_database_stores_it(self, db_session, client):
         _ok(_post_bundle(client, _bare_proton_bundle()))
-        stored = db_session.execute(
-            text(
-                "SELECT energy_hartree FROM transition_state_validation_energy "
-                "WHERE participant = 'reactant:2' AND energy_kind = 'electronic'"
-            )
-        ).scalar_one()
-        assert stored == 0.0
+        stored = dict(
+            db_session.execute(
+                text(
+                    "SELECT energy_kind, energy_hartree FROM transition_state_validation_energy "
+                    "WHERE participant = 'reactant:2'"
+                )
+            ).all()
+        )
+        assert stored == {"electronic": 0.0, "e0": 0.0}

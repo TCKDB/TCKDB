@@ -70,6 +70,24 @@ class TransitionStateComparedEnergy(SchemaBase):
     :param energy_kind: ``"electronic"`` for the electronic energy, or ``"e0"``
         for the electronic energy plus the zero-point energy. They are
         different quantities and are never compared with each other.
+
+        An ``e0`` is held against the *stored* values of the calculations it
+        rests on: the stored electronic energy of this participant's
+        ``electronic`` entry plus the zero-point energy stored on the cited
+        ``freq`` calculation, which is the producer's own unscaled value (the
+        program's raw zero-point correction). With ``zpe_scale_factor`` stated
+        the sum is ``electronic + zpe_scale_factor * zpe``; without it the
+        sum is ``electronic + zpe``, and an E0 that does not match that sum is
+        not refused (the producer may have scaled the zero-point energy and not
+        said so) but recorded as not compared.
+    :param zpe_scale_factor: ``e0`` only. The factor ``s`` the producer
+        multiplied the stored zero-point energy by in forming this E0
+        (``E0 = E_electronic + s * ZPE``), for example a published ZPE scale
+        factor for the level of theory. Provenance the producer states, never
+        inferred. Omit it when the E0 uses the zero-point energy as stored
+        (an unscaled E0), not ``1.0``-as-a-guess: ``1.0`` is a claim that the
+        sum is unscaled, and is held to the stored values like any other
+        stated factor. Finite and positive.
     :param energy_hartree: The absolute energy, in hartree: finite and not
         positive. A bound system's total energy is below the zero of separated
         nuclei and electrons, so a positive value is a relative energy (or a
@@ -90,6 +108,16 @@ class TransitionStateComparedEnergy(SchemaBase):
     energy_kind: Literal["electronic", "e0"]
     energy_hartree: float = Field(le=0, allow_inf_nan=False)
     source_calculation_key: str = Field(min_length=1)
+    zpe_scale_factor: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_zpe_scale_factor_is_for_e0(self) -> Self:
+        if self.zpe_scale_factor is not None and self.energy_kind != "e0":
+            raise ValueError(
+                "zpe_scale_factor scales the zero-point energy in an E0 and is accepted "
+                f"only on energy_kind='e0', not '{self.energy_kind}'."
+            )
+        return self
 
 
 class TransitionStateValidationEvidenceIn(SchemaBase):

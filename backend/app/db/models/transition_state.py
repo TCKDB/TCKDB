@@ -383,6 +383,10 @@ class TransitionStateValidationEnergy(Base):
     #: pass. A *disagreement* is never stored: it refuses the deposit.
     stored_energy_comparison: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     not_compared_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    #: ``e0`` only. The factor the producer multiplied the stored (unscaled)
+    #: zero-point energy by in forming ``energy_hartree``. NULL means none was
+    #: stated, not 1.0.
+    zpe_scale_factor: Mapped[Optional[float]] = mapped_column(nullable=True)
     evidence: Mapped["TransitionStateValidationEvidence"] = relationship(back_populates="compared_energies")
     source_calculation: Mapped["Calculation"] = relationship()
     __table_args__ = (
@@ -393,6 +397,17 @@ class TransitionStateValidationEnergy(Base):
         CheckConstraint(
             "(stored_energy_comparison IS NOT DISTINCT FROM 'not_compared') = (not_compared_reason IS NOT NULL)",
             name="not_compared_reason_shape",
+        ),
+        CheckConstraint(
+            "not_compared_reason IS NULL OR not_compared_reason IN ("
+            "'stored_energy_not_stated', 'zpe_not_stated', 'no_electronic_energy_to_pair', "
+            "'geometry_not_paired', 'zpe_scaling_unstated')",
+            name="not_compared_reason_token",
+        ),
+        CheckConstraint(
+            "zpe_scale_factor IS NULL OR (energy_kind = 'e0' AND zpe_scale_factor > 0 "
+            "AND zpe_scale_factor < 'Infinity'::float8)",
+            name="zpe_scale_factor_e0_positive",
         ),
         CheckConstraint(
             "participant ~ '^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$'",

@@ -23,7 +23,7 @@ Read it in pieces: `python -m tckdb_schemas.contract --print` for all of it, `--
 | [`StatmechUploadRequest`](#s-statmechuploadrequest) | `POST /api/v1/uploads/statmech` | - | `calculation_geometry_composition_mismatch`, `species_geometry_composition_mismatch`, `species_geometry_isotope_mismatch` |
 | [`ThermoUploadRequest`](#s-thermouploadrequest) | `POST /api/v1/uploads/thermo`<br>`POST /api/v1/jobs/thermo` | A thermo record with enthalpy content must declare what its enthalpies mean. Never defaulted: `enthalpy_reference_kind`, `reference_pressure_bar`. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
 | [`ThermoMLUploadRequest`](#s-thermomluploadrequest) | `POST /api/v1/uploads/thermoml` | - | `thermoml_doi_conflict`, `thermoml_file_too_large`, `thermoml_invalid_base64` |
-| [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest) | `POST /api/v1/uploads/transition-states`<br>`POST /api/v1/jobs/transition-state` | - | `atom_map_contradicts_irc_mapping`, `transition_state_charge_mismatch`, `transition_state_irc_mapping_element_mismatch` |
+| [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest) | `POST /api/v1/uploads/transition-states`<br>`POST /api/v1/jobs/transition-state` | - | `atom_map_contradicts_irc_mapping`, `transition_state_charge_mismatch`, `transition_state_composition_mismatch` |
 | [`TransportUploadRequest`](#s-transportuploadrequest) | `POST /api/v1/uploads/transport`<br>`POST /api/v1/jobs/transport` | - | `calculation_geometry_composition_mismatch`, `species_geometry_composition_mismatch`, `species_geometry_isotope_mismatch` |
 | [`ContributionBundleV0`](#s-contributionbundlev0) | `POST /api/v1/bundles/dry-run`<br>`POST /api/v1/bundles/submit` | A thermo record with enthalpy content must declare what its enthalpies mean. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
 | [`ArtifactsUploadRequest`](#s-artifactsuploadrequest) | `POST /api/v1/calculations/{calculation_id}/artifacts` | - | `calculation_geometry_composition_mismatch`, `handle_not_found`, `handle_type_mismatch` |
@@ -136,15 +136,21 @@ three validation records, at most one per `kind`, every one optional:
   `sp`'s electronic energy (or the cited `opt`'s final energy), `n` = 2; an
   `e0` against the stored electronic energy of the same participant's
   `electronic` entry plus the cited `freq`'s zero-point energy, `n` = 3, and
-  only when those two calculations are at one geometry. A stated energy that
-  contradicts the stored one is refused with
-  `ts_energy_ordering_stated_energy_mismatch` (its `context` carries the
-  participant, the kind, both values and the tolerance). An energy that
-  cannot be compared (the stored energy or zero-point energy is not stated,
-  there is no electronic entry to pair an E0 with, or the geometries cannot be
-  paired) is accepted, stored as `not_compared` with a reason, and reported
-  with a `transition_state_energy_ordering_not_compared` warning; it is never
-  read as agreement. Taking one
+  only when those two calculations are at one geometry. TCKDB stores your
+  zero-point energy unscaled, so an `e0` built with a scaled one
+  (`E0 = E_electronic + s * ZPE`) must state `zpe_scale_factor` (`s`, positive,
+  `e0` entries only); the E0 is then held to `electronic + s * ZPE`, with a
+  tolerance that also covers `s` printed to four decimals. A contradiction is
+  refused with `ts_energy_ordering_stated_energy_mismatch` (`context`: the
+  participant, kind, both values, tolerance, and for an E0 the stored ZPE and
+  factor). With no factor, an `e0` equal to `electronic + ZPE` agrees; any
+  other is **not refused** (a scaled ZPE cannot be told from a wrong number)
+  but stored as `not_compared`, reason `zpe_scaling_unstated`. An energy that
+  cannot be compared at all (a stored energy or ZPE not stated, no electronic
+  entry to pair an E0 with, geometries that cannot be paired) is accepted,
+  stored as `not_compared` with a reason, and reported with a
+  `transition_state_energy_ordering_not_compared` warning, never read as
+  agreement. Taking one
   `energy_kind` from calculations at more than one level of theory is accepted
   with a `transition_state_energy_ordering_mixed_levels` warning. It is
   accepted on the computed-reaction and pressure-dependent bundles; the
@@ -225,13 +231,22 @@ for the calculation it cites.
   the two calculations are at one geometry). The tolerance is the printed-precision one,
   `max(1e-6, 5e-7 * n)` hartree with n = 2 (electronic) or 3 (E0). `context` carries the field, the
   participant, the energy kind, both values and the tolerance.
+- **`zpe_scale_factor` (new, optional, `e0` energies only).** TCKDB stores your zero-point energy
+  unscaled. An `e0` built as `E_electronic + s * ZPE` (Arkane-style) states `s` on that energy, and is
+  then held to `electronic + s * ZPE`; the tolerance also covers `s` printed to four decimals, so it is
+  `max(1e-6, 5e-7 * n)` with `n = 2 + s + 100 * ZPE`. Finite and positive; refused on an `electronic`
+  energy. An `e0` with no factor stated that is not `electronic + ZPE` is **not refused**: a scaled ZPE
+  cannot be told from a wrong number, so it is stored as `not_compared` with reason
+  `zpe_scaling_unstated` and the warning below. An `e0` equal to `electronic + ZPE` is recorded as
+  agreeing.
 - **`transition_state_energy_ordering_not_compared` (warning).** An energy that cannot be compared (the
   stored energy or zero-point energy is not stated, no electronic entry exists to pair an E0 with, or the
   geometries cannot be paired) is accepted and reported, never read as agreement.
 - Reads: each compared energy of an `energy_ordering` record gains `stored_energy_comparison` (`agrees` or
-  `not_compared`, null on a record deposited earlier) and `not_compared_reason`.
-- Uploads only: stored records read exactly as before. A record whose stated energies disagree with the
-  stored ones must state the stored values or cite the calculation the numbers came from.
+  `not_compared`, null on a record deposited earlier), `not_compared_reason` (`stored_energy_not_stated`,
+  `zpe_not_stated`, `no_electronic_energy_to_pair`, `geometry_not_paired`, `zpe_scaling_unstated`) and
+  `zpe_scale_factor`.
+- Uploads only: stored records read exactly as before.
 
 ### 0.77.0 - 2026-10-03
 
@@ -1221,11 +1236,12 @@ If your chemistry is legitimate: Declare a participant with ``molecule_kind: pse
 
 ### `validate_transition_state_composition`
 
-`app.services.reaction_resolution:validate_transition_state_composition`. block; codes [`transition_state_charge_mismatch`](#c-transition-state-charge-mismatch). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
+`app.services.reaction_resolution:validate_transition_state_composition` enforces 2 checks. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
-A saddle point carries the same total charge as the reactants it sits between.
-
-If your chemistry is legitimate: Omit the transition state's charge, which skips the comparison. Multiplicity is deliberately **not** checked here at all: spin is not conserved the way charge and atoms are — two doublets may react over a singlet or a triplet surface, and spin-forbidden reactions are real chemistry — so a multiplicity rule would fire on correct novel results. The pseudo-species exemption here is narrower than ``_load_participant_species``'s, and deliberately so. That helper exempts elemental balance and charge conservation on a pseudo participant on **either** side, because both compare one side against the other and a lumped construct makes the side it sits on unknowable. This check compares the saddle point against the **reactant side only**, so only a *reactant* being pseudo can make it meaningless; a pseudo *product* leaves the reactant side fully atom-resolved and is not exempted. Aligning the two would discard a guarantee that is still well-defined, and would discard it exactly where it is worth most: a reaction with a pseudo product has already lost elemental balance and charge conservation, so this is the only atom-level statement left about its saddle point.
+- **block; codes [`transition_state_composition_mismatch`](#c-transition-state-composition-mismatch).** A saddle point is made of exactly the atoms of the reaction it is declared to sit in.
+  If your chemistry is legitimate: Declare the extra species as participants of the reaction. A ``pseudo`` *reactant* exempts the reaction; a pseudo product does not, and that is not an oversight — see below. Absence does not block: no geometry and no parseable SMILES means nothing is compared, and an unparseable transition-state SMILES is treated as silence rather than as a contradiction, because a TS SMILES is a lossy label for a structure that is by construction not a stable molecule. The pseudo-species exemption here is narrower than ``_load_participant_species``'s, and deliberately so. That helper exempts elemental balance and charge conservation on a pseudo participant on **either** side, because both compare one side against the other and a lumped construct makes the side it sits on unknowable. This check compares the saddle point against the **reactant side only**, so only a *reactant* being pseudo can make it meaningless; a pseudo *product* leaves the reactant side fully atom-resolved and is not exempted. Aligning the two would discard a guarantee that is still well-defined, and would discard it exactly where it is worth most: a reaction with a pseudo product has already lost elemental balance and charge conservation, so this is the only atom-level statement left about its saddle point.
+- **block; codes [`transition_state_charge_mismatch`](#c-transition-state-charge-mismatch).** A saddle point carries the same total charge as the reactants it sits between.
+  If your chemistry is legitimate: Omit the transition state's charge, which skips the comparison. Multiplicity is deliberately **not** checked here at all: spin is not conserved the way charge and atoms are — two doublets may react over a singlet or a triplet surface, and spin-forbidden reactions are real chemistry — so a multiplicity rule would fire on correct novel results. The pseudo-species exemption here is narrower than ``_load_participant_species``'s, and deliberately so. That helper exempts elemental balance and charge conservation on a pseudo participant on **either** side, because both compare one side against the other and a lumped construct makes the side it sits on unknowable. This check compares the saddle point against the **reactant side only**, so only a *reactant* being pseudo can make it meaningless; a pseudo *product* leaves the reactant side fully atom-resolved and is not exempted. Aligning the two would discard a guarantee that is still well-defined, and would discard it exactly where it is worth most: a reaction with a pseudo product has already lost elemental balance and charge conservation, so this is the only atom-level statement left about its saddle point.
 
 <a id="k-app-services-reaction-resolution-validate-ts-evidence-participant-composition"></a>
 
@@ -1271,21 +1287,27 @@ If your chemistry is legitimate: Deposit no geometry. An explicitly declared *st
 
 ### `persist_transition_state_validation_evidence`
 
-`app.services.transition_state_validation:persist_transition_state_validation_evidence`. warn; codes [`transition_state_energy_ordering_not_compared`](#c-transition-state-energy-ordering-not-compared). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
+`app.services.transition_state_validation:persist_transition_state_validation_evidence` enforces 4 checks. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
-Every energy an energy-ordering record states should be comparable with the energy TCKDB stores for its calculation.
-
-If your chemistry is legitimate: None needed: the warning is the accommodation. Deposit the cited calculation's energy (and the frequency's zero-point energy, with the electronic energy at the same geometry) to make the comparison possible.
+- **warn; codes [`transition_state_missing_irc_evidence`](#c-transition-state-missing-irc-evidence).** A deposited saddle point should carry passing intrinsic-reaction-coordinate evidence that it connects the declared reactants and products.
+  If your chemistry is legitimate: None needed — the warning is the accommodation. Note the warning fires on absence of a *passing* ``irc`` record, so an IRC that was run and failed is stored and still warns, and so does a deposit whose only evidence is an energy ordering or an imaginary mode: neither shows the saddle point connects the declared endpoints.
+- **warn; codes [`transition_state_energy_ordering_mixed_levels`](#c-transition-state-energy-ordering-mixed-levels).** The energies an energy-ordering record compares should be taken at one level of theory per energy kind.
+  If your chemistry is legitimate: None needed: the warning is the accommodation. Take every energy of a kind at one level, or accept the warning.
+- **block; codes [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch).** An energy an energy-ordering record states for a participant should be the energy TCKDB stores for the calculation the record cites: the cited single point's electronic energy (or the optimisation's final energy), or, for an E0, the paired stored electronic energy plus the cited frequency calculation's zero-point energy, scaled by the ``zpe_scale_factor`` the record states (a record that states none is held to the unscaled sum only as far as agreement, never refused).
+  If your chemistry is legitimate: State the energy the cited calculation stores, or cite the calculation the number came from. Where the stored energy is not stated the energy is not compared and the upload warns. An E0 built with a scaled zero-point energy states ``zpe_scale_factor``.
+- **warn; codes [`transition_state_energy_ordering_not_compared`](#c-transition-state-energy-ordering-not-compared).** Every energy an energy-ordering record states should be comparable with the energy TCKDB stores for its calculation.
+  If your chemistry is legitimate: None needed: the warning is the accommodation. Deposit the cited calculation's energy (and the frequency's zero-point energy, with the electronic energy at the same geometry) to make the comparison possible.
 
 <a id="k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency"></a>
 
 ### `evaluate_species_entry_frequency`
 
-`tckdb_schemas.stationary_point:evaluate_species_entry_frequency`. warn; codes [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum), [`n_imag_higher_order_saddle`](#c-n-imag-higher-order-saddle), [`n_imag_suggests_transition_state`](#c-n-imag-suggests-transition-state). Applied on: [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
+`tckdb_schemas.stationary_point:evaluate_species_entry_frequency` enforces 2 checks. Applied on: [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
-A van der Waals complex is formally a minimum, so an imaginary mode on one is recorded and flagged rather than refused — unless the mode is too stiff to be an intermolecular one, which suggests a genuine reaction coordinate.
-
-If your chemistry is legitimate: This *is* the escape hatch for the blocking minimum rule. Its own cost is that a genuinely mislabelled saddle point deposited as a van der Waals complex is accepted with a warning.
+- **block; codes [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum).** A species entry declared a minimum has no imaginary vibrational modes.
+  If your chemistry is legitimate: Declare ``species_entry_kind='vdw_complex'``, which records the same mode with a warning instead, or deposit the structure through a transition-state payload if the single imaginary mode is real.
+- **warn; codes [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum), [`n_imag_higher_order_saddle`](#c-n-imag-higher-order-saddle), [`n_imag_suggests_transition_state`](#c-n-imag-suggests-transition-state).** A van der Waals complex is formally a minimum, so an imaginary mode on one is recorded and flagged rather than refused — unless the mode is too stiff to be an intermolecular one, which suggests a genuine reaction coordinate.
+  If your chemistry is legitimate: This *is* the escape hatch for the blocking minimum rule. Its own cost is that a genuinely mislabelled saddle point deposited as a van der Waals complex is accepted with a warning.
 
 <a id="codes-most-surfaces-share"></a>
 
@@ -1619,8 +1641,8 @@ The most specific refusals traced for this surface (ranking in the [code referen
 - [`enthalpy_reference_kind_unrecognized`](#c-enthalpy-reference-kind-unrecognized) (422): '{reference}' is not a recognized enthalpy_reference_kind -- did you mean '{canonical}'?
 - [`atom_map_contradicts_irc_mapping`](#c-atom-map-contradicts-irc-mapping) (422): Transition state '{subject_label}' {field_path} contradicts its own IRC participant mapping: the atom map assigns saddle-point atom(s) {disputed} to {offender[0].value} {offender[1]}, which the IRC mapping assigns to {', '.join(elsewhere) or 'no participant'} ({W_ATOM_MAP_CONTRADICTS_IRC_MAPPING}).
 - [`transition_state_charge_mismatch`](#c-transition-state-charge-mismatch) (422): Transition state '{subject_label}' carries charge {transition_state_charge}, but its reactants total {reactant_charge} (transition_state_charge_mismatch).
+- [`transition_state_composition_mismatch`](#c-transition-state-composition-mismatch) (422): Transition state '{subject_label}' is {format_element_counts(ts_counts)}, but the reaction it sits in is {format_element_counts(reactant_totals)} (transition_state_composition_mismatch).
 - [`transition_state_irc_mapping_element_mismatch`](#c-transition-state-irc-mapping-element-mismatch) (422): Transition state '{subject_label}' {field_path} assigns saddle-point atoms {sorted(atom_indices)} to {participant_key}, which is {format_element_counts(assigned)}, but {role.value} {participant_index} is declared as '{species.smiles}', which is {format_element_counts(declared)} ({W_IRC_MAPPING_ELEMENT_MISMATCH}).
-- [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
 
 ### Routes
 
@@ -1807,12 +1829,12 @@ Found by tracing each route's handler through its direct calls: every function r
 - [`validate_atom_map_agrees_with_irc_evidence`](#k-app-services-reaction-atom-map-validate-atom-map-agrees-with-irc-evidence) (block; `atom_map_contradicts_irc_mapping`)
 - [`validate_reaction_charge_conservation`](#k-app-services-reaction-resolution-validate-reaction-charge-conservation) (block; `reaction_charge_not_conserved`)
 - [`validate_reaction_elemental_balance`](#k-app-services-reaction-resolution-validate-reaction-elemental-balance) (block; `reaction_mass_balance_failed`)
-- [`validate_transition_state_composition`](#k-app-services-reaction-resolution-validate-transition-state-composition) (block; `transition_state_charge_mismatch`)
+- [`validate_transition_state_composition`](#k-app-services-reaction-resolution-validate-transition-state-composition) (block; `transition_state_composition_mismatch`, `transition_state_charge_mismatch`)
 - [`validate_ts_evidence_participant_composition`](#k-app-services-reaction-resolution-validate-ts-evidence-participant-composition) (block; `transition_state_irc_mapping_element_mismatch`)
 - [`assert_declared_kind_matches_stored`](#k-app-services-species-resolution-assert-declared-kind-matches-stored) (block; `species_kind_conflict`)
 - [`assert_geometry_composition_matches_identity`](#k-app-services-species-resolution-assert-geometry-composition-matches-identity) (block; `species_geometry_composition_mismatch`)
 - [`assert_geometry_isotopes_match_identity`](#k-app-services-species-resolution-assert-geometry-isotopes-match-identity) (block; `species_geometry_isotope_mismatch`)
-- [`persist_transition_state_validation_evidence`](#k-app-services-transition-state-validation-persist-transition-state-validation-evidence) (warn; `transition_state_energy_ordering_not_compared`)
+- [`persist_transition_state_validation_evidence`](#k-app-services-transition-state-validation-persist-transition-state-validation-evidence) (warn/block; `transition_state_missing_irc_evidence`, `transition_state_energy_ordering_mixed_levels`, `ts_energy_ordering_stated_energy_mismatch`, `transition_state_energy_ordering_not_compared`)
 - **`tckdb_schemas.enthalpy_reference:enthalpy_reference_error`** (reached from `POST /api/v1/uploads/computed-reaction`):
 
   A thermo record with enthalpy content must declare what its enthalpies mean.
@@ -2599,7 +2621,7 @@ Found by tracing each route's handler through its direct calls: every function r
 - [`assert_declared_kind_matches_stored`](#k-app-services-species-resolution-assert-declared-kind-matches-stored) (block; `species_kind_conflict`)
 - [`assert_geometry_composition_matches_identity`](#k-app-services-species-resolution-assert-geometry-composition-matches-identity) (block; `species_geometry_composition_mismatch`)
 - [`assert_geometry_isotopes_match_identity`](#k-app-services-species-resolution-assert-geometry-isotopes-match-identity) (block; `species_geometry_isotope_mismatch`)
-- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (warn; `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
+- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (block/warn; `n_imag_contradicts_minimum`, `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
 
 ### Refusal codes this surface can return
 
@@ -2768,11 +2790,11 @@ The most specific refusals traced for this surface (ranking in the [code referen
 - [`atom_map_contradicts_irc_mapping`](#c-atom-map-contradicts-irc-mapping) (422): Transition state '{subject_label}' {field_path} contradicts its own IRC participant mapping: the atom map assigns saddle-point atom(s) {disputed} to {offender[0].value} {offender[1]}, which the IRC mapping assigns to {', '.join(elsewhere) or 'no participant'} ({W_ATOM_MAP_CONTRADICTS_IRC_MAPPING}).
 - [`atom_map_inferred_requires_note`](#c-atom-map-inferred-requires-note) (422): atom_map.source='inferred' requires atom_map.note naming the algorithm that produced the map.
 - [`transition_state_charge_mismatch`](#c-transition-state-charge-mismatch) (422): Transition state '{subject_label}' carries charge {transition_state_charge}, but its reactants total {reactant_charge} (transition_state_charge_mismatch).
+- [`transition_state_composition_mismatch`](#c-transition-state-composition-mismatch) (422): Transition state '{subject_label}' is {format_element_counts(ts_counts)}, but the reaction it sits in is {format_element_counts(reactant_totals)} (transition_state_composition_mismatch).
 - [`transition_state_irc_mapping_element_mismatch`](#c-transition-state-irc-mapping-element-mismatch) (422): Transition state '{subject_label}' {field_path} assigns saddle-point atoms {sorted(atom_indices)} to {participant_key}, which is {format_element_counts(assigned)}, but {role.value} {participant_index} is declared as '{species.smiles}', which is {format_element_counts(declared)} ({W_IRC_MAPPING_ELEMENT_MISMATCH}).
+- [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch) (422): {field} states {stated} Eh as the '{energy_kind}' energy of '{participant}', but {what} is {stored} Eh, a difference of {abs(stated - stored)} Eh against a tolerance of {tolerance} Eh.
 - [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
 - [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) (422): Reaction is not element-balanced (reaction_mass_balance_failed).
-- [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) (422): Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants.
-- [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) (422): Species geometry is {geometry_formula}, but species_entry.smiles={payload.smiles} is {identity_formula} (species_geometry_composition_mismatch).
 
 ### Routes
 
@@ -2946,12 +2968,12 @@ Found by tracing each route's handler through its direct calls: every function r
 - [`validate_atom_map_agrees_with_irc_evidence`](#k-app-services-reaction-atom-map-validate-atom-map-agrees-with-irc-evidence) (block; `atom_map_contradicts_irc_mapping`)
 - [`validate_reaction_charge_conservation`](#k-app-services-reaction-resolution-validate-reaction-charge-conservation) (block; `reaction_charge_not_conserved`)
 - [`validate_reaction_elemental_balance`](#k-app-services-reaction-resolution-validate-reaction-elemental-balance) (block; `reaction_mass_balance_failed`)
-- [`validate_transition_state_composition`](#k-app-services-reaction-resolution-validate-transition-state-composition) (block; `transition_state_charge_mismatch`)
+- [`validate_transition_state_composition`](#k-app-services-reaction-resolution-validate-transition-state-composition) (block; `transition_state_composition_mismatch`, `transition_state_charge_mismatch`)
 - [`validate_ts_evidence_participant_composition`](#k-app-services-reaction-resolution-validate-ts-evidence-participant-composition) (block; `transition_state_irc_mapping_element_mismatch`)
 - [`assert_declared_kind_matches_stored`](#k-app-services-species-resolution-assert-declared-kind-matches-stored) (block; `species_kind_conflict`)
 - [`assert_geometry_composition_matches_identity`](#k-app-services-species-resolution-assert-geometry-composition-matches-identity) (block; `species_geometry_composition_mismatch`)
 - [`assert_geometry_isotopes_match_identity`](#k-app-services-species-resolution-assert-geometry-isotopes-match-identity) (block; `species_geometry_isotope_mismatch`)
-- [`persist_transition_state_validation_evidence`](#k-app-services-transition-state-validation-persist-transition-state-validation-evidence) (warn; `transition_state_energy_ordering_not_compared`)
+- [`persist_transition_state_validation_evidence`](#k-app-services-transition-state-validation-persist-transition-state-validation-evidence) (warn/block; `transition_state_missing_irc_evidence`, `transition_state_energy_ordering_mixed_levels`, `ts_energy_ordering_stated_energy_mismatch`, `transition_state_energy_ordering_not_compared`)
 - **`tckdb_schemas.fragments.reaction_atom_map:ReactionAtomMapIn.validate_inferred_names_its_algorithm`** (reached from `POST /api/v1/uploads/networks/pdep`; structural; `atom_map_inferred_requires_note`): An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
 
 ### Refusal codes this surface can return
@@ -3094,7 +3116,7 @@ Found by tracing each route's handler through its direct calls: every function r
 - [`assert_declared_kind_matches_stored`](#k-app-services-species-resolution-assert-declared-kind-matches-stored) (block; `species_kind_conflict`)
 - [`assert_geometry_composition_matches_identity`](#k-app-services-species-resolution-assert-geometry-composition-matches-identity) (block; `species_geometry_composition_mismatch`)
 - [`assert_geometry_isotopes_match_identity`](#k-app-services-species-resolution-assert-geometry-isotopes-match-identity) (block; `species_geometry_isotope_mismatch`)
-- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (warn; `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
+- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (block/warn; `n_imag_contradicts_minimum`, `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
 
 ### Refusal codes this surface can return
 
@@ -3803,12 +3825,12 @@ The most specific refusals traced for this surface (ranking in the [code referen
 
 - [`atom_map_contradicts_irc_mapping`](#c-atom-map-contradicts-irc-mapping) (422): Transition state '{subject_label}' {field_path} contradicts its own IRC participant mapping: the atom map assigns saddle-point atom(s) {disputed} to {offender[0].value} {offender[1]}, which the IRC mapping assigns to {', '.join(elsewhere) or 'no participant'} ({W_ATOM_MAP_CONTRADICTS_IRC_MAPPING}).
 - [`transition_state_charge_mismatch`](#c-transition-state-charge-mismatch) (422): Transition state '{subject_label}' carries charge {transition_state_charge}, but its reactants total {reactant_charge} (transition_state_charge_mismatch).
+- [`transition_state_composition_mismatch`](#c-transition-state-composition-mismatch) (422): Transition state '{subject_label}' is {format_element_counts(ts_counts)}, but the reaction it sits in is {format_element_counts(reactant_totals)} (transition_state_composition_mismatch).
 - [`transition_state_irc_mapping_element_mismatch`](#c-transition-state-irc-mapping-element-mismatch) (422): Transition state '{subject_label}' {field_path} assigns saddle-point atoms {sorted(atom_indices)} to {participant_key}, which is {format_element_counts(assigned)}, but {role.value} {participant_index} is declared as '{species.smiles}', which is {format_element_counts(declared)} ({W_IRC_MAPPING_ELEMENT_MISMATCH}).
+- [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch) (422): {field} states {stated} Eh as the '{energy_kind}' energy of '{participant}', but {what} is {stored} Eh, a difference of {abs(stated - stored)} Eh against a tolerance of {tolerance} Eh.
 - [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
 - [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) (422): Reaction is not element-balanced (reaction_mass_balance_failed).
 - [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) (422): Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants.
-- [`n_imag_contradicts_minimum`](#c-n-imag-contradicts-minimum) (422): A species entry declared a minimum has no imaginary vibrational modes.
-- [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) (422): Species geometry is {geometry_formula}, but species_entry.smiles={payload.smiles} is {identity_formula} (species_geometry_composition_mismatch).
 
 ### Routes
 
@@ -3969,13 +3991,13 @@ Found by tracing each route's handler through its direct calls: every function r
 - [`validate_atom_map_agrees_with_irc_evidence`](#k-app-services-reaction-atom-map-validate-atom-map-agrees-with-irc-evidence) (block; `atom_map_contradicts_irc_mapping`)
 - [`validate_reaction_charge_conservation`](#k-app-services-reaction-resolution-validate-reaction-charge-conservation) (block; `reaction_charge_not_conserved`)
 - [`validate_reaction_elemental_balance`](#k-app-services-reaction-resolution-validate-reaction-elemental-balance) (block; `reaction_mass_balance_failed`)
-- [`validate_transition_state_composition`](#k-app-services-reaction-resolution-validate-transition-state-composition) (block; `transition_state_charge_mismatch`)
+- [`validate_transition_state_composition`](#k-app-services-reaction-resolution-validate-transition-state-composition) (block; `transition_state_composition_mismatch`, `transition_state_charge_mismatch`)
 - [`validate_ts_evidence_participant_composition`](#k-app-services-reaction-resolution-validate-ts-evidence-participant-composition) (block; `transition_state_irc_mapping_element_mismatch`)
 - [`assert_declared_kind_matches_stored`](#k-app-services-species-resolution-assert-declared-kind-matches-stored) (block; `species_kind_conflict`)
 - [`assert_geometry_composition_matches_identity`](#k-app-services-species-resolution-assert-geometry-composition-matches-identity) (block; `species_geometry_composition_mismatch`)
 - [`assert_geometry_isotopes_match_identity`](#k-app-services-species-resolution-assert-geometry-isotopes-match-identity) (block; `species_geometry_isotope_mismatch`)
-- [`persist_transition_state_validation_evidence`](#k-app-services-transition-state-validation-persist-transition-state-validation-evidence) (warn; `transition_state_energy_ordering_not_compared`)
-- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (warn; `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
+- [`persist_transition_state_validation_evidence`](#k-app-services-transition-state-validation-persist-transition-state-validation-evidence) (warn/block; `transition_state_missing_irc_evidence`, `transition_state_energy_ordering_mixed_levels`, `ts_energy_ordering_stated_energy_mismatch`, `transition_state_energy_ordering_not_compared`)
+- [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency) (block/warn; `n_imag_contradicts_minimum`, `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`)
 
 ### Refusal codes this surface can return
 
@@ -8462,6 +8484,9 @@ Unknown keys are refused.
 | `energy_kind` | "electronic" \| "e0" | yes |  |  | `electronic`, `e0` | ``"electronic"`` for the electronic energy, or ``"e0"`` for the electronic energy plus the zero-point energy. They are different quantities and are never compared with each other. |
 | `energy_hartree` | number | yes |  | hartree | <= 0 | The absolute energy, in hartree: finite and not positive. A bound system's total energy is below the zero of separated nuclei and electrons, so a positive value is a relative energy (or a unit slip) and is refused rather than stored where a reader would take it for absolute. Zero is allowed because it is exact for the bare proton (``[H+]``), a participant with atoms and no electrons. A side of the reaction with several participants is compared by the sum of their energies, so a participant is given its own and never a pre-summed total: a total has no single calculation to name. |
 | `source_calculation_key` | string | yes |  |  | length >= 1 | Local key of the calculation this energy was taken from, in the enclosing payload's calculation namespace. The calculation must belong to the thing the energy is of: the saddle point's own calculation for ``ts``, the participant species' own for a reactant or product. |
+| `zpe_scale_factor` | number \| null | no | `null` |  | > 0 | ``e0`` only. The factor ``s`` the producer multiplied the stored zero-point energy by in forming this E0 (``E0 = E_electronic + s * ZPE``), for example a published ZPE scale factor for the level of theory. Provenance the producer states, never inferred. Omit it when the E0 uses the zero-point energy as stored (an unscaled E0), not ``1.0``-as-a-guess: ``1.0`` is a claim that the sum is unscaled, and is held to the stored values like any other stated factor. Finite and positive. |
+
+- **TransitionStateComparedEnergy.validate_zpe_scale_factor_is_for_e0** (model, after; can refuse): zpe_scale_factor scales the zero-point energy in an E0 and is accepted only on energy_kind='e0', not '{self.energy_kind}'.
 
 <a id="m-transitionstatein"></a>
 
@@ -9452,8 +9477,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
-- Scientific check (block): A species entry declared a minimum has no imaginary vibrational modes.
-- If your chemistry is legitimate: Declare ``species_entry_kind='vdw_complex'``, which records the same mode with a warning instead, or deposit the structure through a transition-state payload if the single imaginary mode is real.
+- Scientific check: [`evaluate_species_entry_frequency`](#k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency).
 
 <a id="c-network-channel-key-undeclared"></a>
 
@@ -9937,8 +9961,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/reaction_resolution.py`.
 - The body's `context` names the things involved.
 - Message: "Transition state '{subject_label}' is {format_element_counts(ts_counts)}, but the reaction it sits in is {format_element_counts(reactant_totals)} (transition_state_composition_mismatch). A transition state is a stationary point on the potential energy surface of its reaction's atoms, so a saddle point made of different atoms cannot be that reaction's saddle point. If the saddle-point structure genuinely contains additional species, declare them as participants of the reaction."
-- Scientific check (block): A saddle point is made of exactly the atoms of the reaction it is declared to sit in.
-- If your chemistry is legitimate: Declare the extra species as participants of the reaction. A ``pseudo`` *reactant* exempts the reaction; a pseudo product does not, and that is not an oversight — see below. Absence does not block: no geometry and no parseable SMILES means nothing is compared, and an unparseable transition-state SMILES is treated as silence rather than as a contradiction, because a TS SMILES is a lossy label for a structure that is by construction not a stable molecule. The pseudo-species exemption here is narrower than ``_load_participant_species``'s, and deliberately so. That helper exempts elemental balance and charge conservation on a pseudo participant on **either** side, because both compare one side against the other and a lumped construct makes the side it sits on unknowable. This check compares the saddle point against the **reactant side only**, so only a *reactant* being pseudo can make it meaningless; a pseudo *product* leaves the reactant side fully atom-resolved and is not exempted. Aligning the two would discard a guarantee that is still well-defined, and would discard it exactly where it is worth most: a reaction with a pseudo product has already lost elemental balance and charge conservation, so this is the only atom-level statement left about its saddle point.
+- Scientific check: [`validate_transition_state_composition`](#k-app-services-reaction-resolution-validate-transition-state-composition).
 
 <a id="c-transition-state-irc-mapping-element-mismatch"></a>
 
@@ -10001,8 +10024,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "{field} states {stated} Eh as the '{energy_kind}' energy of '{participant}', but {what} is {stored} Eh, a difference of {abs(stated - stored)} Eh against a tolerance of {tolerance} Eh. State the energy the calculation stores, or cite the calculation the number came from."
 - Note: An energy_ordering energy states a value that is not the energy TCKDB stores for the calculation it cites, beyond the printed-precision tolerance max(1e-6, 5e-7 * n) hartree (n = 2 for an electronic energy, 3 for an E0 = stored electronic + stored ZPE).
-- Scientific check (block): An energy an energy-ordering record states for a participant should be the energy TCKDB stores for the calculation the record cites: the cited single point's electronic energy (or the optimisation's final energy), or, for an E0, the paired stored electronic energy plus the cited frequency calculation's zero-point energy.
-- If your chemistry is legitimate: State the energy the cited calculation stores, or cite the calculation the number came from. Where the stored energy is not stated the energy is not compared and the upload warns.
+- Scientific check: [`persist_transition_state_validation_evidence`](#k-app-services-transition-state-validation-persist-transition-state-validation-evidence).
 
 <a id="c-ts-validation-source-calculation-owner-mismatch"></a>
 

@@ -338,6 +338,8 @@ class TransitionStateComparedEnergySummary(BaseModel):
     ``not_compared`` with ``not_compared_reason`` saying why. Null means the
     energy was deposited before the comparison existed. It is never a pass:
     an energy that disagreed with the stored one was refused, not stored.
+    ``zpe_scale_factor`` is the factor the producer stated for an ``e0``
+    (``E0 = electronic + factor * zpe``); null means none was stated.
     """
 
     participant: str
@@ -346,6 +348,7 @@ class TransitionStateComparedEnergySummary(BaseModel):
     source_calculation_ref: str | None = None
     stored_energy_comparison: str | None = None
     not_compared_reason: str | None = None
+    zpe_scale_factor: float | None = None
 
 
 class TransitionStateValidationEvidenceSummary(BaseModel):
