@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.79.0 - 2026-10-03
+
+Network solve energy sources must belong to the subject they state an energy for (#668). No field or
+enum member changes; the `source_calculation_key` description of a state energy and of a channel
+barrier gains a sentence, and one new refusal code joins the catalogue.
+
+- **`network_energy_source_subject_mismatch` (422).** `POST /uploads/networks/pdep` refuses a source
+  cited for the wrong subject: a `state_energies[].source_calculation_key` that is not a calculation of
+  a species of that state (any one of them for a bimolecular state), a `channel_barriers[]` source that
+  is not a calculation of the barrier's own transition state (a species single point is the case that
+  used to be stored), a `well_energy` link that is not a calculation of a species in one of the
+  network's states, and a `barrier_energy` link that is not a calculation of one of its transition
+  states. `context` names the field, the expected and the found kind of owner and, for a state or a
+  barrier, the key of the state or transition state; no database id. Producers that cite the single
+  point of the species in the state, or of the transition state (every producer known to us, the
+  hydrazine ingester included) are unaffected. Uploads only: stored networks read exactly as before.
+
 ## 0.77.0 - 2026-10-03
 
 Composite levels of theory, phase P7b (ADR 0021): a read-shape note only. No upload payload field is
