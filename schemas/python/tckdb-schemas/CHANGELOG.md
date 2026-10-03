@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.81.0 - 2026-10-03
+
+TS energy-ordering energies are held against the stored energies (#638). No field is removed or changed;
+`zpe_scale_factor` is added.
+
+- **`ts_energy_ordering_stated_energy_mismatch` (422).** A stated energy that is not what TCKDB stores for
+  its `source_calculation_key` is refused: `electronic` against the cited `sp`'s energy (or `opt`'s final
+  energy), `e0` against the same participant's stored `electronic` energy plus the cited `freq`'s ZPE, when
+  both are at one geometry. Tolerance `max(1e-6, 5e-7 * n)` hartree, n = 2 (electronic) or 3 (E0).
+- **`zpe_scale_factor` (optional, `e0` energies only).** TCKDB stores your ZPE unscaled. An `e0` built as
+  `E_electronic + s * ZPE` states `s` and is held to that sum (n = 2 + s + 100 * ZPE, which assumes `s` has
+  at least four decimals: state it as multiplied, since 0.954 for a true 0.953649 can be refused). With no factor, an `e0` equal to `electronic + ZPE` agrees; any other is not refused
+  but stored `not_compared` with reason `zpe_scaling_unstated`.
+- **`transition_state_energy_ordering_not_compared` (warning).** An energy that cannot be compared (stored
+  energy or ZPE not stated, no electronic energy to pair an E0 with, geometries not pairable) is accepted
+  and reported, never read as agreement.
+- Reads: compared energies gain `stored_energy_comparison`, `not_compared_reason` and `zpe_scale_factor`
+  (null on earlier records). Uploads only.
+
 ## 0.80.0 - 2026-10-03
 
 A rigidly moved copy of a polyatomic geometry is no longer a way round the no-optimisation duplicate

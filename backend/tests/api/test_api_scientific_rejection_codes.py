@@ -1091,3 +1091,33 @@ class TestTheAtomMapAgainstTheIrcPartition:
         assert not any(
             key == "id" or key.endswith(("_id", "_ids")) for key in context
         ), context
+
+
+# ---------------------------------------------------------------------------
+# Transition-state energy ordering against the stored energies (#638)
+# ---------------------------------------------------------------------------
+
+
+class TestStatedEnergyAgainstStoredEnergy:
+    def test_the_637_fixture_names_its_code_in_the_envelope(self, client):
+        """-40.20 Eh stated from a single point that stores -40.9 Eh."""
+        from tests.api.test_api_ts_contract_621 import (
+            _bundle,
+            _energy_ordering,
+            _post_bundle,
+        )
+
+        payload = _bundle([_energy_ordering()])
+        for calculation in payload["transition_state"]["calculations"]:
+            if calculation["key"] == "ts-sp":
+                calculation["sp_electronic_energy_hartree"] = -40.9
+        body = _assert_code(
+            _post_bundle(client, payload), "ts_energy_ordering_stated_energy_mismatch"
+        )
+        context = body["context"]
+        assert context["participant"] == "ts", context
+        assert context["energy_kind"] == "electronic", context
+        assert context["stated_hartree"] == -40.20, context
+        assert context["stored_hartree"] == -40.9, context
+        assert context["field"] == "transition_state.validation_evidence[0].energies[0]", context
+        assert not any(key == "id" or key.endswith(("_id", "_ids")) for key in context), context

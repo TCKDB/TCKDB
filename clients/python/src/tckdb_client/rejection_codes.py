@@ -308,6 +308,7 @@ class RejectionCode(str, Enum):
     TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS = "transition_state_reaction_coordinate_ambiguous"
     TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED = "transition_state_reaction_coordinate_not_designated"
     TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH = "transport_source_calculation_owner_mismatch"
+    TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH = "ts_energy_ordering_stated_energy_mismatch"
     UNIQUE_CONFLICT = "unique_conflict"
     UNKNOWN_CALCULATION_ARTIFACT_REF = "unknown_calculation_artifact_ref"
     UNKNOWN_CALCULATION_REF = "unknown_calculation_ref"
@@ -527,6 +528,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED,
         RejectionCode.TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+        RejectionCode.TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH,
         RejectionCode.UNKNOWN_ELEMENT_SYMBOL,
         RejectionCode.UNKNOWN_INCLUDE_TOKEN,
         RejectionCode.UNKNOWN_RECORD_TYPE,
@@ -813,6 +815,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS: frozenset({422}),
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED: frozenset({422}),
     RejectionCode.TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH: frozenset({422}),
     RejectionCode.UNIQUE_CONFLICT: frozenset({409}),
     RejectionCode.UNKNOWN_CALCULATION_ARTIFACT_REF: frozenset({404}),
     RejectionCode.UNKNOWN_CALCULATION_REF: frozenset({404}),

@@ -128,8 +128,64 @@ def _irc_evidence(**overrides) -> dict:
     return record
 
 
-def _bundle(evidence: list[dict] | None = None) -> dict:
-    payload = _payload_with_ts_irc()
+#: The energies ``_energy_ordering`` states, as the cited calculations store them
+#: (issue #638): an ordering is held against the stored values, so the fixture's
+#: calculations must store what its record says. Each E0 is that participant's
+#: electronic energy plus the ZPE below, which every freq and sp of one
+#: participant share a geometry key for.
+STORED_SP_HARTREE = {
+    "ts-sp": -40.20,
+    "ch3-sp": -39.75,
+    "h-sp": -0.50,
+    "ch4-sp": -40.50,
+}
+STORED_ZPE_HARTREE = {
+    "ts-freq": 0.02,
+    "ch3-freq": 0.05,
+    "h-freq": 0.01,
+    "ch4-freq": 0.05,
+}
+
+
+def state_stored_energies(
+    payload: dict,
+    sp: dict[str, float] | None = None,
+    zpe: dict[str, float] | None = None,
+) -> dict:
+    """Overwrite the stored sp energies and freq ZPEs of the calculations named by key."""
+
+    sp = STORED_SP_HARTREE if sp is None else sp
+    zpe = STORED_ZPE_HARTREE if zpe is None else zpe
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            key = node.get("key")
+            if key in sp and node.get("type") == "sp":
+                node["sp_electronic_energy_hartree"] = sp[key]
+            if key in zpe and node.get("type") == "freq":
+                node["freq_zpe_hartree"] = zpe[key]
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(payload)
+    return payload
+
+
+def _bundle(
+    evidence: list[dict] | None = None,
+    *,
+    sp: dict[str, float] | None = None,
+    zpe: dict[str, float] | None = None,
+) -> dict:
+    """``sp`` / ``zpe`` override what the named calculations store, on top of the defaults."""
+    payload = state_stored_energies(
+        _payload_with_ts_irc(),
+        sp={**STORED_SP_HARTREE, **(sp or {})},
+        zpe={**STORED_ZPE_HARTREE, **(zpe or {})},
+    )
     if evidence is not None:
         payload["transition_state"]["validation_evidence"] = evidence
     return payload
@@ -537,7 +593,10 @@ class TestEvidenceKindsOnTheReactionBundle:
         """A producer that says it failed is not contradicted by numbers."""
         record = _energy_ordering(passed=False)
         record["energies"][0] = _energy("ts", "electronic", -40.30, "ts-sp")
-        _ok(_post_bundle(client, _bundle([record])))
+        # The cited calculations store these numbers (and the ZPE that keeps the
+        # saddle point's E0 at -40.18): being marked failed excuses an ordering,
+        # not a stated energy the stored one contradicts.
+        _ok(_post_bundle(client, _bundle([record], sp={"ts-sp": -40.30}, zpe={"ts-freq": 0.12})))
 
     def test_an_ordering_needs_a_well_on_each_side(self, client):
         record = _energy_ordering()

@@ -153,6 +153,21 @@ class TestMixedLevelsWarn:
         assert _MIXED not in _codes(result)
 
 
+def _bare_proton_bundle() -> dict:
+    """An ordering with a zero-energy reactant, stored as stated.
+
+    ``[H+]`` has no electrons, so its electronic energy is exactly 0, and no
+    vibrations, so its zero-point energy is 0 and its E0 is 0.0 as well. The
+    cited calculations store what the record states (issue #638).
+    """
+    record = _energy_ordering()
+    record["energies"][0] = _energy("ts", "electronic", -39.5, "ts-sp")
+    record["energies"][2] = _energy("reactant:2", "electronic", 0.0, "h-sp")
+    record["energies"][4] = _energy("ts", "e0", -39.48, "ts-freq")
+    record["energies"][6] = _energy("reactant:2", "e0", 0.0, "h-freq")
+    return _bundle([record], sp={"ts-sp": -39.5, "h-sp": 0.0}, zpe={"h-freq": 0.0})
+
+
 class TestTheBareProton:
     def test_a_zero_energy_participant_can_be_part_of_a_passing_ordering(self, client):
         """``[H+]`` has exactly zero energy, so zero must be depositable.
@@ -160,20 +175,16 @@ class TestTheBareProton:
         The saddle point is placed above the (zero-containing) reactant sum so
         the ordering rule has nothing to object to.
         """
-        record = _energy_ordering()
-        record["energies"][0] = _energy("ts", "electronic", -39.5, "ts-sp")
-        record["energies"][2] = _energy("reactant:2", "electronic", 0.0, "h-sp")
-        _ok(_post_bundle(client, _bundle([record])))
+        _ok(_post_bundle(client, _bare_proton_bundle()))
 
     def test_the_database_stores_it(self, db_session, client):
-        record = _energy_ordering()
-        record["energies"][0] = _energy("ts", "electronic", -39.5, "ts-sp")
-        record["energies"][2] = _energy("reactant:2", "electronic", 0.0, "h-sp")
-        _ok(_post_bundle(client, _bundle([record])))
-        stored = db_session.execute(
-            text(
-                "SELECT energy_hartree FROM transition_state_validation_energy "
-                "WHERE participant = 'reactant:2' AND energy_kind = 'electronic'"
-            )
-        ).scalar_one()
-        assert stored == 0.0
+        _ok(_post_bundle(client, _bare_proton_bundle()))
+        stored = dict(
+            db_session.execute(
+                text(
+                    "SELECT energy_kind, energy_hartree FROM transition_state_validation_energy "
+                    "WHERE participant = 'reactant:2'"
+                )
+            ).all()
+        )
+        assert stored == {"electronic": 0.0, "e0": 0.0}

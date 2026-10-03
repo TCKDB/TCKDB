@@ -2485,6 +2485,19 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "subject. The request schema and persist_bundle_transport "
                 "raise the same code and context (ADR 0017)."
             )),
+    ApiCode("ts_energy_ordering_stated_energy_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/transition_state_validation.py",
+            shape=Shape.relationship,
+            note=(
+                "An energy_ordering energy states a value that is not the "
+                "energy TCKDB stores for the calculation it cites, beyond the "
+                "printed-precision tolerance max(1e-6, 5e-7 * n) hartree (n = "
+                "2 for an electronic energy, 3 for an E0 = stored electronic "
+                "+ stored ZPE). Context carries the participant, the energy "
+                "kind, both values and the tolerance. A comparison that "
+                "cannot be made is not refused: the energy is stored as not "
+                "compared and the upload warns."
+            )),
     ApiCode("ts_validation_source_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
             shape=Shape.relationship,

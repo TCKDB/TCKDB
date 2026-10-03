@@ -328,3 +328,33 @@ class TestFiniteAndPlausibleValues:
             TransitionStateValidationEvidenceIn(
                 **_ordering(passed=False, energies=[_energy("ts", "electronic", float("-inf"))])
             )
+
+
+class TestZpeScaleFactor:
+    """``zpe_scale_factor`` states how an E0's zero-point energy was scaled (#638)."""
+
+    def _record(self, kind: str, **extra):
+        return TransitionStateValidationEvidenceIn(
+            **_ordering(
+                passed=False,
+                energies=[
+                    {**_energy("ts", kind, -1.0), **extra},
+                    _energy("reactant:1", kind, -2.0),
+                    _energy("product:1", kind, -3.0),
+                ],
+            )
+        )
+
+    def test_an_e0_may_state_a_positive_factor(self):
+        record = self._record("e0", zpe_scale_factor=0.98)
+        assert record.energies[0].zpe_scale_factor == 0.98
+        assert self._record("e0").energies[0].zpe_scale_factor is None
+
+    def test_an_electronic_energy_may_not_state_one(self):
+        with pytest.raises(ValidationError, match="only on energy_kind='e0'"):
+            self._record("electronic", zpe_scale_factor=0.98)
+
+    @pytest.mark.parametrize("value", [0.0, -1.0, float("inf"), float("nan")])
+    def test_the_factor_is_finite_and_positive(self, value):
+        with pytest.raises(ValidationError):
+            self._record("e0", zpe_scale_factor=value)

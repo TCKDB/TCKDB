@@ -337,7 +337,12 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 #: traced on ten surfaces, so codes on eight or more surfaces are printed once in a shared table
 #: (``ContractBuilder.widely_shared_codes``) instead of ten times, which is what keeps the ceiling
 #: where it was.
-MARKDOWN_BYTE_CEILING = 700_000
+#:
+#: Raised 700_000 -> 705_000 for #638: ``check_by_func`` kept only the last register check per function,
+#: so three functions silently printed one of their checks (the TS evidence seam enforces four, the
+#: transition-state composition check two, the frequency evaluator two). Printing all of them, grouped
+#: per function, is about 5 KB of content that was always supposed to be there; the E0 rules add ~1 KB.
+MARKDOWN_BYTE_CEILING = 705_000
 
 
 def test_the_contract_stays_readable_in_pieces(committed_markdown: str) -> None:
@@ -531,3 +536,19 @@ def test_making_the_helper_raise_changes_the_label(monkeypatch) -> None:
 
     monkeypatch.setitem(globals(), "_quiet_helper", _refusing_helper)
     assert _rule(_Probe, "check_value").refusal_site == f"{__name__}:_refusing_helper"
+
+
+def test_a_function_that_enforces_several_checks_keeps_every_one(builder, committed_markdown) -> None:
+    """The TS evidence seam enforces four register checks; a single-valued map kept only the last."""
+    key = "app.services.transition_state_validation:persist_transition_state_validation_evidence"
+    codes = {check.code for check in builder.check_by_func[key]}
+    assert {
+        "transition_state_missing_irc_evidence",
+        "transition_state_energy_ordering_mixed_levels",
+        "ts_energy_ordering_stated_energy_mismatch",
+        "transition_state_energy_ordering_not_compared",
+    } <= codes
+    section = committed_markdown.split("### `persist_transition_state_validation_evidence`", 1)[1].split("\n### ", 1)[0]
+    assert f"enforces {len(codes)} checks" in section
+    for code in codes:
+        assert f"(#{generator._anchor('c', code)})" in section, code
