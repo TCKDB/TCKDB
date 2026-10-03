@@ -697,6 +697,20 @@ class EnergyTransferIn(SchemaBase):
         return self
 
 
+_ENERGY_SOURCE_DESCRIPTION = (
+    "Local key of the calculation this energy came from. For "
+    "correction_convention 'electronic_only' it is the calculation the "
+    "electronic energy came from: an sp, an opt or a composite. For the "
+    "composed conventions (electronic_plus_zpe, atom_and_bond_corrected, "
+    "thermal_enthalpy_298k, other) it is the calculation of the energy's "
+    "electronic part, or a composite that holds the whole E0; the frequency "
+    "calculation goes in source_calculations with the well_freq or "
+    "barrier_freq role. A calculation that reports no stationary-point "
+    "energy (irc, scan, path_search, conf) is refused with "
+    "network_energy_source_type_mismatch."
+)
+
+
 class ConventionBlock(SchemaBase):
     """Shared declaration of the energy zero and the corrections applied.
 
@@ -731,7 +745,10 @@ class StateEnergyIn(ConventionBlock):
 
     state_key: str = Field(min_length=1)
     energy_kj_mol: float
-    source_calculation_key: str | None = None
+    source_calculation_key: str | None = Field(
+        default=None,
+        description=_ENERGY_SOURCE_DESCRIPTION,
+    )
 
     @model_validator(mode="after")
     def validate_energy_is_finite(self) -> Self:
@@ -758,7 +775,10 @@ class ChannelBarrierIn(ConventionBlock):
     transition_state_key: str = Field(min_length=1)
     forward_barrier_kj_mol: float
     reverse_barrier_kj_mol: float
-    source_calculation_key: str | None = None
+    source_calculation_key: str | None = Field(
+        default=None,
+        description=_ENERGY_SOURCE_DESCRIPTION,
+    )
 
     @model_validator(mode="after")
     def validate_barriers_are_finite(self) -> Self:

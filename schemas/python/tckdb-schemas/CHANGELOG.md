@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.76.0 - 2026-10-03
+
+Network solve energy sources are typed (#642). No field or enum member changes; the `source_calculation_key` of a state energy and of a channel
+barrier gains a description, and one new refusal code joins the catalogue so a producer branching on
+codes can learn it.
+
+- **`network_energy_source_type_mismatch` (422).** `POST /uploads/networks/pdep` refuses a source that
+  cannot carry the energy it is cited for: `state_energies[].source_calculation_key` and
+  `channel_barriers[].source_calculation_key` when stated as `correction_convention: electronic_only`
+  (accepted from `sp`, `opt` or `composite`), and, for any convention and for the `well_energy` and
+  `barrier_energy` roles of `source_calculations`, any calculation that is not an `sp`, `opt`, `freq` or
+  `composite` (so an `irc`, `scan`, `path_search` or `conf` is refused). `context` names the field, the
+  stated convention or role, the accepted types and the type found. Producers that cite a single point
+  (every producer known to us) are unaffected. Uploads only: stored networks read exactly as before.
 ## 0.75.0 - 2026-10-03
 
 The producer contract now records that `/bundles/submit` and `/bundles/dry-run` apply the

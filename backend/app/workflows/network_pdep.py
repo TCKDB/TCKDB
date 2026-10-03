@@ -28,6 +28,7 @@ from app.db.models.calculation import (
 )
 from app.db.models.common import (
     CalculationGeometryRole,
+    EnergyCorrectionConvention,
     NetworkSpeciesRole,
     SubmissionRecordType,
 )
@@ -87,6 +88,10 @@ from app.services.local_key_resolution import (
     resolve_species_key,
     resolve_transition_state_key,
 )
+from app.services.network_energy_sources import (
+    assert_network_energy_source_type,
+    assert_network_source_role_type,
+)
 from app.services.provenance_warnings import (
     collect_network_energy_transfer_warnings,
     collect_network_solve_kind_warnings,
@@ -130,6 +135,36 @@ _PDEP_ABSENCE_REMEDY = (
     "reaction, deposit it through the computed-reaction upload, which accepts "
     "'atom_map' (ADR 0011)."
 )
+
+
+def _calculation_row(session: Session, calculation_id: int) -> Calculation:
+    calculation = session.get(Calculation, calculation_id)
+    assert calculation is not None  # just resolved from this upload's own map
+    return calculation
+
+
+def _resolve_energy_source(
+    session: Session,
+    key: str | None,
+    calculation_key_to_id: dict[str, int],
+    *,
+    field: str,
+    correction_convention: EnergyCorrectionConvention,
+) -> int | None:
+    """Resolve a state or barrier energy's source and check its type (#642).
+
+    The type is read off the persisted row, never off the payload, so this
+    holds for a request built without wire validation as well.
+    """
+    if not key:
+        return None
+    calculation_id = resolve_calculation_key(key, calculation_key_to_id, field=field)
+    assert_network_energy_source_type(
+        _calculation_row(session, calculation_id),
+        correction_convention,
+        field=field,
+    )
+    return calculation_id
 
 
 def _composition_hash(participants: list[tuple[int, int]]) -> str:
@@ -973,16 +1008,16 @@ def persist_network_pdep_upload(
                 energy_zero_convention=energy_in.energy_zero_convention,
                 correction_convention=energy_in.correction_convention,
                 convention_note=energy_in.convention_note,
-                source_calculation_id=(
-                    resolve_calculation_key(
-                        energy_in.source_calculation_key,
-                        calculation_key_to_id,
-                        field=(
-                            f"solve.state_energies[{energy_index}]."
-                            f"source_calculation_key"
-                        ),
-                    )
-                    if energy_in.source_calculation_key else None),
+                source_calculation_id=_resolve_energy_source(
+                    session,
+                    energy_in.source_calculation_key,
+                    calculation_key_to_id,
+                    field=(
+                        f"solve.state_energies[{energy_index}]."
+                        f"source_calculation_key"
+                    ),
+                    correction_convention=energy_in.correction_convention,
+                ),
             ))
 
         for barrier_index, barrier_in in enumerate(solve_in.channel_barriers):
@@ -1014,31 +1049,38 @@ def persist_network_pdep_upload(
                 energy_zero_convention=barrier_in.energy_zero_convention,
                 correction_convention=barrier_in.correction_convention,
                 convention_note=barrier_in.convention_note,
-                source_calculation_id=(
-                    resolve_calculation_key(
-                        barrier_in.source_calculation_key,
-                        calculation_key_to_id,
-                        field=(
-                            f"solve.channel_barriers[{barrier_index}]."
-                            f"source_calculation_key"
-                        ),
-                    )
-                    if barrier_in.source_calculation_key else None),
+                source_calculation_id=_resolve_energy_source(
+                    session,
+                    barrier_in.source_calculation_key,
+                    calculation_key_to_id,
+                    field=(
+                        f"solve.channel_barriers[{barrier_index}]."
+                        f"source_calculation_key"
+                    ),
+                    correction_convention=barrier_in.correction_convention,
+                ),
             ))
 
         # Source calculations
         for sc_index, sc in enumerate(solve_in.source_calculations):
+            sc_field = f"solve.source_calculations[{sc_index}].calculation_key"
+            sc_calculation_id = resolve_calculation_key(
+                sc.calculation_key,
+                calculation_key_to_id,
+                field=sc_field,
+            )
+            # Re-read from the row, not from the payload: the wire schema
+            # does not narrow this key by type, and a caller that reaches
+            # this function without it must meet the same refusal (#642).
+            assert_network_source_role_type(
+                _calculation_row(session, sc_calculation_id),
+                sc.role,
+                field=sc_field,
+            )
             session.add(
                 NetworkSolveSourceCalculation(
                     solve_id=solve.id,
-                    calculation_id=resolve_calculation_key(
-                        sc.calculation_key,
-                        calculation_key_to_id,
-                        field=(
-                            f"solve.source_calculations[{sc_index}]."
-                            f"calculation_key"
-                        ),
-                    ),
+                    calculation_id=sc_calculation_id,
                     role=sc.role,
                 )
             )
