@@ -329,6 +329,22 @@ class CalculationCompositeTermSummary(BaseModel):
     value_hartree: float
 
 
+class CalculationCompositeInputSummary(BaseModel):
+    """One input of an assembled composite (``calc_composite_input``): a slot and the calculation in it.
+
+    Refs only: ``calculation_ref`` is the public ref of the input calculation
+    (never its integer id), and the slot is the term's ``term_position`` in the
+    composite's scheme (read the scheme at ``/scientific/composite-schemes/{ref}``)
+    with its ``slot`` and, on an extrapolation, its ``cardinal_number``. Ordered
+    by term, slot and cardinal number.
+    """
+
+    term_position: int
+    slot: Literal["value", "high", "low", "cardinal"]
+    cardinal_number: int | None = None
+    calculation_ref: str
+
+
 class CalculationCompositeResultSummary(BaseModel):
     """Summary projection of a ``calc_composite_result`` row and its terms (ADR 0021).
 
@@ -341,6 +357,8 @@ class CalculationCompositeResultSummary(BaseModel):
       zero-point energy.
     * ``recipe_zpe_hartree`` -- the zero-point energy the recipe added.
     * ``terms`` -- the optional breakdown, by ``term_position``.
+    * ``inputs`` -- for an ``assembled`` composite, the calculation in each slot
+      of its scheme, by public ref; empty for a ``program_run``.
     """
 
     assembly: Literal["program_run", "assembled"]
@@ -348,6 +366,7 @@ class CalculationCompositeResultSummary(BaseModel):
     e0_hartree: float | None = None
     recipe_zpe_hartree: float | None = None
     terms: list[CalculationCompositeTermSummary] = []
+    inputs: list[CalculationCompositeInputSummary] = []
 
 
 class CalculationOptResultSummary(BaseModel):
@@ -1495,6 +1514,7 @@ __all__ = [
     "AppliedEnergyCorrectionSummary",
     "AvailableCalculationSections",
     "CalculationArtifactSummary",
+    "CalculationCompositeInputSummary",
     "CalculationCompositeResultSummary",
     "CalculationCompositeTermSummary",
     "CalculationConformerSummary",

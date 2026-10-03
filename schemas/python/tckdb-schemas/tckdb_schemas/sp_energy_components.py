@@ -70,6 +70,7 @@ SP_ENERGY_COMPONENTS_DESCRIPTION = (
 
 __all__ = [
     "SP_ENERGY_COMPONENTS_DESCRIPTION",
+    "SP_ENERGY_COMPONENT_DERIVED",
     "SP_ENERGY_COMPONENT_DUPLICATE",
     "SP_ENERGY_COMPONENT_NOT_ON_SP",
     "SP_ENERGY_COMPONENT_TOTAL_MISMATCH",
@@ -80,6 +81,9 @@ __all__ = [
 ]
 
 SP_ENERGY_COMPONENT_NOT_ON_SP = "sp_energy_component_not_on_sp"
+#: ``correlation_excluding_triples`` is a quantity a composite scheme term reads,
+#: derived from the stored ``correlation`` and ``triples``; it is never stored.
+SP_ENERGY_COMPONENT_DERIVED = "sp_energy_component_derived"
 SP_ENERGY_COMPONENT_DUPLICATE = "sp_energy_component_duplicate"
 SP_ENERGY_COMPONENT_TOTAL_MISMATCH = "sp_energy_component_total_mismatch"
 SP_ENERGY_COMPONENTS_DO_NOT_SUM = "sp_energy_components_do_not_sum"
@@ -126,6 +130,20 @@ def check_sp_energy_components(
             context={"calculation_type": type_value},
             message_prefix=False,
         )
+
+    for kind, _ in pairs:
+        if kind is EnergyComponentKind.correlation_excluding_triples:
+            raise CodedValidationError(
+                SP_ENERGY_COMPONENT_DERIVED,
+                (
+                    "'correlation_excluding_triples' is not a stored component: it is derived from the "
+                    "'correlation' and 'triples' you send, under the convention your reference, correlation "
+                    "and energy imply. Send 'correlation' (and 'triples' where the program prints it "
+                    "separately); a composite scheme term may then read the CCSD part by name."
+                ),
+                context={"component": kind.value},
+                message_prefix=False,
+            )
 
     values: dict[EnergyComponentKind, float] = {}
     for kind, value in pairs:

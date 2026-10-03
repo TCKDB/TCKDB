@@ -170,8 +170,19 @@ def test_duplicate_term_positions_are_refused():
         )
 
 
-def test_the_assembled_form_parses_so_the_server_can_refuse_it_by_name():
-    assert CompositeResultPayload(assembly="assembled").assembly.value == "assembled"
+def test_the_assembled_form_needs_its_inputs():
+    """Until P5 the form parsed bare so the server could refuse it by name; now it must say what it assembles."""
+    with pytest.raises(ValidationError) as exc:
+        CompositeResultPayload(assembly="assembled")
+    assert _coded(exc).code == "composite_total_required"
+    with pytest.raises(ValidationError) as exc:
+        CompositeResultPayload(assembly="assembled", electronic_energy_hartree=-1.0)
+    assert _coded(exc).code == "composite_input_missing"
+    inputs = [{"term_key": "x", "slot": "value", "calculation_key": "a"}]
+    assert (
+        CompositeResultPayload(assembly="assembled", electronic_energy_hartree=-1.0, inputs=inputs).assembly.value
+        == "assembled"
+    )
 
 
 # -- type pairing, in every payload shape ---------------------------------

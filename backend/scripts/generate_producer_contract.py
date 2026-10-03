@@ -1541,6 +1541,23 @@ def json_schema_text(model: type[BaseModel]) -> str:
     return json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+def _compact_json(value: Any, indent: int = 0, width: int = 110) -> str:
+    """JSON with every object or list that fits in ``width`` columns written on one line.
+
+    The worked composite payloads are long; one line per input or per level keeps the
+    contract readable and small, and the text is still valid JSON.
+    """
+    flat = json.dumps(value, ensure_ascii=False)
+    if len(flat) + indent <= width or not isinstance(value, (dict, list)) or not value:
+        return flat
+    pad = " " * (indent + 2)
+    if isinstance(value, dict):
+        items = [f'{pad}{json.dumps(k, ensure_ascii=False)}: {_compact_json(v, indent + 2, width)}' for k, v in value.items()]
+        return "{\n" + ",\n".join(items) + "\n" + " " * indent + "}"
+    items = [f"{pad}{_compact_json(v, indent + 2, width)}" for v in value]
+    return "[\n" + ",\n".join(items) + "\n" + " " * indent + "]"
+
+
 class ContractBuilder:
     """Collects every fact once, then renders the markdown and the schemas."""
 
@@ -1697,6 +1714,20 @@ class ContractBuilder:
             self._by_code_cache = self.traced_codes()
         return self._by_code_cache
 
+    #: A refusal code traced on at least this many surfaces is printed once, in a shared
+    #: table, instead of in every surface's own table: ten surfaces carry a level of theory
+    #: and a calculation, so every rule about those repeated verbatim ten times.
+    SHARED_CODE_MIN_SURFACES = 8
+
+    def widely_shared_codes(self) -> dict[str, int]:
+        """code -> number of surfaces that can return it, for codes on enough surfaces to print once."""
+        common = set(self.global_trace.code_sites)
+        return {
+            code: len(titles)
+            for code, titles in self._surfaces_by_code().items()
+            if code not in common and len(titles) >= self.SHARED_CODE_MIN_SURFACES
+        }
+
     def shared_checks(self) -> dict[str, tuple[ScientificCheck, list[str]]]:
         """Register checks two or more surfaces' workflows reach: printed once."""
         reached: dict[str, list[str]] = {}
@@ -1797,6 +1828,7 @@ class ContractBuilder:
             "- [What changed](#what-changed)",
             "- [Every producer route](#every-producer-route)",
             "- [Checks several surfaces apply](#checks-several-surfaces-apply)",
+            "- [Worked payloads: user-built composite energies](#worked-payloads-user-built-composite-energies)",
             *[f"- [Surface `{surface.title}`](#{surface.anchor})" for surface in self.surfaces],
             "- [Model reference](#model-reference)",
             "- [Enums](#enums)",
@@ -1808,6 +1840,7 @@ class ContractBuilder:
         out += self._render_changes(entries)
         out += self._render_common()
         out += self._render_shared_checks()
+        out += self._render_composite_worked_payloads()
         for surface in self.surfaces:
             out += self._render_surface(surface)
         out += self._render_model_reference()
@@ -1894,6 +1927,57 @@ class ContractBuilder:
         ]
         return out
 
+    def _render_composite_worked_payloads(self) -> list[str]:
+        """Two complete composite bundles, validated against the live model before they are printed."""
+        from tckdb_schemas.composite_worked_examples import worked_payload_b, worked_payload_c
+        from tckdb_schemas.workflows.computed_species_upload import ComputedSpeciesUploadRequest
+
+        out = [
+            "## Worked payloads: user-built composite energies",
+            "",
+            "A composite energy you build yourself (a CCSD(T)/CBS extrapolation, a focal-point sum) is sent as an"
+            " **assembled** composite: the other calculations are ordinary single points, and the composite is a"
+            " calculation of type `composite` whose `level_of_theory` carries the recipe inline as"
+            " `composite_scheme` (send `method` **or** `composite_scheme`, never both) and whose"
+            " `composite_result.inputs` name, by bundle-local `key` or by `calc_...` ref, the calculation that fills"
+            " each slot. The server names the level of theory itself and never stores a total it computed:"
+            " it recomputes `electronic_energy_hartree` from the stored energies of the inputs to **check** yours,"
+            " blocking beyond `max(1e-6, 5e-7 * n)` hartree (`composite_total_mismatch`) and warning"
+            " (`composite_total_unverifiable`) when an input energy or component is not stated.",
+            "",
+            "What a scheme says. The total is the sum of its terms in order. A `value` or `base` term reads one"
+            " input; an `extrapolation` term applies `formula` (`inverse_power` with `exponent`,"
+            " `inverse_power_shifted_half` with `exponent`, `karton_martin_scf`, `exponential_three_point`) to inputs"
+            " at declared `cardinal_number`s; a `difference` term is its `high` input minus its `low` input."
+            " `energy_component` says which part of the input's energy is read. A `correlation` term means the"
+            " whole correlation energy, (T) included: for an input whose stored `correlation` is the CCSD part"
+            " with `triples` separate (Molpro), the server reads `correlation + triples`; for one whose"
+            " `correlation` already includes (T) (ORCA), `correlation` alone. It decides by which sum equals the"
+            " stored energy, and warns rather than guesses when it cannot. Formula, exponent, cardinal numbers,"
+            " the input levels (including `core_treatment`) and the order of the terms are the scheme's identity;"
+            " the term `key`s and the literature are not. An input level is an ordinary level: a nested composite,"
+            " or a named composite method such as CBS-QB3, is refused (`composite_scheme_nested`).",
+            "",
+        ]
+        for title, build, note in (
+            (
+                "(b) CCSD(T)/CBS from a TZ/QZ pair",
+                worked_payload_b,
+                "Reference energy at QZ, correlation energy extrapolated over cardinal numbers 3 and 4 with an"
+                " inverse-power law of exponent 3. The energies are the water values printed in the ORCA 6.1 manual.",
+            ),
+            (
+                "(c) Focal-point additive",
+                worked_payload_c,
+                "A QZ base plus a core-valence difference (the same level, `all_electron` against `frozen_core`),"
+                " a higher-order difference, a relativistic difference and a DBOC value.",
+            ),
+        ):
+            payload = build()
+            ComputedSpeciesUploadRequest.model_validate(payload)
+            out += [f"### {title}", "", note, "", "```json", _compact_json(payload), "```", ""]
+        return out
+
     def _render_shared_checks(self) -> list[str]:
         out = [
             "## Checks several surfaces apply",
@@ -1919,6 +2003,25 @@ class ContractBuilder:
             ]
             if check.escape_hatch:
                 out += [f"If your chemistry is legitimate: {_one_line(check.escape_hatch)}", ""]
+        shared = self.widely_shared_codes()
+        total = len(self.surfaces)
+        out += [
+            '<a id="codes-most-surfaces-share"></a>',
+            "",
+            "### Codes most surfaces share",
+            "",
+            f"Refusal codes that {self.SHARED_CODE_MIN_SURFACES} or more of the {total} surfaces can return, printed"
+            " here once instead of in each surface's own table. They come from rules every payload that carries a"
+            " calculation or a level of theory meets. Each links to its entry in the"
+            " [refusal code reference](#refusal-code-reference); `traced` counts the surfaces.",
+            "",
+            "| Code | Status | Surfaces traced |",
+            "|---|---|---|",
+        ]
+        for code in sorted(shared):
+            statuses = ", ".join(str(s) for s in sorted({e.status for e in self.catalogue[code]}))
+            out.append(f"| [`{code}`](#{_anchor('c', code)}) | {statuses} | {shared[code]} of {total} |")
+        out.append("")
         return out
 
     def _render_surface(self, surface: Surface) -> list[str]:
@@ -2018,14 +2121,16 @@ class ContractBuilder:
     def _render_surface_codes(self, surface: Surface) -> list[str]:
         traced = self.surface_codes(surface)
         common = set(self.global_trace.code_sites)
-        specific = {code: how for code, how in traced.items() if code not in common}
+        shared = self.widely_shared_codes()
+        specific = {code: how for code, how in traced.items() if code not in common and code not in shared}
         out = [
             "### Refusal codes this surface can return",
             "",
             "Traced statically from the payload validators, route handlers and route dependencies:"
             " reachable from the route, not necessarily for every payload; a code raised through"
             " dynamic dispatch can be missing. Codes every request can receive are listed"
-            " [once](#every-producer-route).",
+            " [once](#every-producer-route); codes most surfaces can return (calculation, level of"
+            " theory and composite rules) are listed [once](#codes-most-surfaces-share).",
             "",
         ]
         if not specific:

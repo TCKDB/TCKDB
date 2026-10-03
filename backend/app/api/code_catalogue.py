@@ -1016,6 +1016,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "statmech or kinetics record's analysis software_release "
                 "(fed by analysis_software_release) is not checked."
             )),
+    ApiCode("calculation_software_release_required", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            note=(
+                "A calculation names no software_release. The release names "
+                "the program that produced the numbers, so every calculation "
+                "carries one except an assembled composite (arithmetic over "
+                "other deposited calculations, run by no program; ADR 0021)."
+            )),
     ApiCode("candidate_rights_basis_incompatible", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             shape=Shape.relationship,
@@ -1065,15 +1073,25 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("composed_search_pagination_stalled", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py",
             shape=Shape.relationship),
-    ApiCode("composite_assembled_not_accepted", 422, Surface.coded_exception,
-            "backend/app/services/composite_result_resolution.py",
+    ApiCode("composite_assembled_cannot_be_primary", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
             note=(
-                "composite_result.assembly='assembled': an energy that is "
-                "arithmetic over other deposited calculations. Needs a "
-                "user-built scheme and its inputs, which arrive in a later "
-                "release (ADR 0021, phase P5); the wire accepts the value so "
-                "this refusal can say what it is. Deposit assembly='program_run' "
-                "at a catalogued named method until then."
+                "An assembled composite was sent as a conformer's or "
+                "transition state's primary calculation. The primary is the "
+                "run that produced the geometry; only a program-run composite "
+                "can be one. Send the assembled composite as an additional "
+                "calculation."
+            )),
+    ApiCode("composite_assembled_not_accepted", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            note=(
+                "composite_result.assembly='assembled' at a level of theory "
+                "that is not a user-built scheme sent inline "
+                "(level_of_theory.composite_scheme): a named method such as "
+                "CBS-QB3 is a program_run composite, and an assembled one "
+                "needs a recipe to be checked against. Published with P3a, "
+                "when no assembled composite was accepted at all; since P5 "
+                "(ADR 0021) it names this one remaining case."
             )),
     ApiCode("composite_e0_inconsistent", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
@@ -1083,6 +1101,82 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "recipe_zpe_hartree by more than the printed-precision tolerance "
                 "(1.5e-6 hartree), with all three "
                 "present. Context carries the difference and the tolerance."
+            )),
+    ApiCode("composite_input_duplicate", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "Two composite_result.inputs fill the same slot of the same "
+                "term. Context carries the term_key, slot and cardinal_number."
+            )),
+    ApiCode("composite_input_edge_is_derived", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/workflows/computed_species_upload.py",
+            note=(
+                "depends_on declared role 'composite_input'. The server writes "
+                "that edge from composite_result.inputs, one per slot, so an "
+                "edge declared here would be evidence with no slot behind it."
+            )),
+    ApiCode("composite_input_geometry_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/composite_input_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "Two inputs of an assembled composite, or an input and the "
+                "composite itself, that both declare a geometry declare "
+                "different ones. An input that declares none is a warning, "
+                "composite_input_geometry_undeclared, not this. Context names "
+                "the inputs as the depositor wrote them."
+            )),
+    ApiCode("composite_input_level_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/composite_input_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "An input calculation ran at a different level of theory than "
+                "the slot of the scheme it fills (merged spellings of one "
+                "level are followed on both sides). Context carries the "
+                "term_key, slot and both levels as method/basis."
+            )),
+    ApiCode("composite_input_missing", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py",
+            note=(
+                "An assembled composite names no calculation for a slot of its "
+                "scheme (or names no inputs at all). Context lists the "
+                "unfilled slots as term_key/slot[/cardinal]."
+            )),
+    ApiCode("composite_input_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_ownership.py",
+            shape=Shape.relationship,
+            note=(
+                "An input of an assembled composite belongs to another species "
+                "or transition-state entry than the composite. One owner entry "
+                "per recipe (ADR 0021)."
+            )),
+    ApiCode("composite_input_reference_invalid", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            note=(
+                "A composite_result.inputs entry names its calculation by both "
+                "calculation_key and calculation_ref, or by neither."
+            )),
+    ApiCode("composite_input_slot_unknown", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "A composite_result.inputs entry names a term_key, slot or "
+                "cardinal_number the calculation's composite_scheme does not "
+                "have. Context lists the scheme's slots."
+            )),
+    ApiCode("composite_input_type_invalid", 422, Surface.coded_exception,
+            "backend/app/services/composite_input_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "An input of an assembled composite is not a single point or "
+                "an optimisation. Context carries the calculation_type found."
+            )),
+    ApiCode("composite_inputs_require_assembled", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            note=(
+                "composite_result.inputs on a program_run composite. A program "
+                "printed that number; there is no arithmetic over other "
+                "calculations to evidence."
             )),
     ApiCode("composite_level_not_scheme_bound", 422, Surface.coded_exception,
             "backend/app/services/composite_result_resolution.py",
@@ -1095,6 +1189,33 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/composite_result_resolution.py"),
     ApiCode("composite_result_requires_composite_type", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
+    ApiCode("composite_scheme_malformed", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "A user-built composite scheme's shape is wrong: a formula "
+                "without its exponent, a slot the operation does not take, a "
+                "duplicate term key, an empirical term, a kind that does not "
+                "match its terms, or method-level fields sent next to the "
+                "scheme. context.rule names which (ADR 0021)."
+            )),
+    ApiCode("composite_scheme_named_method_not_sendable", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py",
+            note=(
+                "composite_scheme.kind='named_method' is the server's own kind "
+                "for a catalogued program recipe. Send the method's name as "
+                "level_of_theory.method instead."
+            )),
+    ApiCode("composite_scheme_nested", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "An input level of a user-built composite scheme is itself "
+                "composite: it carries its own composite_scheme, names a "
+                "catalogued composite method such as CBS-QB3, or resolves to a "
+                "level bound to a scheme. A composite is built from ordinary "
+                "levels of theory."
+            )),
     ApiCode("composite_term_position_unknown", 422, Surface.coded_exception,
             "backend/app/services/composite_result_resolution.py",
             shape=Shape.relationship,
@@ -1111,6 +1232,25 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "within the printed-precision tolerance, max(1e-6, 5e-7 * "
                 "(terms + 1)) hartree. Context carries the difference and the "
                 "tolerance."
+            )),
+    ApiCode("composite_total_mismatch", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/composite_total.py",
+            shape=Shape.relationship,
+            note=(
+                "An assembled composite's deposited electronic_energy_hartree "
+                "is not what its scheme gives for the stored energies of the "
+                "calculations it names, beyond max(1e-6, 5e-7 * n) hartree (n "
+                "= the deposited total plus every stored number consumed). "
+                "Context carries both totals, the difference and the "
+                "tolerance; the recomputed value is never stored."
+            )),
+    ApiCode("composite_total_required", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            note=(
+                "An assembled composite deposited no "
+                "electronic_energy_hartree. The total is deposited and only "
+                "checked by recomputation (ADR 0021, owner decision 5); TCKDB "
+                "stores no value it computed."
             )),
     ApiCode("composite_type_requires_composite_result", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
@@ -1491,6 +1631,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "the single-point and the optimization levels as separate "
                 "calculations. Context carries the field and the value "
                 "sent (ADR 0021)."
+            )),
+    ApiCode("level_of_theory_method_with_composite_scheme", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "A level of theory sent both method and composite_scheme. "
+                "Exactly one: a program's own method (a named composite method "
+                "is sent by name, with no definition) or a recipe defined "
+                "inline."
+            )),
+    ApiCode("level_of_theory_requires_method_or_composite_scheme", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py",
+            note=(
+                "A level of theory sent neither method nor composite_scheme."
             )),
     ApiCode("limit_too_large", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/common.py",
@@ -2009,6 +2163,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
             note=(
                 "A required source pin file (environment.yml, uv.lock, Dockerfile, licences, CITATION.cff) is absent. "
                 "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("sp_energy_component_derived", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py",
+            note=(
+                "correlation_excluding_triples was sent as a stored "
+                "single-point component. It is derived from correlation and "
+                "triples under the row's own convention; a composite scheme "
+                "term may read it by name, but nothing stores it."
             )),
     ApiCode("sp_energy_component_duplicate", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py"),

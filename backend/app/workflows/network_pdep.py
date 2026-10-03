@@ -70,6 +70,7 @@ from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
     resolve_workflow_tool_release_ref,
 )
+from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.conformer_anchoring import (
     anchor_species_calculation_to_observation,
@@ -147,6 +148,7 @@ def _persist_calculation(
     geometry_id: int | None = None,
     geometry_key_map: dict[str, int],
     created_by: int | None = None,
+    as_primary: bool = False,
 ) -> Calculation:
     """Persist one bundle-local calculation through the shared calculation seam.
 
@@ -183,6 +185,7 @@ def _persist_calculation(
         species_entry_id=species_entry_id,
         transition_state_entry_id=transition_state_entry_id,
         created_by=created_by,
+        as_primary=as_primary,
     )
 
     if effective_geometry_id is not None:
@@ -316,6 +319,7 @@ def persist_network_pdep_upload(
                 geometry_id=geometry.id,
                 geometry_key_map=geometry_key_to_id,
                 created_by=created_by,
+                as_primary=True,
             )
             calculation_key_to_id[conf.calculation.key] = calculation.id
             calculation_key_to_calc[conf.calculation.key] = calculation
@@ -538,6 +542,7 @@ def persist_network_pdep_upload(
             geometry_id=ts_geometry.id,
             geometry_key_map=geometry_key_to_id,
             created_by=created_by,
+            as_primary=True,
         )
         calculation_key_to_id[ts_in.calculation.key] = ts_calc.id
         calculation_key_to_calc[ts_in.calculation.key] = ts_calc
@@ -627,6 +632,16 @@ def persist_network_pdep_upload(
             created_by=created_by,
             warnings=warning_sink,
         )
+
+    # An assembled composite's inputs are written, and its total checked, now that
+    # every calculation exists (ADR 0021, P5).
+    warning_sink.extend(
+        finalize_composite_inputs(
+            session,
+            calculation_key_to_id.values(),
+            calculations_by_key=calculation_key_to_calc,
+        )
+    )
 
     # Every calculation of the upload is flushed: an opt or sp at a named
     # composite method's level is reported once, as on every other route.

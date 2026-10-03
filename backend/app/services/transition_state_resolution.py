@@ -95,6 +95,7 @@ def persist_ts_calculations(
         primary_opt_upload,
         transition_state_entry_id=transition_state_entry_id,
         created_by=created_by,
+        as_primary=True,
     )
     # The saddle geometry has already been compared against this reaction's
     # reactants by ``validate_transition_state_composition``, so this call

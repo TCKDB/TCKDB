@@ -13,7 +13,7 @@ from tckdb_schemas.enums import (
     StatmechCalculationRole,
     StatmechTreatmentKind,
 )
-from tckdb_schemas.fragments.calculation import CalculationWithResultsPayload
+from tckdb_schemas.fragments.calculation import CalculationWithResultsPayload, assert_assembled_not_primary
 from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 from tckdb_schemas.fragments.refs import (
@@ -276,6 +276,12 @@ class ConformerUploadRequest(SchemaBase):
     applied_energy_corrections: list[AppliedEnergyCorrectionUploadPayload] = Field(
         default_factory=list
     )
+
+    @model_validator(mode="after")
+    def validate_primary_is_not_an_assembled_composite(self) -> Self:
+        """The primary produced the geometry; an assembled composite produced nothing (ADR 0021)."""
+        assert_assembled_not_primary(self.calculation.composite_result, subject="calculation")
+        return self
 
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
     # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional

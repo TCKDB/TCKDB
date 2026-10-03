@@ -204,6 +204,121 @@ the context key `named_method`; they are not aliased, because an alias would
 store a `//` in a method name. Year suffixes and the `paraskevas` label are
 warned about after any known method stem (decision 12), not only composites.
 
+## User-built schemes (P5)
+
+A producer builds its own composite energy by sending the recipe inline as
+`level_of_theory.composite_scheme` (exactly one of `method` and
+`composite_scheme`) and an `assembled` composite calculation whose
+`composite_result.inputs` name, by bundle-local key or `calc_...` ref, the
+calculation that fills each slot of the recipe. The decisions P5 makes where the
+plan left a choice:
+
+- **The total is the sum of the terms.** A `value` or `base` term reads one input,
+  an `extrapolation` term applies a formula to inputs at declared cardinal numbers,
+  a `difference` term is `high` minus `low`. `kind` classifies the recipe:
+  `extrapolation` has only value and extrapolation terms, `additive` has at least
+  one difference term. An `empirical` term cannot be user-defined: there is nothing
+  to recompute it from.
+- **The four formulas** (`inverse_power`, `inverse_power_shifted_half`,
+  `karton_martin_scf`, `exponential_three_point`) are closed forms in
+  `tckdb_schemas.composite_formulas`, with their sources. The exponent belongs to
+  the first two and is part of identity; the exponential takes three consecutive
+  cardinal numbers. Only `inverse_power` has published worked numbers in the
+  group's sources (five ORCA manual values, reproduced to the printed digits); the
+  others are tested by recovering a known limit from the model they invert.
+- **Identity.** `definition_hash` is a SHA-256 over the canonical JSON of `kind`
+  and the terms **in canonical order**, each with operation, component, formula,
+  exponent and its inputs (sorted by slot then cardinal number) as slot, declared
+  cardinal number and the `lot_hash` of the resolved level (merges followed). The
+  total is a sum, so the order a producer listed the terms in is not identity:
+  terms are ordered by operation (base, value, extrapolation, difference), energy
+  component, formula, exponent and their inputs, and a term's stored `position` is
+  its place in that order. The positions a producer uses (`composite_result.terms`)
+  are mapped to the canonical ones at the write. Term keys, literature and the
+  label are not in the hash, and a `cardinal_number` on a slot that is not a
+  `cardinal` slot is refused (it would change the hash and not the number). The
+  level of theory's `lot_hash` is a SHA-256 over
+  `{"composite_scheme": <definition_hash>}`; a normal level's payload always has a
+  `method` key, so the two cannot be equal. Every replica agrees: the resolver is
+  the only writer, and `merge_duplicate_levels_of_theory.py` **recomputes** a
+  declared level's hash from its bound scheme rather than from its columns (no
+  declared level is skipped; each is alone in its group, so it never merges with a
+  plain level that shares its label). No frozen migration copy applies: they ran
+  before declared levels existed.
+- **The label** (`method` of the level, `name` of the scheme) is generated, for
+  example `CBS[ref:CCSD(T)/cc-pVQZ + corr:CCSD(T)/cc-pV{T,Q}Z; inverse_power x=3; n=3,4]`
+  or `Additive[... + dE:CCSD(T)/cc-pCVTZ ae - CCSD(T)/cc-pCVTZ fc + ...]`: a head by
+  kind, terms joined by ` + `, levels written `method/basis` with `fc`/`ae` for a
+  stated core treatment, bases merged when they differ only in the zeta letter, at
+  most 200 characters (a longer label is cut and ends `...#<8 hex of the hash>`).
+- **Term-input levels carry `core_treatment`.** An input level is resolved from its
+  full reference, so a frozen-core and an all-electron level of one method and basis
+  are two levels and a core-valence difference is expressible.
+- **Correlation and triples (pinned).** Single-point components allow two
+  conventions when `triples` is stored: ORCA's correlation includes (T)
+  (`reference + correlation` equals the energy), Molpro's is the CCSD part
+  (`reference + correlation + triples` equals the energy). A scheme term can ask for
+  either meaning by naming it. `correlation` is the **whole** correlation energy,
+  (T) included: the stored value under ORCA's convention, `correlation + triples`
+  under Molpro's. `correlation_excluding_triples` (a new `EnergyComponentKind`
+  member) is the CCSD part: the stored value under Molpro's, `correlation -
+  triples` under ORCA's. The textbook scheme (extrapolate the CCSD correlation
+  energy, add (T) at a smaller basis as its own `triples` term) is written with
+  `correlation_excluding_triples` and counts (T) once whichever program produced
+  each input. The convention is read off the stored row: whichever sum equals the
+  stored energy within the single-point tolerance (1e-6 Eh; |(T)| is far larger)
+  decides. If both match, the stored `correlation` is used for either meaning; if
+  neither does, or the reference or the energy is not stated, or an ORCA-convention
+  row stores no `triples` to subtract, the total is `composite_total_unverifiable`,
+  never guessed. A term that reads `triples` reads the stored component as it is.
+  `correlation_excluding_triples` is **derived and never stored** as a
+  single-point component (`sp_energy_component_derived`): it would be a number
+  TCKDB computed, and it follows from `correlation` and `triples` under the row's
+  own convention. The enum value is added to `energy_component_kind` by the P5
+  revision, which rebuilds the enum on downgrade and refuses while any row uses it.
+- **The check and its tolerance.** `composite_total_mismatch` recomputes the total
+  from the inputs' stored energies and compares it with the deposited
+  `electronic_energy_hartree` at `max(1e-6, 5e-7 * (1 + sum_i |d total / d x_i|))`
+  hartree, the sum over every stored number the recomputation consumed. The weight
+  of a number is how far a rounding error in it can move the total: 1 for a value
+  or base input and for either side of a difference, the extrapolation's own weight
+  for an extrapolated input (closed form for the two-point formulas, e.g. 27/37 and
+  64/37 for x^-3 at cardinals 3 and 4; the analytic partial derivatives
+  `(d2/D)^2`, `2 d1 d2 / D^2`, `(d1/D)^2` for the three-point exponential), and 1 for
+  each number behind a two-number correlation. When every weight is 1 this is the
+  rule of the composite results, `max(1e-6, 5e-7 * n)` with `n` the number of rounded
+  quantities. The weighted form is the honest one: a larger-basis energy enters an
+  inverse-power extrapolation with a weight above 1, so a total built from inputs
+  printed to six decimals was refused by the plain count at a gap of 2.08e-6 against
+  2.0e-6 and is accepted at the weighted bound of 2.23e-6. The recomputed value is
+  formed, compared and discarded.
+- **The total must be deposited.** An assembled composite with no
+  `electronic_energy_hartree` is refused (`composite_total_required`) rather than
+  warned about: owner decision 5 says the total is deposited and only checked, so
+  there is no unverifiable-by-absence.
+- **An assembled composite is never a primary.** A conformer's or transition state's
+  primary is the run that produced the geometry; a program-run named composite did,
+  an assembled one is arithmetic and produced nothing
+  (`composite_assembled_cannot_be_primary`, at the wire and in
+  `resolve_and_persist_calculation_with_results(as_primary=True)`).
+- **The `composite_input` edge is derived.** `add_dependency_edge_idempotent`
+  refuses it unless the caller is the input writer
+  (`composite_input_edge_is_derived`), so no site that wires declared edges can
+  write one, present or future.
+- **Numerical stability.** The three-point exponential is evaluated as
+  `E_{n+2} - d2^2 / (d1 - d2)`, which does not cancel at large |E| (the product form
+  loses every digit at 5300 Eh).
+- **Assembled composites are not accepted at a named method.** The one remaining
+  meaning of `composite_assembled_not_accepted`: an assembled composite whose level
+  of theory is not a user scheme sent inline.
+- **Writing the inputs is deferred.** The result is stored when the calculation is
+  created; the inputs (and every input check) are written by
+  `finalize_composite_inputs` once all calculations of the request exist, before the
+  review policy can freeze them. A commit-time guard refuses a session that still
+  holds an assembled composite with no inputs, and a structural test fails any
+  workflow that forgets.
+- **Software is optional only for an assembled composite.** No program ran it.
+
 ## Rejected shapes
 
 - **Components with role and weight on `level_of_theory`.** See decision 1.
@@ -242,7 +357,7 @@ Each phase is independently mergeable.
     (`named_composite_deposited_as_opt` / `_sp`,
     `composite_role_on_non_composite_calculation`). Only `assembly =
     program_run` is accepted; `assembled` is refused by name
-    (`composite_assembled_not_accepted`) until P5.
+    (`composite_assembled_not_accepted`) until P5 (now accepted; see below).
   - **P3b (built).** The Gaussian composite summary-block parser
     (`gaussian_composite_parser`: CBS-QB3, ROCBS-QB3, CBS-4M and G3, each with a
     real log and each block checked against the manual's identity
@@ -258,8 +373,9 @@ Each phase is independently mergeable.
     storing a number TCKDB computed. A composite route on an `sp` is still refused
     an sp energy, and the reason is recorded.
 - **P4.** `calc_sp_energy_component` and the core-treatment field.
-- **P5.** User schemes: the inline definition, the hash branch,
-  `calc_composite_input`, the `composite_input` role, the checks.
+- **P5 (built).** User schemes: the inline definition, the hash branch,
+  `calc_composite_input`, the `composite_input` role, the checks. Details under
+  "User-built schemes (P5)" below.
 - **P6.** Correction-scheme frequency level and the `composite_delta` warning.
 - **P7.** Reads and trust (`composite_energy_verification`).
 - **P8.** Producers (ARC exports the composite log path; the adapter sends the

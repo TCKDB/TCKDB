@@ -29,6 +29,10 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "applied_group_additivity",
         "applied_group_additivity_component",
         "author",
+        # An assembled composite's inputs (ADR 0021): the slot each cited
+        # calculation fills. Evidence: a restore that dropped them would hand back
+        # a composite energy with no recipe slots behind it.
+        "calc_composite_input",
         "calc_composite_result",
         "calc_composite_term",
         "calc_freq_mode",

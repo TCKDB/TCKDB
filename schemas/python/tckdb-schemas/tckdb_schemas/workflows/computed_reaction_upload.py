@@ -47,6 +47,7 @@ from tckdb_schemas.fragments.calculation import (
     CalculationConstraintCreate,
     CalculationWithResultsPayload,
     IRCResultPayload,
+    assert_assembled_not_primary,
     OutputGeometryEntry,
     PathSearchResultPayload,
 )
@@ -323,6 +324,7 @@ class ConformerIn(SchemaBase):
             self.calculation.type,
             self.geometry.xyz_text,
             subject=f"Conformer '{self.key}' primary calculation type",
+            primary_composite_result=self.calculation.composite_result,
         )
         return self
 
@@ -978,6 +980,13 @@ class BundleTransitionStateIn(SchemaBase):
     calculation: ComputedReactionCalculationIn
     calculations: list[ComputedReactionCalculationIn] = Field(default_factory=list)
     statmech: StatmechInBundle | None = None
+
+    @model_validator(mode="after")
+    def validate_primary_is_not_an_assembled_composite(self) -> Self:
+        """The saddle point's primary produced its geometry; an assembled composite produced nothing."""
+        assert_assembled_not_primary(self.calculation.composite_result, subject="transition state calculation")
+        return self
+
     applied_energy_corrections: list[AppliedEnergyCorrectionInBundle] = Field(
         default_factory=list,
         description=(

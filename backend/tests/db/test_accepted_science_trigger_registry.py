@@ -52,12 +52,19 @@ _COMPOSITE_RESULT_REVISION = _VERSIONS / "f3b7d2a9c514_composite_calculation_typ
 #: ``calculation`` guarded like ``calc_sp_result``, with the TRUNCATE refusal.
 _SP_COMPONENT_REVISION = _VERSIONS / "e5b2d8a4c613_sp_energy_components_and_core_treatment.py"
 
+#: ``b4d8e2f6a1c9`` adds ``calc_composite_input``, the slot each calculation an
+#: assembled composite cites fills. An ownership child of the composite (guarded on
+#: ``calculation_id`` only: the cited calculation is a citation, not an owner), with
+#: the TRUNCATE refusal.
+_COMPOSITE_INPUT_REVISION = _VERSIONS / "b4d8e2f6a1c9_composite_inputs_and_dependency_role.py"
+
 _EXTENSION_REVISIONS = (
     _ATOM_MAP_REVISION,
     _EVIDENCE_REVISION,
     _EVIDENCE_KINDS_REVISION,
     _SP_COMPONENT_REVISION,
     _COMPOSITE_RESULT_REVISION,
+    _COMPOSITE_INPUT_REVISION,
 )
 
 #: ``d4e9b1c7a253`` narrows the regime instead of extending it: it removes one

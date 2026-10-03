@@ -1318,7 +1318,15 @@
           "default": null
         },
         "software_release": {
-          "$ref": "#/$defs/SoftwareReleaseRef"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoftwareReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "sp_energy_components": {
           "description": "The parts of this single point's electronic energy, as the program printed them. Single points only, and only together with the energy: sp_result.electronic_energy_hartree (or sp_electronic_energy_hartree) must be stated, else sp_energy_components_require_energy. One value per component. reference + correlation must equal the energy within 1e-6 Eh; when a triples component is also sent, reference + correlation + triples may match instead. ORCA's correlation energy already includes (T) (use reference + correlation); Molpro prints CCSD and (T) separately (send correlation = CCSD and triples = (T)). On F12 methods, reference must include the CABS-singles correction if the program's total does. A total component must equal the energy. TCKDB compares and never stores a value it computed.",
@@ -1378,7 +1386,6 @@
       },
       "required": [
         "type",
-        "software_release",
         "level_of_theory"
       ],
       "title": "CalculationWithResultsPayload",
@@ -1477,9 +1484,89 @@
       "title": "CompositeAssembly",
       "type": "string"
     },
+    "CompositeExtrapolationFormula": {
+      "enum": [
+        "inverse_power",
+        "inverse_power_shifted_half",
+        "karton_martin_scf",
+        "exponential_three_point"
+      ],
+      "title": "CompositeExtrapolationFormula",
+      "type": "string"
+    },
+    "CompositeInputPayload": {
+      "additionalProperties": false,
+      "description": "One input of an ``assembled`` composite: the calculation that fills a scheme slot.\n\nNames the term by the **key you gave it** in the level of theory's\n``composite_scheme`` and the slot (with its cardinal number on an\nextrapolation), and the calculation by a bundle-local ``calculation_key`` or,\nfor a calculation deposited earlier, its ``calc_...`` ref. Never a database\nid. Send exactly one of the two.\n\n:param term_key: The ``key`` of a term of the composite's scheme.\n:param slot: The slot of that term this calculation fills.\n:param cardinal_number: The slot's cardinal number; required on a\n    ``cardinal`` slot, ignored elsewhere.\n:param calculation_key: Local key of a calculation declared in this request.\n:param calculation_ref: The ``calc_...`` ref of an already-deposited\n    calculation.",
+      "properties": {
+        "calculation_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Key"
+        },
+        "calculation_ref": {
+          "anyOf": [
+            {
+              "pattern": "^calc_[a-z2-7]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Ref"
+        },
+        "cardinal_number": {
+          "anyOf": [
+            {
+              "maximum": 32767,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cardinal Number"
+        },
+        "slot": {
+          "$ref": "#/$defs/CompositeInputSlot"
+        },
+        "term_key": {
+          "minLength": 1,
+          "title": "Term Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "term_key",
+        "slot"
+      ],
+      "title": "CompositeInputPayload",
+      "type": "object"
+    },
+    "CompositeInputSlot": {
+      "enum": [
+        "value",
+        "high",
+        "low",
+        "cardinal"
+      ],
+      "title": "CompositeInputSlot",
+      "type": "string"
+    },
     "CompositeResultPayload": {
       "additionalProperties": false,
-      "description": "The energy of a ``composite`` calculation (ADR 0021).\n\nEvery energy is optional and ``null`` means *not stated*, never zero.\nTCKDB never stores a total it computed itself: these are the producer's\nnumbers (or the program's own output), and the two arithmetic checks below\nonly test them.\n\n:param assembly: ``program_run`` (a program printed the final number: a\n    named method such as CBS-QB3 or G4) or ``assembled`` (arithmetic over\n    other deposited calculations). Only ``program_run`` is accepted for\n    now; ``assembled`` is refused with ``composite_assembled_not_accepted``\n    until user-built schemes arrive.\n:param electronic_energy_hartree: ZPE-free energy with every term of the\n    recipe included (the empirical terms of a named method among them).\n    This is the number a correction layer is applied to.\n:param e0_hartree: The 0 K energy *including* the recipe's own scaled\n    zero-point energy (Gaussian's ``CBS-QB3 (0 K)``).\n:param recipe_zpe_hartree: The zero-point energy the recipe added, after\n    its own scale factor. Never negative.\n:param terms: The optional breakdown of ``electronic_energy_hartree``.",
+      "description": "The energy of a ``composite`` calculation (ADR 0021).\n\nEvery energy is optional and ``null`` means *not stated*, never zero.\nTCKDB never stores a total it computed itself: these are the producer's\nnumbers (or the program's own output), and the checks only test them.\n\n:param assembly: ``program_run`` (a program printed the final number: a\n    named method such as CBS-QB3 or G4, or one program run of a scheme) or\n    ``assembled`` (arithmetic over other deposited calculations: a\n    user-built scheme, with ``inputs``). An ``assembled`` composite's\n    ``level_of_theory`` carries the scheme inline and its ``software_release``\n    is optional; a ``program_run`` names the software that ran it.\n:param electronic_energy_hartree: ZPE-free energy with every term of the\n    recipe included (the empirical terms of a named method among them).\n    This is the number a correction layer is applied to.\n:param e0_hartree: The 0 K energy *including* the recipe's own scaled\n    zero-point energy (Gaussian's ``CBS-QB3 (0 K)``).\n:param recipe_zpe_hartree: The zero-point energy the recipe added, after\n    its own scale factor. Never negative.\n:param terms: The optional breakdown of ``electronic_energy_hartree``.\n:param inputs: For an ``assembled`` composite, the calculation that fills each\n    slot of the level of theory's scheme (one entry per slot). Refused on a\n    ``program_run``. TCKDB recomputes the total from these calculations'\n    stored energies to check ``electronic_energy_hartree``; it never stores\n    the recomputed value.",
       "properties": {
         "assembly": {
           "$ref": "#/$defs/CompositeAssembly"
@@ -1508,6 +1595,13 @@
           "default": null,
           "title": "Electronic Energy Hartree"
         },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/CompositeInputPayload"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
         "recipe_zpe_hartree": {
           "anyOf": [
             {
@@ -1534,6 +1628,270 @@
       ],
       "title": "CompositeResultPayload",
       "type": "object"
+    },
+    "CompositeSchemeDefinition": {
+      "additionalProperties": false,
+      "description": "A user-built composite scheme, sent inline as ``level_of_theory.composite_scheme``.\n\nThe server resolves each input level, canonicalises the definition and\nnames the level of theory itself (a readable label such as\n``CBS[ref:HF/cc-pVQZ + corr:CCSD(T)/cc-pV{T,Q}Z; inverse_power x=3 n=3,4]``);\nyou do not choose the name. Formula, exponent and cardinal numbers are part of\nidentity; ``key`` names, ``literature`` and order of the inputs within a term\nare not.\n\n:param kind: ``extrapolation`` (value and extrapolation terms) or\n    ``additive`` (at least one difference term). ``named_method`` is the\n    server's own kind and is refused.\n:param terms: The terms, in order. The position of a term is its place in\n    this list.\n:param literature: The paper that defines the recipe, when there is one.\n    Provenance only: it is not part of the scheme's identity.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/CompositeSchemeKind"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "terms": {
+          "items": {
+            "$ref": "#/$defs/CompositeSchemeTermIn"
+          },
+          "minItems": 1,
+          "title": "Terms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "terms"
+      ],
+      "title": "CompositeSchemeDefinition",
+      "type": "object"
+    },
+    "CompositeSchemeInputLevel": {
+      "additionalProperties": false,
+      "description": "An input level of a user-built composite scheme: an ordinary level, never composite.\n\nA composite is built from ordinary levels of theory. An input that itself\ncarries a ``composite_scheme`` is a nested composite and is refused with\n``composite_scheme_nested`` (a named composite method such as CBS-QB3 used as\nan input is refused by the server, which holds the catalogue). State\n``core_treatment`` when a term depends on it: a core-valence difference is\nthe same level with ``all_electron`` against ``frozen_core``.",
+      "properties": {
+        "aux_basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Aux Basis"
+        },
+        "basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Basis"
+        },
+        "cabs_basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cabs Basis"
+        },
+        "core_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "dispersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dispersion"
+        },
+        "keywords": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keywords"
+        },
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "solvent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Solvent"
+        },
+        "solvent_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Solvent Model"
+        },
+        "spin_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpinTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "title": "CompositeSchemeInputLevel",
+      "type": "object"
+    },
+    "CompositeSchemeKind": {
+      "enum": [
+        "named_method",
+        "extrapolation",
+        "additive"
+      ],
+      "title": "CompositeSchemeKind",
+      "type": "string"
+    },
+    "CompositeSchemeTermIn": {
+      "additionalProperties": false,
+      "description": "One term of a user-built scheme; the scheme's total is the sum of its terms.\n\n:param key: Your name for the term (for example ``\"corr\"``, ``\"dcv\"``).\n    Local to this definition and **not part of the scheme's identity**: the\n    calculation's ``composite_result.inputs`` name terms by it, and two\n    depositors who key the same recipe differently get the same scheme.\n:param operation: ``base`` / ``value`` (one input taken as it is),\n    ``extrapolation``, or ``difference`` (high minus low). ``empirical`` is\n    refused.\n:param energy_component: Which part of the input energy the term reads:\n    ``total``, ``reference``, ``correlation`` (the whole correlation energy,\n    triples included), ``triples``, ``dboc``, ``scalar_relativistic``.\n:param formula: The extrapolation formula (``extrapolation`` terms only).\n:param exponent: The formula's exponent where it has one (``inverse_power``,\n    ``inverse_power_shifted_half``). Part of the identity: exponent 3 and 3.4\n    are two schemes.\n:param inputs: The levels the term reads, each filling a slot.",
+      "properties": {
+        "energy_component": {
+          "$ref": "#/$defs/EnergyComponentKind"
+        },
+        "exponent": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exponent"
+        },
+        "formula": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompositeExtrapolationFormula"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/CompositeSchemeTermInputIn"
+          },
+          "minItems": 1,
+          "title": "Inputs",
+          "type": "array"
+        },
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/CompositeTermOperation"
+        }
+      },
+      "required": [
+        "key",
+        "operation",
+        "energy_component",
+        "inputs"
+      ],
+      "title": "CompositeSchemeTermIn",
+      "type": "object"
+    },
+    "CompositeSchemeTermInputIn": {
+      "additionalProperties": false,
+      "description": "One input of a scheme term: the level it reads, and which slot it fills.\n\n:param slot: ``value`` (base / value term), ``high`` / ``low`` (difference),\n    or ``cardinal`` (one point of an extrapolation).\n:param level_of_theory: The ordinary level the input calculation ran at.\n:param cardinal_number: The declared cardinal number (2 for double-zeta, 3\n    for triple-zeta, ...). Required on a ``cardinal`` slot; never derived from\n    the basis name. Part of the scheme's identity.",
+      "properties": {
+        "cardinal_number": {
+          "anyOf": [
+            {
+              "maximum": 32767,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cardinal Number"
+        },
+        "level_of_theory": {
+          "$ref": "#/$defs/CompositeSchemeInputLevel"
+        },
+        "slot": {
+          "$ref": "#/$defs/CompositeInputSlot"
+        }
+      },
+      "required": [
+        "slot",
+        "level_of_theory"
+      ],
+      "title": "CompositeSchemeTermInputIn",
+      "type": "object"
+    },
+    "CompositeTermOperation": {
+      "enum": [
+        "base",
+        "extrapolation",
+        "difference",
+        "value",
+        "empirical"
+      ],
+      "title": "CompositeTermOperation",
+      "type": "string"
     },
     "CompositeTermPayload": {
       "additionalProperties": false,
@@ -1761,14 +2119,15 @@
       "type": "object"
     },
     "EnergyComponentKind": {
-      "description": "Which part of an electronic energy a value is (ADR 0021).\n\nNamed generically because it is shared: a scheme term says which\ncomponent of an input energy it consumes, and a single-point energy\ncomponent says which component it stores. ``total`` is the whole\nelectronic energy; ``reference`` the reference-determinant (SCF / HF)\npart; ``correlation`` the correlation part; ``triples`` the perturbative\ntriples part; ``dboc`` the diagonal Born-Oppenheimer correction;\n``scalar_relativistic`` the scalar-relativistic correction. The wire enum\nin ``tckdb_schemas.enums`` carries this exact text, so the OpenAPI schema\nfor the two is one schema, not two.",
+      "description": "Which part of an electronic energy a value is (ADR 0021).\n\nNamed generically because it is shared: a scheme term says which\ncomponent of an input energy it consumes, and a single-point energy\ncomponent says which component it stores. ``total`` is the whole\nelectronic energy; ``reference`` the reference-determinant (SCF / HF)\npart; ``correlation`` the correlation part; ``triples`` the perturbative\ntriples part; ``dboc`` the diagonal Born-Oppenheimer correction;\n``scalar_relativistic`` the scalar-relativistic correction;\n``correlation_excluding_triples`` the correlation energy *without* the\nperturbative triples (the CCSD part), a quantity a scheme term can read but a\nsingle point never stores: it is derived from the stored ``correlation`` and\n``triples`` under the row's own convention (``tckdb_schemas.composite_total``). The wire enum\nin ``tckdb_schemas.enums`` carries this exact text, so the OpenAPI schema\nfor the two is one schema, not two.",
       "enum": [
         "total",
         "reference",
         "correlation",
         "triples",
         "dboc",
-        "scalar_relativistic"
+        "scalar_relativistic",
+        "correlation_excluding_triples"
       ],
       "title": "EnergyComponentKind",
       "type": "string"
@@ -3918,7 +4277,7 @@
     },
     "LevelOfTheoryRef": {
       "additionalProperties": false,
-      "description": "Upload-facing reference to a level of theory.",
+      "description": "Upload-facing reference to a level of theory: a program's method, or your own recipe.\n\nSend exactly one of ``method`` and ``composite_scheme``. ``method`` is a\nmethod a program ran (including a named composite method such as CBS-QB3,\nsent by name alone). ``composite_scheme`` defines a recipe of your own\n(a CCSD(T)/CBS extrapolation, a focal-point sum) from ordinary levels of\ntheory; the server names the resulting level of theory and binds it to the\nrecipe. Both, or neither, is refused. With ``composite_scheme`` the other\nlevel fields (basis, dispersion, ...) are not sent: they belong to the\nscheme's input levels.",
       "properties": {
         "aux_basis": {
           "anyOf": [
@@ -3956,6 +4315,17 @@
           "default": null,
           "title": "Cabs Basis"
         },
+        "composite_scheme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompositeSchemeDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "core_treatment": {
           "anyOf": [
             {
@@ -3992,9 +4362,17 @@
           "title": "Keywords"
         },
         "method": {
-          "minLength": 1,
-          "title": "Method",
-          "type": "string"
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Method"
         },
         "solvent": {
           "anyOf": [
@@ -4032,9 +4410,6 @@
           "default": null
         }
       },
-      "required": [
-        "method"
-      ],
       "title": "LevelOfTheoryRef",
       "type": "object"
     },

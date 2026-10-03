@@ -2,7 +2,7 @@
  * Canonical plain-words wording for `CalculationDependencyRole`
  * (`backend/app/db/models/common.py::CalculationDependencyRole`, seven
  * values: `optimized_from`, `freq_on`, `single_point_on`, `arkane_source`,
- * `irc_start`, `irc_followup`, `scan_parent`).
+ * `irc_start`, `irc_followup`, `scan_parent`, `composite_input`).
  *
  * Both `CalculationDetailPage.tsx`'s Related-calculations sentence list AND
  * `CalculationDependencyGraph.tsx`'s edge labels read from this ONE table,
@@ -10,11 +10,11 @@
  * can never fork — a wording change here is a single edit both surfaces
  * pick up.
  *
- * All seven roles are bespoke here (2026-09 rewrite, below) — a role with
+ * All eight roles are bespoke here (2026-09 rewrite, below) — a role with
  * no entry falls back to `roleLabel(role)` (the raw token with underscores
  * replaced by spaces) in every view, never to another role's wording. That
  * fallback exists for a role this backend enum has not shipped yet, not
- * for any of the seven current values — see the "falls back to the raw
+ * for any of the eight current values — see the "falls back to the raw
  * role token" test in `CalculationDetailPage.test.tsx`, which uses a
  * synthetic `some_future_role` and which this table's fallback path must
  * keep satisfying.
@@ -147,6 +147,14 @@ export const DEPENDENCY_ROLE_WORDING: Record<string, DependencyRoleWording> = {
         childSentence: "This used {link} as an Arkane source",
         parentSentence: "{link} used this as an Arkane source",
         edgeLabel: "source for Arkane",
+    },
+    composite_input: {
+        // ADR 0021 (P5): the PARENT is the single point (or optimisation) an assembled composite
+        // read an energy from, the CHILD is the composite built from it. The server writes the
+        // edge from the composite's inputs; the arrow runs input -> composite.
+        childSentence: "This composite energy was assembled using the energy from {link}",
+        parentSentence: "The energy from this calculation was used by {link} to assemble a composite",
+        edgeLabel: "input to the composite",
     },
 }
 

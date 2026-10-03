@@ -225,10 +225,19 @@ def test_a_composite_result_on_another_type_is_refused(client, builder):
     assert body["code"] == "composite_result_requires_composite_type"
 
 
-def test_an_assembled_composite_is_refused_as_not_yet_accepted(client):
+def test_an_assembled_composite_with_no_inputs_is_refused(client):
     body = _code_of(_deposit_conformer(client, primary=_composite(assembly="assembled")))
+    assert body["code"] == "composite_input_missing"
+
+
+def test_an_assembled_composite_at_a_named_method_is_not_accepted(client):
+    calc = _composite(assembly="assembled")
+    calc["composite_result"]["inputs"] = [
+        {"term_key": "x", "slot": "value", "calculation_ref": "calc_aaaaaaaaaaaaaaaaaaaaaaaaaa"}
+    ]
+    body = _code_of(_deposit_conformer(client, primary=calc))
     assert body["code"] == "composite_assembled_not_accepted"
-    assert "later release" in body["detail"]
+    assert "inline" in str(body["detail"])
 
 
 def test_a_composite_at_a_level_that_is_not_scheme_bound_is_refused(client):

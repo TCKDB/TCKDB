@@ -37,6 +37,7 @@ from app.db.models.common import (
     CalculationQuality,
     CalculationType,
     CompositeAssembly,
+    CompositeInputSlot,
     ConstraintKind,
     CoordinateUnit,
     EnergyComponentKind,
@@ -244,6 +245,15 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         back_populates="calculation",
         cascade="all, delete-orphan",
         order_by="CalculationCompositeTerm.term_position",
+    )
+    composite_inputs: Mapped[list["CalculationCompositeInput"]] = relationship(
+        back_populates="calculation",
+        cascade="all, delete-orphan",
+        foreign_keys="CalculationCompositeInput.calculation_id",
+        order_by=(
+            "CalculationCompositeInput.term_position, "
+            "CalculationCompositeInput.slot, CalculationCompositeInput.cardinal_number"
+        ),
     )
     opt_result: Mapped[Optional["CalculationOptResult"]] = relationship(
         back_populates="calculation",
@@ -579,6 +589,13 @@ class CalculationSPEnergyComponent(Base):
             "value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8",
             name="value_hartree_finite",
         ),
+        # ``correlation_excluding_triples`` is derived from ``correlation`` and ``triples`` and is never
+        # stored (ADR 0021). Compared as text so the constraint can be created in the transaction that
+        # adds the enum value.
+        CheckConstraint(
+            "component::text <> 'correlation_excluding_triples'",
+            name="component_not_derived",
+        ),
     )
 
 
@@ -661,6 +678,73 @@ class CalculationCompositeTerm(Base):
             "value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8",
             name="value_finite",
         ),
+    )
+
+
+class CalculationCompositeInput(Base):
+    """One input of an assembled composite: the calculation that fills a scheme slot (ADR 0021, P5).
+
+    Evidence, not arithmetic: the row says *which* deposited calculation was
+    the ``slot`` of term ``term_position`` of the composite's scheme, so a reader
+    can follow the recipe to the energies it used. The energies themselves stay
+    on the input calculation; nothing here, and nothing derived from it, is a
+    stored total (TCKDB recomputes only to check).
+
+    Every row is mirrored by a ``calculation_dependency`` edge with role
+    ``composite_input`` (parent = ``input_calculation_id``, child =
+    ``calculation_id``). The edge is what the graph, the review queue and the
+    accepted-science guard already walk; the row is what carries the slot. The
+    service that writes one writes the other
+    (:func:`app.services.composite_input_resolution.finalize_composite_inputs`).
+
+    ``term_position`` is the term's place in the scheme's ``terms`` (the
+    depositor's ``term_key`` is not stored: it is not part of the scheme's
+    identity). ``cardinal_number`` is the slot's declared cardinal and is set
+    only on a ``cardinal`` slot. An input calculation may fill more than one
+    slot (a base and a difference can read one single point), so the primary key
+    carries the slot; one calculation per ``(term, slot, cardinal)`` is the
+    unique index.
+    """
+
+    __tablename__ = "calc_composite_input"
+
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+    term_position: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    slot: Mapped[CompositeInputSlot] = mapped_column(
+        SAEnum(CompositeInputSlot, name="composite_input_slot"), primary_key=True
+    )
+    input_calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+    cardinal_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    calculation: Mapped["Calculation"] = relationship(
+        back_populates="composite_inputs", foreign_keys=[calculation_id]
+    )
+    input_calculation: Mapped["Calculation"] = relationship(foreign_keys=[input_calculation_id])
+
+    __table_args__ = (
+        CheckConstraint("term_position >= 0", name="term_position_non_negative"),
+        CheckConstraint("cardinal_number IS NULL OR cardinal_number >= 1", name="cardinal_number_positive"),
+        CheckConstraint("slot <> 'cardinal' OR cardinal_number IS NOT NULL", name="cardinal_slot_needs_number"),
+        CheckConstraint("slot = 'cardinal' OR cardinal_number IS NULL", name="cardinal_only_on_cardinal_slot"),
+        CheckConstraint("input_calculation_id <> calculation_id", name="not_its_own_input"),
+        Index(
+            "uq_calc_composite_input_slot",
+            "calculation_id",
+            "term_position",
+            "slot",
+            "cardinal_number",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+        ),
+        Index("ix_calc_composite_input_input_calculation_id", "input_calculation_id"),
     )
 
 

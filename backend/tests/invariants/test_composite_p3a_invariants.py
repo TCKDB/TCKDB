@@ -38,6 +38,7 @@ _GUARD_REVISIONS = (
     "a7d3f1c95e28_ts_evidence_kinds_and_unstated_irc_direction.py",
     "e5b2d8a4c613_sp_energy_components_and_core_treatment.py",
     "f3b7d2a9c514_composite_calculation_type_and_result.py",
+    "b4d8e2f6a1c9_composite_inputs_and_dependency_role.py",
 )
 
 

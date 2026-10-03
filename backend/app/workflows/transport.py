@@ -25,6 +25,7 @@ from app.services.calculation_ownership import (
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
+from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.record_review import (
@@ -88,6 +89,18 @@ def persist_transport_upload(
             species_entry_id=species_entry.id,
         )
         calculations_by_key[calc_in.key] = calc_row
+
+    # An assembled composite's inputs are written, and its total checked, now
+    # that every inline calculation exists and the key namespace is complete
+    # (ADR 0021, P5). Always run: the write is not optional when the caller
+    # collects no warnings.
+    composite_input_warnings = finalize_composite_inputs(
+        session,
+        [calc.id for calc in calculations_by_key.values()],
+        calculations_by_key=calculations_by_key,
+    )
+    if warnings_out is not None:
+        warnings_out.extend(composite_input_warnings)
 
     # An inline opt or sp at a named composite method's level is the same
     # misshapen deposit the bundle routes warn about (ADR 0021, decision 7).

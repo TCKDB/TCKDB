@@ -52,6 +52,14 @@ from . import (
 
 _install_public_ref_listener()
 
+# Backstop for assembled composites (ADR 0021, P5): refuse to commit one whose
+# inputs were never written. Idempotent.
+from app.db.composite_commit_guard import (  # noqa: E402
+    install_composite_commit_guard as _install_composite_commit_guard,
+)
+
+_install_composite_commit_guard()
+
 
 __all__ = [
     "accepted_science_repair",

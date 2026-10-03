@@ -9,7 +9,13 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.sql import ColumnElement
-from tckdb_schemas.fragments.calculation import assert_composite_result_matches_type
+from tckdb_schemas.coded_error import CodedValidationError
+from tckdb_schemas.fragments.calculation import (
+    CALCULATION_SOFTWARE_RELEASE_REQUIRED,
+    assert_assembled_not_primary,
+    assert_composite_calculation_shape,
+    assert_composite_result_matches_type,
+)
 from tckdb_schemas.sp_energy_components import check_sp_energy_components
 from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 
@@ -45,6 +51,7 @@ from app.db.models.common import (
     CalculationGeometryRole,
     CalculationRecordKind,
     CalculationType,
+    CompositeAssembly,
     IRCDirection,
     ParameterSource,
     SoftwareReconciliationStatus,
@@ -75,7 +82,7 @@ from app.services.calculation_geometry_composition import (
 )
 from app.services.calculation_scan_resolution import persist_calculation_scan
 from app.services.composite_result_resolution import persist_composite_result
-from app.services.composite_scheme_resolution import ensure_named_method_binding
+from app.services.composite_scheme_resolution import ensure_named_method_binding, resolve_declared_scheme_level
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.hessian_method_inference import infer_hessian_method
@@ -145,10 +152,36 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     the dispersion key (issue #630, :func:`~app.chemistry.dispersion_names.level_identity_keys`).
     The row still stores every name verbatim. ``keywords`` is free-form text and is hashed as written.
 
+    A user-built composite scheme has no hash here: its hash is over the
+    scheme's definition, which needs the input levels resolved
+    (:func:`~app.services.composite_scheme_resolution.declared_scheme_lot_hash`).
+    Its payload is ``{"composite_scheme": <hash>}``, which can never equal this
+    function's payload because this one always has a ``"method"`` key.
+
     :param ref: Upload-facing level-of-theory reference.
     :returns: SHA-256 hash of the canonicalized level-of-theory payload.
+    :raises ValueError: when ``ref`` names a ``composite_scheme`` instead of a method.
     """
 
+    payload = _level_of_theory_payload(ref)
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _level_of_theory_payload(ref: LevelOfTheoryRef) -> dict[str, object]:
+    """The canonical payload :func:`_level_of_theory_hash` hashes.
+
+    Split out so a test can state, of every payload this function builds, that it
+    has a ``"method"`` key -- the property that keeps a declared composite scheme's
+    ``{"composite_scheme": ...}`` payload from ever colliding with it.
+    """
+
+    if getattr(ref, "composite_scheme", None) is not None or ref.method is None:
+        raise ValueError(
+            "a level of theory that names a composite_scheme has no method hash; resolve it with "
+            "resolve_level_of_theory_ref, which hashes the scheme's definition"
+        )
     method_key, dispersion_key = level_identity_keys(ref.method, ref.dispersion)
     payload = {
         "method": method_key,
@@ -174,9 +207,7 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     core_treatment = getattr(ref.core_treatment, "value", ref.core_treatment)
     if core_treatment is not None:
         payload["core_treatment"] = core_treatment
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
+    return payload
 
 
 def resolve_workflow_tool_release_ref(
@@ -245,11 +276,19 @@ def resolve_level_of_theory_ref(
     """Resolve or create a level-of-theory row.
 
     :param session: Active SQLAlchemy session.
+    A ref that carries a ``composite_scheme`` is a user-built recipe: it goes
+    through :func:`~app.services.composite_scheme_resolution.resolve_declared_scheme_level`,
+    which hashes the scheme's definition and binds the level to it (ADR 0021, P5).
+
     :param ref: Upload-facing level-of-theory reference.
     :returns: Existing or newly created ``LevelOfTheory`` row.
     """
 
+    if getattr(ref, "composite_scheme", None) is not None:
+        return resolve_declared_scheme_level(session, ref)
     lot_hash = _level_of_theory_hash(ref)
+    # ``_level_of_theory_hash`` refused a ref with no method just above.
+    assert ref.method is not None
     level_of_theory = session.scalar(
         select(LevelOfTheory).where(LevelOfTheory.lot_hash == lot_hash)
     )
@@ -428,14 +467,24 @@ def resolve_calculation_create_request(
     """
 
     refuse_workflow_tool_as_calculation_software(request.software_release)
-    software_release = resolve_software_release_ref(session, request.software_release)
+    if request.software_release is None and not request.software_optional:
+        raise CodedValueError(
+            CALCULATION_SOFTWARE_RELEASE_REQUIRED,
+            "software_release is required: it names the program that produced this calculation's "
+            "numbers. Only an assembled composite may omit it.",
+            context={"field": "software_release", "calculation_type": request.type.value},
+            message_prefix=False,
+        )
+    software_release = (
+        None if request.software_release is None else resolve_software_release_ref(session, request.software_release)
+    )
     workflow_tool_release = resolve_workflow_tool_release_ref(
         session, request.workflow_tool_release
     )
     level_of_theory = resolve_level_of_theory_ref(session, request.level_of_theory)
     environment = resolve_execution_environment_manifest(session, request.execution_environment)
     if environment is not None and (
-        environment.software_release_id != software_release.id
+        environment.software_release_id != (software_release.id if software_release else None)
         or environment.workflow_tool_release_id != (workflow_tool_release.id if workflow_tool_release else None)
     ):
         raise ExecutionEnvironmentManifestIntegrityError(
@@ -447,7 +496,7 @@ def resolve_calculation_create_request(
         quality=request.quality,
         species_entry_id=request.species_entry_id,
         transition_state_entry_id=request.transition_state_entry_id,
-        software_release_id=software_release.id,
+        software_release_id=software_release.id if software_release else None,
         workflow_tool_release_id=(
             workflow_tool_release.id if workflow_tool_release else None
         ),
@@ -1316,7 +1365,12 @@ def persist_calculation_result(
     # check, and a result on another type would be dropped silently.
     assert_composite_result_matches_type(calculation.type, calc_upload.composite_result)
     if calc_upload.composite_result is not None:
-        persist_composite_result(session, calculation, calc_upload.composite_result)
+        persist_composite_result(
+            session,
+            calculation,
+            calc_upload.composite_result,
+            level_of_theory=calc_upload.level_of_theory,
+        )
 
     if calc_upload.sp_energy_components:
         # The wire models refuse these on a non-sp and on a contradictory set
@@ -1661,6 +1715,16 @@ _OPTIMIZED_FROM_PARENT_TYPES: frozenset[CalculationType] = frozenset(
     {CalculationType.opt, CalculationType.path_search}
 )
 
+#: Types a ``composite_input`` edge's parent may have: a single point, or an
+#: optimisation whose final energy is the single-point value at its own level
+#: (the same exception ``role='sp'`` makes for thermo and statmech: an
+#: optimisation's energy *is* a single-point energy, and a depositor who never
+#: ran a separate single point has not lost the number). Anything else
+#: (freq, irc, scan, a nested composite) produced no energy a scheme term reads.
+COMPOSITE_INPUT_PARENT_TYPES: frozenset[CalculationType] = frozenset(
+    {CalculationType.sp, CalculationType.opt}
+)
+
 
 def dependency_role_type_compatible(
     parent_calc: Calculation,
@@ -1680,6 +1744,8 @@ def dependency_role_type_compatible(
     # opt/path_search parent-type check for ``optimized_from`` edges.
     if role == CalculationDependencyRole.optimized_from:
         return parent_calc.type in _OPTIMIZED_FROM_PARENT_TYPES
+    if role == CalculationDependencyRole.composite_input:
+        return parent_calc.type in COMPOSITE_INPUT_PARENT_TYPES
     expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE.get(role)
     if expected is None:
         return True
@@ -1729,6 +1795,11 @@ def assert_dependency_role_type_compatible(
             f"type 'opt' or 'path_search', got "
             f"'{parent_calc.type.value}'."
         )
+    if role == CalculationDependencyRole.composite_input:
+        raise ValueError(
+            f"{context}: role='composite_input' requires a parent of type 'sp' or 'opt', got "
+            f"'{parent_calc.type.value}'."
+        )
     if role in _COMPOSITE_PARENT_ROLES and parent_calc.type == CalculationType.composite:
         raise ValueError(
             f"{context}: role='{role.value}' accepts a parent of type 'opt', or "
@@ -1741,6 +1812,12 @@ def assert_dependency_role_type_compatible(
     )
 
 
+#: A ``composite_input`` edge was declared (``depends_on``) rather than written from
+#: an assembled composite's ``composite_result.inputs``. Same literal as the wire
+#: refusal; this is its re-run at the seam every edge goes through.
+COMPOSITE_INPUT_EDGE_IS_DERIVED = "composite_input_edge_is_derived"
+
+
 def add_dependency_edge_idempotent(
     session: Session,
     *,
@@ -1748,6 +1825,7 @@ def add_dependency_edge_idempotent(
     child_calculation_id: int,
     dependency_role: CalculationDependencyRole,
     context: str,
+    derived: bool = False,
 ) -> CalculationDependency:
     """Insert a ``CalculationDependency`` edge idempotently.
 
@@ -1771,6 +1849,17 @@ def add_dependency_edge_idempotent(
     edges are not flushed mid-check and racing the duplicate-insert
     this helper exists to prevent.
     """
+    if dependency_role == CalculationDependencyRole.composite_input and not derived:
+        # The slot a composite_input edge stands for lives in calc_composite_input; an edge
+        # declared by a producer would be evidence with no slot behind it. Only
+        # ``finalize_composite_inputs`` (derived=True) writes one.
+        raise CodedValueError(
+            COMPOSITE_INPUT_EDGE_IS_DERIVED,
+            f"{context}: role 'composite_input' cannot be declared. The server writes that edge from the "
+            "assembled composite's composite_result.inputs, one per slot. Name the calculation there instead.",
+            context={"field": "depends_on", "role": dependency_role.value},
+            message_prefix=False,
+        )
     if parent_calculation_id == child_calculation_id:
         raise ValueError(
             f"{context}: a calculation cannot depend on itself."
@@ -2059,6 +2148,7 @@ def resolve_and_persist_calculation_with_results(
     species_entry_id: int | None = None,
     transition_state_entry_id: int | None = None,
     created_by: int | None = None,
+    as_primary: bool = False,
 ) -> Calculation:
     """Resolve provenance, persist a calculation, and attach typed results.
 
@@ -2067,9 +2157,29 @@ def resolve_and_persist_calculation_with_results(
     :param species_entry_id: Owner species-entry id (mutually exclusive with TS).
     :param transition_state_entry_id: Owner TS-entry id.
     :param created_by: Optional application user id.
+    :param as_primary: ``True`` for a conformer's or transition state's primary
+        calculation, the run that produced its geometry. An assembled composite
+        produced none and is refused there
+        (``composite_assembled_cannot_be_primary``).
     :returns: Persisted ``Calculation`` row.
     """
+    if as_primary:
+        try:
+            assert_assembled_not_primary(calc_upload.composite_result, subject="primary calculation")
+        except CodedValidationError as exc:
+            raise CodedValueError(exc.code, exc.detail, context=exc.context, message_prefix=False) from exc
 
+    # Every wire rule that ties the block, the level and the software together
+    # (ADR 0021): software required unless an assembled composite, and an
+    # assembled composite's scheme inline with its inputs filling every slot. The
+    # models ran it on parse; a payload built with ``model_copy`` skipped it, and
+    # this is the one seam every calculation passes through.
+    assert_composite_calculation_shape(
+        calc_upload.type,
+        calc_upload.composite_result,
+        level_of_theory=calc_upload.level_of_theory,
+        software_release=calc_upload.software_release,
+    )
     # The citation arrives as an inline fragment, never as a row id: a
     # depositor knows their paper's DOI, not our ``literature.id`` (#194,
     # .claude/rules/schema-rules.md). This is the single place it is
@@ -2088,6 +2198,10 @@ def resolve_and_persist_calculation_with_results(
         species_entry_id=species_entry_id,
         transition_state_entry_id=transition_state_entry_id,
         software_release=calc_upload.software_release,
+        software_optional=(
+            calc_upload.composite_result is not None
+            and calc_upload.composite_result.assembly == CompositeAssembly.assembled
+        ),
         workflow_tool_release=calc_upload.workflow_tool_release,
         level_of_theory=calc_upload.level_of_theory,
         literature_id=literature_id,

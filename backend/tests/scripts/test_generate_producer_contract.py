@@ -332,6 +332,11 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 
 #: The contract was ~1 MB before it was trimmed; an agent cannot read that
 #: whole. This is a ceiling to notice regrowth, not a target.
+#:
+#: The composite-scheme work (ADR 0021, P5) grew the file by about 14 KB net: its refusal codes are
+#: traced on ten surfaces, so codes on eight or more surfaces are printed once in a shared table
+#: (``ContractBuilder.widely_shared_codes``) instead of ten times, which is what keeps the ceiling
+#: where it was.
 MARKDOWN_BYTE_CEILING = 700_000
 
 

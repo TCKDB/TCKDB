@@ -35,7 +35,7 @@ from tckdb_schemas.fragments.calculation import (
     SPEnergyComponentPayload,
     SPResultPayload,
     WavefunctionDiagnosticPayload,
-    assert_composite_result_matches_type,
+    assert_composite_calculation_shape,
 )
 from tckdb_schemas.fragments.refs import (
     LevelOfTheoryRef,
@@ -82,7 +82,8 @@ class CalculationIn(SchemaBase):
         before this field existed keep anchoring exactly as they did. When
         neither field resolves, the calculation is stored unanchored and the
         upload reports a warning rather than dropping the anchor silently.
-    :param software_release: Required software provenance reference.
+    :param software_release: Software provenance reference. Required, except on an
+        ``assembled`` composite (arithmetic over other deposited calculations).
     :param level_of_theory: Required level-of-theory reference.
     :param workflow_tool_release: Optional workflow-tool provenance reference.
     :param literature: Optional inline literature provenance, resolved (or
@@ -122,7 +123,7 @@ class CalculationIn(SchemaBase):
     geometry_key: str | None = Field(default=None, min_length=1)
     conformer_key: str | None = Field(default=None, min_length=1)
 
-    software_release: SoftwareReleaseRef
+    software_release: SoftwareReleaseRef | None = None
     level_of_theory: LevelOfTheoryRef
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     literature: LiteratureUploadRequest | None = None
@@ -179,8 +180,17 @@ class CalculationIn(SchemaBase):
 
     @model_validator(mode="after")
     def validate_composite_result_matches_type(self) -> Self:
-        """``type: "composite"`` and ``composite_result`` come together or not at all."""
-        assert_composite_result_matches_type(self.type, self.composite_result)
+        """``type: "composite"`` and ``composite_result`` come together or not at all.
+
+        Also the software rule (required unless an assembled composite) and the
+        assembled-composite rules: its scheme is inline and its inputs fill every slot.
+        """
+        assert_composite_calculation_shape(
+            self.type,
+            self.composite_result,
+            level_of_theory=self.level_of_theory,
+            software_release=self.software_release,
+        )
         return self
 
     @model_validator(mode="after")

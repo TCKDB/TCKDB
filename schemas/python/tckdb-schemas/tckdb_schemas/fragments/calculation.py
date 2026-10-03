@@ -5,11 +5,13 @@ from pydantic import BaseModel, Field, model_validator
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
+from tckdb_schemas.composite_scheme_rules import COMPOSITE_INPUT_MISSING, match_inputs_to_definition
 from tckdb_schemas.enums import (
     CalculationGeometryRole,
     CalculationQuality,
     CalculationType,
     CompositeAssembly,
+    CompositeInputSlot,
     ConstraintKind,
     EnergyComponentKind,
     HessianSource,
@@ -108,7 +110,9 @@ class CalculationPayload(SchemaBase):
 
     :param type: Calculation type.
     :param quality: Curation quality flag.
-    :param software_release: Required software release reference.
+    :param software_release: The software release that produced the numbers.
+        Required, except on an ``assembled`` composite (arithmetic over other
+        deposited calculations, run by no program).
     :param workflow_tool_release: Optional workflow tool provenance reference.
     :param level_of_theory: Required level-of-theory reference.
     :param literature: Optional inline literature provenance, resolved (or
@@ -118,7 +122,7 @@ class CalculationPayload(SchemaBase):
     type: CalculationType
     quality: CalculationQuality = CalculationQuality.raw
 
-    software_release: SoftwareReleaseRef
+    software_release: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     level_of_theory: LevelOfTheoryRef
 
@@ -131,6 +135,17 @@ class CalculationPayload(SchemaBase):
     #: routes that reach the shared payload directly — conformers,
     #: transition-states, statmech, thermo and transport.
     literature: LiteratureUploadRequest | None = None
+
+    @model_validator(mode="after")
+    def validate_software_and_composite_shape(self) -> Self:
+        """Software is required unless an assembled composite; composite rules (ADR 0021)."""
+        assert_composite_calculation_shape(
+            self.type,
+            getattr(self, "composite_result", None),
+            level_of_theory=self.level_of_theory,
+            software_release=self.software_release,
+        )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -436,7 +451,7 @@ COMPOSITE_PRINTED_ROUNDING_HARTREE = 5e-7
 _FLOAT_NOISE = 1e-12
 
 
-def composite_arithmetic_tolerance_hartree(rounded_quantities: int) -> float:
+def composite_arithmetic_tolerance_hartree(rounded_quantities: float) -> float:
     """The tolerance of an equation among ``rounded_quantities`` printed numbers.
 
     ``max(1e-6, 5e-7 * n)``: an equation in which ``n`` numbers were each
@@ -447,7 +462,10 @@ def composite_arithmetic_tolerance_hartree(rounded_quantities: int) -> float:
 
     :param rounded_quantities: How many numbers in the equation are rounded
         values: ``len(terms) + 1`` for the terms and their total, 3 for
-        ``e0 = electronic + zpe``.
+        ``e0 = electronic + zpe``. An assembled composite's total passes a weighted
+        count, ``1 + sum |d total / d x_i|`` over the stored numbers it consumed (see
+        ``tckdb_schemas.composite_total``), which equals the plain count when every
+        weight is 1.
     """
     return max(COMPOSITE_ARITHMETIC_TOLERANCE_HARTREE, COMPOSITE_PRINTED_ROUNDING_HARTREE * rounded_quantities)
 
@@ -465,19 +483,86 @@ class CompositeTermPayload(SchemaBase):
     value_hartree: float = Field(allow_inf_nan=False)
 
 
+#: ``composite_result.inputs[]`` names a calculation by both a local key and a
+#: ref, or by neither.
+COMPOSITE_INPUT_REFERENCE_INVALID = "composite_input_reference_invalid"
+
+#: An ``assembled`` composite deposited no ``electronic_energy_hartree`` (owner
+#: decision 5: the total is deposited and only checked by recomputation).
+COMPOSITE_TOTAL_REQUIRED = "composite_total_required"
+
+#: An ``assembled`` composite is a conformer's (or transition state's) primary
+#: calculation. Only a program-run composite that produced the geometry may be one.
+COMPOSITE_ASSEMBLED_CANNOT_BE_PRIMARY = "composite_assembled_cannot_be_primary"
+
+#: ``composite_result.inputs`` on a ``program_run`` composite: a program printed
+#: that number, so there is no arithmetic over other calculations to evidence.
+COMPOSITE_INPUTS_REQUIRE_ASSEMBLED = "composite_inputs_require_assembled"
+
+#: An ``assembled`` composite's ``level_of_theory`` is not a user-built scheme
+#: carried inline: the definition is what its inputs are matched to. (Published
+#: with P3a, when no assembled composite was accepted at all; since P5 it names
+#: the one way an assembled composite is still not accepted.)
+COMPOSITE_ASSEMBLED_NOT_ACCEPTED = "composite_assembled_not_accepted"
+
+#: A calculation names no software release and is not an assembled composite.
+CALCULATION_SOFTWARE_RELEASE_REQUIRED = "calculation_software_release_required"
+
+
+class CompositeInputPayload(SchemaBase):
+    """One input of an ``assembled`` composite: the calculation that fills a scheme slot.
+
+    Names the term by the **key you gave it** in the level of theory's
+    ``composite_scheme`` and the slot (with its cardinal number on an
+    extrapolation), and the calculation by a bundle-local ``calculation_key`` or,
+    for a calculation deposited earlier, its ``calc_...`` ref. Never a database
+    id. Send exactly one of the two.
+
+    :param term_key: The ``key`` of a term of the composite's scheme.
+    :param slot: The slot of that term this calculation fills.
+    :param cardinal_number: The slot's cardinal number; required on a
+        ``cardinal`` slot, ignored elsewhere.
+    :param calculation_key: Local key of a calculation declared in this request.
+    :param calculation_ref: The ``calc_...`` ref of an already-deposited
+        calculation.
+    """
+
+    term_key: str = Field(min_length=1)
+    slot: CompositeInputSlot
+    cardinal_number: int | None = Field(default=None, ge=1, le=32767)
+    calculation_key: str | None = Field(default=None, min_length=1)
+    calculation_ref: str | None = Field(default=None, pattern=r"^calc_[a-z2-7]+$")
+
+    @model_validator(mode="after")
+    def validate_one_reference(self) -> Self:
+        """Exactly one of ``calculation_key`` and ``calculation_ref``."""
+        if (self.calculation_key is None) == (self.calculation_ref is None):
+            raise CodedValidationError(
+                COMPOSITE_INPUT_REFERENCE_INVALID,
+                (
+                    f"composite_result.inputs entry for term {self.term_key!r} must name its calculation "
+                    "by exactly one of calculation_key (a calculation declared in this request) or "
+                    "calculation_ref (a calc_... ref from an earlier deposit)."
+                ),
+                context={"field": "composite_result.inputs", "term_key": self.term_key},
+                message_prefix=False,
+            )
+        return self
+
+
 class CompositeResultPayload(SchemaBase):
     """The energy of a ``composite`` calculation (ADR 0021).
 
     Every energy is optional and ``null`` means *not stated*, never zero.
     TCKDB never stores a total it computed itself: these are the producer's
-    numbers (or the program's own output), and the two arithmetic checks below
-    only test them.
+    numbers (or the program's own output), and the checks only test them.
 
     :param assembly: ``program_run`` (a program printed the final number: a
-        named method such as CBS-QB3 or G4) or ``assembled`` (arithmetic over
-        other deposited calculations). Only ``program_run`` is accepted for
-        now; ``assembled`` is refused with ``composite_assembled_not_accepted``
-        until user-built schemes arrive.
+        named method such as CBS-QB3 or G4, or one program run of a scheme) or
+        ``assembled`` (arithmetic over other deposited calculations: a
+        user-built scheme, with ``inputs``). An ``assembled`` composite's
+        ``level_of_theory`` carries the scheme inline and its ``software_release``
+        is optional; a ``program_run`` names the software that ran it.
     :param electronic_energy_hartree: ZPE-free energy with every term of the
         recipe included (the empirical terms of a named method among them).
         This is the number a correction layer is applied to.
@@ -486,6 +571,11 @@ class CompositeResultPayload(SchemaBase):
     :param recipe_zpe_hartree: The zero-point energy the recipe added, after
         its own scale factor. Never negative.
     :param terms: The optional breakdown of ``electronic_energy_hartree``.
+    :param inputs: For an ``assembled`` composite, the calculation that fills each
+        slot of the level of theory's scheme (one entry per slot). Refused on a
+        ``program_run``. TCKDB recomputes the total from these calculations'
+        stored energies to check ``electronic_energy_hartree``; it never stores
+        the recomputed value.
     """
 
     assembly: CompositeAssembly
@@ -493,6 +583,7 @@ class CompositeResultPayload(SchemaBase):
     e0_hartree: float | None = Field(default=None, allow_inf_nan=False)
     recipe_zpe_hartree: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     terms: list[CompositeTermPayload] = Field(default_factory=list)
+    inputs: list[CompositeInputPayload] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_terms_unique(self) -> Self:
@@ -500,6 +591,43 @@ class CompositeResultPayload(SchemaBase):
         positions = [t.term_position for t in self.terms]
         if len(set(positions)) != len(positions):
             raise ValueError("composite_result.terms must have unique term_position values.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_inputs_match_assembly(self) -> Self:
+        """``inputs`` belong to an ``assembled`` composite, and an assembled one needs them."""
+        if self.inputs and self.assembly != CompositeAssembly.assembled:
+            raise CodedValidationError(
+                COMPOSITE_INPUTS_REQUIRE_ASSEMBLED,
+                (
+                    "composite_result.inputs is only allowed with assembly='assembled'. A "
+                    "program_run composite is a number a program printed; it has no deposited "
+                    "calculations to evidence."
+                ),
+                context={"field": "composite_result.inputs", "assembly": self.assembly.value},
+                message_prefix=False,
+            )
+        if self.assembly == CompositeAssembly.assembled and self.electronic_energy_hartree is None:
+            raise CodedValidationError(
+                COMPOSITE_TOTAL_REQUIRED,
+                (
+                    "an assembled composite must deposit its total, composite_result.electronic_energy_hartree. "
+                    "TCKDB recomputes the total from the inputs only to check yours and never stores a value it "
+                    "computed; without yours there is nothing to check and no energy to record."
+                ),
+                context={"field": "composite_result.electronic_energy_hartree"},
+                message_prefix=False,
+            )
+        if not self.inputs and self.assembly == CompositeAssembly.assembled:
+            raise CodedValidationError(
+                COMPOSITE_INPUT_MISSING,
+                (
+                    "an assembled composite must name the calculations it was assembled from in "
+                    "composite_result.inputs, one per slot of its scheme."
+                ),
+                context={"field": "composite_result.inputs"},
+                message_prefix=False,
+            )
         return self
 
     @model_validator(mode="after")
@@ -612,6 +740,89 @@ def assert_composite_result_matches_type(
             context={"field": "composite_result", "calculation_type": calc_type.value},
             message_prefix=False,
         )
+
+
+def assert_assembled_not_primary(composite_result: "CompositeResultPayload | None", *, subject: str) -> None:
+    """Refuse an assembled composite as a conformer's or transition state's primary calculation.
+
+    The primary is the one run that produced the geometry. A program-run named
+    composite did (its first step is an optimisation); an assembled composite is
+    arithmetic over other calculations and produced nothing, so it has no
+    geometry and no program to name.
+
+    :param composite_result: The primary's ``composite_result`` (``None`` for any other type).
+    :param subject: The field, named as the refusal should read it.
+    :raises CodedValidationError: ``composite_assembled_cannot_be_primary``.
+    """
+    if composite_result is not None and composite_result.assembly == CompositeAssembly.assembled:
+        raise CodedValidationError(
+            COMPOSITE_ASSEMBLED_CANNOT_BE_PRIMARY,
+            (
+                f"{subject} is an assembled composite. A primary calculation is the run that produced the "
+                "conformer's geometry: an optimisation, or a program-run composite such as CBS-QB3 whose first "
+                "step is one. An assembled composite is arithmetic over other calculations; send it as an "
+                "additional calculation instead."
+            ),
+            context={"field": subject},
+            message_prefix=False,
+        )
+
+
+def assert_composite_calculation_shape(
+    calc_type: CalculationType,
+    composite_result: "CompositeResultPayload | None",
+    *,
+    level_of_theory: object,
+    software_release: object | None,
+) -> None:
+    """Every wire rule that ties a calculation's block, level and software together.
+
+    Shared by every calculation payload shape (the three the wire carries), and
+    run again by the backend at the write, so no route can take a composite
+    without these rules and a payload built with ``model_copy`` cannot skip them.
+
+    * the ``type`` / ``composite_result`` pairing
+      (:func:`assert_composite_result_matches_type`);
+    * ``software_release`` is required on every calculation except an
+      ``assembled`` composite (``calculation_software_release_required``): a
+      program printed every other number, but an assembled one is arithmetic
+      over other deposited calculations and no program ran it;
+    * an ``assembled`` composite's level of theory carries the scheme inline
+      (``composite_assembled_not_accepted``), and its inputs fill
+      every slot of that scheme exactly once
+      (``composite_input_missing`` / ``_slot_unknown`` / ``_duplicate``).
+
+    :raises CodedValidationError: any of the codes above.
+    """
+    assert_composite_result_matches_type(calc_type, composite_result)
+    assembled = composite_result is not None and composite_result.assembly == CompositeAssembly.assembled
+    if software_release is None and not assembled:
+        raise CodedValidationError(
+            CALCULATION_SOFTWARE_RELEASE_REQUIRED,
+            (
+                "software_release is required: it names the program that produced this "
+                "calculation's numbers. Only an assembled composite (arithmetic over other "
+                "deposited calculations, run by no program) may omit it."
+            ),
+            context={"field": "software_release", "calculation_type": calc_type.value},
+            message_prefix=False,
+        )
+    if not assembled or composite_result is None:
+        return
+    scheme = getattr(level_of_theory, "composite_scheme", None)
+    if scheme is None:
+        raise CodedValidationError(
+            COMPOSITE_ASSEMBLED_NOT_ACCEPTED,
+            (
+                "an assembled composite's level_of_theory must carry the scheme inline "
+                "(level_of_theory.composite_scheme): the definition is what composite_result.inputs "
+                "are matched to, and what the energy is recomputed with. A named method such as "
+                "CBS-QB3 is a program_run composite."
+            ),
+            context={"field": "level_of_theory"},
+            message_prefix=False,
+        )
+    match_inputs_to_definition(scheme, composite_result.inputs)
 
 
 class SPEnergyComponentPayload(SchemaBase):

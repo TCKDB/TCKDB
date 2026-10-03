@@ -89,8 +89,11 @@ parameters. Specific result rows (`calc_sp_result`, `calc_opt_result`,
 
 A `composite` calculation is one composite energy at a scheme-bound level of
 theory. A program-run named method (CBS-QB3, G4, W1BD, ...) is accepted, with
-its energy in `calc_composite_result`; user-built extrapolations and an energy
-assembled from other calculations are **planned, not built**. A named composite
+its energy in `calc_composite_result`. A user-built scheme (a CCSD(T)/CBS
+extrapolation, a focal-point sum) is sent inline on the level of theory, and an
+`assembled` composite names the single points that fill its slots
+(`calc_composite_input`, each mirrored by a `composite_input` dependency edge);
+TCKDB recomputes the total from them to check yours and never stores its own. A named composite
 deposited as an `sp` or `opt` still stores, with a warning. The decided model
 is in [ADR 0021](../adr/0021-composite-levels-of-theory-are-a-recipe-bound-to-a-level-not-a-weighted-level.md).
 

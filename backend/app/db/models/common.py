@@ -453,6 +453,11 @@ class CalculationDependencyRole(str, Enum):
     - ``scan_parent``: parent ``opt`` -> child ``scan``.
     - ``arkane_source``: scientific metadata, not pinned to a specific
       parent ``CalculationType``.
+    - ``composite_input``: parent is an ``sp`` (or an ``opt``, whose final
+      energy is the single-point value at its own level) that an assembled
+      ``composite`` consumed -> child is that composite. Written by the server
+      from ``calc_composite_input``, one edge per input row; never declared
+      by a producer (ADR 0021, P5).
 
     Any consumer that buckets these roles by "which side of the edge is
     the calc of interest on" (e.g. the transition-state trust rubric's
@@ -469,6 +474,7 @@ class CalculationDependencyRole(str, Enum):
     irc_start = "irc_start"
     irc_followup = "irc_followup"
     scan_parent = "scan_parent"
+    composite_input = "composite_input"
 
 
 class ValidationStatus(str, Enum):
@@ -974,7 +980,11 @@ class EnergyComponentKind(str, Enum):
     electronic energy; ``reference`` the reference-determinant (SCF / HF)
     part; ``correlation`` the correlation part; ``triples`` the perturbative
     triples part; ``dboc`` the diagonal Born-Oppenheimer correction;
-    ``scalar_relativistic`` the scalar-relativistic correction. The wire enum
+    ``scalar_relativistic`` the scalar-relativistic correction;
+    ``correlation_excluding_triples`` the correlation energy *without* the
+    perturbative triples (the CCSD part), a quantity a scheme term can read but a
+    single point never stores: it is derived from the stored ``correlation`` and
+    ``triples`` under the row's own convention (``tckdb_schemas.composite_total``). The wire enum
     in ``tckdb_schemas.enums`` carries this exact text, so the OpenAPI schema
     for the two is one schema, not two.
     """
@@ -985,6 +995,7 @@ class EnergyComponentKind(str, Enum):
     triples = "triples"
     dboc = "dboc"
     scalar_relativistic = "scalar_relativistic"
+    correlation_excluding_triples = "correlation_excluding_triples"
 
 
 class CompositeExtrapolationFormula(str, Enum):
