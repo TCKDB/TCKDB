@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.86.0 - 2026-10-03
+
+The layout of `PRODUCER_CONTRACT.md` changed; its content did not (#681). No field, rule, code or enum
+changes. What a rule, a refusal code or a nested model says is now printed once and linked from each
+surface that has it, instead of once per surface. Every surface still lists exactly the same refusal
+codes, checks and nested models: a code or model several surfaces share sits in a numbered group
+("Code group N", "Model group N") that each of those surfaces links, and a "Will be refused if" line
+for such a code no longer repeats its sentence (the code reference has it).
+
 ## 0.85.0 - 2026-10-03
 
 A thermo record can state what its values describe (`thermodynamic_target`) and how they were

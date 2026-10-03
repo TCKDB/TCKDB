@@ -202,6 +202,10 @@ def _cell(text: object) -> str:
     return " ".join(str(text).split()).replace("|", "\\|")
 
 
+def _count(n: int, noun: str) -> str:
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+
+
 def _one_line(text: str) -> str:
     return " ".join(text.split())
 
@@ -1412,6 +1416,15 @@ enforces), `docs/guides/api_vocabulary.md` (every code and token).
 """
 
 
+@dataclasses.dataclass(frozen=True)
+class SharedGroup:
+    """Items that exactly the same surfaces carry, printed once and linked from each of them."""
+
+    number: int
+    titles: tuple[str, ...]
+    items: tuple[Any, ...]
+
+
 @dataclasses.dataclass
 class Surface:
     model: type[BaseModel]
@@ -1741,22 +1754,56 @@ class ContractBuilder:
             self._by_code_cache = self.traced_codes()
         return self._by_code_cache
 
-    #: A refusal code traced on at least this many surfaces is printed once, in a shared
-    #: table, instead of in every surface's own table: ten surfaces carry a level of theory
-    #: and a calculation, so every rule about those repeated verbatim ten times. Four, not
-    #: eight: the thermo declaration codes sit on the four surfaces that carry a thermo block
-    #: (standalone, both computed bundles, contribution bundles) and repeating them four times
-    #: was what pushed the file over its size ceiling.
-    SHARED_CODE_MIN_SURFACES = 4
+    #: Anything two or more surfaces have in common is printed once and linked from each of them:
+    #: a scientific check, a marked producer rule, a refusal code, a nested model. A thing on one
+    #: surface stays in that surface's own section, where it is already printed once. There is no
+    #: higher threshold: any count above one is a repeat.
+    SHARED_MIN_SURFACES = 2
 
-    def widely_shared_codes(self) -> dict[str, int]:
-        """code -> number of surfaces that can return it, for codes on enough surfaces to print once."""
-        common = set(self.global_trace.code_sites)
-        return {
-            code: len(titles)
-            for code, titles in self._surfaces_by_code().items()
-            if code not in common and len(titles) >= self.SHARED_CODE_MIN_SURFACES
+    def _partition(self, by_surface: dict[str, list[Any]]) -> tuple[list[SharedGroup], dict[str, list[Any]]]:
+        """Split each surface's items into those only it has and groups several surfaces share.
+
+        Items with the same set of owning surfaces form one group, so a surface lists a handful of
+        group links instead of every item. Returns the groups (largest owner set first, numbered
+        from 1) and, per surface, the items that are its alone, in the order it listed them.
+        """
+        owners: dict[Any, list[str]] = {}
+        for title, items in by_surface.items():
+            for item in items:
+                if title not in owners.setdefault(item, []):
+                    owners[item].append(title)
+        order = {surface.title: index for index, surface in enumerate(self.surfaces)}
+        by_owners: dict[tuple[str, ...], list[Any]] = {}
+        for item, titles in owners.items():
+            if len(titles) >= self.SHARED_MIN_SURFACES:
+                by_owners.setdefault(tuple(titles), []).append(item)
+        ranked = sorted(by_owners, key=lambda titles: (-len(titles), [order[t] for t in titles]))
+        groups = [SharedGroup(number, titles, tuple(by_owners[titles])) for number, titles in enumerate(ranked, 1)]
+        alone = {
+            title: [item for item in items if len(owners[item]) < self.SHARED_MIN_SURFACES]
+            for title, items in by_surface.items()
         }
+        return groups, alone
+
+    def code_groups(self) -> tuple[list[SharedGroup], dict[str, list[str]]]:
+        """Refusal codes by owning surfaces: (groups several surfaces share, codes only one surface can return)."""
+        if not hasattr(self, "_code_groups_cache"):
+            common = set(self.global_trace.code_sites)
+            self._code_groups_cache = self._partition(
+                {
+                    surface.title: [code for code in sorted(self.surface_codes(surface)) if code not in common]
+                    for surface in self.surfaces
+                }
+            )
+        return self._code_groups_cache
+
+    def model_groups(self) -> tuple[list[SharedGroup], dict[str, list[type[BaseModel]]]]:
+        """Nested models by owning surfaces: (groups several surfaces share, models only one surface nests)."""
+        if not hasattr(self, "_model_groups_cache"):
+            self._model_groups_cache = self._partition(
+                {surface.title: list(surface.closure[1:]) for surface in self.surfaces}
+            )
+        return self._model_groups_cache
 
     def shared_checks(self) -> dict[str, tuple[list[ScientificCheck], list[str]]]:
         """Functions two or more surfaces' workflows reach, with every register check each enforces: printed once.
@@ -1774,32 +1821,22 @@ class ContractBuilder:
                     reached[key].append(surface.title)
                 if check not in checks.setdefault(key, []):
                     checks[key].append(check)
-        return {key: (checks[key], titles) for key, titles in sorted(reached.items()) if len(titles) > 1}
-
-    #: A ``@producer_rule`` reached by at least this many surfaces is printed once, in the shared
-    #: section, and linked from each surface. Four: the thermo-declaration rule is reached by the four
-    #: surfaces that carry a thermo block, and repeating it in full four times was what pushed the
-    #: file over its size ceiling (``ALWAYS_IN_FULL_RULES`` names the exceptions).
-    SHARED_RULE_MIN_SURFACES = 4
-
-    #: Rules printed in full on every surface that reaches them, whatever the count: the enthalpy
-    #: declaration is the rule an adapter once never learned (#520/#536), and a producer reading any
-    #: thermo-carrying surface must find it in that surface's own section.
-    ALWAYS_IN_FULL_RULES = frozenset({"tckdb_schemas.enthalpy_reference:enthalpy_reference_error"})
+        return {key: (checks[key], titles) for key, titles in sorted(reached.items()) if len(titles) >= self.SHARED_MIN_SURFACES}
 
     def shared_producer_rules(self) -> dict[str, tuple[Callable[..., object], list[str]]]:
-        """Marked rules reached by enough surfaces to print once."""
+        """Marked rules two or more surfaces reach: printed once, whatever the count."""
         reached: dict[str, list[str]] = {}
         funcs: dict[str, Callable[..., object]] = {}
         for surface in self.surfaces:
             for key, func, _check in surface.workflow_rules:
                 if is_producer_rule(func):
-                    reached.setdefault(key, []).append(surface.title)
+                    if surface.title not in reached.setdefault(key, []):
+                        reached[key].append(surface.title)
                     funcs[key] = func
         return {
             key: (funcs[key], titles)
             for key, titles in sorted(reached.items())
-            if len(titles) >= self.SHARED_RULE_MIN_SURFACES and key not in self.ALWAYS_IN_FULL_RULES
+            if len(titles) >= self.SHARED_MIN_SURFACES
         }
 
     def top_refusals(self, surface: Surface, limit: int = TOP_REFUSALS) -> list[str]:
@@ -1854,6 +1891,27 @@ class ContractBuilder:
             said = "see the code reference"
         return f"- [`{code}`](#{_anchor('c', code)}) ({statuses}): {said}"
 
+    def rule_anchor(self, key: str) -> str:
+        """The anchor of a shared rule's entry: its function name, or the whole key where two share a name."""
+        if not hasattr(self, "_rule_anchor_cache"):
+            keys = sorted({*self.shared_checks(), *self.shared_producer_rules()})
+            names = [k.split(":", 1)[1] for k in keys]
+            self._rule_anchor_cache = {
+                k: _anchor("k", n if names.count(n) == 1 else k) for k, n in zip(keys, names, strict=True)
+            }
+        return self._rule_anchor_cache[key]
+
+    def _top_refusal_line(self, code: str) -> str:
+        """A "Will be refused if" bullet: the sentence only for a code no other surface can return.
+
+        Every other surface that can return the code would print the same sentence again; the
+        reference entry the bullet links to has it once.
+        """
+        if len(self._surfaces_by_code().get(code, [])) <= 1:
+            return self._refusal_line(code)
+        statuses = "/".join(str(s) for s in self.code_facts(code).statuses)
+        return f"- [`{code}`](#{_anchor('c', code)}) ({statuses})"
+
     # -- rendering ----------------------------------------------------------
 
     def render_markdown(self) -> str:
@@ -1889,7 +1947,10 @@ class ContractBuilder:
             "- [Conventions a producer must know](#conventions-a-producer-must-know)",
             "- [What changed](#what-changed)",
             "- [Every producer route](#every-producer-route)",
+            "- [Reading a surface section](#reading-a-surface-section)",
             "- [Checks several surfaces apply](#checks-several-surfaces-apply)",
+            "- [Refusal codes several surfaces share](#refusal-codes-several-surfaces-share)",
+            "- [Nested models several surfaces share](#nested-models-several-surfaces-share)",
             "- [Worked payloads: user-built composite energies](#worked-payloads-user-built-composite-energies)",
             *[f"- [Surface `{surface.title}`](#{surface.anchor})" for surface in self.surfaces],
             "- [Model reference](#model-reference)",
@@ -1901,6 +1962,7 @@ class ContractBuilder:
         ]
         out += self._render_changes(entries)
         out += self._render_common()
+        out += self._render_reading_guide()
         out += self._render_shared_checks()
         out += self._render_composite_worked_payloads()
         for surface in self.surfaces:
@@ -2040,35 +2102,77 @@ class ContractBuilder:
             out += [f"### {title}", "", note, "", "```json", _compact_json(payload), "```", ""]
         return out
 
+    def _render_reading_guide(self) -> list[str]:
+        """What every surface section's lists mean, said once instead of at the top of each list."""
+        return [
+            '<a id="reading-a-surface-section"></a>',
+            "",
+            "## Reading a surface section",
+            "",
+            "Each surface section lists what the surface can refuse, and prints a thing that several surfaces share"
+            " once, in a shared section, linked from each of them. The lists, in the order they appear:",
+            "",
+            "- **Will be refused if.** The surface's most specific refusals, ranked: codes raised by a"
+            " `@producer_rule` its workflow reaches, then codes of scientific checks it reaches, then codes of the"
+            " root model's own validators, then the rest; within a rank, a code fewer surfaces can return comes first."
+            " Codes every request can receive are left out. A code only this surface can return says what it refuses"
+            " on the line; one that several surfaces can return is described once, in its entry in the"
+            " [refusal code reference](#refusal-code-reference).",
+            "- **Rules the workflow applies.** Found by tracing each route's handler through its direct calls: every"
+            " function reached that is marked `@producer_rule` or declared in the scientific check register. A rule"
+            " several surfaces reach is linked to its entry in [checks several surfaces apply]"
+            "(#checks-several-surfaces-apply); one only this surface reaches is printed in full.",
+            "- **Refusal codes this surface can return.** Traced statically from the payload validators, route"
+            " handlers and route dependencies: reachable from the route, not necessarily for every payload; a code"
+            " raised through dynamic dispatch can be missing. Codes every request can receive are listed"
+            " [once](#every-producer-route). The table is the codes only this surface can return; every code of each"
+            " code group linked after it is also returned here, and the group lists it once in"
+            " [refusal codes several surfaces share](#refusal-codes-several-surfaces-share).",
+            "- **Nested models.** The models only this surface nests, then the model groups it shares; a group is"
+            " listed once in [nested models several surfaces share](#nested-models-several-surfaces-share).",
+            "",
+        ]
+
     def _render_shared_checks(self) -> list[str]:
         out = [
             "## Checks several surfaces apply",
             "",
-            "Scientific checks the workflows of two or more surfaces reach, and marked"
-            f" `@producer_rule`s that {self.SHARED_RULE_MIN_SURFACES} or more surfaces reach, printed once and"
-            " linked from each surface. A marked rule reached by fewer surfaces is printed in full on each.",
+            "Scientific checks and marked `@producer_rule`s that two or more surfaces' workflows reach,"
+            " printed once here and linked from each surface. A rule only one surface reaches is printed in that"
+            " surface's own section.",
             "",
         ]
+        printed: dict[int, str] = {}  # id(check) -> the entry that carries its body
+
+        def body(check: ScientificCheck, key: str) -> list[str]:
+            """The check's sentence and escape hatch, or a pointer when another entry already prints them."""
+            first = printed.setdefault(id(check), key)
+            if first != key:
+                return [f"Same check as [`{first.split(':', 1)[1]}`](#{self.rule_anchor(first)})."]
+            lines = [_one_line(check.asserts)]
+            if check.escape_hatch:
+                lines.append(f"If your chemistry is legitimate: {_one_line(check.escape_hatch)}")
+            return lines
+
         for key, (func_checks, titles) in self.shared_checks().items():
             applied = "Applied on: " + ", ".join(f"[`{t}`](#{_anchor('s', t)})" for t in titles) + "."
-            out += [f'<a id="{_anchor("k", key)}"></a>', "", f"### `{key.split(':', 1)[1]}`", ""]
+            out += [f'<a id="{self.rule_anchor(key)}"></a>', "", f"### `{key.split(':', 1)[1]}`", ""]
             if len(func_checks) == 1:
                 (check,) = func_checks
                 codes = ", ".join(f"[`{code}`](#{_anchor('c', code)})" for code in check.codes) or "none"
-                out += [f"`{key}`. {check.tier.value}; codes {codes}. {applied}", "", _one_line(check.asserts), ""]
-                if check.escape_hatch:
-                    out += [f"If your chemistry is legitimate: {_one_line(check.escape_hatch)}", ""]
+                out += [f"`{key}`. {check.tier.value}; codes {codes}. {applied}", ""]
+                for line in body(check, key):
+                    out += [line, ""]
                 continue
             out += [f"`{key}` enforces {len(func_checks)} checks. {applied}", ""]
             for check in func_checks:
                 codes = ", ".join(f"[`{code}`](#{_anchor('c', code)})" for code in check.codes) or "none"
-                out += [f"- **{check.tier.value}; codes {codes}.** {_one_line(check.asserts)}"]
-                if check.escape_hatch:
-                    out += [f"  If your chemistry is legitimate: {_one_line(check.escape_hatch)}"]
+                first, *rest = body(check, key)
+                out += [f"- **{check.tier.value}; codes {codes}.** {first}", *[f"  {line}" for line in rest]]
             out.append("")
         for key, (func, titles) in self.shared_producer_rules().items():
             out += [
-                f'<a id="{_anchor("k", key)}"></a>',
+                f'<a id="{self.rule_anchor(key)}"></a>',
                 "",
                 f"### `{key.split(':', 1)[1]}`",
                 "",
@@ -2079,26 +2183,71 @@ class ContractBuilder:
                 *_indent_block(_own_doc(func) or ""),
                 "",
             ]
-        shared = self.widely_shared_codes()
-        total = len(self.surfaces)
-        out += [
-            '<a id="codes-most-surfaces-share"></a>',
+        out += self._render_shared_codes()
+        out += self._render_shared_models()
+        return out
+
+    def _titles_links(self, titles: Iterable[str]) -> str:
+        return ", ".join(f"[`{t}`](#{_anchor('s', t)})" for t in titles)
+
+    def _render_shared_codes(self) -> list[str]:
+        groups, _alone = self.code_groups()
+        by_title = {surface.title: surface for surface in self.surfaces}
+        out = [
+            '<a id="refusal-codes-several-surfaces-share"></a>',
             "",
-            "### Codes most surfaces share",
+            "## Refusal codes several surfaces share",
             "",
-            f"Refusal codes that {self.SHARED_CODE_MIN_SURFACES} or more of the {total} surfaces can return, printed"
-            " here once instead of in each surface's own table. They come from rules that every payload carrying a"
-            " calculation or a level of theory meets, and from the rules of a block that several surfaces carry"
-            " (the thermo block's enthalpy and declaration rules). Each links to its entry in the"
-            " [refusal code reference](#refusal-code-reference); `traced` counts the surfaces.",
+            "A refusal code that two or more surfaces can return is printed once, here, in a group of the codes"
+            " exactly the same surfaces return. A surface's own \"Refusal codes this surface can return\" section lists"
+            " the codes only it can return and links the groups it belongs to: its codes are those plus every code"
+            " of those groups. `Traced via` is how the code was reached, joined over the group's surfaces. Each code"
+            " links to its entry in the [refusal code reference](#refusal-code-reference).",
             "",
-            "| Code | Status | Surfaces traced |",
-            "|---|---|---|",
         ]
-        for code in sorted(shared):
-            statuses = ", ".join(str(s) for s in sorted({e.status for e in self.catalogue[code]}))
-            out.append(f"| [`{code}`](#{_anchor('c', code)}) | {statuses} | {shared[code]} of {total} |")
-        out.append("")
+        for group in groups:
+            out += [
+                f'<a id="{_anchor("cg", str(group.number))}"></a>',
+                "",
+                f"### Code group {group.number}",
+                "",
+                f"{_count(len(group.items), 'code')} on {len(group.titles)} surfaces: {self._titles_links(group.titles)}.",
+                "",
+                "| Code | Status | Traced via |",
+                "|---|---|---|",
+            ]
+            for code in group.items:
+                statuses = ", ".join(str(s) for s in sorted({e.status for e in self.catalogue[code]}))
+                how = sorted({h for title in group.titles for h in self.surface_codes(by_title[title]).get(code, [])})
+                out.append(f"| [`{code}`](#{_anchor('c', code)}) | {statuses} | {_cell('; '.join(how))} |")
+            out.append("")
+        return out
+
+    def _render_shared_models(self) -> list[str]:
+        groups, _alone = self.model_groups()
+        names = self.names
+        out = [
+            '<a id="nested-models-several-surfaces-share"></a>',
+            "",
+            "## Nested models several surfaces share",
+            "",
+            "A model that two or more surfaces' payloads nest is listed once, here, in a group of the models exactly"
+            " the same surfaces nest. A surface's \"Payload fields\" section lists the models only it nests and links"
+            " the groups it belongs to: its nested models are those plus every model of those groups. Fields and"
+            " rules of each model are in the [model reference](#model-reference).",
+            "",
+        ]
+        for group in groups:
+            out += [
+                f'<a id="{_anchor("mg", str(group.number))}"></a>',
+                "",
+                f"### Model group {group.number}",
+                "",
+                f"{_count(len(group.items), 'model')} nested on {len(group.titles)} surfaces: {self._titles_links(group.titles)}.",
+                "",
+                *[f"- {names.link(model)}" for model in sorted(group.items, key=lambda m: names.display(m))],
+                "",
+            ]
         return out
 
     def _render_surface(self, surface: Surface) -> list[str]:
@@ -2113,14 +2262,12 @@ class ContractBuilder:
             _first_paragraph(_own_doc(model)) or "(the model has no docstring)",
             "",
             f"Payload model `{model.__module__}.{model.__qualname__}`; JSON Schema"
-            f" `tckdb_schemas/contract/{surface.schema_file}`.",
+            f" `tckdb_schemas/contract/{surface.schema_file}`. What each list below means:"
+            " [reading a surface section](#reading-a-surface-section).",
             "",
             "### Will be refused if",
             "",
-            "The most specific refusals traced for this surface (ranking in the"
-            " [code reference](#refusal-code-reference) intro):",
-            "",
-            *[self._refusal_line(code) for code in self.top_refusals(surface)],
+            *[self._top_refusal_line(code) for code in self.top_refusals(surface)],
             "",
             "### Routes",
             "",
@@ -2152,10 +2299,17 @@ class ContractBuilder:
         out.append("")
         nested = surface.closure[1:]
         if nested:
+            model_groups, model_alone = self.model_groups()
             out += [
                 f"Nested models ({len(nested)}; fields and rules in the [model reference](#model-reference)):",
                 "",
-                *[f"- {names.link(sub)}" for sub in nested],
+                *[f"- {names.link(sub)}" for sub in model_alone[surface.title]],
+                *[
+                    f"- [Model group {group.number}](#{_anchor('mg', str(group.number))}):"
+                    f" {_count(len(group.items), 'model')}, nested on {len(group.titles)} surfaces"
+                    for group in model_groups
+                    if surface.title in group.titles
+                ],
                 "",
             ]
 
@@ -2172,10 +2326,6 @@ class ContractBuilder:
         out += [
             "### Rules the workflow applies",
             "",
-            "Found by tracing each route's handler through its direct calls: every function"
-            " reached that is marked `@producer_rule` (printed in full, or once in the shared section when several surfaces reach it) or declared in the"
-            " scientific check register.",
-            "",
         ]
         if not surface.workflow_rules:
             out += ["No marked rule or register check is reached from these handlers.", ""]
@@ -2184,7 +2334,7 @@ class ContractBuilder:
             routes = [label for label, reached in sorted(surface.rules_by_route.items()) if key in reached]
             via = ", ".join(f"`{label}`" for label in routes)
             if is_producer_rule(func) and key in shared_rules:
-                out.append(f"- [`{key.split(':', 1)[1]}`](#{_anchor('k', key)}) (marked rule, printed once; reached from {via})")
+                out.append(f"- [`{key.split(':', 1)[1]}`](#{self.rule_anchor(key)}) (marked rule; reached from {via})")
             elif is_producer_rule(func):
                 out += [f"- **`{key}`** (reached from {via}):", "", *_indent_block(_own_doc(func) or ""), ""]
             elif check is not None and key in shared:
@@ -2193,8 +2343,7 @@ class ContractBuilder:
                 listed_shared.add(key)
                 func_checks = shared[key][0]
                 tiers = "/".join(dict.fromkeys(c.tier.value for c in func_checks))
-                codes = ", ".join(f"`{code}`" for code in dict.fromkeys(c for ch in func_checks for c in ch.codes)) or "no code"
-                out.append(f"- [`{key.split(':', 1)[1]}`](#{_anchor('k', key)}) ({tiers}; {codes})")
+                out.append(f"- [`{key.split(':', 1)[1]}`](#{self.rule_anchor(key)}) ({tiers})")
             elif check is not None:
                 codes = ", ".join(f"`{code}`" for code in check.codes) or "no code"
                 out.append(f"- **`{key}`** (reached from {via}; {check.tier.value}; {codes}): {_one_line(check.asserts)}")
@@ -2206,27 +2355,31 @@ class ContractBuilder:
 
     def _render_surface_codes(self, surface: Surface) -> list[str]:
         traced = self.surface_codes(surface)
-        common = set(self.global_trace.code_sites)
-        shared = self.widely_shared_codes()
-        specific = {code: how for code, how in traced.items() if code not in common and code not in shared}
+        groups, alone = self.code_groups()
+        specific = alone[surface.title]
+        belongs = [group for group in groups if surface.title in group.titles]
         out = [
             "### Refusal codes this surface can return",
             "",
-            "Traced statically from the payload validators, route handlers and route dependencies:"
-            " reachable from the route, not necessarily for every payload; a code raised through"
-            " dynamic dispatch can be missing. Codes every request can receive are listed"
-            " [once](#every-producer-route); codes most surfaces can return (calculation, level of"
-            " theory, composite and thermo-block rules) are listed [once](#codes-most-surfaces-share).",
-            "",
         ]
-        if not specific:
+        if not specific and not belongs:
             return [*out, "No surface-specific code traced.", ""]
-        out += ["| Code | Status | Traced via |", "|---|---|---|"]
-        for code in sorted(specific):
-            statuses = ", ".join(str(s) for s in sorted({e.status for e in self.catalogue[code]}))
-            how = "; ".join(sorted(set(specific[code])))
-            out.append(f"| [`{code}`](#{_anchor('c', code)}) | {statuses} | {_cell(how)} |")
-        out.append("")
+        if specific:
+            out += ["| Code | Status | Traced via |", "|---|---|---|"]
+            for code in specific:
+                statuses = ", ".join(str(s) for s in sorted({e.status for e in self.catalogue[code]}))
+                how = "; ".join(sorted(set(traced[code])))
+                out.append(f"| [`{code}`](#{_anchor('c', code)}) | {statuses} | {_cell(how)} |")
+            out.append("")
+        if belongs:
+            out += [
+                *[
+                    f"- [Code group {group.number}](#{_anchor('cg', str(group.number))}):"
+                    f" {_count(len(group.items), 'code')}, returned on {len(group.titles)} surfaces"
+                    for group in belongs
+                ],
+                "",
+            ]
         return out
 
     def _render_example(self, surface: Surface, requires: str | None) -> list[str]:
@@ -2334,7 +2487,7 @@ class ContractBuilder:
                 out.append(f"- Note: {_first_sentence(note)}")
             shared_key = next((key for key, (checks, _) in shared.items() if facts.check in checks), None)
             if shared_key is not None:
-                out.append(f"- Scientific check: [`{shared_key.split(':', 1)[1]}`](#{_anchor('k', shared_key)}).")
+                out.append(f"- Scientific check: [`{shared_key.split(':', 1)[1]}`](#{self.rule_anchor(shared_key)}).")
             elif facts.check is not None:
                 out.append(f"- Scientific check ({facts.check.tier.value}): {_one_line(facts.check.asserts)}")
                 if facts.check.escape_hatch:
