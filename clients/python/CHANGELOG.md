@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.113.0 - 2026-10-03
+
+Adds the `RejectionCode.NETWORK_ENERGY_SOURCE_TYPE_MISMATCH` member (`tckdb-schemas` 0.76.0, #642): the
+network-PDep upload now refuses a state energy, barrier energy or `well_energy` / `barrier_energy` source
+link whose cited calculation is of a type that carries no such energy (an IRC, scan, path search or
+conformer search; a `freq` for an `electronic_only` energy). Nothing in the client's code changes.
+
 ## 0.112.0 - 2026-10-03
 
 A polyatomic species whose only calculation is a single point that declares no geometry is told what

@@ -619,6 +619,7 @@
             }
           ],
           "default": null,
+          "description": "Local key of the calculation this energy came from. For correction_convention 'electronic_only' it is the calculation the electronic energy came from: an sp, an opt or a composite. For the composed conventions (electronic_plus_zpe, atom_and_bond_corrected, thermal_enthalpy_298k, other) it is the calculation of the energy's electronic part, or a composite that holds the whole E0; the frequency calculation goes in source_calculations with the well_freq or barrier_freq role. A calculation that reports no stationary-point energy (irc, scan, path_search, conf) is refused with network_energy_source_type_mismatch.",
           "title": "Source Calculation Key"
         },
         "transition_state_key": {
@@ -3507,6 +3508,7 @@
             }
           ],
           "default": null,
+          "description": "Local key of the calculation this energy came from. For correction_convention 'electronic_only' it is the calculation the electronic energy came from: an sp, an opt or a composite. For the composed conventions (electronic_plus_zpe, atom_and_bond_corrected, thermal_enthalpy_298k, other) it is the calculation of the energy's electronic part, or a composite that holds the whole E0; the frequency calculation goes in source_calculations with the well_freq or barrier_freq role. A calculation that reports no stationary-point energy (irc, scan, path_search, conf) is refused with network_energy_source_type_mismatch.",
           "title": "Source Calculation Key"
         },
         "state_key": {
