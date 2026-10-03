@@ -278,7 +278,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `assert_calculation_geometry_composition` — `backend/app/services/calculation_geometry_composition.py::assert_calculation_geometry_composition`
-  *Called from every site that inserts a `calculation_input_geometry` or `calculation_output_geometry` row -- eight of them across four modules -- on both the producer-explicit branch and the `geometry_key`/fallback branch. A guard test fails if a ninth appears unchecked. `calc_isotopes.assert_isotopes` runs beside it at the same sites and extends the claim to isotopes, refusing with its own code `calculation_geometry_isotope_mismatch` (counts only).*
+  *Called from every site that inserts a `calculation_input_geometry` or `calculation_output_geometry` row -- eight of them across four modules -- on both the producer-explicit branch and the `geometry_key`/fallback branch. A guard test fails if a ninth appears unchecked. `calc_isotopes.assert_isotopes` extends the claim to isotopes (own code, by count).*
 
 **Escape hatch.** Declare the structure's real composition: give the calculation the geometry it was run on, or file it under the subject that geometry belongs to. Absence does not block -- a `pseudo` owner, a transition state whose reaction records no reactants or a pseudo reactant, and an unparseable stored SMILES are all left unjudged. Only atom counts are compared, so isotopologues, scan and IRC points, constitutional isomers and dissociated optimisations all pass.
 

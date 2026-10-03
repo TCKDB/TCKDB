@@ -2,7 +2,7 @@
 
 ## 0.86.0 - 2026-10-03
 
-New code `calculation_geometry_isotope_mismatch` (#666); TS `geometry.isotopes` is now read.
+New isotope refusal code.
 
 ## 0.85.0 - 2026-10-03
 
