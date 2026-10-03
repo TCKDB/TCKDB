@@ -6020,7 +6020,7 @@
     },
     "ThermoProtocolCalculationRef": {
       "additionalProperties": false,
-      "description": "A supporting calculation, by local key or public ref.\n\nExactly one of the two. ``calculation_key`` names a calculation the same\nrequest declares; ``calculation_ref`` (``calc_...``) names one already\ndeposited for the same species entry. Computed-species and\ncomputed-reaction bundles accept keys only.\n\n:param calculation_key: Local key.\n:param calculation_ref: Public ref.",
+      "description": "A supporting calculation, by local key or public ref (exactly one).\n\n:param calculation_key: Key of a calculation the same request declares.\n:param calculation_ref: Public ref (``calc_...``) of one already deposited for the same species\n    entry. Computed bundles accept keys only.",
       "properties": {
         "calculation_key": {
           "anyOf": [
@@ -6054,7 +6054,7 @@
     },
     "ThermoProtocolDeclaration": {
       "additionalProperties": false,
-      "description": "The protocol a thermo record was produced with. Version 1.\n\nAn attributed claim, stored as made: not checked for truth against the\nlinked calculations here, and never a substitute for evidence a later rule\nrequires. Every block is optional; at least one statement (a block, or an\nexplicit ``departures`` list) must be present.\n\n``departures`` distinguishes three states, and the difference matters: omitted\n(or null) means the depositor did not say; an empty list means the depositor\nstates there are no departures from the standard recipe; a list names them.\n\"Standard\" can only be established by the empty list.\n\n:param version: Declaration format version; only the integer ``1`` is accepted\n    (not ``true``, ``\"1\"`` or ``1.0``).\n:param recipe: The recipe (G3, G4, G4(MP2), G4(complete), other) and version.\n:param formation_reference: How the formation enthalpy was constructed.\n:param thermal_approximation: What represents the target ensemble.\n:param departures: Stated departures from the standard recipe. Three states:\n    omitted means not stated; an empty list means the depositor states there\n    are none; a list of ``{component, description}`` names them. Only an\n    empty list says \"standard\".\n:param supporting_calculations: Calculations the declaration rests on.",
+      "description": "The protocol a thermo record was produced with. Version 1.\n\nAn attributed claim, stored as made, not checked against the linked\ncalculations. Every block is optional; at least one statement must be present.\n\n:param version: Declaration format version; only the integer ``1`` is accepted\n    (not ``true``, ``\"1\"`` or ``1.0``).\n:param recipe: The recipe (G3, G4, G4(MP2), G4(complete), other) and version.\n:param formation_reference: How the formation enthalpy was constructed.\n:param thermal_approximation: What represents the target ensemble.\n:param departures: Stated departures from the standard recipe. Three states:\n    omitted means not stated; an empty list means the depositor states there\n    are none; a list of ``{component, description}`` names them. Only an\n    empty list says \"standard\".\n:param supporting_calculations: Calculations the declaration rests on.",
       "properties": {
         "departures": {
           "anyOf": [
@@ -6250,7 +6250,7 @@
     },
     "ThermoTargetDeclaration": {
       "additionalProperties": false,
-      "description": "What the record's values are claimed to describe.\n\n``kind`` is ``equilibrium_ensemble`` or ``single_conformer``. A\n``single_conformer`` target names exactly one conformer group of the\nrecord's own species entry, by ``conformer_group_ref`` (a public ref, on\nthe standalone and contribution-bundle routes) or by ``conformer_key`` (a\nconformer declared in the same computed-species / computed-reaction\nbundle). An ``equilibrium_ensemble`` target names no group and is refused\nif it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``) of the conformer\n    group. Standalone ``/uploads/thermo`` and contribution bundles only.\n:param conformer_key: Local key of a conformer the same bundle declares.\n    Computed-species and computed-reaction bundles only.",
+      "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.",
       "properties": {
         "conformer_group_ref": {
           "anyOf": [
@@ -6542,7 +6542,7 @@
             }
           ],
           "default": null,
-          "description": "How the values were produced (versioned). Supporting calculations are named by a calculation_key of this request or a calculation_ref. Never inferred or defaulted."
+          "description": "How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted."
         },
         "reference_pressure_bar": {
           "anyOf": [
@@ -6629,7 +6629,7 @@
             }
           ],
           "default": null,
-          "description": "What the values describe: equilibrium_ensemble, or single_conformer naming one conformer group of this species entry by conformer_group_ref. Never inferred or defaulted."
+          "description": "What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted."
         },
         "tmax_k": {
           "anyOf": [

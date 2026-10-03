@@ -274,17 +274,11 @@ class ThermoStateFields(SchemaBase):
     enthalpy_formation_0k_uncertainty_kj_mol: float | None = Field(default=None, ge=0)
     thermodynamic_target: ThermoTargetDeclaration | None = Field(
         default=None,
-        description=(
-            "What the values describe: equilibrium_ensemble, or single_conformer naming "
-            "one conformer of this bundle by conformer_key. Never inferred or defaulted."
-        ),
+        description="What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted.",
     )
     protocol: ThermoProtocolDeclaration | None = Field(
         default=None,
-        description=(
-            "How the values were produced (versioned). Supporting calculations are "
-            "named by bundle calculation_key. Never inferred or defaulted."
-        ),
+        description="How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted.",
     )
 
     @model_validator(mode="after")

@@ -111,19 +111,12 @@ def version_is_supported(value: Any) -> bool:
 class ThermoTargetDeclaration(SchemaBase):
     """What the record's values are claimed to describe.
 
-    ``kind`` is ``equilibrium_ensemble`` or ``single_conformer``. A
-    ``single_conformer`` target names exactly one conformer group of the
-    record's own species entry, by ``conformer_group_ref`` (a public ref, on
-    the standalone and contribution-bundle routes) or by ``conformer_key`` (a
-    conformer declared in the same computed-species / computed-reaction
-    bundle). An ``equilibrium_ensemble`` target names no group and is refused
-    if it does.
+    A ``single_conformer`` target names exactly one conformer group of the record's own species
+    entry; an ``equilibrium_ensemble`` target names none and is refused if it does.
 
     :param kind: The target kind.
-    :param conformer_group_ref: Public ref (``cg_...``) of the conformer
-        group. Standalone ``/uploads/thermo`` and contribution bundles only.
-    :param conformer_key: Local key of a conformer the same bundle declares.
-        Computed-species and computed-reaction bundles only.
+    :param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.
+    :param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.
     """
 
     kind: ThermoTargetKind
@@ -381,15 +374,11 @@ class ThermoProtocolDeparture(SchemaBase):
 
 
 class ThermoProtocolCalculationRef(SchemaBase):
-    """A supporting calculation, by local key or public ref.
+    """A supporting calculation, by local key or public ref (exactly one).
 
-    Exactly one of the two. ``calculation_key`` names a calculation the same
-    request declares; ``calculation_ref`` (``calc_...``) names one already
-    deposited for the same species entry. Computed-species and
-    computed-reaction bundles accept keys only.
-
-    :param calculation_key: Local key.
-    :param calculation_ref: Public ref.
+    :param calculation_key: Key of a calculation the same request declares.
+    :param calculation_ref: Public ref (``calc_...``) of one already deposited for the same species
+        entry. Computed bundles accept keys only.
     """
 
     calculation_key: str | None = Field(default=None, min_length=1)
@@ -409,15 +398,8 @@ class ThermoProtocolCalculationRef(SchemaBase):
 class ThermoProtocolDeclaration(SchemaBase):
     """The protocol a thermo record was produced with. Version 1.
 
-    An attributed claim, stored as made: not checked for truth against the
-    linked calculations here, and never a substitute for evidence a later rule
-    requires. Every block is optional; at least one statement (a block, or an
-    explicit ``departures`` list) must be present.
-
-    ``departures`` distinguishes three states, and the difference matters: omitted
-    (or null) means the depositor did not say; an empty list means the depositor
-    states there are no departures from the standard recipe; a list names them.
-    "Standard" can only be established by the empty list.
+    An attributed claim, stored as made, not checked against the linked
+    calculations. Every block is optional; at least one statement must be present.
 
     :param version: Declaration format version; only the integer ``1`` is accepted
         (not ``true``, ``"1"`` or ``1.0``).
@@ -513,9 +495,9 @@ class StoredThermoProtocolDeclaration(ThermoProtocolDeclaration):
 def thermo_declaration_error(payload: Any) -> tuple[str, str] | None:
     """A thermo record's optional target and protocol declarations must be coherent.
 
-    A ``single_conformer`` target names exactly one conformer group; an
-    ``equilibrium_ensemble`` target names none. ``protocol`` carries ``version`` (only 1)
-    and refuses unknown fields and values. Both are claims, never inferred or defaulted.
+    A ``single_conformer`` target names exactly one conformer group, an
+    ``equilibrium_ensemble`` target none; ``protocol.version`` is exactly ``1`` and
+    unknown fields and values are refused. Claims, never inferred or defaulted.
     """
     target = _get(payload, "thermodynamic_target")
     error = thermo_target_error(target)

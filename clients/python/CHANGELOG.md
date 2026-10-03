@@ -1,9 +1,9 @@
 # Changelog
 
-## 0.118.0 - 2026-10-03
+## 0.121.0 - 2026-10-03
 
 Thermo builders can state what a record's values describe and how they were produced
-(`tckdb-schemas` 0.82.0). Both are optional attributed claims; leave them out and the payload is
+(`tckdb-schemas` 0.85.0). Both are optional attributed claims; leave them out and the payload is
 byte-for-byte what it was.
 
 - `Thermo.scalar` / `Thermo.nasa` / `Thermo.points` accept `thermodynamic_target`
@@ -24,7 +24,7 @@ byte-for-byte what it was.
   `thermo_protocol_version_unsupported`, `thermo_protocol_calculation_owner_mismatch`.
 - Thermo reads gain `thermodynamic_target` (`kind`, `conformer_group_ref`) and `protocol`, both `null`
   on a record that declared nothing. `ThermoDetailRecord` types them.
-- `tckdb-schemas>=0.82.0` is now required.
+- `tckdb-schemas>=0.85.0` is now required.
 - `tckdb-schemas>=0.77.0` is now required.
 ## 0.117.0 - 2026-10-03
 

@@ -1,20 +1,51 @@
 # Changelog
 
-## 0.82.0 - 2026-10-03
+## 0.85.0 - 2026-10-03
 
 A thermo record can state what its values describe (`thermodynamic_target`) and how they were
-produced (`protocol`, version 1). Both are optional attributed claims, never inferred or defaulted,
-`null` on every record deposited without them. Every payload accepted before is accepted unchanged.
-Field by field: `backend/schema_spec.md`, "Thermodynamic target and protocol declarations".
+produced (`protocol`, version 1): optional attributed claims, never inferred or defaulted, `null`
+when omitted. Existing payloads are accepted unchanged. Fields and rules: `backend/schema_spec.md`,
+"Thermodynamic target and protocol declarations". New codes (`thermo_target_group_*`,
+`thermo_protocol_*`, `thermo_recipe_name_listed`, `thermo_declaration_invalid`) and the shared rule
+`thermo_declaration_error`.
 
-- A single-conformer target names exactly one conformer group of the record's own species entry
-  (`conformer_group_ref`, or `conformer_key` in the computed bundles); an equilibrium target that
-  names one is refused. New codes: `thermo_target_group_required`, `thermo_target_group_not_allowed`,
-  `thermo_target_group_owner_mismatch`, `thermo_protocol_calculation_owner_mismatch`,
-  `thermo_protocol_version_unsupported` (the version must be exactly the integer `1`),
-  `thermo_recipe_name_listed` (`recipe.other_name` may not spell G3, G4, G4(MP2) or G4(complete)) and
-  `thermo_declaration_invalid`.
-- `thermo_declaration_error(payload)` is a shared producer rule; `ThermoTargetKind` is a new enum.
+## 0.81.0 - 2026-10-03
+
+TS energy-ordering energies are held against the stored energies (#638). No field is removed or changed;
+`zpe_scale_factor` is added.
+
+- **`ts_energy_ordering_stated_energy_mismatch` (422).** A stated energy that is not what TCKDB stores for
+  its `source_calculation_key` is refused: `electronic` against the cited `sp`'s energy (or `opt`'s final
+  energy), `e0` against the same participant's stored `electronic` energy plus the cited `freq`'s ZPE, when
+  both are at one geometry. Tolerance `max(1e-6, 5e-7 * n)` hartree, n = 2 (electronic) or 3 (E0).
+- **`zpe_scale_factor` (optional, `e0` energies only).** TCKDB stores your ZPE unscaled. An `e0` built as
+  `E_electronic + s * ZPE` states `s` and is held to that sum (n = 2 + s + 100 * ZPE, which assumes `s` has
+  at least four decimals: state it as multiplied, since 0.954 for a true 0.953649 can be refused). With no factor, an `e0` equal to `electronic + ZPE` agrees; any other is not refused
+  but stored `not_compared` with reason `zpe_scaling_unstated`.
+- **`transition_state_energy_ordering_not_compared` (warning).** An energy that cannot be compared (stored
+  energy or ZPE not stated, no electronic energy to pair an E0 with, geometries not pairable) is accepted
+  and reported, never read as agreement.
+- Reads: compared energies gain `stored_energy_comparison`, `not_compared_reason` and `zpe_scale_factor`
+  (null on earlier records). Uploads only.
+
+## 0.80.0 - 2026-10-03
+
+A rigidly moved copy of a polyatomic geometry is no longer a way round the no-optimisation duplicate
+rule (#667, the polyatomic half of #623). No field is added, removed or renamed; one payload that was
+accepted is now refused, under the code the rule already used.
+
+- **Two single points (or two composites) on one polyatomic structure are now one duplicate, wherever
+  the structure sits (shared rule, so `/uploads/thermo`, `/uploads/statmech` and both bundle routes
+  change).** With no `opt` linked, two `sp` links (or two `composite` links) whose geometries are the
+  same structure moved rigidly, translated and/or rotated, are refused with `thermo_role_duplicate` /
+  `statmech_role_duplicate`; before, only the very same stored geometry was. "The same structure" is
+  the same atoms in the same order (element and stated isotope) whose Kabsch-aligned RMSD is within
+  the rounding of the coordinates as deposited (1.7e-6 Angstrom for coordinates written to six
+  decimals, never more than 1.7e-4 Angstrom). An enantiomer is a different structure (a mirror image counts as the same only when a rotation superposes it atom for atom). A genuinely
+  different geometry, such as another conformer or a bond length changed by more than the rounding,
+  is unchanged and still accepted. The same atoms listed in a different order are still treated as
+  different geometries (no canonical atom order exists for a bare geometry; deferred).
+- The one-atom rule of 0.74.0 is unchanged.
 
 ## 0.79.0 - 2026-10-03
 

@@ -1776,6 +1776,32 @@ class ContractBuilder:
                     checks[key].append(check)
         return {key: (checks[key], titles) for key, titles in sorted(reached.items()) if len(titles) > 1}
 
+    #: A ``@producer_rule`` reached by at least this many surfaces is printed once, in the shared
+    #: section, and linked from each surface. Four: the thermo-declaration rule is reached by the four
+    #: surfaces that carry a thermo block, and repeating it in full four times was what pushed the
+    #: file over its size ceiling (``ALWAYS_IN_FULL_RULES`` names the exceptions).
+    SHARED_RULE_MIN_SURFACES = 4
+
+    #: Rules printed in full on every surface that reaches them, whatever the count: the enthalpy
+    #: declaration is the rule an adapter once never learned (#520/#536), and a producer reading any
+    #: thermo-carrying surface must find it in that surface's own section.
+    ALWAYS_IN_FULL_RULES = frozenset({"tckdb_schemas.enthalpy_reference:enthalpy_reference_error"})
+
+    def shared_producer_rules(self) -> dict[str, tuple[Callable[..., object], list[str]]]:
+        """Marked rules reached by enough surfaces to print once."""
+        reached: dict[str, list[str]] = {}
+        funcs: dict[str, Callable[..., object]] = {}
+        for surface in self.surfaces:
+            for key, func, _check in surface.workflow_rules:
+                if is_producer_rule(func):
+                    reached.setdefault(key, []).append(surface.title)
+                    funcs[key] = func
+        return {
+            key: (funcs[key], titles)
+            for key, titles in sorted(reached.items())
+            if len(titles) >= self.SHARED_RULE_MIN_SURFACES and key not in self.ALWAYS_IN_FULL_RULES
+        }
+
     def top_refusals(self, surface: Surface, limit: int = TOP_REFUSALS) -> list[str]:
         """The surface's most specific client-facing refusals, most specific first.
 
@@ -2018,9 +2044,9 @@ class ContractBuilder:
         out = [
             "## Checks several surfaces apply",
             "",
-            "Scientific checks the workflows of two or more surfaces reach, printed once and"
-            " linked from each surface. A marked `@producer_rule` is never moved here: it is"
-            " printed in full on every surface that reaches it.",
+            "Scientific checks the workflows of two or more surfaces reach, and marked"
+            f" `@producer_rule`s that {self.SHARED_RULE_MIN_SURFACES} or more surfaces reach, printed once and"
+            " linked from each surface. A marked rule reached by fewer surfaces is printed in full on each.",
             "",
         ]
         for key, (func_checks, titles) in self.shared_checks().items():
@@ -2040,6 +2066,19 @@ class ContractBuilder:
                 if check.escape_hatch:
                     out += [f"  If your chemistry is legitimate: {_one_line(check.escape_hatch)}"]
             out.append("")
+        for key, (func, titles) in self.shared_producer_rules().items():
+            out += [
+                f'<a id="{_anchor("k", key)}"></a>',
+                "",
+                f"### `{key.split(':', 1)[1]}`",
+                "",
+                f"`{key}`. Marked producer rule. Applied on: "
+                + ", ".join(f"[`{t}`](#{_anchor('s', t)})" for t in titles)
+                + ".",
+                "",
+                *_indent_block(_own_doc(func) or ""),
+                "",
+            ]
         shared = self.widely_shared_codes()
         total = len(self.surfaces)
         out += [
@@ -2129,11 +2168,12 @@ class ContractBuilder:
             out += ["The root model declares no validators.", ""]
 
         shared = self.shared_checks()
+        shared_rules = self.shared_producer_rules()
         out += [
             "### Rules the workflow applies",
             "",
             "Found by tracing each route's handler through its direct calls: every function"
-            " reached that is marked `@producer_rule` (printed in full) or declared in the"
+            " reached that is marked `@producer_rule` (printed in full, or once in the shared section when several surfaces reach it) or declared in the"
             " scientific check register.",
             "",
         ]
@@ -2143,7 +2183,9 @@ class ContractBuilder:
         for key, func, check in surface.workflow_rules:
             routes = [label for label, reached in sorted(surface.rules_by_route.items()) if key in reached]
             via = ", ".join(f"`{label}`" for label in routes)
-            if is_producer_rule(func):
+            if is_producer_rule(func) and key in shared_rules:
+                out.append(f"- [`{key.split(':', 1)[1]}`](#{_anchor('k', key)}) (marked rule, printed once; reached from {via})")
+            elif is_producer_rule(func):
                 out += [f"- **`{key}`** (reached from {via}):", "", *_indent_block(_own_doc(func) or ""), ""]
             elif check is not None and key in shared:
                 if key in listed_shared:

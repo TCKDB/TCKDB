@@ -196,11 +196,7 @@ class ThermoUploadRequest(SchemaBase):
     # that the group exists and belongs to this record's species entry.
     thermodynamic_target: ThermoTargetDeclaration | None = Field(
         default=None,
-        description=(
-            "What the values describe: equilibrium_ensemble, or single_conformer naming "
-            "one conformer group of this species entry by conformer_group_ref. Never "
-            "inferred or defaulted."
-        ),
+        description="What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted.",
     )
 
     # How the values were produced: a versioned, schema-validated declaration
@@ -211,11 +207,7 @@ class ThermoUploadRequest(SchemaBase):
     # for the same species entry.
     protocol: ThermoProtocolDeclaration | None = Field(
         default=None,
-        description=(
-            "How the values were produced (versioned). Supporting calculations are named "
-            "by a calculation_key of this request or a calculation_ref. Never inferred "
-            "or defaulted."
-        ),
+        description="How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted.",
     )
 
     # A minimal valid payload. Published as the JSON Schema's ``examples``, in

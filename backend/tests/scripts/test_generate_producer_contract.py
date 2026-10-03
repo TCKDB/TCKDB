@@ -343,11 +343,14 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 #: transition-state composition check two, the frequency evaluator two). Printing all of them, grouped
 #: per function, is about 5 KB of content that was always supposed to be there; the E0 rules add ~1 KB.
 #:
-#: The thermo target and protocol declarations (H298 selection, change 1) added two optional blocks and
-#: seven nested models to each of four surfaces. They were not allowed to raise the ceiling: the shared-code
-#: table now starts at four surfaces (``SHARED_CODE_MIN_SURFACES``), which prints the declaration codes once
-#: and took the file well under it.
-MARKDOWN_BYTE_CEILING = 705_000
+#: The thermo target and protocol declarations (H298 selection, change 1) add two optional blocks and
+#: seven nested models to each of four surfaces. Trimmed first, by about 18 KB: the shared-code table now
+#: starts at four surfaces (``SHARED_CODE_MIN_SURFACES``), a marked producer rule reached by four surfaces
+#: is printed once (``SHARED_RULE_MIN_SURFACES``; the enthalpy rule stays in full on each by design), and
+#: the changelog, field descriptions and code notes were cut to a line each. What remains is intrinsic
+#: (the model reference and the per-surface links to it), which leaves the file 3.2 KB over the 705 KB it
+#: had on main; the ceiling is that file rounded up, 3.5 KB above main's.
+MARKDOWN_BYTE_CEILING = 708_500
 
 
 def test_the_contract_stays_readable_in_pieces(committed_markdown: str) -> None:

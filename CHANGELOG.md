@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## Thermo target and protocol declarations (2026-10-03)
 
-- tckdb-schemas 0.82.0, tckdb-client 0.118.0 and tckdb-backend: a thermo record can state what its
+- tckdb-schemas 0.85.0, tckdb-client 0.121.0 and tckdb-backend: a thermo record can state what its
   values describe (`thermodynamic_target`: `equilibrium_ensemble`, or `single_conformer` naming one
   conformer group of its own species entry) and how they were produced (`protocol`: a versioned
   declaration of the recipe, the formation-reference construction, the thermal approximation, any
