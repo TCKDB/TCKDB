@@ -191,12 +191,12 @@ _PLAIN_ELEMENT_TOKEN = re.compile(r"^[A-Za-z]{1,2}$")
 _LABELLED_ELEMENT_TOKEN = re.compile(r"^([A-Za-z]{1,2})\d+$")
 
 #: The only tokens accepted *without* a periodic-table lookup: deuterium
-#: and tritium. Both are legitimate deposited symbols every ESS program in
-#: this codebase's scope accepts (ADR 0008; see
-#: :func:`app.chemistry.geometry.resolve_element_symbol`), and neither is
-#: a real element RDKit's periodic table recognises, so validating them
-#: the same way as everything else would refuse correct, common
-#: isotope-labelled decks. Every other one-or-two-letter token -- Gaussian's
+#: and tritium. Both are legitimate symbols for 2H and 3H (IUPAC Red Book
+#: IR-3.3.2) that a hand-written deck may use, and neither is a real element
+#: RDKit's periodic table recognises, so validating them the same way as
+#: everything else would refuse correct isotope-labelled decks. They are
+#: passed on as written; :func:`app.chemistry.geometry.parse_xyz` then reads
+#: them as H with mass number 2 or 3 (``docs/adr/0022``). Every other one-or-two-letter token -- Gaussian's
 #: ``X`` (dummy atom), ``Bq`` (ghost/counterpoise atom), or nonsense like
 #: ``Xx`` -- has exactly this shape too and names no real element, so shape
 #: alone must not be the acceptance test.

@@ -59,7 +59,10 @@ class GeometryAtomPayload(BaseModel):
     tell an isotopologue apart from the unlabelled species reads this field
     per atom rather than guessing from ``element`` alone (a ``D``/``T``
     symbol already implies a non-standard nuclide; an ordinary symbol with a
-    non-null value here does too).
+    non-null value here does too). A geometry deposited with a ``D``/``T``
+    element token is stored as ``H`` with ``isotope_mass_number`` 2 or 3
+    (``docs/adr/0022``); only rows deposited before that decision still hold
+    the ``D``/``T`` symbol with a null value here.
     """
 
     atom_index: int

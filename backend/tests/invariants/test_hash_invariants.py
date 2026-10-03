@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 
+from app.chemistry.geometry import parse_xyz
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.refs import LevelOfTheoryRef
 from app.services.calculation_resolution import _level_of_theory_hash
@@ -187,18 +188,66 @@ def test_two_spellings_of_one_geometry_still_hash_apart() -> None:
     ]
 
 
-def test_hydrogen_isotope_labels_are_not_canonicalised_away() -> None:
-    """Case is settled at ingestion; nuclide labelling is not.
+def test_a_d_or_t_spelling_is_stored_as_hydrogen_with_its_mass_number() -> None:
+    """A ``D``/``T`` element token is an isotope declaration (#672, ADR 0022).
 
-    ``D`` and ``T`` are what the depositor wrote, and they stay in
-    ``geometry_atom.element``. Collapsing them to ``H`` here would destroy
-    deposited isotope labelling; code that *counts* elements resolves them at
-    the point of counting instead
-    (``app.chemistry.geometry.resolve_element_symbol``).
+    Before 2026-10-03 this test pinned the opposite: ``D`` and ``T`` stayed in
+    ``geometry_atom.element`` and carried no isotope. They are now stored as the
+    element ``H`` plus ``isotope_mass_number`` 2 or 3 (the element column must
+    stay an element, because ``ck_reaction_atom_map_pair_element_matches``
+    compares it), while ``xyz_text`` keeps what the depositor wrote.
     """
     heavy_water = "3\nheavy water\nO 0.0 0.0 0.117\nd 0.0 0.757 -0.469\nT 0.0 -0.757 -0.469"
     created = geometry_create_from_payload(GeometryPayload(xyz_text=heavy_water))
-    assert [atom.element for atom in created.atoms] == ["O", "D", "T"]
+    assert [atom.element for atom in created.atoms] == ["O", "H", "H"]
+    assert [atom.isotope_mass_number for atom in created.atoms] == [None, 2, 3]
+    # The deposited spelling is evidence and is not rewritten.
+    assert [line.split()[0] for line in created.xyz_text.splitlines()[2:]] == ["O", "d", "T"]
+
+
+_D2O_XYZ = "3\nheavy water\nO 0.0 0.0 0.117\nD 0.0 0.757 -0.469\nD 0.0 -0.757 -0.469"
+_H2O_XYZ = "3\nwater\nO 0.0 0.0 0.117\nH 0.0 0.757 -0.469\nH 0.0 -0.757 -0.469"
+
+#: What ``_D2O_XYZ`` hashed to before D/T carried an isotope: the canonical text
+#: with no suffix. A row stored under this hash exists wherever a D file was
+#: deposited, and no row is rewritten, so the value must stay reachable.
+_LEGACY_D2O_GEOM_HASH = "2ff993cea4e93f87e471d21e8e057ec44089c245ae734ec0edf8700192e75ac6"
+#: What the same file hashes to now: canonical text plus ``ISOTOPES 2:2,3:2``.
+_D2O_GEOM_HASH = "27886b72fde42b040b06e283676686b691ca9edd05ee36ff5f7219f1c156d07b"
+#: Plain water has no isotope and no suffix; this value must never move.
+_H2O_GEOM_HASH = "0719e27a8afe7cb5d32ee9bca3c43d4f256021ee3c111b8cd82d2ffad09f54e9"
+
+
+def test_the_implied_isotope_is_in_the_hash_and_the_pins_hold() -> None:
+    """Literal pins for the geometry hash of an unlabelled D file and of water.
+
+    The implied isotope goes into ``hash_text`` exactly as an explicit
+    ``geometry.isotopes`` entry would, so a new D file gets its own, correctly
+    indexed row and never dedupes onto a legacy ``D``/NULL row. No stored hash
+    changes: the plain-hydrogen pin proves unlabelled geometries still hash as
+    they always did, and the legacy pin is what a pre-decision D file stored.
+    """
+    parsed = parse_xyz(GeometryPayload(xyz_text=_D2O_XYZ))
+    assert parsed.hash_text.endswith("\nISOTOPES 2:2,3:2")
+    assert _geom_hash(_D2O_XYZ) == _D2O_GEOM_HASH
+    assert _geom_hash(_H2O_XYZ) == _H2O_GEOM_HASH
+    # The legacy value is the hash of the text alone, i.e. what a D file got
+    # before the suffix applied to it. A new deposit must not collide with it.
+    assert hashlib.sha256(parsed.canonical_xyz_text.encode("utf-8")).hexdigest() == _LEGACY_D2O_GEOM_HASH
+    assert _geom_hash(_D2O_XYZ) != _LEGACY_D2O_GEOM_HASH
+
+
+def test_a_redundant_explicit_isotope_hashes_like_the_implied_one() -> None:
+    """``D`` with ``{i: 2}`` is the same deposit as ``D`` alone."""
+    implied = geometry_create_from_payload(GeometryPayload(xyz_text=_D2O_XYZ))
+    explicit = geometry_create_from_payload(
+        GeometryPayload(xyz_text=_D2O_XYZ, isotopes={2: 2, 3: 2})
+    )
+    assert explicit.geom_hash == implied.geom_hash == _D2O_GEOM_HASH
+    assert [a.isotope_mass_number for a in explicit.atoms] == [a.isotope_mass_number for a in implied.atoms]
+    # Partial restatement: one atom stated, one implied. Still one deposit.
+    partial = geometry_create_from_payload(GeometryPayload(xyz_text=_D2O_XYZ, isotopes={3: 2}))
+    assert partial.geom_hash == _D2O_GEOM_HASH
 
 
 # ---------------------------------------------------------------------------

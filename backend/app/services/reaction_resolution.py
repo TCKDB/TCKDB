@@ -941,8 +941,9 @@ def _transition_state_element_counts(
     which refuses correct chemistry over a string — the failure ADR 0008 puts
     out of bounds for a blocking check. ``b4e7c1d20f83`` canonicalises the case
     at ingestion, which makes ``CL`` and ``c`` rare here rather than absent;
-    ``D`` and ``T`` are preserved on purpose and are never absent. Both halves
-    of the resolution therefore stay.
+    ``D`` and ``T`` are never absent from rows deposited before
+    ``docs/adr/0022`` (which stored them verbatim and cannot be rewritten), and
+    are resolved here for those. Both halves of the resolution therefore stay.
     """
 
     if transition_state_geometry_id is not None:

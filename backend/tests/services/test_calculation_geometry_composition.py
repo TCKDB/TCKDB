@@ -100,8 +100,8 @@ _XYZ_BENZENE = (
     "H -1.240 -2.147  0.000\n"
     "H  1.240 -2.147  0.000"
 )
-#: Fully deuterated methane, with the hydrogens written ``D`` — a spelling
-#: Gaussian, ORCA, Molpro and CFOUR all emit or accept.
+#: Fully deuterated methane, with the hydrogens written ``D`` -- a spelling a
+#: hand-written file uses, and one that declares deuterium (#672, ADR 0022).
 _XYZ_CD4 = (
     "5\nperdeuteromethane\n"
     "C  0.000  0.000  0.000\n"
@@ -487,36 +487,31 @@ def test_case_1_a_transition_states_geometries_span_the_whole_system(
         assert len(linked) == 1
 
 
-def test_case_2_deuterium_in_the_element_column_is_hydrogen(db_conn) -> None:
-    """CASE 2, the ESS spelling: ``D`` written in the element column.
+def test_case_2_deuterium_in_the_element_column_is_hydrogen_but_not_protium(db_conn) -> None:
+    """CASE 2, the ``D`` spelling: hydrogen by element, deuterium by nuclide.
 
-    Gaussian, ORCA, Molpro and CFOUR all emit or accept it, and ingestion
-    deliberately preserves the token. A calculation geometry spelling its
-    hydrogens ``D`` is CH4 by element, so it matches a ``smiles: "C"``
-    identity. Comparing raw symbols would read this as containing an element
-    the SMILES never mentions and refuse every such deposit.
+    A calculation geometry spelling its hydrogens ``D`` is CH4 *by element*, so
+    the composition rule does not refuse it against a ``smiles: "C"`` identity
+    (comparing raw symbols would read it as containing an element the SMILES
+    never mentions). Since #672 (ADR 0022) a ``D`` token also declares
+    deuterium, so the isotope rule (#666) refuses this CD4 geometry under a
+    protium CH4 with ``calculation_geometry_isotope_mismatch``. This test used
+    to assert acceptance; it now pins that the refusal is the isotope rule's
+    (the composition code must not fire: one owner per fact, ADR 0008 section 9).
     """
 
     with _isolated_session(db_conn) as session:
-        _upload_species(
-            session,
-            _species_bundle(
-                smiles="C",
-                conformer_xyz=_XYZ_CH4,
-                opt_input_xyz=_XYZ_CD4,
-                sp_output_xyz=_XYZ_CD4,
-            ),
-        )
-        session.flush()
-        assert (
-            session.scalar(
-                select(Calculation.id).where(
-                    Calculation.created_by == _USER_ID,
-                    Calculation.type == "sp",
-                )
+        with pytest.raises(CodedValueError) as excinfo:
+            _upload_species(
+                session,
+                _species_bundle(
+                    smiles="C",
+                    conformer_xyz=_XYZ_CH4,
+                    opt_input_xyz=_XYZ_CD4,
+                    sp_output_xyz=_XYZ_CD4,
+                ),
             )
-            is not None
-        )
+    assert excinfo.value.code == "calculation_geometry_isotope_mismatch"
 
 
 def test_case_2b_a_labelled_isotopologue_identity_is_not_a_mismatch(

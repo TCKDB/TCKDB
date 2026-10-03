@@ -1452,6 +1452,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("freq_n_imag_disagrees_with_modes", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
             shape=Shape.relationship),
+    ApiCode("geometry_isotope_symbol_conflict", 422, Surface.coded_exception,
+            "backend/app/chemistry/geometry.py",
+            shape=Shape.relationship),
     ApiCode("geometry_key_unresolved", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py",
             note=(

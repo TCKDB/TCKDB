@@ -1706,7 +1706,7 @@
     },
     "GeometryPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing geometry payload.\n\n:param xyz_text: Raw XYZ text block for the uploaded geometry.\n:param isotopes: Optional atom-resolved isotope labelling, mapping a\n    1-based XYZ atom index to that atom's isotope mass number (``2`` for\n    deuterium, ``13`` for carbon-13, ...). Only substituted atoms need an\n    entry; every unlisted atom is taken to be at its most abundant\n    natural isotope. Omit the field entirely for an ordinary geometry.",
+      "description": "Upload-facing geometry payload.\n\n:param xyz_text: Raw XYZ text block for the uploaded geometry.\n:param isotopes: Optional atom-resolved isotope labelling, mapping a\n    1-based XYZ atom index to that atom's isotope mass number (``2`` for\n    deuterium, ``13`` for carbon-13, ...). Only substituted atoms need an\n    entry; every unlisted atom is taken to be at its most abundant\n    natural isotope, except an atom spelled ``D`` or ``T``, which declares\n    mass number 2 or 3 by its spelling. An entry for it must equal that\n    number (redundant) or the deposit is refused as\n    ``geometry_isotope_symbol_conflict``. Omit the field for an ordinary\n    geometry.",
       "properties": {
         "isotopes": {
           "anyOf": [
