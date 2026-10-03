@@ -137,8 +137,11 @@ def test_copies_written_to_different_precisions_are_still_one_structure(client, 
 def test_the_precision_of_either_deposit_counts_whichever_is_listed_first(client, product):
     """An 8-decimal geometry first and a 6-decimal copy second: the 6-decimal rounding sets the tolerance too."""
     eight = _xyz(_moved(_WATER, rotation=_ROTATION, shift=_SHIFT), decimals=8)
-    _assert_duplicate(_two_sps(client, product, eight, _BASE), product)
-    _assert_duplicate(_two_sps(client, product, _BASE, eight), product)
+    # The 6-decimal copy is itself moved, so rounding it to six decimals leaves real noise (~3e-7 A)
+    # against the 8-decimal one: a tolerance taken from the 8-decimal side alone (~1.7e-8 A) refuses to match.
+    six = _xyz(_moved(_WATER, rotation=_rotation((0.0, 1.0, 1.0), 2.1), shift=(-0.3, 0.2, 0.9)), decimals=6)
+    _assert_duplicate(_two_sps(client, product, eight, six), product)
+    _assert_duplicate(_two_sps(client, product, six, eight), product)
 
 
 @PRODUCTS
