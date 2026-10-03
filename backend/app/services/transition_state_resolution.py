@@ -14,6 +14,7 @@ from app.db.models.calculation import Calculation, CalculationOutputGeometry
 from app.db.models.common import CalculationGeometryRole
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.fragments.calculation import CalculationWithResultsPayload
+from app.services.calc_isotopes import assert_isotopes
 from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
 )
@@ -106,6 +107,12 @@ def persist_ts_calculations(
     # ``attach_calculation_output_geometries``, and a future caller passing a
     # different ``geometry_id`` would otherwise inherit an unchecked path.
     assert_calculation_geometry_composition(
+        session,
+        calc=primary_calc,
+        geometry_id=geometry_id,
+        field="primary_opt: geometry",
+    )
+    assert_isotopes(
         session,
         calc=primary_calc,
         geometry_id=geometry_id,

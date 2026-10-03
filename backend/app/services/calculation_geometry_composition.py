@@ -173,6 +173,43 @@ def _species_entry_reference(
         return None
 
 
+def _ts_entry_reactant_rows(
+    session: Session, transition_state_entry_id: int
+) -> list[tuple[Species, SpeciesEntry]]:
+    """Return ``(species, species entry)`` for each reactant of a TS entry's reaction.
+
+    The one query both the composition reference and the isotope reference
+    read, so the two can never disagree about which reactants a transition
+    state is made of.
+    """
+
+    return [
+        (species, entry)
+        for species, entry in session.execute(
+            select(Species, SpeciesEntry)
+            .select_from(ReactionEntryStructureParticipant)
+            .join(
+                TransitionState,
+                TransitionState.reaction_entry_id
+                == ReactionEntryStructureParticipant.reaction_entry_id,
+            )
+            .join(
+                TransitionStateEntry,
+                TransitionStateEntry.transition_state_id == TransitionState.id,
+            )
+            .join(
+                SpeciesEntry,
+                SpeciesEntry.id == ReactionEntryStructureParticipant.species_entry_id,
+            )
+            .join(Species, Species.id == SpeciesEntry.species_id)
+            .where(
+                TransitionStateEntry.id == transition_state_entry_id,
+                ReactionEntryStructureParticipant.role == ReactionRole.reactant,
+            )
+        ).all()
+    ]
+
+
 def _transition_state_entry_reference(
     session: Session, transition_state_entry_id: int
 ) -> Counter[str] | None:
@@ -191,28 +228,9 @@ def _transition_state_entry_reference(
     sum unknowable.
     """
 
-    reactants = session.scalars(
-        select(Species)
-        .select_from(ReactionEntryStructureParticipant)
-        .join(
-            TransitionState,
-            TransitionState.reaction_entry_id
-            == ReactionEntryStructureParticipant.reaction_entry_id,
-        )
-        .join(
-            TransitionStateEntry,
-            TransitionStateEntry.transition_state_id == TransitionState.id,
-        )
-        .join(
-            SpeciesEntry,
-            SpeciesEntry.id == ReactionEntryStructureParticipant.species_entry_id,
-        )
-        .join(Species, Species.id == SpeciesEntry.species_id)
-        .where(
-            TransitionStateEntry.id == transition_state_entry_id,
-            ReactionEntryStructureParticipant.role == ReactionRole.reactant,
-        )
-    ).all()
+    reactants = [
+        species for species, _entry in _ts_entry_reactant_rows(session, transition_state_entry_id)
+    ]
     if not reactants:
         return None
     if any(species.kind == MoleculeKind.pseudo for species in reactants):
@@ -419,7 +437,8 @@ CHECK_CALCULATION_GEOMETRY_COMPOSITION = ScientificCheck(
                 "``calculation_output_geometry`` row -- eight of them across "
                 "four modules -- on both the producer-explicit branch and the "
                 "``geometry_key``/fallback branch. A guard test fails if a "
-                "ninth appears unchecked."
+                "ninth appears unchecked. ``calc_isotopes.assert_isotopes`` "
+                "extends the claim to isotopes (own code, by count)."
             ),
         ),
     ),

@@ -293,3 +293,25 @@ and reads nothing that a stored row would have to be migrated to satisfy. A
 survey of stored rows against the rule would be worth running against the live
 instance before the next release; it is not attempted here because this branch
 cannot reach that database.
+
+## Isotopes (`calculation_geometry_isotope_mismatch`, #666)
+
+The composition rule counts elements and reads `D`, `T` and `[2H]` as hydrogen, so by design it cannot
+tell a deuterium geometry from a protium one. A sibling rule, `assert_isotopes` (`app/services/calc_isotopes.py`)
+(ADR 0008, block), runs at every site that runs the composition rule; a structural guard
+(`tests/services/test_calculation_geometry_isotopes_guard.py`) fails if a site runs one and not the other.
+
+- **Reference.** The species entry's `isotope_key` (the canonical isotope-labelled SMILES), not
+  `species.smiles`, which is isotope-blind. For a transition state, the sum over the reaction's
+  reactants, the same reactants the composition rule uses.
+- **Observed.** `geometry_atom.isotope_mass_number`, i.e. `geometry.isotopes`. Standard-isotope labels are
+  dropped on both sides.
+- **Count-based.** The multiset of `(element, mass number)` is compared. A calculation geometry has no
+  atom map to the species graph, so isotopomers (CH2D-OH vs CH3-OD) are not distinguished: a documented
+  false acceptance, never a false refusal.
+- **`D`/`T` spellings are isotope-silent**, per `resolve_element_symbol`. A `D` geometry on a protium
+  species is accepted; `tests/services/test_calculation_geometry_isotopes.py::test_a_d_spelling_is_isotope_silent_by_design`
+  pins it. This differs from `normal_modes.atomic_mass`, which reads `D` as mass 2; that split is tracked
+  separately.
+- **Absence does not block**, as for composition: a `pseudo` owner, a transition state with no reactants
+  or a pseudo reactant, and an unparseable isotope key are left unjudged.
