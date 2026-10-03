@@ -1,0 +1,1047 @@
+# E1 audited membership manifest - G4 vs G3 hydrocarbon benchmark scope.
+# Version 1.0.0, approved for activation by the repository owner acting as curator (2026-10-03);
+# see status.curator_acceptance. Compiled 2026-10-03 from the sources listed below and copied here
+# unchanged except for this header and the read_from of source G399_2000. Loaded by
+# app.chemistry.thermo_rules.e1_manifest. Changing a member or a recipe fact is a new manifest
+# version and a new rule version, never an in-place edit.
+rule_id: E1
+rule_statement: >-
+  Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon
+  formation-enthalpy (298 K) records, restricted to verified members of the
+  published hydrocarbon benchmark subset.
+manifest_version: "1.0.0"
+manifest_history:
+  - {version: "0.1.0-draft", date: "2026-10-03", note: "21 memberships inferred; G3/99 paper not read"}
+  - {version: "1.0.0", date: "2026-10-03", note: "Curator (repository owner) accepted the count-reconciliation argument for the 5 G2-1 members; manifest approved for activating E1. No member changed."}
+  - {version: "0.2.0", date: "2026-10-03", note: "G3/99 paper read (owner-supplied PDF): 16 G3/99 hydrocarbons named in Table I and counted in text/Table III; COF2 deletion and phenyl/CF3 radical classification confirmed. No member changed."}
+manifest_date: "2026-10-03"
+status:
+  count_stated_by_source: 38        # G4 paper Table II "Hydrocarbons (38)"; G3/05 paper Table IV; G3X paper Table V
+  count_found: 38
+  count_complete: true
+  membership_listed_under_category_heading: 17        # G2-2 hydrocarbons, G2/97 Tables II/III "Hydrocarbons" heading
+  membership_named_with_category_count_by_table_order: 16  # G3/99 Table I rows 1-16 + text "16 hydrocarbons" + Table III MADs reproduced
+  membership_inferred_from_counts_and_rule: 5          # G2-1: CH2(1A1), CH4, C2H2, C2H4, C2H6 - no read source names them as hydrocarbons
+  members_still_inferred: ["CH2(1A1)", "CH4", "C2H2", "C2H4", "C2H6"]
+  identity_unresolved: 0
+  identity_state_specific: 1         # CH2(1A1)
+  identity_identifier_caveat: 1      # cyclooctatetraene InChIKey stereo layer differs by source
+  curator_acceptance:
+    accepted_by: "repository owner (curator)"
+    date: "2026-10-03"
+    scope: "the 5 G2-1 members (CH2(1A1), CH4, C2H2, C2H4, C2H6), accepted on the reconciliation argument in NOTES.md"
+  activation_approved: true
+  activation_recommendation: >-
+    Count-complete (38/38) but NOT complete-by-listing. The 16 G3/99 additions are now
+    named in the G3/99 paper (Table I) with the category count stated in its text, and
+    row-order assignment is confirmed by reproducing three published MADs. Still inferred:
+    the 5 G2-1 members (CH2(1A1), CH4, C2H2, C2H4, C2H6) - no source read prints their
+    category; they rest on the G2/97 categorisation rule, Table VI counts and MAD
+    fingerprints. Checked and found WITHOUT per-row G2-1 category headings: G2/97 Tables
+    II/III, G3 paper (JCP 109, 7764) Table II, G3/99 paper. A curator must accept the
+    reconciliation argument for these 5 (or locate a per-molecule G2-1 categorisation)
+    before activation.
+sources:
+  - id: G4_2007
+    citation: "L. A. Curtiss, P. C. Redfern, K. Raghavachari, J. Chem. Phys. 126, 084108 (2007)"
+    doi: "10.1063/1.2436888"
+    read_from: "https://lab409chem.ccu.edu.tw/var/file/80/1080/img/1544/G4.pdf (full text)"
+    used_for: "Table II hydrocarbons (38): G3 MAD 0.69 / RMS 0.93, G4 MAD 0.48 / RMS 0.70; G4 recipe; HLC; evidence limits"
+    accessed: "2026-10-03"
+  - id: G4_2007_EPAPS
+    citation: "EPAPS E-JCPSA6-126-310707, G4_epaps.doc (Suppl. Tables 1-14)"
+    read_from: "https://web.archive.org/web/2018id_/http://ftp.aip.org/epaps/journ_chem_phys/E-JCPSA6-126-310707/G4_epaps.doc (text strings extracted)"
+    used_for: "Per-species G3/05 enthalpy list and G4 deviations (Table 11); G3/99 75-species list (Table 3)"
+    accessed: "2026-10-03"
+  - id: ANL_G4_DEV
+    citation: "Argonne compmat site, 'g4 g305 dev table' (same content as EPAPS Table 11)"
+    read_from: "https://web.archive.org/web/2008id_/http://chemistry.anl.gov/compmat/G4%20energies/g4%20g305%20dev%20table.htm"
+    accessed: "2026-10-03"
+  - id: G305_2005
+    citation: "L. A. Curtiss, P. C. Redfern, K. Raghavachari, J. Chem. Phys. 123, 124107 (2005)"
+    doi: "10.1063/1.2039080"
+    read_from: "https://lab409chem.ccu.edu.tw/var/file/80/1080/img/1544/G3_DFT_test_JCP_2005.pdf (full text)"
+    used_for: "G3/05 composition (78 additions: 14 nonhydrogens, 58 third-row, 6 H-bonded); Table IV Hydrocarbons (38)"
+    accessed: "2026-10-03"
+  - id: G297_1997
+    citation: "L. A. Curtiss, K. Raghavachari, P. C. Redfern, J. A. Pople, J. Chem. Phys. 106, 1063 (1997)"
+    doi: "10.1063/1.473182"
+    read_from: "https://lab409chem.ccu.edu.tw/var/file/80/1080/img/1544/G2_DFT_dHf_1997.pdf (full text)"
+    used_for: "Category rule (p. 1066); G2-2 'Hydrocarbons' heading (Tables II, III); Table VI per-subset counts; atomization/298 K formula and atomic data (Table I, Eqs. 1-2)"
+    accessed: "2026-10-03"
+  - id: G3X_2001
+    citation: "L. A. Curtiss, P. C. Redfern, K. Raghavachari, J. A. Pople, J. Chem. Phys. 114, 108 (2001)"
+    doi: "10.1063/1.1321305"
+    read_from: "https://lab409chem.ccu.edu.tw/var/file/80/1080/img/1544/G3X_JCP_2001.pdf (full text)"
+    used_for: "G3/99 subset counts (Table V: 222 = 47/38/91/15/31); G2/97 counts after COF2 removal (Table VI: 147, nonhydrogens 34); nonhydrogen list (Table VII); G3X and G3 HLC table (Table III)"
+    accessed: "2026-10-03"
+  - id: G3_1998
+    citation: "L. A. Curtiss, K. Raghavachari, P. C. Redfern, V. Rassolov, J. A. Pople, J. Chem. Phys. 109, 7764 (1998)"
+    doi: "10.1063/1.477422"
+    read_from: "https://lab409chem.ccu.edu.tw/var/file/80/1080/img/1544/G3.pdf (full text)"
+    used_for: "Standard G3 recipe and HLC"
+    accessed: "2026-10-03"
+  - id: G3MP2_1999
+    citation: "L. A. Curtiss, P. C. Redfern, K. Raghavachari, V. Rassolov, J. A. Pople, J. Chem. Phys. 110, 4703 (1999)"
+    doi: "10.1063/1.478385"
+    read_from: "https://lab409chem.ccu.edu.tw/var/file/80/1080/img/1544/G3_MP2.pdf (full text)"
+    used_for: "G3(MP2) recipe differences"
+    accessed: "2026-10-03"
+  - id: ANL_TESTSET_PAGES
+    citation: "Argonne compmat pages G2-97.htm, g3-99.htm, g3-05.htm, g2geoma.htm, g399/g3en.htm, g2dev.htm, g2-97_cart_neut.txt, g3-3_mp2.txt"
+    read_from: "web.archive.org snapshots 2007-2010 of chemistry.anl.gov/compmat and www.cse.anl.gov/OldCHMwebsiteContent/compmat"
+    used_for: "Species lists, G2 per-molecule deviations, benchmark geometry comments"
+    accessed: "2026-10-03"
+  - id: NIST_WEBBOOK
+    citation: "NIST Chemistry WebBook, SRD 69"
+    url: "https://webbook.nist.gov/"
+    used_for: "Standard InChI / InChIKey / CAS per member"
+    accessed: "2026-10-03"
+  - id: PUBCHEM
+    citation: "PubChem PUG REST"
+    url: "https://pubchem.ncbi.nlm.nih.gov/rest/pug/"
+    used_for: "SMILES, CID, cross-check InChIKey"
+    accessed: "2026-10-03"
+  - id: G399_2000
+    citation: "L. A. Curtiss, K. Raghavachari, P. C. Redfern, J. A. Pople, J. Chem. Phys. 112, 7374 (2000)"
+    doi: "10.1063/1.481336"
+    read_from: "owner-supplied full text of JCP 112, 7374 (2000)"
+    used_for: "COF2 deletion (p. 7375); G3-3 subset composition 13/16/44/2 (p. 7376); Table I names of the 75 additions (pp. 7377-7378); Table III subset counts and MADs (p. 7379)"
+    accessed: "2026-10-03"
+scope_conditions:
+  charge: 0
+  phase: gas
+  property: "standard enthalpy of formation at 298.15 K (benchmark: 298 K)"
+  derivation: "atomization route per G2/97 Eqs. (1)-(2); see recipe_facts.formation_enthalpy"
+  excluded_by_construction:
+    - "radicals (incl. CH, CH2(3B1), CH3, CCH, C2H3, C2H5, (CH3)2CH, (CH3)3C, C6H5) - G3/05 'Radicals (34)' subset, not 'Hydrocarbons (38)'"
+    - "H2 - G2/97 'Inorganic hydrides' (Table II heading)"
+    - "any species not in this list (no 'small hydrocarbon' predicate)"
+statistics_check:
+  description: "Recomputed from per-species G4 deviations (ANL/EPAPS Table 11) over the 38 members"
+  g4_mad_recomputed: 0.484
+  g4_rms_recomputed: 0.703
+  g4_mad_published: 0.48
+  g4_rms_published: 0.70
+  caveat: "Consistent, but NOT uniquely discriminating: many single-species swaps also round to 0.48/0.70. Membership rests on the count reconciliation, not on this check."
+recipe_facts:
+  standard_G4:
+    source: G4_2007
+    geometry: "B3LYP/6-31G(2df,p); RHF/RB3LYP for singlets, unrestricted for others (step 1)"
+    zpe: "B3LYP/6-31G(2df,p) harmonic frequencies scaled by 0.9854 (step 2)"
+    hf_limit: "two-point extrapolation E(HF/n)=E(HF/limit)+B exp(-alpha n), n=4,5 (G4-modified aug-cc-pVQZ / aug-cc-pV5Z), alpha=1.63 (step 3)"
+    single_points: "MP4/6-31G(d) + dE(+) [MP4/6-31+G(d)] + dE(2df,p) [MP4/6-31G(2df,p)] + dE(CC) [CCSD(T)/6-31G(d)] + dE(G3LargeXP) [MP2(full)/G3LargeXP - MP2/6-31G(2df,p) - MP2/6-31+G(d) + MP2/6-31G(d)] + dE(HF) + dE(SO) (Eq. 6); MP4 and CCSD(T) frozen core, large-basis MP2 all-electron"
+    spin_orbit: "atoms only (Table I), plus first-order 2Pi diatomics. For hydrocarbons only the atomic C(3P) -0.14 mEh term applies."
+    hlc_mhartree: {A: 6.947, B: 2.441, C: 7.116, D: 1.414, A_prime: 7.128, E: 2.745}
+    hlc_form: "-A n_beta (closed-shell molecules); -A' n_beta - B(n_alpha-n_beta) (open-shell); -C n_beta - D(n_alpha-n_beta) (atoms); E for species whose valence shell is a single s pair (not relevant to hydrocarbons)"
+    hlc_fit_set: "A,A',B,C,D fitted to minimise MAD over the whole G3/05 test set; E fitted to 13 single-pair species (text, p. 084108-3/-4). NOTE Table III caption says the HLC was 'reoptimized using the G3/99 test set' for the stepwise variants - internal inconsistency in the paper."
+    final: "E0(G4) = E(combined) + E(HLC) + E(ZPE)"
+    program: "GAUSSIAN 03"
+  G4_complete:
+    source: G4_2007
+    definition: "CCSD(T,full)/G3LargeXP // B3LYP/6-31G(2df,p) + HF-limit extrapolation + scaled B3LYP ZPE + atomic SO + REOPTIMISED HLC (fit to G2/91 test set, Table VI footnote: A=9.815, B=3.727, C=9.534, D=2.872, A'=9.871, E=4.904)"
+    distinct_from_standard_G4: true
+    note: "No additivity approximation; different HLC; assessed only on the 125-energy G2 test set. Must never match E1's 'standard G4'."
+  G4_MP2:
+    source: "Curtiss, Redfern, Raghavachari, J. Chem. Phys. 127, 124105 (2007), doi:10.1063/1.2770701 - NOT READ (paywalled)"
+    definition_secondary: "Gaussian 09 manual (via rag-drg): keyword G4MP2 requests the reduced-order 'fourth generation' variant [Curtiss07a]."
+    distinct_from_standard_G4: true
+  standard_G3:
+    source: G3_1998
+    geometry: "HF/6-31G(d) initial; final MP2(full)/6-31G(d) (all electrons) (steps 1, 3)"
+    zpe: "HF/6-31G(d) harmonic frequencies scaled by 0.8929 (step 2)"
+    single_points: "MP4/6-31G(d) + dE(+) [MP4/6-31+G(d)] + dE(2df,p) + dE(QCI) [QCISD(T)/6-31G(d)] + dE(G3large) [MP2(full)/G3large based]; frozen core except MP2(full)/G3large"
+    spin_orbit: "atomic species only (Table I); molecular SO explicitly NOT included"
+    hlc_mhartree: {A: 6.386, B: 2.977, C: 6.219, D: 1.185}
+    hlc_form: "-A n_beta - B(n_alpha-n_beta) molecules; -C n_beta - D(n_alpha-n_beta) atoms"
+    hlc_fit_set: "G2/97 test set (299 energies; less three IPs)"
+    final: "E0(G3) = E(combined) + E(HLC) + E(ZPE)"
+    program: "GAUSSIAN 94 (original)"
+  G3_MP2:
+    source: G3MP2_1999
+    definition: "MP2(full)/6-31G(d) geometry; QCISD(T)/6-31G(d) + dE(MP2) [MP2(fc)/G3MP2large - MP2/6-31G(d)] + atomic SO + HLC + ZPE (HF/6-31G(d) x 0.8929)"
+    hlc_mhartree: {A: 9.279, B: 4.471, C: 9.345, D: 2.021}
+    distinct_from_standard_G3: true
+  G3X:
+    source: G3X_2001
+    definition: "G3 with B3LYP/6-31G(2df,p) geometry and ZPE (x0.9854) plus HF/G3XLarge correction (g functions on second row)"
+    hlc_mhartree: {A: 6.783, B: 3.083, C: 6.877, D: 1.152}
+    hlc_fit_set: "G3/99"
+    distinct_from_standard_G3: true
+  G3B3:
+    source: "Baboul, Curtiss, Redfern, Raghavachari, J. Chem. Phys. 110, 7650 (1999), doi:10.1063/1.478676 - NOT READ (paywalled)"
+    definition_secondary: "Gaussian 09 manual (via rag-drg): 'G3 variants using B3LYP structures and frequencies [Baboul99] are requested with the G3B3 and G3MP2B3 keywords.' Geometry basis/scale factor not verified from primary."
+    distinct_from_standard_G3: true
+    caution: "Not the same as the G3X paper's 'G3//B32df' (B3LYP/6-31G(2df,p), its own HLC)."
+  formation_enthalpy:
+    source: "G2/97 paper Eqs. (1)-(2), Table I; G4 paper p. 084108-5 ('calculated as in Ref. 18'); G3 paper p. 7767 ('as in Ref. 5')"
+    route: "atomization: dfH(0K) = sum_atoms dfH0(atom,0K) - sum D0; dfH(298) = dfH(0K) + [H298-H0](molecule) - sum_atoms [H298-H0](element, standard state)"
+    atomic_dfH_0K_kcal_mol: {H: "51.63 +/- 0.001", C: "169.98 +/- 0.1"}
+    atomic_source: "JANAF (G2/97 Table I); boron from Ruscic et al. (irrelevant to hydrocarbons)"
+    element_H298_minus_H0_kcal_mol: {H: 1.01, C: 0.25}
+    element_note: "Per atom, elements in standard states (H2 gas, graphite), from JANAF"
+    molecular_thermal_correction: "RRHO: harmonic vibrations from the recipe's scaled frequencies, classical translation (3/2 RT) and rotation (3/2 RT nonlinear, RT linear), plus PV; all modes harmonic incl. torsions"
+    frequency_source_for_thermal_correction:
+      G3: "scaled HF/6-31G(d) (G2/97 p. 1065; G3/05 p. 124107-2)"
+      G4: "not explicitly stated in the G4 paper beyond 'as in Ref. 18'; by analogy with G3X (G3/05 p. 124107-2: scaled B3LYP/6-31G(2df,p)) presumably scaled B3LYP/6-31G(2df,p) - judgement call, unverified"
+    relativistic: "Scalar relativistic effects not included in G4 (p. 084108-9)"
+evidence_limits:
+  - quote: "The A, A', B, C, and D values are chosen to give the smallest average absolute deviation from experiment for the whole G3/05 test set."
+    source: "G4 paper p. 084108-3"
+  - quote: "G3 ... A, B, C, D values are chosen to give the smallest average absolute deviation from experiment for the G2/97 test set (less three ionization potentials as noted below)."
+    source: "G3 paper p. 7767"
+  - statement: "The 38 hydrocarbons are inside both fit sets (G2/97 subset for G3's HLC: 22 of them; G3/05 for G4's HLC: all 38). The G4 vs G3 MAD (0.48 vs 0.69) is in-sample, development-set performance, not independent validation."
+  - quote: "the largest improvement occurs for nonhydrogens ... The next largest improvement occurs for the 38 hydrocarbons for which the average absolute deviation decreases from 0.69 kcal/mol (G3) to 0.48 kcal/mol (G4)."
+    source: "G4 paper p. 084108-5"
+  - quote: "This approach depends on a cancellation of errors as well as well-defined parameters to achieve this."
+    source: "G4 paper p. 084108-2"
+  - statement: "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
+members:
+  - member_id: E1-HC-01
+    name_as_printed: "CH2(1A1)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G21 DHf)"
+    common_name: "Methylene"
+    molecular_formula: CH2
+    smiles: "[CH2]"
+    smiles_source: "PubChem CID 123164 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/CH2/h1H2"
+    inchikey: HZVOZRGWRWCICA-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=HZVOZRGWRWCICA-UHFFFAOYSA-N&Units=SI), CAS 2465-56-7"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "1A1 (singlet methylene; an EXCITED state - the ground state of CH2 is 3B1 triplet, which is a separate G3/05 entry classed as a radical)"
+    phase: gas
+    test_set: "G2/97 (G2-1 subset, original G2 test set)"
+    membership_evidence: inferred
+    membership_citation: "G2/97 paper (JCP 106, 1063) p. 1066 classification rule ('separated out the radicals and then further separated the closed shell species into (1) non-hydrogen systems, (2) hydrocarbons, ...') and Table VI (p. 1076): G2-1 hydrocarbons (5) with G2 MAD 0.88. G2-1 Table II has no category headings; the 5 members are the only closed-shell C/H-only G2-1 species, and their G2 deviations (ANL g2dev.htm) give MAD 0.88 exactly. All five G2-1 category counts (14/5/5/18/13) reconcile with this partition (see NOTES.md). G3/99 paper does not list G2-1 members by category; its Table III (p. 7379) G2/97 Hydrocarbons (22) G3 MAD 0.68 is reproduced (0.677) with CH2(1A1) as the fifth G2-1 member (also with CH3, 0.682; not with CH2(3B1) 0.695, CH 0.700, H2 0.659)."
+    identity_status: resolved_state_specific
+    flags:
+      - "STATE-SPECIFIC: SMILES [CH2] and InChI/InChIKey are identical for singlet and triplet methylene; a record matches only if it explicitly declares multiplicity 1 / 1A1. Species-level identity alone must NOT match."
+      - "Excited electronic state (not the ground state); its experimental enthalpy is for 1CH2."
+    benchmark_geometry_note: "ANL g2-97_cart_neut.txt: 'Singlet methylene (CH2), C2v symm, 1-A1. MP2(full)/6-31G* Geom.' [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: 1.02
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-02
+    name_as_printed: "CH4"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G21 DHf)"
+    common_name: "Methane"
+    molecular_formula: CH4
+    smiles: "C"
+    smiles_source: "PubChem CID 297 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/CH4/h1H4"
+    inchikey: VNWKTOKETHGBQD-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=VNWKTOKETHGBQD-UHFFFAOYSA-N&Units=SI), CAS 74-82-8"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-1 subset, original G2 test set)"
+    membership_evidence: inferred
+    membership_citation: "G2/97 paper (JCP 106, 1063) p. 1066 classification rule ('separated out the radicals and then further separated the closed shell species into (1) non-hydrogen systems, (2) hydrocarbons, ...') and Table VI (p. 1076): G2-1 hydrocarbons (5) with G2 MAD 0.88. G2-1 Table II has no category headings; the 5 members are the only closed-shell C/H-only G2-1 species, and their G2 deviations (ANL g2dev.htm) give MAD 0.88 exactly. All five G2-1 category counts (14/5/5/18/13) reconcile with this partition (see NOTES.md). G3/99 paper does not list G2-1 members by category; its Table III (p. 7379) G2/97 Hydrocarbons (22) G3 MAD 0.68 is reproduced (0.677) with CH2(1A1) as the fifth G2-1 member (also with CH3, 0.682; not with CH2(3B1) 0.695, CH 0.700, H2 0.659)."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: -0.03
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-03
+    name_as_printed: "C2H2"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G21 DHf)"
+    common_name: "Acetylene"
+    molecular_formula: C2H2
+    smiles: "C#C"
+    smiles_source: "PubChem CID 6326 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C2H2/c1-2/h1-2H"
+    inchikey: HSFWRNGVRCDJHI-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=HSFWRNGVRCDJHI-UHFFFAOYSA-N&Units=SI), CAS 74-86-2"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-1 subset, original G2 test set)"
+    membership_evidence: inferred
+    membership_citation: "G2/97 paper (JCP 106, 1063) p. 1066 classification rule ('separated out the radicals and then further separated the closed shell species into (1) non-hydrogen systems, (2) hydrocarbons, ...') and Table VI (p. 1076): G2-1 hydrocarbons (5) with G2 MAD 0.88. G2-1 Table II has no category headings; the 5 members are the only closed-shell C/H-only G2-1 species, and their G2 deviations (ANL g2dev.htm) give MAD 0.88 exactly. All five G2-1 category counts (14/5/5/18/13) reconcile with this partition (see NOTES.md). G3/99 paper does not list G2-1 members by category; its Table III (p. 7379) G2/97 Hydrocarbons (22) G3 MAD 0.68 is reproduced (0.677) with CH2(1A1) as the fifth G2-1 member (also with CH3, 0.682; not with CH2(3B1) 0.695, CH 0.700, H2 0.659)."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: -0.4
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-04
+    name_as_printed: "C2H4"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G21 DHf)"
+    common_name: "Ethylene"
+    molecular_formula: C2H4
+    smiles: "C=C"
+    smiles_source: "PubChem CID 6325 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C2H4/c1-2/h1-2H2"
+    inchikey: VGGSQFUCUMXWEO-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=VGGSQFUCUMXWEO-UHFFFAOYSA-N&Units=SI), CAS 74-85-1"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-1 subset, original G2 test set)"
+    membership_evidence: inferred
+    membership_citation: "G2/97 paper (JCP 106, 1063) p. 1066 classification rule ('separated out the radicals and then further separated the closed shell species into (1) non-hydrogen systems, (2) hydrocarbons, ...') and Table VI (p. 1076): G2-1 hydrocarbons (5) with G2 MAD 0.88. G2-1 Table II has no category headings; the 5 members are the only closed-shell C/H-only G2-1 species, and their G2 deviations (ANL g2dev.htm) give MAD 0.88 exactly. All five G2-1 category counts (14/5/5/18/13) reconcile with this partition (see NOTES.md). G3/99 paper does not list G2-1 members by category; its Table III (p. 7379) G2/97 Hydrocarbons (22) G3 MAD 0.68 is reproduced (0.677) with CH2(1A1) as the fifth G2-1 member (also with CH3, 0.682; not with CH2(3B1) 0.695, CH 0.700, H2 0.659)."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: 0.12
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-05
+    name_as_printed: "C2H6"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G21 DHf)"
+    common_name: "Ethane"
+    molecular_formula: C2H6
+    smiles: "CC"
+    smiles_source: "PubChem CID 6324 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C2H6/c1-2/h1-2H3"
+    inchikey: OTMSDBZUPAUEDD-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?ID=C74840&Units=SI), CAS 74-84-0"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-1 subset, original G2 test set)"
+    membership_evidence: inferred
+    membership_citation: "G2/97 paper (JCP 106, 1063) p. 1066 classification rule ('separated out the radicals and then further separated the closed shell species into (1) non-hydrogen systems, (2) hydrocarbons, ...') and Table VI (p. 1076): G2-1 hydrocarbons (5) with G2 MAD 0.88. G2-1 Table II has no category headings; the 5 members are the only closed-shell C/H-only G2-1 species, and their G2 deviations (ANL g2dev.htm) give MAD 0.88 exactly. All five G2-1 category counts (14/5/5/18/13) reconcile with this partition (see NOTES.md). G3/99 paper does not list G2-1 members by category; its Table III (p. 7379) G2/97 Hydrocarbons (22) G3 MAD 0.68 is reproduced (0.677) with CH2(1A1) as the fifth G2-1 member (also with CH3, 0.682; not with CH2(3B1) 0.695, CH 0.700, H2 0.659)."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: -0.11
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-06
+    name_as_printed: "CH3CCH (propyne)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Propyne"
+    molecular_formula: C3H4
+    smiles: "CC#C"
+    smiles_source: "PubChem CID 6335 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C3H4/c1-3-2/h1H,2H3"
+    inchikey: MWWATHDPGQKSAR-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=MWWATHDPGQKSAR-UHFFFAOYSA-N&Units=SI), CAS 74-99-7"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: -0.06
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-07
+    name_as_printed: "CH2=C=CH2 (allene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Allene"
+    molecular_formula: C3H4
+    smiles: "C=C=C"
+    smiles_source: "PubChem CID 10037 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C3H4/c1-3-2/h1-2H2"
+    inchikey: IYABWNGZIDDRAK-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=IYABWNGZIDDRAK-UHFFFAOYSA-N&Units=SI), CAS 463-49-0"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: 0.35
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-08
+    name_as_printed: "C3H4 (cyclopropene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Cyclopropene"
+    molecular_formula: C3H4
+    smiles: "C1C=C1"
+    smiles_source: "PubChem CID 123173 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C3H4/c1-2-3-1/h1-2H,3H2"
+    inchikey: OOXWYYGXTJLWHA-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=OOXWYYGXTJLWHA-UHFFFAOYSA-N&Units=SI), CAS 2781-85-3"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: -1.71
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-09
+    name_as_printed: "CH3CH=CH2 (propylene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Propene"
+    molecular_formula: C3H6
+    smiles: "CC=C"
+    smiles_source: "PubChem CID 8252 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C3H6/c1-3-2/h3H,1H2,2H3"
+    inchikey: QQONPFPTGQHPMA-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=QQONPFPTGQHPMA-UHFFFAOYSA-N&Units=SI), CAS 115-07-1"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: -0.04
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-10
+    name_as_printed: "C3H6 (cyclopropane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Cyclopropane"
+    molecular_formula: C3H6
+    smiles: "C1CC1"
+    smiles_source: "PubChem CID 6351 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C3H6/c1-2-3-1/h1-3H2"
+    inchikey: LVZWSLJZHVFIQJ-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=LVZWSLJZHVFIQJ-UHFFFAOYSA-N&Units=SI), CAS 75-19-4"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g2-97_cart_neut.txt: D3h [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.26
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-11
+    name_as_printed: "C3H8 (propane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Propane"
+    molecular_formula: C3H8
+    smiles: "CCC"
+    smiles_source: "PubChem CID 6334 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C3H8/c1-3-2/h3H2,1-2H3"
+    inchikey: ATUOYWHBWRKTHZ-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=ATUOYWHBWRKTHZ-UHFFFAOYSA-N&Units=SI), CAS 74-98-6"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g2-97_cart_neut.txt: C2v [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.16
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-12
+    name_as_printed: "CH2CHCHCH2 (butadiene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "1,3-Butadiene"
+    molecular_formula: C4H6
+    smiles: "C=CC=C"
+    smiles_source: "PubChem CID 7845 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C4H6/c1-3-4-2/h3-4H,1-2H2"
+    inchikey: KAKZBPTYRLMSJV-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=KAKZBPTYRLMSJV-UHFFFAOYSA-N&Units=SI), CAS 106-99-0"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g2-97_cart_neut.txt: 'Trans-1,3-butadiene (C4H6), C2h symm.' (s-trans conformer) [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.23
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-13
+    name_as_printed: "C4H6 (2-butyne)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "2-Butyne"
+    molecular_formula: C4H6
+    smiles: "CC#CC"
+    smiles_source: "PubChem CID 10419 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C4H6/c1-3-4-2/h1-2H3"
+    inchikey: XNMQEEKYCVKGBD-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=XNMQEEKYCVKGBD-UHFFFAOYSA-N&Units=SI), CAS 503-17-3"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: -0.55
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-14
+    name_as_printed: "C4H6 (methylene cyclopropane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Methylenecyclopropane"
+    molecular_formula: C4H6
+    smiles: "C=C1CC1"
+    smiles_source: "PubChem CID 80245 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C4H6/c1-4-2-3-4/h1-3H2"
+    inchikey: XSGHLZBESSREDT-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=XSGHLZBESSREDT-UHFFFAOYSA-N&Units=SI), CAS 6142-73-0"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g2-97_cart_neut.txt: C2v [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: 1.89
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-15
+    name_as_printed: "C4H6 (bicyclobutane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Bicyclo[1.1.0]butane"
+    molecular_formula: C4H6
+    smiles: "C1C2C1C2"
+    smiles_source: "PubChem CID 135973 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C4H6/c1-3-2-4(1)3/h3-4H,1-2H2"
+    inchikey: LASLVGACQUUOEB-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=LASLVGACQUUOEB-UHFFFAOYSA-N&Units=SI), CAS 157-33-5"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g2-97_cart_neut.txt: C2v [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -1.46
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-16
+    name_as_printed: "C4H6 (cyclobutene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Cyclobutene"
+    molecular_formula: C4H6
+    smiles: "C1CC=C1"
+    smiles_source: "PubChem CID 69972 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C4H6/c1-2-4-3-1/h1-2H,3-4H2"
+    inchikey: CFBGXYDUODCMNS-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=CFBGXYDUODCMNS-UHFFFAOYSA-N&Units=SI), CAS 822-35-5"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: -1.46
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-17
+    name_as_printed: "C4H8 (cyclobutane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Cyclobutane"
+    molecular_formula: C4H8
+    smiles: "C1CCC1"
+    smiles_source: "PubChem CID 9250 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C4H8/c1-2-4-3-1/h1-4H2"
+    inchikey: PMPVIKIVABFJJI-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=PMPVIKIVABFJJI-UHFFFAOYSA-N&Units=SI), CAS 287-23-0"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g2-97_cart_neut.txt: D2d [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.01
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-18
+    name_as_printed: "C4H8 (isobutene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "1-Propene, 2-methyl-"
+    molecular_formula: C4H8
+    smiles: "CC(=C)C"
+    smiles_source: "PubChem CID 8255 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C4H8/c1-4(2)3/h1H2,2-3H3"
+    inchikey: VQTUBCCKSQIDNK-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=VQTUBCCKSQIDNK-UHFFFAOYSA-N&Units=SI), CAS 115-11-7"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g2-97_cart_neut.txt: 'Isobutene (C4H8), Single bonds trans, C2v symm.' [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.01
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-19
+    name_as_printed: "C4H10 (trans butane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Butane"
+    molecular_formula: C4H10
+    smiles: "CCCC"
+    smiles_source: "PubChem CID 7843 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C4H10/c1-3-4-2/h3-4H2,1-2H3"
+    inchikey: IJDNQMDRQITEOD-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=IJDNQMDRQITEOD-UHFFFAOYSA-N&Units=SI), CAS 106-97-8"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g2-97_cart_neut.txt: 'Trans-butane (C4H10), C2h symm.' (anti conformer) [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.1
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-20
+    name_as_printed: "C4H10 (isobutane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Isobutane"
+    molecular_formula: C4H10
+    smiles: "CC(C)C"
+    smiles_source: "PubChem CID 6360 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C4H10/c1-4(2)3/h4H,1-3H3"
+    inchikey: NNPPMTNAJDCUHE-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=NNPPMTNAJDCUHE-UHFFFAOYSA-N&Units=SI), CAS 75-28-5"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g2-97_cart_neut.txt: C3v [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.2
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-21
+    name_as_printed: "C5H8 (spiropentane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Spiropentane"
+    molecular_formula: C5H8
+    smiles: "C1CC12CC2"
+    smiles_source: "PubChem CID 9088 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C5H8/c1-2-5(1)3-4-5/h1-4H2"
+    inchikey: OGNAOIGAPPSUMG-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=OGNAOIGAPPSUMG-UHFFFAOYSA-N&Units=SI), CAS 157-40-4"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: 0.41
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-22
+    name_as_printed: "C6H6 (benzene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G22 DHf)"
+    common_name: "Benzene"
+    molecular_formula: C6H6
+    smiles: "C1=CC=CC=C1"
+    smiles_source: "PubChem CID 241 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C6H6/c1-2-4-6-5-3-1/h1-6H"
+    inchikey: UHOVQNZJYSORNB-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=UHOVQNZJYSORNB-UHFFFAOYSA-N&Units=SI), CAS 71-43-2"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G2/97 (G2-2 subset, G2/97 additions)"
+    membership_evidence: explicit
+    membership_citation: "Curtiss, Raghavachari, Redfern & Pople, J. Chem. Phys. 106, 1063 (1997), Table II (p. 1068) and Table III (p. 1071): listed under the 'G2-2 test set / Hydrocarbons' heading; Table VI (p. 1076) G2-2 hydrocarbons (17). Carried into G3/99 (G3X paper Table VI, Hydrocarbons (22) of G2/97) and G3/05 (G4 paper Table II, Hydrocarbons (38))."
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: -0.24
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-23
+    name_as_printed: "C4H6 (methyl allene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "1,2-Butadiene"
+    molecular_formula: C4H6
+    smiles: "CC=C=C"
+    smiles_source: "PubChem CID 11535 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C4H6/c1-3-4-2/h4H,1H2,2H3"
+    inchikey: QNRMTGGDHLBXQZ-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=QNRMTGGDHLBXQZ-UHFFFAOYSA-N&Units=SI), CAS 590-19-2"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 1 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "CH3-CH=C=CH2 (methyl allene)"
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g3-3_mp2.txt: 'C4H6 isomer. CH3-CH=C=CH2. C1 symmetry.' [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: 0.1
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-24
+    name_as_printed: "C5H8 (isoprene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "Isoprene"
+    molecular_formula: C5H8
+    smiles: "CC(=C)C=C"
+    smiles_source: "PubChem CID 6557 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C5H8/c1-4-5(2)3/h4H,1-2H2,3H3"
+    inchikey: RRHGJUQNOFWUDK-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=RRHGJUQNOFWUDK-UHFFFAOYSA-N&Units=SI), CAS 78-79-5"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 2 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C5H8 (isoprene)"
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g3-3_mp2.txt: 'C5H8 isoprene H2C=CHC(CH3)=CH2 trans' (s-trans conformer) [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.14
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-25
+    name_as_printed: "C5H10 (cyclopentane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "Cyclopentane"
+    molecular_formula: C5H10
+    smiles: "C1CCCC1"
+    smiles_source: "PubChem CID 9253 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C5H10/c1-2-4-5-3-1/h1-5H2"
+    inchikey: RGSFGYAAUTVSQA-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=RGSFGYAAUTVSQA-UHFFFAOYSA-N&Units=SI), CAS 287-92-3"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 3 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C5H10 (cyclopentane)"
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g3-3_mp2.txt: 'cyclopentane twist c5h10 C2 symmetry. Note: NImag=1 but has same hf/6-31g* energy and structure as nosym species' [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.93
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-26
+    name_as_printed: "C5H12 (n-pentane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "Pentane"
+    molecular_formula: C5H12
+    smiles: "CCCCC"
+    smiles_source: "PubChem CID 8003 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C5H12/c1-3-5-4-2/h3-5H2,1-2H3"
+    inchikey: OFBQJSOFQDEBGM-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=OFBQJSOFQDEBGM-UHFFFAOYSA-N&Units=SI), CAS 109-66-0"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 4 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C5H12 (n-pentane)"
+    identity_status: resolved
+    flags:
+      - "Conformer used in the benchmark geometry not stated in the ANL source comment; experimental value is the equilibrium gas (conformer mixture). Species identity unaffected."
+    g4_deviation_expt_minus_theory_kcal_mol: -0.21
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-27
+    name_as_printed: "C5H12 (neo pentane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "Neopentane"
+    molecular_formula: C5H12
+    smiles: "CC(C)(C)C"
+    smiles_source: "PubChem CID 10041 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C5H12/c1-5(2,3)4/h1-4H3"
+    inchikey: CRSOQBOWXPBRES-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=CRSOQBOWXPBRES-UHFFFAOYSA-N&Units=SI), CAS 463-82-1"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 5 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C5H12 (neopentane)"
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g3-3_mp2.txt: Td [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.25
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-28
+    name_as_printed: "C6H8 (1,3 cyclohexadiene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "1,3-Cyclohexadiene"
+    molecular_formula: C6H8
+    smiles: "C1CC=CC=C1"
+    smiles_source: "PubChem CID 11605 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C6H8/c1-2-4-6-5-3-1/h1-4H,5-6H2"
+    inchikey: MGNZXYYWBUKAII-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=MGNZXYYWBUKAII-UHFFFAOYSA-N&Units=SI), CAS 592-57-4"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 6 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C6H8 (1,3 cyclohexadiene)"
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g3-3_mp2.txt: C2 [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.55
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-29
+    name_as_printed: "C6H8 (1,4 cyclohexadiene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "1,4-Cyclohexadiene"
+    molecular_formula: C6H8
+    smiles: "C1C=CCC=C1"
+    smiles_source: "PubChem CID 12343 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C6H8/c1-2-4-6-5-3-1/h1-2,5-6H,3-4H2"
+    inchikey: UVJHQYIOXKWHFD-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=UVJHQYIOXKWHFD-UHFFFAOYSA-N&Units=SI), CAS 628-41-1"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 7 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C6H8 (1,4 cyclohexadiene)"
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g3-3_mp2.txt: 'para-cyclohexadiene. C6H8. D2h symmetry.' (planar) [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -1.08
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-30
+    name_as_printed: "C6H12 (cyclohexane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "Cyclohexane"
+    molecular_formula: C6H12
+    smiles: "C1CCCCC1"
+    smiles_source: "PubChem CID 8078 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C6H12/c1-2-4-6-5-3-1/h1-6H2"
+    inchikey: XDTMQSROBMDMFD-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=XDTMQSROBMDMFD-UHFFFAOYSA-N&Units=SI), CAS 110-82-7"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 8 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C6H12 (cyclohexane)"
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g3-3_mp2.txt: 'Cyclohexane (chair). D3d' [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: -0.56
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-31
+    name_as_printed: "C6H14 (n-hexane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "n-Hexane"
+    molecular_formula: C6H14
+    smiles: "CCCCCC"
+    smiles_source: "PubChem CID 8058 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C6H14/c1-3-5-6-4-2/h3-6H2,1-2H3"
+    inchikey: VLKZOEOYAKHREP-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=VLKZOEOYAKHREP-UHFFFAOYSA-N&Units=SI), CAS 110-54-3"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 9 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C6H14 (n-hexane)"
+    identity_status: resolved
+    flags:
+      - "Conformer used in the benchmark geometry not stated in the ANL source comment; experimental value is the equilibrium gas (conformer mixture). Species identity unaffected."
+    g4_deviation_expt_minus_theory_kcal_mol: 0.06
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-32
+    name_as_printed: "C6H14 (3-methyl pentane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "Pentane, 3-methyl-"
+    molecular_formula: C6H14
+    smiles: "CCC(C)CC"
+    smiles_source: "PubChem CID 7282 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C6H14/c1-4-6(3)5-2/h6H,4-5H2,1-3H3"
+    inchikey: PFEOZHBOMNWTJB-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=PFEOZHBOMNWTJB-UHFFFAOYSA-N&Units=SI), CAS 96-14-0"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 10 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C6H14 (3-methyl pentane)"
+    identity_status: resolved
+    flags:
+      - "Conformer used in the benchmark geometry not stated in the ANL source comment; experimental value is the equilibrium gas (conformer mixture). Species identity unaffected."
+    g4_deviation_expt_minus_theory_kcal_mol: -0.3
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-33
+    name_as_printed: "C6H5CH3"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "Toluene"
+    molecular_formula: C7H8
+    smiles: "CC1=CC=CC=C1"
+    smiles_source: "PubChem CID 1140 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C7H8/c1-7-5-3-2-4-6-7/h2-6H,1H3"
+    inchikey: YXFVVABEGXRONW-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=YXFVVABEGXRONW-UHFFFAOYSA-N&Units=SI), CAS 108-88-3"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 11 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C6H5CH3 (toluene)"
+    identity_status: resolved
+    benchmark_geometry_note: "ANL g3-3_mp2.txt: 'C6H5-CH3 (Toluene. Cs)' [G3-style MP2(full)/6-31G* geometry; G4 uses B3LYP/6-31G(2df,p) geometries, not inspected]"
+    g4_deviation_expt_minus_theory_kcal_mol: 0.04
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-34
+    name_as_printed: "C7H16 (n-heptane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "Heptane"
+    molecular_formula: C7H16
+    smiles: "CCCCCCC"
+    smiles_source: "PubChem CID 8900 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C7H16/c1-3-5-7-6-4-2/h3-7H2,1-2H3"
+    inchikey: IMNFDUFMRHMDMM-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=IMNFDUFMRHMDMM-UHFFFAOYSA-N&Units=SI), CAS 142-82-5"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 12 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C7H16 (n-heptane)"
+    identity_status: resolved
+    flags:
+      - "Conformer used in the benchmark geometry not stated in the ANL source comment; experimental value is the equilibrium gas (conformer mixture). Species identity unaffected."
+    g4_deviation_expt_minus_theory_kcal_mol: 0.18
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-35
+    name_as_printed: "C8H8 (cyclooctatetraene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "1,3,5,7-Cyclooctatetraene"
+    molecular_formula: C8H8
+    smiles: "C\\1=C\\C=C/C=C\\C=C1"
+    smiles_source: "PubChem CID 637866 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C8H8/c1-2-4-6-8-7-5-3-1/h1-8H/b2-1-,3-1-,4-2-,5-3-,6-4-,7-5-,8-6-,8-7-"
+    inchikey: KDUIUFJBNGTBMD-BONZMOEMSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?ID=C629209&Units=SI), CAS 629-20-9"
+    inchikey_pubchem: KDUIUFJBNGTBMD-DLMDZQPMSA-N
+    inchi_pubchem: "InChI=1S/C8H8/c1-2-4-6-8-7-5-3-1/h1-8H/b2-1-,3-1?,4-2?,5-3-,6-4-,7-5?,8-6?,8-7-"
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 13 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C8H8 (cyclooctatetraene)"
+    identity_status: resolved_identifier_caveat
+    flags:
+      - "InChI stereo layer is source-dependent: NIST ...-BONZMOEMSA-N (all ring bonds '-'), PubChem CID 637866 ...-DLMDZQPMSA-N (four bonds '?'), unspecified SMILES ...-UHFFFAOYSA-N. All share connectivity block KDUIUFJBNGTBMD. Matcher must compare on connectivity + formula (or one canonicalising toolkit), not on raw full InChIKey."
+    g4_deviation_expt_minus_theory_kcal_mol: -0.7
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-36
+    name_as_printed: "C8H18 (n-octane)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "Octane"
+    molecular_formula: C8H18
+    smiles: "CCCCCCCC"
+    smiles_source: "PubChem CID 356 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C8H18/c1-3-5-7-8-6-4-2/h3-8H2,1-2H3"
+    inchikey: TVMXDCGIABBOFY-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=TVMXDCGIABBOFY-UHFFFAOYSA-N&Units=SI), CAS 111-65-9"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 14 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C8H18 (n-octane)"
+    identity_status: resolved
+    flags:
+      - "Conformer used in the benchmark geometry not stated in the ANL source comment; experimental value is the equilibrium gas (conformer mixture). Species identity unaffected."
+    g4_deviation_expt_minus_theory_kcal_mol: 0.3
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-37
+    name_as_printed: "C10H8 (naphthalene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "Naphthalene"
+    molecular_formula: C10H8
+    smiles: "C1=CC=C2C=CC=CC2=C1"
+    smiles_source: "PubChem CID 931 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C10H8/c1-2-6-10-8-4-3-7-9(10)5-1/h1-8H"
+    inchikey: UFWIBTONFRDIAS-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=UFWIBTONFRDIAS-UHFFFAOYSA-N&Units=SI), CAS 91-20-3"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 15 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C10H8 (naphthalene)"
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: 1.27
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
+  - member_id: E1-HC-38
+    name_as_printed: "C10H8 (azulene)"
+    name_source: "G4 paper EPAPS E-JCPSA6-126-310707 Suppl. Table 11 / ANL 'g4 g305 dev table' row label (property code G33 DHf)"
+    common_name: "Azulene"
+    molecular_formula: C10H8
+    smiles: "C1=CC=C2C=CC=C2C=C1"
+    smiles_source: "PubChem CID 9231 (PUG REST, SMILES property); RDKit 2025.09.6 round-trip InChIKey equals PubChem"
+    inchi: "InChI=1S/C10H8/c1-2-5-9-7-4-8-10(9)6-3-1/h1-8H"
+    inchikey: CUFNKYGDVFVPHO-UHFFFAOYSA-N
+    inchi_source: "NIST Chemistry WebBook (https://webbook.nist.gov/cgi/cbook.cgi?InChI=CUFNKYGDVFVPHO-UHFFFAOYSA-N&Units=SI), CAS 275-51-4"
+    pubchem_inchikey_agrees: true
+    charge: 0
+    multiplicity: 1
+    electronic_state: "closed-shell singlet ground state"
+    phase: gas
+    test_set: "G3/99 addition"
+    membership_evidence: named_in_source_category_by_table_order
+    membership_citation: "G3/99 paper (Curtiss, Raghavachari, Redfern & Pople, JCP 112, 7374 (2000)), Table I (p. 7377), row 16 of 75: named among the 75 new enthalpies. Text p. 7376: the G3-3 subset contains '13 molecules without hydrogen, 16 hydrocarbons, 44 substituted hydrocarbons, and 2 radicals'. Table I has no per-row category headings; the first 16 rows are exactly the 16 C/H-only closed-shell species, and their printed G3 / G3(MP3) / G3(MP2) deviations reproduce Table III (p. 7379) 'Hydrocarbons (16)' MADs 0.69 / 0.66 / 0.72 (recomputed 0.694 / 0.669 / 0.719). Complete-G3/99 Table III: Hydrocarbons (38)."
+    name_in_g399_table_I: "C10H8 (azulene)"
+    identity_status: resolved
+    g4_deviation_expt_minus_theory_kcal_mol: -0.92
+    g4_deviation_source: "ANL 'g4 g305 dev table' (Wayback 2008/2010) = G4 EPAPS Suppl. Table 11"
