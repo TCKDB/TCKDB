@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import pytest
 from tckdb_schemas.coded_error import CodedValidationError
-from tckdb_schemas.fragments.calculation import CompositeInputPayload, CompositeResultPayload
+from tckdb_schemas.fragments.calculation import (
+    CalculationWithResultsPayload,
+    CompositeInputPayload,
+    CompositeResultPayload,
+)
 from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 from tckdb_schemas.workflows.computed_species_upload import CalculationDependencyInBundle, ComputedSpeciesUploadRequest
 
@@ -127,3 +131,51 @@ def test_an_input_naming_both_a_key_and_a_ref_is_refused_when_the_inputs_are_wri
     with pytest.raises(CodedValueError) as err:
         finalize_composite_inputs(db_session, [composite.id], calculations_by_key={"spq": sps["spq"]})
     assert err.value.code == "composite_input_reference_invalid"
+
+
+def test_a_program_run_at_an_inline_scheme_stores_its_breakdown_at_the_canonical_positions(db_session):
+    """The remap runs whenever a definition came with the level, not only for an assembled composite.
+
+    The producer lists scheme (c)'s terms as dtq, drel, dboc, base, dcv; the canonical order is base, dboc,
+    dtq, drel, dcv. That permutation is not its own inverse (a 5-cycle plus a fixed point), so a swap of the
+    mapping with its inverse stores values at the wrong terms and is caught, which a two-term reverse could not.
+    """
+    import copy
+
+    from sqlalchemy import select
+
+    from app.db.models.calculation import CalculationCompositeTerm
+
+    by_key = {t["key"]: t for t in f.SCHEME_C["terms"]}
+    listed = ["dtq", "drel", "dboc", "base", "dcv"]
+    scheme = copy.deepcopy(f.SCHEME_C)
+    scheme["terms"] = [copy.deepcopy(by_key[key]) for key in listed]
+    value = {"base": -76.375, "dcv": -0.01, "dtq": -0.0123, "drel": -0.0045, "dboc": 0.0027}
+    total = sum(value.values())
+    entry = _species_entry(db_session)
+    payload = CalculationWithResultsPayload(
+        type="composite",
+        software_release=f.SOFTWARE,
+        level_of_theory={"composite_scheme": scheme},
+        composite_result={
+            "assembly": "program_run",
+            "electronic_energy_hartree": total,
+            "terms": [{"term_position": i, "value_hartree": value[key]} for i, key in enumerate(listed)],
+        },
+    )
+    composite = resolve_and_persist_calculation_with_results(db_session, payload, species_entry_id=entry)
+    db_session.flush()
+    stored = {
+        row.term_position: row.value_hartree
+        for row in db_session.scalars(
+            select(CalculationCompositeTerm).where(CalculationCompositeTerm.calculation_id == composite.id)
+        )
+    }
+    # Canonical order of scheme (c): base, dboc (a value term), then the three differences, dtq, drel, dcv.
+    assert stored == {
+        0: value["base"],
+        1: value["dboc"],
+        2: value["dtq"],
+        3: value["drel"],
+        4: value["dcv"],
+    }

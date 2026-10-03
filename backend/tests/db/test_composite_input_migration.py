@@ -379,11 +379,12 @@ def test_downgrade_refuses_while_a_scheme_term_reads_the_ccsd_only_component(har
         assert conn.scalar(text("SELECT count(*) FROM composite_scheme_term")) == 1
 
 
-def test_downgrade_refuses_while_a_single_point_stores_the_derived_component(harness):
-    """The wire never lets one in; the refusal is for a row that got there past it."""
+def test_the_database_refuses_a_stored_derived_component(harness):
+    """The wire and the service refuse it; the CHECK is the floor under them."""
     harness.run("upgrade", _MIGRATION.revision)
     with harness.engine.begin() as conn:
         sp_id, _ = _seed_two_calculations(conn)
+    with pytest.raises(DBAPIError, match="component_not_derived"), harness.engine.begin() as conn:
         conn.execute(
             text(
                 "INSERT INTO calc_sp_energy_component (calculation_id, component, value_hartree) "
@@ -391,6 +392,26 @@ def test_downgrade_refuses_while_a_single_point_stores_the_derived_component(har
             ),
             {"c": sp_id, "k": _COMPONENT},
         )
-    refused = _alembic(harness, "downgrade", _MIGRATION.parent)
-    assert refused.returncode != 0
-    assert f"calc_sp_energy_component.component value(s) '{_COMPONENT}'" in refused.stderr + refused.stdout
+    # The other components are unaffected.
+    with harness.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO calc_sp_energy_component (calculation_id, component, value_hartree) "
+                "VALUES (:c, CAST('triples' AS energy_component_kind), -0.01)"
+            ),
+            {"c": sp_id},
+        )
+
+
+def test_the_check_is_created_in_the_transaction_that_adds_the_value_and_dropped_on_downgrade(harness):
+    harness.run("upgrade", _MIGRATION.parent)
+    harness.run("upgrade", _MIGRATION.revision)  # one transaction: ADD VALUE, then the CHECK
+    with harness.engine.connect() as conn:
+        assert conn.scalar(
+            text("SELECT count(*) FROM pg_constraint WHERE conname = 'ck_calc_sp_energy_component_component_not_derived'")
+        ) == 1
+    harness.run("downgrade", _MIGRATION.parent)
+    with harness.engine.connect() as conn:
+        assert conn.scalar(
+            text("SELECT count(*) FROM pg_constraint WHERE conname = 'ck_calc_sp_energy_component_component_not_derived'")
+        ) == 0

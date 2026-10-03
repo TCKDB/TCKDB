@@ -1323,6 +1323,7 @@ the gap.
 
 **Check constraints:**
 
+- `ck_calc_sp_energy_component_component_not_derived`: `component::text <> 'correlation_excluding_triples'`
 - `ck_calc_sp_energy_component_value_hartree_finite`: `value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8`
 
 ### `calc_sp_result`

@@ -215,10 +215,11 @@ def persist_composite_result(
     # The wire validator ran these on parse; a payload built with model_copy skipped it.
     assert_composite_result_arithmetic(payload)
 
-    # An assembled composite's breakdown names terms by the position the producer listed
-    # them at; the stored scheme orders its terms canonically, so map them across.
+    # A breakdown names terms by the position the producer listed them at in the scheme it sent
+    # inline (an assembled composite's, or a program run of a user scheme); the stored scheme
+    # orders its terms canonically, so map them across whenever a definition came with the level.
     term_values = [(t.term_position, t.value_hartree) for t in payload.terms]
-    if assembled and definition is not None and payload.terms:
+    if definition is not None and payload.terms:
         mapping = term_positions_for(session, definition)
         unknown_listed = sorted({p for p, _ in term_values if not 0 <= p < len(mapping)})
         if unknown_listed:

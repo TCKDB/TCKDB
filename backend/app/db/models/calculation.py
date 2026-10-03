@@ -589,6 +589,13 @@ class CalculationSPEnergyComponent(Base):
             "value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8",
             name="value_hartree_finite",
         ),
+        # ``correlation_excluding_triples`` is derived from ``correlation`` and ``triples`` and is never
+        # stored (ADR 0021). Compared as text so the constraint can be created in the transaction that
+        # adds the enum value.
+        CheckConstraint(
+            "component::text <> 'correlation_excluding_triples'",
+            name="component_not_derived",
+        ),
     )
 
 

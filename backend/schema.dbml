@@ -1431,6 +1431,7 @@ Table calc_sp_energy_component {
   }
 
   checks {
+    `component::text <> 'correlation_excluding_triples'` [name: 'ck_calc_sp_energy_component_component_not_derived']
     `value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8` [name: 'ck_calc_sp_energy_component_value_hartree_finite']
   }
 

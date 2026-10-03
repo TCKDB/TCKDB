@@ -14,9 +14,9 @@ Schema
 * ``energy_component_kind`` gains ``correlation_excluding_triples``: the CCSD part
   of a correlation energy, which a scheme term can read (``composite_scheme_term.energy_component``)
   and a single point never stores (the wire refuses it as a stored component; it is
-  derived from ``correlation`` and ``triples``). A CHECK on ``calc_sp_energy_component``
-  cannot say so here, because PostgreSQL refuses to use an enum value in the
-  transaction that added it.
+  derived from ``correlation`` and ``triples``) and ``calc_sp_energy_component`` carries
+  a CHECK saying so (``component::text <> 'correlation_excluding_triples'``: compared
+  as text, which PostgreSQL allows in the transaction that added the enum value).
 * ``calc_composite_input`` -- one row per slot an assembled composite filled:
   ``(calculation_id, term_position, slot, input_calculation_id)`` is the primary
   key, ``cardinal_number`` is set only on a ``cardinal`` slot, and
@@ -99,6 +99,7 @@ _PRIOR_COMPONENT_VALUES = (
     "scalar_relativistic",
 )
 #: ``(table, column)`` using ``energy_component_kind``.
+_DERIVED_CHECK = "ck_calc_sp_energy_component_component_not_derived"
 _COMPONENT_COLUMNS = (("composite_scheme_term", "energy_component"), ("calc_sp_energy_component", "component"))
 
 _SLOT = postgresql.ENUM("value", "high", "low", "cardinal", name="composite_input_slot", create_type=False)
@@ -144,6 +145,12 @@ def upgrade() -> None:
     # as the value is not used in the same transaction, which it is not.
     op.execute(f"ALTER TYPE {_ROLE_TYPE} ADD VALUE IF NOT EXISTS '{_NEW_VALUE}'")
     op.execute(f"ALTER TYPE {_COMPONENT_TYPE} ADD VALUE IF NOT EXISTS '{_COMPONENT_NEW_VALUE}'")
+    # Compared as text, so it is allowed in the transaction that added the value.
+    op.create_check_constraint(
+        op.f(_DERIVED_CHECK),
+        "calc_sp_energy_component",
+        f"component::text <> '{_COMPONENT_NEW_VALUE}'",
+    )
 
     op.create_table(
         _TABLE,
@@ -234,6 +241,7 @@ def downgrade() -> None:
         f"SELECT count(*) FROM calculation_dependency WHERE dependency_role = '{_NEW_VALUE}'",
     )
 
+    op.drop_constraint(op.f(_DERIVED_CHECK), "calc_sp_energy_component", type_="check")
     for table, column in _COMPONENT_COLUMNS:
         _refuse_if_any(
             f"{table}.{column} value(s) '{_COMPONENT_NEW_VALUE}'",
