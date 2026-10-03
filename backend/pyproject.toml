@@ -189,6 +189,10 @@ thermoml = [
 [tool.setuptools]
 py-modules = ["main"]
 
+# Audited rule data read at runtime (app/chemistry/thermo_rules/e1_manifest.py).
+[tool.setuptools.package-data]
+"app.chemistry.thermo_rules" = ["*.yaml"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
