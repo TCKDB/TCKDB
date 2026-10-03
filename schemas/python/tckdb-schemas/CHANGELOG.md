@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.88.0 - 2026-10-03
+
+No wire model changes. Contract notes the read-only thermo select endpoint.
+
 ## 0.85.0 - 2026-10-03
 
 A thermo record can state what its values describe (`thermodynamic_target`) and how they were

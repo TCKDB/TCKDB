@@ -294,6 +294,7 @@ class RejectionCode(str, Enum):
     THERMO_PROTOCOL_VERSION_UNSUPPORTED = "thermo_protocol_version_unsupported"
     THERMO_RECIPE_NAME_LISTED = "thermo_recipe_name_listed"
     THERMO_ROLE_DUPLICATE = "thermo_role_duplicate"
+    THERMO_SELECTION_CONDITION_CONFLICT = "thermo_selection_condition_conflict"
     THERMO_SOURCE_CALCULATION_OWNER_MISMATCH = "thermo_source_calculation_owner_mismatch"
     THERMO_SOURCE_ROLE_TYPE_MISMATCH = "thermo_source_role_type_mismatch"
     THERMO_SP_GEOMETRY_MISMATCH = "thermo_sp_geometry_mismatch"
@@ -521,6 +522,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.THERMO_PROTOCOL_VERSION_UNSUPPORTED,
         RejectionCode.THERMO_RECIPE_NAME_LISTED,
         RejectionCode.THERMO_ROLE_DUPLICATE,
+        RejectionCode.THERMO_SELECTION_CONDITION_CONFLICT,
         RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH,
         RejectionCode.THERMO_SP_GEOMETRY_MISMATCH,
@@ -815,6 +817,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.THERMO_PROTOCOL_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.THERMO_RECIPE_NAME_LISTED: frozenset({422}),
     RejectionCode.THERMO_ROLE_DUPLICATE: frozenset({422}),
+    RejectionCode.THERMO_SELECTION_CONDITION_CONFLICT: frozenset({422}),
     RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_SP_GEOMETRY_MISMATCH: frozenset({422}),

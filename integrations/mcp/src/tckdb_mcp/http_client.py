@@ -112,8 +112,16 @@ class TCKDBHttpClient:
         """
         return self._request("GET", url, params=_clean_params(params))
 
-    def post_json(self, url: str, body: Mapping[str, Any]) -> Any:
-        return self._request("POST", url, json=dict(body))
+    def post_json(
+        self,
+        url: str,
+        body: Mapping[str, Any],
+        *,
+        params: Mapping[str, Any] | None = None,
+    ) -> Any:
+        """POST ``body`` as JSON. ``params`` is for the few routes whose query string carries a
+        read-contract knob (``profile``) rather than a search field; ``None`` values are dropped."""
+        return self._request("POST", url, json=dict(body), params=_clean_params(params))
 
     def _request(
         self,
