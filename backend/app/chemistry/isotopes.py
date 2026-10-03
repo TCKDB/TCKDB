@@ -23,6 +23,7 @@ from rdkit import Chem
 
 __all__ = [
     "HYDROGEN_ISOTOPE_SYMBOLS",
+    "implied_isotope_mass_number",
     "isotope_mass",
     "most_common_isotope",
     "normalize_isotope",
@@ -31,26 +32,49 @@ __all__ = [
 
 #: Element symbols that name a *nuclide* rather than an element, mapped to the
 #: mass number they stand for. Only hydrogen has them, and only these two:
-#: ``D`` is deuterium and ``T`` is tritium.
+#: ``D`` is deuterium (mass number 2) and ``T`` is tritium (mass number 3).
 #:
-#: They are legal, common XYZ tokens — Gaussian, ORCA, Molpro and CFOUR all
-#: emit or accept them — and ``geometry_atom.element`` keeps them. Ingestion
-#: canonicalises the *case* of every symbol it stores
-#: (:func:`app.chemistry.geometry.normalize_element_symbol`, applied in
-#: :func:`app.chemistry.geometry.parse_xyz`) and deliberately stops there: a
-#: ``D`` collapsed to ``H`` at deposit time would destroy the depositor's own
-#: isotope labelling, which is a fact about the deposit rather than a spelling
-#: of one. Anything that *counts elements* must therefore resolve them to ``H``
-#: (:func:`app.chemistry.geometry.resolve_element_symbol`), or it refuses a
-#: correctly deposited isotopologue for spelling its hydrogens the way its ESS
-#: did — which ADR 0008 puts out of bounds for a blocking check.
+#: A ``D``/``T`` element token is an isotope declaration (decided 2026-10-03,
+#: ``docs/adr/0022``, issue #672). :func:`app.chemistry.geometry.parse_xyz`
+#: reads it as ``H`` plus the mass number below, so a new ``geometry_atom`` row
+#: holds ``H`` and an ``isotope_mass_number``, the isotope identity check sees
+#: ``[2H]``/``[3H]``, and the geometry hash includes the implied isotope
+#: exactly as an explicit ``geometry.isotopes`` entry would. ``xyz_text`` keeps
+#: the ``D`` the depositor wrote. :func:`validate_isotope` resolves the symbol
+#: to ``H`` before it asks RDKit, whose periodic table has no ``D``.
 #:
-#: This mapping is deliberately *not* wired into :func:`validate_isotope` or
-#: :func:`parse_xyz`. Isotope **identity** is carried atom-resolved by
-#: ``geometry.isotopes`` and by SMILES isotope notation, never by the element
-#: column; resolving ``D`` to ``H`` here answers "which element is this atom",
-#: which is the only question composition counting asks.
+#: Wherever ``D`` has a meaning in chemistry it means deuterium (IUPAC Red Book
+#: IR-3.3.2 permits ``D`` and ``T`` as symbols for 2H and 3H; RDKit's molfile
+#: reader turns a ``D`` atom into ``[2H]``). The council that settled #672
+#: found no manual saying Gaussian, ORCA, Molpro, Psi4 or Q-Chem emit ``D`` as
+#: an element: each documents an isotope as a mass attached to an element
+#: (``H(Iso=2)``, ``M = ...``, a ``MASS`` card, ``H@2.014101779``, a
+#: ``$isotopes`` section). A ``D`` reaches TCKDB from a hand-written xyz or
+#: input deck, not from an ESS's own output.
+#:
+#: Rows deposited *before* that decision hold ``D``/``T`` in the element column
+#: with a NULL mass number and cannot be rewritten
+#: (``trg_as_geometry_atom``). :func:`implied_isotope_mass_number` is how a
+#: reader recovers their meaning from the row's own symbol, and
+#: :func:`app.chemistry.geometry.resolve_element_symbol` is how anything that
+#: only *counts elements* still resolves them to ``H``.
 HYDROGEN_ISOTOPE_SYMBOLS: dict[str, int] = {"D": 2, "T": 3}
+
+
+def implied_isotope_mass_number(element: str) -> int | None:
+    """Return the mass number a ``D``/``T`` element symbol names, else ``None``.
+
+    Reads the symbol only (case-insensitive, blank-padded ``character(2)``
+    values accepted), so it can interpret a legacy ``geometry_atom`` row whose
+    ``isotope_mass_number`` is NULL without borrowing anything from a sibling
+    record.
+
+    :param element: Element symbol as stored or deposited.
+    :returns: ``2`` for ``D``, ``3`` for ``T``, ``None`` for every element
+        symbol.
+    """
+
+    return HYDROGEN_ISOTOPE_SYMBOLS.get(element.strip().capitalize())
 
 
 def _periodic_table() -> Chem.PeriodicTable:
@@ -103,12 +127,20 @@ def validate_isotope(element: str, mass_number: int, *, context: str) -> None:
     (frequencies, rotational constants, ZPE, kinetic isotope effects). We
     reject rather than guess.
 
+    ``D`` and ``T`` are resolved to ``H`` first: RDKit's periodic table has no
+    such element, so without that a ``D`` atom plus a correct mass number was
+    refused as "unknown element symbol". Whether the mass number *agrees with*
+    the spelling is a different question, answered where the spelling is read
+    (:func:`app.chemistry.geometry.parse_xyz`).
+
     :param element: Element symbol from the uploaded geometry or SMILES.
     :param mass_number: Uploaded isotope mass number.
     :param context: Human-readable location for the error message.
     :raises ValueError: If the element or the isotope is unknown to RDKit.
     """
 
+    if element.strip().capitalize() in HYDROGEN_ISOTOPE_SYMBOLS:
+        element = "H"
     if most_common_isotope(element) is None:
         raise ValueError(f"{context}: unknown element symbol {element!r}")
     if mass_number < 1:

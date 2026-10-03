@@ -81,9 +81,17 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # D4-D6, each a separate review-tier claim the Phase D plan requires to be
     # declared; D4 filled slot 40, D6 is 41, D5 will be 42. The ceiling is
     # still a filter: anything past 45 needs the same explicit argument.
-    assert 10 <= len(REGISTER) <= 45, (
+    #
+    # Raised 45 -> 46 (2026-10-03) for #672 (ADR 0022): the review-tier
+    # ``isotope-identity`` advisory check, for rows stored before the decision
+    # that D/T means 2H/3H. They cannot be rewritten (trg_as_geometry_atom), so
+    # they need a finding rather than a refusal, and it is a different tier
+    # from every blocking entry. ``geometry_isotope_symbol_conflict`` is
+    # deliberately NOT an entry: it refuses an input-format contradiction
+    # ("D is 2H" is a definition) and lives in the code catalogue.
+    assert 10 <= len(REGISTER) <= 46, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~45 the inclusion test ('could this check be wrong "
+        "the system; above ~46 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 

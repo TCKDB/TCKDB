@@ -18418,7 +18418,7 @@
         "type": "string"
       },
       "GeometryAtomPayload": {
-        "description": "One atom row inside a geometry's coordinate payload.\n\n``isotope_mass_number`` mirrors ``GeometryAtomBase.isotope_mass_number``\n(the upload payload's own field, see\n``app.schemas.entities.geometry.GeometryAtomBase``): ``None`` means the\nelement's most abundant natural isotope, *not* \"unrecorded\" — every atom\ndeposited before atom-resolved isotope support is by definition an\nordinary isotopologue, so this is never ambiguous. A caller that needs to\ntell an isotopologue apart from the unlabelled species reads this field\nper atom rather than guessing from ``element`` alone (a ``D``/``T``\nsymbol already implies a non-standard nuclide; an ordinary symbol with a\nnon-null value here does too).",
+        "description": "One atom row inside a geometry's coordinate payload.\n\n``isotope_mass_number`` mirrors ``GeometryAtomBase.isotope_mass_number``\n(the upload payload's own field, see\n``app.schemas.entities.geometry.GeometryAtomBase``): ``None`` means the\nelement's most abundant natural isotope, *not* \"unrecorded\" — every atom\ndeposited before atom-resolved isotope support is by definition an\nordinary isotopologue, so this is never ambiguous. A caller that needs to\ntell an isotopologue apart from the unlabelled species reads this field\nper atom rather than guessing from ``element`` alone (a ``D``/``T``\nsymbol already implies a non-standard nuclide; an ordinary symbol with a\nnon-null value here does too). A geometry deposited with a ``D``/``T``\nelement token is stored as ``H`` with ``isotope_mass_number`` 2 or 3\n(``docs/adr/0022``); only rows deposited before that decision still hold\nthe ``D``/``T`` symbol with a null value here.",
         "properties": {
           "atom_index": {
             "title": "Atom Index",
@@ -18696,7 +18696,7 @@
       },
       "GeometryPayload": {
         "additionalProperties": false,
-        "description": "Upload-facing geometry payload.\n\n:param xyz_text: Raw XYZ text block for the uploaded geometry.\n:param isotopes: Optional atom-resolved isotope labelling, mapping a\n    1-based XYZ atom index to that atom's isotope mass number (``2`` for\n    deuterium, ``13`` for carbon-13, ...). Only substituted atoms need an\n    entry; every unlisted atom is taken to be at its most abundant\n    natural isotope. Omit the field entirely for an ordinary geometry.",
+        "description": "Upload-facing geometry payload.\n\n:param xyz_text: Raw XYZ text block for the uploaded geometry.\n:param isotopes: Optional atom-resolved isotope labelling, mapping a\n    1-based XYZ atom index to that atom's isotope mass number (``2`` for\n    deuterium, ``13`` for carbon-13, ...). Only substituted atoms need an\n    entry; every unlisted atom is taken to be at its most abundant\n    natural isotope, except an atom spelled ``D`` or ``T``, which declares\n    mass number 2 or 3 by its spelling. An entry for it must equal that\n    number (redundant) or the deposit is refused as\n    ``geometry_isotope_symbol_conflict``. Omit the field for an ordinary\n    geometry.",
         "properties": {
           "isotopes": {
             "anyOf": [

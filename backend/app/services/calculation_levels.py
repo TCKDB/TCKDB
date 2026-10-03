@@ -105,11 +105,12 @@ from sqlalchemy.orm import Session, object_session
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import resolve_element_symbol
+from app.chemistry.isotopes import implied_isotope_mass_number
 from app.chemistry.torsion_fingerprint import kabsch_rmsd
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationType
 from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
-from app.db.models.geometry import Geometry
+from app.db.models.geometry import Geometry, GeometryAtom
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.schemas.upload_warning import UploadWarning
 
@@ -436,13 +437,31 @@ def _calc_geometry_ids(calc: Calculation, *, role: str) -> set[int]:
     return inputs
 
 
+def _atom_nuclide(atom: GeometryAtom) -> tuple[str, int | None]:
+    """``(element, isotope mass number)`` of one stored atom: the atom's own notion of "the same atom".
+
+    ``element`` is CHAR(2), so a one-letter symbol comes back blank-padded, and
+    ``D``/``T`` are hydrogen for any element comparison (the composition check
+    reads them so), hence ``resolve_element_symbol``. The isotope is the stored
+    mass number, which ``parse_xyz`` sets for every row written since
+    ``docs/adr/0022``; a row written before it holds ``D``/``T`` with a NULL
+    mass number and cannot be rewritten, so its own symbol is read, and a legacy
+    deuterium atom and a new one are one atom.
+    """
+    mass_number = atom.isotope_mass_number
+    if mass_number is None:
+        mass_number = implied_isotope_mass_number(atom.element)
+    return resolve_element_symbol(atom.element.strip()), mass_number
+
+
 def _structure_key(geometry: Geometry) -> tuple[str | int | None, ...]:
     """What makes two energy calculations' geometries different structures (R2', no opt).
 
     A **single atom** has no geometry to differ in -- every position is the
     same structure -- so it is keyed by its element (D and T resolve to
-    hydrogen) and its stated isotope mass number, and a copy of the atom moved
-    to another coordinate is the same structure, not a second one (#623).
+    hydrogen) and its isotope mass number (stated, or implied by a D/T spelling
+    on a row written before ``docs/adr/0022``), and a copy of the atom moved to
+    another coordinate is the same structure, not a second one (#623).
 
     A polyatomic geometry is keyed by its row id *here*, and
     :func:`_energies_by_structure` then merges rows that are the same structure
@@ -458,11 +477,8 @@ def _structure_key(geometry: Geometry) -> tuple[str | int | None, ...]:
     """
     if geometry.natoms == 1 and geometry.atoms:
         atom = geometry.atoms[0]
-        # ``element`` is CHAR(2): a one-letter symbol comes back blank-padded.
-        # ``D`` and ``T`` are hydrogen for any comparison (the composition
-        # check reads them so), hence ``resolve_element_symbol``. The isotope
-        # is the explicit field only, never inferred from a D/T spelling.
-        return ("atom", resolve_element_symbol(atom.element.strip()), atom.isotope_mass_number)
+        element, mass_number = _atom_nuclide(atom)
+        return ("atom", element, mass_number)
     return ("geometry", geometry.id)
 
 
@@ -524,7 +540,7 @@ def _atoms_of(geometry: Geometry) -> _AtomsOf | None:
         return None
     coordinates = [(row.x, row.y, row.z) for row in rows]
     # Element and explicit isotope per atom, the atom path's own notion of "the same atom" (#663).
-    species = tuple((resolve_element_symbol(row.element.strip()), row.isotope_mass_number) for row in rows)
+    species = tuple(_atom_nuclide(row) for row in rows)
     return _AtomsOf(species, coordinates, _coordinate_decimals(coordinates))
 
 

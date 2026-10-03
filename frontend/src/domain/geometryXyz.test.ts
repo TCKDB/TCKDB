@@ -59,6 +59,14 @@ describe("atomicNumberForSymbol", () => {
         expect(atomicNumberForSymbol("Cl")).toBe(17)
     })
 
+    it("reads D and T as hydrogen, not as an unknown symbol (#672)", () => {
+        // A row stored before D/T meant 2H/3H still holds the symbol; its
+        // atomic number is hydrogen's. Case-sensitive like every other symbol.
+        expect(atomicNumberForSymbol("D")).toBe(1)
+        expect(atomicNumberForSymbol("T")).toBe(1)
+        expect(atomicNumberForSymbol("d")).toBeNull()
+    })
+
     it("returns null — never 0 — for a symbol it does not recognise", () => {
         // `null` is checked with `toBeNull`, not a falsy check, so a
         // mutation that returns `0` for an unrecognised symbol (0 is not

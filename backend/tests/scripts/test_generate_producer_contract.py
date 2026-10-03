@@ -350,7 +350,11 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 #: the changelog, field descriptions and code notes were cut to a line each. What remains is intrinsic
 #: (the model reference and the per-surface links to it), which leaves the file 3.2 KB over the 705 KB it
 #: had on main; the ceiling is that file rounded up, 3.5 KB above main's.
-MARKDOWN_BYTE_CEILING = 708_500
+#:
+#: #672: ``geometry_isotope_symbol_conflict`` is raised by ``parse_xyz``, which every geometry upload reaches,
+#: so its code is traced on 13 of the 16 surfaces. Interim ceiling, as for the thermo declarations above:
+#: the rebased file rounded up, until the generator dedupe in #681 lands.
+MARKDOWN_BYTE_CEILING = 709_500
 
 
 def test_the_contract_stays_readable_in_pieces(committed_markdown: str) -> None:

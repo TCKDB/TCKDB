@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.123.0 - 2026-10-03
+
+Adds the `RejectionCode.GEOMETRY_ISOTOPE_SYMBOL_CONFLICT` member (`tckdb-schemas` 0.87.0, #672). A
+`D`/`T` element spelling now means deuterium/tritium: an `isotopes` entry that contradicts the spelling
+(`D` with mass 3 or 1, `T` with mass 2) is refused with this code. **A `D`/`T`-spelled geometry on a
+protium species, previously accepted, is now refused** with the existing
+`species_geometry_isotope_mismatch`; label the species (`[2H]O[2H]`) or spell the atom `H` with
+`isotopes`. Nothing in the client's code changes.
+
 ## 0.121.0 - 2026-10-03
 
 Thermo builders can state what a record's values describe and how they were produced
@@ -26,6 +35,7 @@ byte-for-byte what it was.
   on a record that declared nothing. `ThermoDetailRecord` types them.
 - `tckdb-schemas>=0.85.0` is now required.
 - `tckdb-schemas>=0.77.0` is now required.
+
 ## 0.117.0 - 2026-10-03
 
 Adds the `RejectionCode.TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH` member (`tckdb-schemas` 0.81.0, #638):

@@ -12,7 +12,11 @@ class GeometryPayload(SchemaBase):
         1-based XYZ atom index to that atom's isotope mass number (``2`` for
         deuterium, ``13`` for carbon-13, ...). Only substituted atoms need an
         entry; every unlisted atom is taken to be at its most abundant
-        natural isotope. Omit the field entirely for an ordinary geometry.
+        natural isotope, except an atom spelled ``D`` or ``T``, which declares
+        mass number 2 or 3 by its spelling. An entry for it must equal that
+        number (redundant) or the deposit is refused as
+        ``geometry_isotope_symbol_conflict``. Omit the field for an ordinary
+        geometry.
     """
 
     xyz_text: str = Field(min_length=1)

@@ -139,13 +139,32 @@ def test_two_sps_at_different_levels_on_a_shifted_atom_are_still_refused_as_a_du
 @pytest.mark.parametrize("symbol", ["D", "T"])
 @PRODUCTS
 def test_a_shifted_copy_of_the_atom_spelled_d_or_t_is_still_the_same_atom(client, product, symbol):
-    """D and T are hydrogen to every comparison (the composition check reads them so)."""
+    """A ``D``/``T`` atom is the same atom wherever it sits.
+
+    Since #672 the spelling declares a nuclide (stored ``H`` + mass number 2/3),
+    so the structure key is ``(H, 2)`` / ``(H, 3)``: two sps on a shifted copy
+    of one D atom are one structure and refused as a duplicate, exactly like
+    two on a shifted protium atom.
+    """
     spelled = f"1\n{symbol} atom\n{symbol} 1.0 0.0 0.0"
-    url, payload = _atom_payload(product, {"s1": _sp(_ATOM), "s2": _sp(spelled)}, [("s1", "sp"), ("s2", "sp")])
+    shifted = f"1\n{symbol} atom\n{symbol} -2.5 0.75 0.0"
+    url, payload = _atom_payload(product, {"s1": _sp(spelled), "s2": _sp(shifted)}, [("s1", "sp"), ("s2", "sp")])
     _assert_duplicate(_post(client, url, payload), product, "sp_calculation_refs")
-    # Either order: the first-written spelling must not decide the group.
-    url, payload = _atom_payload(product, {"s1": _sp(spelled), "s2": _sp(_ATOM)}, [("s1", "sp"), ("s2", "sp")])
-    _assert_duplicate(_post(client, url, payload), product, "sp_calculation_refs")
+
+
+@pytest.mark.parametrize("symbol", ["D", "T"])
+@PRODUCTS
+def test_a_d_or_t_atom_is_not_the_same_structure_as_a_protium_atom(client, product, symbol):
+    """It used to be, when ``D`` was isotope-silent; it is a different nuclide now.
+
+    The key already told a stated ``H`` + mass 2 apart from plain ``H``
+    (#610/#623); a ``D`` spelling is that same statement.
+    """
+    spelled = f"1\n{symbol} atom\n{symbol} 1.0 0.0 0.0"
+    for first, second in ((_ATOM, spelled), (spelled, _ATOM)):
+        url, payload = _atom_payload(product, {"s1": _sp(first), "s2": _sp(second)}, [("s1", "sp"), ("s2", "sp")])
+        resp = _post(client, url, payload)
+        assert resp.json().get("code") != f"{product}_role_duplicate", resp.text[:800]
 
 
 @PRODUCTS

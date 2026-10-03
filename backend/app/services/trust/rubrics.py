@@ -3334,3 +3334,7 @@ THERMO_KINETICS_CONSISTENCY_V1 = EvidenceRubric(
 GIBBS_SELF_CONSISTENCY_V1 = EvidenceRubric(name="gibbs_self_consistency", version=1, record_type="thermo", checks=())
 HESS_CONSISTENCY_V1 = EvidenceRubric(name="hess_consistency", version=1, record_type="kinetics", checks=())
 KIRCHHOFF_CONSISTENCY_V1 = EvidenceRubric(name="kirchhoff_consistency", version=1, record_type="thermo", checks=())
+# #672: a protium species entry whose calculation geometries declare a non-standard nuclide.
+ISOTOPE_IDENTITY_CONSISTENCY_V1 = EvidenceRubric(
+    name="isotope_identity_consistency", version=1, record_type="species_entry", checks=(),
+)
