@@ -706,10 +706,8 @@ CHECK_CALCULATION_GEOMETRY_ISOTOPES = ScientificCheck(
     sort_key=7,  # Appended after #143's shift (slots 0-6 are taken); see CHECK_CALCULATION_GEOMETRY_COMPOSITION.
     code=W_CALCULATION_GEOMETRY_ISOTOPE_MISMATCH,
     asserts=(
-        "The multiset of isotopic substitutions on every geometry linked to a "
-        "calculation equals the multiset declared by the subject that "
-        "calculation is filed under -- the species entry's isotope key, or, "
-        "for a transition state, the sum over its reaction's reactants."
+        "A calculation geometry carries the isotopes its subject declares: "
+        "the species entry's, or a transition state's reactant sum."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
