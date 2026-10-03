@@ -85,11 +85,14 @@ class GeometryAtom(Base):
     #: ``session_replication_role = replica`` -- so readers may now compare the
     #: stored value directly.
     #:
-    #: Case is the *only* thing canonicalised. ``D`` and ``T`` are stored as
-    #: ``D`` and ``T``: they are the depositor's isotope labelling, and code
-    #: that counts elements resolves them with
-    #: :func:`app.chemistry.geometry.resolve_element_symbol` at the point of
-    #: counting.
+    #: Case is canonicalised, and so is the hydrogen-isotope spelling, since
+    #: ``docs/adr/0022`` (2026-10-03): a deposited ``D``/``T`` is stored as
+    #: ``H`` with ``isotope_mass_number`` 2/3, while ``geometry.xyz_text`` keeps
+    #: the ``D``. Rows written before that decision hold ``D``/``T`` here with
+    #: a NULL mass number and cannot be rewritten
+    #: (``trg_as_geometry_atom``); code that counts elements resolves them with
+    #: :func:`app.chemistry.geometry.resolve_element_symbol`, and code that needs
+    #: their isotope reads :func:`app.chemistry.isotopes.implied_isotope_mass_number`.
     element: Mapped[str] = mapped_column(CHAR(2), nullable=False)
     x: Mapped[float] = mapped_column(nullable=False)
     y: Mapped[float] = mapped_column(nullable=False)

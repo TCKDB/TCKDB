@@ -409,7 +409,10 @@ def atomic_mass(element: str, isotope_mass_number: int | None) -> float | None:
     ``isotope_mass_number is None`` means the element's most abundant
     natural isotope -- not "unknown". The element symbols ``D`` and ``T``
     name a nuclide rather than an element and carry their own mass number,
-    which an explicit ``isotope_mass_number`` overrides.
+    which an explicit ``isotope_mass_number`` overrides. New rows store ``H``
+    plus the mass number (``docs/adr/0022``), so this branch serves the rows
+    deposited before that, which hold ``D``/``T`` with a NULL mass number; their
+    masses are correct and are deliberately left as they are (#672).
 
     :param element: Element symbol from ``geometry_atom.element``.
     :param isotope_mass_number: ``geometry_atom.isotope_mass_number``.

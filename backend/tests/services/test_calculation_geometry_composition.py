@@ -100,8 +100,8 @@ _XYZ_BENZENE = (
     "H -1.240 -2.147  0.000\n"
     "H  1.240 -2.147  0.000"
 )
-#: Fully deuterated methane, with the hydrogens written ``D`` — a spelling
-#: Gaussian, ORCA, Molpro and CFOUR all emit or accept.
+#: Fully deuterated methane, with the hydrogens written ``D`` -- a spelling a
+#: hand-written file uses, and one that declares deuterium (#672, ADR 0022).
 _XYZ_CD4 = (
     "5\nperdeuteromethane\n"
     "C  0.000  0.000  0.000\n"
@@ -479,13 +479,19 @@ def test_case_1_a_transition_states_geometries_span_the_whole_system(
 
 
 def test_case_2_deuterium_in_the_element_column_is_hydrogen(db_conn) -> None:
-    """CASE 2, the ESS spelling: ``D`` written in the element column.
+    """CASE 2, the ``D`` spelling: composition counts it as hydrogen.
 
-    Gaussian, ORCA, Molpro and CFOUR all emit or accept it, and ingestion
-    deliberately preserves the token. A calculation geometry spelling its
-    hydrogens ``D`` is CH4 by element, so it matches a ``smiles: "C"``
-    identity. Comparing raw symbols would read this as containing an element
-    the SMILES never mentions and refuse every such deposit.
+    A calculation geometry spelling its hydrogens ``D`` is CH4 *by element*, so
+    this composition rule must not refuse it against a ``smiles: "C"``
+    identity: comparing raw symbols would read it as containing an element the
+    SMILES never mentions. That is all this test pins.
+
+    It does **not** say the deposit is correct. Since #672 (ADR 0022) a ``D``
+    token also declares deuterium, so this CD4 geometry under a protium CH4 is
+    an isotope contradiction. The calculation-geometry isotope rule (#666)
+    owns refusing it, and the rule has its own tests; the composition rule
+    deliberately stays blind to nuclides (ADR 0008 section 9, one owner per
+    fact). When that rule is present, this deposit is refused there, not here.
     """
 
     with _isolated_session(db_conn) as session:

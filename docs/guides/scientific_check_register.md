@@ -87,9 +87,9 @@ disagree, this one is right by construction.
 | `block` | 21 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
 | `warn` | 12 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `label` | 1 | Labels a stored record at read time without refusing anything — a `HardFailReason` in the trust evaluator. For facts TCKDB observes about a record after it was accepted, which no upload-time check could have refused because they did not exist yet. |
-| `review` | 6 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
+| `review` | 7 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **45** | |
+| **total** | **46** | |
 
 ## Where a check's code reaches a client
 
@@ -99,8 +99,8 @@ disagree, this one is right by construction.
 | `upload_warning` | 12 | the `code` field of an `UploadWarning` returned alongside the accepted upload |
 | `trust_label` | 1 | a read-time trust label (`HardFailReason`), not any refusal |
 | `database_constraint` | 1 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
-| `none` | 9 | *nothing carries a code* |
-| **total** | **45** | |
+| `none` | 10 | *nothing carries a code* |
+| **total** | **46** | |
 
 ## Recorded divergences
 
@@ -1007,9 +1007,29 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
+### 44. Find, on a protium species entry, calculation geometries that declare a non-standard nuclide of any element -- a D or T element symbol deposited before 2026-10-03, or a stored mass number -- and record each as a finding.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `review` |
+| **Code** | *(none — prose only)* |
+| **Code reaches a client via** | *nothing carries a code* |
+| **Governing ADR** | 0008, 0022 |
+
+**Why this tier.** Rows stored before #672 (docs/adr/0022) hold D/T with no mass number, were accepted at the time and cannot be rewritten (trg_as_geometry_atom), so the contradiction is observed after acceptance. It cannot block; it is one append-only record_machine_review row a curator may read, with no status, selection, trust or approval effect.
+
+**Enforced at.**
+
+- `compare_isotope_identity` — `backend/app/services/consistency/isotope_identity.py::compare_isotope_identity`
+  *Explicit CLI/service invocation only (--check isotope-identity, a spe_ ref). Judges only an entry whose isotope_key is NULL; a labelled entry is reported as not judged. Reads each atom's own stored mass number, or for a legacy row the one its own symbol names. The Pi held no D/T rows when measured on 2026-10-03; self-hosted instances are unknown.*
+
+**Escape hatch.** None.
+
+*(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
+
 ## External reference comparison
 
-### 44. A computed thermo record's heat capacity, evaluated at each temperature an independent external observation reports, is compared against that observation and the residual is recorded -- never judged against a threshold and never fed back into the record's trust or review state.
+### 45. A computed thermo record's heat capacity, evaluated at each temperature an independent external observation reports, is compared against that observation and the residual is recorded -- never judged against a threshold and never fed back into the record's trust or review state.
 
 | Field | Value |
 | --- | --- |
@@ -1031,7 +1051,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Scan coordinates
 
-### 45. A scan point's stored coordinate_value is the internal coordinate at that point's own sampled geometry, in that coordinate's own unit (ADR 0020) -- never a displacement, and never compared against start_value as an anchor.
+### 46. A scan point's stored coordinate_value is the internal coordinate at that point's own sampled geometry, in that coordinate's own unit (ADR 0020) -- never a displacement, and never compared against start_value as an anchor.
 
 | Field | Value |
 | --- | --- |

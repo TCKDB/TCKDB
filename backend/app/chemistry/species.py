@@ -201,12 +201,14 @@ def element_counts_from_smiles(smiles: str) -> Counter[str]:
       (:func:`app.services.species_resolution.assert_geometry_isotopes_match_identity`).
     * **Symbols are resolved to elements** through
       :func:`~app.chemistry.geometry.resolve_element_symbol`, because the other
-      side of every comparison is an XYZ element column that ESS codes fill in
+      side of every comparison is an XYZ element column that depositors fill in
       their own spelling: they disagree about capitalisation (``CL``, ``cl``)
-      and write hydrogen's isotopes as elements (``D``, ``T``).
-      ``b4e7c1d20f83`` canonicalises the case on the way in, which makes the
-      first of those rare rather than impossible — it is a convention, not a
-      constraint — and deliberately preserves the second. RDKit's
+      and a hand-written file may write hydrogen's isotopes as elements
+      (``D``, ``T``). ``b4e7c1d20f83`` canonicalises the case on the way in,
+      which makes the first of those rare rather than impossible. Since
+      ``docs/adr/0022`` (2026-10-03) ``parse_xyz`` stores a ``D``/``T`` as
+      ``H`` plus a mass number, so only rows deposited before that still hold
+      the ``D``/``T`` symbol — which cannot be rewritten, so this call stays. RDKit's
       ``GetSymbol()`` produces neither spelling, so this call is a no-op on
       this side — it is here so that both sides of every comparison are counted
       by one rule rather than two that must be remembered to agree.

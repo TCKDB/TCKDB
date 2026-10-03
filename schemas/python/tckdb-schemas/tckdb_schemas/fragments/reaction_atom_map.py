@@ -149,6 +149,12 @@ def xyz_block_shape(xyz_text: str) -> tuple[int | None, list[str]]:
     return declared, [line for line in lines[2:] if line.strip()]
 
 
+#: Element-column tokens that name a hydrogen nuclide: ``D`` (deuterium) and
+#: ``T`` (tritium). Mirrors ``HYDROGEN_ISOTOPE_SYMBOLS`` in the backend's
+#: ``app.chemistry.isotopes``, which this package may not import.
+_HYDROGEN_ISOTOPE_SYMBOLS = frozenset({"D", "T"})
+
+
 def parse_xyz_elements(xyz_text: str) -> list[str]:
     """Return the element symbol of each atom of an XYZ block, in file order.
 
@@ -156,6 +162,13 @@ def parse_xyz_elements(xyz_text: str) -> list[str]:
     ``elements[n - 1]``. Raises :class:`ValueError` on a block whose header
     count and body disagree, because a geometry that cannot be counted cannot
     have a map checked against it.
+
+    ``D`` and ``T`` are returned as ``H``. They name hydrogen's isotopes, and
+    the backend stores a ``D``/``T`` atom as the element ``H`` plus a mass
+    number (``geometry_atom.element`` is compared across a map, and an element
+    does not change across a reaction). Returning the nuclide symbol here would
+    refuse a map from a ``D``-spelled reactant onto a saddle point spelled
+    ``H`` with ``isotopes``, which is correct chemistry (#672).
     """
 
     declared, body = xyz_block_shape(xyz_text)
@@ -176,7 +189,8 @@ def parse_xyz_elements(xyz_text: str) -> list[str]:
     elements: list[str] = []
     for line in body:
         symbol = line.split()[0]
-        elements.append(symbol[:1].upper() + symbol[1:].lower())
+        element = symbol[:1].upper() + symbol[1:].lower()
+        elements.append("H" if element in _HYDROGEN_ISOTOPE_SYMBOLS else element)
     return elements
 
 

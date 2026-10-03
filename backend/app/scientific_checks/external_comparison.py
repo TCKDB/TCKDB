@@ -19,6 +19,7 @@ from app.scientific_checks import (
 )
 from app.services.consistency.gibbs import compare_gibbs
 from app.services.consistency.hess import compare_hess
+from app.services.consistency.isotope_identity import compare_isotope_identity
 from app.services.consistency.kinetics import compare_kinetics
 from app.services.consistency.kirchhoff import compare_kirchhoff
 from app.services.consistency.thermo import compare_thermo
@@ -187,6 +188,33 @@ CHECK_HESS_CONSISTENCY = ScientificCheck(
             "identity (separated species), which only a separated_reactants "
             "row's exactly-zero reactant energy partly checks. Gas phase only; ions and "
             "isotopologues out of scope; pressure never gates enthalpy."
+        ),
+    ),),
+    escape_hatch=None,
+)
+
+__all__ += ["CHECK_ISOTOPE_IDENTITY_CONSISTENCY"]
+
+CHECK_ISOTOPE_IDENTITY_CONSISTENCY = ScientificCheck(
+    group="Advisory consistency", sort_key=6, code=None,
+    asserts=(
+        "Find, on a protium species entry, calculation geometries that declare a non-standard nuclide of any element -- a D or T "
+        "element symbol deposited before 2026-10-03, or a stored mass number -- and record each as a finding."
+    ),
+    tier=CheckTier.review, channel=CodeChannel.none,
+    tier_rationale=(
+        "Rows stored before #672 (docs/adr/0022) hold D/T with no mass number, were accepted at the time and "
+        "cannot be rewritten (trg_as_geometry_atom), so the contradiction is observed after acceptance. It "
+        "cannot block; it is one append-only record_machine_review row a curator may read, with no status, "
+        "selection, trust or approval effect."
+    ),
+    adr="0008, 0022", enforced_by=(PythonCheck(
+        compare_isotope_identity,
+        note=(
+            "Explicit CLI/service invocation only (--check isotope-identity, a spe_ ref). Judges only an entry "
+            "whose isotope_key is NULL; a labelled entry is reported as not judged. Reads each atom's own "
+            "stored mass number, or for a legacy row the one its own symbol names. The Pi held no D/T rows "
+            "when measured on 2026-10-03; self-hosted instances are unknown."
         ),
     ),),
     escape_hatch=None,

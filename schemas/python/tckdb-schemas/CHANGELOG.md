@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.87.0 - 2026-10-03
+
+A `D`/`T` element spelling now means 2H/3H (#672, ADR 0022): **a `D`/`T` geometry on a protium species, previously accepted, is now refused**, `[2H]O[2H]` with it is accepted, and `isotopes` contradicting the spelling is refused as `geometry_isotope_symbol_conflict`.
+
 ## 0.85.0 - 2026-10-03
 
 A thermo record can state what its values describe (`thermodynamic_target`) and how they were
@@ -92,6 +96,7 @@ codes can learn it.
   `composite` (so an `irc`, `scan`, `path_search` or `conf` is refused). `context` names the field, the
   stated convention or role, the accepted types and the type found. Producers that cite a single point
   (every producer known to us) are unaffected. Uploads only: stored networks read exactly as before.
+
 ## 0.75.0 - 2026-10-03
 
 The producer contract now records that `/bundles/submit` and `/bundles/dry-run` apply the
@@ -239,6 +244,7 @@ for two complete examples (CCSD(T)/CBS from a TZ/QZ pair, and a focal-point sum)
 - **New enums mirrored from the server:** `CompositeSchemeKind`,
   `CompositeTermOperation`, `CompositeExtrapolationFormula`,
   `CompositeInputSlot`, and `CalculationDependencyRole.composite_input`.
+
 ## 0.71.0 - 2026-10-01
 
 Composite levels of theory, phase P3b (ADR 0021): a `composite` calculation's
@@ -749,7 +755,6 @@ on one geometry (thermo or statmech) are refused `thermo_role_duplicate` /
 link. What an atom should send is in the
 producer contract, under the two conformer primary-calculation rules. The
 wire shape gains nothing: no field is added, removed or renamed.
-
 
 ## 0.58.0 - 2026-09-30
 

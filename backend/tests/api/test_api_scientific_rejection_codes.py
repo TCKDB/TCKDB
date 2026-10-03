@@ -137,6 +137,12 @@ _METHANE_XYZ = (
     "H -0.629  0.629 -0.629\n"
     "H  0.629 -0.629 -0.629"
 )
+_D2O_XYZ = (
+    "3\nheavy water\n"
+    "O  0.000  0.000  0.117\n"
+    "D  0.000  0.757 -0.469\n"
+    "D  0.000 -0.757 -0.469"
+)
 _METHYL_XYZ = (
     "4\nmethyl\n"
     "C  0.000  0.000  0.000\n"
@@ -194,6 +200,42 @@ class TestAStructureAgainstItsOwnLabel:
         )
         body = _assert_code(response, "species_geometry_isotope_mismatch")
         assert "Isotope substitution" in str(body["detail"])
+
+    def test_a_d_geometry_under_a_protium_species_names_the_isotope_check(
+        self, client
+    ):
+        """``D`` declares deuterium (#672): heavy water cannot be filed under ``O``."""
+        response = client.post(
+            "/api/v1/uploads/conformers",
+            json=_conformer_payload(species_entry=_WATER, xyz_text=_D2O_XYZ),
+        )
+        body = _assert_code(response, "species_geometry_isotope_mismatch")
+        assert body["context"]["geometry_substitutions"] == "2Hx2"
+
+    def test_a_d_geometry_under_a_2H_species_is_accepted(self, client):
+        response = client.post(
+            "/api/v1/uploads/conformers",
+            json=_conformer_payload(
+                species_entry={"smiles": "[2H]O[2H]", "charge": 0, "multiplicity": 1},
+                xyz_text=_D2O_XYZ,
+            ),
+        )
+        assert response.status_code == 201, response.text
+
+    def test_an_isotopes_entry_against_the_d_spelling_names_the_symbol_conflict(
+        self, client
+    ):
+        payload = _conformer_payload(
+            species_entry={"smiles": "[2H]O[2H]", "charge": 0, "multiplicity": 1},
+            xyz_text=_D2O_XYZ,
+        )
+        payload["geometry"]["isotopes"] = {"2": 3}
+        body = _assert_code(
+            client.post("/api/v1/uploads/conformers", json=payload),
+            "geometry_isotope_symbol_conflict",
+        )
+        assert body["context"]["implied_mass_number"] == 2
+        assert body["context"]["declared_mass_number"] == 3
 
     def test_declared_charge_that_the_smiles_denies_names_the_charge_check(
         self, client

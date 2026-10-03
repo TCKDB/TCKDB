@@ -424,11 +424,13 @@ def assert_geometry_composition_matches_identity(
     **Elements, not nuclides.** ``[2H]`` is stored as element ``H`` in the
     canonical form, so counting isotope-resolved would refuse every
     isotopologue. The XYZ element column gets the same treatment from the
-    other direction: ``D`` and ``T`` are legal tokens that every major ESS
-    emits or accepts, and they are counted as the hydrogen they are (see
-    :func:`app.chemistry.geometry.resolve_element_symbol`). Isotope agreement
-    is checked separately and exactly by
-    :func:`assert_geometry_isotopes_match_identity`.
+    other direction: ``D`` and ``T`` name hydrogen, so they are counted as the
+    hydrogen they are (see
+    :func:`app.chemistry.geometry.resolve_element_symbol`). What they also name
+    is a nuclide, and that is not ignored: :func:`parse_xyz` reads the spelling
+    as a 2H/3H declaration, so isotope agreement -- checked separately and
+    exactly by :func:`assert_geometry_isotopes_match_identity` -- refuses a
+    ``D`` geometry under a protium identity (``docs/adr/0022``).
 
     **Counts, not positions.** Two structures with the same formula pass, even
     if the connectivity differs — an isomer deposited under the wrong

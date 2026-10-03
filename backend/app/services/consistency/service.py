@@ -7,6 +7,7 @@ from app.db.models.thermo import Thermo
 from app.services.consistency.core import AdvisoryResult, currency, record_result
 from app.services.consistency.gibbs import compare_gibbs
 from app.services.consistency.hess import compare_hess
+from app.services.consistency.isotope_identity import compare_isotope_identity
 from app.services.consistency.kinetics import compare_kinetics
 from app.services.consistency.kirchhoff import compare_kirchhoff
 from app.services.consistency.thermo import compare_thermo
@@ -35,6 +36,10 @@ def compare(session, *, check, target_ref, comparison_thermo_ref=None, reverse_k
                 entry = _resolve(session, SpeciesEntry, entry_ref, "spe_")
                 mapping[entry.id] = _resolve(session, Thermo, thermo_ref, "thm_")
             return compare_kinetics(forward, reverse, mapping, temperature_grid=temperature_grid)
+        if check == "isotope-identity":
+            if comparison_thermo_ref is not None or reverse_kinetics_ref is not None or thermo_mapping or temperature_grid:
+                raise ValueError("isotope-identity takes a species-entry reference alone")
+            return compare_isotope_identity(_resolve(session, SpeciesEntry, target_ref, "spe_"))
         if check == "hess":
             if comparison_thermo_ref is not None or reverse_kinetics_ref is not None or temperature_grid:
                 raise ValueError("hess uses the kinetics record's own reaction energy and a spe=thm[:rep] mapping")

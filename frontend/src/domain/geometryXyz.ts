@@ -88,6 +88,16 @@ export const ELEMENT_ATOMIC_NUMBERS: Record<string, number> = {
 }
 
 /**
+ * `D` (deuterium, mass number 2) and `T` (tritium, 3): element-column tokens
+ * that name a hydrogen *nuclide*, not an element, so they are not in
+ * `ELEMENT_ATOMIC_NUMBERS`. A geometry deposited since #672 stores `H` plus an
+ * `isotope_mass_number` and never shows one of these; a row deposited before
+ * that decision still holds the symbol, and its atomic number is hydrogen's
+ * rather than "unknown (D)".
+ */
+export const HYDROGEN_ISOTOPE_SYMBOLS: Record<string, number> = { D: 2, T: 3 }
+
+/**
  * Looks up an atomic number by element symbol. Returns `null` — never
  * `0`, which is not a valid atomic number and would read as a real (if
  * wrong) answer — for a symbol this table does not recognise, so a caller
@@ -105,5 +115,6 @@ export const ELEMENT_ATOMIC_NUMBERS: Record<string, number> = {
  * adversarial or corrupted input.
  */
 export function atomicNumberForSymbol(symbol: string): number | null {
+    if (Object.hasOwn(HYDROGEN_ISOTOPE_SYMBOLS, symbol)) return ELEMENT_ATOMIC_NUMBERS.H
     return Object.hasOwn(ELEMENT_ATOMIC_NUMBERS, symbol) ? ELEMENT_ATOMIC_NUMBERS[symbol] : null
 }
