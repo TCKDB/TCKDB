@@ -437,7 +437,10 @@ CHECK_CALCULATION_GEOMETRY_COMPOSITION = ScientificCheck(
                 "``calculation_output_geometry`` row -- eight of them across "
                 "four modules -- on both the producer-explicit branch and the "
                 "``geometry_key``/fallback branch. A guard test fails if a "
-                "ninth appears unchecked."
+                "ninth appears unchecked. ``calc_isotopes.assert_isotopes`` "
+                "runs beside it at the same sites and extends the claim to "
+                "isotopes, refusing with its own code "
+                "``calculation_geometry_isotope_mismatch`` (counts only)."
             ),
         ),
     ),

@@ -2,8 +2,10 @@
 
 Companion of :mod:`app.services.calculation_geometry_composition`, which counts
 elements and reads ``D``, ``T`` and ``[2H]`` as hydrogen and so cannot see an
-isotope disagreement. Kept in its own short-named module because the producer
-contract repeats the function's name and anchor on every route it covers.
+isotope disagreement. Not a separate register entry: it is the composition
+entry's claim ("this geometry is this species") extended to isotopes, and is
+recorded there (``CHECK_CALCULATION_GEOMETRY_COMPOSITION``); only its refusal
+code is its own.
 """
 
 from __future__ import annotations
@@ -21,12 +23,6 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import MoleculeKind
 from app.db.models.geometry import GeometryAtom
 from app.db.models.species import Species, SpeciesEntry
-from app.scientific_checks import (
-    CheckTier,
-    CodeChannel,
-    PythonCheck,
-    ScientificCheck,
-)
 from app.services.calculation_geometry_composition import _ts_entry_reactant_rows
 
 logger = logging.getLogger(__name__)
@@ -253,23 +249,3 @@ def assert_isotopes(
         },
         message_prefix=False,
     )
-
-
-CHECK_CALCULATION_GEOMETRY_ISOTOPES = ScientificCheck(
-    group="A structure against its own label",
-    sort_key=7,  # Appended after #143's shift (slots 0-6 are taken).
-    code=W_CALCULATION_GEOMETRY_ISOTOPE_MISMATCH,
-    asserts="Geometry isotopes match subject.",
-    tier=CheckTier.block,
-    channel=CodeChannel.error_envelope,
-    tier_rationale="Definitional: isotopes change every mass-weighted number reported.",
-    adr="0008",
-    enforced_by=(
-        PythonCheck(
-            assert_isotopes,
-            note="Runs beside the composition check at every link site.",
-        ),
-    ),
-    escape_hatch="Label both sides alike.",
-    divergence="A false acceptance: counts only, so isotopomers pass.",
-)
