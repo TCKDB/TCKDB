@@ -41,11 +41,15 @@ def protocol(
     *,
     departures: list[dict] | None = (),  # type: ignore[assignment]
     derivation: str | None = "atomization",
-    internal_motion: str | None = None,
+    internal_motion: str | None = "harmonic",
+    ensemble: str | None = "lowest_conformer",
+    source: str | None = "nist_janaf",
     other_name: str | None = None,
     label: str | None = None,
 ) -> dict[str, Any]:
-    """A stored (version 1) protocol declaration. ``departures=None`` states nothing; ``()`` states none."""
+    """A stored (version 1) protocol declaration, by default stating the E1 benchmark route completely
+    (harmonic, lowest conformer, JANAF, atomization). ``None`` omits a component (states nothing);
+    ``departures=()`` states there are none."""
     body: dict[str, Any] = {"version": 1, "departures": None if departures is None else list(departures)}
     if recipe is not None:
         body["recipe"] = {"name": recipe}
@@ -55,8 +59,11 @@ def protocol(
             body["recipe"]["recipe_version"] = label
     if derivation is not None:
         body["formation_reference"] = {"derivation": derivation}
-    if internal_motion is not None:
-        body["thermal_approximation"] = {"internal_motion": internal_motion}
+        if source is not None:
+            body["formation_reference"]["reference_data_source"] = source
+    thermal = {k: v for k, v in (("internal_motion", internal_motion), ("ensemble_representation", ensemble)) if v}
+    if thermal:
+        body["thermal_approximation"] = thermal
     return body
 
 

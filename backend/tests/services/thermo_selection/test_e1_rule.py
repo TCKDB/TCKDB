@@ -126,13 +126,50 @@ def test_the_formation_derivation_must_be_atomization():
     assert undeclared.state is Tri.unknown
 
 
-@pytest.mark.parametrize("motion", ["hindered_rotors", "anharmonic"])
-def test_a_thermal_treatment_beyond_the_benchmarked_harmonic_one_prevents_a_match(motion):
-    assert RULE.preferred_side(cand("x", proto=protocol("g4", internal_motion=motion))).state is Tri.false
+@pytest.mark.parametrize(
+    ("override", "reason"),
+    [
+        ({"internal_motion": "hindered_rotors"}, "internal_motion_differs_from_benchmark:hindered_rotors"),
+        ({"internal_motion": "anharmonic"}, "internal_motion_differs_from_benchmark:anharmonic"),
+        ({"ensemble": "boltzmann_conformers"}, "ensemble_representation_differs_from_benchmark:boltzmann_conformers"),
+        ({"source": "atct"}, "reference_data_source_differs_from_benchmark:atct"),
+        ({"source": "codata"}, "reference_data_source_differs_from_benchmark:codata"),
+        ({"source": "other"}, "reference_data_source_differs_from_benchmark:other"),
+    ],
+)
+def test_a_stated_component_that_differs_from_the_benchmark_route_is_false_on_both_sides(override, reason):
+    for recipe, side in (("g4", RULE.preferred_side), ("g3", RULE.yielding_side)):
+        proto = protocol(recipe, **override)
+        match = side(cand("x", proto=proto))
+        assert match.state is Tri.false and reason in match.reasons
 
 
-def test_a_declared_harmonic_treatment_still_matches():
-    assert RULE.preferred_side(cand("x", proto=protocol("g4", internal_motion="harmonic"))).state is Tri.true
+@pytest.mark.parametrize(
+    ("override", "reason"),
+    [
+        ({"internal_motion": None}, "internal_motion_not_stated"),
+        ({"ensemble": None}, "ensemble_representation_not_stated"),
+        ({"source": None}, "reference_data_source_not_stated"),
+        ({"internal_motion": None, "ensemble": None}, "internal_motion_not_stated"),
+    ],
+)
+def test_an_unstated_benchmark_component_is_unknown_never_a_match(override, reason):
+    for recipe, side in (("g4", RULE.preferred_side), ("g3", RULE.yielding_side)):
+        match = side(cand("x", proto=protocol(recipe, **override)))
+        assert match.state is Tri.unknown and reason in match.reasons
+
+
+def test_every_component_stated_as_the_benchmark_route_is_true_and_the_route_is_in_the_registry_entry():
+    full = protocol("g4", internal_motion="harmonic", ensemble="lowest_conformer", source="nist_janaf")
+    assert RULE.preferred_side(cand("x", proto=full)).state is Tri.true
+    route = RULE.describe()["benchmark_route"]
+    assert route == {"internal_motion": "harmonic", "ensemble_representation": "lowest_conformer",
+                     "reference_data_source": "nist_janaf", "formation_derivation": "atomization"}
+
+
+def test_a_refuted_component_wins_over_an_unstated_one():
+    match = RULE.preferred_side(cand("x", proto=protocol("g4", internal_motion="hindered_rotors", source=None)))
+    assert match.state is Tri.false
 
 
 def test_a_linked_level_that_names_another_recipe_contradicts_the_declaration():
@@ -168,3 +205,20 @@ def test_the_registry_entry_records_version_evidence_limits_and_exclusions():
     assert any("radicals" in e for e in entry["exclusions"])
     assert entry["exceptions"] == []
     assert "not a per-molecule guarantee" in entry["interpretation"]
+
+
+def test_a_state_specific_member_is_not_refuted_by_an_excited_state_label_but_a_ground_state_member_is():
+    # CH2(1A1) is itself an excited singlet in the manifest: multiplicity, not the label, tells it from the triplet.
+    assert RULE.scope(subject_for("Methylene", electronic_state_kind="excited")).state is Tri.true
+    refused = RULE.scope(subject_for("Benzene", electronic_state_kind="excited"))
+    assert refused.state is Tri.false and "electronic_state_kind_not_ground" in refused.reasons[0]
+
+
+def test_an_unreadable_formula_makes_the_connectivity_match_unknown_not_false():
+    subject = subject_for("1,3,5,7-Cyclooctatetraene", molecular_formula=None)
+    match = RULE.scope(subject)
+    assert match.state is Tri.unknown and "formula_not_derivable" in match.reasons[0]
+    # A full-key member needs no formula; and a different connectivity block is still a plain no.
+    assert RULE.scope(subject_for("Methane", molecular_formula=None)).state is Tri.true
+    assert RULE.scope(subject_for("1,3,5,7-Cyclooctatetraene", inchi_key="AAAAAAAAAAAAAA-UHFFFAOYSA-N",
+                                  molecular_formula=None)).state is Tri.false

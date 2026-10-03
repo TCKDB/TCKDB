@@ -116,6 +116,12 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule]
         if key not in available:
             raise ReplayError(f"rule {key[0]} version {key[1]} is not in the running registry")
         used.append(available[key])
+    for c in manifest["candidates"]:
+        if c["eligible"] != c["assessment"]["physically_eligible"]:
+            raise ReplayError(
+                f"candidate {c['thermo_ref']} records eligible={c['eligible']} but its assessment says "
+                f"physically_eligible={c['assessment']['physically_eligible']}"
+            )
     eligible = [NormalizedCandidate.from_dict(c) for c in manifest["candidates"] if c["eligible"]]
     decision = decide(
         eligible,

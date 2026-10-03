@@ -306,4 +306,5 @@ class H298Selection:
     decision: Decision | None
     manifest: dict[str, Any]
     unresolved_refs: tuple[str, ...] = ()
+    unsupported_refs: tuple[str, ...] = ()
     notes: tuple[str, ...] = field(default_factory=tuple)

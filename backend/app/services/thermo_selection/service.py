@@ -128,13 +128,18 @@ def select_h298(
         candidates=rows, decision=decision, outcome=decision.outcome,
     )
     unresolved = tuple(a.thermo_ref for a in assessments if a.applicability is Applicability.unresolved)
+    unsupported = tuple(a.thermo_ref for a in assessments if a.applicability is Applicability.unsupported)
+    manifest["disclosures"] = {"unresolved_refs": list(unresolved), "unsupported_refs": list(unsupported)}
     notes: list[str] = []
-    if decision.outcome is Outcome.sole_eligible_candidate and unresolved:
+    if unresolved or unsupported:
+        # Uniform across every outcome: a result is scoped to what is eligible now, and these records
+        # might compete if their missing facts were recorded or their form were evaluated.
         notes.append(
-            f"{len(unresolved)} candidate(s) are unresolved and may be applicable if their missing facts were "
-            "recorded; the sole-candidate result is scoped to what is eligible now"
+            f"{len(unresolved)} candidate(s) are unresolved and {len(unsupported)} unsupported; they do not compete "
+            "in this result and may be applicable if their missing facts were recorded or their form evaluated"
         )
     return H298Selection(
         outcome=decision.outcome, selected_ref=decision.selected_ref, assessments=tuple(assessments),
-        decision=decision, manifest=manifest, unresolved_refs=unresolved, notes=tuple(notes),
+        decision=decision, manifest=manifest, unresolved_refs=unresolved, unsupported_refs=unsupported,
+        notes=tuple(notes),
     )
