@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.77.0 - 2026-10-03
+## 0.82.0 - 2026-10-03
 
 A thermo record can state what its values describe and how they were produced (H298 method-aware
 selection, change 1 of 3). Both are optional attributed claims: stored as made, never inferred from a
