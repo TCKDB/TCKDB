@@ -1335,7 +1335,8 @@ three validation records, at most one per `kind`, every one optional:
   zero-point energy unscaled, so an `e0` built with a scaled one
   (`E0 = E_electronic + s * ZPE`) must state `zpe_scale_factor` (`s`, positive,
   `e0` entries only); the E0 is then held to `electronic + s * ZPE`, with a
-  tolerance that also covers `s` printed to four decimals. A contradiction is
+  tolerance that assumes `s` has at least four decimals, so state it exactly as
+  multiplied (0.954 for a true 0.953649 can be refused). A contradiction is
   refused with `ts_energy_ordering_stated_energy_mismatch` (`context`: the
   participant, kind, both values, tolerance, and for an E0 the stored ZPE and
   factor). With no factor, an `e0` equal to `electronic + ZPE` agrees; any
@@ -2146,7 +2147,7 @@ class ContractBuilder:
                 listed_shared.add(key)
                 func_checks = shared[key][0]
                 tiers = "/".join(dict.fromkeys(c.tier.value for c in func_checks))
-                codes = ", ".join(f"`{code}`" for c in func_checks for code in c.codes) or "no code"
+                codes = ", ".join(f"`{code}`" for code in dict.fromkeys(c for ch in func_checks for c in ch.codes)) or "no code"
                 out.append(f"- [`{key.split(':', 1)[1]}`](#{_anchor('k', key)}) ({tiers}; {codes})")
             elif check is not None:
                 codes = ", ".join(f"`{code}`" for code in check.codes) or "no code"

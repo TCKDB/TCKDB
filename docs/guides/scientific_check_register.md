@@ -570,7 +570,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None needed: the warning is the accommodation. Take every energy of a kind at one level, or accept the warning.
 
-### 23. A stated energy-ordering energy should be the energy TCKDB stores for its cited calculation: the single point's (or optimisation's) energy, or for an E0 the paired electronic energy plus the cited frequency's ZPE, scaled by the stated `zpe_scale_factor`.
+### 23. A stated energy-ordering energy should be the energy TCKDB stores for its cited calculation: the single point's (or optimisation's) energy, or for an E0 the paired electronic energy plus the cited frequency's ZPE, scaled by the stated `zpe_scale_factor`. An E0 with no stated factor is never refused.
 
 | Field | Value |
 | --- | --- |
