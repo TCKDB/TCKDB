@@ -297,7 +297,7 @@ cannot reach that database.
 ## Isotopes (`calculation_geometry_isotope_mismatch`, #666)
 
 The composition rule counts elements and reads `D`, `T` and `[2H]` as hydrogen, so by design it cannot
-tell a deuterium geometry from a protium one. A sibling rule, `assert_calculation_geometry_isotopes`
+tell a deuterium geometry from a protium one. A sibling rule, `assert_isotopes` (`app/services/calc_isotopes.py`)
 (ADR 0008, block), runs at every site that runs the composition rule; a structural guard
 (`tests/services/test_calculation_geometry_isotopes_guard.py`) fails if a site runs one and not the other.
 

@@ -81,9 +81,14 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # D4-D6, each a separate review-tier claim the Phase D plan requires to be
     # declared; D4 filled slot 40, D6 is 41, D5 will be 42. The ceiling is
     # still a filter: anything past 45 needs the same explicit argument.
-    assert 10 <= len(REGISTER) <= 45, (
+    # Raised 45 -> 46 (#666) for ``calculation_geometry_isotope_mismatch``: a
+    # blocking (ADR 0008) claim that could be wrong in an interesting way
+    # (counts, not atoms, so isotopomers pass; D/T spellings read as silent),
+    # distinct from the composition entry beside it, which reads D, T and [2H]
+    # as hydrogen by design and so cannot make it.
+    assert 10 <= len(REGISTER) <= 46, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~45 the inclusion test ('could this check be wrong "
+        "the system; above ~46 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
