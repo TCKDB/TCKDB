@@ -120,7 +120,7 @@ the two integers from whatever shape they hold and pass them in.
 
 from __future__ import annotations
 
-from tckdb_schemas.fragments.reaction_atom_map import parse_xyz_elements
+from tckdb_schemas.fragments.reaction_atom_map import xyz_block_shape
 from tckdb_schemas.stationary_point import StationaryPointFinding, ValidationTier
 
 #: The deposited frequency list is shorter than the smallest complete
@@ -182,13 +182,19 @@ def atom_count_of_xyz(xyz_text: str | None) -> int | None:
     An unparseable geometry is refused by the atom-map fragment that owns
     that contract; this check declines to speak about it rather than
     reporting the same defect a second time in different words.
+
+    Counts through :func:`~tckdb_schemas.fragments.reaction_atom_map.xyz_block_shape`
+    rather than catching the refusal :func:`parse_xyz_elements` raises: there is
+    no code path here that raises a coded error, so the producer contract's
+    static trace (which cannot see a ``try``/``except``) never lists that
+    refusal against a rule that only wanted a count (#623).
     """
     if xyz_text is None:
         return None
-    try:
-        return len(parse_xyz_elements(xyz_text))
-    except ValueError:
+    declared, body = xyz_block_shape(xyz_text)
+    if declared is None or len(body) != declared:
         return None
+    return declared
 
 
 def evaluate_frequency_list_completeness(

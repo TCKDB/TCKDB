@@ -73,7 +73,7 @@ def test_two_sp_links_on_an_atom_are_refused(client, route, product):
     assert resp.status_code == 422, resp.text[:800]
     body = resp.json()
     assert body["code"] == f"{product}_role_duplicate", body
-    assert "at most one 'sp' per geometry" in body["detail"]
+    assert "at most one 'sp' per atom" in body["detail"]
     assert len(body["context"]["sp_calculation_refs"]) == 2
 
 

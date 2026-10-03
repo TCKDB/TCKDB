@@ -81,6 +81,7 @@ __all__ = [
     "W_ATOM_MAP_WITHOUT_TRANSITION_STATE",
     "parse_xyz_elements",
     "validate_reaction_atom_map",
+    "xyz_block_shape",
 ]
 
 # ---------------------------------------------------------------------------
@@ -127,6 +128,27 @@ W_ATOM_MAP_PARTICIPANT_NOT_DECLARED = "atom_map_participant_not_declared"
 W_ATOM_MAP_GEOMETRY_UNPARSEABLE = "atom_map_geometry_unparseable"
 
 
+def xyz_block_shape(xyz_text: str) -> tuple[int | None, list[str]]:
+    """Split an XYZ block into its declared atom count and its coordinate lines.
+
+    Never raises, and raises no coded refusal on any path, so a caller that
+    only wants to *count* (:func:`tckdb_schemas.frequency_completeness.atom_count_of_xyz`)
+    does not inherit the unparseable-geometry refusal in the producer
+    contract's static trace. The count is ``None`` when the header line is
+    missing or not an integer; the coordinate lines are the non-blank ones
+    after the comment line. A block is well formed when the two agree.
+    """
+
+    lines = xyz_text.strip().splitlines()
+    if len(lines) < 1:
+        return None, []
+    try:
+        declared = int(lines[0].strip())
+    except ValueError:
+        return None, []
+    return declared, [line for line in lines[2:] if line.strip()]
+
+
 def parse_xyz_elements(xyz_text: str) -> list[str]:
     """Return the element symbol of each atom of an XYZ block, in file order.
 
@@ -136,22 +158,13 @@ def parse_xyz_elements(xyz_text: str) -> list[str]:
     have a map checked against it.
     """
 
-    lines = xyz_text.strip().splitlines()
-    if len(lines) < 1:
+    declared, body = xyz_block_shape(xyz_text)
+    if declared is None:
         raise CodedValidationError(
             W_ATOM_MAP_GEOMETRY_UNPARSEABLE,
             "geometry is not a valid XYZ block.",
             message_prefix=False,
         )
-    try:
-        declared = int(lines[0].strip())
-    except ValueError as exc:
-        raise CodedValidationError(
-            W_ATOM_MAP_GEOMETRY_UNPARSEABLE,
-            "geometry is not a valid XYZ block.",
-            message_prefix=False,
-        ) from exc
-    body = [line for line in lines[2:] if line.strip()]
     if len(body) != declared:
         raise CodedValidationError(
             W_ATOM_MAP_GEOMETRY_UNPARSEABLE,

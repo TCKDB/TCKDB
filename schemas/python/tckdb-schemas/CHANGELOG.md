@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.74.0 - 2026-10-03
+
+A shifted copy of an atom is no longer a way round the no-optimisation duplicate rule (#623).
+No field is added, removed or renamed; one payload that was accepted is now refused, and one
+refusal changes its code.
+
+- **Two single points (or two composites) on one atom are now one duplicate, wherever the atom sits
+  (shared rule, so `/uploads/thermo`, `/uploads/statmech` and both bundle routes change).** With no
+  `opt` linked, two `sp` links (or two `composite` links) on one structure are refused with
+  `thermo_role_duplicate` / `statmech_role_duplicate`. For a geometry of exactly one atom the
+  structure is the element, not the stored geometry: a second `sp` on a copy of the atom at another
+  coordinate (`1\nH\nH 1.0 0.0 0.0` beside `1\nH\nH 0.0 0.0 0.0`) used to be a different geometry and
+  returned 201, and is now refused. A geometry of two or more atoms is still its own structure, so
+  two `sp` links on genuinely different polyatomic geometries are unchanged. Two single points at two
+  levels on a shifted atom were never accepted: they used to be refused as
+  `*_energy_level_ambiguous` and are now refused as `*_role_duplicate`, which is what the same
+  geometry at two levels has always returned. The message for an atom now says "per atom".
+- **The rule is stated for polyatomic sp-only links too.** It has always applied to a polyatomic
+  species whose linked calculations are `sp`s with no `opt`, including on the standalone
+  `/uploads/thermo` and `/uploads/statmech` routes; the workflow guide `depositing_a_thermo_record.md`
+  now says so.
+- **The producer contract no longer lists `atom_map_geometry_unparseable` against every surface that
+  counts atoms.** The atom counter used by the frequency-list and one-atom-primary rules swallowed
+  that refusal internally but was traced as if it raised it, so ten surfaces named a code they cannot
+  return. It still lists it where the atom-map rules raise it (the reaction routes). Nothing a
+  producer sends changes for this item.
+- `xyz_block_shape` is new in `tckdb_schemas.fragments.reaction_atom_map`: it splits an XYZ block into
+  its declared atom count and coordinate lines and never raises. `parse_xyz_elements` is built on it
+  and behaves as before.
+
 ## 0.73.0 - 2026-10-03
 
 Composite levels of theory, phase P7a (ADR 0021): the wire package gains the closed-form

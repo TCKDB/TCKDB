@@ -92,3 +92,44 @@ def test_reaction_builder_sends_an_atoms_sp_as_its_conformer_calculation():
 def test_reaction_builder_refuses_a_molecules_sp_primary():
     with pytest.raises(TCKDBBuilderValidationError, match="this geometry has 2 atoms"):
         _reaction(_H2).to_payload()
+
+
+# A species whose only calculation is an sp that declares no geometry has
+# nothing to count, so the useful message is the one about the type: it needs
+# an opt. The geometry message used to replace it (#623).
+
+
+def _bare_sp() -> Calculation:
+    return Calculation.sp(_ORCA, _LOT, electronic_energy_hartree=-1.1)
+
+
+def test_a_species_whose_only_calculation_is_an_sp_without_geometry_is_told_it_needs_an_opt():
+    with pytest.raises(TCKDBBuilderValidationError) as raised:
+        ComputedSpeciesUpload(
+            species=Species(smiles="[H][H]", charge=0, multiplicity=1),
+            calculations=[_bare_sp()],
+        )
+    message = str(raised.value)
+    assert "primary_calculation.type must be 'opt', got 'sp'" in message
+    assert "anchors each conformer on an opt" in message
+    assert "so the conformer carries a reference" not in message
+
+
+def test_an_opt_primary_without_geometry_still_gets_the_geometry_message():
+    opt = Calculation.opt(_ORCA, _LOT, converged=True, final_energy_hartree=-1.1)
+    with pytest.raises(TCKDBBuilderValidationError, match="must declare output_geometry or input_geometry"):
+        ComputedSpeciesUpload(
+            species=Species(smiles="[H][H]", charge=0, multiplicity=1),
+            calculations=[opt],
+        ).to_payload()
+
+
+def test_a_reaction_species_whose_only_calculation_is_an_sp_without_geometry_is_told_it_needs_an_opt():
+    h = Species(smiles="[H]", charge=0, multiplicity=2, label="H")
+    upload = ComputedReactionUpload(
+        reaction=ChemReaction(reactants=[h], products=[h], family="H_Abstraction"),
+        calculations=[],
+        species_calculations={h: [_bare_sp()]},
+    )
+    with pytest.raises(TCKDBBuilderValidationError, match="must contain at least one opt calculation"):
+        upload.to_payload()
