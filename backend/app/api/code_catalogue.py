@@ -2312,6 +2312,15 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("tckdb_client_version_unsupported", 426, Surface.detail_object,
             "backend/app/api/client_version.py",
             shape=Shape.relationship),
+    ApiCode("thermo_declaration_invalid", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py",
+            note=(
+                "A target or protocol declaration that reached a service or the "
+                "client builder without request validation (a payload built with "
+                "model_construct) and fails it there: an unrecognised target kind, "
+                "or a protocol that does not validate. A parsed request is refused "
+                "earlier, as an ordinary validation error."
+            )),
     ApiCode("thermo_energy_level_ambiguous", 422, Surface.coded_exception,
             "backend/app/services/calculation_levels.py",
             shape=Shape.relationship,
@@ -2342,6 +2351,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "same rule (app/services/calculation_levels.py), own code per "
                 "product per the house convention."
             )),
+    ApiCode("thermo_protocol_calculation_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/thermo_declaration_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "A protocol declaration's supporting calculation belongs to "
+                "another species entry. Distinct from "
+                "thermo_source_calculation_owner_mismatch: a source link says "
+                "which jobs produced the number, a declaration says which jobs "
+                "it rests on, and a client repairs them in different places."
+            )),
+    ApiCode("thermo_protocol_version_unsupported", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py"),
     ApiCode("thermo_role_duplicate", 422, Surface.coded_exception,
             "backend/app/services/calculation_levels.py",
             shape=Shape.relationship),
@@ -2365,6 +2386,27 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "function, source_calculations name jobs, and a depositor "
                 "repairs them in different places."
             )),
+    ApiCode("thermo_target_group_not_allowed", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py",
+            shape=Shape.relationship,
+            note=(
+                "An equilibrium_ensemble target that names a conformer group is "
+                "refused rather than ignored: a declaration is a claim, and a "
+                "claim carrying a group the record does not mean would be "
+                "stored as if it were meant."
+            )),
+    ApiCode("thermo_target_group_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/thermo_declaration_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "A single_conformer target names a conformer group owned by "
+                "another species entry. The group exists, so this is not "
+                "unknown_conformer_group_ref; the repair is to name a group of "
+                "this record's own species entry."
+            )),
+    ApiCode("thermo_target_group_required", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py",
+            shape=Shape.relationship),
     ApiCode("too_many_element_symbols", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/species.py",
             shape=Shape.relationship,

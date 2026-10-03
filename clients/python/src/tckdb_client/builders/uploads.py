@@ -272,6 +272,9 @@ class ComputedSpeciesUpload:
             bundle["thermo"] = self.thermo.to_payload(
                 allow_source_calculations=True,
                 calc_key_lookup=calc_keys.lookup,
+                # The one conformer this upload declares: what a
+                # ``single_conformer`` target names.
+                conformer_key=conformer_key,
             )
         if self.statmech is not None:
             # ``StatmechInBundle`` always carries ``source_calculations``;
@@ -1322,7 +1325,18 @@ class ComputedReactionUpload:
             # silently omits it; we already validated upstream that
             # any source calcs supplied resolve into the same species
             # bucket, so producers won't be surprised at upload time.
-            block["thermo"] = thermo.to_payload(allow_source_calculations=False)
+            # The target's conformer is the one this block declares below, whose
+            # key is minted after this point; a single_conformer target is
+            # therefore filled in there. The slot is created here either way so
+            # the key order of the block does not depend on the declaration.
+            block["thermo"] = (
+                {}
+                if thermo.thermodynamic_target == "single_conformer"
+                else thermo.to_payload(
+                    allow_source_calculations=False,
+                    calc_key_lookup=calc_keys.lookup,
+                )
+            )
         if statmech is not None:
             # ``BundleStatmechIn`` in computed-reaction DOES carry
             # ``source_calculations`` — emit them, resolving against
@@ -1332,6 +1346,12 @@ class ComputedReactionUpload:
                 calc_key_lookup=calc_keys.lookup,
             )
         if not sp_calcs:
+            if thermo is not None and thermo.thermodynamic_target == "single_conformer":
+                # No conformer is declared for this species; this raises the
+                # builder's own refusal saying so.
+                block["thermo"] = thermo.to_payload(
+                    allow_source_calculations=False, calc_key_lookup=calc_keys.lookup
+                )
             return block
 
         primary_opt = self._pick_species_primary_opt(sp, sp_calcs)
@@ -1360,6 +1380,12 @@ class ComputedReactionUpload:
         geom_key = geometry_keys.mint(conformer_geom, label=conformer_geom.label)
         conformer_key = conformer_keys.mint(primary_opt, label=primary_opt.label)
         primary_calc_key = calc_keys.lookup(primary_opt)
+        if thermo is not None and thermo.thermodynamic_target == "single_conformer":
+            block["thermo"] = thermo.to_payload(
+                allow_source_calculations=False,
+                calc_key_lookup=calc_keys.lookup,
+                conformer_key=conformer_key,
+            )
 
         block["conformers"] = [
             {

@@ -22,6 +22,23 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Thermo target and protocol declarations (2026-10-03)
+
+- tckdb-schemas 0.77.0, tckdb-client 0.114.0 and tckdb-backend: a thermo record can state what its
+  values describe (`thermodynamic_target`: `equilibrium_ensemble`, or `single_conformer` naming one
+  conformer group of its own species entry) and how they were produced (`protocol`: a versioned
+  declaration of the recipe, the formation-reference construction, the thermal approximation, any
+  departures from the standard recipe and the supporting calculations). Both are optional attributed
+  claims, stored as made; neither is ever inferred from a statmech link or a method name, and every
+  existing record reads `null` for both. They travel through `/uploads/thermo`, the computed-species
+  and computed-reaction bundles and contribution bundles, and thermo reads show them. First of three
+  changes toward method-aware H298 selection; selection itself is not part of this one. Schema
+  impact: revision `b3d8f1a6c924` adds three nullable columns and two CHECKs to `thermo` (additive,
+  no backfill, `downgrade()` implemented); accepted thermo stays frozen, so an approved declaration is
+  corrected only by supersession. Deploy the migration before the backend and clients. No new
+  environment variable. See `backend/schema_spec.md` and
+  `docs/guides/depositing_a_thermo_record.md`.
+
 ## Transition-state contract additions (2026-09-30)
 
 - tckdb-schemas 0.64.0 and tckdb-backend: a transition state carries more of

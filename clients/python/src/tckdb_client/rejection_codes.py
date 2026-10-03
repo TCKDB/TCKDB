@@ -284,15 +284,21 @@ class RejectionCode(str, Enum):
     TCKDB_CLIENT_VERSION_INVALID = "tckdb_client_version_invalid"
     TCKDB_CLIENT_VERSION_MISSING = "tckdb_client_version_missing"
     TCKDB_CLIENT_VERSION_UNSUPPORTED = "tckdb_client_version_unsupported"
+    THERMO_DECLARATION_INVALID = "thermo_declaration_invalid"
     THERMO_ENERGY_LEVEL_AMBIGUOUS = "thermo_energy_level_ambiguous"
     THERMO_ENERGY_LEVEL_CONTRADICTION = "thermo_energy_level_contradiction"
     THERMO_ENERGY_LEVEL_REQUIRES_SP = "thermo_energy_level_requires_sp"
     THERMO_ENERGY_SP_AND_COMPOSITE_LINKED = "thermo_energy_sp_and_composite_linked"
+    THERMO_PROTOCOL_CALCULATION_OWNER_MISMATCH = "thermo_protocol_calculation_owner_mismatch"
+    THERMO_PROTOCOL_VERSION_UNSUPPORTED = "thermo_protocol_version_unsupported"
     THERMO_ROLE_DUPLICATE = "thermo_role_duplicate"
     THERMO_SOURCE_CALCULATION_OWNER_MISMATCH = "thermo_source_calculation_owner_mismatch"
     THERMO_SOURCE_ROLE_TYPE_MISMATCH = "thermo_source_role_type_mismatch"
     THERMO_SP_GEOMETRY_MISMATCH = "thermo_sp_geometry_mismatch"
     THERMO_STATMECH_OWNER_MISMATCH = "thermo_statmech_owner_mismatch"
+    THERMO_TARGET_GROUP_NOT_ALLOWED = "thermo_target_group_not_allowed"
+    THERMO_TARGET_GROUP_OWNER_MISMATCH = "thermo_target_group_owner_mismatch"
+    THERMO_TARGET_GROUP_REQUIRED = "thermo_target_group_required"
     THERMOML_DOI_CONFLICT = "thermoml_doi_conflict"
     THERMOML_FILE_TOO_LARGE = "thermoml_file_too_large"
     THERMOML_INVALID_BASE64 = "thermoml_invalid_base64"
@@ -502,15 +508,21 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STORED_SPECIES_SMILES_UNPARSEABLE,
         RejectionCode.SUBJECT_TYPE_MISMATCH,
         RejectionCode.SUPERSEDES_SAME_RECORD,
+        RejectionCode.THERMO_DECLARATION_INVALID,
         RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS,
         RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION,
         RejectionCode.THERMO_ENERGY_LEVEL_REQUIRES_SP,
         RejectionCode.THERMO_ENERGY_SP_AND_COMPOSITE_LINKED,
+        RejectionCode.THERMO_PROTOCOL_CALCULATION_OWNER_MISMATCH,
+        RejectionCode.THERMO_PROTOCOL_VERSION_UNSUPPORTED,
         RejectionCode.THERMO_ROLE_DUPLICATE,
         RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH,
         RejectionCode.THERMO_SP_GEOMETRY_MISMATCH,
         RejectionCode.THERMO_STATMECH_OWNER_MISMATCH,
+        RejectionCode.THERMO_TARGET_GROUP_NOT_ALLOWED,
+        RejectionCode.THERMO_TARGET_GROUP_OWNER_MISMATCH,
+        RejectionCode.THERMO_TARGET_GROUP_REQUIRED,
         RejectionCode.THERMOML_DOI_CONFLICT,
         RejectionCode.THERMOML_FILE_TOO_LARGE,
         RejectionCode.THERMOML_INVALID_BASE64,
@@ -787,15 +799,21 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TCKDB_CLIENT_VERSION_INVALID: frozenset({426}),
     RejectionCode.TCKDB_CLIENT_VERSION_MISSING: frozenset({426}),
     RejectionCode.TCKDB_CLIENT_VERSION_UNSUPPORTED: frozenset({426}),
+    RejectionCode.THERMO_DECLARATION_INVALID: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_REQUIRES_SP: frozenset({422}),
     RejectionCode.THERMO_ENERGY_SP_AND_COMPOSITE_LINKED: frozenset({422}),
+    RejectionCode.THERMO_PROTOCOL_CALCULATION_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.THERMO_PROTOCOL_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.THERMO_ROLE_DUPLICATE: frozenset({422}),
     RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_SP_GEOMETRY_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_STATMECH_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.THERMO_TARGET_GROUP_NOT_ALLOWED: frozenset({422}),
+    RejectionCode.THERMO_TARGET_GROUP_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.THERMO_TARGET_GROUP_REQUIRED: frozenset({422}),
     RejectionCode.THERMOML_DOI_CONFLICT: frozenset({422}),
     RejectionCode.THERMOML_FILE_TOO_LARGE: frozenset({422}),
     RejectionCode.THERMOML_INVALID_BASE64: frozenset({422}),

@@ -19,6 +19,7 @@ from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_resolution import resolve_software_release_ref
+from app.services.thermo_declaration_resolution import assert_thermo_declaration_columns
 
 
 def infer_thermo_model_kind(
@@ -150,6 +151,16 @@ def persist_thermo(
     :param created_by: Optional application user id.
     :returns: Newly created ``Thermo`` row.
     """
+    # The last stop for the target and protocol columns: a resolved payload
+    # built without validation, or by a caller that never ran a workflow, is
+    # judged here exactly as one a workflow produced.
+    protocol_declaration = assert_thermo_declaration_columns(
+        session,
+        species_entry_id=thermo_create.species_entry_id,
+        thermodynamic_target_kind=thermo_create.thermodynamic_target_kind,
+        target_conformer_group_id=thermo_create.target_conformer_group_id,
+        protocol_declaration=thermo_create.protocol_declaration,
+    )
     thermo = Thermo(
         species_entry_id=thermo_create.species_entry_id,
         scientific_origin=thermo_create.scientific_origin,
@@ -159,6 +170,9 @@ def persist_thermo(
         software_release_id=thermo_create.software_release_id,
         statmech_id=thermo_create.statmech_id,
         energy_level_of_theory_id=thermo_create.energy_level_of_theory_id,
+        thermodynamic_target_kind=thermo_create.thermodynamic_target_kind,
+        target_conformer_group_id=thermo_create.target_conformer_group_id,
+        protocol_declaration=protocol_declaration,
         h298_kj_mol=thermo_create.h298_kj_mol,
         s298_j_mol_k=thermo_create.s298_j_mol_k,
         h298_uncertainty_kj_mol=thermo_create.h298_uncertainty_kj_mol,

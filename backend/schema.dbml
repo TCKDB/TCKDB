@@ -778,6 +778,11 @@ enum ThermoModelKind {
   scalar
 }
 
+enum ThermoTargetKind {
+  equilibrium_ensemble
+  single_conformer
+}
+
 enum TorsionTreatmentKind {
   hindered_rotor
   free_rotor
@@ -3678,6 +3683,9 @@ Table thermo {
   software_release_id bigint [ref: > software_release.id]
   energy_level_of_theory_id bigint [ref: > level_of_theory.id]
   enthalpy_reference_kind EnthalpyReferenceKind
+  thermodynamic_target_kind ThermoTargetKind
+  target_conformer_group_id bigint [ref: > conformer_group.id]
+  protocol_declaration jsonb
   h298_kj_mol double
   s298_j_mol_k double
   h298_uncertainty_kj_mol double
@@ -3699,12 +3707,15 @@ Table thermo {
     literature_id [name: 'ix_thermo_literature_id']
     public_ref [unique, name: 'ix_thermo_public_ref']
     statmech_id [name: 'ix_thermo_statmech_id']
+    target_conformer_group_id [name: 'ix_thermo_target_conformer_group_id']
   }
 
   checks {
     `enthalpy_formation_0k_uncertainty_kj_mol IS NULL OR enthalpy_formation_0k_uncertainty_kj_mol >= 0` [name: 'ck_thermo_enthalpy_formation_0k_uncertainty_ge_0']
     `h298_uncertainty_kj_mol IS NULL OR h298_uncertainty_kj_mol >= 0` [name: 'ck_thermo_h298_uncertainty_ge_0']
+    `protocol_declaration IS NULL OR (jsonb_typeof(protocol_declaration) = 'object' AND coalesce(jsonb_typeof(protocol_declaration -> 'version'), '') = 'number')` [name: 'ck_thermo_protocol_declaration_versioned_object']
     `s298_uncertainty_j_mol_k IS NULL OR s298_uncertainty_j_mol_k >= 0` [name: 'ck_thermo_s298_uncertainty_ge_0']
+    `(thermodynamic_target_kind IS NOT DISTINCT FROM 'single_conformer') = (target_conformer_group_id IS NOT NULL)` [name: 'ck_thermo_target_group_iff_single_conformer']
     `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_thermo_tmax_k_gt_0']
     `tmin_k IS NULL OR tmin_k > 0` [name: 'ck_thermo_tmin_k_gt_0']
     `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k` [name: 'ck_thermo_tmin_le_tmax']

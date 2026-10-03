@@ -1931,3 +1931,90 @@ property label, state, temperature, pressure and uncertainty meaning.
 CCCBDB's explicitly labelled H(298.15)-H(0) is routed to an observation
 payload with its source datum and identity hint intact. ARC requires an
 explicit adapter configuration; its output does not establish a basis.
+
+## Thermodynamic target and protocol declarations (2026-10-03)
+
+Three nullable columns on `thermo` let a depositor state two things the record
+could not state before. Both are **attributed claims**: stored as made, never
+inferred, never defaulted, never backfilled. Every record deposited before
+this revision reads `NULL` for all three, and `NULL` means "not stated" --
+not "equilibrium", not "standard".
+
+- `thermodynamic_target_kind` (`thermo_target_kind`: `equilibrium_ensemble` |
+  `single_conformer`) -- what the values are claimed to describe.
+- `target_conformer_group_id` (FK to `conformer_group`) -- the one group a
+  `single_conformer` target names.
+- `protocol_declaration` (JSONB) -- a versioned declaration of how the values
+  were produced.
+
+### Target rules
+
+- A `single_conformer` target **requires** a group and the group must belong to
+  the **same species entry** as the thermo row. An `equilibrium_ensemble`
+  target names no group, and a request that gives one is **refused**
+  (`thermo_target_group_not_allowed`), not ignored: a claim carrying a group
+  the record does not mean would otherwise be stored as if it were meant.
+- "A group is named exactly when the kind is `single_conformer`" is a CHECK
+  (`ck_thermo_target_group_iff_single_conformer`, written with `IS NOT DISTINCT
+  FROM` so that a group on a row with no kind is refused too). That the group
+  belongs to the row's species entry is a cross-table fact no CHECK can state,
+  and making it a trigger or composite foreign key would alter
+  `conformer_group`, a deployed identity table. It is enforced where the row is
+  written, in three layers that do not rely on each other: the request schema
+  (self-contradiction), the workflow (`resolve_thermo_declarations`, which
+  re-derives every check from the declaration itself so a `model_construct`
+  payload is judged the same), and `persist_thermo` (the resolved columns).
+- The target is never inferred from `statmech_id`, a conformer selection, or
+  anything else attached to the record.
+- Wire spelling: `conformer_group_ref` (public ref, standalone
+  `/uploads/thermo` and contribution bundles) or `conformer_key` (a conformer
+  the same computed-species / computed-reaction bundle declares; a reaction
+  bundle's namespace is the species' own conformers). Never a database id.
+
+### Protocol declaration (version 1)
+
+Owned by `tckdb_schemas.thermo_declarations`. Typed Pydantic models with
+`extra="forbid"` and an explicit required `version`; only the versions in
+`THERMO_PROTOCOL_VERSIONS` (`{1}`) are accepted. The database checks only that
+the value is a JSON object with a numeric `version`
+(`ck_thermo_protocol_declaration_versioned_object`). What is stored is the
+validated form, with supporting calculations as public refs.
+
+| Field | Meaning |
+| --- | --- |
+| `recipe.name` | `g3`, `g4`, `g4mp2`, `g4_complete`, or `other` (then `recipe.other_name` is required). The four named recipes are distinct values because a method-aware comparison must tell them apart. |
+| `recipe.recipe_version` | Free text naming the recipe's version or reference. Stored as written. |
+| `formation_reference.derivation` | `atomization`, `isodesmic`, or `working_reaction` (any other balanced working reaction). A preference established for one derivation does not transfer to another. |
+| `formation_reference.reference_data_source` / `reference_data_detail` | Where the reference formation enthalpies came from: `atct`, `nist_janaf`, `codata`, or `other` (then the detail is required); the detail is free text such as `ATcT 1.122`. |
+| `thermal_approximation.ensemble_representation` | What stands in for the target ensemble: `lowest_conformer` or `boltzmann_conformers`. **Separate from the target**: the target says what ensemble is meant, this says what represents it. |
+| `thermal_approximation.internal_motion` | `harmonic`, `hindered_rotors` or `anharmonic`. |
+| `departures` | Stated departures from the standard form of the declared recipe: a list of `{component, description}` (`geometry`, `frequencies`, `zero_point_energy`, `electronic_energy`, `empirical_correction`, `other`). **Three states**: omitted means not stated; `[]` means the depositor states there are none; a list names them. "Standard" can only be established by `[]`. |
+| `supporting_calculations` | Calculations the declaration rests on, by local key (`calculation_key`) or public ref (`calculation_ref`, standalone and contribution-bundle routes only). Must belong to the record's own species entry. Stored as public refs. |
+
+The vocabulary is deliberately small: it stores only what a job states, and a
+value is added when a real deposit needs it (adding an enum member or an
+optional field is additive within version 1). It is a claim, not a verification:
+nothing here checks a recipe against the linked calculations or statmech, and
+a method name alone satisfies no later evidence requirement.
+
+### Lifecycle
+
+- **Immutability.** `trg_as_root_thermo` refuses any UPDATE of an accepted
+  thermo row, whichever column it touches, so the three columns are frozen with
+  the rest of the row. An approved declaration is corrected only by
+  supersession, like any other scientific content. No accepted-science repair
+  declaration lists them, so no repair can change one.
+- **Digests.** The three columns are registered in `UNCHANGED_DEFAULTS` with
+  value `NULL`: an undeclared row's consistency and reproducibility digests are
+  exactly what they were before the revision (no stored review goes stale on
+  deploy), and a row that states a target or protocol hashes differently,
+  because the declaration is part of what the row claims. This follows the
+  enthalpy-reference column, which also changes a row's digest once declared.
+- **Reads.** `ThermoRecord.thermodynamic_target` (`kind`, `conformer_group_ref`)
+  and `ThermoRecord.protocol` (stored form). Both `null` for a legacy row.
+- **Contribution bundles.** Export carries an equilibrium target and the
+  protocol's recipe, formation reference, thermal approximation and departures.
+  It leaves out, and reports as a `declaration_pruned` omission, what names a
+  row of the exporting database and so cannot travel: a `single_conformer`
+  target's group and the protocol's supporting calculations. Left out means
+  absent, never replaced.

@@ -337,7 +337,14 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 #: traced on ten surfaces, so codes on eight or more surfaces are printed once in a shared table
 #: (``ContractBuilder.widely_shared_codes``) instead of ten times, which is what keeps the ceiling
 #: where it was.
-MARKDOWN_BYTE_CEILING = 700_000
+#:
+#: The thermo target and protocol declarations (H298 selection, change 1) grew it by about 21 KB net
+#: and the ceiling by 15 KB (5 KB of it headroom after the rebase onto main). Trimmed first: the rule text is one short paragraph, free-text fields use
+#: constraints rather than validators (no rule bullets), and the refusal codes are six. What is left is
+#: intrinsic: two optional blocks and seven nested models on each of four surfaces (``/uploads/thermo``,
+#: both computed bundles, contribution bundles), whose codes sit on four surfaces and so do not reach
+#: the eight-surface threshold for the shared table.
+MARKDOWN_BYTE_CEILING = 715_000
 
 
 def test_the_contract_stays_readable_in_pieces(committed_markdown: str) -> None:

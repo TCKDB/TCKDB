@@ -232,6 +232,28 @@ per omission to stderr, and an `error:` line if nothing was left to write.
 A record that already carries a declaration is completely unaffected by
 this and exports (and re-imports) exactly as described above.
 
+### Exporting a target and protocol declaration
+
+`ThermoUploadRequest.thermodynamic_target` and `ThermoUploadRequest.protocol`
+(see `schema_spec.md` § "Thermodynamic target and protocol declarations") are
+optional attributed claims. A bundle must be importable on any instance, so the
+exporter carries what is portable and leaves out, with a report, what names a
+row of the exporting database:
+
+- An `equilibrium_ensemble` target, and the protocol's `recipe`,
+  `formation_reference`, `thermal_approximation` and `departures`, are carried
+  exactly (`departures: []` stays `[]`: "no departures" is a statement).
+- A `single_conformer` target names a conformer group of the exporting
+  database, so it is left out; the protocol's `supporting_calculations` are
+  public refs to calculations of the exporting database, so they are left out
+  too (a protocol that said nothing else is left out entirely). Left out means
+  **absent in the bundle, never replaced**: a dropped single-conformer target
+  does not become an equilibrium one.
+- Each such record gets a `declaration_pruned` omission (or, if its enthalpy was
+  also pruned, the `enthalpy_pruned` omission carries both sentences).
+
+A legacy record that made no declaration exports none and reports nothing.
+
 ### `local_refs`
 
 A map from a bundle-local reference key to a small descriptor.
