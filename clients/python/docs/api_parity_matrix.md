@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 109 |
+| typed | 110 |
 | raw_only | 107 |
 | not_applicable | 45 |
-| **total** | **261** |
+| **total** | **262** |
 
 ## Typed coverage
 
@@ -104,6 +104,7 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/species-entries/{species_entry_id}/observations` | yes | `get_species_observations` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/species-entries/{species_entry_id}/thermo` | yes | `get_species_thermo` | — | `examples/scientific_reads.py` | `tests/test_scientific.py` |
 | `POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select` | yes | `select_species_thermo` | — | — | `tests/test_thermo_selection.py` |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select/manifest` | yes | `get_species_thermo_selection_manifest` | — | — | `tests/test_thermo_selection.py` |
 | `GET /api/v1/scientific/species/browse` | yes | `browse_species` | `iter_species_browse` | — | `tests/test_scientific.py` |
 | `GET /api/v1/scientific/species/search` | yes | `search_species` | `iter_species` | `examples/scientific_reads.py` | `tests/test_scientific.py` |
 | `GET /api/v1/scientific/species/structure-search` | yes | `search_species_structures` | `iter_species_structures` | — | `tests/test_typed_parity_methods.py` |

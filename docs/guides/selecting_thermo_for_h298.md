@@ -52,8 +52,8 @@ The read profile is the usual `?profile=exploratory|curated` query
 parameter. There is no candidate cap field: the cap is fixed at 500 visible
 candidates.
 
-`?format=manifest` returns the decision manifest instead of the typed
-response (see "Replaying a decision").
+`POST .../thermo/select/manifest` takes the same body and returns the
+decision manifest instead of the typed response (see "Replaying a decision").
 
 ## What each outcome means
 
@@ -66,7 +66,13 @@ response (see "Replaying a decision").
 | `sole_eligible_candidate` | Exactly one record is eligible. | That record. It is the only one found, not a claim that it is the best possible value. |
 | `no_applicable_candidate` | No record is eligible for this request. | `null`. |
 | `policy_conflict` | Opposing rules, or a preference cycle, contradict each other. | `null`. There is no silent fallback. |
-| `bounded_search_exceeded` | More than 500 candidates are visible. Nothing was assessed, because a winner picked from part of the population would say nothing about the rest. | `null`. |
+
+More than 500 visible records is not an outcome but a refusal: 422
+`thermo_selection_population_too_large`. Nothing is assessed, because a winner
+picked from part of the population would say nothing about the rest. Only
+records visible under the caller's read profile and review floor are counted,
+so the refusal cannot reveal records the profile hides; `min_review_status` or
+`profile=curated` narrows the population.
 
 An `administrative_first` choice is a convenience for a caller who needs one
 record regardless. It is not a claim that the record is better.
@@ -110,9 +116,12 @@ E1 prefers a standard G4 calculation over a standard G3 calculation for the
 gas-phase formation enthalpy at 298.15 K. Version 1.0.0, with audited
 membership manifest 1.0.0.
 
-- **Scope.** Neutral, ground-state, non-isotopologue minimum entries of one of
-  the 38 hydrocarbons in the audited benchmark manifest (an exact InChIKey,
-  charge and multiplicity match; singlet methylene only). Any other species is
+- **Scope.** Neutral, non-isotopologue minimum entries of one of the 38
+  hydrocarbons in the audited benchmark manifest (an exact InChIKey, charge and
+  multiplicity match). Every member except methylene must also be recorded as
+  ground state. Methylene is in scope as the singlet only (multiplicity 1) and is
+  told apart from the triplet by multiplicity alone, so a singlet entry labelled
+  with an excited electronic state is still in scope. Any other species is
   outside the rule and gets no preference.
 - **Both records must state**: a computed origin; the recipe exactly `g4`
   (preferred) or `g3` (yielding); an explicit, empty list of departures from
@@ -126,11 +135,13 @@ membership manifest 1.0.0.
 - **The declaration is a claim.** A matching label is the depositor's word.
   The response says whether a linked level corroborates it or the declaration
   stands alone.
-- **Evidence limits.** The preference rests on average deviations over the
-  benchmark development sets (G3 0.69, G4 0.48 kcal/mol). That is
-  development-set performance, aggregate and in-sample. It is not a
-  per-molecule guarantee, not a per-record uncertainty, and not a curator
-  recommendation. The limits ship in the response's `policy.rules`.
+- **Evidence limits.** The preference rests on mean absolute deviations of
+  G3 0.69 and G4 0.48 kcal/mol, averaged over these same 38 hydrocarbons. They
+  sit inside both methods' fit sets (all 38 for G4, 22 for G3), so the figures
+  are in-sample development-set performance, aggregate, and not independent
+  validation. They are not a per-molecule guarantee, not a per-record
+  uncertainty, and not a curator recommendation. The limits ship in the
+  response's `policy.rules`.
 
 Because E1 applies only inside its manifest, an older qualifying G4 record
 outranks a newer qualifying G3 record for those species. Recency never
@@ -154,11 +165,11 @@ The same visibility rules as the other `/scientific/` reads apply.
 
 ## Replaying a decision
 
-`POST ...?format=manifest` downloads the decision manifest: the normalised
+`POST .../thermo/select/manifest` downloads the decision manifest: the normalised
 request, the effective floor, every assessed candidate with its normalised
 inputs, the rules applied (id, version, evidence limits), each rule's verdict
 per candidate, the preference edges, the fronts and the administrative order.
-It holds public refs only. The decision can be recomputed from it with no
+It holds public refs only, and records the read profile it was made under. The decision can be recomputed from it with no
 database (`app.services.thermo_selection.replay_decision`). A manifest made
 under a rule version the running server does not carry is refused rather than
 replayed under another.

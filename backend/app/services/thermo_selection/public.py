@@ -29,12 +29,14 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.db.models.species import ConformerGroup
 from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
 from app.schemas.reads.scientific_thermo_selection import (
     QUANTITY_H298,
     REFERENCE_TEMPERATURE_K,
+    W_THERMO_SELECTION_POPULATION_TOO_LARGE,
     ThermoSelectionCandidate,
     ThermoSelectionDisclosures,
     ThermoSelectionEdge,
@@ -60,7 +62,7 @@ from app.services.scientific_read.handles import (
     resolve_species_entry_handle,
 )
 from app.services.scientific_read.profile import current_read_profile
-from app.services.thermo_selection.models import H298Request, H298Selection, Outcome
+from app.services.thermo_selection.models import MAX_CANDIDATES, H298Request, H298Selection, Outcome
 from app.services.thermo_selection.service import select_h298
 
 
@@ -117,6 +119,16 @@ def run_selection(
     )
     rules = None if body.policy is ThermoSelectionPolicy.method_preferred else ()
     selection = select_h298(session, species_entry_id=species_entry_id, request=request, rules=rules)
+    if selection.outcome is Outcome.bounded_search_exceeded:
+        # The service counted only records at or above the effective floor, so this number is about the
+        # caller's visible population and says nothing about records the profile hides.
+        visible = selection.manifest["population"]["visible_candidates"]
+        raise CodedValueError(
+            W_THERMO_SELECTION_POPULATION_TOO_LARGE,
+            f"{visible} visible thermo records exceed the limit of {MAX_CANDIDATES} for one selection; "
+            "nothing was assessed. Narrow the population with min_review_status or the curated profile.",
+            context={"limit": MAX_CANDIDATES, "visible_candidates": visible},
+        )
     return selection, body.target.conformer_group_ref
 
 
@@ -127,6 +139,11 @@ def profile_has_floor() -> bool:
 def redact_manifest(manifest: dict[str, Any], *, withhold_excluded: bool) -> dict[str, Any]:
     """A copy of the manifest safe to hand to this caller. Never alters ``decision`` or ``candidates``."""
     out = copy.deepcopy(manifest)
+    # The candidate cap is the server's, not a field of the request; it is not part of what is downloaded.
+    out["request"].pop("max_candidates", None)
+    # The read profile the manifest was made under, as every scientific response echoes it. Replay reads
+    # only the administrative policy, so these keys cannot change a decision.
+    out["request"].update(current_read_profile().echo())
     if withhold_excluded:
         population = out["population"]
         population["thermo_rows_for_entry"] = population["visible_candidates"]

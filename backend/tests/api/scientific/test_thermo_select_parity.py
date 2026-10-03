@@ -129,11 +129,18 @@ def test_a_single_conformer_target_agrees_through_all_three(client, sdk, mcp, db
 
 def test_the_manifest_is_the_same_document_through_the_api_and_the_client(client, sdk, db_session, methane):
     _seed(db_session, methane)
-    api = client.post(
-        f"/api/v1/scientific/species-entries/{methane.public_ref}/thermo/select",
-        json={"target": EQ}, params={"format": "manifest"},
-    ).json()
-    assert sdk.get_species_thermo_selection_manifest(methane.public_ref, target=EQ) == api
+    make_thermo(db_session, methane, proto=protocol("g4"), age_days=700)  # not reviewed: hidden under curated
+    for profile in (None, "curated"):
+        api = client.post(
+            f"/api/v1/scientific/species-entries/{methane.public_ref}/thermo/select/manifest",
+            json={"target": EQ}, params={"profile": profile} if profile else None,
+        )
+        assert api.status_code == 200
+        via_sdk = sdk.get_species_thermo_selection_manifest(methane.public_ref, target=EQ, profile=profile)
+        assert via_sdk == api.json(), profile
+    exploratory = sdk.get_species_thermo_selection_manifest(methane.public_ref, target=EQ)
+    curated = sdk.get_species_thermo_selection_manifest(methane.public_ref, target=EQ, profile="curated")
+    assert exploratory != curated  # the profile reaches the server, so the two documents really differ
 
 
 @pytest.mark.parametrize(

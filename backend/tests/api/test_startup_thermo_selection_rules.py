@@ -61,7 +61,25 @@ def test_the_failure_names_its_cause_and_keeps_the_original_exception(fresh_rule
     with pytest.raises(ThermoSelectionRulesError) as caught:
         validate_thermo_selection_rules()
     assert isinstance(caught.value.__cause__, e1_manifest.ManifestError)
-    assert "ManifestError" in str(caught.value)
+    assert "does not match its pinned digest" in str(caught.value)
+
+
+def test_a_missing_manifest_file_is_reported_as_missing_not_as_a_bad_digest(fresh_rule_caches, tmp_path, monkeypatch):
+    monkeypatch.setattr(e1_manifest, "MANIFEST_PATH", tmp_path / "gone.yaml")
+    with pytest.raises(ThermoSelectionRulesError) as caught:
+        validate_thermo_selection_rules()
+    assert isinstance(caught.value.__cause__, FileNotFoundError)
+    assert "could not be read" in str(caught.value) and "pinned digest" not in str(caught.value)
+
+
+def test_a_failed_audit_is_reported_as_such(fresh_rule_caches, monkeypatch):
+    def refuse(_raw):
+        raise e1_manifest.ManifestError("manifest is not approved for activation")
+
+    monkeypatch.setattr(e1_manifest, "parse_e1_manifest", refuse)
+    monkeypatch.setattr(selection_rules, "E1_MANIFEST_SHA256", None)
+    with pytest.raises(ThermoSelectionRulesError, match="not approved for activation"):
+        validate_thermo_selection_rules()
 
 
 def test_a_failed_build_is_not_cached_so_a_restored_manifest_loads(fresh_rule_caches, tmp_path, monkeypatch):

@@ -30,6 +30,8 @@ REFERENCE_TEMPERATURE_K = 298.15
 #: Refusal for a temperature or phase that contradicts the quantity.
 W_THERMO_SELECTION_CONDITION_CONFLICT = "thermo_selection_condition_conflict"
 #: ``single_conformer`` with no group, and ``equilibrium_ensemble`` with one: same refusals as a deposit.
+#: More visible records than one selection will assess (the service's fixed cap).
+W_THERMO_SELECTION_POPULATION_TOO_LARGE = "thermo_selection_population_too_large"
 W_TARGET_GROUP_REQUIRED = "thermo_target_group_required"
 W_TARGET_GROUP_NOT_ALLOWED = "thermo_target_group_not_allowed"
 
@@ -56,23 +58,15 @@ class ThermoSelectionMode(str, Enum):
     first = "first"
 
 
-class ThermoSelectionFormat(str, Enum):
-    """``json`` answers with the typed response; ``manifest`` answers with the replayable decision manifest
-    as a downloadable JSON document (the same request, the same decision)."""
-
-    json = "json"
-    manifest = "manifest"
-
-
 class ThermoSelectionOutcome(str, Enum):
-    """The selection basis. Mirrors the service ``Outcome`` one to one (a test holds them equal)."""
+    """The selection basis. The service ``Outcome`` minus ``bounded_search_exceeded``, which the endpoint
+    reports as the 422 ``thermo_selection_population_too_large`` instead (a test holds the two in step)."""
 
     policy_preferred = "policy_preferred"
     incomparable_alternatives = "incomparable_alternatives"
     sole_eligible_candidate = "sole_eligible_candidate"
     no_applicable_candidate = "no_applicable_candidate"
     policy_conflict = "policy_conflict"
-    bounded_search_exceeded = "bounded_search_exceeded"
 
 
 class ThermoSelectionTargetIn(BaseModel):
@@ -113,7 +107,9 @@ class ThermoSelectionRequest(BaseModel):
 
     quantity: Literal["formation_enthalpy_298k"] = QUANTITY_H298
     temperature_k: float | None = Field(
-        default=None, description="Normalised to 298.15 K. Any other value is refused."
+        default=None,
+        allow_inf_nan=False,
+        description="Normalised to 298.15 K. Any other value is refused, and NaN and Infinity are invalid.",
     )
     phase: PhaseKind | None = Field(default=None, description="Normalised to gas. Any other phase is refused.")
     target: ThermoSelectionTargetIn
@@ -257,8 +253,9 @@ class ThermoSelectionDisclosures(BaseModel):
     visible_candidates: int = Field(description="Records at or above the effective floor (the assessed population).")
     excluded_by_review: list[ThermoSelectionExcluded] = Field(default_factory=list)
     excluded_by_review_withheld: bool = Field(
-        description="True when records outside the effective floor exist but are not listed, because the read "
-        "profile does not otherwise let the caller see them."
+        description="True whenever the read profile has a review floor of its own (curated): records outside "
+        "the effective floor are then never listed, whether or not any exist, so the field cannot reveal "
+        "that they do. False under a profile with no floor, where they are listed."
     )
     notes: list[str] = Field(default_factory=list)
 
@@ -280,3 +277,38 @@ class ThermoSelectionResponse(BaseModel):
     relations: ThermoSelectionRelations = Field(default_factory=ThermoSelectionRelations)
     rule_matches: list[dict[str, Any]] = Field(default_factory=list)
     disclosures: ThermoSelectionDisclosures
+
+
+class ThermoSelectionManifestRequest(ProfiledRequestEcho):
+    """The manifest's normalised request, with the read profile it was made under (the same echo every
+    scientific response carries). Further keys the decision recorded are kept."""
+
+    model_config = ConfigDict(extra="allow")
+
+    quantity: str
+    temperature_k: float
+    phase: str
+    target: dict[str, Any]
+    min_review_status: RecordReviewStatus | None = None
+    effective_review_statuses: list[RecordReviewStatus]
+    administrative_policy: str
+
+
+class ThermoSelectionManifest(BaseModel):
+    """The replayable decision manifest of ``POST .../thermo/select/manifest``.
+
+    Public refs only. Holds the normalised request, the effective review floor, every assessed candidate
+    with its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the rules
+    applied with each rule's verdict per candidate, the preference edges, the fronts and the administrative
+    order: enough to recompute the decision with no database.
+    """
+
+    manifest_format_version: int
+    policy: dict[str, Any]
+    request: ThermoSelectionManifestRequest
+    subject: dict[str, Any]
+    population: dict[str, Any]
+    candidates: list[dict[str, Any]]
+    decision: dict[str, Any]
+    outcome: ThermoSelectionOutcome
+    disclosures: dict[str, Any] = Field(default_factory=dict)

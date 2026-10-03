@@ -8,32 +8,41 @@ database id leaves the building.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app.db.models.common import (
     EnthalpyReferenceKind,
     PhaseKind,
     ScientificOriginKind,
+    SubmissionRecordType,
     ThermoTargetKind,
 )
 from app.db.models.common import RecordReviewStatus as S
+from app.db.models.species import Species
 from app.db.models.thermo import Thermo
 from app.schemas.reads.scientific_thermo_selection import ThermoSelectionOutcome
 from app.services.thermo_selection import Outcome, replay_decision, replay_matches
-from tests.services.scientific_read._factories import make_conformer_group, make_species, make_species_entry
+from tests.services.scientific_read._factories import (
+    make_conformer_group,
+    make_species,
+    make_species_entry,
+    set_review,
+)
 from tests.services.thermo_selection._support import T0, make_thermo, protocol, species_entry_for
 from tests.services.thermo_selection.test_engine import LabelRule
 
 EQUILIBRIUM = {"target": {"kind": "equilibrium_ensemble"}}
 
 
-def select_url(entry) -> str:
-    return f"/api/v1/scientific/species-entries/{entry.public_ref}/thermo/select"
+def select_url(entry, *, manifest: bool = False) -> str:
+    return f"/api/v1/scientific/species-entries/{entry.public_ref}/thermo/select" + ("/manifest" if manifest else "")
 
 
 def post(client, entry, body=None, *, profile: str | None = None, manifest: bool = False):
-    params = {k: v for k, v in (("profile", profile), ("format", "manifest" if manifest else None)) if v}
-    return client.post(select_url(entry), json=EQUILIBRIUM if body is None else body, params=params or None)
+    params = {"profile": profile} if profile else None
+    return client.post(select_url(entry, manifest=manifest), json=EQUILIBRIUM if body is None else body, params=params)
 
 
 @pytest.fixture
@@ -147,26 +156,63 @@ def test_policy_conflict(client, db_session, methane, monkeypatch):
     assert {a.public_ref, b.public_ref} == set(body["administrative_order"])
 
 
-def test_bounded_search_exceeded_over_the_fixed_cap(client, db_session, methane):
-    db_session.add_all(
+def _bulk(session, entry, n, *, offset=0):
+    rows = [
         Thermo(
-            species_entry_id=methane.id, scientific_origin=ScientificOriginKind.computed, h298_kj_mol=-74.6 - i * 1e-3,
-            enthalpy_reference_kind=EnthalpyReferenceKind.formation_298k, phase=PhaseKind.gas,
-            thermodynamic_target_kind=ThermoTargetKind.equilibrium_ensemble, created_at=T0,
+            species_entry_id=entry.id, scientific_origin=ScientificOriginKind.computed,
+            h298_kj_mol=-74.6 - (offset + i) * 1e-3, enthalpy_reference_kind=EnthalpyReferenceKind.formation_298k,
+            phase=PhaseKind.gas, thermodynamic_target_kind=ThermoTargetKind.equilibrium_ensemble, created_at=T0,
         )
-        for i in range(501)
-    )
-    db_session.flush()
+        for i in range(n)
+    ]
+    session.add_all(rows)
+    session.flush()
+    return rows
+
+
+def test_more_than_the_cap_of_visible_records_is_a_coded_refusal_not_an_outcome(client, db_session, methane):
+    _bulk(db_session, methane, 501)
+    response = post(client, methane)
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "thermo_selection_population_too_large"
+    assert body["context"] == {"limit": 500, "visible_candidates": 501}
+    assert post(client, methane, manifest=True).status_code == 422
+
+
+def test_exactly_the_cap_is_still_assessed(client, db_session, methane):
+    _bulk(db_session, methane, 500)
     response = post(client, methane)
     assert response.status_code == 200
-    body = response.json()
-    assert body["outcome"] == "bounded_search_exceeded"
-    assert body["selection"] is None and body["candidates"] == []
-    assert "500" in body["basis"] and body["disclosures"]["visible_candidates"] == 501
+    assert response.json()["disclosures"]["visible_candidates"] == 500
 
 
-def test_the_outcome_vocabulary_is_the_services_vocabulary():
-    assert {o.value for o in ThermoSelectionOutcome} == {o.value for o in Outcome}
+def test_the_cap_counts_only_records_visible_to_the_caller(client, db_session, methane):
+    visible = _bulk(db_session, methane, 101)
+    for row in visible:
+        set_review(db_session, record_type=SubmissionRecordType.thermo, record_id=row.id, status=S.approved)
+    _bulk(db_session, methane, 400, offset=101)  # 400 never-reviewed records: hidden under the curated profile
+    curated = post(client, methane, profile="curated")
+    assert curated.status_code == 200, curated.text
+    assert curated.json()["disclosures"]["visible_candidates"] == 101
+    assert "bounded" not in curated.text and "population_too_large" not in curated.text
+    assert post(client, methane, profile="curated", manifest=True).status_code == 200
+    exploratory = post(client, methane)  # the same entry, a profile that can see all 501
+    assert exploratory.status_code == 422
+    assert exploratory.json()["context"]["visible_candidates"] == 501
+
+
+def test_the_refusal_reports_the_visible_count_not_the_total_under_curated(client, db_session, methane):
+    for row in _bulk(db_session, methane, 501):
+        set_review(db_session, record_type=SubmissionRecordType.thermo, record_id=row.id, status=S.approved)
+    _bulk(db_session, methane, 50, offset=501)  # hidden under curated
+    response = post(client, methane, profile="curated")
+    assert response.status_code == 422
+    assert response.json()["context"] == {"limit": 500, "visible_candidates": 501}
+
+
+def test_the_outcome_vocabulary_is_the_services_vocabulary_without_the_refusal():
+    assert {o.value for o in ThermoSelectionOutcome} == {o.value for o in Outcome} - {"bounded_search_exceeded"}
 
 
 # -- result mode: an administrative pick says so ---------------------------------------------------------
@@ -409,8 +455,14 @@ def test_a_curated_manifest_still_replays(client, db_session, methane):
 
 # -- no internal ids -------------------------------------------------------------------------------------
 
-#: ``rule_id`` is the rule registry key (``E1``), not a row id.
-_ALLOWED_ID_SHAPED_KEYS = {"rule_id"}
+#: Registry keys (``E1``), not row ids.
+_ALLOWED_ID_SHAPED_KEYS = {"rule_id", "overridden_by_rule_id"}
+#: Every integer the documents may carry, by key: counts, an ordinal, versions, the subject's charge and multiplicity. Any other integer is a leak.
+_ALLOWED_INTEGER_KEYS = {
+    "id_rank", "visible_candidates", "thermo_rows_for_entry", "assessed", "manifest_format_version", "version",
+    "charge", "multiplicity",
+}
+_ALLOWED_REF_PREFIXES = {"thm", "spe", "cg", "calc"}
 
 
 def _keys(value):
@@ -427,6 +479,21 @@ def _id_shaped(keys):
     return sorted({k for k in keys if (k == "id" or k.endswith(("_id", "_ids"))) and k not in _ALLOWED_ID_SHAPED_KEYS})
 
 
+def _stray_integers(value, key=""):
+    """Every (key, int) pair whose key is not a known count, ordinal or version."""
+    if isinstance(value, bool):
+        return
+    if isinstance(value, int):
+        if key not in _ALLOWED_INTEGER_KEYS:
+            yield key, value
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            yield from _stray_integers(v, k)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _stray_integers(item, key)
+
+
 def _ref_values(value):
     """Every string value that sits under a ``*_ref`` / ``*_refs`` key (or in a list of them)."""
     if isinstance(value, dict):
@@ -439,23 +506,40 @@ def _ref_values(value):
             yield from _ref_values(item)
 
 
-def test_no_internal_id_appears_in_the_response_or_the_manifest(client, db_session, methane):
+def test_no_internal_id_appears_in_the_response_or_the_manifest(client, db_session, methane, monkeypatch):
     group = make_conformer_group(db_session, methane)
     g4(db_session, methane, age_days=500, status=S.approved)
     g3(db_session, methane, age_days=1, status=S.approved)
     g3(db_session, methane, target=ThermoTargetKind.single_conformer, group_id=group.id)
     make_thermo(db_session, methane, target=None)
     g4(db_session, methane, status=S.rejected)
+    with_calc = {**protocol("g4"), "supporting_calculations": [{"calculation_ref": "calc_0123456789ab"}]}
+    make_thermo(db_session, methane, proto=with_calc, age_days=2, status=S.approved)
+    # Two rules, one superseding the other, so the decision carries an overridden edge.
+    a = make_thermo(db_session, methane, proto=protocol("g4", label="a"), age_days=5, status=S.approved)
+    b = make_thermo(db_session, methane, proto=protocol("g4", label="b"), age_days=4, status=S.approved)
+    rules = (LabelRule("S1", {"a"}, {"b"}, supersedes=("S2",)), LabelRule("S2", {"b"}, {"a"}))
+    monkeypatch.setattr("app.services.thermo_selection.service.default_rules", lambda: rules)
+
     docs = [
         post(client, methane).json(),
         post(client, methane, manifest=True).json(),
+        post(client, methane, profile="curated").json(),
+        post(client, methane, profile="curated", manifest=True).json(),
         post(client, methane, {"target": {"kind": "single_conformer", "conformer_group_ref": group.public_ref}}).json(),
     ]
+    assert docs[0]["relations"]["overridden_edges"], "the fixture no longer produces an overridden edge"
+    assert "overridden_by_rule_id" in json.dumps(docs[0]["relations"]["overridden_edges"])
+    assert any(
+        c["protocol"] and c["protocol"].get("supporting_calculations") for c in docs[0]["candidates"]
+    ), "the fixture no longer carries supporting calculations"
+    assert a.public_ref in json.dumps(docs[0]) and b.public_ref in json.dumps(docs[0])
     for doc in docs:
         assert _id_shaped(_keys(doc)) == []
+        assert list(_stray_integers(doc)) == []
         refs = {r for r in _ref_values(doc) if isinstance(r, str)}
         assert refs, "the document names no refs at all; the check below would be vacuous"
-        assert {r.split("_", 1)[0] for r in refs} <= {"thm", "spe", "cg"}, refs
+        assert {r.split("_", 1)[0] for r in refs} <= _ALLOWED_REF_PREFIXES, refs
 
 
 def test_candidate_refs_are_thermo_public_refs(client, db_session, methane):
@@ -463,3 +547,147 @@ def test_candidate_refs_are_thermo_public_refs(client, db_session, methane):
     body = post(client, methane).json()
     assert body["candidates"][0]["thermo_ref"] == row.public_ref
     assert row.public_ref.startswith("thm_")
+
+
+# -- non-finite temperatures -----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"])
+def test_a_non_finite_temperature_is_a_clean_422_not_a_500(client, methane, literal):
+    response = client.post(
+        select_url(methane),
+        content=f'{{"target": {{"kind": "equilibrium_ensemble"}}, "temperature_k": {literal}}}',
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 422
+    # Strict JSON (no NaN or Infinity tokens in the reply), and the refusal is the request-validation one,
+    # not the condition-conflict refusal that would have to echo the non-finite value back.
+    body = json.loads(response.text, parse_constant=lambda token: pytest.fail(f"{token} in the response"))
+    assert body["code"] != "thermo_selection_condition_conflict"
+    assert "finite number" in json.dumps(body["detail"]), body  # named for what it is, not a serializer failure
+
+
+# -- the curated profile is not an oracle for hidden records --------------------------------------------
+
+
+def _build(session, entry, *, with_hidden: bool):
+    """The same visible records, optionally with hidden ones interleaved by id. Returns ref -> label."""
+    labels: dict[str, str] = {}
+    plan = [
+        ("old_g4", "g4", 500, S.approved),
+        ("new_g3", "g3", 1, S.approved),
+        ("mid_g3", "g3", 3, S.approved),
+        ("sole_other", "g3", 7, S.approved),
+    ]
+    hidden = [
+        ("h_review", "g4", 900, S.under_review, {}),
+        ("h_unrev", "g3", 2, S.not_reviewed, {}),
+        ("h_rej", "g4", 800, S.rejected, {}),
+        ("h_dep", "g4", 700, S.deprecated, {}),
+        ("h_unresolved", "g4", 5, S.not_reviewed, {"target": None}),
+    ]
+    for index, (label, recipe, age, status) in enumerate(plan):
+        if with_hidden:
+            hlabel, hrecipe, hage, hstatus, extra = hidden[index % len(hidden)]
+            make_thermo(session, entry, proto=protocol(hrecipe), age_days=hage, status=hstatus, **extra)
+            hlabel, hrecipe, hage, hstatus, extra = hidden[(index + 2) % len(hidden)]
+            make_thermo(session, entry, proto=protocol(hrecipe), age_days=hage, status=hstatus, **extra)
+        row = make_thermo(session, entry, proto=protocol(recipe), age_days=age, status=status)
+        labels[row.public_ref] = label
+    if with_hidden:
+        for _label, hrecipe, hage, hstatus, extra in hidden:
+            make_thermo(session, entry, proto=protocol(hrecipe), age_days=hage, status=hstatus, **extra)
+    return labels
+
+
+def _canonical(value):
+    """Lists of objects are sorted: some are ordered by the ref string itself (edges, per-rule candidate
+    lists), and two entries' refs sort differently whatever else they hold. Lists of strings keep their order,
+    so ``fronts`` and ``administrative_order`` are still compared as ordered."""
+    if isinstance(value, dict):
+        return {k: _canonical(v) for k, v in value.items()}
+    if isinstance(value, list):
+        items = [_canonical(v) for v in value]
+        if items and all(isinstance(v, dict) for v in items):
+            return sorted(items, key=lambda v: json.dumps(v, sort_keys=True))
+        return items
+    return value
+
+
+def _masked(doc, labels, entry_ref):
+    text = json.dumps(doc, sort_keys=True)
+    for ref, label in labels.items():
+        text = text.replace(ref, label)
+    return _canonical(json.loads(text.replace(entry_ref, "ENTRY")))
+
+
+def test_curated_output_is_identical_with_and_without_hidden_records(client, db_session, methane):
+    species = db_session.get(Species, methane.species_id)
+    twin = make_species_entry(db_session, species, term_symbol="TWIN")
+    assert twin.id != methane.id
+    plain_labels = _build(db_session, methane, with_hidden=False)
+    noisy_labels = _build(db_session, twin, with_hidden=True)
+    assert sorted(plain_labels.values()) == sorted(noisy_labels.values())
+
+    for manifest in (False, True):
+        plain = post(client, methane, profile="curated", manifest=manifest)
+        noisy = post(client, twin, profile="curated", manifest=manifest)
+        assert plain.status_code == noisy.status_code == 200
+        assert _masked(noisy.json(), noisy_labels, twin.public_ref) == _masked(
+            plain.json(), plain_labels, methane.public_ref
+        ), f"curated {'manifest' if manifest else 'response'} depends on records the profile hides"
+
+    # The comparison is not vacuous: without the curated floor the hidden records are in play.
+    exploratory = post(client, twin, profile=None).json()
+    assert exploratory["disclosures"]["visible_candidates"] > 4
+
+
+def test_manifest_id_rank_is_an_ordinal_over_visible_records_not_a_row_id(client, db_session, methane):
+    _build(db_session, methane, with_hidden=True)
+    manifest = post(client, methane, profile="curated", manifest=True).json()
+    ranks = sorted(c["id_rank"] for c in manifest["candidates"])
+    assert ranks == list(range(1, len(ranks) + 1))
+    assert len(ranks) == 4
+    exploratory = post(client, methane, manifest=True).json()
+    all_ranks = sorted(c["id_rank"] for c in exploratory["candidates"])
+    assert all_ranks == list(range(1, len(all_ranks) + 1))
+
+
+def test_withheld_is_true_under_curated_even_when_nothing_is_hidden(client, db_session, methane):
+    g4(db_session, methane, status=S.approved)
+    curated = post(client, methane, profile="curated").json()
+    assert curated["disclosures"]["excluded_by_review_withheld"] is True
+    assert curated["disclosures"]["excluded_by_review"] == []
+    exploratory = post(client, methane).json()
+    assert exploratory["disclosures"]["excluded_by_review_withheld"] is False
+    manifest = post(client, methane, profile="curated", manifest=True).json()
+    assert manifest["population"]["excluded_by_review_withheld"] is True
+
+
+def test_the_downloadable_manifest_does_not_carry_the_candidate_cap(client, db_session, methane):
+    g4(db_session, methane)
+    manifest = post(client, methane, manifest=True).json()
+    assert "max_candidates" not in json.dumps(manifest)
+    assert replay_matches(manifest)
+
+
+def test_the_manifest_route_declares_its_own_response_schema(client):
+    spec = client.get("/openapi.json")
+    if spec.status_code != 200:  # hosted posture: the document is not served
+        pytest.skip("OpenAPI document not exposed in this configuration")
+    paths = spec.json()["paths"]
+    base = "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select"
+
+    def schema_ref(path: str) -> str:
+        return paths[path]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+
+    assert schema_ref(base).endswith("/ThermoSelectionResponse")
+    assert schema_ref(base + "/manifest").endswith("/ThermoSelectionManifest")
+
+
+def test_the_manifest_records_the_profile_it_was_made_under(client, db_session, methane):
+    g4(db_session, methane, status=S.approved)
+    exploratory = post(client, methane, manifest=True).json()["request"]
+    curated = post(client, methane, profile="curated", manifest=True).json()["request"]
+    assert exploratory["profile"] == "exploratory" and curated["profile"] == "curated"
+    assert curated["profile_recommendation"] == "approved_floor_only"

@@ -28,8 +28,8 @@ dataset must never require a code release.
   `POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select` assesses every visible thermo
   record of a species entry for the gas-phase formation enthalpy at 298.15 K and returns the outcome
   (`policy_preferred`, `incomparable_alternatives`, `sole_eligible_candidate`, `no_applicable_candidate`,
-  `policy_conflict` or `bounded_search_exceeded`) with the assessments, preference relations, ordered fronts,
-  rule versions and disclosures. `?format=manifest` downloads the replayable decision manifest. Records below
+  or `policy_conflict`) with the assessments, preference relations, ordered fronts,
+  rule versions and disclosures. `/thermo/select/manifest` downloads the replayable decision manifest. More than 500 visible records is a 422 (`thermo_selection_population_too_large`). Records below
   the review floor are listed only when the read profile has no floor of its own. The client gains
   `select_species_thermo` and the MCP server `tckdb_select_species_entry_thermo`. The application now builds
   the rule registry at startup, so a bad manifest pin fails the deploy. Browse order is unchanged. Third of

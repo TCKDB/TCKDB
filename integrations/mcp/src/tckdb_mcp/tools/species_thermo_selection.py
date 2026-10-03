@@ -13,7 +13,7 @@ Policy choices enforced here (in addition to server-side validation):
   conformer group is named by ``conformer_group_ref`` (``cg_``). Integer-id
   fields are rejected with a teaching error.
 - ``max_candidates`` is rejected: the 500-candidate cap is the server's, and
-  above it the server answers ``bounded_search_exceeded``.
+  above it the server refuses with 422 ``thermo_selection_population_too_large``.
 - The server's response is returned unchanged. ``outcome``, ``basis`` and
   ``selection`` carry the explanation, so this tool adds no prose of its own
   and does not reduce an outcome to a recommendation: an agent that reports a
@@ -139,7 +139,7 @@ def run(
     if "max_candidates" in args:
         raise invalid_input(
             "max_candidates is not a request field: the candidate cap is fixed by the server, "
-            "which answers 'bounded_search_exceeded' above it."
+            "which refuses with 'thermo_selection_population_too_large' above it."
         )
     unknown = sorted(args.keys() - _ACCEPTED_FIELDS)
     if unknown:

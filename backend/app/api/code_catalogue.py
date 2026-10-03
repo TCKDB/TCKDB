@@ -2400,6 +2400,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "function, source_calculations name jobs, and a depositor "
                 "repairs them in different places."
             )),
+    ApiCode("thermo_selection_population_too_large", 422, Surface.coded_exception,
+            "backend/app/schemas/reads/scientific_thermo_selection.py",
+            shape=Shape.relationship,
+            note=(
+                "More than 500 thermo records are visible to the caller under the effective read profile "
+                "and review floor, so a selection is refused rather than made from part of them. Counts "
+                "visible records only: it cannot reveal ones the profile hides."
+            )),
     ApiCode("thermo_selection_condition_conflict", 422, Surface.coded_exception,
             "backend/app/schemas/reads/scientific_thermo_selection.py",
             shape=Shape.relationship,

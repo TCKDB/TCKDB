@@ -1129,7 +1129,6 @@ ThermoSelectionOutcomeToken: TypeAlias = Literal[
     "sole_eligible_candidate",
     "no_applicable_candidate",
     "policy_conflict",
-    "bounded_search_exceeded",
 ]
 
 

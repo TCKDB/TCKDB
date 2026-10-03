@@ -128,10 +128,15 @@ def validate_thermo_selection_rules() -> None:
     # missing from the package (OSError). Anything else is a defect and should surface as itself.
     try:
         default_rules()
-    except (ManifestError, OSError) as exc:
+    except ManifestError as exc:
+        # Carries the real reason: a digest mismatch against the pin, or the audit failing.
         raise ThermoSelectionRulesError(
-            f"thermo selection rule registry failed to load ({type(exc).__name__}: {exc}); "
-            "the packaged E1 manifest does not match the digest pinned in the rule."
+            f"thermo selection rule registry failed to load: the packaged E1 manifest was refused: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise ThermoSelectionRulesError(
+            f"thermo selection rule registry failed to load: the packaged E1 manifest file could not be read "
+            f"({type(exc).__name__}: {exc})"
         ) from exc
 
 

@@ -11,7 +11,7 @@ Sub-routers:
     reactions_browse.router → /scientific/reactions/browse
     kinetics.router         → /scientific/reaction-entries/{id}/kinetics
     thermo.router           → /scientific/species-entries/{id}/thermo
-    thermo_selection.router → /scientific/species-entries/{ref}/thermo/select (?format=manifest)
+    thermo_selection.router → /scientific/species-entries/{ref}/thermo/select (+ /manifest)
     species_subresources.router
                             → /scientific/species-entries/{id}/statmech
                               /scientific/species-entries/{id}/transport

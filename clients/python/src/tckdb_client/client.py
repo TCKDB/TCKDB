@@ -1739,7 +1739,7 @@ class TCKDBClient:
         min_review_status: str | None = None,
         profile: str | None = None,
     ) -> JSONDict:
-        """``POST /scientific/species-entries/{ref}/thermo/select?format=manifest``.
+        """``POST /scientific/species-entries/{ref}/thermo/select/manifest``.
 
         The replayable decision manifest for the same request as
         :meth:`select_species_thermo`: public refs only, enough to recompute the
@@ -1750,8 +1750,8 @@ class TCKDBClient:
             min_review_status=min_review_status, temperature_k=None, phase=None,
         )
         return self.request_json(
-            "POST", _selection_path(species_entry_ref), json=body,
-            params={"profile": profile, "format": "manifest"}, authenticated=False,
+            "POST", _selection_path(species_entry_ref) + "/manifest", json=body,
+            params={"profile": profile}, authenticated=False,
         ).data
 
     def get_species_observations(

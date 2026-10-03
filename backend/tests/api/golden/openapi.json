@@ -49599,7 +49599,7 @@
             "type": "array"
           },
           "excluded_by_review_withheld": {
-            "description": "True when records outside the effective floor exist but are not listed, because the read profile does not otherwise let the caller see them.",
+            "description": "True whenever the read profile has a review floor of its own (curated): records outside the effective floor are then never listed, whether or not any exist, so the field cannot reveal that they do. False under a profile with no floor, where they are listed.",
             "title": "Excluded By Review Withheld",
             "type": "boolean"
           },
@@ -49688,14 +49688,138 @@
         "title": "ThermoSelectionExcluded",
         "type": "object"
       },
-      "ThermoSelectionFormat": {
-        "description": "``json`` answers with the typed response; ``manifest`` answers with the replayable decision manifest\nas a downloadable JSON document (the same request, the same decision).",
-        "enum": [
-          "json",
-          "manifest"
+      "ThermoSelectionManifest": {
+        "description": "The replayable decision manifest of ``POST .../thermo/select/manifest``.\n\nPublic refs only. Holds the normalised request, the effective review floor, every assessed candidate\nwith its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the rules\napplied with each rule's verdict per candidate, the preference edges, the fronts and the administrative\norder: enough to recompute the decision with no database.",
+        "properties": {
+          "candidates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "decision": {
+            "additionalProperties": true,
+            "title": "Decision",
+            "type": "object"
+          },
+          "disclosures": {
+            "additionalProperties": true,
+            "title": "Disclosures",
+            "type": "object"
+          },
+          "manifest_format_version": {
+            "title": "Manifest Format Version",
+            "type": "integer"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ThermoSelectionOutcome"
+          },
+          "policy": {
+            "additionalProperties": true,
+            "title": "Policy",
+            "type": "object"
+          },
+          "population": {
+            "additionalProperties": true,
+            "title": "Population",
+            "type": "object"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ThermoSelectionManifestRequest"
+          },
+          "subject": {
+            "additionalProperties": true,
+            "title": "Subject",
+            "type": "object"
+          }
+        },
+        "required": [
+          "manifest_format_version",
+          "policy",
+          "request",
+          "subject",
+          "population",
+          "candidates",
+          "decision",
+          "outcome"
         ],
-        "title": "ThermoSelectionFormat",
-        "type": "string"
+        "title": "ThermoSelectionManifest",
+        "type": "object"
+      },
+      "ThermoSelectionManifestRequest": {
+        "additionalProperties": true,
+        "description": "The manifest's normalised request, with the read profile it was made under (the same echo every\nscientific response carries). Further keys the decision recorded are kept.",
+        "properties": {
+          "administrative_policy": {
+            "title": "Administrative Policy",
+            "type": "string"
+          },
+          "effective_review_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Effective Review Statuses",
+            "type": "array"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "title": "Phase",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "string"
+          },
+          "target": {
+            "additionalProperties": true,
+            "title": "Target",
+            "type": "object"
+          },
+          "temperature_k": {
+            "title": "Temperature K",
+            "type": "number"
+          }
+        },
+        "required": [
+          "quantity",
+          "temperature_k",
+          "phase",
+          "target",
+          "effective_review_statuses",
+          "administrative_policy"
+        ],
+        "title": "ThermoSelectionManifestRequest",
+        "type": "object"
       },
       "ThermoSelectionMode": {
         "description": "``all`` returns the whole assessed population; ``first`` also names a single record when it can.",
@@ -49707,14 +49831,13 @@
         "type": "string"
       },
       "ThermoSelectionOutcome": {
-        "description": "The selection basis. Mirrors the service ``Outcome`` one to one (a test holds them equal).",
+        "description": "The selection basis. The service ``Outcome`` minus ``bounded_search_exceeded``, which the endpoint\nreports as the 422 ``thermo_selection_population_too_large`` instead (a test holds the two in step).",
         "enum": [
           "policy_preferred",
           "incomparable_alternatives",
           "sole_eligible_candidate",
           "no_applicable_candidate",
-          "policy_conflict",
-          "bounded_search_exceeded"
+          "policy_conflict"
         ],
         "title": "ThermoSelectionOutcome",
         "type": "string"
@@ -49903,7 +50026,7 @@
                 "type": "null"
               }
             ],
-            "description": "Normalised to 298.15 K. Any other value is refused.",
+            "description": "Normalised to 298.15 K. Any other value is refused, and NaN and Infinity are invalid.",
             "title": "Temperature K"
           }
         },
@@ -83598,7 +83721,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select": {
       "post": {
-        "description": "Assess every visible thermo record of the entry for H298 and say which, if any, to use.\n\n``outcome`` is the selection basis: ``policy_preferred`` (a registered method rule leaves one\ncandidate with nothing preferred over it), ``incomparable_alternatives`` (the rules do not\nrank the leading candidates), ``sole_eligible_candidate``, ``no_applicable_candidate``,\n``policy_conflict`` (opposing rules or a cycle: nothing is selected) or\n``bounded_search_exceeded`` (more than 500 visible candidates: nothing was assessed).\n\n``result_mode=first`` may name a record among unranked first-front alternatives; the\n``selection`` then says ``administrative_first`` and that this is not a method claim.\n\n``?format=manifest`` answers the same request with the decision manifest as an attachment:\nthe normalised request, the effective review floor, every assessed candidate with its\nnormalised inputs, the rules applied, each comparison and the administrative order, as public\nrefs only. It is enough to recompute the decision with no database.",
+        "description": "Assess every visible thermo record of the entry for H298 and say which, if any, to use.\n\n``outcome`` is the selection basis: ``policy_preferred`` (a registered method rule leaves one\ncandidate with nothing preferred over it), ``incomparable_alternatives`` (the rules do not\nrank the leading candidates), ``sole_eligible_candidate``, ``no_applicable_candidate`` or\n``policy_conflict`` (opposing rules or a cycle: nothing is selected). More than 500 visible\ncandidates is refused with 422 ``thermo_selection_population_too_large``: nothing is assessed,\nbecause a winner picked from part of the population would say nothing about the rest. Only records\nvisible under the caller's read profile are counted.\n\n``result_mode=first`` may name a record among unranked first-front alternatives; the\n``selection`` then says ``administrative_first`` and that this is not a method claim.",
         "operationId": "select_species_thermo_api_v1_scientific_species_entries__species_entry_ref__thermo_select_post",
         "parameters": [
           {
@@ -83610,17 +83733,6 @@
               "minLength": 1,
               "title": "Species Entry Ref",
               "type": "string"
-            }
-          },
-          {
-            "description": "'manifest' returns the replayable decision manifest of the same request as a downloadable JSON document instead of the typed response.",
-            "in": "query",
-            "name": "format",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/ThermoSelectionFormat",
-              "default": "json",
-              "description": "'manifest' returns the replayable decision manifest of the same request as a downloadable JSON document instead of the typed response."
             }
           },
           {
@@ -83686,6 +83798,90 @@
           }
         },
         "summary": "Select thermo for formation enthalpy at 298.15 K",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select/manifest": {
+      "post": {
+        "description": "The same request as ``/thermo/select``, answered with the decision manifest as a download.\n\nThe manifest holds the normalised request, the effective review floor, every assessed\ncandidate with its normalised inputs, the rules applied, each comparison and the\nadministrative order, as public refs only. It is enough to recompute the decision with no\ndatabase. The same visibility rules apply as for ``/thermo/select``.",
+        "operationId": "select_species_thermo_manifest_api_v1_scientific_species_entries__species_entry_ref__thermo_select_manifest_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "species_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Species Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThermoSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThermoSelectionManifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download the replayable decision manifest for a thermo selection",
         "tags": [
           "scientific"
         ]

@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 38 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 261 | `backend/app/api/code_catalogue.py` |
-| **total** | **562** | |
+| Refusal codes a caller can receive | 263 | `backend/app/api/code_catalogue.py` |
+| **total** | **564** | |
 
 ## How a record is named
 
@@ -747,7 +747,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (208 codes)
+### HTTP 422 (210 codes)
 
 | Code | Names |
 | --- | --- |
@@ -928,6 +928,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `thermo_recipe_name_listed` | a thing |
 | `thermo_role_duplicate` | a relationship — read `context` |
 | `thermo_selection_condition_conflict` | a relationship — read `context` |
+| `thermo_selection_population_too_large` | a relationship — read `context` |
 | `thermo_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `thermo_source_role_type_mismatch` | a relationship — read `context` |
 | `thermo_sp_geometry_mismatch` | a relationship — read `context` |

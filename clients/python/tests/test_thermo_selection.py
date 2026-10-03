@@ -89,13 +89,20 @@ def test_a_server_refusal_surfaces_as_a_typed_http_error_with_its_code():
     assert caught.value.status_code == 422
 
 
-def test_the_manifest_method_posts_to_the_same_path_asking_for_the_manifest_format():
+def test_the_manifest_method_forwards_the_profile():
+    seen, handler = _recorder({"manifest_format_version": 1})
+    with _client(handler) as client:
+        client.get_species_thermo_selection_manifest(ENTRY, target=EQUILIBRIUM, profile="curated")
+    assert parse_qs(urlsplit(str(seen[0].url)).query) == {"profile": ["curated"]}
+
+
+def test_the_manifest_method_posts_to_the_manifest_path():
     seen, handler = _recorder({"manifest_format_version": 1})
     with _client(handler) as client:
         out = client.get_species_thermo_selection_manifest(ENTRY, target=EQUILIBRIUM, policy="default")
     assert out == {"manifest_format_version": 1}
-    assert urlsplit(str(seen[0].url)).path.endswith(f"/species-entries/{ENTRY}/thermo/select")
-    assert parse_qs(urlsplit(str(seen[0].url)).query) == {"format": ["manifest"]}
+    assert urlsplit(str(seen[0].url)).path.endswith(f"/species-entries/{ENTRY}/thermo/select/manifest")
+    assert "format" not in parse_qs(urlsplit(str(seen[0].url)).query)
     assert json.loads(seen[0].content) == {"target": EQUILIBRIUM, "policy": "default"}
 
 
@@ -103,5 +110,5 @@ def test_the_response_type_names_the_outcome_vocabulary():
     outcomes = set(get_args(get_type_hints(ThermoSelectionResponse)["outcome"]))
     assert outcomes == {
         "policy_preferred", "incomparable_alternatives", "sole_eligible_candidate",
-        "no_applicable_candidate", "policy_conflict", "bounded_search_exceeded",
+        "no_applicable_candidate", "policy_conflict",
     }

@@ -11,12 +11,12 @@ Method-aware selection of a species entry's thermo record for the gas-phase form
   `/scientific/species-entries/{ref}/thermo/select`. It takes a public `spe_` ref only (an integer id is
   refused before any request) and sends only the fields you supply.
 - `get_species_thermo_selection_manifest(...)` returns the replayable decision manifest of the same
-  request (`?format=manifest`).
+  request (`/thermo/select/manifest`).
 - New typed shapes: `ThermoSelectionRequest`, `ThermoSelectionTargetIn`, `ThermoSelectionResponse`,
   `ThermoSelectionPick`, `ThermoSelectionCandidate`, `ThermoSelectionDisclosures` and the
   `ThermoSelectionOutcomeToken` vocabulary (`policy_preferred`, `incomparable_alternatives`,
-  `sole_eligible_candidate`, `no_applicable_candidate`, `policy_conflict`, `bounded_search_exceeded`).
-- `RejectionCode` gains `thermo_selection_condition_conflict`, regenerated from the server's catalogue.
+  `sole_eligible_candidate`, `no_applicable_candidate`, `policy_conflict`). A population over the server's cap of 500 visible records is a 422 (`thermo_selection_population_too_large`).
+- `RejectionCode` gains `thermo_selection_condition_conflict` and `thermo_selection_population_too_large`, regenerated from the server's catalogue.
 
 ## 0.125.0 - 2026-10-03
 
