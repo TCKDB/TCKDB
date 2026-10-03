@@ -2400,6 +2400,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "function, source_calculations name jobs, and a depositor "
                 "repairs them in different places."
             )),
+    ApiCode("thermo_selection_condition_conflict", 422, Surface.coded_exception,
+            "backend/app/schemas/reads/scientific_thermo_selection.py",
+            shape=Shape.relationship,
+            note=(
+                "A thermo-selection request whose temperature or phase contradicts "
+                "formation_enthalpy_298k (298.15 K, gas). Refused rather than normalised."
+            )),
     ApiCode("thermo_target_group_not_allowed", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py",
             shape=Shape.relationship,

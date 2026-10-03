@@ -31,6 +31,7 @@ committed backend OpenAPI golden snapshot at
 | `tckdb_search_kinetics` | `POST /api/v1/scientific/kinetics/search` | Chemistry-first kinetics |
 | `tckdb_get_reaction_entry_kinetics` | `GET /api/v1/scientific/reaction-entries/{rxe_ref}/kinetics` | Entry-scoped kinetics |
 | `tckdb_get_species_entry_thermo` | `GET /api/v1/scientific/species-entries/{spe_ref}/thermo` | Entry-scoped thermo |
+| `tckdb_select_species_entry_thermo` | `POST /api/v1/scientific/species-entries/{spe_ref}/thermo/select` | Method-aware 298 K formation-enthalpy selection |
 | `tckdb_get_geometry` | `GET /api/v1/scientific/geometries/{geom_ref}` | Geometry detail |
 | `tckdb_get_reaction_entry_full` | `GET /api/v1/scientific/reaction-entries/{rxe_ref}/full` | Composite reaction record |
 | `tckdb_calculation_search` | `POST /api/v1/scientific/calculations/search` | Calculation search |
@@ -551,6 +552,33 @@ Example:
 
 Output: the server thermo envelope (`request`, `pagination`, `records`,
 `review_summary`) propagated unchanged.
+
+### `tckdb_select_species_entry_thermo`
+
+Ask which stored thermo record of a species entry to use for the gas-phase
+formation enthalpy at 298.15 K, and why. Read-only; the browse order of
+`tckdb_get_species_entry_thermo` is unchanged.
+
+```text
+species_entry_ref: string          # REQUIRED, must start with "spe_"
+target: object                     # REQUIRED
+  kind: "equilibrium_ensemble" | "single_conformer"
+  conformer_group_ref?: string     # "cg_...", required for single_conformer
+policy?: "method_preferred" | "default" | "most_reviewed" | "latest"
+result_mode?: "all" | "first"      # default "all"
+min_review_status?: string
+temperature_k?: number             # must be 298.15 if given (server refuses otherwise)
+phase?: string                     # must be "gas" if given (server refuses otherwise)
+profile?: "exploratory" | "curated"
+```
+
+Output: the server response, unchanged. `outcome` and `basis` are the
+server's explanation and should be quoted verbatim.
+`incomparable_alternatives` and `policy_conflict` mean nothing was
+scientifically selected, and a `selection` with `administrative: true` is a
+review and recency choice, not a method claim. There is no candidate-cap
+argument: the cap is fixed by the server. See
+`docs/guides/selecting_thermo_for_h298.md`.
 
 ### `tckdb_get_geometry`
 

@@ -49427,6 +49427,718 @@
         "title": "ThermoSearchSpeciesContext",
         "type": "object"
       },
+      "ThermoSelectionCandidate": {
+        "description": "One assessed record: its declared claims, its H298 applicability, and whether it competed.",
+        "properties": {
+          "advisory": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Advisory",
+            "type": "array"
+          },
+          "answer_representation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Representation"
+          },
+          "applicability": {
+            "description": "applicable, incompatible, unsupported or unresolved.",
+            "title": "Applicability",
+            "type": "string"
+          },
+          "blocking": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocking",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "eligible": {
+            "description": "Applicable, with no blocking finding: it competes in the ordering.",
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Reference Kind"
+          },
+          "linked_recipe_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Linked Recipe Keys",
+            "type": "array"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protocol"
+          },
+          "protocol_state": {
+            "description": "absent, valid or unreadable. Absent is 'not stated', never 'standard'.",
+            "title": "Protocol State",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ThermoSelectionReason"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "representations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Representations",
+            "type": "array"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "scientific_origin": {
+            "title": "Scientific Origin",
+            "type": "string"
+          },
+          "target_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Group Ref"
+          },
+          "target_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Kind"
+          },
+          "thermo_ref": {
+            "title": "Thermo Ref",
+            "type": "string"
+          },
+          "value_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Kj Mol"
+          }
+        },
+        "required": [
+          "thermo_ref",
+          "review_status",
+          "created_at",
+          "scientific_origin",
+          "protocol_state",
+          "applicability",
+          "eligible"
+        ],
+        "title": "ThermoSelectionCandidate",
+        "type": "object"
+      },
+      "ThermoSelectionDisclosures": {
+        "description": "What the result does not cover. Never empty by omission: a withheld list says so.",
+        "properties": {
+          "excluded_by_review": {
+            "items": {
+              "$ref": "#/components/schemas/ThermoSelectionExcluded"
+            },
+            "title": "Excluded By Review",
+            "type": "array"
+          },
+          "excluded_by_review_withheld": {
+            "description": "True when records outside the effective floor exist but are not listed, because the read profile does not otherwise let the caller see them.",
+            "title": "Excluded By Review Withheld",
+            "type": "boolean"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "unresolved_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Refs",
+            "type": "array"
+          },
+          "unsupported_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported Refs",
+            "type": "array"
+          },
+          "visible_candidates": {
+            "description": "Records at or above the effective floor (the assessed population).",
+            "title": "Visible Candidates",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "visible_candidates",
+          "excluded_by_review_withheld"
+        ],
+        "title": "ThermoSelectionDisclosures",
+        "type": "object"
+      },
+      "ThermoSelectionEdge": {
+        "properties": {
+          "dispreferred": {
+            "title": "Dispreferred",
+            "type": "string"
+          },
+          "preferred": {
+            "title": "Preferred",
+            "type": "string"
+          },
+          "rule_id": {
+            "description": "The registry key of the rule (for example E1). Not a database id.",
+            "title": "Rule Id",
+            "type": "string",
+            "x-tckdb-policy-hidden": true
+          },
+          "rule_version": {
+            "title": "Rule Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "preferred",
+          "dispreferred",
+          "rule_version"
+        ],
+        "title": "ThermoSelectionEdge",
+        "type": "object"
+      },
+      "ThermoSelectionExcluded": {
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "thermo_ref": {
+            "title": "Thermo Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thermo_ref",
+          "review_status",
+          "reason"
+        ],
+        "title": "ThermoSelectionExcluded",
+        "type": "object"
+      },
+      "ThermoSelectionFormat": {
+        "description": "``json`` answers with the typed response; ``manifest`` answers with the replayable decision manifest\nas a downloadable JSON document (the same request, the same decision).",
+        "enum": [
+          "json",
+          "manifest"
+        ],
+        "title": "ThermoSelectionFormat",
+        "type": "string"
+      },
+      "ThermoSelectionMode": {
+        "description": "``all`` returns the whole assessed population; ``first`` also names a single record when it can.",
+        "enum": [
+          "all",
+          "first"
+        ],
+        "title": "ThermoSelectionMode",
+        "type": "string"
+      },
+      "ThermoSelectionOutcome": {
+        "description": "The selection basis. Mirrors the service ``Outcome`` one to one (a test holds them equal).",
+        "enum": [
+          "policy_preferred",
+          "incomparable_alternatives",
+          "sole_eligible_candidate",
+          "no_applicable_candidate",
+          "policy_conflict",
+          "bounded_search_exceeded"
+        ],
+        "title": "ThermoSelectionOutcome",
+        "type": "string"
+      },
+      "ThermoSelectionPick": {
+        "description": "The one record this response names, and exactly why it is named.",
+        "properties": {
+          "administrative": {
+            "description": "True when the record was chosen by review/recency order among unranked alternatives. That is not a claim that it is method-superior.",
+            "title": "Administrative",
+            "type": "boolean"
+          },
+          "basis": {
+            "enum": [
+              "policy_preferred",
+              "sole_eligible_candidate",
+              "administrative_first"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "thermo_ref": {
+            "title": "Thermo Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thermo_ref",
+          "basis",
+          "administrative",
+          "explanation"
+        ],
+        "title": "ThermoSelectionPick",
+        "type": "object"
+      },
+      "ThermoSelectionPolicy": {
+        "description": "Which ordering the request asks for.\n\n``method_preferred``  apply the registered, evidence-backed method rules; the review/recency order\n                      only sorts within a preference front.\n``default``, ``most_reviewed``, ``latest``\n                      administrative order only (no method rules), exactly as on the browse endpoints.",
+        "enum": [
+          "method_preferred",
+          "default",
+          "most_reviewed",
+          "latest"
+        ],
+        "title": "ThermoSelectionPolicy",
+        "type": "string"
+      },
+      "ThermoSelectionPolicyInfo": {
+        "description": "The selection semantics and the rule versions that were applied.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "description": "Registry entries applied: rule id, version, objective, scope, evidence type and limits.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ],
+        "title": "ThermoSelectionPolicyInfo",
+        "type": "object"
+      },
+      "ThermoSelectionReason": {
+        "properties": {
+          "applicability": {
+            "title": "Applicability",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "applicability"
+        ],
+        "title": "ThermoSelectionReason",
+        "type": "object"
+      },
+      "ThermoSelectionRelations": {
+        "description": "Preference relations between eligible records, and any contradiction among them.",
+        "properties": {
+          "cycles": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Cycles",
+            "type": "array"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/ThermoSelectionEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "opposing_pairs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Opposing Pairs",
+            "type": "array"
+          },
+          "overridden_edges": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Overridden Edges",
+            "type": "array"
+          }
+        },
+        "title": "ThermoSelectionRelations",
+        "type": "object"
+      },
+      "ThermoSelectionRequest": {
+        "additionalProperties": false,
+        "description": "Request body. ``quantity``, ``temperature_k`` and ``phase`` may be omitted; if given they must agree.",
+        "properties": {
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional floor, applied on top of the read profile's floor (the stricter wins)."
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Normalised to gas. Any other phase is refused."
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ThermoSelectionPolicy",
+            "default": "method_preferred"
+          },
+          "quantity": {
+            "const": "formation_enthalpy_298k",
+            "default": "formation_enthalpy_298k",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "result_mode": {
+            "$ref": "#/components/schemas/ThermoSelectionMode",
+            "default": "all"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ThermoSelectionTargetIn"
+          },
+          "temperature_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Normalised to 298.15 K. Any other value is refused.",
+            "title": "Temperature K"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "title": "ThermoSelectionRequest",
+        "type": "object"
+      },
+      "ThermoSelectionRequestEcho": {
+        "description": "The normalised request, as the server understood it.",
+        "properties": {
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "const": "gas",
+            "default": "gas",
+            "title": "Phase",
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ThermoSelectionPolicy"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "quantity": {
+            "const": "formation_enthalpy_298k",
+            "default": "formation_enthalpy_298k",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "result_mode": {
+            "$ref": "#/components/schemas/ThermoSelectionMode"
+          },
+          "species_entry_ref": {
+            "title": "Species Entry Ref",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ThermoSelectionTargetEcho"
+          },
+          "temperature_k": {
+            "default": 298.15,
+            "title": "Temperature K",
+            "type": "number"
+          }
+        },
+        "required": [
+          "species_entry_ref",
+          "target",
+          "policy",
+          "result_mode"
+        ],
+        "title": "ThermoSelectionRequestEcho",
+        "type": "object"
+      },
+      "ThermoSelectionResponse": {
+        "description": "The decision, its basis, and everything it rests on, as public refs only.",
+        "properties": {
+          "administrative_order": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Administrative Order",
+            "type": "array"
+          },
+          "basis": {
+            "description": "One sentence saying why this outcome, in plain terms.",
+            "title": "Basis",
+            "type": "string"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ThermoSelectionCandidate"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "disclosures": {
+            "$ref": "#/components/schemas/ThermoSelectionDisclosures"
+          },
+          "fronts": {
+            "description": "Preference fronts, best first; records within a front are unranked.",
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Fronts",
+            "type": "array"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ThermoSelectionOutcome"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ThermoSelectionPolicyInfo"
+          },
+          "relations": {
+            "$ref": "#/components/schemas/ThermoSelectionRelations"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ThermoSelectionRequestEcho"
+          },
+          "review": {
+            "$ref": "#/components/schemas/ThermoSelectionReview"
+          },
+          "rule_matches": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rule Matches",
+            "type": "array"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoSelectionPick"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "request",
+          "review",
+          "policy",
+          "outcome",
+          "basis",
+          "disclosures"
+        ],
+        "title": "ThermoSelectionResponse",
+        "type": "object"
+      },
+      "ThermoSelectionReview": {
+        "description": "The review floor actually applied: the request's floor combined with the read profile's.",
+        "properties": {
+          "effective_floor": {
+            "$ref": "#/components/schemas/RecordReviewStatus",
+            "description": "The weakest review status a candidate may have. Rejected and deprecated never compete."
+          },
+          "effective_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Effective Statuses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "effective_floor",
+          "effective_statuses"
+        ],
+        "title": "ThermoSelectionReview",
+        "type": "object"
+      },
+      "ThermoSelectionTargetEcho": {
+        "properties": {
+          "conformer_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Group Ref"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ThermoTargetKind"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ThermoSelectionTargetEcho",
+        "type": "object"
+      },
+      "ThermoSelectionTargetIn": {
+        "additionalProperties": false,
+        "description": "The thermodynamic target the caller needs the enthalpy for.",
+        "properties": {
+          "conformer_group_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public conformer-group ref (cg_...). Required for single_conformer, refused otherwise.",
+            "title": "Conformer Group Ref"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ThermoTargetKind",
+            "description": "equilibrium_ensemble, or single_conformer together with conformer_group_ref."
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ThermoSelectionTargetIn",
+        "type": "object"
+      },
       "ThermoSourceCalcInBundle": {
         "additionalProperties": false,
         "description": "Thermo → calc link by local key.\n\nOnly ``calculation_key`` is allowed inside a bundle.\n``existing_calculation_id`` (DR-0028) is the primitive-endpoint\nmechanism and is intentionally not present here (DR-0029 Requirement 1).",
@@ -82879,6 +83591,101 @@
           }
         },
         "summary": "Species Transport",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select": {
+      "post": {
+        "description": "Assess every visible thermo record of the entry for H298 and say which, if any, to use.\n\n``outcome`` is the selection basis: ``policy_preferred`` (a registered method rule leaves one\ncandidate with nothing preferred over it), ``incomparable_alternatives`` (the rules do not\nrank the leading candidates), ``sole_eligible_candidate``, ``no_applicable_candidate``,\n``policy_conflict`` (opposing rules or a cycle: nothing is selected) or\n``bounded_search_exceeded`` (more than 500 visible candidates: nothing was assessed).\n\n``result_mode=first`` may name a record among unranked first-front alternatives; the\n``selection`` then says ``administrative_first`` and that this is not a method claim.\n\n``?format=manifest`` answers the same request with the decision manifest as an attachment:\nthe normalised request, the effective review floor, every assessed candidate with its\nnormalised inputs, the rules applied, each comparison and the administrative order, as public\nrefs only. It is enough to recompute the decision with no database.",
+        "operationId": "select_species_thermo_api_v1_scientific_species_entries__species_entry_ref__thermo_select_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "species_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Species Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "'manifest' returns the replayable decision manifest of the same request as a downloadable JSON document instead of the typed response.",
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ThermoSelectionFormat",
+              "default": "json",
+              "description": "'manifest' returns the replayable decision manifest of the same request as a downloadable JSON document instead of the typed response."
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThermoSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThermoSelectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select thermo for formation enthalpy at 298.15 K",
         "tags": [
           "scientific"
         ]

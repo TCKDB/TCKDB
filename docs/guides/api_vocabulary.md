@@ -927,6 +927,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `thermo_protocol_version_unsupported` | a thing |
 | `thermo_recipe_name_listed` | a thing |
 | `thermo_role_duplicate` | a relationship — read `context` |
+| `thermo_selection_condition_conflict` | a relationship — read `context` |
 | `thermo_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `thermo_source_role_type_mismatch` | a relationship — read `context` |
 | `thermo_sp_geometry_mismatch` | a relationship — read `context` |
