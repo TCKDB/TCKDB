@@ -141,11 +141,11 @@ def _reaction(reactants, products):
 
 def deposit_rate(session, reactants=("CH4", "OH"), products=("CH3", "H2O"), *, direction="forward",
                  xyz=_XYZ_ABSTRACTION, ts_charge=0, ts_multiplicity=2, lot=_LOT, source=True,
-                 tunneling=True, **tunneling_fields):
+                 tunneling=True, geometry_isotopes=None, **tunneling_fields):
     """TS upload, then a kinetics upload whose tunneling block cites the TS opt."""
     reaction = _reaction(reactants, products)
     ts_entry = persist_transition_state_upload(session, TransitionStateUploadRequest(
-        reaction=reaction, charge=ts_charge, multiplicity=ts_multiplicity, geometry={"xyz_text": xyz},
+        reaction=reaction, charge=ts_charge, multiplicity=ts_multiplicity, geometry={"xyz_text": xyz, "isotopes": geometry_isotopes},
         primary_opt=CalculationWithResultsPayload(type="opt", software_release=_SOFTWARE, level_of_theory=lot),
     ))
     calculation = session.scalar(select(Calculation).where(Calculation.transition_state_entry_id == ts_entry.id))
@@ -462,7 +462,10 @@ def _charged(session):
 
 
 def _isotope(session):
-    kinetics = deposit_rate(session, ("CD4", "OH"), ("CD3", "HDO"))
+    # The saddle point holds CD4's four deuterons, so its geometry must say so
+    # (calculation_geometry_isotope_mismatch); atoms 2-5 are the four hydrogens.
+    kinetics = deposit_rate(session, ("CD4", "OH"), ("CD3", "HDO"),
+                            geometry_isotopes={2: 2, 3: 2, 4: 2, 5: 2})
     base = {"CD4": "CH4", "OH": "OH", "CD3": "CH3", "HDO": "H2O"}
     return kinetics, {name: declared_thermo(session, base[name], species_entry=_participant(name)["species_entry"])
                       for name in base}

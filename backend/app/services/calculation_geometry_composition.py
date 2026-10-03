@@ -665,17 +665,25 @@ def assert_calculation_geometry_isotopes(
         subject_text,
     )
 
+    repair = (
+        "A deuterated or 13C-labelled geometry is a different molecule from "
+        "the ordinary one: masses, frequencies and zero-point energy all "
+        "differ. Declare the same substitution on both sides -- SMILES "
+        "isotope notation (e.g. [2H]) on the species and geometry.isotopes "
+        "on the structure -- or file the calculation under the isotopologue "
+        "it was run on. Only the count of each substituted element is "
+        "compared, so which atom carries the label is not checked."
+    )
+
+    # Built by concatenation, like the composition message: ``field`` is a
+    # depositor-facing path, not a code, and a single f-string opening with
+    # ``{field}: `` is the shape the catalogue gate reads as a code minted
+    # from a parameter.
     raise CodedValueError(
         W_CALCULATION_GEOMETRY_ISOTOPE_MISMATCH,
         f"{field}: geometry isotopes are {geometry_text}, but {subject} "
         f"declares {subject_text} (calculation_geometry_isotope_mismatch). "
-        "A deuterated or 13C-labelled geometry is a different molecule from "
-        "the ordinary one: masses, frequencies and zero-point energy all "
-        "differ. Declare the same substitution on both sides -- SMILES isotope "
-        "notation (e.g. [2H]) on the species and geometry.isotopes on the "
-        "structure -- or file the calculation under the isotopologue it was "
-        "run on. Only the count of each substituted element is compared, so "
-        "which atom carries the label is not checked.",
+        + repair,
         context={
             "field": field,
             "owner_kind": owner_kind,
