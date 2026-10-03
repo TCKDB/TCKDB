@@ -457,11 +457,8 @@ def test_a_curated_manifest_still_replays(client, db_session, methane):
 
 #: Registry keys (``E1``), not row ids.
 _ALLOWED_ID_SHAPED_KEYS = {"rule_id", "overridden_by_rule_id"}
-#: Every integer the documents may carry, by key: counts, an ordinal, versions, the subject's charge and multiplicity. Any other integer is a leak.
-_ALLOWED_INTEGER_KEYS = {
-    "id_rank", "visible_candidates", "thermo_rows_for_entry", "assessed", "manifest_format_version", "version",
-    "charge", "multiplicity",
-}
+
+
 _ALLOWED_REF_PREFIXES = {"thm", "spe", "cg", "calc"}
 
 
@@ -479,19 +476,51 @@ def _id_shaped(keys):
     return sorted({k for k in keys if (k == "id" or k.endswith(("_id", "_ids"))) and k not in _ALLOWED_ID_SHAPED_KEYS})
 
 
-def _stray_integers(value, key=""):
-    """Every (key, int) pair whose key is not a known count, ordinal or version."""
+def _int_paths(value, path=""):
+    """Every integer in a document with its path (list indices written ``[]``), booleans excluded."""
     if isinstance(value, bool):
         return
     if isinstance(value, int):
-        if key not in _ALLOWED_INTEGER_KEYS:
-            yield key, value
+        yield path, value
     elif isinstance(value, dict):
         for k, v in value.items():
-            yield from _stray_integers(v, k)
+            yield from _int_paths(v, f"{path}.{k}" if path else k)
     elif isinstance(value, list):
         for item in value:
-            yield from _stray_integers(item, key)
+            yield from _int_paths(item, f"{path}[]")
+
+
+def _assert_integers_are_pinned(doc, *, is_manifest, curated):
+    """Each integer sits at an exact path and has the value that path is allowed to have.
+
+    A name-based allowance would let a row id ride under an innocent key (``version``) anywhere in the
+    document; here a path outside this table fails, and so does a value that is not what the path means.
+    """
+    candidates = doc["candidates"]
+    pinned = {"candidates[].protocol.version": lambda values: set(values) == {1}}
+    if is_manifest:
+        population = doc["population"]
+        pinned.update({
+            "manifest_format_version": lambda v: v == [1],
+            "candidates[].id_rank": lambda v: sorted(v) == list(range(1, len(candidates) + 1)),
+            "population.visible_candidates": lambda v: v == [len(candidates)],
+            "population.assessed": lambda v: v == [len(candidates)],
+            "population.thermo_rows_for_entry": lambda v: (
+                v == [len(candidates)] if curated else v[0] >= len(candidates)
+            ),
+            "subject.charge": lambda v: v == [0],
+            "subject.multiplicity": lambda v: v == [1],
+        })
+        assert population["visible_candidates"] == len(candidates)
+    else:
+        pinned["disclosures.visible_candidates"] = lambda v: v == [len(candidates)]
+    found: dict[str, list[int]] = {}
+    for path, value in _int_paths(doc):
+        found.setdefault(path, []).append(value)
+    stray = sorted(set(found) - set(pinned))
+    assert stray == [], f"integers at unexpected paths: {stray}"
+    wrong = {path: values for path, values in found.items() if not pinned[path](values)}
+    assert wrong == {}, f"integers with values their paths do not allow: {wrong}"
 
 
 def _ref_values(value):
@@ -536,7 +565,7 @@ def test_no_internal_id_appears_in_the_response_or_the_manifest(client, db_sessi
     assert a.public_ref in json.dumps(docs[0]) and b.public_ref in json.dumps(docs[0])
     for doc in docs:
         assert _id_shaped(_keys(doc)) == []
-        assert list(_stray_integers(doc)) == []
+        _assert_integers_are_pinned(doc, is_manifest="population" in doc, curated=doc["request"]["profile"] == "curated")
         refs = {r for r in _ref_values(doc) if isinstance(r, str)}
         assert refs, "the document names no refs at all; the check below would be vacuous"
         assert {r.split("_", 1)[0] for r in refs} <= _ALLOWED_REF_PREFIXES, refs
@@ -691,3 +720,21 @@ def test_the_manifest_records_the_profile_it_was_made_under(client, db_session, 
     curated = post(client, methane, profile="curated", manifest=True).json()["request"]
     assert exploratory["profile"] == "exploratory" and curated["profile"] == "curated"
     assert curated["profile_recommendation"] == "approved_floor_only"
+
+
+def test_real_manifests_validate_against_the_declared_schema_and_it_names_every_key(client, db_session, methane):
+    """The manifest route returns a raw ``JSONResponse``, so its ``response_model`` is never enforced at
+    runtime. Validating real documents here is what keeps the declared schema and the document in step."""
+    from app.schemas.reads.scientific_thermo_selection import ThermoSelectionManifest
+
+    g4(db_session, methane, age_days=500, status=S.approved)
+    g3(db_session, methane, age_days=1, status=S.approved)
+    g3(db_session, methane, status=S.not_reviewed)
+    g4(db_session, methane, status=S.rejected)
+    for profile in (None, "curated"):
+        document = post(client, methane, profile=profile, manifest=True).json()
+        model = ThermoSelectionManifest.model_validate(document)
+        assert set(document) == set(ThermoSelectionManifest.model_fields), "the document and the schema disagree on keys"
+        assert model.outcome.value == document["outcome"]
+        assert model.request.profile.value == (profile or "exploratory")
+        assert len(model.candidates) == len(document["candidates"])
