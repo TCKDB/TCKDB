@@ -191,6 +191,26 @@ def test_removing_an_input_row_makes_it_unverifiable(client, db_session):
     assert _verification(client, composite)["state"] == "unverifiable"
 
 
+def test_a_missing_input_of_a_total_term_is_unverifiable_not_a_recomputed_zero(client, db_session):
+    """A term that reads an input's total: with the input row gone there is no number, and zero is not one."""
+    from app.db.models.calculation import CalculationCompositeInput
+
+    body = _ok(client, f.bundle_c())
+    composite = _calc_by_label(db_session, body, "fpa")
+    base = _calc_by_label(db_session, body, "sp_base")
+    row = db_session.scalars(
+        select(CalculationCompositeInput).where(
+            CalculationCompositeInput.calculation_id == composite.id,
+            CalculationCompositeInput.input_calculation_id == base.id,
+        )
+    ).one()
+    db_session.delete(row)
+    db_session.flush()
+    verification = _verification(client, composite)
+    assert verification["state"] == "unverifiable"
+    assert verification["reason"] == "input_energy_not_stated"
+
+
 # ---------------------------------------------------------------------------
 # Program run: from the recorded log check, never from a log
 # ---------------------------------------------------------------------------
