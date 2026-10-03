@@ -23,10 +23,14 @@ from app.api.errors import render_handled_exception
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.db.models.app_user import AppUser
 from app.schemas.contribution_bundle_dry_run import ContributionBundleDryRunResult
-from app.schemas.contribution_bundle_submit import ContributionBundleSubmitResult
+from app.schemas.contribution_bundle_submit import (
+    ContributionBundleSubmitMessage,
+    ContributionBundleSubmitResult,
+)
 from app.schemas.workflows.contribution_bundle import ContributionBundleV0
 from app.services.contribution_bundle_dry_run import (
     dry_run_contribution_bundle,
+    with_import_warnings,
     with_submit_refusal,
 )
 from app.workflows.contribution_bundle_submit import (
@@ -63,7 +67,10 @@ def dry_run_bundle(
     bundle, the result carries that refusal as an ``error`` message with
     submit's own ``code`` and message, and ``bundle_valid`` is false.
     Nothing is kept: the rehearsal's writes are rolled back and this
-    session never commits.
+    session never commits. When submit would accept the bundle, the upload
+    warnings it would return -- the same ones, in the same order, that the
+    direct ``/uploads/<kind>`` routes give -- are appended to ``messages`` as
+    ``warning`` entries carrying the upload's ``local_ref``.
 
     If another deposit holds a lock the rehearsal needs, the rehearsal gives
     way rather than delay or deadlock that deposit, and this route answers
@@ -91,10 +98,18 @@ def dry_run_bundle(
         # See ``discard_unflushed_writes``.
         discard_unflushed_writes(session)
         result = dry_run_contribution_bundle(session, bundle)
-        refusal = rehearse_contribution_bundle_submit(session, bundle, actor=current_user)
+        import_warnings: list[ContributionBundleSubmitMessage] = []
+        refusal = rehearse_contribution_bundle_submit(
+            session,
+            bundle,
+            actor=current_user,
+            import_warnings_out=import_warnings,
+        )
         if refusal is None:
             outcome = "accepted"
-            return result
+            # The upload warnings submit would return for these records: only
+            # the rehearsal can know them, so they are added to the preview.
+            return with_import_warnings(result, import_warnings)
         rendered = render_handled_exception(request, refusal)
         if rendered is None or rendered[0] >= 500:
             # Not a refusal of the bundle but a failure of the server: submit

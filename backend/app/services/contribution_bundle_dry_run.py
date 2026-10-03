@@ -148,6 +148,29 @@ def with_submit_refusal(
     )
 
 
+def with_import_warnings(
+    result: ContributionBundleDryRunResult,
+    warnings: Sequence[ContributionBundleDryRunMessage],
+) -> ContributionBundleDryRunResult:
+    """Add the upload warnings submit would return to the preview's messages.
+
+    The preview alone cannot know them: some come from the persistence
+    workflows resolving rows. The route gets them by rehearsing submit
+    (#647), which is why they are appended here rather than computed here.
+    They are warnings, so they change neither ``bundle_valid`` nor any error
+    count; ``summary.warnings`` is recounted to include them.
+    """
+    if not warnings:
+        return result
+    messages = [*result.messages, *warnings]
+    return result.model_copy(
+        update={
+            "messages": messages,
+            "summary": _summarize(result.items, messages),
+        }
+    )
+
+
 # ---------------------------------------------------------------------------
 # Per-upload preview
 # ---------------------------------------------------------------------------
