@@ -1096,6 +1096,109 @@ class SpeciesThermoResponse(ScientificSearchResponse[ThermoDetailRecord]):
     species_entry_id: NotRequired[int]
 
 
+class ThermoSelectionTargetIn(TypedDict, total=False):
+    """The thermodynamic target of a selection request.
+
+    ``kind`` is ``"equilibrium_ensemble"`` or ``"single_conformer"``; the latter
+    requires ``conformer_group_ref`` (a public ``cg_...`` ref), the former refuses it.
+    """
+
+    kind: Required[Literal["equilibrium_ensemble", "single_conformer"]]
+    conformer_group_ref: str
+
+
+class ThermoSelectionRequest(TypedDict, total=False):
+    """Body of ``POST .../thermo/select``. Only ``target`` is required.
+
+    ``quantity``, ``temperature_k`` and ``phase`` may be omitted; if given they must
+    be ``"formation_enthalpy_298k"``, 298.15 and ``"gas"``, and anything else is refused.
+    """
+
+    target: Required[ThermoSelectionTargetIn]
+    quantity: Literal["formation_enthalpy_298k"]
+    temperature_k: float
+    phase: Literal["gas"]
+    policy: Literal["method_preferred", "default", "most_reviewed", "latest"]
+    result_mode: Literal["all", "first"]
+    min_review_status: str
+
+
+ThermoSelectionOutcomeToken: TypeAlias = Literal[
+    "policy_preferred",
+    "incomparable_alternatives",
+    "sole_eligible_candidate",
+    "no_applicable_candidate",
+    "policy_conflict",
+    "bounded_search_exceeded",
+]
+
+
+class ThermoSelectionPick(TypedDict):
+    """The one record the response names, and exactly why.
+
+    ``administrative`` is true when the record was chosen by review/recency order among
+    alternatives the method rules do not rank: that is not a claim it is method-superior.
+    """
+
+    thermo_ref: str
+    basis: Literal["policy_preferred", "sole_eligible_candidate", "administrative_first"]
+    administrative: bool
+    explanation: str
+
+
+class ThermoSelectionCandidate(TypedDict):
+    thermo_ref: str
+    review_status: str
+    created_at: str
+    scientific_origin: str
+    phase: str | None
+    enthalpy_reference_kind: str | None
+    target_kind: str | None
+    target_group_ref: str | None
+    protocol_state: str
+    protocol: JSONDict | None
+    linked_recipe_keys: list[str]
+    applicability: str
+    reasons: list[JSONDict]
+    answer_representation: str | None
+    value_kj_mol: float | None
+    representations: list[JSONDict]
+    blocking: list[str]
+    advisory: list[str]
+    eligible: bool
+
+
+class ThermoSelectionDisclosures(TypedDict):
+    unresolved_refs: list[str]
+    unsupported_refs: list[str]
+    visible_candidates: int
+    excluded_by_review: list[JSONDict]
+    excluded_by_review_withheld: bool
+    notes: list[str]
+
+
+class ThermoSelectionResponse(TypedDict):
+    """The decision, its basis, and everything it rests on, as public refs only.
+
+    ``outcome`` is the selection basis. Preserve it and ``basis`` verbatim when
+    reporting a result: ``incomparable_alternatives`` and ``policy_conflict`` mean
+    nothing was scientifically selected.
+    """
+
+    request: JSONDict
+    review: JSONDict
+    policy: JSONDict
+    outcome: ThermoSelectionOutcomeToken
+    basis: str
+    selection: ThermoSelectionPick | None
+    fronts: list[list[str]]
+    administrative_order: list[str]
+    candidates: list[ThermoSelectionCandidate]
+    relations: JSONDict
+    rule_matches: list[JSONDict]
+    disclosures: ThermoSelectionDisclosures
+
+
 class ObservationRecord(TypedDict, total=False):
     """One ``molecular_property_observation`` row (Phase C-E5).
 
@@ -1307,6 +1410,13 @@ __all__ = [
     "ThermoRecord",
     "ThermoSearchRecord",
     "ThermoSearchResponse",
+    "ThermoSelectionCandidate",
+    "ThermoSelectionDisclosures",
+    "ThermoSelectionOutcomeToken",
+    "ThermoSelectionPick",
+    "ThermoSelectionRequest",
+    "ThermoSelectionResponse",
+    "ThermoSelectionTargetIn",
     "TransitionStateDetailResponse",
     "TransitionStateEntryDetailResponse",
     "TransitionStateEntryRecord",

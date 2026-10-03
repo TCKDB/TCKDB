@@ -100,6 +100,38 @@ def validate_deployment_safety(settings: Settings) -> None:
         raise UnsafeDeploymentConfigError(mode, violations)
 
 
+class ThermoSelectionRulesError(RuntimeError):
+    """Raised when the shipped thermo-selection rule registry cannot be built.
+
+    The registry pins its audited membership manifest by SHA-256, so an edited,
+    truncated or unapproved manifest refuses to load. Without this check that
+    refusal would first surface as a 500 on the first ``/thermo/select`` request;
+    with it the deploy fails instead, which is where a bad pin should be found.
+    """
+
+
+def validate_thermo_selection_rules() -> None:
+    """Build the selection rule registry now, so a bad manifest pin stops the boot.
+
+    Runs in every deployment mode, ``local`` included: it reads one packaged file and
+    needs no network or database. The result is cached by ``default_rules``, so the
+    first request reuses it.
+
+    :raises ThermoSelectionRulesError: the registry (or a manifest it pins) does not load.
+    """
+    # Imported here: the services package pulls in the ORM and RDKit, which this module
+    # otherwise avoids at import time.
+    from app.services.thermo_selection.rules import default_rules
+
+    try:
+        default_rules()
+    except Exception as exc:
+        raise ThermoSelectionRulesError(
+            f"thermo selection rule registry failed to load ({type(exc).__name__}: {exc}); "
+            "the packaged E1 manifest does not match the digest pinned in the rule."
+        ) from exc
+
+
 #: The only encoding this deployment is designed for. Anything else stores
 #: bytes without validating them (``SQL_ASCII``) or silently transcodes.
 EXPECTED_SERVER_ENCODING = "UTF8"

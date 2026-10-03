@@ -11,6 +11,7 @@ Sub-routers:
     reactions_browse.router → /scientific/reactions/browse
     kinetics.router         → /scientific/reaction-entries/{id}/kinetics
     thermo.router           → /scientific/species-entries/{id}/thermo
+    thermo_selection.router → /scientific/species-entries/{ref}/thermo/select (?format=manifest)
     species_subresources.router
                             → /scientific/species-entries/{id}/statmech
                               /scientific/species-entries/{id}/transport
@@ -75,6 +76,7 @@ from app.api.routes.scientific import (
     structure,
     thermo,
     thermo_search,
+    thermo_selection,
     transition_states,
     transition_states_browse,
     transport,
@@ -107,6 +109,8 @@ scientific_router.include_router(reactions_browse.router)
 scientific_router.include_router(reactions.router)
 scientific_router.include_router(kinetics.router)
 scientific_router.include_router(thermo.router)
+# Method-aware H298 selection; a sibling of the per-entry thermo browse, same prefix, deeper path.
+scientific_router.include_router(thermo_selection.router)
 # Sibling per-entry subresource reads (statmech / transport) sharing the
 # ``/species-entries`` prefix with the thermo per-entry endpoint.
 scientific_router.include_router(species_subresources.router)
