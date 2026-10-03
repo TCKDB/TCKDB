@@ -42,7 +42,12 @@ already follow for role/type compatibility:
   ``*_role_duplicate`` code for that. All linked ``sp``s must additionally
   share one level of theory; when they do not, "the energy level" has no
   single answer, and that raises the product's `*_energy_level_ambiguous`
-  code.
+  code. With **no** ``opt`` linked there is nothing to anchor on, so the
+  same distinctness is asked of *structures*: two ``sp``s (or two
+  ``composite``s) on one structure are a duplicate. A polyatomic geometry is
+  its own structure (one stored geometry row); a single atom has no geometry
+  to differ in, so every position of it is one structure, compared by element
+  (``D``/``T`` read as hydrogen) and stated isotope mass number (#610, #623).
 * **R3' -- every sp must sit on some linked opt's geometry.** Silent
   when either side declares no geometry at all -- absence of evidence is
   not evidence of a mismatch, and with at most one linked ``opt`` there
@@ -96,6 +101,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, object_session
 
 from app.api.error_contract import CodedValueError
+from app.chemistry.geometry import resolve_element_symbol
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationType
 from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
@@ -432,7 +438,7 @@ def _structure_key(geometry: Geometry) -> tuple[str | int | None, ...]:
     A polyatomic geometry is its own structure, keyed by its row id: a
     genuinely different geometry is different evidence. A **single atom** has
     no geometry to differ in -- every position is the same structure -- so it
-    is keyed by its element (and isotope, so H and D stay apart), and a copy
+    is keyed by its element (D and T resolve to hydrogen) and its stated isotope mass number, and a copy
     of the atom moved to another coordinate is the same structure, not a
     second one (#623).
 
@@ -446,7 +452,10 @@ def _structure_key(geometry: Geometry) -> tuple[str | int | None, ...]:
     if geometry.natoms == 1 and geometry.atoms:
         atom = geometry.atoms[0]
         # ``element`` is CHAR(2): a one-letter symbol comes back blank-padded.
-        return ("atom", atom.element.strip(), atom.isotope_mass_number)
+        # ``D`` and ``T`` are hydrogen for any comparison (the composition
+        # check reads them so), hence ``resolve_element_symbol``. The isotope
+        # is the explicit field only, never inferred from a D/T spelling.
+        return ("atom", resolve_element_symbol(atom.element.strip()), atom.isotope_mass_number)
     return ("geometry", geometry.id)
 
 

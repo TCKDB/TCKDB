@@ -146,7 +146,8 @@ polyatomic species whose only linked calculations are `sp`s.
   `sp` links on the same geometry are refused; two on genuinely different
   geometries are not.
 - **A single atom.** An atom has no geometry to differ in, so "one
-  structure" means the same element. A second `sp` on a shifted copy of the
+  structure" means the same element and the same stated isotope mass number (`D` and
+  `T` count as hydrogen, as they do everywhere else elements are compared). A second `sp` on a shifted copy of the
   atom (`1\nH\nH 1.0 0.0 0.0` beside `1\nH\nH 0.0 0.0 0.0`) is refused exactly
   like one on the identical geometry.
 - **No geometry declared.** An `sp` that declares no geometry is not
