@@ -14,8 +14,9 @@ filed under (#666). No payload field is added, removed or changed.
 - The comparison is by count, not by atom: a calculation geometry carries no map to the species graph,
   so which atom carries a label is not checked. A `D` or `T` element spelling stays isotope-silent, as
   documented in `resolve_element_symbol`; only `geometry.isotopes` and SMILES labels count.
-- Network upload: a transition state's `geometry.isotopes` is now read. It was accepted by the schema and
-  dropped before the geometry was stored.
+- Network and computed-reaction uploads: a transition state's `geometry.isotopes` is now read. It was
+  accepted by the schema and dropped before the geometry was stored (contribution bundles take the
+  computed-reaction route).
 - A deposit whose calculation geometries carry no isotope labels under a species that declares some
   (for example `[2H]C` with an unlabelled CH4 opt input) is now refused; label the geometry.
 

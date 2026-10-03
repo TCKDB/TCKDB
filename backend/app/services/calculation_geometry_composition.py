@@ -586,6 +586,13 @@ def _geometry_isotope_counts(session: Session, geometry_id: int) -> IsotopeCount
     codebase defines it as composition-neutral and isotope-silent
     (:func:`app.chemistry.geometry.resolve_element_symbol`), and the conformer
     rule (``species_geometry_isotope_mismatch``) reads it the same way.
+
+    **Forward compatibility.** This reads *stored* ``geometry_atom`` rows,
+    nothing else. If the D/T question (#672) is settled as "D/T mean
+    2H/3H", legacy ``D`` / ``T`` rows with a NULL ``isotope_mass_number``
+    would need a read-time rule here (``D`` -> ``(H, 2)``, ``T`` ->
+    ``(H, 3)``), alongside the conformer rule. Not implemented: today they
+    count as nothing.
     """
 
     counts: IsotopeCounts = {}
