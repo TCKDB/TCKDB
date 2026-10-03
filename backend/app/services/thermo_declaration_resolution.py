@@ -50,6 +50,7 @@ from tckdb_schemas.thermo_declarations import (
     StoredThermoProtocolDeclaration,
     ThermoProtocolDeclaration,
     thermo_declaration_error,
+    version_is_supported,
 )
 
 from app.api.error_contract import CodedValueError
@@ -387,7 +388,7 @@ def assert_thermo_declaration_columns(
         else protocol_declaration
     )
     version = raw.get("version") if isinstance(raw, dict) else None
-    if version not in THERMO_PROTOCOL_VERSIONS:
+    if not version_is_supported(version):
         raise CodedValueError(
             W_THERMO_PROTOCOL_VERSION_UNSUPPORTED,
             f"protocol.version {version!r} is not supported; supported versions: "

@@ -16,6 +16,7 @@ from tckdb_schemas.thermo import ThermoStateFields
 from tckdb_schemas.thermo_declarations import (
     THERMO_PROTOCOL_VERSIONS,
     W_THERMO_DECLARATION_INVALID,
+    W_THERMO_RECIPE_NAME_LISTED,
     W_THERMO_PROTOCOL_VERSION_UNSUPPORTED,
     W_THERMO_TARGET_GROUP_NOT_ALLOWED,
     W_THERMO_TARGET_GROUP_REQUIRED,
@@ -253,3 +254,44 @@ def test_a_bundle_names_by_key_and_refuses_a_public_ref():
     with pytest.raises(ValidationError, match="not accepted inside a bundle"):
         _state(protocol={"version": 1, "supporting_calculations": [{"calculation_ref": "calc_" + "a" * 26}]})
     assert _state(protocol={"version": 1, "supporting_calculations": [{"calculation_key": "opt0"}]})
+
+
+@pytest.mark.parametrize("version", [True, "1", 1.0, 1.5, None])
+def test_the_version_is_exactly_the_integer_one(version):
+    """``true``, ``"1"`` and ``1.0`` are not version 1."""
+    with pytest.raises(ValidationError):
+        ThermoProtocolDeclaration.model_validate({**G4, "version": version})
+    if version is not None:
+        code, _ = thermo_declaration_error({"protocol": {**G4, "version": version}})
+        assert code == W_THERMO_PROTOCOL_VERSION_UNSUPPORTED
+    assert ThermoProtocolDeclaration.model_validate({**G4, "version": 1})
+
+
+@pytest.mark.parametrize(
+    "spelling,member",
+    [
+        ("G4", "g4"),
+        ("g4", "g4"),
+        (" G-4 ", "g4"),
+        ("G3", "g3"),
+        ("G4(MP2)", "g4mp2"),
+        ("g4 mp2", "g4mp2"),
+        ("G4MP2", "g4mp2"),
+        ("G4-complete", "g4_complete"),
+        ("g4_COMPLETE", "g4_complete"),
+        ("G4 (complete)", "g4_complete"),
+    ],
+)
+def test_other_name_may_not_spell_a_listed_recipe(spelling, member):
+    """A standard recipe declared as ``other`` would be invisible to a comparison that matches ``g4``."""
+    with pytest.raises(ValidationError) as caught:
+        ThermoProtocolDeclaration.model_validate({"version": 1, "recipe": {"name": "other", "other_name": spelling}})
+    error = _coded(caught)
+    assert error.code == W_THERMO_RECIPE_NAME_LISTED
+    assert error.context["recipe_name"] == member
+    assert member in str(error)
+
+
+@pytest.mark.parametrize("spelling", ["CBS-QB3", "G4X", "W1", "G5", "modified G4"])
+def test_other_name_may_name_anything_that_is_not_a_listed_recipe(spelling):
+    assert ThermoProtocolDeclaration.model_validate({"version": 1, "recipe": {"name": "other", "other_name": spelling}})

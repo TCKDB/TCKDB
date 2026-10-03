@@ -342,6 +342,11 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 #: so three functions silently printed one of their checks (the TS evidence seam enforces four, the
 #: transition-state composition check two, the frequency evaluator two). Printing all of them, grouped
 #: per function, is about 5 KB of content that was always supposed to be there; the E0 rules add ~1 KB.
+#:
+#: The thermo target and protocol declarations (H298 selection, change 1) added two optional blocks and
+#: seven nested models to each of four surfaces. They were not allowed to raise the ceiling: the shared-code
+#: table now starts at four surfaces (``SHARED_CODE_MIN_SURFACES``), which prints the declaration codes once
+#: and took the file well under it.
 MARKDOWN_BYTE_CEILING = 705_000
 
 

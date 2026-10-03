@@ -2375,6 +2375,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("thermo_protocol_version_unsupported", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py"),
+    ApiCode("thermo_recipe_name_listed", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py",
+            note=(
+                "recipe.other_name spells a recipe the vocabulary lists (G3, G4, "
+                "G4(MP2), G4(complete)), so a standard recipe cannot be hidden from "
+                "a method-aware comparison by declaring it as other. Context names "
+                "the enum member to use."
+            )),
     ApiCode("thermo_role_duplicate", 422, Surface.coded_exception,
             "backend/app/services/calculation_levels.py",
             shape=Shape.relationship),

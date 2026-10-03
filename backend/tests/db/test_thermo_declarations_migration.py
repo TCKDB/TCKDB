@@ -261,28 +261,31 @@ def test_an_unapproved_row_may_still_be_edited(db_session):
     ) == "equilibrium_ensemble"
 
 
-def test_a_declared_row_hashes_differently_from_an_undeclared_one(db_session):
-    """Per the enthalpy-reference precedent: absent stays out of the digest, declared goes in."""
+def test_a_declared_row_changes_the_reproducibility_snapshot_but_not_the_consistency_context(db_session):
+    """Hash precedent (#619/#633): no consistency check reads a declaration, so it stays out of that
+    context; the reproducibility snapshot is the digest a declaration is part of."""
     entry = _entry(db_session, "THMDECLHASH")
     thermo_id = _legacy_thermo(db_session, entry.id)
     thermo = db_session.get(Thermo, thermo_id)
-    undeclared = (encoded(thermo_inputs(thermo)), _mapped_columns(thermo))
+    consistency = encoded(thermo_inputs(thermo))
+    undeclared = _mapped_columns(thermo)
 
     thermo.thermodynamic_target_kind = "equilibrium_ensemble"
     db_session.flush()
-    assert encoded(thermo_inputs(thermo)) != undeclared[0]
-    assert _mapped_columns(thermo) != undeclared[1]
-    assert thermo_inputs(thermo)["thermodynamic_target_kind"] == "equilibrium_ensemble"
+    assert encoded(thermo_inputs(thermo)) == consistency
+    assert _mapped_columns(thermo) != undeclared
+    assert _mapped_columns(thermo)["thermodynamic_target_kind"] == "equilibrium_ensemble"
 
     thermo.thermodynamic_target_kind = None
     thermo.protocol_declaration = {"version": 1, "recipe": {"name": "g4"}}
     db_session.flush()
-    assert encoded(thermo_inputs(thermo)) != undeclared[0]
-    assert thermo_inputs(thermo)["protocol_declaration"] == {"recipe": {"name": "g4"}, "version": 1}
+    assert encoded(thermo_inputs(thermo)) == consistency
+    assert _mapped_columns(thermo) != undeclared
+    assert _mapped_columns(thermo)["protocol_declaration"] == {"recipe": {"name": "g4"}, "version": 1}
 
     thermo.protocol_declaration = None
     db_session.flush()
-    assert (encoded(thermo_inputs(thermo)), _mapped_columns(thermo)) == undeclared
+    assert _mapped_columns(thermo) == undeclared
 
 
 # ---------------------------------------------------------------------------

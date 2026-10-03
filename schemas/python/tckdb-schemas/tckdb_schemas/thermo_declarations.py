@@ -30,10 +30,11 @@ calculation. What is *stored* carries public refs only
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Annotated, Any
 
-from pydantic import Field, StringConstraints, ValidationError, field_validator, model_validator
+from pydantic import Field, StrictInt, StringConstraints, ValidationError, field_validator, model_validator
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
@@ -59,9 +60,11 @@ __all__ = [
     "ThermoThermalApproximation",
     "W_THERMO_DECLARATION_INVALID",
     "W_THERMO_PROTOCOL_VERSION_UNSUPPORTED",
+    "W_THERMO_RECIPE_NAME_LISTED",
     "W_THERMO_TARGET_GROUP_NOT_ALLOWED",
     "W_THERMO_TARGET_GROUP_REQUIRED",
     "thermo_declaration_error",
+    "version_is_supported",
     "thermo_target_error",
 ]
 
@@ -83,8 +86,21 @@ W_THERMO_DECLARATION_INVALID = "thermo_declaration_invalid"
 #: Free text, trimmed and never blank.
 _Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
+#: ``recipe.other_name`` spells a recipe the vocabulary lists (G3, G4, G4(MP2), G4(complete)).
+#: Refused so that a standard recipe cannot be hidden from a method-aware comparison by
+#: declaring it as ``other``; the repair is to name the enum member.
+W_THERMO_RECIPE_NAME_LISTED = "thermo_recipe_name_listed"
+
 #: Protocol declaration versions the server accepts.
 THERMO_PROTOCOL_VERSIONS: frozenset[int] = frozenset({1})
+
+#: Listed recipes, keyed by their name with case, spaces and punctuation removed.
+_LISTED_RECIPES = {"g3": "g3", "g4": "g4", "g4mp2": "g4mp2", "g4complete": "g4_complete"}
+
+
+def version_is_supported(value: Any) -> bool:
+    """Exactly a supported integer: ``True``, ``"1"`` and ``1.0`` are not version 1."""
+    return type(value) is int and value in THERMO_PROTOCOL_VERSIONS
 
 
 # ---------------------------------------------------------------------------
@@ -277,9 +293,20 @@ class ThermoProtocolRecipe(SchemaBase):
 
     @model_validator(mode="after")
     def validate_other_name(self) -> ThermoProtocolRecipe:
-        """``recipe.other_name`` is required when ``recipe.name`` is ``other`` and refused for a named recipe."""
+        """``recipe.other_name`` is required when ``recipe.name`` is ``other``, refused for a named recipe, and
+        refused when it spells a listed recipe (G3, G4, G4(MP2), G4(complete) in any case or punctuation)."""
         if self.name is ThermoRecipeName.other and self.other_name is None:
             raise ValueError("recipe.other_name is required when recipe.name is 'other'.")
+        if self.name is ThermoRecipeName.other and self.other_name is not None:
+            listed = _LISTED_RECIPES.get(re.sub(r"[^a-z0-9]", "", self.other_name.lower()))
+            if listed is not None:
+                raise CodedValidationError(
+                    W_THERMO_RECIPE_NAME_LISTED,
+                    f"recipe.other_name {self.other_name!r} names a listed recipe; declare "
+                    f"recipe.name = {listed!r} instead, so the recipe is not hidden as 'other'.",
+                    context={"field": "recipe.other_name", "recipe_name": listed},
+                    message_prefix=False,
+                )
         if self.name is not ThermoRecipeName.other and self.other_name is not None:
             raise ValueError("recipe.other_name is only allowed when recipe.name is 'other'.")
         return self
@@ -392,15 +419,19 @@ class ThermoProtocolDeclaration(SchemaBase):
     states there are no departures from the standard recipe; a list names them.
     "Standard" can only be established by the empty list.
 
-    :param version: Declaration format version; only ``1`` is accepted.
+    :param version: Declaration format version; only the integer ``1`` is accepted
+        (not ``true``, ``"1"`` or ``1.0``).
     :param recipe: The recipe (G3, G4, G4(MP2), G4(complete), other) and version.
     :param formation_reference: How the formation enthalpy was constructed.
     :param thermal_approximation: What represents the target ensemble.
-    :param departures: Stated departures from the standard recipe.
+    :param departures: Stated departures from the standard recipe. Three states:
+        omitted means not stated; an empty list means the depositor states there
+        are none; a list of ``{component, description}`` names them. Only an
+        empty list says "standard".
     :param supporting_calculations: Calculations the declaration rests on.
     """
 
-    version: int
+    version: StrictInt
     recipe: ThermoProtocolRecipe | None = None
     formation_reference: ThermoFormationReference | None = None
     thermal_approximation: ThermoThermalApproximation | None = None
@@ -411,7 +442,7 @@ class ThermoProtocolDeclaration(SchemaBase):
     @classmethod
     def validate_version(cls, value: int) -> int:
         """``protocol.version`` must be a supported declaration version (only ``1``); any other is refused."""
-        if value not in THERMO_PROTOCOL_VERSIONS:
+        if not version_is_supported(value):
             raise _version_error(value)
         return value
 
@@ -494,7 +525,7 @@ def thermo_declaration_error(payload: Any) -> tuple[str, str] | None:
     if protocol is None:
         return None
     version = _get(protocol, "version")
-    if version not in THERMO_PROTOCOL_VERSIONS:
+    if not version_is_supported(version):
         err = _version_error(version)
         return err.code, err.detail
     raw = protocol if isinstance(protocol, dict) else protocol.model_dump(mode="json")

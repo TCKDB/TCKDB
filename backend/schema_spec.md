@@ -1982,7 +1982,7 @@ validated form, with supporting calculations as public refs.
 
 | Field | Meaning |
 | --- | --- |
-| `recipe.name` | `g3`, `g4`, `g4mp2`, `g4_complete`, or `other` (then `recipe.other_name` is required). The four named recipes are distinct values because a method-aware comparison must tell them apart. |
+| `recipe.name` | `g3`, `g4`, `g4mp2`, `g4_complete`, or `other` (then `recipe.other_name` is required, and may not spell a listed recipe in any case or punctuation: `thermo_recipe_name_listed`). The four named recipes are distinct values because a method-aware comparison must tell them apart. |
 | `recipe.recipe_version` | Free text naming the recipe's version or reference. Stored as written. |
 | `formation_reference.derivation` | `atomization`, `isodesmic`, or `working_reaction` (any other balanced working reaction). A preference established for one derivation does not transfer to another. |
 | `formation_reference.reference_data_source` / `reference_data_detail` | Where the reference formation enthalpies came from: `atct`, `nist_janaf`, `codata`, or `other` (then the detail is required); the detail is free text such as `ATcT 1.122`. |
@@ -2004,14 +2004,16 @@ a method name alone satisfies no later evidence requirement.
   the rest of the row. An approved declaration is corrected only by
   supersession, like any other scientific content. No accepted-science repair
   declaration lists them, so no repair can change one.
-- **Digests.** The three columns are registered in `UNCHANGED_DEFAULTS` with
-  value `NULL`: an undeclared row's consistency and reproducibility digests are
-  exactly what they were before the revision (no stored review goes stale on
-  deploy), and a row that states a target or protocol hashes differently,
-  because the declaration is part of what the row claims. This follows the
-  enthalpy-reference column, which also changes a row's digest once declared.
+- **Digests.** Follows #619/#633. No consistency check reads a declaration, so the
+  three columns are in `THERMO_HASH_EXCLUDED_COLUMNS`: stating or changing one never
+  restales a stored consistency review. They are in the reproducibility-assessment
+  snapshot, registered in `UNCHANGED_DEFAULTS` with value `NULL`: an undeclared row's
+  snapshot is exactly what it was before the revision, and a row that states a target
+  or protocol snapshots differently, because the declaration is part of what it claims.
 - **Reads.** `ThermoRecord.thermodynamic_target` (`kind`, `conformer_group_ref`)
-  and `ThermoRecord.protocol` (stored form). Both `null` for a legacy row.
+  and `ThermoRecord.protocol` (stored form). Both `null` for a legacy row. A stored
+  protocol that no longer validates (written outside the upload path) is served as
+  `protocol: null, protocol_unreadable: true` and logged; it never fails the listing.
 - **Contribution bundles.** Export carries an equilibrium target and the
   protocol's recipe, formation reference, thermal approximation and departures.
   It leaves out, and reports as a `declaration_pruned` omission, what names a

@@ -287,6 +287,10 @@ class ThermoRecord(BaseModel):
     #: public ref); ``null`` means none was declared. An attributed claim, not
     #: a verified fact. See ``docs/guides/depositing_a_thermo_record.md``.
     protocol: StoredThermoProtocolDeclaration | None = None
+    #: ``true`` when a protocol is stored but no longer validates against the declaration
+    #: schema (a value written outside the upload path). ``protocol`` is then ``null`` and
+    #: the rest of the record is served; ``null`` alone still means "not stated".
+    protocol_unreadable: bool = False
     enthalpy_formation_0k_kj_mol: float | None = None
     enthalpy_formation_0k_uncertainty_kj_mol: float | None = None
     h298_kj_mol: float | None = None

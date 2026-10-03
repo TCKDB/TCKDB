@@ -5,8 +5,10 @@ See docs/specs/read_api_mvp.md §Endpoint 4.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 from tckdb_schemas.thermo_declarations import StoredThermoProtocolDeclaration
@@ -210,6 +212,8 @@ _LOT_FILTER_ROLE_PRIORITY = (
     ThermoCalculationRole.freq,
     ThermoCalculationRole.opt,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_species_thermo(
@@ -560,6 +564,20 @@ def get_species_thermo(
                 }
             )
 
+        # A stored protocol that no longer validates (written outside the upload path) must
+        # not take the whole listing down: serve the record, mark the protocol unreadable.
+        protocol = None
+        protocol_unreadable = False
+        if t.protocol_declaration is not None:
+            try:
+                protocol = StoredThermoProtocolDeclaration.model_validate(t.protocol_declaration)
+            except ValidationError:
+                protocol_unreadable = True
+                logger.warning(
+                    "thermo %s stores a protocol declaration that fails validation; served as unreadable",
+                    t.public_ref,
+                )
+
         record = ThermoRecord(
             thermo_id=t.id,
             thermo_ref=t.public_ref,
@@ -578,11 +596,8 @@ def get_species_thermo(
                 if t.thermodynamic_target_kind is not None
                 else None
             ),
-            protocol=(
-                StoredThermoProtocolDeclaration.model_validate(t.protocol_declaration)
-                if t.protocol_declaration is not None
-                else None
-            ),
+            protocol=protocol,
+            protocol_unreadable=protocol_unreadable,
             enthalpy_formation_0k_kj_mol=t.enthalpy_formation_0k_kj_mol,
             enthalpy_formation_0k_uncertainty_kj_mol=t.enthalpy_formation_0k_uncertainty_kj_mol,
             h298_kj_mol=t.h298_kj_mol,

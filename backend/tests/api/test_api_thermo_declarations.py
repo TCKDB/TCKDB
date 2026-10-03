@@ -12,7 +12,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 
 from app.db.models.app_user import AppUser
@@ -472,3 +472,54 @@ def test_the_bundle_target_resolves_to_the_group_of_that_conformers_observation(
     row = _only_thermo(db_session)
     observation = db_session.scalars(select(ConformerObservation)).one()
     assert row.target_conformer_group_id == observation.conformer_group_id
+
+
+# ---------------------------------------------------------------------------
+# Read resilience
+# ---------------------------------------------------------------------------
+
+
+def test_a_stored_protocol_that_no_longer_validates_does_not_take_the_listing_down(client, db_session, caplog):
+    """Written outside the upload path (raw SQL passes the database CHECK): the record is served, marked unreadable."""
+    assert client.post(THERMO, json=_standalone(protocol=G4_PROTOCOL)).status_code == 201
+    assert client.post(THERMO, json=_standalone(thermodynamic_target={"kind": "equilibrium_ensemble"})).status_code == 201
+    broken, healthy = db_session.scalars(select(Thermo).order_by(Thermo.id)).all()
+    db_session.execute(
+        text("UPDATE thermo SET protocol_declaration = CAST(:p AS jsonb) WHERE id = :id"),
+        {"p": '{"version": 1, "recipe": {"name": "g5"}}', "id": broken.id},
+    )
+    db_session.flush()
+    db_session.expire_all()  # the read must see the raw write, not the identity map
+
+    with caplog.at_level("WARNING"):
+        records = _read(client, broken.species_entry_id)
+
+    by_ref = {record["thermo_ref"]: record for record in records}
+    assert set(by_ref) == {broken.public_ref, healthy.public_ref}
+    unreadable = by_ref[broken.public_ref]
+    assert unreadable["protocol"] is None and unreadable["protocol_unreadable"] is True
+    assert unreadable["h298_kj_mol"] == 217.998  # the rest of the record is still served
+    assert by_ref[healthy.public_ref]["protocol_unreadable"] is False
+    assert by_ref[healthy.public_ref]["thermodynamic_target"]["kind"] == "equilibrium_ensemble"
+    assert broken.public_ref in caplog.text
+
+
+def test_a_record_with_no_protocol_is_not_marked_unreadable(client, db_session):
+    assert client.post(THERMO, json=_standalone()).status_code == 201
+    (record,) = _read(client, _only_thermo(db_session).species_entry_id)
+    assert record["protocol"] is None and record["protocol_unreadable"] is False
+
+
+def test_a_listed_recipe_declared_as_other_is_refused_over_http(client, db_session):
+    response = client.post(
+        THERMO, json=_standalone(protocol={"version": 1, "recipe": {"name": "other", "other_name": "G4(MP2)"}})
+    )
+    assert _code(response) == "thermo_recipe_name_listed"
+    assert response.json()["context"]["recipe_name"] == "g4mp2"
+    assert db_session.scalars(select(Thermo)).all() == []
+
+
+@pytest.mark.parametrize("version", [True, "1", 1.0])
+def test_an_inexact_version_is_refused_over_http(client, version):
+    response = client.post(THERMO, json=_standalone(protocol={**G4_PROTOCOL, "version": version}))
+    assert response.status_code == 422, response.text

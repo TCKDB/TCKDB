@@ -1743,8 +1743,11 @@ class ContractBuilder:
 
     #: A refusal code traced on at least this many surfaces is printed once, in a shared
     #: table, instead of in every surface's own table: ten surfaces carry a level of theory
-    #: and a calculation, so every rule about those repeated verbatim ten times.
-    SHARED_CODE_MIN_SURFACES = 8
+    #: and a calculation, so every rule about those repeated verbatim ten times. Four, not
+    #: eight: the thermo declaration codes sit on the four surfaces that carry a thermo block
+    #: (standalone, both computed bundles, contribution bundles) and repeating them four times
+    #: was what pushed the file over its size ceiling.
+    SHARED_CODE_MIN_SURFACES = 4
 
     def widely_shared_codes(self) -> dict[str, int]:
         """code -> number of surfaces that can return it, for codes on enough surfaces to print once."""
@@ -2045,8 +2048,9 @@ class ContractBuilder:
             "### Codes most surfaces share",
             "",
             f"Refusal codes that {self.SHARED_CODE_MIN_SURFACES} or more of the {total} surfaces can return, printed"
-            " here once instead of in each surface's own table. They come from rules every payload that carries a"
-            " calculation or a level of theory meets. Each links to its entry in the"
+            " here once instead of in each surface's own table. They come from rules that every payload carrying a"
+            " calculation or a level of theory meets, and from the rules of a block that several surfaces carry"
+            " (the thermo block's enthalpy and declaration rules). Each links to its entry in the"
             " [refusal code reference](#refusal-code-reference); `traced` counts the surfaces.",
             "",
             "| Code | Status | Surfaces traced |",
@@ -2170,7 +2174,7 @@ class ContractBuilder:
             " reachable from the route, not necessarily for every payload; a code raised through"
             " dynamic dispatch can be missing. Codes every request can receive are listed"
             " [once](#every-producer-route); codes most surfaces can return (calculation, level of"
-            " theory and composite rules) are listed [once](#codes-most-surfaces-share).",
+            " theory, composite and thermo-block rules) are listed [once](#codes-most-surfaces-share).",
             "",
         ]
         if not specific:

@@ -216,6 +216,8 @@ class ThermoDetailRecord(TypedDict, total=False):
     # reference, thermal approximation, departures, supporting calculations
     # by public ref). ``null`` means none was declared. An attributed claim.
     protocol: JSONDict | None
+    # ``true`` when a stored protocol no longer validates: ``protocol`` is then ``null``.
+    protocol_unreadable: bool
     h298_kj_mol: float | None
     s298_j_mol_k: float | None
     h298_uncertainty_kj_mol: float | None
