@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 38 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 260 | `backend/app/api/code_catalogue.py` |
-| **total** | **561** | |
+| Refusal codes a caller can receive | 261 | `backend/app/api/code_catalogue.py` |
+| **total** | **562** | |
 
 ## How a record is named
 
@@ -747,7 +747,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (207 codes)
+### HTTP 422 (208 codes)
 
 | Code | Names |
 | --- | --- |
@@ -819,6 +819,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `freq_list_exceeds_geometry_degrees_of_freedom` | a relationship — read `context` |
 | `freq_mode_index_not_unique` | a relationship — read `context` |
 | `freq_n_imag_disagrees_with_modes` | a relationship — read `context` |
+| `geometry_isotope_symbol_conflict` | a relationship — read `context` |
 | `geometry_key_unresolved` | a thing |
 | `geometry_too_large` | a relationship — read `context` |
 | `handle_type_mismatch` | a relationship — read `context` |

@@ -131,6 +131,20 @@ carries a comparison; the others each name what stopped it:
 ``masses_unresolved``
     An element or isotope the periodic table cannot weigh. No guess is
     substituted.
+``isotope_identity_conflict``
+    The geometry declares a non-standard nuclide, of any element (a ``D``/``T``
+    spelling on a row deposited before #672, or a stored mass number), while the species entry
+    it is filed under is the all-standard (protium) one. The masses this
+    analysis would use are the deuterium or tritium masses, so the spectrum it
+    recovered would describe an isotopologue under a protium label (any element
+    is judged, not only hydrogen: a ``13C`` label under a protium entry gives the
+    same wrong masses) -- and
+    would *agree* with a frequency list computed the same way, which is the
+    failure. No frequencies are returned. Judged only for a calculation owned
+    by a species entry, only in the "entry says standard, geometry says
+    isotope" direction, and only after the masses resolve (so an isotope the
+    periodic table cannot weigh keeps ``masses_unresolved``). See
+    ``docs/adr/0022``.
 ``rigid_body_curvature_too_large``
     The geometry on file is not the frame the matrix was computed in
     (:data:`~app.chemistry.normal_modes.FRAME_CONSISTENCY_TOLERANCE_CM1`).
@@ -160,6 +174,8 @@ import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.chemistry.geometry import resolve_element_symbol
+from app.chemistry.isotopes import implied_isotope_mass_number, most_common_isotope
 from app.chemistry.normal_modes import (
     FRAME_CONSISTENCY_TOLERANCE_CM1,
     NormalMode,
@@ -249,6 +265,7 @@ class ReanalysisStatus(str, Enum):
     frequency_list_missing = "frequency_list_missing"
     geometry_incomplete = "geometry_incomplete"
     masses_unresolved = "masses_unresolved"
+    isotope_identity_conflict = "isotope_identity_conflict"
     rigid_body_curvature_too_large = "rigid_body_curvature_too_large"
     mode_count_mismatch = "mode_count_mismatch"
 
@@ -580,6 +597,34 @@ def _with_identity(result: HessianReanalysis, calc: Calculation) -> HessianReana
     )
 
 
+def _declares_isotope_under_protium(calc: Calculation, atoms: Sequence[GeometryAtom]) -> bool:
+    """True when the geometry declares an isotope that the owning entry denies.
+
+    The declaration is read from each atom's own row: its stored mass number,
+    or -- for a row deposited before ``docs/adr/0022``, which holds ``D``/``T``
+    with a NULL mass number and cannot be rewritten -- the mass number its own
+    symbol names. Nothing is borrowed from a sibling record. The entry denies
+    it when its ``isotope_key`` is NULL, TCKDB's all-standard key.
+
+    A calculation with no species-entry owner (a transition state's) is not
+    judged: its identity is the reaction's reactants taken together, which this
+    reader does not assemble.
+    """
+
+    entry = calc.species_entry
+    if entry is None or entry.isotope_key is not None:
+        return False
+    for atom in atoms:
+        mass_number = atom.isotope_mass_number
+        if mass_number is None:
+            mass_number = implied_isotope_mass_number(atom.element)
+        if mass_number is None:
+            continue
+        if mass_number != most_common_isotope(resolve_element_symbol(atom.element)):
+            return True
+    return False
+
+
 def _imaginary_block(session: Session, calculation_id: int) -> tuple[str | None, tuple[ImaginaryModeComparison, ...]]:
     """The declared-versus-determined block, from the production projection."""
 
@@ -663,6 +708,12 @@ def reanalyse_calculation(
                 calculation,
             )
         masses.append(mass)
+
+    if _declares_isotope_under_protium(calculation, atoms):
+        return _with_identity(
+            HessianReanalysis(status=ReanalysisStatus.isotope_identity_conflict, natoms=hessian.natoms),
+            calculation,
+        )
 
     coordinates = np.array([[atom.x, atom.y, atom.z] for atom in atoms], dtype=float)
     software_name = None

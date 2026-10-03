@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.isotopes import (
     HYDROGEN_ISOTOPE_SYMBOLS,
     normalize_isotope,
     validate_isotope,
 )
 from app.schemas.fragments.geometry import GeometryPayload
+
+#: Raised when a geometry's ``isotopes`` entry contradicts the nuclide its own
+#: element spelling names: ``D`` with mass number 3, ``T`` with 2, ``D`` with 1.
+#: An input-format refusal ("D is 2H" is a definition), so it is in the code
+#: catalogue and not in the scientific check register; see ``docs/adr/0022``.
+W_GEOMETRY_ISOTOPE_SYMBOL_CONFLICT = "geometry_isotope_symbol_conflict"
 
 
 def normalize_element_symbol(symbol: str) -> str:
@@ -65,26 +72,31 @@ def resolve_element_symbol(symbol: str) -> str:
     """Return the *element* an XYZ symbol names, not the nuclide it names.
 
     :func:`normalize_element_symbol` settles capitalisation. This settles the
-    other way an XYZ can spell an element that a comparison must not trip over:
-    ``D`` and ``T`` are hydrogen. Both are legal, common tokens — Gaussian,
-    ORCA, Molpro and CFOUR all emit or accept them — and ingestion
-    canonicalisation deliberately leaves them alone, so
-    ``geometry_atom.element`` stores them as ``D`` and ``T``, and a check that
-    compares raw symbols reads a perfectly ordinary deuterated geometry as
-    containing an element its SMILES never mentions. That refuses correct
-    chemistry, which ADR 0008 disqualifies a blocking check from doing.
+    other spelling a comparison must not trip over: ``D`` and ``T`` are
+    hydrogen. They are also nuclides -- ``D`` is deuterium (mass number 2) and
+    ``T`` is tritium (mass number 3), the only meaning either symbol has in
+    chemistry (IUPAC Red Book IR-3.3.2) -- and that half of the meaning is
+    carried elsewhere (decided 2026-10-03, ``docs/adr/0022``): a ``D``/``T``
+    element token is read as hydrogen **plus** an implied mass number by
+    :func:`parse_xyz`, so every *new* ``geometry_atom`` row holds ``H`` and an
+    ``isotope_mass_number``.
 
-    Use this wherever elements are **counted or matched** — composition checks,
-    graph-isomorphism element groups. Do not use it where the deposited symbol
-    itself is the subject (round-tripping ``geometry_atom.element``, rendering
-    an XYZ back to a depositor): ``D`` is what they wrote and what they should
-    read back.
+    This function is therefore the answer to "which element is it", and only
+    that. It stays in the codebase for two jobs:
 
-    Isotope *identity* is unaffected: it is carried atom-resolved by
-    ``geometry.isotopes`` and by SMILES isotope notation, and compared by
-    :func:`app.services.species_resolution.assert_geometry_isotopes_match_identity`.
-    Writing ``D`` in the element column is therefore composition-neutral and
-    isotope-silent, exactly as it was before any composition check existed.
+    * counting and matching elements on symbols that did not come through
+      :func:`parse_xyz` -- an RDKit symbol, a raw XYZ string, a wire payload;
+    * reading the ``geometry_atom`` rows deposited **before** that decision,
+      which store ``D``/``T`` in the element column with a NULL mass number.
+      Nothing may rewrite them (``trg_as_geometry_atom`` forbids it), so a
+      check that counts elements still resolves them to ``H`` rather than
+      reading an element its SMILES never mentions. Their isotope meaning is
+      read from the symbol at read time: see
+      :func:`app.chemistry.isotopes.implied_isotope_mass_number`.
+
+    Do not use it where the deposited symbol itself is the subject
+    (round-tripping ``geometry.xyz_text``): ``D`` is what the depositor wrote
+    and what they should read back.
 
     :param symbol: Element symbol as deposited.
     :returns: The normalised symbol of the element, with ``D`` and ``T``
@@ -105,7 +117,9 @@ class ParsedXYZ:
     :param isotopes: Normalized non-standard isotope substitutions, as a
         sorted tuple of ``(atom_index, mass_number)`` pairs with 1-based atom
         indices matching ``atoms``. Atoms at their most abundant isotope are
-        absent, so an ordinary geometry has an empty tuple.
+        absent, so an ordinary geometry has an empty tuple. An atom spelled
+        ``D`` or ``T`` is present with its implied mass number (2 or 3), exactly
+        as if ``geometry.isotopes`` had said so; its ``atoms`` entry is ``H``.
     """
 
     natoms: int
@@ -126,6 +140,17 @@ class ParsedXYZ:
         The isotope suffix is appended only when a substitution is present,
         which keeps ``geom_hash`` byte-for-byte identical for every geometry
         already stored — none of which carries isotope data.
+
+        A ``D`` or ``T`` spelling counts as a substitution (decided
+        2026-10-03, ``docs/adr/0022``): its implied mass number is in
+        :attr:`isotopes` and so in this suffix, exactly as an explicit
+        ``geometry.isotopes`` entry would be. A redundant explicit entry that
+        equals the implied one adds nothing, so ``D`` alone and ``D`` with a
+        redundant entry hash identically; ``D`` and ``H`` plus ``isotopes`` give
+        two rows. A geometry that spells ``D`` and was stored
+        before that decision keeps its old hash and its old row (no suffix, a
+        ``D``/NULL atom); a new deposit of the same file hashes differently and
+        gets its own correctly indexed row rather than deduping onto it.
         """
 
         if not self.isotopes:
@@ -194,8 +219,18 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
     * ``xyz_text`` is the deposited evidence. It is the block a depositor reads
       back, and the symbol is the one part of an atom line this function does
       not already reformat. ``D`` is what they wrote and what they should read
-      back, for the reason :func:`resolve_element_symbol` gives; the same is
-      true of ``CL``.
+      back; the same is true of ``CL``.
+
+    ``D`` and ``T`` are the one place the parsed index differs from case alone.
+    An element token ``D`` or ``T`` declares a nuclide (deuterium, tritium), so
+    the parsed atom is ``H`` with an implied mass number of 2 or 3: ``atoms``
+    holds ``H`` (``geometry_atom.element`` stays an element, which is what
+    ``reaction_atom_map``'s pair constraint compares), :attr:`ParsedXYZ.isotopes`
+    holds the mass number (so the isotope identity check and ``hash_text`` see
+    it), and ``xyz_text`` still reads ``D``. An explicit ``geometry.isotopes``
+    entry for that atom must equal the implied number, and is then redundant;
+    anything else contradicts the spelling and is refused with
+    ``geometry_isotope_symbol_conflict``. See ``docs/adr/0022``.
 
     So ``geometry.xyz_text`` may read ``CL`` while ``geometry_atom.element``
     reads ``Cl`` for the same atom. That is not drift: one is the record of what
@@ -206,6 +241,8 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
     :param payload: Upload-facing geometry payload.
     :returns: Parsed XYZ representation with canonicalized coordinate text.
     :raises ValueError: If the XYZ text is malformed or internally inconsistent.
+    :raises CodedValueError: ``geometry_isotope_symbol_conflict`` when an
+        explicit isotope contradicts a ``D``/``T`` element spelling.
     """
 
     lines = [line.rstrip() for line in payload.xyz_text.strip().splitlines()]
@@ -226,6 +263,8 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
         )
 
     atoms: list[tuple[str, float, float, float]] = []
+    #: 1-based atom index -> mass number implied by a ``D``/``T`` spelling.
+    implied_isotopes: dict[int, int] = {}
     #: The element token exactly as the file wrote it, kept alongside the
     #: canonicalised one so ``canonical_xyz_text`` — and therefore
     #: ``geom_hash`` — is byte-for-byte what it was before this function
@@ -236,11 +275,13 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
         if len(parts) != 4:
             raise ValueError("Each XYZ atom line must contain element x y z")
         deposited = parts[0]
-        # `normalize_element_symbol`, not `resolve_element_symbol`: `D` and `T`
-        # must stay `D` and `T` in the stored column. Collapsing them to `H`
-        # here would destroy deposited isotope labelling, which is a fact about
-        # the deposit and not a spelling of one.
         element = normalize_element_symbol(deposited)
+        # `D`/`T` name a nuclide, not an element: store the element (`H`, which
+        # is what `ck_reaction_atom_map_pair_element_matches` compares) and
+        # carry the nuclide as the implied mass number. `xyz_text` keeps `D`.
+        if element in HYDROGEN_ISOTOPE_SYMBOLS:
+            implied_isotopes[len(atoms) + 1] = HYDROGEN_ISOTOPE_SYMBOLS[element]
+            element = "H"
         try:
             x = float(parts[1])
             y = float(parts[2])
@@ -254,7 +295,7 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
     for deposited, (_element, x, y, z) in zip(deposited_symbols, atoms, strict=True):
         canonical_lines.append(f"{deposited} {x:.12f} {y:.12f} {z:.12f}")
 
-    isotopes: list[tuple[int, int]] = []
+    isotope_by_index: dict[int, int] = dict(implied_isotopes)
     for atom_index, mass_number in sorted((payload.isotopes or {}).items()):
         if not 1 <= atom_index <= natoms:
             raise ValueError(
@@ -262,6 +303,22 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
                 f"1..{natoms} for this geometry"
             )
         element = atoms[atom_index - 1][0]
+        implied = implied_isotopes.get(atom_index)
+        if implied is not None and mass_number != implied:
+            spelling = deposited_symbols[atom_index - 1]
+            raise CodedValueError(
+                W_GEOMETRY_ISOTOPE_SYMBOL_CONFLICT,
+                f"isotopes[{atom_index}]={mass_number} contradicts the spelling "
+                f"{spelling!r} (mass {implied}). Write H with isotope {mass_number} "
+                "or drop the conflicting entry.",
+                context={
+                    "atom_index": atom_index,
+                    "element_symbol": spelling,
+                    "implied_mass_number": implied,
+                    "declared_mass_number": mass_number,
+                },
+                message_prefix=False,
+            )
         validate_isotope(
             element,
             mass_number,
@@ -269,13 +326,16 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
         )
         # An explicitly stated standard isotope carries no information and is
         # dropped, so `{1: 1}` on a hydrogen can never fork an identity away
-        # from an unlabelled deposit of the same molecule.
+        # from an unlabelled deposit of the same molecule. (An explicit entry
+        # equal to a `D`/`T` implied one is the same dict key, so it is the
+        # implied entry, once.)
         if normalize_isotope(element, mass_number) is not None:
-            isotopes.append((atom_index, mass_number))
+            isotope_by_index[atom_index] = mass_number
 
     return ParsedXYZ(
         natoms=natoms,
         canonical_xyz_text="\n".join(canonical_lines),
         atoms=tuple(atoms),
-        isotopes=tuple(isotopes),
+        isotopes=tuple(sorted(isotope_by_index.items())),
     )
+

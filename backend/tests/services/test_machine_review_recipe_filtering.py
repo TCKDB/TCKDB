@@ -19,7 +19,7 @@ from datetime import datetime
 
 import pytest
 
-from app.services.consistency import gibbs, hess, kinetics, kirchhoff
+from app.services.consistency import gibbs, hess, isotope_identity, kinetics, kirchhoff
 from app.services.consistency import thermo as thermo_check
 from app.services.consistency.core import AdvisoryResult, currency
 from app.services.consistency.service import invoke
@@ -47,6 +47,7 @@ from app.services.trust.rubrics import (
     EXTERNAL_CP_COMPARISON_V2,
     GIBBS_SELF_CONSISTENCY_V1,
     HESS_CONSISTENCY_V1,
+    ISOTOPE_IDENTITY_CONSISTENCY_V1,
     KIRCHHOFF_CONSISTENCY_V1,
     THERMO_CONSISTENCY_V1,
     THERMO_KINETICS_CONSISTENCY_V1,
@@ -74,6 +75,7 @@ _ADVISORY_RECIPES = {
     (kinetics.RUNNER, THERMO_KINETICS_CONSISTENCY_V1): {"thermo_kinetics_consistency_v1": "1"},
     (gibbs.RUNNER, GIBBS_SELF_CONSISTENCY_V1): {"gibbs_self_consistency_v1": "1"},
     (hess.RUNNER, HESS_CONSISTENCY_V1): {"hess_consistency_v1": "1"},
+    (isotope_identity.RUNNER, ISOTOPE_IDENTITY_CONSISTENCY_V1): {"isotope_identity_consistency_v1": "1"},
     (kirchhoff.RUNNER, KIRCHHOFF_CONSISTENCY_V1): {"kirchhoff_consistency_v1": "1"},
     (cp.RUNNER_VERSION, EXTERNAL_CP_COMPARISON_V2): {"external_cp_comparison_v2": "2"},
 }

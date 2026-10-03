@@ -30,9 +30,14 @@ against.
 
 The interesting half of this file is the accepting half. A blocking check that
 refuses correct science is worse than no check, so isotopologues, charged
-species, hydrogens written ``D`` or ``T``, two-letter element symbols written
-in whatever case an ESS felt like, and deposits with no geometry at all must
-all still go through.
+species, hydrogens written ``D`` or ``T`` *under a matching isotope label*,
+two-letter element symbols written in whatever case an ESS felt like, and
+deposits with no geometry at all must all still go through.
+
+A ``D``/``T`` element token is an isotope declaration (#672, ADR 0022): it is
+read as ``H`` with mass number 2/3, so it is composition-neutral but not
+isotope-silent. Heavy water filed under a protium ``"O"`` is refused as an
+isotope mismatch, and under ``[2H]O[2H]`` it is accepted.
 """
 
 from __future__ import annotations
@@ -94,10 +99,9 @@ _XYZ_CH3CL_MIXED_CASE = (
     "h -0.372 -0.514  0.890\n"
     "h -0.372 -0.514 -0.890"
 )
-#: Heavy water, written the way an ESS is entitled to write it: ``D`` in the
-#: element column. Gaussian, ORCA, Molpro and CFOUR all emit or accept the
-#: token, and ``geometry_atom.element`` keeps it by design — ingestion
-#: canonicalises case and deliberately leaves nuclide labelling alone.
+#: Heavy water with ``D`` in the element column, the way a hand-written file
+#: spells it. The token declares deuterium: ``parse_xyz`` stores ``H`` with mass
+#: number 2 and ``xyz_text`` keeps the ``D`` (#672, ADR 0022).
 _XYZ_D2O = (
     "3\nheavy water, hydrogens written as D\n"
     "O  0.000  0.000  0.117\n"
@@ -328,36 +332,85 @@ def test_a_radical_is_accepted(db_conn) -> None:
     assert outcome.species_entry_id is not None
 
 
-def test_deuterium_written_as_the_element_D_is_accepted(db_conn) -> None:
-    """``D`` is hydrogen, and this check must know it.
+def _assert_isotope_mismatch(excinfo) -> None:
+    assert getattr(excinfo.value, "code", None) == "species_geometry_isotope_mismatch"
 
-    ``D`` is a legal, common XYZ token — Gaussian, ORCA, Molpro and CFOUR all
-    emit or accept it — and ``geometry_atom.element`` keeps it. A raw
-    comparison reads this geometry as containing an element water's SMILES
-    never mentions and refuses a deposit that was accepted before any
-    composition check existed. That is a regression on correct chemistry, and
-    the error message it produced ended by promising that "isotope labels are
-    counted as their element, so an isotopologue is not a mismatch" — while
-    refusing the depositor for an isotope label.
 
-    Note what the ``D`` does *not* do: it carries no isotope identity. Isotope
-    identity lives in ``geometry.isotopes`` and in SMILES isotope notation, so
-    this deposit is the ordinary H2O it declares itself to be. That is
-    unchanged from before the composition check, and deliberately not widened
-    here.
+def test_deuterium_written_as_the_element_D_under_protium_is_refused(db_conn) -> None:
+    """``D`` declares deuterium, so heavy water cannot be filed under ``"O"``.
+
+    This deposit was accepted before #672 (it asserted acceptance here). The
+    identity said H2O while every mass-weighted number computed from the
+    geometry described D2O -- a ~15 kJ/mol zero-point error with nothing to
+    flag it. The existing isotope-mismatch refusal now fires, because the
+    geometry's isotope multiset is ``{(H, 2): 2}`` and the SMILES's is empty.
     """
 
     with _isolated_session(db_conn) as session:
-        outcome = _upload(session, _bundle(smiles="O", xyz=_XYZ_D2O))
-    assert outcome.species_entry_id is not None
+        with pytest.raises(ValueError) as excinfo:
+            _upload(session, _bundle(smiles="O", xyz=_XYZ_D2O))
+    _assert_isotope_mismatch(excinfo)
 
 
-def test_tritium_written_as_the_element_T_is_accepted(db_conn) -> None:
-    """``T`` is hydrogen too, and for exactly the same reason."""
+def test_tritium_written_as_the_element_T_under_protium_is_refused(db_conn) -> None:
+    """``T`` is tritium: CH3T cannot be filed under ``"C"``."""
 
     with _isolated_session(db_conn) as session:
-        outcome = _upload(session, _bundle(smiles="C", xyz=_XYZ_CH3T))
+        with pytest.raises(ValueError) as excinfo:
+            _upload(session, _bundle(smiles="C", xyz=_XYZ_CH3T))
+    _assert_isotope_mismatch(excinfo)
+
+
+def test_a_2H_species_with_a_D_spelled_geometry_is_accepted(db_conn) -> None:
+    """The twin of the refusal above: ``D`` under ``[2H]O[2H]`` is correct.
+
+    Before #672 this was refused (a D geometry carried no isotope, so it never
+    matched a labelled SMILES) and there was no accepted way to deposit a
+    correctly labelled isotopologue spelled with ``D``.
+    """
+
+    with _isolated_session(db_conn) as session:
+        outcome = _upload(session, _bundle(smiles="[2H]O[2H]", xyz=_XYZ_D2O))
     assert outcome.species_entry_id is not None
+
+
+def test_a_3H_species_with_a_T_spelled_geometry_is_accepted(db_conn) -> None:
+    with _isolated_session(db_conn) as session:
+        outcome = _upload(session, _bundle(smiles="[3H]C", xyz=_XYZ_CH3T))
+    assert outcome.species_entry_id is not None
+
+
+def test_a_D_spelled_geometry_with_a_redundant_matching_map_is_accepted(db_conn) -> None:
+    """``D`` plus ``{i: 2}`` states the same thing twice, which is not a conflict."""
+
+    with _isolated_session(db_conn) as session:
+        outcome = _upload(
+            session,
+            _bundle(smiles="[2H]O[2H]", xyz=_XYZ_D2O, isotopes={2: 2, 3: 2}),
+        )
+    assert outcome.species_entry_id is not None
+
+
+@pytest.mark.parametrize(
+    ("xyz", "isotopes"),
+    [
+        (_XYZ_D2O, {2: 3}),  # D with mass 3
+        (_XYZ_D2O, {2: 1}),  # D with mass 1
+        (_XYZ_CH3T, {2: 2}),  # T with mass 2
+    ],
+)
+def test_an_isotopes_entry_that_contradicts_the_spelling_is_refused(
+    db_conn, xyz, isotopes
+) -> None:
+    """The coded refusal reaches the deposit path, not only ``parse_xyz``."""
+
+    with _isolated_session(db_conn) as session:
+        with pytest.raises(ValueError) as excinfo:
+            _upload(
+                session,
+                _bundle(smiles="[2H]O[2H]", xyz=xyz, isotopes=isotopes),
+            )
+    assert getattr(excinfo.value, "code", None) == "geometry_isotope_symbol_conflict"
 
 
 def test_a_D_geometry_with_the_wrong_atom_count_is_still_refused(

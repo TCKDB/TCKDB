@@ -309,9 +309,10 @@ tell a deuterium geometry from a protium one. A sibling rule, `assert_isotopes` 
 - **Count-based.** The multiset of `(element, mass number)` is compared. A calculation geometry has no
   atom map to the species graph, so isotopomers (CH2D-OH vs CH3-OD) are not distinguished: a documented
   false acceptance, never a false refusal.
-- **`D`/`T` spellings are isotope-silent**, per `resolve_element_symbol`. A `D` geometry on a protium
-  species is accepted; `tests/services/test_calculation_geometry_isotopes.py::test_a_d_spelling_is_isotope_silent_by_design`
-  pins it. This differs from `normal_modes.atomic_mass`, which reads `D` as mass 2; that split is tracked
-  separately.
+- **A `D`/`T` spelling is an isotope declaration** (#672, ADR 0022). `parse_xyz` stores it as `H` with
+  mass number 2/3, so a `D` geometry on a protium species is refused, and a legacy row (`D`/`T` with a NULL
+  mass number, unrewritable) counts as 2/3 at read time from its own symbol.
+  `tests/services/test_calculation_geometry_isotopes.py::test_a_d_spelling_is_an_isotope_declaration` pins
+  it. This agrees with `normal_modes.atomic_mass`, which reads `D` as mass 2.
 - **Absence does not block**, as for composition: a `pseudo` owner, a transition state with no reactants
   or a pseudo reactant, and an unparseable isotope key are left unjudged.

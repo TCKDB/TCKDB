@@ -13,9 +13,10 @@ Design, each pinned below:
   same core as the conformer rule). CH2D-OH vs CH3-OD is not distinguished.
 * **The reference is ``species_entry.isotope_key``**, not ``species.smiles``,
   which is isotope-blind by design.
-* **A ``D``/``T`` element spelling is isotope-silent**, by the documented
-  decision in ``resolve_element_symbol``. That is pinned as an *acceptance*
-  here so it cannot change by accident.
+* **A ``D``/``T`` element spelling is an isotope declaration** (#672, ADR 0022):
+  ``parse_xyz`` stores it as ``H`` + mass 2/3, so a ``D`` geometry under a
+  protium species is refused, and a legacy row (``D``/``T`` with a NULL mass,
+  unrewritable) is read by its own symbol.
 """
 
 from __future__ import annotations
@@ -30,9 +31,11 @@ from sqlalchemy.orm import Session
 from app.api.error_contract import CodedValueError
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import Calculation
+from app.db.models.geometry import Geometry, GeometryAtom
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.computed_species_upload import ComputedSpeciesUploadRequest
 from app.schemas.workflows.transition_state_upload import TransitionStateUploadRequest
+from app.services.calc_isotopes import assert_isotopes
 from app.services.calculation_resolution import (
     attach_calculation_input_geometries,
     attach_calculation_output_geometries,
@@ -273,19 +276,57 @@ def test_an_explicit_standard_isotope_is_not_a_substitution(db_conn) -> None:
     _accepted(db_conn, _protium(opt_input=_geom(_XYZ_H, {1: 1})))
 
 
-def test_a_d_spelling_is_isotope_silent_by_design(db_conn) -> None:
-    """PINS CURRENT BEHAVIOUR, documented in ``resolve_element_symbol``.
+def test_a_d_spelling_is_an_isotope_declaration(db_conn) -> None:
+    """A ``D`` geometry on a protium species is refused; on a ``[2H]`` species it is accepted.
 
-    A ``D`` in the element column is composition-neutral *and* isotope-silent:
-    isotope identity is carried only by ``geometry.isotopes`` and SMILES
-    labels. So a ``D`` geometry on a protium species is accepted here. That
-    differs from ``normal_modes.atomic_mass``, which reads ``D`` as mass 2; the
-    split is tracked as its own issue and deliberately not changed by #666.
-    If you are making D/T an isotope declaration, this test is the one that
-    should change, together with the conformer rule and ``validate_isotope``.
+    This pinned the opposite (acceptance, "isotope-silent by design") before
+    #672 / ADR 0022: ``parse_xyz`` now stores ``D`` as ``H`` + mass 2, which this
+    rule counts like any explicit ``isotopes`` entry.
     """
 
-    _accepted(db_conn, _protium(opt_input=_geom(_XYZ_D, None)))
+    error = _refused(db_conn, _protium(opt_input=_geom(_XYZ_D, None)))
+    assert error.context["owner_kind"] == "species_entry"
+    _accepted(db_conn, _deuterium(opt_input=_geom(_XYZ_D, None)))
+
+
+def _legacy_d_geometry_id(session: Session, symbol: str = "D") -> int:
+    """A geometry as deposited before #672: the symbol in the element column, no mass number."""
+    geometry = Geometry(natoms=1, geom_hash=f"legacy-{symbol}-{id(session)}", xyz_text=f"1\n\n{symbol} 0 0 0")
+    session.add(geometry)
+    session.flush()
+    session.add(GeometryAtom(geometry_id=geometry.id, atom_index=1, element=symbol, x=0.0, y=0.0, z=0.0))
+    session.flush()
+    return geometry.id
+
+
+def test_a_legacy_d_row_with_a_null_mass_counts_as_deuterium(db_conn) -> None:
+    """The read-time rule: ``mass = stored or implied_isotope_mass_number(element)``.
+
+    Called directly because no upload can produce the row any more. A legacy
+    ``D``/NULL geometry under a protium calculation is refused, under a ``[2H]``
+    one it agrees, and a legacy ``T`` counts as 3 (so it disagrees with ``[2H]``).
+    """
+
+    with _isolated_session(db_conn) as session:
+        _upload(session, _protium())
+        session.flush()
+        calc = session.scalars(
+            select(Calculation).where(Calculation.created_by == _USER_ID, Calculation.type == "opt")
+        ).one()
+        legacy_d = _legacy_d_geometry_id(session, "D")
+        with pytest.raises(CodedValueError) as excinfo:
+            assert_isotopes(session, calc=calc, geometry_id=legacy_d, field="test")
+        assert excinfo.value.code == _CODE
+
+    with _isolated_session(db_conn) as session:
+        _upload(session, _deuterium())
+        session.flush()
+        calc = session.scalars(
+            select(Calculation).where(Calculation.created_by == _USER_ID, Calculation.type == "opt")
+        ).one()
+        assert_isotopes(session, calc=calc, geometry_id=_legacy_d_geometry_id(session, "D"), field="test")
+        with pytest.raises(CodedValueError):
+            assert_isotopes(session, calc=calc, geometry_id=_legacy_d_geometry_id(session, "T"), field="test")
 
 
 # ---------------------------------------------------------------------------
