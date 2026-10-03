@@ -113,3 +113,39 @@ def test_editing_one_recipe_fact_fails_the_pinned_load():
         parse_e1_manifest_bytes(edited, expected_sha256=E1_MANIFEST_SHA256)
     # The edit is otherwise a perfectly valid manifest: only the pin stops it.
     assert parse_e1_manifest_bytes(edited, expected_sha256=None).version == "1.0.0"
+
+
+def test_the_rules_own_load_is_pinned_so_edited_bytes_on_disk_cannot_register_the_rule(tmp_path, monkeypatch):
+    from app.services.thermo_selection.rules import E1Rule, default_rules
+
+    edited = _shipped_bytes().decode().replace("alpha=1.63", "alpha=1.64", 1)
+    path = tmp_path / "e1.yaml"
+    path.write_text(edited, encoding="utf-8")
+    monkeypatch.setattr(e1_manifest, "MANIFEST_PATH", path)
+    load_e1_manifest.cache_clear()
+    default_rules.cache_clear()
+    try:
+        with pytest.raises(ManifestError, match="pinned digest"):
+            E1Rule()
+        with pytest.raises(ManifestError, match="pinned digest"):
+            default_rules()
+    finally:
+        monkeypatch.undo()
+        load_e1_manifest.cache_clear()
+        default_rules.cache_clear()
+    assert E1Rule().manifest.version == "1.0.0"
+
+
+def test_the_manifest_reports_the_digest_of_the_bytes_it_was_loaded_from():
+    from app.services.thermo_selection.rules import E1Rule
+
+    digest = hashlib.sha256(_shipped_bytes()).hexdigest()
+    assert load_e1_manifest().sha256 == digest
+    assert E1Rule().describe()["manifest_sha256"] == digest
+    assert E1Rule().describe()["manifest"]["sha256"] == digest
+    unpinned = parse_e1_manifest_bytes(_shipped_bytes().decode().replace("alpha=1.63", "alpha=1.64").encode(),
+                                       expected_sha256=None)
+    assert unpinned.sha256 != digest  # the reported digest follows the bytes loaded, not a constant
+    from app.services.thermo_selection.rules import E1Rule as _Rule
+
+    assert _Rule(unpinned).describe()["manifest_sha256"] == unpinned.sha256 != digest

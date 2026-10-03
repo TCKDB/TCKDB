@@ -101,6 +101,13 @@ def test_without_any_matching_rule_every_candidate_shares_the_first_front_and_is
     assert len(decision.fronts) == 1 and not decision.edges
 
 
+def test_an_unknown_scope_is_labelled_scope_unknown_not_outside_the_scope():
+    unreadable = subject_for("1,3,5,7-Cyclooctatetraene", molecular_formula=None)
+    decision = decide([cand("g4", proto="g4"), cand("g3", proto="g3")], subject=unreadable)
+    assert decision.outcome is Outcome.incomparable_alternatives and not decision.edges
+    assert decision.rule_matches[0]["why"] == "scope_unknown"
+
+
 def test_a_rule_does_not_apply_outside_its_scope():
     pentane_like = subject_for("Methane", inchi_key="BKIMMITUMNQMOS-UHFFFAOYSA-N", molecular_formula="C9H20")
     decision = decide([cand("g4", proto="g4"), cand("g3", proto="g3")], subject=pentane_like)

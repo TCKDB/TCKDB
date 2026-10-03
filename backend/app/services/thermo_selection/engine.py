@@ -217,7 +217,8 @@ def decide(
             continue
         scope: RuleMatch = rule.scope(subject)
         if scope.state is not Tri.true:
-            rule_matches.append({**header, "applied": False, "why": "outside_rule_scope", "scope": scope.to_dict()})
+            why = "scope_unknown" if scope.state is Tri.unknown else "outside_rule_scope"
+            rule_matches.append({**header, "applied": False, "why": why, "scope": scope.to_dict()})
             continue
         sides = {c.thermo_ref: (rule.preferred_side(c), rule.yielding_side(c)) for c in admin_all}
         preferred = [ref for ref, (p, _) in sides.items() if p.state is Tri.true]

@@ -15,6 +15,7 @@ acceptance does not load, so the rule cannot be registered over it. There is no
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 from dataclasses import dataclass
 from functools import lru_cache
@@ -76,6 +77,8 @@ class E1Manifest:
     #: Recipes the manifest names as distinct from the two standard recipes.
     #: Keys of ``recipe_facts`` whose entry says ``distinct_from_standard_*``.
     distinct_variants: tuple[str, ...]
+    #: SHA-256 of the bytes this manifest was parsed from; ``None`` when built from a parsed document alone.
+    sha256: str | None = None
 
     def describe(self) -> dict[str, Any]:
         """A JSON-ready summary for a decision manifest: version, counts, citations, limits."""
@@ -86,6 +89,7 @@ class E1Manifest:
             "sources": [s["id"] for s in self.sources],
             "evidence_limits": [dict(e) for e in self.evidence_limits],
             "distinct_variants": list(self.distinct_variants),
+            "sha256": self.sha256,
         }
 
 
@@ -168,13 +172,13 @@ def parse_e1_manifest_bytes(data: bytes, *, expected_sha256: str | None) -> E1Ma
 
     :raises ManifestError: on a digest mismatch, or any failure of :func:`parse_e1_manifest`.
     """
+    actual = hashlib.sha256(data).hexdigest()
     if expected_sha256 is not None:
-        actual = hashlib.sha256(data).hexdigest()
         if actual != expected_sha256:
             raise ManifestError(
                 f"E1 manifest content does not match its pinned digest (expected {expected_sha256}, got {actual})"
             )
-    return parse_e1_manifest(yaml.safe_load(data))
+    return dataclasses.replace(parse_e1_manifest(yaml.safe_load(data)), sha256=actual)
 
 
 @lru_cache(maxsize=4)
