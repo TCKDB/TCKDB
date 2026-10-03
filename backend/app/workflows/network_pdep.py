@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.upload_warning import UploadWarning
 
@@ -89,8 +91,11 @@ from app.services.local_key_resolution import (
     resolve_transition_state_key,
 )
 from app.services.network_energy_sources import (
+    assert_barrier_source_owner,
     assert_network_energy_source_type,
+    assert_network_role_source_owner,
     assert_network_source_role_type,
+    assert_state_energy_source_owner,
 )
 from app.services.provenance_warnings import (
     collect_network_energy_transfer_warnings,
@@ -150,21 +155,55 @@ def _resolve_energy_source(
     *,
     field: str,
     correction_convention: EnergyCorrectionConvention,
+    assert_owner: Callable[[Calculation], None],
 ) -> int | None:
-    """Resolve a state or barrier energy's source and check its type (#642).
+    """Resolve a state or barrier energy's source; check its type and owner.
 
-    The type is read off the persisted row, never off the payload, so this
-    holds for a request built without wire validation as well.
+    The type (#642) and the owning subject (#668) are read off the persisted
+    row, never off the payload, so this holds for a request built without wire
+    validation as well. ``assert_owner`` is the subject check for the energy
+    being stated, run after the type check.
     """
     if not key:
         return None
     calculation_id = resolve_calculation_key(key, calculation_key_to_id, field=field)
+    calculation = _calculation_row(session, calculation_id)
     assert_network_energy_source_type(
-        _calculation_row(session, calculation_id),
+        calculation,
         correction_convention,
         field=field,
     )
+    assert_owner(calculation)
     return calculation_id
+
+
+def _state_owner_check(
+    state_species_entry_ids: set[int], *, state_key: str, field: str
+) -> Callable[[Calculation], None]:
+    """The subject check for one state's energy source (#668)."""
+
+    def check(calculation: Calculation) -> None:
+        assert_state_energy_source_owner(
+            calculation, state_species_entry_ids, state_key=state_key, field=field
+        )
+
+    return check
+
+
+def _barrier_owner_check(
+    transition_state_entry_id: int, *, transition_state_key: str, field: str
+) -> Callable[[Calculation], None]:
+    """The subject check for one channel barrier's energy source (#668)."""
+
+    def check(calculation: Calculation) -> None:
+        assert_barrier_source_owner(
+            calculation,
+            transition_state_entry_id,
+            transition_state_key=transition_state_key,
+            field=field,
+        )
+
+    return check
 
 
 def _composition_hash(participants: list[tuple[int, int]]) -> str:
@@ -997,13 +1036,22 @@ def persist_network_pdep_upload(
         # (ADR 0010) is exempt from those rules and so was exempt from the
         # side effect, and reached these subscripts with whatever it wrote.
         for energy_index, energy_in in enumerate(solve_in.state_energies):
+            energy_state = resolve_network_state_key(
+                energy_in.state_key,
+                state_key_to_row,
+                field=f"solve.state_energies[{energy_index}].state_key",
+            )
+            # The state's own species, from the persisted participant rows.
+            energy_state_species = set(
+                session.scalars(
+                    select(NetworkStateParticipant.species_entry_id).where(
+                        NetworkStateParticipant.state_id == energy_state.id
+                    )
+                )
+            )
             session.add(NetworkSolveStateEnergy(
                 solve_id=solve.id,
-                state_id=resolve_network_state_key(
-                    energy_in.state_key,
-                    state_key_to_row,
-                    field=f"solve.state_energies[{energy_index}].state_key",
-                ).id,
+                state_id=energy_state.id,
                 energy_kj_mol=energy_in.energy_kj_mol,
                 energy_zero_convention=energy_in.energy_zero_convention,
                 correction_convention=energy_in.correction_convention,
@@ -1017,10 +1065,26 @@ def persist_network_pdep_upload(
                         f"source_calculation_key"
                     ),
                     correction_convention=energy_in.correction_convention,
+                    assert_owner=_state_owner_check(
+                        energy_state_species,
+                        state_key=energy_in.state_key,
+                        field=(
+                            f"solve.state_energies[{energy_index}]."
+                            f"source_calculation_key"
+                        ),
+                    ),
                 ),
             ))
 
         for barrier_index, barrier_in in enumerate(solve_in.channel_barriers):
+            barrier_ts_entry = resolve_transition_state_key(
+                barrier_in.transition_state_key,
+                ts_key_to_entry,
+                field=(
+                    f"solve.channel_barriers[{barrier_index}]."
+                    f"transition_state_key"
+                ),
+            )
             session.add(NetworkSolveChannelBarrier(
                 solve_id=solve.id,
                 channel_id=resolve_network_channel_key(
@@ -1036,14 +1100,7 @@ def persist_network_pdep_upload(
                         f"micro_reaction_key"
                     ),
                 ).id,
-                transition_state_entry_id=resolve_transition_state_key(
-                    barrier_in.transition_state_key,
-                    ts_key_to_entry,
-                    field=(
-                        f"solve.channel_barriers[{barrier_index}]."
-                        f"transition_state_key"
-                    ),
-                ).id,
+                transition_state_entry_id=barrier_ts_entry.id,
                 forward_barrier_kj_mol=barrier_in.forward_barrier_kj_mol,
                 reverse_barrier_kj_mol=barrier_in.reverse_barrier_kj_mol,
                 energy_zero_convention=barrier_in.energy_zero_convention,
@@ -1058,8 +1115,30 @@ def persist_network_pdep_upload(
                         f"source_calculation_key"
                     ),
                     correction_convention=barrier_in.correction_convention,
+                    assert_owner=_barrier_owner_check(
+                        barrier_ts_entry.id,
+                        transition_state_key=barrier_in.transition_state_key,
+                        field=(
+                            f"solve.channel_barriers[{barrier_index}]."
+                            f"source_calculation_key"
+                        ),
+                    ),
                 ),
             ))
+
+        # The subjects an energy-role link may belong to: the species taking
+        # part in this network's states and the transition states it declares.
+        network_species_entry_ids = set(
+            session.scalars(
+                select(NetworkStateParticipant.species_entry_id)
+                .join(
+                    NetworkState,
+                    NetworkState.id == NetworkStateParticipant.state_id,
+                )
+                .where(NetworkState.network_id == network.id)
+            )
+        )
+        network_ts_entry_ids = {entry.id for entry in ts_key_to_entry.values()}
 
         # Source calculations
         for sc_index, sc in enumerate(solve_in.source_calculations):
@@ -1072,9 +1151,18 @@ def persist_network_pdep_upload(
             # Re-read from the row, not from the payload: the wire schema
             # does not narrow this key by type, and a caller that reaches
             # this function without it must meet the same refusal (#642).
+            sc_calculation = _calculation_row(session, sc_calculation_id)
             assert_network_source_role_type(
-                _calculation_row(session, sc_calculation_id),
+                sc_calculation,
                 sc.role,
+                field=sc_field,
+            )
+            # ... and whose it is (#668), read from the same persisted row.
+            assert_network_role_source_owner(
+                sc_calculation,
+                sc.role,
+                network_species_entry_ids=network_species_entry_ids,
+                network_transition_state_entry_ids=network_ts_entry_ids,
                 field=sc_field,
             )
             session.add(

@@ -220,33 +220,39 @@ Every entry of `schemas/python/tckdb-schemas/CHANGELOG.md`, newest first, copied
 
 ### 0.81.0 - 2026-10-03
 
-TS energy-ordering evidence is held against the stored energies (#638). No upload field is added, removed
-or changed; a payload that was accepted is accepted unless a stated energy contradicts what TCKDB stores
-for the calculation it cites.
+TS energy-ordering energies are held against the stored energies (#638). No field is removed or changed;
+`zpe_scale_factor` is added.
 
-- **`ts_energy_ordering_stated_energy_mismatch` (422).** An `energy_ordering` energy whose stated value is
-  not the energy stored for its `source_calculation_key` is refused: an `electronic` energy against the
-  cited `sp`'s electronic energy (or the cited `opt`'s final energy), an `e0` against the stored electronic
-  energy of the same participant's `electronic` entry plus the cited `freq`'s zero-point energy (only when
-  the two calculations are at one geometry). The tolerance is the printed-precision one,
-  `max(1e-6, 5e-7 * n)` hartree with n = 2 (electronic) or 3 (E0). `context` carries the field, the
-  participant, the energy kind, both values and the tolerance.
-- **`zpe_scale_factor` (new, optional, `e0` energies only).** TCKDB stores your zero-point energy
-  unscaled. An `e0` built as `E_electronic + s * ZPE` (Arkane-style) states `s` on that energy, and is
-  then held to `electronic + s * ZPE`; the tolerance also covers `s` printed to four decimals, so it is
-  `max(1e-6, 5e-7 * n)` with `n = 2 + s + 100 * ZPE`. Finite and positive; refused on an `electronic`
-  energy. An `e0` with no factor stated that is not `electronic + ZPE` is **not refused**: a scaled ZPE
-  cannot be told from a wrong number, so it is stored as `not_compared` with reason
-  `zpe_scaling_unstated` and the warning below. An `e0` equal to `electronic + ZPE` is recorded as
-  agreeing.
-- **`transition_state_energy_ordering_not_compared` (warning).** An energy that cannot be compared (the
-  stored energy or zero-point energy is not stated, no electronic entry exists to pair an E0 with, or the
-  geometries cannot be paired) is accepted and reported, never read as agreement.
-- Reads: each compared energy of an `energy_ordering` record gains `stored_energy_comparison` (`agrees` or
-  `not_compared`, null on a record deposited earlier), `not_compared_reason` (`stored_energy_not_stated`,
-  `zpe_not_stated`, `no_electronic_energy_to_pair`, `geometry_not_paired`, `zpe_scaling_unstated`) and
-  `zpe_scale_factor`.
-- Uploads only: stored records read exactly as before.
+- **`ts_energy_ordering_stated_energy_mismatch` (422).** A stated energy that is not what TCKDB stores for
+  its `source_calculation_key` is refused: `electronic` against the cited `sp`'s energy (or `opt`'s final
+  energy), `e0` against the same participant's stored `electronic` energy plus the cited `freq`'s ZPE, when
+  both are at one geometry. Tolerance `max(1e-6, 5e-7 * n)` hartree, n = 2 (electronic) or 3 (E0).
+- **`zpe_scale_factor` (optional, `e0` energies only).** TCKDB stores your ZPE unscaled. An `e0` built as
+  `E_electronic + s * ZPE` states `s` and is held to that sum (n = 2 + s + 100 * ZPE, covering `s` printed
+  to four decimals). With no factor, an `e0` equal to `electronic + ZPE` agrees; any other is not refused
+  but stored `not_compared` with reason `zpe_scaling_unstated`.
+- **`transition_state_energy_ordering_not_compared` (warning).** An energy that cannot be compared (stored
+  energy or ZPE not stated, no electronic energy to pair an E0 with, geometries not pairable) is accepted
+  and reported, never read as agreement.
+- Reads: compared energies gain `stored_energy_comparison`, `not_compared_reason` and `zpe_scale_factor`
+  (null on earlier records). Uploads only.
+
+### 0.79.0 - 2026-10-03
+
+Network solve energy sources must belong to the subject they state an energy for (#668). No field or
+enum member changes; the `source_calculation_key` description of a state energy and of a channel
+barrier gains a sentence, and one new refusal code joins the catalogue.
+
+- **`network_energy_source_subject_mismatch` (422).** `POST /uploads/networks/pdep` refuses a source
+  cited for the wrong subject: a `state_energies[].source_calculation_key` that is not a calculation of
+  a species of that state (any one of them for a bimolecular state), a `channel_barriers[]` source that
+  is not a calculation of the barrier's own transition state (a species single point is the case that
+  used to be stored), a `well_energy` link that is not a calculation of a species in one of the
+  network's states, and a `barrier_energy` link that is not a calculation of one of its transition
+  states. `context` names the field, the expected and the found kind of owner and, for a state or a
+  barrier, the key of the state or transition state; no database id. Producers that cite the single
+  point of the species in the state, or of the transition state (every producer known to us, the
+  hydrazine ingester included) are unaffected. Uploads only: stored networks read exactly as before.
 
 ### 0.77.0 - 2026-10-03
 
@@ -1293,10 +1299,10 @@ If your chemistry is legitimate: Deposit no geometry. An explicitly declared *st
   If your chemistry is legitimate: None needed — the warning is the accommodation. Note the warning fires on absence of a *passing* ``irc`` record, so an IRC that was run and failed is stored and still warns, and so does a deposit whose only evidence is an energy ordering or an imaginary mode: neither shows the saddle point connects the declared endpoints.
 - **warn; codes [`transition_state_energy_ordering_mixed_levels`](#c-transition-state-energy-ordering-mixed-levels).** The energies an energy-ordering record compares should be taken at one level of theory per energy kind.
   If your chemistry is legitimate: None needed: the warning is the accommodation. Take every energy of a kind at one level, or accept the warning.
-- **block; codes [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch).** An energy an energy-ordering record states for a participant should be the energy TCKDB stores for the calculation the record cites: the cited single point's electronic energy (or the optimisation's final energy), or, for an E0, the paired stored electronic energy plus the cited frequency calculation's zero-point energy, scaled by the ``zpe_scale_factor`` the record states (a record that states none is held to the unscaled sum only as far as agreement, never refused).
-  If your chemistry is legitimate: State the energy the cited calculation stores, or cite the calculation the number came from. Where the stored energy is not stated the energy is not compared and the upload warns. An E0 built with a scaled zero-point energy states ``zpe_scale_factor``.
+- **block; codes [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch).** A stated energy-ordering energy should be the energy TCKDB stores for its cited calculation: the single point's (or optimisation's) energy, or for an E0 the paired electronic energy plus the cited frequency's ZPE, scaled by the stated ``zpe_scale_factor``.
+  If your chemistry is legitimate: State the stored energy, or cite the calculation the number came from. An E0 built with a scaled ZPE states ``zpe_scale_factor``.
 - **warn; codes [`transition_state_energy_ordering_not_compared`](#c-transition-state-energy-ordering-not-compared).** Every energy an energy-ordering record states should be comparable with the energy TCKDB stores for its calculation.
-  If your chemistry is legitimate: None needed: the warning is the accommodation. Deposit the cited calculation's energy (and the frequency's zero-point energy, with the electronic energy at the same geometry) to make the comparison possible.
+  If your chemistry is legitimate: None needed: the warning is the accommodation. Deposit the cited energy (and the ZPE, at the electronic energy's geometry) to compare.
 
 <a id="k-tckdb-schemas-stationary-point-evaluate-species-entry-frequency"></a>
 
@@ -2792,7 +2798,7 @@ The most specific refusals traced for this surface (ranking in the [code referen
 - [`transition_state_charge_mismatch`](#c-transition-state-charge-mismatch) (422): Transition state '{subject_label}' carries charge {transition_state_charge}, but its reactants total {reactant_charge} (transition_state_charge_mismatch).
 - [`transition_state_composition_mismatch`](#c-transition-state-composition-mismatch) (422): Transition state '{subject_label}' is {format_element_counts(ts_counts)}, but the reaction it sits in is {format_element_counts(reactant_totals)} (transition_state_composition_mismatch).
 - [`transition_state_irc_mapping_element_mismatch`](#c-transition-state-irc-mapping-element-mismatch) (422): Transition state '{subject_label}' {field_path} assigns saddle-point atoms {sorted(atom_indices)} to {participant_key}, which is {format_element_counts(assigned)}, but {role.value} {participant_index} is declared as '{species.smiles}', which is {format_element_counts(declared)} ({W_IRC_MAPPING_ELEMENT_MISMATCH}).
-- [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch) (422): {field} states {stated} Eh as the '{energy_kind}' energy of '{participant}', but {what} is {stored} Eh, a difference of {abs(stated - stored)} Eh against a tolerance of {tolerance} Eh.
+- [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch) (422): {field} states {stated} Eh as the '{energy_kind}' energy of '{participant}', but {what} is {stored} Eh (difference {abs(stated - stored)}, tolerance {tolerance}).
 - [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
 - [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) (422): Reaction is not element-balanced (reaction_mass_balance_failed).
 
@@ -2995,6 +3001,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`geometry_key_unresolved`](#c-geometry-key-unresolved) | 422 | payload validation; route handler |
 | [`micro_reaction_key_undeclared`](#c-micro-reaction-key-undeclared) | 422 | payload validation; route handler |
 | [`network_channel_key_undeclared`](#c-network-channel-key-undeclared) | 422 | payload validation; route handler |
+| [`network_energy_source_subject_mismatch`](#c-network-energy-source-subject-mismatch) | 422 | route handler |
 | [`network_energy_source_type_mismatch`](#c-network-energy-source-type-mismatch) | 422 | route handler |
 | [`network_solve_reported_requires_literature`](#c-network-solve-reported-requires-literature) | 409 | heuristic: the handler names table `network_solve`, constraint `ck_network_solve_reported_requires_literature` |
 | [`network_state_key_undeclared`](#c-network-state-key-undeclared) | 422 | payload validation; route handler |
@@ -3827,7 +3834,7 @@ The most specific refusals traced for this surface (ranking in the [code referen
 - [`transition_state_charge_mismatch`](#c-transition-state-charge-mismatch) (422): Transition state '{subject_label}' carries charge {transition_state_charge}, but its reactants total {reactant_charge} (transition_state_charge_mismatch).
 - [`transition_state_composition_mismatch`](#c-transition-state-composition-mismatch) (422): Transition state '{subject_label}' is {format_element_counts(ts_counts)}, but the reaction it sits in is {format_element_counts(reactant_totals)} (transition_state_composition_mismatch).
 - [`transition_state_irc_mapping_element_mismatch`](#c-transition-state-irc-mapping-element-mismatch) (422): Transition state '{subject_label}' {field_path} assigns saddle-point atoms {sorted(atom_indices)} to {participant_key}, which is {format_element_counts(assigned)}, but {role.value} {participant_index} is declared as '{species.smiles}', which is {format_element_counts(declared)} ({W_IRC_MAPPING_ELEMENT_MISMATCH}).
-- [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch) (422): {field} states {stated} Eh as the '{energy_kind}' energy of '{participant}', but {what} is {stored} Eh, a difference of {abs(stated - stored)} Eh against a tolerance of {tolerance} Eh.
+- [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch) (422): {field} states {stated} Eh as the '{energy_kind}' energy of '{participant}', but {what} is {stored} Eh (difference {abs(stated - stored)}, tolerance {tolerance}).
 - [`reaction_charge_not_conserved`](#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
 - [`reaction_mass_balance_failed`](#c-reaction-mass-balance-failed) (422): Reaction is not element-balanced (reaction_mass_balance_failed).
 - [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) (422): Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants.
@@ -5821,7 +5828,7 @@ Unknown keys are refused.
 | `transition_state_key` | string | yes |  |  | length >= 1 |  |
 | `forward_barrier_kj_mol` | number | yes |  | kJ/mol |  |  |
 | `reverse_barrier_kj_mol` | number | yes |  | kJ/mol |  |  |
-| `source_calculation_key` | string \| null | no | `null` |  |  | Local key of the calculation this energy came from. For correction_convention 'electronic_only' it is the calculation the electronic energy came from: an sp, an opt or a composite. For the composed conventions (electronic_plus_zpe, atom_and_bond_corrected, thermal_enthalpy_298k, other) it is the calculation of the energy's electronic part, or a composite that holds the whole E0; the frequency calculation goes in source_calculations with the well_freq or barrier_freq role. A calculation that reports no stationary-point energy (irc, scan, path_search, conf) is refused with network_energy_source_type_mismatch. |
+| `source_calculation_key` | string \| null | no | `null` |  |  | Local key of the calculation this energy came from. For correction_convention 'electronic_only' it is the calculation the electronic energy came from: an sp, an opt or a composite. For the composed conventions (electronic_plus_zpe, atom_and_bond_corrected, thermal_enthalpy_298k, other) it is the calculation of the energy's electronic part, or a composite that holds the whole E0; the frequency calculation goes in source_calculations with the well_freq or barrier_freq role. A calculation that reports no stationary-point energy (irc, scan, path_search, conf) is refused with network_energy_source_type_mismatch. The calculation must also belong to the subject the energy is stated for: a species of that state (any one of them for a bimolecular state) for a state energy, the transition state itself for a channel barrier; otherwise it is refused with network_energy_source_subject_mismatch. |
 
 - **ChannelBarrierIn.validate_other_requires_note** (model, after; can refuse): convention_note is required when an energy convention is 'other'.
 - **ChannelBarrierIn.validate_barriers_are_finite** (model, after; can refuse): forward and reverse barriers must be finite.
@@ -8000,7 +8007,7 @@ Unknown keys are refused.
 | `convention_note` | string \| null | no | `null` |  |  |  |
 | `state_key` | string | yes |  |  | length >= 1 |  |
 | `energy_kj_mol` | number | yes |  | kJ/mol |  |  |
-| `source_calculation_key` | string \| null | no | `null` |  |  | Local key of the calculation this energy came from. For correction_convention 'electronic_only' it is the calculation the electronic energy came from: an sp, an opt or a composite. For the composed conventions (electronic_plus_zpe, atom_and_bond_corrected, thermal_enthalpy_298k, other) it is the calculation of the energy's electronic part, or a composite that holds the whole E0; the frequency calculation goes in source_calculations with the well_freq or barrier_freq role. A calculation that reports no stationary-point energy (irc, scan, path_search, conf) is refused with network_energy_source_type_mismatch. |
+| `source_calculation_key` | string \| null | no | `null` |  |  | Local key of the calculation this energy came from. For correction_convention 'electronic_only' it is the calculation the electronic energy came from: an sp, an opt or a composite. For the composed conventions (electronic_plus_zpe, atom_and_bond_corrected, thermal_enthalpy_298k, other) it is the calculation of the energy's electronic part, or a composite that holds the whole E0; the frequency calculation goes in source_calculations with the well_freq or barrier_freq role. A calculation that reports no stationary-point energy (irc, scan, path_search, conf) is refused with network_energy_source_type_mismatch. The calculation must also belong to the subject the energy is stated for: a species of that state (any one of them for a bimolecular state) for a state energy, the transition state itself for a channel barrier; otherwise it is refused with network_energy_source_subject_mismatch. |
 
 - **StateEnergyIn.validate_other_requires_note** (model, after; can refuse): convention_note is required when an energy convention is 'other'.
 - **StateEnergyIn.validate_energy_is_finite** (model, after; can refuse): energy_kj_mol must be finite.
@@ -9486,6 +9493,15 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py`.
 - Message: "channel_kinetics references undefined channel_key '{nk.channel_key}'."
 
+<a id="c-network-energy-source-subject-mismatch"></a>
+
+#### `network_energy_source_subject_mismatch`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/network_energy_sources.py`.
+- The body's `context` names the things involved.
+- Message: not found by the static search.
+- Note: A network solve's state energy, channel barrier or well_energy / barrier_energy source link cites a calculation owned by a subject other than the one the energy is stated for (a species outside the state, another transition state, or a species calculation for a barrier).
+
 <a id="c-network-energy-source-type-mismatch"></a>
 
 #### `network_energy_source_type_mismatch`
@@ -10022,7 +10038,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/transition_state_validation.py`.
 - The body's `context` names the things involved.
-- Message: "{field} states {stated} Eh as the '{energy_kind}' energy of '{participant}', but {what} is {stored} Eh, a difference of {abs(stated - stored)} Eh against a tolerance of {tolerance} Eh. State the energy the calculation stores, or cite the calculation the number came from."
+- Message: "{field} states {stated} Eh as the '{energy_kind}' energy of '{participant}', but {what} is {stored} Eh (difference {abs(stated - stored)}, tolerance {tolerance}). State the stored energy or cite the right calculation."
 - Note: An energy_ordering energy states a value that is not the energy TCKDB stores for the calculation it cites, beyond the printed-precision tolerance max(1e-6, 5e-7 * n) hartree (n = 2 for an electronic energy, 3 for an E0 = stored electronic + stored ZPE).
 - Scientific check: [`persist_transition_state_validation_evidence`](#k-app-services-transition-state-validation-persist-transition-state-validation-evidence).
 

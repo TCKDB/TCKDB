@@ -707,7 +707,11 @@ _ENERGY_SOURCE_DESCRIPTION = (
     "calculation goes in source_calculations with the well_freq or "
     "barrier_freq role. A calculation that reports no stationary-point "
     "energy (irc, scan, path_search, conf) is refused with "
-    "network_energy_source_type_mismatch."
+    "network_energy_source_type_mismatch. The calculation must also belong "
+    "to the subject the energy is stated for: a species of that state (any "
+    "one of them for a bimolecular state) for a state energy, the "
+    "transition state itself for a channel barrier; otherwise it is refused "
+    "with network_energy_source_subject_mismatch."
 )
 
 

@@ -288,9 +288,8 @@ def _stated_energy_mismatch(
         E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH,
         (
             f"{field} states {stated!r} Eh as the '{energy_kind}' energy of '{participant}', "
-            f"but {what} is {stored!r} Eh, a difference of {abs(stated - stored):.3e} Eh against "
-            f"a tolerance of {tolerance:.2e} Eh. State the energy the calculation stores, or cite "
-            "the calculation the number came from."
+            f"but {what} is {stored!r} Eh (difference {abs(stated - stored):.3e}, "
+            f"tolerance {tolerance:.2e}). State the stored energy or cite the right calculation."
         ),
         context=context,
     )
@@ -929,13 +928,10 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
     sort_key=11,
     code=E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH,
     asserts=(
-        "An energy an energy-ordering record states for a participant should be "
-        "the energy TCKDB stores for the calculation the record cites: the "
-        "cited single point's electronic energy (or the optimisation's final "
-        "energy), or, for an E0, the paired stored electronic energy plus the "
-        "cited frequency calculation's zero-point energy, scaled by the "
-        "``zpe_scale_factor`` the record states (a record that states none is "
-        "held to the unscaled sum only as far as agreement, never refused)."
+        "A stated energy-ordering energy should be the energy TCKDB stores for "
+        "its cited calculation: the single point's (or optimisation's) energy, "
+        "or for an E0 the paired electronic energy plus the cited frequency's "
+        "ZPE, scaled by the stated ``zpe_scale_factor``."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -964,10 +960,8 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
         ),
     ),
     escape_hatch=(
-        "State the energy the cited calculation stores, or cite the "
-        "calculation the number came from. Where the stored energy is not "
-        "stated the energy is not compared and the upload warns. An E0 built "
-        "with a scaled zero-point energy states ``zpe_scale_factor``."
+        "State the stored energy, or cite the calculation the number came "
+        "from. An E0 built with a scaled ZPE states ``zpe_scale_factor``."
     ),
 )
 
@@ -1003,8 +997,7 @@ CHECK_TS_ENERGY_ORDERING_NOT_COMPARED = ScientificCheck(
     ),
     escape_hatch=(
         "None needed: the warning is the accommodation. Deposit the cited "
-        "calculation's energy (and the frequency's zero-point energy, with the "
-        "electronic energy at the same geometry) to make the comparison possible."
+        "energy (and the ZPE, at the electronic energy's geometry) to compare."
     ),
 )
 

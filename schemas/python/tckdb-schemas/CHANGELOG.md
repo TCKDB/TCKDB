@@ -2,33 +2,39 @@
 
 ## 0.81.0 - 2026-10-03
 
-TS energy-ordering evidence is held against the stored energies (#638). No upload field is added, removed
-or changed; a payload that was accepted is accepted unless a stated energy contradicts what TCKDB stores
-for the calculation it cites.
+TS energy-ordering energies are held against the stored energies (#638). No field is removed or changed;
+`zpe_scale_factor` is added.
 
-- **`ts_energy_ordering_stated_energy_mismatch` (422).** An `energy_ordering` energy whose stated value is
-  not the energy stored for its `source_calculation_key` is refused: an `electronic` energy against the
-  cited `sp`'s electronic energy (or the cited `opt`'s final energy), an `e0` against the stored electronic
-  energy of the same participant's `electronic` entry plus the cited `freq`'s zero-point energy (only when
-  the two calculations are at one geometry). The tolerance is the printed-precision one,
-  `max(1e-6, 5e-7 * n)` hartree with n = 2 (electronic) or 3 (E0). `context` carries the field, the
-  participant, the energy kind, both values and the tolerance.
-- **`zpe_scale_factor` (new, optional, `e0` energies only).** TCKDB stores your zero-point energy
-  unscaled. An `e0` built as `E_electronic + s * ZPE` (Arkane-style) states `s` on that energy, and is
-  then held to `electronic + s * ZPE`; the tolerance also covers `s` printed to four decimals, so it is
-  `max(1e-6, 5e-7 * n)` with `n = 2 + s + 100 * ZPE`. Finite and positive; refused on an `electronic`
-  energy. An `e0` with no factor stated that is not `electronic + ZPE` is **not refused**: a scaled ZPE
-  cannot be told from a wrong number, so it is stored as `not_compared` with reason
-  `zpe_scaling_unstated` and the warning below. An `e0` equal to `electronic + ZPE` is recorded as
-  agreeing.
-- **`transition_state_energy_ordering_not_compared` (warning).** An energy that cannot be compared (the
-  stored energy or zero-point energy is not stated, no electronic entry exists to pair an E0 with, or the
-  geometries cannot be paired) is accepted and reported, never read as agreement.
-- Reads: each compared energy of an `energy_ordering` record gains `stored_energy_comparison` (`agrees` or
-  `not_compared`, null on a record deposited earlier), `not_compared_reason` (`stored_energy_not_stated`,
-  `zpe_not_stated`, `no_electronic_energy_to_pair`, `geometry_not_paired`, `zpe_scaling_unstated`) and
-  `zpe_scale_factor`.
-- Uploads only: stored records read exactly as before.
+- **`ts_energy_ordering_stated_energy_mismatch` (422).** A stated energy that is not what TCKDB stores for
+  its `source_calculation_key` is refused: `electronic` against the cited `sp`'s energy (or `opt`'s final
+  energy), `e0` against the same participant's stored `electronic` energy plus the cited `freq`'s ZPE, when
+  both are at one geometry. Tolerance `max(1e-6, 5e-7 * n)` hartree, n = 2 (electronic) or 3 (E0).
+- **`zpe_scale_factor` (optional, `e0` energies only).** TCKDB stores your ZPE unscaled. An `e0` built as
+  `E_electronic + s * ZPE` states `s` and is held to that sum (n = 2 + s + 100 * ZPE, covering `s` printed
+  to four decimals). With no factor, an `e0` equal to `electronic + ZPE` agrees; any other is not refused
+  but stored `not_compared` with reason `zpe_scaling_unstated`.
+- **`transition_state_energy_ordering_not_compared` (warning).** An energy that cannot be compared (stored
+  energy or ZPE not stated, no electronic energy to pair an E0 with, geometries not pairable) is accepted
+  and reported, never read as agreement.
+- Reads: compared energies gain `stored_energy_comparison`, `not_compared_reason` and `zpe_scale_factor`
+  (null on earlier records). Uploads only.
+
+## 0.79.0 - 2026-10-03
+
+Network solve energy sources must belong to the subject they state an energy for (#668). No field or
+enum member changes; the `source_calculation_key` description of a state energy and of a channel
+barrier gains a sentence, and one new refusal code joins the catalogue.
+
+- **`network_energy_source_subject_mismatch` (422).** `POST /uploads/networks/pdep` refuses a source
+  cited for the wrong subject: a `state_energies[].source_calculation_key` that is not a calculation of
+  a species of that state (any one of them for a bimolecular state), a `channel_barriers[]` source that
+  is not a calculation of the barrier's own transition state (a species single point is the case that
+  used to be stored), a `well_energy` link that is not a calculation of a species in one of the
+  network's states, and a `barrier_energy` link that is not a calculation of one of its transition
+  states. `context` names the field, the expected and the found kind of owner and, for a state or a
+  barrier, the key of the state or transition state; no database id. Producers that cite the single
+  point of the species in the state, or of the transition state (every producer known to us, the
+  hydrazine ingester included) are unaffected. Uploads only: stored networks read exactly as before.
 
 ## 0.77.0 - 2026-10-03
 

@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 38 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 251 | `backend/app/api/code_catalogue.py` |
-| **total** | **552** | |
+| Refusal codes a caller can receive | 252 | `backend/app/api/code_catalogue.py` |
+| **total** | **553** | |
 
 ## How a record is named
 
@@ -747,7 +747,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (198 codes)
+### HTTP 422 (199 codes)
 
 | Code | Names |
 | --- | --- |
@@ -850,6 +850,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `multiple_structure_queries` | a relationship — read `context` |
 | `n_imag_contradicts_minimum` | a relationship — read `context` |
 | `network_channel_key_undeclared` | a thing |
+| `network_energy_source_subject_mismatch` | a relationship — read `context` |
 | `network_energy_source_type_mismatch` | a relationship — read `context` |
 | `network_kinetics_batch_evaluate_grid_too_large` | a relationship — read `context` |
 | `network_kinetics_evaluate_grid_too_large` | a relationship — read `context` |

@@ -337,7 +337,12 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 #: traced on ten surfaces, so codes on eight or more surfaces are printed once in a shared table
 #: (``ContractBuilder.widely_shared_codes``) instead of ten times, which is what keeps the ceiling
 #: where it was.
-MARKDOWN_BYTE_CEILING = 700_000
+#:
+#: Raised 700_000 -> 705_000 for #638: ``check_by_func`` kept only the last register check per function,
+#: so three functions silently printed one of their checks (the TS evidence seam enforces four, the
+#: transition-state composition check two, the frequency evaluator two). Printing all of them, grouped
+#: per function, is about 5 KB of content that was always supposed to be there; the E0 rules add ~1 KB.
+MARKDOWN_BYTE_CEILING = 705_000
 
 
 def test_the_contract_stays_readable_in_pieces(committed_markdown: str) -> None:
