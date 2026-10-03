@@ -109,6 +109,7 @@ from app.services.artifact_storage import (
 from app.services.best_effort import isolated_best_effort
 from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
+    assert_calculation_geometry_isotopes,
 )
 from app.services.ess_software_detection import SoftwareName, detect_software_from_text
 from app.services.gaussian_output_parser import extract_first_geometry
@@ -913,6 +914,12 @@ def _mint_and_link_extracted_geometry(
             return InputGeometryOutcome(kind=InputGeometryOutcomeKind.identical_to_output)
 
         assert_calculation_geometry_composition(
+            session,
+            calc=calculation,
+            geometry_id=geometry.id,
+            field="input_geometry_extraction",
+        )
+        assert_calculation_geometry_isotopes(
             session,
             calc=calculation,
             geometry_id=geometry.id,

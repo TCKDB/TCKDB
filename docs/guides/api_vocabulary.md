@@ -767,6 +767,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bac_total_requires_components` | a relationship — read `context` |
 | `bundle_too_many_records` | a relationship — read `context` |
 | `calculation_geometry_composition_mismatch` | a relationship — read `context` |
+| `calculation_geometry_isotope_mismatch` | a relationship — read `context` |
 | `calculation_handle_conflict` | a relationship — read `context` |
 | `calculation_key_undeclared` | a thing |
 | `calculation_software_is_workflow_tool` | a thing |

@@ -11,6 +11,7 @@ from sqlalchemy.sql import ColumnElement
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import parse_xyz, resolve_element_symbol
+from app.chemistry.isotopes import render_isotope_substitutions
 from app.chemistry.species import (
     canonical_isotope_key,
     canonical_species_identity,
@@ -291,13 +292,7 @@ def assert_geometry_isotopes_match_identity(
     if from_smiles == from_geometry:
         return
 
-    def _render(counts: dict[tuple[str, int], int]) -> str:
-        if not counts:
-            return "none (all standard isotopes)"
-        return ", ".join(
-            f"{mass_number}{element}x{count}"
-            for (element, mass_number), count in sorted(counts.items())
-        )
+    _render = render_isotope_substitutions
 
     raise CodedValueError(
         W_SPECIES_GEOMETRY_ISOTOPE_MISMATCH,

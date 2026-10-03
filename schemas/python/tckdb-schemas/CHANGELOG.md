@@ -2,6 +2,23 @@
 
 ## 0.86.0 - 2026-10-03
 
+A geometry linked to a calculation is now checked against the isotopes of the subject the calculation is
+filed under (#666). No payload field is added, removed or changed.
+
+- New refusal code `calculation_geometry_isotope_mismatch` (422, ADR 0008 block), on every route that
+  already runs `calculation_geometry_composition_mismatch`: thermo, statmech, conformer, computed
+  species, computed reaction, transition state and network. The multiset of `(element, mass number)`
+  substitutions on each calculation geometry (`geometry.isotopes`) must equal the one the species entry
+  declares through its SMILES isotope labels, or, for a transition state, the sum over its reaction's
+  reactants. Before, a deuterium geometry could be attached to a protium species and the reverse.
+- The comparison is by count, not by atom: a calculation geometry carries no map to the species graph,
+  so which atom carries a label is not checked. A `D` or `T` element spelling stays isotope-silent, as
+  documented in `resolve_element_symbol`; only `geometry.isotopes` and SMILES labels count.
+- Network upload: a transition state's `geometry.isotopes` is now read. It was accepted by the schema and
+  dropped before the geometry was stored.
+- A deposit whose calculation geometries carry no isotope labels under a species that declares some
+  (for example `[2H]C` with an unlabelled CH4 opt input) is now refused; label the geometry.
+
 The layout of `PRODUCER_CONTRACT.md` changed; its content did not (#681). No field, rule, code or enum
 changes. What a rule, a refusal code or a nested model says is now printed once and linked from each
 surface that has it, instead of once per surface. Every surface still lists exactly the same refusal
