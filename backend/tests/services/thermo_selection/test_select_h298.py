@@ -396,12 +396,21 @@ def test_the_manifest_records_inputs_rules_comparisons_and_order_with_public_ref
     assert listed == real_refs  # every record is accounted for, by public ref, once
 
 
-def test_a_manifest_whose_eligibility_was_tampered_with_no_longer_replays(db_session, methane):
-    result = _scenario(db_session, methane)
-    tampered = json.loads(json.dumps(result.manifest))
-    for c in tampered["candidates"]:
-        if c["assessment"]["answer_representation"] and c["protocol"] and c["protocol"]["recipe"]["name"] == "g4":
+def test_a_manifest_whose_eligibility_flag_contradicts_its_assessment_is_refused(db_session, methane):
+    manifest = json.loads(json.dumps(_scenario(db_session, methane).manifest))
+    for c in manifest["candidates"]:
+        if c["protocol"] and c["protocol"]["recipe"]["name"] == "g4":
             c["eligible"] = False
+    with pytest.raises(ReplayError, match="physically_eligible"):
+        replay_decision(manifest)
+
+
+def test_a_manifest_whose_eligibility_and_assessment_were_both_edited_no_longer_replays(db_session, methane):
+    tampered = json.loads(json.dumps(_scenario(db_session, methane).manifest))
+    for c in tampered["candidates"]:
+        if c["protocol"] and c["protocol"]["recipe"]["name"] == "g4":
+            c["eligible"] = False
+            c["assessment"]["physically_eligible"] = False
     assert not replay_matches(tampered)
 
 
@@ -445,3 +454,42 @@ def test_selection_persists_nothing_and_leaves_curation_alone(db_session, methan
         db_session.scalar(select(func.count()).select_from(RecordReview)),
     )
     assert before == after
+
+
+def test_unresolved_and_unsupported_candidates_are_disclosed_under_every_outcome(db_session, methane):
+    from tests.services.scientific_read._factories import attach_thermo_wilhoit
+
+    a = g4(db_session, methane, age_days=50)
+    g3(db_session, methane, age_days=10)
+    unresolved = g3(db_session, methane, age_days=1, phase=None)
+    wilhoit = make_thermo(db_session, methane, h298=None)
+    attach_thermo_wilhoit(db_session, thermo=wilhoit)
+
+    preferred = run(db_session, methane)
+    assert preferred.outcome is Outcome.policy_preferred and preferred.selected_ref == a.public_ref
+    assert preferred.unresolved_refs == (unresolved.public_ref,) and preferred.unsupported_refs == (wilhoit.public_ref,)
+    assert preferred.notes and "1 candidate(s) are unresolved and 1 unsupported" in preferred.notes[0]
+    assert preferred.manifest["disclosures"] == {
+        "unresolved_refs": [unresolved.public_ref], "unsupported_refs": [wilhoit.public_ref]}
+
+    make_thermo(db_session, methane, proto=None, age_days=2)  # an unranked competitor: now no unique winner
+    alternatives = run(db_session, methane)
+    assert alternatives.outcome is Outcome.incomparable_alternatives
+    assert alternatives.notes == preferred.notes
+
+
+def test_an_outcome_with_nothing_unresolved_or_unsupported_carries_no_note(db_session, methane):
+    g3(db_session, methane)
+    assert run(db_session, methane).notes == ()
+
+
+def test_a_siblings_declared_energy_level_is_not_borrowed_by_a_record_that_links_none(db_session, methane):
+    # The sibling's G4 is linked through energy_level_of_theory_id (no source calculation at all).
+    lot = make_lot(db_session, method="G4", basis=None)
+    sibling = g4(db_session, methane, age_days=9, energy_lot_id=lot.id)
+    bare = make_thermo(db_session, methane, proto=None, age_days=1)
+    other = g3(db_session, methane, age_days=2)
+    by_ref = {c["thermo_ref"]: c for c in run(db_session, methane).manifest["candidates"]}
+    assert by_ref[sibling.public_ref]["linked_recipe_keys"] == ["g4"]
+    assert by_ref[bare.public_ref]["linked_recipe_keys"] == []
+    assert by_ref[other.public_ref]["linked_recipe_keys"] == []

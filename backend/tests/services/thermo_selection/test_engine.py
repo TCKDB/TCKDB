@@ -252,3 +252,12 @@ def test_normalized_candidates_round_trip_through_their_manifest_form():
     assert NormalizedCandidate.from_dict(c.to_dict()) == c
     s = subject_for("Methane")
     assert Subject.from_dict(s.to_dict()) == s
+
+
+def test_a_node_whose_predecessors_sit_in_two_fronts_lands_in_the_third_front():
+    # a -> b, b -> c and a -> c: c has an incoming edge from the first front and one from the second.
+    rules = (LabelRule("R1", {"a"}, {"b", "c"}), LabelRule("R2", {"b"}, {"c"}))
+    decision = decide([labelled("a", "a"), labelled("b", "b"), labelled("c", "c")], rules=rules)
+    assert decision.outcome is Outcome.policy_preferred and decision.selected_ref == "a"
+    assert decision.fronts == (("a",), ("b",), ("c",))
+    assert {(e.preferred, e.dispreferred) for e in decision.edges} == {("a", "b"), ("a", "c"), ("b", "c")}

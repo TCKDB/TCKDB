@@ -35,9 +35,20 @@ E1_RULE_ID = "E1"
 #: manifest version changes; a decision manifest records it so a replay can refuse a different one.
 E1_RULE_VERSION = "1.0.0"
 
+#: SHA-256 of ``e1_g4_over_g3_manifest.yaml`` as approved by the curator (manifest 1.0.0). The rule refuses
+#: to load over any other bytes; a change to a member or a recipe fact is a new manifest version, a new
+#: pin and a new ``E1_RULE_VERSION``.
+E1_MANIFEST_SHA256 = "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0"
+
 _ATOMIZATION = "atomization"
-#: A thermal treatment beyond harmonic RRHO is a departure from the benchmarked recipes.
-_BEYOND_RRHO = frozenset({"hindered_rotors", "anharmonic"})
+#: The route the benchmark used (manifest recipe_facts.formation_enthalpy and molecular_thermal_correction):
+#: harmonic RRHO with every mode harmonic, one (lowest) conformer, JANAF atomic data. ATcT and JANAF carbon
+#: differ by about 0.04 kcal/mol per carbon, about 0.4 for the C10 members, which exceeds the G3 to G4 margin.
+_BENCHMARK_COMPONENTS = (
+    ("internal_motion", "harmonic"),
+    ("ensemble_representation", "lowest_conformer"),
+    ("reference_data_source", "nist_janaf"),
+)
 
 
 class PreferenceRule(ABC):
@@ -118,7 +129,10 @@ class E1Rule(PreferenceRule):
     * ``departures`` stated as an explicit empty list: omitting it is unknown, naming any is a no;
     * a formation enthalpy derived by atomization, the route the benchmark used: another derivation
       is a no, an undeclared one is unknown;
-    * no thermal treatment beyond harmonic RRHO, which the benchmarked recipes use;
+    * the benchmark route, component by component (harmonic internal motion, the single lowest
+      conformer, JANAF atomic data = ``nist_janaf``): stated and equal is true, stated and different
+      (hindered rotors, anharmonic, Boltzmann conformers, ATcT, CODATA, other) is a no, unstated is
+      unknown. Saying less never earns an edge;
     * no contradiction from the record's own linked levels: a linked named composite method that is
       not the declared recipe is a no.
 
@@ -144,7 +158,7 @@ class E1Rule(PreferenceRule):
     )
 
     def __init__(self, manifest: E1Manifest | None = None) -> None:
-        self._manifest = manifest or load_e1_manifest()
+        self._manifest = manifest or load_e1_manifest(expected_sha256=E1_MANIFEST_SHA256)
 
     @property
     def manifest(self) -> E1Manifest:
@@ -152,25 +166,38 @@ class E1Rule(PreferenceRule):
 
     # -- scope ---------------------------------------------------------------------------------
 
-    def _identity_matches(self, member: E1Member, subject: Subject) -> bool:
+    @staticmethod
+    def _identity(member: E1Member, subject: Subject) -> Tri:
         if member.match_mode == MATCH_CONNECTIVITY_AND_FORMULA:
-            block = subject.inchi_key.split("-", 1)[0]
-            return block == member.connectivity_block and subject.molecular_formula == member.molecular_formula
-        return subject.inchi_key == member.inchikey
+            if subject.inchi_key.split("-", 1)[0] != member.connectivity_block:
+                return Tri.false
+            if subject.molecular_formula is None:  # RDKit could not read the SMILES: unknowable, not a refusal
+                return Tri.unknown
+            return Tri.true if subject.molecular_formula == member.molecular_formula else Tri.false
+        return Tri.true if subject.inchi_key == member.inchikey else Tri.false
 
     def scope(self, subject: Subject) -> RuleMatch:
         if subject.isotope_key is not None:
             return RuleMatch(Tri.false, ("isotopologue_is_not_a_manifest_member",))
         if subject.entry_kind != "minimum":
             return RuleMatch(Tri.false, (f"entry_kind_not_minimum:{subject.entry_kind}",))
-        if subject.electronic_state_kind != "ground":
-            return RuleMatch(Tri.false, (f"electronic_state_kind_not_ground:{subject.electronic_state_kind}",))
-        same_identity = [m for m in self._manifest.members if self._identity_matches(m, subject)]
+        verdicts = [(m, self._identity(m, subject)) for m in self._manifest.members]
+        same_identity = [m for m, t in verdicts if t is Tri.true]
+        undecidable = [m for m, t in verdicts if t is Tri.unknown]
         if not same_identity:
+            if undecidable:
+                return RuleMatch(Tri.unknown, (f"formula_not_derivable_for_connectivity_match:{undecidable[0].member_id}",))
             return RuleMatch(Tri.false, ("species_not_in_manifest",))
         for member in same_identity:
             if member.charge == subject.charge and member.multiplicity == subject.multiplicity:
-                return RuleMatch(Tri.true, (f"manifest_member:{member.member_id}", f"membership_evidence:{member.membership_evidence}"))
+                # A state-specific member (CH2(1A1)) is told apart by its multiplicity; the manifest itself
+                # calls it an excited singlet, so an electronic-state label must not refute it. Every other
+                # member is the ground state.
+                if subject.electronic_state_kind != "ground" and not member.state_specific:
+                    return RuleMatch(Tri.false, (f"electronic_state_kind_not_ground:{subject.electronic_state_kind}",))
+                return RuleMatch(
+                    Tri.true, (f"manifest_member:{member.member_id}", f"membership_evidence:{member.membership_evidence}")
+                )
         member = same_identity[0]
         if member.multiplicity != subject.multiplicity:
             return RuleMatch(
@@ -228,9 +255,17 @@ class E1Rule(PreferenceRule):
         elif formation.get("derivation") != _ATOMIZATION:
             refuted.append(f"formation_derivation_not_atomization:{formation.get('derivation')}")
 
-        motion = (protocol.get("thermal_approximation") or {}).get("internal_motion")
-        if motion in _BEYOND_RRHO:
-            refuted.append(f"thermal_treatment_beyond_recipe:{motion}")
+        # The benchmark route is fixed: harmonic RRHO, the single lowest conformer, JANAF atomic data.
+        # Each component is stated-and-equal (true), stated-and-different (false) or unstated (unknown):
+        # saying less never earns an edge.
+        thermal = protocol.get("thermal_approximation") or {}
+        for field, benchmark in _BENCHMARK_COMPONENTS:
+            container = formation if field == "reference_data_source" else thermal
+            value = (container or {}).get(field)
+            if value is None:
+                unknown.append(f"{field}_not_stated")
+            elif value != benchmark:
+                refuted.append(f"{field}_differs_from_benchmark:{value}")
 
     @staticmethod
     def _check_linked_levels(
@@ -260,6 +295,12 @@ class E1Rule(PreferenceRule):
         entry = super().describe()
         entry["statement"] = self._manifest.rule_statement
         entry["manifest"] = self._manifest.describe()
+        entry["manifest_sha256"] = E1_MANIFEST_SHA256
+        entry["benchmark_route"] = dict(_BENCHMARK_COMPONENTS)
+        entry["benchmark_route"]["formation_derivation"] = _ATOMIZATION
+        entry["benchmark_route_rule"] = (
+            "each component: stated and equal is true, stated and different is false, unstated is unknown"
+        )
         return entry
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 
 import pytest
 import yaml
@@ -14,6 +15,7 @@ from app.chemistry.thermo_rules.e1_manifest import (
     ManifestError,
     load_e1_manifest,
     parse_e1_manifest,
+    parse_e1_manifest_bytes,
 )
 
 
@@ -77,3 +79,37 @@ def test_an_unresolved_identity_does_not_load():
     raw["members"][3]["identity_status"] = "unresolved"
     with pytest.raises(ManifestError, match="not resolved"):
         parse_e1_manifest(raw)
+
+
+def _shipped_bytes() -> bytes:
+    return e1_manifest.MANIFEST_PATH.read_bytes()
+
+
+def test_the_shipped_bytes_match_the_pin_in_the_rule_and_the_rule_loads_over_them():
+    from app.services.thermo_selection.rules import E1_MANIFEST_SHA256, E1Rule
+
+    assert hashlib.sha256(_shipped_bytes()).hexdigest() == E1_MANIFEST_SHA256
+    assert E1Rule().describe()["manifest_sha256"] == E1_MANIFEST_SHA256
+
+
+def test_editing_one_inchikey_fails_the_pinned_load():
+    from app.services.thermo_selection.rules import E1_MANIFEST_SHA256
+
+    text = _shipped_bytes().decode()
+    key = "VNWKTOKETHGBQD-UHFFFAOYSA-N"  # methane
+    assert key in text
+    edited = text.replace(key, "VNWKTOKETHGBQD-UHFFFAOYSA-M", 1).encode()
+    with pytest.raises(ManifestError, match="pinned digest"):
+        parse_e1_manifest_bytes(edited, expected_sha256=E1_MANIFEST_SHA256)
+
+
+def test_editing_one_recipe_fact_fails_the_pinned_load():
+    from app.services.thermo_selection.rules import E1_MANIFEST_SHA256
+
+    text = _shipped_bytes().decode()
+    assert "alpha=1.63" in text
+    edited = text.replace("alpha=1.63", "alpha=1.64", 1).encode()
+    with pytest.raises(ManifestError, match="pinned digest"):
+        parse_e1_manifest_bytes(edited, expected_sha256=E1_MANIFEST_SHA256)
+    # The edit is otherwise a perfectly valid manifest: only the pin stops it.
+    assert parse_e1_manifest_bytes(edited, expected_sha256=None).version == "1.0.0"

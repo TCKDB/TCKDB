@@ -15,6 +15,7 @@ acceptance does not load, so the rule cannot be registered over it. There is no
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -162,8 +163,24 @@ def parse_e1_manifest(raw: dict[str, Any]) -> E1Manifest:
     )
 
 
-@lru_cache(maxsize=1)
-def load_e1_manifest() -> E1Manifest:
-    """Load and validate the shipped manifest (cached; the file is immutable at runtime)."""
-    with MANIFEST_PATH.open(encoding="utf-8") as handle:
-        return parse_e1_manifest(yaml.safe_load(handle))
+def parse_e1_manifest_bytes(data: bytes, *, expected_sha256: str | None) -> E1Manifest:
+    """Parse manifest bytes, first refusing them if their SHA-256 is not the pinned one.
+
+    :raises ManifestError: on a digest mismatch, or any failure of :func:`parse_e1_manifest`.
+    """
+    if expected_sha256 is not None:
+        actual = hashlib.sha256(data).hexdigest()
+        if actual != expected_sha256:
+            raise ManifestError(
+                f"E1 manifest content does not match its pinned digest (expected {expected_sha256}, got {actual})"
+            )
+    return parse_e1_manifest(yaml.safe_load(data))
+
+
+@lru_cache(maxsize=4)
+def load_e1_manifest(expected_sha256: str | None = None) -> E1Manifest:
+    """Load and validate the shipped manifest (cached; the file is immutable at runtime).
+
+    :param expected_sha256: The pinned digest of the file's bytes; ``None`` skips the pin check.
+    """
+    return parse_e1_manifest_bytes(MANIFEST_PATH.read_bytes(), expected_sha256=expected_sha256)
