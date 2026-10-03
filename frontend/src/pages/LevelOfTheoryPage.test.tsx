@@ -427,4 +427,28 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(refValue).toBeVisible()
         expect(refValue.closest("a")).toBeNull()
     })
+
+    it("titles the page, and its breadcrumb, with the server's full label so core treatments are told apart", async () => {
+        const record = baseRecord()
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse({
+            ...record,
+            level_of_theory: {
+                ...record.level_of_theory,
+                method: "CCSD(T)",
+                basis: "cc-pCVTZ",
+                core_treatment: "all_electron",
+                label: "CCSD(T)/cc-pCVTZ (core=all_electron)",
+            },
+        }))))
+        page()
+        expect(await screen.findByRole("heading", { level: 1, name: "CCSD(T)/cc-pCVTZ (core=all_electron)" })).toBeInTheDocument()
+        const crumb = screen.getByRole("navigation", { name: "Breadcrumb" })
+        expect(crumb.querySelector("[aria-current='page']")?.textContent).toBe("CCSD(T)/cc-pCVTZ (core=all_electron)")
+    })
+
+    it("keeps method/basis as the title when the payload carries no label", async () => {
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
+        page()
+        expect(await screen.findByRole("heading", { level: 1, name: "b3lyp/def2tzvp" })).toBeInTheDocument()
+    })
 })

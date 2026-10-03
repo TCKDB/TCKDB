@@ -59,7 +59,10 @@ export default function LevelOfTheoryPage() {
 
 function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
     const lot = record.level_of_theory
-    const title = lot.basis ? `${lot.method}/${lot.basis}` : lot.method
+    // The server's full label (ADR 0021, P7b) names the level the way its identity reads, so the
+    // all-electron and frozen-core pages of one method and basis are told apart in the heading and
+    // the breadcrumb. Older payloads have none: they keep `method/basis`.
+    const title = lot.label ?? (lot.basis ? `${lot.method}/${lot.basis}` : lot.method)
 
     return (
         <section className="conformer-page methods-page">

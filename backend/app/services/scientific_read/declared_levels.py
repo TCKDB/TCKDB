@@ -63,7 +63,6 @@ def load_declared_energy_summaries(
             aux_basis=lot.aux_basis,
             cabs_basis=lot.cabs_basis,
             solvent_model=lot.solvent_model,
-            label=None,
             composite_scheme=schemes.get(lot.id),
         )
     return out

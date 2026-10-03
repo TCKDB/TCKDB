@@ -297,7 +297,6 @@ def _build_lot_summary(
         aux_basis=lot.aux_basis,
         cabs_basis=lot.cabs_basis,
         solvent_model=lot.solvent_model,
-        label=None,
         composite_scheme=composite_scheme_summary(session, lot.id),
     )
 
