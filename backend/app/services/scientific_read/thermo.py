@@ -448,14 +448,14 @@ def get_species_thermo(
         for t, _ in classified
         if t.target_conformer_group_id is not None
     }
-    target_group_refs: dict[int, str] = {
-        group_id: group_ref
+    target_group_refs: dict[int, str] = {}
+    if target_group_ids:
         for group_id, group_ref in session.execute(
             select(ConformerGroup.id, ConformerGroup.public_ref).where(
                 ConformerGroup.id.in_(target_group_ids)
             )
-        ).all()
-    } if target_group_ids else {}
+        ).all():
+            target_group_refs[group_id] = group_ref
 
     records: list[ThermoRecord] = []
     for t, model_kind in classified:
