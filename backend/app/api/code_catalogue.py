@@ -986,7 +986,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("calculation_geometry_isotope_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calc_isotopes.py",
             shape=Shape.relationship,
-            note="Isotope counts differ."),
+            note=(
+                "A calculation geometry's isotope counts differ from its "
+                "subject's (species entry, or a transition state's reactants). "
+                "Sibling of calculation_geometry_composition_mismatch."
+            )),
     ApiCode("calculation_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",
             shape=Shape.relationship),
