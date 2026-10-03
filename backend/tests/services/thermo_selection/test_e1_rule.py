@@ -133,7 +133,6 @@ def test_the_formation_derivation_must_be_atomization():
         ({"internal_motion": "anharmonic"}, "internal_motion_differs_from_benchmark:anharmonic"),
         ({"ensemble": "boltzmann_conformers"}, "ensemble_representation_differs_from_benchmark:boltzmann_conformers"),
         ({"source": "atct"}, "reference_data_source_differs_from_benchmark:atct"),
-        ({"source": "codata"}, "reference_data_source_differs_from_benchmark:codata"),
         ({"source": "other"}, "reference_data_source_differs_from_benchmark:other"),
     ],
 )
@@ -163,8 +162,16 @@ def test_every_component_stated_as_the_benchmark_route_is_true_and_the_route_is_
     full = protocol("g4", internal_motion="harmonic", ensemble="lowest_conformer", source="nist_janaf")
     assert RULE.preferred_side(cand("x", proto=full)).state is Tri.true
     route = RULE.describe()["benchmark_route"]
-    assert route == {"internal_motion": "harmonic", "ensemble_representation": "lowest_conformer",
-                     "reference_data_source": "nist_janaf", "formation_derivation": "atomization"}
+    assert route == {"internal_motion": ["harmonic"], "ensemble_representation": ["lowest_conformer"],
+                     "reference_data_source": ["nist_janaf", "codata"], "formation_derivation": "atomization"}
+
+
+@pytest.mark.parametrize("source", ["nist_janaf", "codata"])
+def test_janaf_and_codata_atomic_data_are_both_the_benchmark_source_but_atct_is_not(source):
+    # CODATA key values for C(g) and H(g) agree with JANAF within their uncertainties; ATcT does not count.
+    for recipe, side in (("g4", RULE.preferred_side), ("g3", RULE.yielding_side)):
+        assert side(cand("x", proto=protocol(recipe, source=source))).state is Tri.true
+    assert RULE.preferred_side(cand("x", proto=protocol("g4", source="atct"))).state is Tri.false
 
 
 def test_a_refuted_component_wins_over_an_unstated_one():

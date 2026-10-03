@@ -44,10 +44,12 @@ _ATOMIZATION = "atomization"
 #: The route the benchmark used (manifest recipe_facts.formation_enthalpy and molecular_thermal_correction):
 #: harmonic RRHO with every mode harmonic, one (lowest) conformer, JANAF atomic data. ATcT and JANAF carbon
 #: differ by about 0.04 kcal/mol per carbon, about 0.4 for the C10 members, which exceeds the G3 to G4 margin.
+#: CODATA key values for C(g) and H(g) agree with JANAF within their stated uncertainties (716.68 vs 716.67
+#: kJ/mol for C(g)), so CODATA counts as the benchmark source; ATcT and ``other`` do not.
 _BENCHMARK_COMPONENTS = (
-    ("internal_motion", "harmonic"),
-    ("ensemble_representation", "lowest_conformer"),
-    ("reference_data_source", "nist_janaf"),
+    ("internal_motion", ("harmonic",)),
+    ("ensemble_representation", ("lowest_conformer",)),
+    ("reference_data_source", ("nist_janaf", "codata")),
 )
 
 
@@ -130,8 +132,8 @@ class E1Rule(PreferenceRule):
     * a formation enthalpy derived by atomization, the route the benchmark used: another derivation
       is a no, an undeclared one is unknown;
     * the benchmark route, component by component (harmonic internal motion, the single lowest
-      conformer, JANAF atomic data = ``nist_janaf``): stated and equal is true, stated and different
-      (hindered rotors, anharmonic, Boltzmann conformers, ATcT, CODATA, other) is a no, unstated is
+      conformer, JANAF or CODATA atomic data = ``nist_janaf`` or ``codata``): stated and equal is true, stated and different
+      (hindered rotors, anharmonic, Boltzmann conformers, ATcT, other) is a no, unstated is
       unknown. Saying less never earns an edge;
     * no contradiction from the record's own linked levels: a linked named composite method that is
       not the declared recipe is a no.
@@ -264,7 +266,7 @@ class E1Rule(PreferenceRule):
             value = (container or {}).get(field)
             if value is None:
                 unknown.append(f"{field}_not_stated")
-            elif value != benchmark:
+            elif value not in benchmark:
                 refuted.append(f"{field}_differs_from_benchmark:{value}")
 
     @staticmethod
@@ -295,8 +297,8 @@ class E1Rule(PreferenceRule):
         entry = super().describe()
         entry["statement"] = self._manifest.rule_statement
         entry["manifest"] = self._manifest.describe()
-        entry["manifest_sha256"] = E1_MANIFEST_SHA256
-        entry["benchmark_route"] = dict(_BENCHMARK_COMPONENTS)
+        entry["manifest_sha256"] = self._manifest.sha256
+        entry["benchmark_route"] = {field: list(accepted) for field, accepted in _BENCHMARK_COMPONENTS}
         entry["benchmark_route"]["formation_derivation"] = _ATOMIZATION
         entry["benchmark_route_rule"] = (
             "each component: stated and equal is true, stated and different is false, unstated is unknown"

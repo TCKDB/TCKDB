@@ -87,7 +87,7 @@ def subject_for(name: str, *, multiplicity: int | None = None, **overrides: Any)
 def cand(
     ref: str,
     *,
-    proto: dict[str, Any] | None | str = "g4",
+    proto: dict[str, Any] | str | None = "g4",
     status: RecordReviewStatus = RecordReviewStatus.approved,
     age_days: float = 0,
     id_rank: int | None = None,
