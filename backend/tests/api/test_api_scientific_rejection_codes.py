@@ -178,6 +178,24 @@ class TestAStructureAgainstItsOwnLabel:
         body = _assert_code(response, "calculation_geometry_composition_mismatch")
         assert "calculation_geometry_composition_mismatch" in str(body["detail"])
 
+    def test_a_calculation_geometry_of_another_isotopologue_names_its_own_code(
+        self, client
+    ):
+        """Right formula, right conformer, wrong isotopes on the calculation.
+
+        Composition reads D and [2H] as H, so only the calculation-level
+        isotope check can refuse this; a different code from
+        ``species_geometry_isotope_mismatch``, which is repaired on the
+        conformer rather than on a calculation.
+        """
+        payload = _conformer_payload(species_entry=_METHANE, xyz_text=_METHANE_XYZ)
+        payload["calculation"]["input_geometries"] = [
+            {"xyz_text": _METHANE_XYZ, "isotopes": {2: 2}}
+        ]
+        response = client.post("/api/v1/uploads/conformers", json=payload)
+        body = _assert_code(response, "calculation_geometry_isotope_mismatch")
+        assert "calculation_geometry_isotope_mismatch" in str(body["detail"])
+
     def test_isotope_labels_that_disagree_name_the_isotope_check(self, client):
         # CH3D by SMILES, all-protium by geometry. Same formula, so the
         # composition check above passes and only the isotope one can fire.

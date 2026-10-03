@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.122.0 - 2026-10-03
+
+Adds the `RejectionCode.CALCULATION_GEOMETRY_ISOTOPE_MISMATCH` member (`tckdb-schemas` 0.78.0, #666): an
+upload is refused when a geometry linked to a calculation carries different isotope substitutions than
+the species (or, for a transition state, the reaction's reactants) the calculation is filed under.
+Nothing in the client's code changes.
+
 ## 0.121.0 - 2026-10-03
 
 Thermo builders can state what a record's values describe and how they were produced

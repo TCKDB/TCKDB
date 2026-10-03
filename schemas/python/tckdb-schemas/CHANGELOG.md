@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.86.0 - 2026-10-03
+
+New isotope refusal code.
+
 ## 0.85.0 - 2026-10-03
 
 A thermo record can state what its values describe (`thermodynamic_target`) and how they were

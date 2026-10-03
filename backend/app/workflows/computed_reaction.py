@@ -803,9 +803,7 @@ def persist_computed_reaction_upload(
             RecordRef(SubmissionRecordType.transition_state_entry, ts_entry.id)
         )
 
-        ts_geom = resolve_geometry_payload(
-            session, GeometryPayload(xyz_text=ts_in.geometry.xyz_text)
-        )
+        ts_geom = resolve_geometry_payload(session, ts_in.geometry.to_payload())
         geometry_key_to_id[ts_in.geometry.key] = ts_geom.id
 
         # The saddle point must be made of this reaction's atoms, at this

@@ -11,6 +11,7 @@ from sqlalchemy.sql import ColumnElement
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import parse_xyz, resolve_element_symbol
+from app.chemistry.isotopes import render_isotope_substitutions
 from app.chemistry.species import (
     canonical_isotope_key,
     canonical_species_identity,
@@ -291,24 +292,18 @@ def assert_geometry_isotopes_match_identity(
     if from_smiles == from_geometry:
         return
 
-    def _render(counts: dict[tuple[str, int], int]) -> str:
-        if not counts:
-            return "none (all standard isotopes)"
-        return ", ".join(
-            f"{mass_number}{element}x{count}"
-            for (element, mass_number), count in sorted(counts.items())
-        )
-
+    want = render_isotope_substitutions(from_smiles)
+    got = render_isotope_substitutions(from_geometry)
     raise CodedValueError(
         W_SPECIES_GEOMETRY_ISOTOPE_MISMATCH,
         "Isotope substitution declared in species_entry.smiles does not match "
         "the uploaded geometry. "
-        f"smiles={_render(from_smiles)}; geometry.isotopes={_render(from_geometry)}. "
+        f"smiles={want}; geometry.isotopes={got}. "
         "Declare the same substitution on both: use SMILES isotope notation "
         "(e.g. [2H]) for identity and geometry.isotopes for the per-atom masses.",
         context={
-            "smiles_substitutions": _render(from_smiles),
-            "geometry_substitutions": _render(from_geometry),
+            "smiles_substitutions": want,
+            "geometry_substitutions": got,
         },
         message_prefix=False,
     )

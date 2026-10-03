@@ -983,6 +983,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "TS entry is resolved from): those are repaired in a "
                 "payload's identity block, this one on a calculation."
             )),
+    ApiCode("calculation_geometry_isotope_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calc_isotopes.py",
+            shape=Shape.relationship,
+            note="Isotope counts differ."),
     ApiCode("calculation_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",
             shape=Shape.relationship),
