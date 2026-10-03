@@ -59,6 +59,7 @@ from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 from tckdb_schemas.local_key_codes import (
     W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
     W_CALCULATION_KEY_UNDECLARED,
+    W_CONFORMER_KEY_UNDECLARED,
     undeclared_key_error,
 )
 from tckdb_schemas.fragments.refs import (
@@ -1084,6 +1085,41 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                     key=ac.source_calculation_key,
                     declared=defined,
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_thermo_declaration_keys_resolve(self) -> Self:
+        """The thermo target's conformer and the protocol's calculations must be declared in this bundle."""
+        if self.thermo is None:
+            return self
+        target = self.thermo.thermodynamic_target
+        if target is not None and target.conformer_key is not None:
+            conformer_keys = {conf.key for conf in self.conformers}
+            if target.conformer_key not in conformer_keys:
+                raise undeclared_key_error(
+                    W_CONFORMER_KEY_UNDECLARED,
+                    f"thermo.thermodynamic_target.conformer_key "
+                    f"'{target.conformer_key}' does not reference a conformer "
+                    f"declared in this bundle.",
+                    field="thermo.thermodynamic_target.conformer_key",
+                    key=target.conformer_key,
+                    declared=conformer_keys,
+                )
+        if self.thermo.protocol is not None:
+            defined = self._all_calc_keys()
+            for index, ref in enumerate(self.thermo.protocol.supporting_calculations):
+                if ref.calculation_key not in defined:
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
+                        f"thermo.protocol.supporting_calculations references undefined "
+                        f"calculation_key '{ref.calculation_key}'.",
+                        field=(
+                            f"thermo.protocol.supporting_calculations[{index}]"
+                            f".calculation_key"
+                        ),
+                        key=ref.calculation_key,
+                        declared=defined,
+                    )
         return self
 
     @model_validator(mode="after")

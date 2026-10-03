@@ -114,6 +114,20 @@ class EnthalpyReferenceKind(str, Enum):
     formation_298k = "formation_298k"
 
 
+class ThermoTargetKind(str, Enum):
+    """The thermodynamic target a thermo record's values are claimed to describe.
+
+    ``equilibrium_ensemble`` is the thermally equilibrated population of the
+    species' conformers; ``single_conformer`` is one named conformer group
+    (the record then names that group). A depositor's attributed claim:
+    never inferred from a statmech link or a conformer selection, and null
+    on every record deposited without one.
+    """
+
+    equilibrium_ensemble = "equilibrium_ensemble"
+    single_conformer = "single_conformer"
+
+
 class PhaseKind(str, Enum):
     """Physical phase a thermochemistry record is referenced to.
 

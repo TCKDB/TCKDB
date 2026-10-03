@@ -137,6 +137,10 @@ from app.services.statmech_resolution import (
     assert_statmech_role_compatible,
     collect_frequency_scale_factor_software_mismatch_warnings,
 )
+from app.services.thermo_declaration_resolution import (
+    assert_thermo_declaration,
+    resolve_thermo_declarations,
+)
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
 from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
 from app.workflows.transport import persist_bundle_transport
@@ -563,6 +567,12 @@ def persist_computed_species_upload(
         outcome.conformer_in_bundle.key: outcome.observation.id
         for outcome in conformer_outcomes
     }
+    # The same total namespace, to each conformer's group: a thermo target
+    # that names a conformer by key resolves to the group it was assigned to.
+    conformer_keys_to_group_id: dict[str, int] = {
+        outcome.conformer_in_bundle.key: outcome.group_id
+        for outcome in conformer_outcomes
+    }
     calc_keys_to_id: dict[str, Calculation] = {}
     for outcome in conformer_outcomes:
         calc_keys_to_id[outcome.conformer_in_bundle.primary_calculation.key] = (
@@ -785,6 +795,7 @@ def persist_computed_species_upload(
             species_entry_id=species_entry.id,
             calc_keys_to_id=calc_keys_to_id,
             conformer_keys_to_observation_id=conformer_keys_to_observation_id,
+            conformer_keys_to_group_id=conformer_keys_to_group_id,
             default_workflow_tool_release=request.workflow_tool_release,
             created_by=created_by,
             warnings=upload_warnings,
@@ -948,6 +959,7 @@ def _persist_thermo_block(
     species_entry_id: int,
     calc_keys_to_id: dict[str, Calculation],
     conformer_keys_to_observation_id: dict[str, int],
+    conformer_keys_to_group_id: dict[str, int] | None = None,
     default_workflow_tool_release: WorkflowToolReleaseRef | None = None,
     created_by: int | None,
     warnings: list[UploadWarning] | None = None,
@@ -972,6 +984,8 @@ def _persist_thermo_block(
 
     thermo_in = request.thermo
     assert_enthalpy_reference(thermo_in)
+    # Before any row is written: a self-contradicting target or protocol.
+    assert_thermo_declaration(thermo_in)
 
     # Resolve source_calculations by local key with role/type checks.
     resolved_sources: list[ThermoSourceCalculationCreate] = []
@@ -1028,6 +1042,18 @@ def _persist_thermo_block(
         warnings=warnings,
     )
 
+    # The target's conformer and the protocol's supporting calculations are
+    # named by this bundle's local keys; resolve them to rows of this species
+    # entry before the thermo row exists.
+    declarations = resolve_thermo_declarations(
+        session,
+        thermo_in,
+        species_entry_id=species_entry_id,
+        conformer_group_ids_by_key=conformer_keys_to_group_id,
+        calculations_by_key=calc_keys_to_id,
+        field_prefix="thermo.",
+    )
+
     synthetic = _build_synthetic_thermo_upload_request(
         thermo_in,
         species_entry_payload=request.species_entry,
@@ -1043,6 +1069,9 @@ def _persist_thermo_block(
     thermo_create = thermo_create.model_copy(
         update={
             "source_calculations": resolved_sources,
+            "thermodynamic_target_kind": declarations.thermodynamic_target_kind,
+            "target_conformer_group_id": declarations.target_conformer_group_id,
+            "protocol_declaration": declarations.protocol_declaration,
             # Stored as declared, after ``assert_role_consistency`` above.
             "energy_level_of_theory_id": (
                 declared_energy_lot.id if declared_energy_lot is not None else None

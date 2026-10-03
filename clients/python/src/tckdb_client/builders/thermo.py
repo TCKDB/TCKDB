@@ -28,6 +28,10 @@ import math
 from pydantic import ValidationError
 from tckdb_schemas.enthalpy_reference import enthalpy_reference_error
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
+from tckdb_schemas.thermo_declarations import (
+    ThermoProtocolDeclaration,
+    thermo_declaration_error,
+)
 from typing import TYPE_CHECKING, Any, Callable
 
 from tckdb_client.builders.validation import (
@@ -168,6 +172,40 @@ def _check_optional_scalar(name: str, value: float | None) -> float | None:
     return float(value)
 
 
+def _normalise_protocol(value: Any) -> dict[str, Any] | None:
+    """Coerce ``protocol`` to the plain dict the wire carries.
+
+    Accepts a ``ThermoProtocolDeclaration`` or a dict. Supporting calculations
+    are not given here: a builder cannot know the local keys the assembler
+    mints, so name the calculations with ``protocol_calculations`` instead.
+    Absent stays absent and ``departures: []`` (an explicit "no departures")
+    stays ``[]``.
+    """
+    if value is None:
+        return None
+    try:
+        model = (
+            value
+            if isinstance(value, ThermoProtocolDeclaration)
+            else ThermoProtocolDeclaration.model_validate(value)
+        )
+    except ValidationError as exc:
+        # A coded refusal (an unsupported version) keeps its code in the message,
+        # as every other builder refusal of a coded rule does.
+        coded = exc.errors()[0].get("ctx", {}).get("error")
+        if coded is not None and hasattr(coded, "code"):
+            raise TCKDBBuilderValidationError(f"{coded.code}: {coded.detail}") from exc
+        raise TCKDBBuilderValidationError(f"Thermo.protocol: {exc}") from exc
+    raw = model.model_dump(mode="json", exclude_none=True)
+    if raw.pop("supporting_calculations", None):
+        raise TCKDBBuilderValidationError(
+            "Thermo.protocol must not carry supporting_calculations; pass the "
+            "Calculation builders as protocol_calculations so the assembler can "
+            "name them by bundle key."
+        )
+    return raw
+
+
 class _Omitted(Enum):
     value = "omitted"
 
@@ -210,6 +248,15 @@ class Thermo:
     note: str | None = None
     label: str | None = None
     source_calculations: list[tuple[str, Any]] = field(default_factory=list)
+    # What the values are claimed to describe: ``"equilibrium_ensemble"`` or
+    # ``"single_conformer"`` (the species' own conformer in this upload). An
+    # attributed claim; never inferred, never defaulted.
+    thermodynamic_target: str | None = None
+    # How the values were produced: a ``ThermoProtocolDeclaration`` (or the
+    # equivalent dict) without supporting calculations, plus the
+    # ``Calculation`` builders those calculations are named by.
+    protocol: Any = None
+    protocol_calculations: list[Any] = field(default_factory=list)
 
     # Tag for diagnostics / error messages; not emitted on the wire.
     _kind: str = field(default="generic", init=False, repr=False)
@@ -234,6 +281,29 @@ class Thermo:
         })
         if error is not None:
             raise TCKDBBuilderValidationError(f"{error[0]}: {error[1]}")
+        if self.thermodynamic_target is not None and not isinstance(self.thermodynamic_target, str):
+            raise TCKDBBuilderValidationError(
+                "Thermo.thermodynamic_target must be 'equilibrium_ensemble', "
+                "'single_conformer' or None."
+            )
+        self.protocol = _normalise_protocol(self.protocol)
+        if self.protocol_calculations and self.protocol is None:
+            raise TCKDBBuilderValidationError(
+                "Thermo.protocol_calculations needs a protocol to be part of."
+            )
+        target_for_check: dict[str, Any] | None = None
+        if self.thermodynamic_target is not None:
+            target_for_check = {"kind": self.thermodynamic_target}
+            if self.thermodynamic_target == "single_conformer":
+                # The conformer a single_conformer target names is the species'
+                # own, which the assembler resolves to its bundle key; a
+                # placeholder stands in so the shared rule judges the rest.
+                target_for_check["conformer_key"] = "<assembler>"
+        declaration_error = thermo_declaration_error(
+            {"thermodynamic_target": target_for_check, "protocol": self.protocol}
+        )
+        if declaration_error is not None:
+            raise TCKDBBuilderValidationError(f"{declaration_error[0]}: {declaration_error[1]}")
         try:
             state = {name: getattr(self, name) for name in (
                 "phase", "reference_pressure_bar", "enthalpy_formation_0k_kj_mol",
@@ -300,6 +370,9 @@ class Thermo:
         ) = None,
         label: str | None = None,
         note: str | None = None,
+        thermodynamic_target: str | None = None,
+        protocol: "ThermoProtocolDeclaration | dict[str, Any] | None" = None,
+        protocol_calculations: "list[Calculation] | None" = None,
     ) -> "Thermo":
         """Scalar h298 / s298 thermo, with optional temperature bounds.
 
@@ -329,6 +402,9 @@ class Thermo:
             source_calculations=_normalise_thermo_source_calculations(
                 source_calculations
             ),
+            thermodynamic_target=thermodynamic_target,
+            protocol=protocol,
+            protocol_calculations=list(protocol_calculations or []),
         )
         out._kind = "scalar"
         return out
@@ -359,6 +435,9 @@ class Thermo:
         ) = None,
         label: str | None = None,
         note: str | None = None,
+        thermodynamic_target: str | None = None,
+        protocol: "ThermoProtocolDeclaration | dict[str, Any] | None" = None,
+        protocol_calculations: "list[Calculation] | None" = None,
     ) -> "Thermo":
         """NASA 7-coefficient polynomial thermo.
 
@@ -429,6 +508,9 @@ class Thermo:
             source_calculations=_normalise_thermo_source_calculations(
                 source_calculations
             ),
+            thermodynamic_target=thermodynamic_target,
+            protocol=protocol,
+            protocol_calculations=list(protocol_calculations or []),
         )
         out._kind = "nasa"
         return out
@@ -457,6 +539,9 @@ class Thermo:
         ) = None,
         label: str | None = None,
         note: str | None = None,
+        thermodynamic_target: str | None = None,
+        protocol: "ThermoProtocolDeclaration | dict[str, Any] | None" = None,
+        protocol_calculations: "list[Calculation] | None" = None,
     ) -> "Thermo":
         """Tabulated thermo points (``temperature_k`` + cp/h/s/g).
 
@@ -515,6 +600,9 @@ class Thermo:
             source_calculations=_normalise_thermo_source_calculations(
                 source_calculations
             ),
+            thermodynamic_target=thermodynamic_target,
+            protocol=protocol,
+            protocol_calculations=list(protocol_calculations or []),
         )
         out._kind = "points"
         return out
@@ -530,6 +618,7 @@ class Thermo:
         *,
         allow_source_calculations: bool = False,
         calc_key_lookup: Callable[[Any], str] | None = None,
+        conformer_key: str | None = None,
     ) -> dict[str, Any]:
         """Render the dict accepted by ``BundleThermoIn`` / ``ThermoInBundle``.
 
@@ -547,7 +636,12 @@ class Thermo:
           builder has registered source calculations; the assembler
           forwards its :class:`KeyMinter` lookup here so the on-wire
           ``calculation_key`` values resolve into the bundle's global
-          calc namespace without any ``id()`` use.
+          calc namespace without any ``id()`` use. Also needed for
+          ``protocol_calculations``, which name the protocol's supporting
+          calculations the same way, whatever ``allow_source_calculations`` says.
+        - ``conformer_key`` — the bundle-local key of the species' own
+          conformer, which a ``single_conformer`` target names. Required
+          exactly when ``thermodynamic_target`` is ``"single_conformer"``.
         """
         out: dict[str, Any] = {}
         for name in ("phase", "reference_pressure_bar", "enthalpy_reference_kind"):
@@ -573,6 +667,31 @@ class Thermo:
             out["points"] = [dict(p) for p in self.point_table]
         if self.note is not None:
             out["note"] = self.note
+        if self.thermodynamic_target is not None:
+            target: dict[str, Any] = {"kind": self.thermodynamic_target}
+            if self.thermodynamic_target == "single_conformer":
+                if conformer_key is None:
+                    raise TCKDBBuilderValidationError(
+                        "Thermo.thermodynamic_target='single_conformer' names the "
+                        "species' own conformer, but this upload declares none for "
+                        "the species. Attach the species' calculations (an opt "
+                        "anchors the conformer), or declare 'equilibrium_ensemble'."
+                    )
+                target["conformer_key"] = conformer_key
+            out["thermodynamic_target"] = target
+        if self.protocol is not None:
+            protocol = dict(self.protocol)
+            if self.protocol_calculations:
+                if calc_key_lookup is None:
+                    raise TCKDBBuilderValidationError(
+                        "Thermo.to_payload needs a calc_key_lookup callable so the "
+                        "protocol's supporting calculations resolve to bundle-local keys."
+                    )
+                protocol["supporting_calculations"] = [
+                    {"calculation_key": calc_key_lookup(calc)}
+                    for calc in self.protocol_calculations
+                ]
+            out["protocol"] = protocol
         if allow_source_calculations and self.source_calculations:
             if calc_key_lookup is None:
                 raise TCKDBBuilderValidationError(

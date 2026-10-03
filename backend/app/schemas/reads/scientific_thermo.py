@@ -8,6 +8,7 @@ from __future__ import annotations
 from enum import Enum
 
 from pydantic import BaseModel, Field
+from tckdb_schemas.thermo_declarations import StoredThermoProtocolDeclaration
 
 from app.db.models.common import (
     EnthalpyReferenceKind,
@@ -15,6 +16,7 @@ from app.db.models.common import (
     PhaseKind,
     RecordReviewStatus,
     ScientificOriginKind,
+    ThermoTargetKind,
 )
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
@@ -237,6 +239,18 @@ class GroupAdditivityBlock(BaseModel):
     components: list[GroupAdditivityComponentBlock] = Field(default_factory=list)
 
 
+class ThermoTargetBlock(BaseModel):
+    """The thermodynamic target a record's depositor declared.
+
+    :param kind: ``equilibrium_ensemble`` or ``single_conformer``.
+    :param conformer_group_ref: Public ref of the conformer group a
+        ``single_conformer`` target names; ``null`` for an equilibrium target.
+    """
+
+    kind: ThermoTargetKind
+    conformer_group_ref: str | None = None
+
+
 class ThermoRecord(BaseModel):
     """One thermo record returned by the thermo endpoint.
 
@@ -264,6 +278,15 @@ class ThermoRecord(BaseModel):
     #: means the deposit did not state one. See
     #: ``docs/guides/depositing_a_thermo_record.md``.
     enthalpy_reference_kind: EnthalpyReferenceKind | None = None
+    #: What the depositor declared the values describe; ``null`` means no
+    #: target was declared (every record deposited before declarations
+    #: existed). Never inferred from a statmech link.
+    thermodynamic_target: ThermoTargetBlock | None = None
+    #: The depositor's versioned protocol declaration (recipe, formation
+    #: reference, thermal approximation, departures, supporting calculations by
+    #: public ref); ``null`` means none was declared. An attributed claim, not
+    #: a verified fact. See ``docs/guides/depositing_a_thermo_record.md``.
+    protocol: StoredThermoProtocolDeclaration | None = None
     enthalpy_formation_0k_kj_mol: float | None = None
     enthalpy_formation_0k_uncertainty_kj_mol: float | None = None
     h298_kj_mol: float | None = None

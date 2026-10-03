@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.77.0 - 2026-10-03
+
+A thermo record can state what its values describe and how they were produced (H298 method-aware
+selection, change 1 of 3). Both are optional attributed claims: stored as made, never inferred from a
+statmech link or a method name, never defaulted, `null` on every record deposited without them. Every
+payload accepted before is accepted unchanged; this release only adds.
+
+- **`thermodynamic_target`** (`/uploads/thermo`, the computed bundles' thermo blocks, contribution
+  bundles). `{"kind": "equilibrium_ensemble"}` names no conformer group, and one that does is refused
+  (`thermo_target_group_not_allowed`). `{"kind": "single_conformer"}` names exactly one group of the
+  record's own species entry, by `conformer_group_ref` (`/uploads/thermo`, contribution bundles) or
+  `conformer_key` (computed bundles); none, or both, is `thermo_target_group_required`. Also refused:
+  `thermo_target_group_owner_mismatch`, `unknown_conformer_group_ref`.
+- **`protocol`** (`ThermoProtocolDeclaration`, `version: 1`): `recipe` (`g3`, `g4`, `g4mp2`,
+  `g4_complete`, `other`), `formation_reference` (`atomization`, `isodesmic`, `working_reaction`, and
+  the reference data source), `thermal_approximation` (kept apart from the target: what represents the
+  ensemble), `departures` (omitted = not stated, `[]` = none, list = named) and
+  `supporting_calculations` (`calculation_key`, or `calculation_ref` on `/uploads/thermo`). Unknown
+  fields and values are refused; an unsupported version is `thermo_protocol_version_unsupported`; a
+  calculation of another species entry is `thermo_protocol_calculation_owner_mismatch`. Stored and
+  read back as `StoredThermoProtocolDeclaration`, with public refs only.
+- `thermo_declaration_error(payload)` is a shared producer rule that judges both blocks on a payload
+  that skipped validation (`thermo_declaration_invalid`).
+- `ThermoTargetKind` is a new wire enum. Producer contract regenerated.
 ## 0.81.0 - 2026-10-03
 
 TS energy-ordering energies are held against the stored energies (#638). No field is removed or changed;

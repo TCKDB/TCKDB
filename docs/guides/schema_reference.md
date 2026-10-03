@@ -2950,6 +2950,9 @@ the gap.
 | `software_release_id` | BIGINT | yes | — | software_release.id | — | not documented |
 | `energy_level_of_theory_id` | BIGINT | yes | — | level_of_theory.id | — | not documented |
 | `enthalpy_reference_kind` | EnthalpyReferenceKind (enum) | yes | — | — | `formation_298k` | ``enthalpy_reference_kind`` declares which reference every enthalpy on this record uses. ``formation_298k`` is the standard enthalpy of formation at 298.15 K; an enthalpy at any other temperature is that value plus the species' own enthalpy increment from 298.15 K, with the elemental term not reevaluated. ``NULL`` means the reference was never recorded -- it is never inferred from a value, a producer or a neighbouring row, and never backfilled. |
+| `thermodynamic_target_kind` | ThermoTargetKind (enum) | yes | — | — | `equilibrium_ensemble`, `single_conformer` | ``thermodynamic_target_kind`` declares what the values are claimed to describe: ``equilibrium_ensemble`` (the thermally equilibrated population of the species' conformers) or ``single_conformer`` (one named conformer group). ``NULL`` means no target was declared -- it is never inferred from ``statmech_id`` or a conformer selection, and never backfilled. |
+| `target_conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | ``target_conformer_group_id`` is the conformer group a ``single_conformer`` target names, and is set exactly then (``ck_thermo_target_group_iff_single_conformer``). That the group belongs to this row's species entry is checked where the row is written. |
+| `protocol_declaration` | JSONB | yes | — | — | — | ``protocol_declaration`` is the depositor's versioned protocol declaration -- recipe, formation-reference construction, thermal approximation, departures from the standard recipe, supporting calculations (by public ref) -- validated against ``tckdb_schemas.thermo_declarations.StoredThermoProtocolDeclaration``. An attributed claim, stored as made. ``NULL`` means none was declared. All three are frozen with the rest of an accepted row. |
 | `h298_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of formation and standard entropy at 298.15 K. |
 | `s298_j_mol_k` | DOUBLE PRECISION | yes | — | — | — | ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of formation and standard entropy at 298.15 K. |
 | `h298_uncertainty_kj_mol` | DOUBLE PRECISION | yes | — | — | — | not documented |
@@ -2970,7 +2973,9 @@ the gap.
 
 - `ck_thermo_enthalpy_formation_0k_uncertainty_ge_0`: `enthalpy_formation_0k_uncertainty_kj_mol IS NULL OR enthalpy_formation_0k_uncertainty_kj_mol >= 0`
 - `ck_thermo_h298_uncertainty_ge_0`: `h298_uncertainty_kj_mol IS NULL OR h298_uncertainty_kj_mol >= 0`
+- `ck_thermo_protocol_declaration_versioned_object`: `protocol_declaration IS NULL OR (jsonb_typeof(protocol_declaration) = 'object' AND coalesce(jsonb_typeof(protocol_declaration -> 'version'), '') = 'number')`
 - `ck_thermo_s298_uncertainty_ge_0`: `s298_uncertainty_j_mol_k IS NULL OR s298_uncertainty_j_mol_k >= 0`
+- `ck_thermo_target_group_iff_single_conformer`: `(thermodynamic_target_kind IS NOT DISTINCT FROM 'single_conformer') = (target_conformer_group_id IS NOT NULL)`
 - `ck_thermo_tmax_k_gt_0`: `tmax_k IS NULL OR tmax_k > 0`
 - `ck_thermo_tmin_k_gt_0`: `tmin_k IS NULL OR tmin_k > 0`
 - `ck_thermo_tmin_le_tmax`: `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k`

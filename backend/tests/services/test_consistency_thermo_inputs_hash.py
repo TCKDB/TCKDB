@@ -47,8 +47,12 @@ def test_only_the_declared_level_is_excluded_and_everything_else_is_hashed(db_se
     db_session.flush()
     hashed = set(thermo_inputs(thermo))
     clocks = {"created_at", "updated_at", "created_by"}
-    columns = {c.key for c in inspect(Thermo).columns} - clocks - THERMO_HASH_EXCLUDED_COLUMNS
+    # Declarations a row did not make stay out of the digest (snapshot_defaults),
+    # so the three declaration columns are absent from an undeclared row's.
+    undeclared = {"thermodynamic_target_kind", "target_conformer_group_id", "protocol_declaration"}
+    columns = {c.key for c in inspect(Thermo).columns} - clocks - THERMO_HASH_EXCLUDED_COLUMNS - undeclared
     assert columns <= hashed, sorted(columns - hashed)
+    assert not (undeclared & hashed)
     # A value column that does feed the checks still moves the hash.
     before = encoded(thermo_inputs(thermo))
     thermo.h298_kj_mol = (thermo.h298_kj_mol or 0.0) + 1.0

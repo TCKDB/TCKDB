@@ -39,6 +39,7 @@ from app.db.models.common import (
     ReactionRole,
     SubmissionRecordType,
     ThermoModelKind,
+    ThermoTargetKind,
 )
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import (
@@ -129,6 +130,14 @@ class BundleExportOmission:
         other field are unaffected. A tabulated point left with no value
         at all is dropped, and its temperature listed in
         ``points_dropped_at_k``.
+        ``"declaration_pruned"`` -- the record was exported, but part of its
+        target or protocol declaration was left out because a portable bundle
+        cannot carry it: a ``single_conformer`` target names a conformer group
+        of *this* database, and a protocol's supporting calculations are named
+        by public ref to calculations of this database. Left out means absent,
+        never replaced (a dropped single-conformer target does not become an
+        equilibrium target). When the record also had an enthalpy pruned, the
+        action stays ``"enthalpy_pruned"`` and the detail says both.
     :param ref: The record's public ref (``thermo.public_ref``) -- never a
         row id, so the report stays meaningful outside this DB instance.
     :param detail: Human-readable reason.
@@ -609,6 +618,8 @@ def _thermo_to_upload(
     if thermo.wilhoit is not None:
         payload["wilhoit"] = _thermo_wilhoit_payload(thermo.wilhoit)
 
+    declaration_notes = _add_declarations(payload, thermo)
+
     literature = _literature_payload(thermo.literature)
     if literature is not None:
         payload["literature"] = literature
@@ -670,6 +681,20 @@ def _thermo_to_upload(
             points_dropped_at_k=prune.points_dropped_at_k,
         )
 
+    if declaration_notes:
+        note_text = " ".join(declaration_notes)
+        if omission is None:
+            omission = BundleExportOmission(
+                action="declaration_pruned", ref=thermo.public_ref, detail=note_text
+            )
+        else:
+            omission = BundleExportOmission(
+                action=omission.action,
+                ref=omission.ref,
+                detail=f"{omission.detail} {note_text}",
+                points_dropped_at_k=omission.points_dropped_at_k,
+            )
+
     try:
         ThermoUploadRequest.model_validate(payload)
     except ValidationError as exc:
@@ -697,6 +722,54 @@ def _thermo_to_upload(
             f"thermo_upload_incompatible: {thermo.public_ref}: {exc}"
         ) from exc
     return payload, omission
+
+
+def _add_declarations(payload: dict[str, Any], thermo: Thermo) -> list[str]:
+    """Write the portable part of the target and protocol declarations into ``payload``.
+
+    A bundle must be importable on any instance, so what names a row of *this*
+    database is left out and reported rather than exported: the conformer group
+    of a ``single_conformer`` target, and the supporting calculations of a
+    protocol. What is left out is absent in the bundle, never replaced by
+    something that reads differently. An equilibrium target and the protocol's
+    recipe, formation reference, thermal approximation and departures carry
+    over exactly.
+
+    :returns: Sentences for the omission detail; empty when nothing was left out.
+    """
+    notes: list[str] = []
+    kind = thermo.thermodynamic_target_kind
+    if kind is ThermoTargetKind.equilibrium_ensemble:
+        payload["thermodynamic_target"] = {"kind": ThermoTargetKind.equilibrium_ensemble.value}
+    elif kind is ThermoTargetKind.single_conformer:
+        notes.append(
+            "Its single_conformer target names a conformer group of this database, which a "
+            "portable bundle cannot carry, so the target declaration was left out (absent, "
+            "not replaced by an equilibrium target)."
+        )
+    if thermo.protocol_declaration is not None:
+        protocol = {
+            key: value
+            for key, value in thermo.protocol_declaration.items()
+            if key != "supporting_calculations"
+        }
+        if thermo.protocol_declaration.get("supporting_calculations"):
+            notes.append(
+                "Its protocol declaration's supporting calculations are public refs to "
+                "calculations of this database, which a portable bundle cannot carry, so "
+                "they were left out."
+            )
+        if any(
+            key in protocol
+            for key in ("recipe", "formation_reference", "thermal_approximation", "departures")
+        ):
+            payload["protocol"] = protocol
+        else:
+            notes.append(
+                "Nothing else was stated in the protocol declaration, so it was left out "
+                "entirely."
+            )
+    return notes
 
 
 def _thermo_point_payload(point: ThermoPoint) -> dict[str, Any]:

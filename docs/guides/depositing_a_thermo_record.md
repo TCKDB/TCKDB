@@ -86,6 +86,44 @@ removed. `phase` is the one field here that still defaults, and only for
 computed-origin records — see the table above for why that case is judged
 differently.
 
+## Saying what the values describe, and how they were made
+
+Two optional blocks let a record state things it could not state before. Both
+are **claims, stored exactly as you make them**. TCKDB does not infer either
+from anything else (a statmech link does not make a record "equilibrium"; a
+method name in a level of theory does not make it "G4"), never defaults either,
+and never fills one in for a record that was deposited without it. Leave a
+block out to say nothing; a record that says nothing reads `null` for it.
+
+**`thermodynamic_target`** says what the values describe.
+
+- `{"kind": "equilibrium_ensemble"}` — the thermally equilibrated population of
+  the species' conformers. It names no conformer group; one that does is
+  refused (`thermo_target_group_not_allowed`) rather than ignored.
+- `{"kind": "single_conformer", "conformer_group_ref": "cg_..."}` — one named
+  conformer group of **this record's own species entry**. A group is required
+  (`thermo_target_group_required`) and must belong to the same species entry
+  (`thermo_target_group_owner_mismatch`). Inside a computed-species or
+  computed-reaction bundle you name the conformer the bundle declares,
+  `"conformer_key": "..."`, instead of a ref.
+
+**`protocol`** says how the values were produced. It is versioned
+(`"version": 1` is the only accepted value, `thermo_protocol_version_unsupported`
+otherwise), and an unknown field or value is refused. Every block in it is
+optional, but it must say something.
+
+| Block | What it says |
+| --- | --- |
+| `recipe` | `name` is `g3`, `g4`, `g4mp2`, `g4_complete` or `other` (then `other_name` is required); `recipe_version` is free text. |
+| `formation_reference` | `derivation` is `atomization`, `isodesmic` or `working_reaction`; `reference_data_source` is `atct`, `nist_janaf`, `codata` or `other` (then `reference_data_detail` is required). |
+| `thermal_approximation` | `ensemble_representation` (`lowest_conformer`, `boltzmann_conformers`) and `internal_motion` (`harmonic`, `hindered_rotors`, `anharmonic`). This is **not** the target: the target is the ensemble you mean, this is what stands in for it. A record can target the equilibrium ensemble and represent it by its lowest conformer. |
+| `departures` | A list of `{component, description}` naming where you departed from the standard form of the recipe. |
+| `supporting_calculations` | The calculations the declaration rests on, by `calculation_key` (a calculation declared in the same request) or, on `/uploads/thermo`, `calculation_ref` (a calculation already deposited for the same species entry). |
+
+`departures` has three states and they mean different things: **omitted** says
+you did not state it; **an empty list** says you state there were no
+departures; a list names them. Only the empty list says "standard".
+
 ## Refusals you may see, and what to do
 
 Every one of these comes back with a code and a message. They are generated
