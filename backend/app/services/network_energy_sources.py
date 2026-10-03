@@ -50,6 +50,32 @@ of points along a path, and ``conf`` is a conformer search, so none is ever the
 source of a state or barrier energy. A follow-up will share one table between
 the two rules.
 
+Whose calculation it is (#668)
+------------------------------
+The type is half the rule. A calculation of the right type can still belong to
+the wrong subject: a well's energy cited to another well's single point, or a
+saddle point's barrier cited to a species single point (#665's own test matrix
+stored exactly that). The transition-state route already refuses this for its
+``energy_ordering`` evidence (#637: each energy must come from the participant
+it is the energy of); this is the same rule for the network route, read from
+the persisted ``Calculation.species_entry_id`` / ``transition_state_entry_id``
+and never from the payload:
+
+* a ``state_energies[]`` source must be owned by a species entry that is a
+  *participant of that state*. A bimolecular state is a sum over its species and
+  the one source slot cannot hold the sum, so any one participant's calculation
+  is accepted (the hydrazine ingester cites the first participant's single
+  point); a species outside the state is not.
+* a ``channel_barriers[]`` source must be owned by the transition-state entry
+  the barrier names.
+* a ``well_energy`` / ``barrier_energy`` link is attached to the solve, not to a
+  state or a channel, so its subject is the network: ``well_energy`` must be a
+  calculation of a species entry that takes part in one of the network's
+  states, and ``barrier_energy`` one of a transition state the upload declares.
+
+The subject is checked after the type, so a calculation that fails both reports
+the type (the older, narrower refusal). Neither refusal runs on a read.
+
 Tier (ADR 0008)
 ---------------
 ``block``, the tier #637 used for the same mismatch: a type that cannot carry
@@ -65,6 +91,7 @@ the id goes to the log.
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 
 from app.api.error_contract import CodedValueError
 from app.db.models.calculation import Calculation
@@ -79,6 +106,10 @@ logger = logging.getLogger(__name__)
 #: A network solve cites, as the source of an energy, a calculation whose type
 #: cannot carry that energy.
 W_NETWORK_ENERGY_SOURCE_TYPE_MISMATCH = "network_energy_source_type_mismatch"
+
+#: A network solve cites, as the source of an energy, a calculation owned by a
+#: subject other than the one the energy is stated for (#668).
+W_NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH = "network_energy_source_subject_mismatch"
 
 #: Calculation types that report the energy of a stationary point at all.
 _STATIONARY_POINT_ENERGY_TYPES: frozenset[CalculationType] = frozenset(
@@ -208,3 +239,162 @@ def assert_network_source_role_type(
         stated="role",
         stated_value=role.value,
     )
+
+
+def _owner_kind(calculation: Calculation) -> str:
+    if calculation.species_entry_id is not None:
+        return "species_entry"
+    if calculation.transition_state_entry_id is not None:
+        return "transition_state_entry"
+    return "none"
+
+
+def _refuse_subject(
+    calculation: Calculation,
+    *,
+    field: str,
+    subject_kind: str,
+    subject_key: str | None,
+    stated: str,
+    detail: str,
+) -> None:
+    logger.info(
+        "network energy source subject mismatch at %s: calculation id=%s "
+        "species_entry_id=%s transition_state_entry_id=%s, expected a %s (%s=%s)",
+        field,
+        calculation.id,
+        calculation.species_entry_id,
+        calculation.transition_state_entry_id,
+        subject_kind,
+        stated,
+        subject_key,
+    )
+    context: dict[str, object] = {
+        "field": field,
+        "expected_owner_kind": subject_kind,
+        "actual_owner_kind": _owner_kind(calculation),
+    }
+    if subject_key is not None:
+        context["stated"] = stated
+        context["stated_value"] = subject_key
+    raise CodedValueError(
+        W_NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH,
+        f"{field}: {detail}",
+        context=context,
+        message_prefix=False,
+    )
+
+
+def assert_state_energy_source_owner(
+    calculation: Calculation,
+    state_species_entry_ids: Collection[int],
+    *,
+    state_key: str,
+    field: str,
+) -> None:
+    """Refuse a state energy cited to a calculation of a species outside the state.
+
+    :param state_species_entry_ids: The species entries that are participants
+        of the state, read from the persisted participant rows. A bimolecular
+        state accepts a calculation of any one of them. An empty collection
+        refuses everything, never accepts it.
+    :raises CodedValueError: ``network_energy_source_subject_mismatch``.
+    """
+    if (
+        calculation.species_entry_id is not None
+        and calculation.species_entry_id in state_species_entry_ids
+    ):
+        return
+    _refuse_subject(
+        calculation,
+        field=field,
+        subject_kind="species_entry",
+        subject_key=state_key,
+        stated="state_key",
+        detail=(
+            f"the cited calculation does not belong to a species of the state "
+            f"'{state_key}' whose energy it is cited for. Cite a calculation of "
+            "one of that state's own species."
+        ),
+    )
+
+
+def assert_barrier_source_owner(
+    calculation: Calculation,
+    transition_state_entry_id: int,
+    *,
+    transition_state_key: str,
+    field: str,
+) -> None:
+    """Refuse a barrier cited to a calculation of anything but its own saddle point.
+
+    :raises CodedValueError: ``network_energy_source_subject_mismatch``.
+    """
+    if calculation.transition_state_entry_id == transition_state_entry_id:
+        return
+    _refuse_subject(
+        calculation,
+        field=field,
+        subject_kind="transition_state_entry",
+        subject_key=transition_state_key,
+        stated="transition_state_key",
+        detail=(
+            "the cited calculation does not belong to the transition state "
+            f"'{transition_state_key}' the barrier is stated for. Cite a "
+            "calculation of that transition state."
+        ),
+    )
+
+
+def assert_network_role_source_owner(
+    calculation: Calculation,
+    role: NetworkSolveCalculationRole,
+    *,
+    network_species_entry_ids: Collection[int],
+    network_transition_state_entry_ids: Collection[int],
+    field: str,
+) -> None:
+    """Refuse a ``well_energy`` / ``barrier_energy`` link to another subject.
+
+    The link hangs off the solve, so the subject it is held to is the network:
+    ``well_energy`` to a species entry in one of its states, ``barrier_energy``
+    to one of its transition states. Other roles are not constrained here.
+
+    :raises CodedValueError: ``network_energy_source_subject_mismatch``.
+    """
+    role = NetworkSolveCalculationRole(role)
+    if role == NetworkSolveCalculationRole.well_energy:
+        if (
+            calculation.species_entry_id is not None
+            and calculation.species_entry_id in network_species_entry_ids
+        ):
+            return
+        _refuse_subject(
+            calculation,
+            field=field,
+            subject_kind="species_entry",
+            subject_key=role.value,
+            stated="role",
+            detail=(
+                "a 'well_energy' calculation must belong to a species of one of "
+                "this network's states."
+            ),
+        )
+    elif role == NetworkSolveCalculationRole.barrier_energy:
+        if (
+            calculation.transition_state_entry_id is not None
+            and calculation.transition_state_entry_id
+            in network_transition_state_entry_ids
+        ):
+            return
+        _refuse_subject(
+            calculation,
+            field=field,
+            subject_kind="transition_state_entry",
+            subject_key=role.value,
+            stated="role",
+            detail=(
+                "a 'barrier_energy' calculation must belong to a transition "
+                "state of this network."
+            ),
+        )

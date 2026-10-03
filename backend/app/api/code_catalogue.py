@@ -1743,6 +1743,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("network_energy_source_type_mismatch", 422, Surface.coded_exception,
             "backend/app/services/network_energy_sources.py",
             shape=Shape.relationship),
+    ApiCode("network_energy_source_subject_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/network_energy_sources.py",
+            shape=Shape.relationship,
+            note=(
+                "A network solve's state energy, channel barrier or "
+                "well_energy / barrier_energy source link cites a calculation "
+                "owned by a subject other than the one the energy is stated for "
+                "(a species outside the state, another transition state, or a "
+                "species calculation for a barrier). Distinct from "
+                "network_energy_source_type_mismatch: that one is about the "
+                "calculation's type, this one about whose calculation it is."
+            )),
     ApiCode("network_kinetics_batch_evaluate_grid_too_large", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/network_kinetics_batch_evaluate.py",
             shape=Shape.relationship,

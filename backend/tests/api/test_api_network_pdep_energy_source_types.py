@@ -59,6 +59,19 @@ _KEY_BY_TYPE = {
 }
 _ALL_TYPES = tuple(_KEY_BY_TYPE)
 
+# The same matrix on the saddle point: a barrier (and a ``barrier_energy`` link) must cite
+# a calculation of the transition state itself (#668), so its type matrix is the TS's own.
+_TS_KEY_BY_TYPE = {
+    "sp": "ts_elim_sp",
+    "opt": "ts_elim_opt",
+    "freq": "ts_elim_freq",
+    "irc": "ts_elim_irc",
+    "scan": "ts_elim_scan",
+    "path_search": "ts_elim_path",
+    "conf": "ts_elim_conf",
+    "composite": "ts_elim_comp",
+}
+
 #: The types each stated energy accepts, written out by hand.
 _ACCEPTED = {
     "electronic_only": {"sp", "opt", "composite"},
@@ -90,6 +103,28 @@ def _payload(*, parallel: bool = False) -> dict:
                     "assembly": "program_run",
                     "electronic_energy_hartree": -79.8,
                     "e0_hartree": -79.75,
+                    "recipe_zpe_hartree": 0.05,
+                },
+            },
+        ]
+    )
+    ts = next(t for t in payload["transition_states"] if t["key"] == "ts_elim")
+    ts_base = {"geometry_key": "ts_elim_geom", "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT}
+    ts["calculations"].extend(
+        [
+            {"key": "ts_elim_scan", "type": "scan", **ts_base},
+            {"key": "ts_elim_path", "type": "path_search", **ts_base},
+            {"key": "ts_elim_conf", "type": "conf", **ts_base},
+            {
+                "key": "ts_elim_comp",
+                "type": "composite",
+                "geometry_key": "ts_elim_geom",
+                "software_release": _SOFTWARE,
+                "level_of_theory": {"method": "CBS-QB3"},
+                "composite_result": {
+                    "assembly": "program_run",
+                    "electronic_energy_hartree": -229.6,
+                    "e0_hartree": -229.55,
                     "recipe_zpe_hartree": 0.05,
                 },
             },
@@ -160,7 +195,7 @@ def test_state_energy_source_type(client, db_session, correction: str, calc_type
 @pytest.mark.parametrize("correction", ["electronic_only", "electronic_plus_zpe"])
 def test_barrier_source_type(client, db_session, correction: str, calc_type: str) -> None:
     payload = _payload()
-    _set_barrier(payload, _KEY_BY_TYPE[calc_type], correction)
+    _set_barrier(payload, _TS_KEY_BY_TYPE[calc_type], correction)
     resp = client.post(_PDEP_URL, json=payload)
     if calc_type in _ACCEPTED[correction]:
         assert resp.status_code == 201, resp.text
@@ -184,9 +219,8 @@ def test_barrier_source_type(client, db_session, correction: str, calc_type: str
 @pytest.mark.parametrize("role", ["well_energy", "barrier_energy"])
 def test_energy_role_source_type(client, db_session, role: str, calc_type: str) -> None:
     payload = _payload()
-    payload["solve"]["source_calculations"] = [
-        {"calculation_key": _KEY_BY_TYPE[calc_type], "role": role}
-    ]
+    keys = _KEY_BY_TYPE if role == "well_energy" else _TS_KEY_BY_TYPE
+    payload["solve"]["source_calculations"] = [{"calculation_key": keys[calc_type], "role": role}]
     resp = client.post(_PDEP_URL, json=payload)
     if calc_type in _ENERGY_ROLE_ACCEPTED:
         assert resp.status_code == 201, resp.text
