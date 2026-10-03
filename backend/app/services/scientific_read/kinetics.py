@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from collections.abc import Mapping
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased, selectinload
@@ -34,6 +35,7 @@ from app.db.models.common import (
     PressureContext,
     RecordReviewStatus,
     SCFStabilityStatus,
+    SpinTreatment,
     SubmissionRecordType,
     ValidationStatus,
 )
@@ -54,6 +56,7 @@ from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
+    CompositeEnergyVerification,
     CompositeSchemeSummary,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
@@ -86,6 +89,7 @@ from app.schemas.reads.scientific_kinetics import (
     ThirdBodyEfficiencyBlock,
 )
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
+from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -97,6 +101,10 @@ from app.services.scientific_read.common import (
     validate_pagination,
     validate_temperature_range,
     visible_statuses,
+)
+from app.services.scientific_read.composite_annotations import (
+    legacy_composite_shape,
+    record_composite_verification,
 )
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
@@ -459,6 +467,12 @@ def get_reaction_kinetics(
         sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs
     }
     calc_meta = _calc_metadata(session, all_source_calc_ids)
+    # How far each cited composite energy has been checked (ADR 0021, P7a): derived now,
+    # in bulk for the whole entry.
+    composite_verifications = verify_composite_calculations(
+        session,
+        [cid for cid, meta in calc_meta.items() if meta.type == CalculationType.composite],
+    )
     geometry_validations = _geometry_validations(session, all_source_calc_ids)
     scf_stabilities = _scf_stabilities(session, all_source_calc_ids)
     calc_refs = _calc_refs(session, all_source_calc_ids)
@@ -589,6 +603,7 @@ def get_reaction_kinetics(
             ts_freq_calc_id=ts_freq_calc_id,
             ts_sp_calc_id=ts_sp_calc_id,
             calc_meta=calc_meta,
+            composite_verifications=composite_verifications,
         )
 
         evidence = _evidence_breakdown(
@@ -1048,13 +1063,17 @@ class _CalcMeta:
     __slots__ = (
         "composite_scheme",
         "id",
+        "lot_aux_basis",
         "lot_basis",
+        "lot_cabs_basis",
         "lot_core_treatment",
         "lot_dispersion",
         "lot_id",
         "lot_method",
         "lot_ref",
         "lot_solvent",
+        "lot_solvent_model",
+        "lot_spin_treatment",
         "parameters_json",
         "software_name",
         "software_release_id",
@@ -1083,6 +1102,10 @@ class _CalcMeta:
         parameters_json: dict | None,
         composite_scheme: CompositeSchemeSummary | None = None,
         lot_core_treatment: CoreTreatment | None = None,
+        lot_aux_basis: str | None = None,
+        lot_cabs_basis: str | None = None,
+        lot_solvent_model: str | None = None,
+        lot_spin_treatment: SpinTreatment | None = None,
     ):
         self.composite_scheme = composite_scheme
         self.id = id
@@ -1095,6 +1118,10 @@ class _CalcMeta:
         self.lot_dispersion = lot_dispersion
         self.lot_solvent = lot_solvent
         self.lot_core_treatment = lot_core_treatment
+        self.lot_aux_basis = lot_aux_basis
+        self.lot_cabs_basis = lot_cabs_basis
+        self.lot_solvent_model = lot_solvent_model
+        self.lot_spin_treatment = lot_spin_treatment
         self.software_release_id = software_release_id
         self.software_release_ref = software_release_ref
         self.software_name = software_name
@@ -1140,6 +1167,10 @@ def _calc_metadata(
             Software.name,
             SoftwareRelease.version,
             LevelOfTheory.core_treatment,
+            LevelOfTheory.aux_basis,
+            LevelOfTheory.cabs_basis,
+            LevelOfTheory.solvent_model,
+            LevelOfTheory.spin_treatment,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -1169,6 +1200,10 @@ def _calc_metadata(
             software_version=row[13],
             composite_scheme=schemes.get(row[3]),
             lot_core_treatment=row[14],
+            lot_aux_basis=row[15],
+            lot_cabs_basis=row[16],
+            lot_solvent_model=row[17],
+            lot_spin_treatment=row[18],
         )
         for row in rows
     }
@@ -1637,6 +1672,10 @@ def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None
         dispersion=meta.lot_dispersion,
         solvent=meta.lot_solvent,
         core_treatment=meta.lot_core_treatment,
+        aux_basis=meta.lot_aux_basis,
+        cabs_basis=meta.lot_cabs_basis,
+        solvent_model=meta.lot_solvent_model,
+        spin_treatment=meta.lot_spin_treatment,
         label="/".join(p for p in label_parts if p),
         composite_scheme=meta.composite_scheme,
     )
@@ -1648,6 +1687,7 @@ def _build_kinetics_levels(
     ts_freq_calc_id: int | None,
     ts_sp_calc_id: int | None,
     calc_meta: dict[int, "_CalcMeta"],
+    composite_verifications: Mapping[int, CompositeEnergyVerification],
 ) -> ScientificLevelsSummary:
     """R1 kinetics mapping: ``ts_opt``/``ts_freq``/``ts_sp`` -> derive_levels' opt/freq/sp.
 
@@ -1731,13 +1771,32 @@ def _build_kinetics_levels(
     else:
         energy_meta = None
 
+    geometry = _lot_summary_for_calc(calc_meta.get(ts_opt_calc_id))
+    frequency = _lot_summary_for_calc(calc_meta.get(ts_freq_calc_id))
+    energy_summary = _lot_summary_for_calc(energy_meta)
     return ScientificLevelsSummary(
-        geometry=_lot_summary_for_calc(calc_meta.get(ts_opt_calc_id)),
-        frequency=_lot_summary_for_calc(calc_meta.get(ts_freq_calc_id)),
-        energy=_lot_summary_for_calc(energy_meta),
+        geometry=geometry,
+        frequency=frequency,
+        energy=energy_summary,
         energy_source=derived.energy_source,
         geometry_source=derived.geometry_source,
         frequency_source=derived.frequency_source,
+        composite_energy_verification=record_composite_verification(
+            energy_source=derived.energy_source,
+            typed_composite_ids=[ts_sp_calc_id] if ts_sp_calc_id is not None and energy_is_composite else [],
+            verifications=composite_verifications,
+        ),
+        # A kinetics citation never links a non-``composite`` calculation under a composite role
+        # (the role does not exist here), so only the named-method-level shape can occur.
+        legacy_composite_shape=legacy_composite_shape(
+            composite_role_on_non_composite=False,
+            geometry=geometry,
+            geometry_source=derived.geometry_source,
+            frequency=frequency,
+            frequency_source=derived.frequency_source,
+            energy=energy_summary,
+            energy_source=derived.energy_source,
+        ),
     )
 
 

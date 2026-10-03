@@ -58,6 +58,7 @@ from app.db.models.common import (
     CalculationRecordKind,
     CalculationType,
     CoreTreatment,
+    SpinTreatment,
     SubmissionRecordType,
 )
 from app.db.models.geometry import Geometry
@@ -190,6 +191,10 @@ class _CalcRow:
     energy_kind: str | None  # "electronic_energy" | "final_energy" | None
     composite_scheme: CompositeSchemeSummary | None = None
     lot_core_treatment: CoreTreatment | None = None
+    lot_aux_basis: str | None = None
+    lot_cabs_basis: str | None = None
+    lot_solvent_model: str | None = None
+    lot_spin_treatment: SpinTreatment | None = None
 
 
 def search_species_calculations(
@@ -634,6 +639,10 @@ def _query_candidate_calculations(
             CalculationSPResult.electronic_energy_hartree,
             CalculationOptResult.final_energy_hartree,
             LevelOfTheory.core_treatment,
+            LevelOfTheory.aux_basis,
+            LevelOfTheory.cabs_basis,
+            LevelOfTheory.solvent_model,
+            LevelOfTheory.spin_treatment,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -736,6 +745,10 @@ def _query_candidate_calculations(
                 energy_kind=energy_kind,
                 composite_scheme=schemes.get(row[6]),
                 lot_core_treatment=row[23],
+                lot_aux_basis=row[24],
+                lot_cabs_basis=row[25],
+                lot_solvent_model=row[26],
+                lot_spin_treatment=row[27],
             )
         )
     return out
@@ -1254,6 +1267,10 @@ def _lot_summary_from_row(row: _CalcRow) -> LevelOfTheorySummary | None:
         dispersion=row.lot_dispersion,
         solvent=row.lot_solvent,
         core_treatment=row.lot_core_treatment,
+        aux_basis=row.lot_aux_basis,
+        cabs_basis=row.lot_cabs_basis,
+        solvent_model=row.lot_solvent_model,
+        spin_treatment=row.lot_spin_treatment,
         label="/".join(p for p in label_parts if p),
         composite_scheme=row.composite_scheme,
     )

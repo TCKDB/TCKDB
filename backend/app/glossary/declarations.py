@@ -27,8 +27,11 @@ from app.db.models.common import (
     AtomMapSource,
     CalculationQuality,
     CalculationType,
+    CompositeEnergyVerificationState,
+    CompositeTermLinearity,
     DatasetReleaseStatus,
     KineticsDirection,
+    LegacyCompositeShape,
     ProfileRecommendation,
     ReadProfile,
     RecordReviewStatus,
@@ -430,7 +433,10 @@ _REPRODUCIBILITY = Vocabulary(
         "a statement about *completeness of the deposit* rather than a promise "
         "of bitwise-identical output. Only a calculation can be graded above "
         "`described`: a thermo or kinetics record keeps the limits of the "
-        "sources behind it."
+        "sources behind it. An assembled composite energy, which ran no program "
+        "of its own, is graded on its inputs instead: it reaches a level only "
+        "when every calculation it cites does, and only while its stated total "
+        "still follows from them."
     ),
     terms=(
         Term(
@@ -460,6 +466,131 @@ _REPRODUCIBILITY = Vocabulary(
                 "bytes TCKDB could not read. It is not a claim that a rerun "
                 "would reproduce the numbers."
             ),
+        ),
+    ),
+)
+
+
+_COMPOSITE_VERIFICATION = Vocabulary(
+    group=Group.trust,
+    title="Composite energy verification",
+    enum=CompositeEnergyVerificationState,
+    carried_by=(
+        "`composite_energy_verification.state` on a composite calculation, and the same block on "
+        "`levels` of a thermo, statmech or kinetics record whose energy comes from a composite"
+    ),
+    summary=(
+        "How far a composite energy (CBS-QB3, G4, a CCSD(T)/CBS extrapolation, a focal-point sum) has been "
+        "checked by TCKDB. Computed on every read and never stored; TCKDB never stores a total it computed "
+        "itself, so an assembled composite's number is always the one the depositor sent. It says nothing "
+        "about whether a person has looked, and nothing about whether the recipe is a good one."
+    ),
+    terms=(
+        Term(
+            token="recomputed",
+            means=(
+                "An assembled composite whose stored inputs, run through its scheme just now, give the total "
+                "it states, within a tolerance that scales with how many rounded numbers went into the "
+                "sum. Because it is recomputed on every read, an input energy deposited later is picked up."
+            ),
+        ),
+        Term(
+            token="recompute_mismatch",
+            means=(
+                "The same recomputation disagrees. This can only happen after the fact, because a total that "
+                "disagreed was refused at upload: an input's stored energy is no longer what the total was "
+                "checked against (a single point whose energy a later log upload filled in, say; an "
+                "accepted input cannot change). "
+                "`difference_hartree` is the stated total minus the recomputed one."
+            ),
+        ),
+        Term(
+            token="log_reconciled",
+            means=(
+                "A program run (one program printed the final number) whose attached output log was compared "
+                "at upload and confirmed every number the deposit stated."
+            ),
+        ),
+        Term(
+            token="program_reported",
+            means=(
+                "A program run with no confirming log: none was attached, or the one attached could not "
+                "confirm it. The `reason` says which, and names a log that *disagreed* (`log_mismatch`, "
+                "`log_method_mismatch`) rather than hiding it."
+            ),
+        ),
+        Term(
+            token="unverifiable",
+            means=(
+                "The check cannot be made: an input or one of its energy components is not stated, the "
+                "split of an input's correlation energy matches neither convention for (T), or no energy "
+                "was stated at all. The `reason` names which; nothing is guessed."
+            ),
+        ),
+    ),
+)
+
+
+_LEGACY_COMPOSITE_SHAPE = Vocabulary(
+    group=Group.provenance,
+    title="Legacy composite shape",
+    enum=LegacyCompositeShape,
+    carried_by="`levels.legacy_composite_shape` on a record, and the same field on a calculation",
+    summary=(
+        "A way of depositing a composite energy from before TCKDB had a `composite` calculation type. "
+        "It is an annotation only: the record reads exactly as it was deposited, and its levels are "
+        "derived as they always were."
+    ),
+    terms=(
+        Term(
+            token="composite_role_on_non_composite_calculation",
+            means=(
+                "A calculation that is not of type `composite` (a single point, say) is linked to the record "
+                "under the source role `composite`."
+            ),
+        ),
+        Term(
+            token="named_method_level_on_non_composite_calculation",
+            means=(
+                "An optimisation, frequency or single-point calculation ran at the level of a named "
+                "composite method such as CBS-QB3. The energy of such a method is one number a program "
+                "printed after several internal steps, which a `composite` calculation records and a "
+                "plain single point cannot."
+            ),
+        ),
+    ),
+)
+
+
+_COMPOSITE_TERM_LINEARITY = Vocabulary(
+    group=Group.provenance,
+    title="Composite term linearity",
+    enum=CompositeTermLinearity,
+    carried_by="`linearity` on each term of a composite scheme read",
+    summary=(
+        "Whether one term of a composite recipe is a fixed linear combination of the energies of its "
+        "inputs, so that each input's `coefficient` means something. Derived from the term's operation "
+        "and formula; never stored."
+    ),
+    terms=(
+        Term(
+            token="linear",
+            means=(
+                "A value, base or difference term, or a two-point extrapolation. Each input carries its "
+                "coefficient: +1 for a value, +1 and -1 for the high and low of a difference, and the "
+                "closed-form weights of the extrapolation (which sum to 1)."
+            ),
+        ),
+        Term(
+            token="nonlinear",
+            means=(
+                "The three-point exponential extrapolation. Its limit is a ratio of differences of the "
+                "energies, so it has no fixed weights, and none are given."
+            ),
+        ),
+        Term(
+            token="not_applicable",
+            means="An empirical term, which is not computed from inputs at all.",
         ),
     ),
 )
@@ -1072,6 +1203,9 @@ VOCABULARIES: tuple[Vocabulary, ...] = (
     _ORIGIN,
     _CALCULATION_TYPE,
     _CALCULATION_QUALITY,
+    _COMPOSITE_VERIFICATION,
+    _LEGACY_COMPOSITE_SHAPE,
+    _COMPOSITE_TERM_LINEARITY,
     _VALIDATION_STATUS,
     _ATOM_MAP_SOURCE,
     _TS_ENTRY_STATUS,

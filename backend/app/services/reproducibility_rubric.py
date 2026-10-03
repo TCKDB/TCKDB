@@ -22,6 +22,17 @@ was the defect ADR 0008 names: the two tiers could disagree about the
 same record, and which answer a reader got depended on which path ran
 last.
 
+**An assembled composite is reproducible only if its inputs are** (ADR 0021, P7a). An
+assembled composite energy is arithmetic over other deposited calculations: it ran
+no program, so it has no software, logs, inputs or parameters of its own to grade,
+and grading it on those would cap every one at ``insufficient``. Its evidence *is* its
+inputs'. For it the software/log/preserved-input checks are replaced by checks that
+grade each input calculation with this same rubric and require every input to reach
+the level, and by a check that its stated total follows from the stored inputs
+(``composite_energy_verification`` is ``recomputed``, recomputed now). The grade is
+therefore the lowest of its own described/auditable evidence and its weakest input's,
+and it changes when an input does. No other calculation's checks change.
+
 The execution-environment manifest is deliberately **not** graded. It is
 recorded in ``context_json['execution_environment']`` as provenance. Gating a
 grade on a byte digest of a site-installed binary would make the top grade
@@ -59,6 +70,8 @@ from app.db.models.common import (
     ArtifactIntegrityFinding,
     ArtifactKind,
     CalculationType,
+    CompositeAssembly,
+    CompositeEnergyVerificationState,
     ReproducibilityAssessorKind,
     ReproducibilityGrade,
     SubmissionRecordType,
@@ -85,6 +98,7 @@ from app.services.artifact_storage import (
     ArtifactStorageUnavailable,
     load_artifact_bytes,
 )
+from app.services.composite_verification import verify_composite_calculation
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.reproducibility_assessment import (
     append_reproducibility_assessment,
@@ -939,6 +953,65 @@ def _execution_environment_snapshot(calculation: Calculation | None) -> dict[str
     return {"recorded": True, "revalidates": valid, "tier": manifest.runtime_kind, **evidence}
 
 
+_GRADE_ORDER: dict[ReproducibilityGrade, int] = {
+    ReproducibilityGrade.insufficient: 0,
+    ReproducibilityGrade.described: 1,
+    ReproducibilityGrade.auditable: 2,
+    ReproducibilityGrade.rerunnable: 3,
+}
+
+
+def _is_assembled_composite(target: Any) -> bool:
+    """Whether ``target`` is a composite calculation whose energy is arithmetic over other calculations."""
+    return (
+        isinstance(target, Calculation)
+        and target.type is CalculationType.composite
+        and target.composite_result is not None
+        and target.composite_result.assembly is CompositeAssembly.assembled
+    )
+
+
+def _assembled_composite_evidence(
+    session: Session,
+    composite: Calculation,
+    *,
+    artifact_loader: ArtifactLoader,
+    integrity_session_factory: Callable[[], Session] | None,
+    integrity_storage_client: Any,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Grade each input of an assembled composite with this rubric, and re-verify its total now.
+
+    :returns: ``(inputs, verification)``: one entry per cited input calculation (its slot(s)
+        and the grade this rubric gives it as an evidence root) and the composite's
+        verification, both recomputed here, never read from a stored verdict.
+    """
+    slots_by_input: dict[int, list[dict[str, Any]]] = {}
+    for row in composite.composite_inputs:
+        slots_by_input.setdefault(row.input_calculation_id, []).append(
+            {"term_position": row.term_position, "slot": row.slot.value, "cardinal_number": row.cardinal_number}
+        )
+    inputs: list[dict[str, Any]] = []
+    for input_id in sorted(slots_by_input):
+        input_calculation = session.get(Calculation, input_id)
+        grade = (
+            # An input is a single point or an optimisation by construction, so this never recurses
+            # into another composite; a calculation of any other type is not graded as an input.
+            evaluate_reproducibility(
+                session,
+                record_type=SubmissionRecordType.calculation,
+                record_id=input_id,
+                artifact_loader=artifact_loader,
+                integrity_session_factory=integrity_session_factory,
+                integrity_storage_client=integrity_storage_client,
+            ).grade
+            if input_calculation is not None and input_calculation.type in (CalculationType.sp, CalculationType.opt)
+            else ReproducibilityGrade.insufficient
+        )
+        inputs.append({"calculation_id": input_id, "slots": slots_by_input[input_id], "grade": grade.value})
+    verification = verify_composite_calculation(session, composite.id)
+    return inputs, ({} if verification is None else verification.model_dump(mode="json", exclude_none=True))
+
+
 def evaluate_reproducibility(
     session: Session,
     *,
@@ -994,6 +1067,27 @@ def evaluate_reproducibility(
 
     context_present, context_detail = _scientific_context(target, target_evidence)
     attribution_outcome, attribution_detail = _source_attribution(target, source_refs)
+    assembled = _is_assembled_composite(target)
+    assembled_inputs: list[dict[str, Any]] = []
+    assembled_verification: dict[str, Any] = {}
+    if assembled:
+        assembled_inputs, assembled_verification = _assembled_composite_evidence(
+            session,
+            target,
+            artifact_loader=artifact_loader,
+            integrity_session_factory=integrity_session_factory,
+            integrity_storage_client=integrity_storage_client,
+        )
+        # An assembled composite ran no program, so it has no software or literature of its own to
+        # attribute; it is attributed through the calculations it cites, which are graded below.
+        attribution_outcome = (
+            CheckOutcome.passed if target.lot_id is not None and assembled_inputs else CheckOutcome.missing
+        )
+        attribution_detail = {
+            "reason": "attributed_through_composite_inputs",
+            "level_of_theory_id": target.lot_id,
+            "input_calculation_ids": [entry["calculation_id"] for entry in assembled_inputs],
+        }
     direct_calculation = target if isinstance(target, Calculation) else None
     direct_snapshot = calculations.get(str(target.id)) if direct_calculation is not None else None
     typed_output_present = bool(direct_snapshot and direct_snapshot["typed_output_present"])
@@ -1040,6 +1134,11 @@ def evaluate_reproducibility(
     )
     environment_snapshot = _execution_environment_snapshot(direct_calculation)
 
+    def inputs_reach(grade: ReproducibilityGrade) -> bool:
+        return bool(assembled_inputs) and all(
+            _GRADE_ORDER[ReproducibilityGrade(entry["grade"])] >= _GRADE_ORDER[grade] for entry in assembled_inputs
+        )
+
     checks = [
         _check("target_identity", CheckLevel.described, bool(target_evidence["reference"]), target_evidence),
         _check("scientific_context", CheckLevel.described, context_present, context_detail),
@@ -1058,8 +1157,10 @@ def evaluate_reproducibility(
         _check(
             "calculation_metadata",
             CheckLevel.auditable,
-            bool(level_of_theory and nonconflicting_software_identity),
-            {
+            bool(level_of_theory) if assembled else bool(level_of_theory and nonconflicting_software_identity),
+            {"level_of_theory": level_of_theory, "reason": "assembled_composite_has_no_program_run"}
+            if assembled
+            else {
                 "level_of_theory": level_of_theory,
                 "software_release": software_release,
                 "exact_release_token": exact_release_token,
@@ -1073,11 +1174,30 @@ def evaluate_reproducibility(
             typed_output_present,
             {} if direct_snapshot is None else direct_snapshot["typed_output"],
         ),
-        _check(
-            "verified_output_artifact_bytes",
-            CheckLevel.auditable,
-            bool(verified_outputs),
-            {"output_artifacts": output_artifacts},
+        *(
+            [
+                _check(
+                    "composite_inputs_auditable",
+                    CheckLevel.auditable,
+                    inputs_reach(ReproducibilityGrade.auditable),
+                    {"inputs": assembled_inputs},
+                ),
+                _check(
+                    "composite_total_follows_from_inputs",
+                    CheckLevel.auditable,
+                    assembled_verification.get("state") == CompositeEnergyVerificationState.recomputed.value,
+                    {"verification": assembled_verification},
+                ),
+            ]
+            if assembled
+            else [
+                _check(
+                    "verified_output_artifact_bytes",
+                    CheckLevel.auditable,
+                    bool(verified_outputs),
+                    {"output_artifacts": output_artifacts},
+                )
+            ]
         ),
         ReproducibilityCheck(
             name="source_role_preservation",
@@ -1090,20 +1210,40 @@ def evaluate_reproducibility(
                 "source_calculations": attribution_detail.get("source_calculations", []),
             },
         ),
-        _check(
-            "preserved_input_artifacts",
-            CheckLevel.rerunnable,
-            bool(input_artifacts),
-            {"input_artifacts": input_artifacts},
-        ),
-        _check(
-            "execution_parameter_snapshot",
-            CheckLevel.rerunnable,
-            bool(direct_snapshot and (direct_snapshot["parameters_json"] or direct_snapshot["parameters"])),
-            {
-                "parameters_json": None if direct_snapshot is None else direct_snapshot["parameters_json"],
-                "parameters": [] if direct_snapshot is None else direct_snapshot["parameters"],
-            },
+        *(
+            [
+                _check(
+                    "composite_inputs_rerunnable",
+                    CheckLevel.rerunnable,
+                    inputs_reach(ReproducibilityGrade.rerunnable),
+                    {"inputs": assembled_inputs},
+                ),
+                # The arithmetic is the whole procedure; there is no execution to parameterise.
+                ReproducibilityCheck(
+                    name="execution_parameter_snapshot",
+                    level=CheckLevel.rerunnable,
+                    outcome=CheckOutcome.not_applicable,
+                    evidence={"reason": "assembled_composite_has_no_program_run"},
+                ),
+            ]
+            if assembled
+            else [
+                _check(
+                    "preserved_input_artifacts",
+                    CheckLevel.rerunnable,
+                    bool(input_artifacts),
+                    {"input_artifacts": input_artifacts},
+                ),
+                _check(
+                    "execution_parameter_snapshot",
+                    CheckLevel.rerunnable,
+                    bool(direct_snapshot and (direct_snapshot["parameters_json"] or direct_snapshot["parameters"])),
+                    {
+                        "parameters_json": None if direct_snapshot is None else direct_snapshot["parameters_json"],
+                        "parameters": [] if direct_snapshot is None else direct_snapshot["parameters"],
+                    },
+                ),
+            ]
         ),
         _check(
             "upstream_dependency_snapshot",

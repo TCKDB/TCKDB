@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
 from app.api.routes._pagination import PaginatedResponse
+from app.db.models.common import CoreTreatment
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.schemas.entities.level_of_theory import LevelOfTheoryRead
 from app.services.scientific_read.handles import canonical_level_of_theory_id
@@ -30,6 +31,7 @@ def list_levels_of_theory(
     basis: str | None = Query(None),
     dispersion: str | None = Query(None),
     solvent: str | None = Query(None),
+    core_treatment: CoreTreatment | None = Query(None),
     lot_hash: str | None = Query(None),
 ):
     # A merged row (#574) is another spelling of a listed row; it is not a
@@ -45,6 +47,8 @@ def list_levels_of_theory(
         base = base.where(dispersion_matches(dispersion))
     if solvent is not None:
         base = base.where(solvent_matches(solvent))
+    if core_treatment is not None:
+        base = base.where(LevelOfTheory.core_treatment == core_treatment)
     if lot_hash is not None:
         base = base.where(LevelOfTheory.lot_hash == lot_hash)
 

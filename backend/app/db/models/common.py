@@ -918,6 +918,71 @@ class CompositeAssembly(str, Enum):
     assembled = "assembled"
 
 
+class CompositeLogOutcome(str, Enum):
+    """What comparing a composite calculation's deposited energy with an attached log concluded.
+
+    Recorded once per ``(calculation, output-log digest)`` when the log is
+    uploaded (``calc_composite_log_check``), so a read can say whether a program
+    run's number was confirmed without parsing a log again. The members are the
+    outcomes of :func:`app.services.composite_energy_reconciliation.reconcile_composite_energy`.
+    """
+
+    confirmed = "confirmed"
+    mismatch = "mismatch"
+    method_mismatch = "method_mismatch"
+    available = "available"
+    unverifiable = "unverifiable"
+    absent = "absent"
+
+
+class CompositeEnergyVerificationState(str, Enum):
+    """How far a composite energy has been checked, as a read reports it (ADR 0021, P7a).
+
+    Derived at read time and never stored; a read-only vocabulary with no
+    database type. ``recomputed`` and ``recompute_mismatch`` apply to an
+    ``assembled`` composite (arithmetic over stored inputs), ``log_reconciled`` and
+    ``program_reported`` to a ``program_run`` one; ``unverifiable`` to either.
+    """
+
+    recomputed = "recomputed"
+    recompute_mismatch = "recompute_mismatch"
+    log_reconciled = "log_reconciled"
+    program_reported = "program_reported"
+    unverifiable = "unverifiable"
+
+
+class CompositeTermLinearity(str, Enum):
+    """Whether a scheme term is a fixed linear combination of its inputs' energies (ADR 0021, P7a).
+
+    Read-only vocabulary derived from a term's operation and formula; no database type.
+    ``linear``: ``base``, ``value`` and ``difference`` terms and the two-point extrapolations,
+    whose per-input coefficients are reported. ``nonlinear``: ``exponential_three_point``,
+    whose limit is a ratio of the energies, so it has no fixed coefficients and none are
+    invented. ``not_applicable``: an ``empirical`` term, which is not computed from inputs.
+    """
+
+    linear = "linear"
+    nonlinear = "nonlinear"
+    not_applicable = "not_applicable"
+
+
+class LegacyCompositeShape(str, Enum):
+    """A record shape from before the ``composite`` calculation type existed (ADR 0021, P7a).
+
+    Annotated on reads, never repaired: the derived levels of such a record are
+    exactly what they were, so a depositor's data is not silently re-read as
+    something it did not claim to be.
+
+    ``composite_role_on_non_composite_calculation``: a calculation of another type
+    is linked under the role ``composite``.
+    ``named_method_level_on_non_composite_calculation``: an ``opt`` or ``sp`` ran at
+    the level of a catalogued named composite method (CBS-QB3, G4, ...).
+    """
+
+    composite_role_on_non_composite_calculation = "composite_role_on_non_composite_calculation"
+    named_method_level_on_non_composite_calculation = "named_method_level_on_non_composite_calculation"
+
+
 class CoreTreatment(str, Enum):
     """Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).
 

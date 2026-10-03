@@ -50,7 +50,7 @@ from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
-from app.db.models.common import SpinTreatment
+from app.db.models.common import CoreTreatment, SpinTreatment
 from app.schemas.reads.scientific_level_of_theory_search import (
     LevelOfTheoryBrowseRequest,
     ScientificLevelOfTheorySearchResponse,
@@ -73,6 +73,7 @@ def scientific_level_of_theory_browse(
     dispersion: str | None = Query(None),
     solvent: str | None = Query(None),
     spin_treatment: SpinTreatment | None = Query(None),
+    core_treatment: CoreTreatment | None = Query(None),
     has_correction_schemes: bool | None = Query(None),
     has_frequency_scale_factors: bool | None = Query(None),
     include_rejected: bool = Query(False),
@@ -110,6 +111,7 @@ def scientific_level_of_theory_browse(
         dispersion=dispersion,
         solvent=solvent,
         spin_treatment=spin_treatment,
+        core_treatment=core_treatment,
         has_correction_schemes=has_correction_schemes,
         has_frequency_scale_factors=has_frequency_scale_factors,
         include_rejected=include_rejected,

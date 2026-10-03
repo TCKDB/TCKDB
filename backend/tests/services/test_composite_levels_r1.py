@@ -238,7 +238,7 @@ def test_the_kinetics_levels_name_the_role_the_ts_energy_calculation_played(ener
         11: _meta(11, energy_type, 3, "CBS-QB3"),
     }
     levels = _build_kinetics_levels(
-        ts_opt_calc_id=10, ts_freq_calc_id=None, ts_sp_calc_id=11, calc_meta=calc_meta
+        ts_opt_calc_id=10, ts_freq_calc_id=None, ts_sp_calc_id=11, calc_meta=calc_meta, composite_verifications={}
     )
     assert levels.energy_source == expected_source
     assert levels.energy is not None and levels.energy.method == "CBS-QB3"
@@ -250,7 +250,7 @@ def test_the_kinetics_levels_of_a_composite_with_no_opt_state_no_geometry():
     """The kinetics read has no session here, so it never invents a recipe level."""
     calc_meta = {11: _meta(11, CalculationType.composite, 3, "CBS-QB3")}
     levels = _build_kinetics_levels(
-        ts_opt_calc_id=None, ts_freq_calc_id=None, ts_sp_calc_id=11, calc_meta=calc_meta
+        ts_opt_calc_id=None, ts_freq_calc_id=None, ts_sp_calc_id=11, calc_meta=calc_meta, composite_verifications={}
     )
     assert levels.energy_source == "composite"
     assert levels.geometry is None and levels.geometry_source is None

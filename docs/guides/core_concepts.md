@@ -93,7 +93,10 @@ its energy in `calc_composite_result`. A user-built scheme (a CCSD(T)/CBS
 extrapolation, a focal-point sum) is sent inline on the level of theory, and an
 `assembled` composite names the single points that fill its slots
 (`calc_composite_input`, each mirrored by a `composite_input` dependency edge);
-TCKDB recomputes the total from them to check yours and never stores its own. A named composite
+TCKDB recomputes the total from them to check yours and never stores its own. A read says how far a
+composite energy has been checked (`composite_energy_verification`: recomputed from its inputs on every
+read, or confirmed against an output log at upload, or neither) and writes a record's energy and
+geometry levels as `notation`, e.g. `CCSD(T)-F12/cc-pVTZ-F12//wB97X-D/def2-TZVP`. A named composite
 deposited as an `sp` or `opt` still stores, with a warning. The decided model
 is in [ADR 0021](../adr/0021-composite-levels-of-theory-are-a-recipe-bound-to-a-level-not-a-weighted-level.md).
 

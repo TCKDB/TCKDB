@@ -11,24 +11,35 @@ the computed-species / computed-reaction bundles), so coverage matches the
 single-point hook without touching those call sites.
 
 Best-effort and never raises, like its sibling: artifact upload is canonical.
-It also never writes: a mismatch is a warning and nothing is filled from the log
-(see the reconciliation module for why).
+It never writes an energy: a mismatch is a warning and nothing is filled from the
+log (see the reconciliation module for why). It does record the *conclusion*, one
+``calc_composite_log_check`` row per ``(calculation, log digest)``, so a read can
+say whether a program run's number was confirmed (``composite_energy_verification``)
+without parsing a log again.
 """
 
 from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import logging
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from tckdb_schemas.upload_warning import UploadWarning
 
-from app.db.models.calculation import Calculation, CalculationCompositeResult
+from app.db.models.calculation import (
+    Calculation,
+    CalculationCompositeLogCheck,
+    CalculationCompositeResult,
+)
+from app.db.models.common import CompositeLogOutcome
 from app.db.models.level_of_theory import LevelOfTheory
 from app.schemas.fragments.artifact import ArtifactIn
 from app.services.best_effort import isolated_best_effort
 from app.services.composite_energy_reconciliation import (
+    COMPOSITE_LOG_PARSER_VERSION,
     CompositeEnergyAction,
     reconcile_composite_energy,
 )
@@ -82,6 +93,18 @@ def _reconcile(
         electronic_energy_hartree=result.electronic_energy_hartree,
         recipe_zpe_hartree=result.recipe_zpe_hartree,
         log_text=text,
+    )
+    # Record the conclusion (never a number). The same bytes uploaded twice under one
+    # parser version conclude the same thing about an immutable result, so the second observation is dropped.
+    session.execute(
+        pg_insert(CalculationCompositeLogCheck)
+        .values(
+            calculation_id=calculation.id,
+            artifact_sha256=hashlib.sha256(content).hexdigest(),
+            parser_version=COMPOSITE_LOG_PARSER_VERSION,
+            outcome=CompositeLogOutcome(outcome.action.value),
+        )
+        .on_conflict_do_nothing()
     )
     if outcome.action is CompositeEnergyAction.unverifiable:
         logger.info(

@@ -992,3 +992,56 @@ def test_include_freq_modes_costs_a_page_one_more_statement(db_session):
         "asking for the modes must not also multiply the summary "
         f"({small_results} against {large_results})"
     )
+
+
+# ---------------------------------------------------------------------------
+# Composite records: the verification is one pass per page (ADR 0021, P7a)
+# ---------------------------------------------------------------------------
+
+#: A page of assembled composites costs the ordinary per-record floor and nothing for the verification:
+#: ``composite_energy_verification`` is computed for the whole page in one bulk pass, not by recomputing each
+#: composite's total inside ``build_record`` (about nine extra statements per record when it was). The ceiling is the
+#: measured slope of the fixture below plus no allowance for a per-record verification.
+COMPOSITE_STATEMENTS_PER_RECORD = 6
+
+_COMPOSITE_SMALL_PAGE = 2
+_COMPOSITE_LARGE_PAGE = 12
+
+
+def _composite_page_statements(session: Session, *, limit: int) -> int:
+    count = 0
+    engine = session.connection().engine
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _before(conn, cursor, statement, parameters, context, executemany):
+        nonlocal count
+        count += 1
+
+    try:
+        response = search_calculations(
+            session,
+            CalculationsSearchRequest(calculation_type=CalculationType.composite, limit=limit),
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", _before)
+    assert len(response.records) == limit, "page must be full to be comparable"
+    assert {r.composite_energy_verification.state.value for r in response.records} == {"recomputed"}
+    return count
+
+
+def test_a_composite_search_page_costs_no_verification_statement_per_record(client, db_session):
+    from tests import composite_p5_fixtures as f
+
+    for _ in range(_COMPOSITE_LARGE_PAGE + 1):
+        resp = client.post("/api/v1/uploads/computed-species", json=f.bundle_b())
+        assert resp.status_code in (200, 201), resp.text[:400]
+
+    small = _composite_page_statements(db_session, limit=_COMPOSITE_SMALL_PAGE)
+    large = _composite_page_statements(db_session, limit=_COMPOSITE_LARGE_PAGE)
+    slope = (large - small) / (_COMPOSITE_LARGE_PAGE - _COMPOSITE_SMALL_PAGE)
+    print(f"composite page slope: {slope} ({small} for {_COMPOSITE_SMALL_PAGE}, {large} for {_COMPOSITE_LARGE_PAGE})")
+    assert slope <= COMPOSITE_STATEMENTS_PER_RECORD, (
+        f"{slope} statements per composite record, expected at most {COMPOSITE_STATEMENTS_PER_RECORD} "
+        f"({small} for {_COMPOSITE_SMALL_PAGE} records, {large} for {_COMPOSITE_LARGE_PAGE}): "
+        "the verification is being recomputed per record"
+    )

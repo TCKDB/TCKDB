@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
+from app.db.models.level_of_theory import LevelOfTheory
 from app.schemas.reads.scientific_common import CompositeSchemeSummary
 
 
@@ -36,13 +37,29 @@ def composite_scheme_summaries(
             CompositeScheme.public_ref,
             CompositeScheme.kind,
             CompositeScheme.name,
+            CompositeScheme.geometry_level_of_theory_id,
         )
         .join(CompositeScheme, CompositeScheme.id == LevelOfTheoryComposite.scheme_id)
         .where(LevelOfTheoryComposite.level_of_theory_id.in_(wanted))
     ).all()
+    # The recipe's own geometry level, by ref. A separate statement, and only when a bound level states one:
+    # an outer join to ``level_of_theory`` here would be counted (and priced) as a per-page level lookup by every
+    # read that builds these summaries (``test_record_builder_statement_cost``), and an ordinary page has no bound level.
+    geometry_ids = {row[4] for row in rows if row[4] is not None}
+    geometry_refs: dict[int, str] = {}
+    if geometry_ids:
+        for geometry_id, geometry_ref in session.execute(
+            select(LevelOfTheory.id, LevelOfTheory.public_ref).where(LevelOfTheory.id.in_(geometry_ids))
+        ).all():
+            geometry_refs[geometry_id] = geometry_ref
     return {
-        lot_id: CompositeSchemeSummary(composite_scheme_ref=ref, kind=kind, name=name)
-        for lot_id, ref, kind, name in rows
+        lot_id: CompositeSchemeSummary(
+            composite_scheme_ref=ref,
+            kind=kind,
+            name=name,
+            geometry_level_of_theory_ref=geometry_refs.get(geometry_id) if geometry_id is not None else None,
+        )
+        for lot_id, ref, kind, name, geometry_id in rows
     }
 
 

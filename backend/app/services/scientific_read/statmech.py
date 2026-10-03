@@ -75,10 +75,15 @@ from app.schemas.reads.scientific_statmech import (
     StatmechTransitionStateContext,
 )
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
+from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     fetch_review_badges,
     review_summary,
     validate_includes,
+)
+from app.services.scientific_read.composite_annotations import (
+    legacy_composite_shape,
+    record_composite_verification,
 )
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
@@ -518,7 +523,11 @@ def _build_levels(
         declared_energy_lot_id
     )
     if not role_calc_ids:
-        return ScientificLevelsSummary(declared_energy=declared)
+        return ScientificLevelsSummary(
+            declared_energy=declared,
+            composite_energy_verification=None,
+            legacy_composite_shape=None,
+        )
 
     all_ids = {cid for ids in role_calc_ids.values() for cid in ids}
     calcs = {
@@ -574,14 +583,38 @@ def _build_levels(
             if (calc := calcs.get(cid)) is not None and cid not in typed_composite_ids
         ],
     )
+    geometry = _build_lot_summary(session, derived.geometry_lot_id)
+    frequency = _build_lot_summary(session, derived.frequency_lot_id)
+    energy = _build_lot_summary(session, derived.energy_lot_id)
     return ScientificLevelsSummary(
-        geometry=_build_lot_summary(session, derived.geometry_lot_id),
-        frequency=_build_lot_summary(session, derived.frequency_lot_id),
-        energy=_build_lot_summary(session, derived.energy_lot_id),
+        geometry=geometry,
+        frequency=frequency,
+        energy=energy,
         energy_source=derived.energy_source,
         geometry_source=derived.geometry_source,
         frequency_source=derived.frequency_source,
         declared_energy=declared,
+        composite_energy_verification=record_composite_verification(
+            energy_source=derived.energy_source,
+            typed_composite_ids=typed_composite_ids,
+            # Derived now from the stored inputs / recorded log checks, never read from a stored verdict.
+            verifications=(
+                verify_composite_calculations(session, typed_composite_ids)
+                if derived.energy_source == "composite"
+                else {}
+            ),
+        ),
+        legacy_composite_shape=legacy_composite_shape(
+            composite_role_on_non_composite=any(
+                cid in calcs and cid not in typed_composite_ids for cid in role_calc_ids.get("composite", [])
+            ),
+            geometry=geometry,
+            geometry_source=derived.geometry_source,
+            frequency=frequency,
+            frequency_source=derived.frequency_source,
+            energy=energy,
+            energy_source=derived.energy_source,
+        ),
     )
 
 
@@ -735,6 +768,9 @@ def _build_lot_summary(
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
         core_treatment=lot.core_treatment,
+        aux_basis=lot.aux_basis,
+        cabs_basis=lot.cabs_basis,
+        solvent_model=lot.solvent_model,
         label=None,
         composite_scheme=composite_scheme_summary(session, lot.id),
     )
@@ -895,6 +931,9 @@ def _bulk_lot_summaries(
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             core_treatment=lot.core_treatment,
+            aux_basis=lot.aux_basis,
+            cabs_basis=lot.cabs_basis,
+            solvent_model=lot.solvent_model,
             label=None,
             composite_scheme=schemes.get(lot.id),
         )

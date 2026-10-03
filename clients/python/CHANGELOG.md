@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.111.0 - 2026-10-03
+
+Reads gain the composite annotations of ADR 0021, phase P7a (`tckdb-schemas` 0.73.0).
+The client's read methods return the server's JSON as dictionaries, so nothing in the client's code
+changes; this release records which keys a caller may now find, all additions:
+
+- `levels` on a thermo, statmech or kinetics record gains `notation` (for example
+  `CCSD(T)-F12/cc-pVTZ-F12//wB97X-D/def2-TZVP`, or `CBS-QB3`; `null` when the energy or geometry level
+  is absent), `composite_energy_verification` (`state`: `recomputed`, `recompute_mismatch`,
+  `log_reconciled`, `program_reported` or `unverifiable`, with an optional `reason`,
+  `difference_hartree` and `tolerance_hartree`; `null` unless the energy comes from a composite) and
+  `legacy_composite_shape` (`null` unless the record was deposited the way it was before the
+  `composite` calculation type existed).
+- A calculation record gains `composite_energy_verification` and `legacy_composite_shape`.
+- A level-of-theory summary gains `aux_basis`, `cabs_basis` and `solvent_model` (`null` when not stated), and `notation` writes every stated part of each level: `method/basis (aux=..., cabs=..., disp=..., solvent=model:name, spin=..., core=...)`, so levels that differ only in dispersion, solvent model, spin or core treatment read differently.
+- The ML-dataset export's level-of-theory `label` is written by the same renderer, so its text changes for a level that states a spin treatment, a core treatment or an auxiliary or CABS basis (it already wrote dispersion and solvent). `lot_hash` stays the key; the label is not.
+- A level-of-theory summary's `composite_scheme` gains `geometry_level_of_theory_ref`.
+- `GET /scientific/composite-schemes/{ref}`: each term gains `linearity`, each term input a
+  `coefficient`, and the record `linear_in_energies`.
+- `GET /levels-of-theory` returns `core_treatment` and `spin_treatment` and accepts a `core_treatment`
+  filter, as do the scientific level-of-theory search and browse reads; the ML-dataset level-of-theory
+  block carries `core_treatment`.
+
 ## 0.110.0 - 2026-10-02
 
 `RejectionCode` gains the codes of user-built composite schemes, regenerated from

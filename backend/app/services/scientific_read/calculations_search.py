@@ -81,6 +81,7 @@ from app.schemas.reads.scientific_calculation_search import (
     RequestEcho,
     ScientificCalculationsSearchResponse,
 )
+from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.calculations import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
@@ -411,6 +412,11 @@ def search_calculations(
         ],
     )
 
+    # One verification pass for the page's composites (not one per record).
+    composite_verifications = verify_composite_calculations(
+        session, [c.id for c in calcs_by_id.values() if c.type == CalculationType.composite]
+    )
+
     # Materialize each page row via the shared record builder so search
     # records and detail records have identical shape.
     records: list[ScientificCalculationRecord] = []
@@ -425,6 +431,7 @@ def search_calculations(
                 includes,
                 badge=badges[cid],
                 conformer_map=conformer_map,
+                composite_verifications=composite_verifications,
             )
         )
 

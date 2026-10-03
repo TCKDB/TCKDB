@@ -55,3 +55,17 @@ def test_every_construction_site_passes_core_treatment():
 def test_the_core_treatment_walk_sees_the_same_sites_as_the_composite_scheme_walk():
     # Not vacuous: a keyword typo in the walk would make "every site passes it" true of nothing.
     assert [(p, line) for p, line, _ in _calls("core_treatment")] == [(p, line) for p, line, _ in _calls()]
+
+
+#: The identity parts the notation of a record's levels writes (``app.chemistry.level_label``). Each defaults to
+#: ``None``, which reads as "not stated", so a builder that forgot one would silently drop it from every notation
+#: built from its summary. Passed explicitly at every site, even as ``None`` by design (P7a).
+_NOTATION_PARTS = ("aux_basis", "cabs_basis", "solvent_model", "spin_treatment")
+
+
+def test_every_construction_site_passes_every_part_the_notation_writes():
+    sites = _calls()
+    assert len(sites) >= 16
+    for keyword in _NOTATION_PARTS:
+        missing = [f"{p.relative_to(_APP.parent)}:{line}" for p, line, ok in _calls(keyword) if not ok]
+        assert missing == [], f"LevelOfTheorySummary built without {keyword} at: {missing}"
