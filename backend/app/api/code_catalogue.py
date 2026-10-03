@@ -983,6 +983,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "TS entry is resolved from): those are repaired in a "
                 "payload's identity block, this one on a calculation."
             )),
+    ApiCode("calculation_geometry_isotope_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_geometry_composition.py",
+            shape=Shape.relationship,
+            note=(
+                "A geometry linked to a calculation carries different "
+                "isotopic substitutions than the subject the calculation is "
+                "filed under (a species entry's isotope key, or a transition "
+                "state's reactant sum). Count-based: the multiset of "
+                "(element, mass number) is compared, not which atom carries "
+                "the label. The sibling of "
+                "calculation_geometry_composition_mismatch, which counts "
+                "elements and reads D, T and [2H] as hydrogen; distinct from "
+                "species_geometry_isotope_mismatch, which is a conformer "
+                "geometry against its species entry. context['owner_kind'] "
+                "says which reference disagreed."
+            )),
     ApiCode("calculation_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",
             shape=Shape.relationship),

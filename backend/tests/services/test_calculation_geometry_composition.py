@@ -166,6 +166,7 @@ def _species_bundle(
     isotopes: dict[int, int] | None = None,
     opt_input_xyz: str | None = None,
     sp_output_xyz: str | None = None,
+    calc_geometry_isotopes: dict[int, int] | None = None,
 ) -> dict:
     geometry: dict = {"xyz_text": conformer_xyz}
     if isotopes is not None:
@@ -178,7 +179,9 @@ def _species_bundle(
         "opt_result": {"converged": True},
     }
     if opt_input_xyz is not None:
-        primary["input_geometries"] = [{"xyz_text": opt_input_xyz}]
+        primary["input_geometries"] = [
+            {"xyz_text": opt_input_xyz, "isotopes": calc_geometry_isotopes}
+        ]
     additional: list[dict] = []
     if sp_output_xyz is not None:
         additional.append(
@@ -189,7 +192,13 @@ def _species_bundle(
                 "level_of_theory": _LOT,
                 "sp_result": {"electronic_energy_hartree": -40.5},
                 "output_geometries": [
-                    {"geometry": {"xyz_text": sp_output_xyz}, "role": "final"}
+                    {
+                        "geometry": {
+                            "xyz_text": sp_output_xyz,
+                            "isotopes": calc_geometry_isotopes,
+                        },
+                        "role": "final",
+                    }
                 ],
             }
         )
@@ -532,6 +541,10 @@ def test_case_2b_a_labelled_isotopologue_identity_is_not_a_mismatch(
                 isotopes={2: 2, 3: 2, 4: 2},
                 opt_input_xyz=_XYZ_CH4,
                 sp_output_xyz=_XYZ_CH4_DISSOCIATED,
+                # The calculation geometries carry the same labels: the
+                # isotope rule (calculation_geometry_isotope_mismatch) would
+                # refuse an unlabelled CH4 under a CD3H identity.
+                calc_geometry_isotopes={2: 2, 3: 2, 4: 2},
             ),
         )
         session.flush()

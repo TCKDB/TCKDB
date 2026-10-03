@@ -68,6 +68,7 @@ from app.schemas.workflows.reaction_upload import (
 from app.services.artifact_persistence import persist_artifact
 from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
+    assert_calculation_geometry_isotopes,
 )
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
@@ -269,6 +270,12 @@ def _persist_calculation(
         # well's geometry, or a transition state's naming a participant's,
         # reaches here with the wrong atoms.
         assert_calculation_geometry_composition(
+            session,
+            calc=calculation,
+            geometry_id=effective_geometry_id,
+            field=f"calculation '{calc_in.key}': geometry_key",
+        )
+        assert_calculation_geometry_isotopes(
             session,
             calc=calculation,
             geometry_id=effective_geometry_id,
@@ -594,7 +601,7 @@ def persist_network_pdep_upload(
         )
 
         # Resolve TS geometry
-        ts_geom_payload = GeometryPayload(xyz_text=ts_in.geometry.xyz_text)
+        ts_geom_payload = ts_in.geometry.to_payload()
         ts_geometry = resolve_geometry_payload(session, ts_geom_payload)
         geometry_key_to_id[ts_in.geometry.key] = ts_geometry.id
 

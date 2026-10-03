@@ -26,6 +26,7 @@ __all__ = [
     "isotope_mass",
     "most_common_isotope",
     "normalize_isotope",
+    "render_isotope_substitutions",
     "validate_isotope",
 ]
 
@@ -135,3 +136,22 @@ def normalize_isotope(element: str, mass_number: int | None) -> int | None:
     if mass_number == most_common_isotope(element):
         return None
     return mass_number
+
+
+def render_isotope_substitutions(counts: dict[tuple[str, int], int]) -> str:
+    """Render ``(element, mass_number) -> count`` for a refusal message.
+
+    Shared by every isotope-agreement check so the species-entry geometry
+    check and the calculation-geometry check word the same fact the same way.
+
+    :param counts: Mapping of ``(element, mass_number)`` to substituted atoms.
+    :returns: ``"none (all standard isotopes)"`` for an empty mapping, else a
+        sorted, comma-separated rendering such as ``"2Hx1"``.
+    """
+
+    if not counts:
+        return "none (all standard isotopes)"
+    return ", ".join(
+        f"{mass_number}{element}x{count}"
+        for (element, mass_number), count in sorted(counts.items())
+    )
