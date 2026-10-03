@@ -189,12 +189,21 @@ def verify_composite_calculations(
 def _log_outcomes(session: Session, calculation_ids: list[int]) -> dict[int, frozenset[CompositeLogOutcome]]:
     if not calculation_ids:
         return {}
-    grouped: dict[int, set[CompositeLogOutcome]] = defaultdict(set)
-    for calculation_id, outcome in session.execute(
-        select(CalculationCompositeLogCheck.calculation_id, CalculationCompositeLogCheck.outcome).where(
-            CalculationCompositeLogCheck.calculation_id.in_(calculation_ids)
-        )
+    # Per log, the conclusion of the newest parser version that drew one; then the set of conclusions per calculation.
+    newest: dict[tuple[int, str], tuple[int, CompositeLogOutcome]] = {}
+    for calculation_id, sha, version, outcome in session.execute(
+        select(
+            CalculationCompositeLogCheck.calculation_id,
+            CalculationCompositeLogCheck.artifact_sha256,
+            CalculationCompositeLogCheck.parser_version,
+            CalculationCompositeLogCheck.outcome,
+        ).where(CalculationCompositeLogCheck.calculation_id.in_(calculation_ids))
     ).all():
+        key = (calculation_id, sha)
+        if key not in newest or version > newest[key][0]:
+            newest[key] = (version, outcome)
+    grouped: dict[int, set[CompositeLogOutcome]] = defaultdict(set)
+    for (calculation_id, _sha), (_version, outcome) in newest.items():
         grouped[calculation_id].add(outcome)
     return {cid: frozenset(values) for cid, values in grouped.items()}
 

@@ -270,7 +270,9 @@ class CompositeEnergyVerification(BaseModel):
           weighted tolerance. Recomputed on every read, so an input energy
           deposited later is picked up and nothing about the check is stale.
         * ``recompute_mismatch`` -- the same recomputation disagrees. Possible when
-          an input changed after the composite was accepted. Surfaced, never hidden;
+          an input's stored energy is not what the total was checked against at upload (for
+          example a single point whose energy a later log upload filled in); an input of an
+          accepted composite cannot change. Surfaced, never hidden;
           ``difference_hartree`` (stated minus recomputed) and ``tolerance_hartree``
           say by how much.
         * ``log_reconciled`` -- a ``program_run`` whose attached output log was
@@ -446,6 +448,25 @@ class ScientificLevelsSummary(BaseModel):
         return levels_notation(energy=self.energy, geometry=self.geometry)
 
 
+def level_label(level: LevelOfTheorySummary) -> str:
+    """A level written in full: ``method/basis``, then dispersion, solvent and core treatment when stated.
+
+    ``display`` is method and basis only, so B3LYP-D3BJ/def2-TZVP and plain B3LYP/def2-TZVP both render
+    ``B3LYP/def2-TZVP``. A notation is a headline people read, so it spells out every part of the level's
+    identity the summary carries: ``B3LYP/def2-TZVP (disp=D3BJ, core=frozen_core)``. The parenthesised form
+    is the one the ML-dataset export already uses for its ``label``; nothing is written for a part that is
+    not stated.
+    """
+    extra: list[str] = []
+    if level.dispersion:
+        extra.append(f"disp={level.dispersion}")
+    if level.solvent:
+        extra.append(f"solvent={level.solvent}")
+    if level.core_treatment is not None:
+        extra.append(f"core={level.core_treatment.value}")
+    return f"{level.display} ({', '.join(extra)})" if extra else level.display
+
+
 def levels_notation(*, energy: LevelOfTheorySummary | None, geometry: LevelOfTheorySummary | None) -> str | None:
     """The notation of a record's energy and geometry levels, e.g. ``CCSD(T)-F12/cc-pVTZ-F12//wB97X-D/def2-TZVP``.
 
@@ -458,8 +479,9 @@ def levels_notation(*, energy: LevelOfTheorySummary | None, geometry: LevelOfThe
     * **The same level for both** (compared by ref, not by text: two rows can render
       alike and differ in dispersion or solvent): that level written once. A level
       bound to a recipe is written as the recipe's label (``composite_scheme.name``),
-      any other as ``method/basis`` (``method`` alone when it has no basis), the way
-      :attr:`LevelOfTheorySummary.display` renders it.
+      any other in full by :func:`level_label`: ``method/basis`` (``method`` alone when it has no
+      basis), then ``(disp=..., solvent=..., core=...)`` for each part that is stated, so two levels
+      that differ only in dispersion read differently.
     * **A composite energy level** (one bound to a recipe, ``energy.composite_scheme``
       set; the role that supplied it does not matter) on another level: the composite's
       label followed by ``//`` and the geometry level, **unless the geometry is the
@@ -480,13 +502,13 @@ def levels_notation(*, energy: LevelOfTheorySummary | None, geometry: LevelOfThe
         return None
     scheme = energy.composite_scheme
     if energy.level_of_theory_ref == geometry.level_of_theory_ref:
-        return scheme.name if scheme is not None else energy.display
+        return scheme.name if scheme is not None else level_label(energy)
     if scheme is not None:
         own_geometry = scheme.geometry_level_of_theory_ref
         if own_geometry is not None and own_geometry == geometry.level_of_theory_ref:
             return scheme.name
-        return f"{scheme.name}//{geometry.display}"
-    return f"{energy.display}//{geometry.display}"
+        return f"{scheme.name}//{level_label(geometry)}"
+    return f"{level_label(energy)}//{level_label(geometry)}"
 
 
 class SoftwareReleaseSummary(BaseModel):

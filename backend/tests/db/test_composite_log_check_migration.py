@@ -144,8 +144,8 @@ def test_downgrade_refuses_while_a_row_exists_and_deletes_nothing(harness):
         calc_id = _seed_composite(conn)
         conn.execute(
             text(
-                f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, outcome) "
-                f"VALUES (:c, :s, CAST('confirmed' AS {_ENUM}))"
+                f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, parser_version, outcome) "
+                f"VALUES (:c, :s, 1, CAST('confirmed' AS {_ENUM}))"
             ),
             {"c": calc_id, "s": _SHA},
         )
@@ -171,8 +171,8 @@ def test_the_table_refuses_a_digest_that_is_not_lowercase_sha256_hex(harness, di
     with pytest.raises(DBAPIError), harness.engine.begin() as conn:
         conn.execute(
             text(
-                f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, outcome) "
-                f"VALUES (:c, :s, CAST('confirmed' AS {_ENUM}))"
+                f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, parser_version, outcome) "
+                f"VALUES (:c, :s, 1, CAST('confirmed' AS {_ENUM}))"
             ),
             {"c": calc_id, "s": digest},
         )
@@ -183,12 +183,35 @@ def test_the_table_refuses_a_second_observation_of_the_same_log(harness):
     with harness.engine.begin() as conn:
         calc_id = _seed_composite(conn)
         conn.execute(
-            text(f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, outcome) VALUES (:c, :s, CAST('confirmed' AS {_ENUM}))"),
+            text(f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, parser_version, outcome) VALUES (:c, :s, 1, CAST('confirmed' AS {_ENUM}))"),
             {"c": calc_id, "s": _SHA},
         )
     with pytest.raises(DBAPIError), harness.engine.begin() as conn:
         conn.execute(
-            text(f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, outcome) VALUES (:c, :s, CAST('mismatch' AS {_ENUM}))"),
+            text(f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, parser_version, outcome) VALUES (:c, :s, 1, CAST('mismatch' AS {_ENUM}))"),
+            {"c": calc_id, "s": _SHA},
+        )
+
+
+def test_the_same_log_under_another_parser_version_is_a_second_row_and_version_zero_is_refused(harness):
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        calc_id = _seed_composite(conn)
+        for version in (1, 2):
+            conn.execute(
+                text(
+                    f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, parser_version, outcome) "
+                    f"VALUES (:c, :s, :v, CAST('mismatch' AS {_ENUM}))"
+                ),
+                {"c": calc_id, "s": _SHA, "v": version},
+            )
+        assert conn.scalar(text(f"SELECT count(*) FROM {_TABLE}")) == 2
+    with pytest.raises(DBAPIError), harness.engine.begin() as conn:
+        conn.execute(
+            text(
+                f"INSERT INTO {_TABLE} (calculation_id, artifact_sha256, parser_version, outcome) "
+                f"VALUES (:c, :s, 0, CAST('mismatch' AS {_ENUM}))"
+            ),
             {"c": calc_id, "s": _SHA},
         )
 
@@ -201,7 +224,7 @@ def _composite_with_check(db_session):
     entry = make_species_entry(db_session, species)
     composite = make_calculation(db_session, type=CalculationType.composite, species_entry_id=entry.id)
     row = CalculationCompositeLogCheck(
-        calculation_id=composite.id, artifact_sha256=_SHA, outcome=CompositeLogOutcome.confirmed
+        calculation_id=composite.id, artifact_sha256=_SHA, parser_version=1, outcome=CompositeLogOutcome.confirmed
     )
     db_session.add(row)
     db_session.flush()
@@ -237,7 +260,7 @@ def test_an_accepted_calculations_log_check_is_frozen(db_session):
     with pytest.raises(DBAPIError), db_session.begin_nested():
         db_session.add(
             CalculationCompositeLogCheck(
-                calculation_id=composite.id, artifact_sha256="cd" * 32, outcome=CompositeLogOutcome.mismatch
+                calculation_id=composite.id, artifact_sha256="cd" * 32, parser_version=1, outcome=CompositeLogOutcome.mismatch
             )
         )
         db_session.flush()

@@ -1105,15 +1105,17 @@ Table calc_composite_input {
 Table calc_composite_log_check {
   calculation_id bigint [not null, ref: > calculation.id]
   artifact_sha256 varchar(64) [not null]
+  parser_version int [not null]
   outcome CompositeLogOutcome [not null]
   created_at timestamp [not null, default: 'now']
 
   indexes {
-    (artifact_sha256, calculation_id) [pk]
+    (artifact_sha256, calculation_id, parser_version) [pk]
   }
 
   checks {
     `artifact_sha256 ~ '^[0-9a-f]{64}$'` [name: 'ck_calc_composite_log_check_artifact_sha256_hex']
+    `parser_version >= 1` [name: 'ck_calc_composite_log_check_parser_version_positive']
   }
 
   Note: 'What comparing a composite calculation with one attached output log concluded (ADR 0021, P7a).'

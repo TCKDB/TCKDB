@@ -10,6 +10,8 @@ that do nothing. See ``backend/docs/specs/scientific_calculation_reads.md``.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from sqlalchemy import exists, false, func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -115,6 +117,7 @@ from app.schemas.reads.scientific_calculation import (
     TransitionStateEntryOwnerSummary,
 )
 from app.schemas.reads.scientific_common import (
+    CompositeEnergyVerification,
     LevelOfTheorySummary,
     LiteratureSummary,
     RecordReviewBadge,
@@ -337,6 +340,7 @@ def build_record(
     *,
     badge: RecordReviewBadge | None = None,
     conformer_map: dict[int, CalculationConformerSummary] | None = None,
+    composite_verifications: Mapping[int, CompositeEnergyVerification] | None = None,
 ) -> ScientificCalculationRecord:
     """Construct a public ``ScientificCalculationRecord`` for *calc*.
 
@@ -477,9 +481,13 @@ def build_record(
 
     # ADR 0021, P7a. Verification is recomputed here on every read (never stored); the
     # legacy annotation reads the level summary above and changes nothing about it.
-    composite_verification = (
-        verify_composite_calculation(session, calc.id) if calc.type == CalculationType.composite else None
-    )
+    if calc.type != CalculationType.composite:
+        composite_verification = None
+    elif composite_verifications is not None:
+        # A page already verified its composites in bulk (the calculations search).
+        composite_verification = composite_verifications.get(calc.id)
+    else:
+        composite_verification = verify_composite_calculation(session, calc.id)
     legacy_shape = (
         LegacyCompositeShape.named_method_level_on_non_composite_calculation
         if calc.type in _LEGACY_NAMED_METHOD_TYPES

@@ -27,11 +27,26 @@ __all__ = ["legacy_composite_shape", "record_composite_verification"]
 #: Worst first. ``recomputed`` and ``log_reconciled`` are both "confirmed" and tie.
 _SEVERITY: dict[CompositeEnergyVerificationState, int] = {
     CompositeEnergyVerificationState.recompute_mismatch: 0,
-    CompositeEnergyVerificationState.unverifiable: 1,
-    CompositeEnergyVerificationState.program_reported: 2,
-    CompositeEnergyVerificationState.recomputed: 3,
-    CompositeEnergyVerificationState.log_reconciled: 3,
+    CompositeEnergyVerificationState.unverifiable: 2,
+    CompositeEnergyVerificationState.program_reported: 3,
+    CompositeEnergyVerificationState.recomputed: 4,
+    CompositeEnergyVerificationState.log_reconciled: 4,
 }
+
+#: ``program_reported`` whose ``reason`` says an attached log *contradicted* the number. A contradiction
+#: ranks right after ``recompute_mismatch``: a plain ``program_reported`` (no log) or an ``unverifiable``
+#: composite must not hide it.
+_CONTRADICTION_REASONS = frozenset({"log_mismatch", "log_method_mismatch"})
+_CONTRADICTION_RANK = 1
+
+
+def _rank(verification: CompositeEnergyVerification) -> int:
+    if (
+        verification.state is CompositeEnergyVerificationState.program_reported
+        and verification.reason in _CONTRADICTION_REASONS
+    ):
+        return _CONTRADICTION_RANK
+    return _SEVERITY[verification.state]
 
 
 def record_composite_verification(
@@ -55,7 +70,7 @@ def record_composite_verification(
     found = [verifications[cid] for cid in typed_composite_ids if cid in verifications]
     if not found:
         return None
-    return min(found, key=lambda verification: _SEVERITY[verification.state])
+    return min(found, key=_rank)
 
 
 def legacy_composite_shape(

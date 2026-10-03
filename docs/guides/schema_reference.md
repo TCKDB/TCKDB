@@ -644,12 +644,14 @@ the gap.
 |---|---|---|---|---|---|---|
 | `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
 | `artifact_sha256` | CHAR(64) | no | — | — | — | not documented |
+| `parser_version` | SMALLINT | no | — | — | — | not documented |
 | `outcome` | CompositeLogOutcome (enum) | no | — | — | `confirmed`, `mismatch`, `method_mismatch`, `available`, `unverifiable`, `absent` | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 
 **Check constraints:**
 
 - `ck_calc_composite_log_check_artifact_sha256_hex`: `artifact_sha256 ~ '^[0-9a-f]{64}$'`
+- `ck_calc_composite_log_check_parser_version_positive`: `parser_version >= 1`
 
 ### `calc_scf_stability`
 

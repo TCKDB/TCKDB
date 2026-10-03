@@ -86,14 +86,45 @@ def test_the_least_verified_composite_speaks_for_the_record(states, worst):
     assert got is not None and got.state is worst
 
 
-def test_a_tie_is_the_first_composite_and_its_reason_comes_with_it():
-    a = _v(S.program_reported, "log_mismatch")
-    b = _v(S.program_reported, "log_method_mismatch")
-    got = record_composite_verification(energy_source="composite", typed_composite_ids=[1, 2], verifications={1: a, 2: b})
-    assert got is a
-    # Two confirmations of different kinds tie too, and neither hides the other's absence of a problem.
-    r, c = _v(S.recomputed), _v(S.log_reconciled)
-    assert record_composite_verification(energy_source="composite", typed_composite_ids=[2, 1], verifications={1: r, 2: c}) is c
+def _least(*verifications, order=None):
+    ids = list(range(1, len(verifications) + 1))
+    mapping = dict(zip(ids, verifications, strict=True))
+    return record_composite_verification(
+        energy_source="composite", typed_composite_ids=order or ids, verifications=mapping
+    )
+
+
+@pytest.mark.parametrize("reason", ["log_mismatch", "log_method_mismatch"])
+def test_a_log_contradiction_is_not_hidden_by_a_plain_program_reported_whichever_comes_first(reason):
+    contradiction, plain = _v(S.program_reported, reason), _v(S.program_reported)
+    assert _least(contradiction, plain) is contradiction
+    assert _least(plain, contradiction) is contradiction
+
+
+@pytest.mark.parametrize("reason", ["log_mismatch", "log_method_mismatch"])
+def test_a_log_contradiction_is_not_hidden_by_an_unverifiable_composite(reason):
+    contradiction, unverifiable = _v(S.program_reported, reason), _v(S.unverifiable, "input_energy_not_stated")
+    assert _least(contradiction, unverifiable) is contradiction
+    assert _least(unverifiable, contradiction) is contradiction
+
+
+def test_a_recompute_mismatch_still_outranks_a_log_contradiction():
+    mismatch, contradiction = _v(S.recompute_mismatch), _v(S.program_reported, "log_mismatch")
+    assert _least(contradiction, mismatch) is mismatch
+    assert _least(mismatch, contradiction) is mismatch
+
+
+def test_a_contradiction_outranks_a_confirmation_and_two_contradictions_tie_to_the_first():
+    a, b = _v(S.program_reported, "log_mismatch"), _v(S.program_reported, "log_method_mismatch")
+    assert _least(_v(S.log_reconciled), a) is a
+    assert _least(a, b) is a and _least(b, a) is b
+
+
+@pytest.mark.parametrize("state", [S.program_reported, S.unverifiable, S.recomputed, S.log_reconciled, S.recompute_mismatch])
+def test_a_genuine_tie_of_two_equal_states_is_the_first_composite(state):
+    first, second = _v(state, "first"), _v(state, "second")
+    assert _least(first, second) is first
+    assert _least(first, second, order=[2, 1]) is second  # "first" follows the order the record links them
 
 
 def test_a_composite_without_a_verification_is_skipped_not_counted_as_worst():

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.db.models.common import CompositeSchemeKind
+from app.db.models.common import CompositeSchemeKind, CoreTreatment
 from app.schemas.reads.scientific_common import (
     CompositeSchemeSummary,
     LevelOfTheorySummary,
@@ -73,6 +73,21 @@ def test_equality_is_by_ref_not_by_text():
     assert levels_notation(energy=WB97XD, geometry=twin) == "wB97X-D/def2-TZVP//wB97X-D/def2-TZVP"
     # The converse: the same ref spelled with different text (a stale summary) is still one level.
     assert levels_notation(energy=WB97XD, geometry=_level("lot_wb97xd", "wb97xd", "def2tzvp")) == "wB97X-D/def2-TZVP"
+
+
+def test_two_levels_differing_only_in_dispersion_or_core_treatment_get_different_notation():
+    """``display`` is method/basis only; the notation spells out the rest of the level's identity."""
+    plain = _level("lot_b3lyp", "B3LYP", "def2-TZVP")
+    d3 = plain.model_copy(update={"level_of_theory_ref": "lot_b3lyp_d3", "dispersion": "D3BJ"})
+    fc = F12.model_copy(update={"level_of_theory_ref": "lot_f12_fc", "core_treatment": CoreTreatment.frozen_core})
+    ae = F12.model_copy(update={"level_of_theory_ref": "lot_f12_ae", "core_treatment": CoreTreatment.all_electron})
+    assert levels_notation(energy=d3, geometry=d3) == "B3LYP/def2-TZVP (disp=D3BJ)"
+    assert levels_notation(energy=plain, geometry=plain) == "B3LYP/def2-TZVP"
+    assert levels_notation(energy=F12, geometry=d3) == "CCSD(T)-F12/cc-pVTZ-F12//B3LYP/def2-TZVP (disp=D3BJ)"
+    assert levels_notation(energy=fc, geometry=WB97XD) != levels_notation(energy=ae, geometry=WB97XD)
+    assert levels_notation(energy=fc, geometry=WB97XD) == "CCSD(T)-F12/cc-pVTZ-F12 (core=frozen_core)//wB97X-D/def2-TZVP"
+    solvated = plain.model_copy(update={"level_of_theory_ref": "lot_b3lyp_s", "solvent": "water", "dispersion": "D3BJ"})
+    assert levels_notation(energy=solvated, geometry=solvated) == "B3LYP/def2-TZVP (disp=D3BJ, solvent=water)"
 
 
 def test_a_method_without_a_basis_is_written_as_the_method_alone():

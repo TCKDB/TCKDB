@@ -278,7 +278,7 @@ def test_a_disagreement_beats_a_confirmation_from_another_log(client, db_session
     calc = _program_run(client, db_session)
     _attach_log(client, calc)
     assert _verification(client, calc)["state"] == "log_reconciled"
-    db_session.add(CalculationCompositeLogCheck(calculation_id=calc.id, artifact_sha256="a" * 64, outcome=CompositeLogOutcome.mismatch))
+    db_session.add(CalculationCompositeLogCheck(calculation_id=calc.id, artifact_sha256="a" * 64, parser_version=1, outcome=CompositeLogOutcome.mismatch))
     db_session.flush()
     assert _verification(client, calc) == {
         "state": "program_reported",
@@ -440,3 +440,191 @@ def test_verifying_many_composites_costs_the_same_statements_as_one(client, db_s
     assert count(ids[:3]) == count(ids[:1])  # three program runs cost what one does
     assert count(ids) <= count(ids[:1]) + 12  # adding an assembled one costs a fixed number of statements
     assert count(ids + ids) == count(ids)
+
+
+# ---------------------------------------------------------------------------
+# An optimisation as an input: its final energy is the input's total
+# ---------------------------------------------------------------------------
+
+_E_OPT = -76.35
+
+
+def _opt_input_bundle() -> dict:
+    scheme = {
+        "kind": "extrapolation",
+        "terms": [
+            {
+                "key": "base",
+                "operation": "value",
+                "energy_component": "total",
+                "inputs": [{"slot": "value", "level_of_theory": f.OPT_LOT}],
+            }
+        ],
+    }
+    inputs = [{"term_key": "base", "slot": "value", "calculation_key": "opt0"}]
+    payload = f.bundle([f.assembled(scheme, inputs, _E_OPT)])
+    payload["conformers"][0]["primary_calculation"]["opt_result"] = {"converged": True, "final_energy_hartree": _E_OPT}
+    return payload
+
+
+def test_an_assembled_composite_over_an_optimisation_reads_that_optimisations_final_energy(client, db_session):
+    from app.db.models.calculation import CalculationOptResult
+
+    body = _ok(client, _opt_input_bundle())
+    composite = _calc_by_label(db_session, body, "cbs")
+    opt = _calc_by_label(db_session, body, "opt0")
+    assert _verification(client, composite)["state"] == "recomputed"
+
+    # The number the verification reads is the optimisation's final energy: move it and the composite disagrees.
+    db_session.get(CalculationOptResult, opt.id).final_energy_hartree = _E_OPT + 1e-3
+    changed = _verification(client, composite)
+    assert changed["state"] == "recompute_mismatch"
+    assert changed["difference_hartree"] == pytest.approx(-1e-3, abs=1e-9)
+    # Unstated, it is unverifiable, not zero.
+    db_session.get(CalculationOptResult, opt.id).final_energy_hartree = None
+    assert _verification(client, composite)["state"] == "unverifiable"
+
+
+# ---------------------------------------------------------------------------
+# The parser version on the recorded log check
+# ---------------------------------------------------------------------------
+
+
+def _checks(db_session, calc: Calculation) -> list[tuple[int, CompositeLogOutcome]]:
+    db_session.expire_all()
+    rows = db_session.scalars(
+        select(CalculationCompositeLogCheck)
+        .where(CalculationCompositeLogCheck.calculation_id == calc.id)
+        .order_by(CalculationCompositeLogCheck.parser_version)
+    ).all()
+    return [(r.parser_version, r.outcome) for r in rows]
+
+
+def test_a_read_prefers_the_newest_parser_versions_conclusion_for_a_log(client, db_session):
+    calc = _program_run(client, db_session)
+    _attach_log(client, calc)
+    (row,) = db_session.scalars(
+        select(CalculationCompositeLogCheck).where(CalculationCompositeLogCheck.calculation_id == calc.id)
+    ).all()
+    assert (row.parser_version, row.outcome) == (1, CompositeLogOutcome.confirmed)
+    assert _verification(client, calc)["state"] == "log_reconciled"
+
+    # A later parser draws another conclusion from the same log: it wins, in either direction.
+    db_session.add(
+        CalculationCompositeLogCheck(
+            calculation_id=calc.id,
+            artifact_sha256=row.artifact_sha256,
+            parser_version=2,
+            outcome=CompositeLogOutcome.mismatch,
+        )
+    )
+    db_session.flush()
+    assert _verification(client, calc) == {"state": "program_reported", "assembly": "program_run", "reason": "log_mismatch"}
+    db_session.add(
+        CalculationCompositeLogCheck(
+            calculation_id=calc.id,
+            artifact_sha256=row.artifact_sha256,
+            parser_version=3,
+            outcome=CompositeLogOutcome.confirmed,
+        )
+    )
+    db_session.flush()
+    assert _verification(client, calc) == {"state": "log_reconciled", "assembly": "program_run"}
+
+
+def test_an_older_version_does_not_override_a_newer_one_for_another_log_digest(client, db_session):
+    """The preference is per log: a second log's own newest conclusion still counts."""
+    calc = _program_run(client, db_session)
+    _attach_log(client, calc)
+    db_session.add_all(
+        [
+            CalculationCompositeLogCheck(calculation_id=calc.id, artifact_sha256="b" * 64, parser_version=1, outcome=CompositeLogOutcome.mismatch),
+            CalculationCompositeLogCheck(calculation_id=calc.id, artifact_sha256="b" * 64, parser_version=2, outcome=CompositeLogOutcome.confirmed),
+        ]
+    )
+    db_session.flush()
+    assert _verification(client, calc)["state"] == "log_reconciled"
+
+
+def test_an_upload_after_a_parser_fix_records_a_fresh_conclusion_and_the_same_version_does_not(client, db_session, monkeypatch):
+    calc = _program_run(client, db_session)
+    _attach_log(client, calc)
+    _attach_log(client, calc, filename="again.log")
+    assert _checks(db_session, calc) == [(1, CompositeLogOutcome.confirmed)]
+
+    monkeypatch.setattr("app.services.composite_energy_extraction.COMPOSITE_LOG_PARSER_VERSION", 2)
+    _attach_log(client, calc, filename="after-the-fix.log")
+    assert _checks(db_session, calc) == [(1, CompositeLogOutcome.confirmed), (2, CompositeLogOutcome.confirmed)]
+
+
+def test_the_hook_stamps_the_parsers_current_version():
+    from app.services.composite_energy_reconciliation import COMPOSITE_LOG_PARSER_VERSION
+
+    assert isinstance(COMPOSITE_LOG_PARSER_VERSION, int) and COMPOSITE_LOG_PARSER_VERSION >= 1
+
+
+# ---------------------------------------------------------------------------
+# The bundle paths write the record too
+# ---------------------------------------------------------------------------
+
+
+def _bundle_species(primary_result: dict) -> dict:
+    primary = _composite(**primary_result)
+    primary["key"] = "primary"
+    primary["artifacts"] = [_output_log()]
+    return {
+        "species_entry": {"smiles": "O", "charge": 0, "multiplicity": 1},
+        "conformers": [{"key": "c0", "geometry": {"xyz_text": f.WATER_XYZ}, "primary_calculation": primary}],
+    }
+
+
+def _only_composite(db_session) -> Calculation:
+    from app.db.models.common import CalculationType
+
+    return db_session.scalars(select(Calculation).where(Calculation.type == CalculationType.composite)).one()
+
+
+def test_a_computed_species_bundle_records_a_confirming_log(client, db_session):
+    resp = client.post("/api/v1/uploads/computed-species", json=_bundle_species({}))
+    assert resp.status_code == 201, resp.text[:500]
+    calc = _only_composite(db_session)
+    assert _checks(db_session, calc) == [(1, CompositeLogOutcome.confirmed)]
+    assert _verification(client, calc)["state"] == "log_reconciled"
+
+
+def test_a_computed_species_bundle_records_a_disagreeing_log(client, db_session):
+    resp = client.post(
+        "/api/v1/uploads/computed-species",
+        json=_bundle_species({"e0_hartree": -283.819775 + 0.01, "electronic_energy_hartree": None}),
+    )
+    assert resp.status_code == 201, resp.text[:500]
+    calc = _only_composite(db_session)
+    assert _checks(db_session, calc) == [(1, CompositeLogOutcome.mismatch)]
+    assert _verification(client, calc) == {"state": "program_reported", "assembly": "program_run", "reason": "log_mismatch"}
+
+
+def _reaction_payload(**result) -> dict:
+    from tests.api.test_api_composite_log_reconciliation import _reaction_with_composite
+
+    return _reaction_with_composite(**result)
+
+
+def test_a_computed_reaction_bundle_records_a_confirming_log(client, db_session):
+    resp = client.post(
+        "/api/v1/uploads/computed-reaction",
+        json=_reaction_payload(e0_hartree=-283.819775, electronic_energy_hartree=-283.892398, recipe_zpe_hartree=0.072623),
+    )
+    assert resp.status_code == 201, resp.text[:500]
+    calc = _only_composite(db_session)
+    assert _checks(db_session, calc) == [(1, CompositeLogOutcome.confirmed)]
+    assert _verification(client, calc)["state"] == "log_reconciled"
+
+
+def test_a_computed_reaction_bundle_records_a_disagreeing_log(client, db_session):
+    resp = client.post(
+        "/api/v1/uploads/computed-reaction", json=_reaction_payload(electronic_energy_hartree=-283.892398 + 0.01)
+    )
+    assert resp.status_code == 201, resp.text[:500]
+    calc = _only_composite(db_session)
+    assert _checks(db_session, calc) == [(1, CompositeLogOutcome.mismatch)]
+    assert _verification(client, calc)["reason"] == "log_mismatch"

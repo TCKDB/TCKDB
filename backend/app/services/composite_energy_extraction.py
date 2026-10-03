@@ -39,6 +39,7 @@ from app.db.models.level_of_theory import LevelOfTheory
 from app.schemas.fragments.artifact import ArtifactIn
 from app.services.best_effort import isolated_best_effort
 from app.services.composite_energy_reconciliation import (
+    COMPOSITE_LOG_PARSER_VERSION,
     CompositeEnergyAction,
     reconcile_composite_energy,
 )
@@ -93,13 +94,14 @@ def _reconcile(
         recipe_zpe_hartree=result.recipe_zpe_hartree,
         log_text=text,
     )
-    # Record the conclusion (never a number). The same bytes uploaded twice conclude
-    # the same thing about an immutable result, so the second observation is dropped.
+    # Record the conclusion (never a number). The same bytes uploaded twice under one
+    # parser version conclude the same thing about an immutable result, so the second observation is dropped.
     session.execute(
         pg_insert(CalculationCompositeLogCheck)
         .values(
             calculation_id=calculation.id,
             artifact_sha256=hashlib.sha256(content).hexdigest(),
+            parser_version=COMPOSITE_LOG_PARSER_VERSION,
             outcome=CompositeLogOutcome(outcome.action.value),
         )
         .on_conflict_do_nothing()

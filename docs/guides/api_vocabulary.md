@@ -232,7 +232,7 @@ How far a composite energy (CBS-QB3, G4, a CCSD(T)/CBS extrapolation, a focal-po
 | Token | What it means |
 | --- | --- |
 | `recomputed` | An assembled composite whose stored inputs, run through its scheme just now, give the total it states, within a tolerance that scales with how many rounded numbers went into the sum. Because it is recomputed on every read, an input energy deposited later is picked up. |
-| `recompute_mismatch` | The same recomputation disagrees. This can only happen after the fact (an input changed once the composite was accepted), because a total that disagreed was refused at upload. `difference_hartree` is the stated total minus the recomputed one. |
+| `recompute_mismatch` | The same recomputation disagrees. This can only happen after the fact, because a total that disagreed was refused at upload: an input's stored energy is no longer what the total was checked against (a single point whose energy a later log upload filled in, say; an accepted input cannot change). `difference_hartree` is the stated total minus the recomputed one. |
 | `log_reconciled` | A program run (one program printed the final number) whose attached output log was compared at upload and confirmed every number the deposit stated. |
 | `program_reported` | A program run with no confirming log: none was attached, or the one attached could not confirm it. The `reason` says which, and names a log that *disagreed* (`log_mismatch`, `log_method_mismatch`) rather than hiding it. |
 | `unverifiable` | The check cannot be made: an input or one of its energy components is not stated, the split of an input's correlation energy matches neither convention for (T), or no energy was stated at all. The `reason` names which; nothing is guessed. |

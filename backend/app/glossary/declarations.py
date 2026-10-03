@@ -497,8 +497,10 @@ _COMPOSITE_VERIFICATION = Vocabulary(
         Term(
             token="recompute_mismatch",
             means=(
-                "The same recomputation disagrees. This can only happen after the fact (an input changed "
-                "once the composite was accepted), because a total that disagreed was refused at upload. "
+                "The same recomputation disagrees. This can only happen after the fact, because a total that "
+                "disagreed was refused at upload: an input's stored energy is no longer what the total was "
+                "checked against (a single point whose energy a later log upload filled in, say; an "
+                "accepted input cannot change). "
                 "`difference_hartree` is the stated total minus the recomputed one."
             ),
         ),

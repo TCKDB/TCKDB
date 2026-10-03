@@ -945,13 +945,14 @@ only: the cited calculation is a citation, not an owner (revision `b4d8e2f6a1c9`
 
 - `calculation_id` (PK part, FK: the composite)
 - `artifact_sha256` (PK part; 64 lowercase hex digits: the log's digest, not a foreign key because the content-addressed object may be shared)
+- `parser_version` (PK part; at least 1: the composite-log parser version that drew the conclusion)
 - `outcome` (`composite_log_outcome`: `confirmed | mismatch | method_mismatch | available | unverifiable | absent`)
 - `created_at`
 
 A *conclusion*, never a number: nothing the log stated is stored and the deposited result is untouched. Written once per
-`(calculation, log digest)` by the upload hook that already compares the log
+`(calculation, log digest, parser version)` by the upload hook that already compares the log
 (`composite_energy_log_mismatch` and its siblings), so a read can report `composite_energy_verification` without parsing a log;
-the same bytes uploaded twice conclude the same thing about an immutable result and the second observation is dropped. A calculation
+the same bytes uploaded twice under one parser version conclude the same thing about an immutable result and the second observation is dropped, while an upload after a parser fix records a fresh conclusion and a read prefers the newest version per log. A calculation
 whose log was uploaded before revision `a9c3e7b1d5f2` has no row and reads as `program_reported` until the log is deposited again.
 Guarded like `calc_composite_result` on `calculation_id` (accepted-science freeze, TRUNCATE refused).
 

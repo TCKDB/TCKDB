@@ -9,11 +9,14 @@ Schema
 ------
 * ``composite_log_outcome`` enum: ``confirmed``, ``mismatch``, ``method_mismatch``,
   ``available``, ``unverifiable``, ``absent``.
-* ``calc_composite_log_check`` -- one row per ``(calculation_id, artifact_sha256)``:
+* ``calc_composite_log_check`` -- one row per ``(calculation_id, artifact_sha256, parser_version)``:
   the conclusion of the reconciliation hook for one attached log. A *conclusion*,
   not a number: no energy the log stated is stored here, and the deposited result
   is untouched. ``artifact_sha256`` is the log's digest (not a foreign key: the
   content-addressed object may be shared), constrained to 64 lowercase hex digits.
+  ``parser_version`` (at least 1) names the version of the composite-log parser that drew the
+  conclusion, and is part of the primary key: the same log uploaded again after a parser fix
+  records a fresh conclusion beside the old one, and a read prefers the newest version.
 
 Accepted-science immutability
 -----------------------------
@@ -89,9 +92,11 @@ def upgrade() -> None:
         _TABLE,
         sa.Column("calculation_id", sa.BigInteger(), nullable=False),
         sa.Column("artifact_sha256", sa.CHAR(64), nullable=False),
+        sa.Column("parser_version", sa.SmallInteger(), nullable=False),
         sa.Column("outcome", postgresql.ENUM(*_VALUES, name=_ENUM, create_type=False), nullable=False),
         sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
         sa.CheckConstraint("artifact_sha256 ~ '^[0-9a-f]{64}$'", name=op.f("ck_calc_composite_log_check_artifact_sha256_hex")),
+        sa.CheckConstraint("parser_version >= 1", name=op.f("ck_calc_composite_log_check_parser_version_positive")),
         sa.ForeignKeyConstraint(
             ["calculation_id"],
             ["calculation.id"],
@@ -99,7 +104,9 @@ def upgrade() -> None:
             initially="IMMEDIATE",
             deferrable=True,
         ),
-        sa.PrimaryKeyConstraint("calculation_id", "artifact_sha256", name=op.f("pk_calc_composite_log_check")),
+        sa.PrimaryKeyConstraint(
+            "calculation_id", "artifact_sha256", "parser_version", name=op.f("pk_calc_composite_log_check")
+        ),
     )
 
     for table, record_type, columns in _child_groups():

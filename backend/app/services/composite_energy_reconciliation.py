@@ -78,6 +78,11 @@ from app.services.gaussian_composite_parser import (
     parse_gaussian_composite_summary,
 )
 
+#: The version of the composite-log parsing and comparison that draws a conclusion. Bump it when a fix to
+#: :mod:`app.services.gaussian_composite_parser` or to this comparison could change what a log concludes: the
+#: next upload of the same log then records a fresh conclusion (``calc_composite_log_check``), and reads prefer it.
+COMPOSITE_LOG_PARSER_VERSION = 1
+
 #: A deposited composite number disagrees with the output log's summary block.
 W_COMPOSITE_ENERGY_LOG_MISMATCH = "composite_energy_log_mismatch"
 #: The log is a different composite method from the calculation's level of theory.
