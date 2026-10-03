@@ -142,9 +142,20 @@ are refused. This applies on every route that links calculations by role,
 including the standalone `/uploads/thermo` and `/uploads/statmech` routes with a
 polyatomic species whose only linked calculations are `sp`s.
 
-- **Polyatomic species.** "One structure" means one stored geometry. Two
-  `sp` links on the same geometry are refused; two on genuinely different
-  geometries are not.
+- **Polyatomic species.** "One structure" means the same atoms (same
+  elements and stated isotopes, in the same order) at the same shape, wherever
+  they sit. Two `sp` links on the same geometry are refused, and so is one on a
+  copy of it that was translated or rotated (a water geometry shifted by 1
+  Angstrom is the same water). The comparison is a rigid-motion RMSD
+  (Kabsch alignment) with a tolerance taken from the precision the coordinates
+  were written to (1.7e-6 Angstrom for six decimals), so a geometry that
+  really differs (another conformer, a bond length changed by more than
+  rounding) is a different structure and is not refused. An enantiomer is a
+  different structure; a mirror image counts as the same only when a rotation
+  superposes it atom for atom. The same atoms listed in a different order are
+  *not* recognised as one structure; list them in one order. A moved copy
+  written to three or fewer decimals may not be recognised (such coordinates
+  are held to the four-decimal tolerance).
 - **A single atom.** An atom has no geometry to differ in, so "one
   structure" means the same element and the same stated isotope mass number (`D` and
   `T` count as hydrogen, as they do everywhere else elements are compared). A second `sp` on a shifted copy of the
