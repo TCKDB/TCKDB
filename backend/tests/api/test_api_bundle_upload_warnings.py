@@ -72,6 +72,31 @@ def _kinetics_bundle() -> dict:
     return _example("kinetics")
 
 
+@pytest.fixture(autouse=True)
+def _doi_metadata(monkeypatch):
+    """The DOI's own title, so a depositor title that disagrees earns a warning
+    without a network call."""
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_doi_metadata",
+        lambda doi: {
+            "title": "Enthalpy of formation of water",
+            "container-title": ["J. Phys. Chem. Ref. Data"],
+            "issued": 1998,
+            "URL": f"https://doi.org/{doi}",
+        },
+    )
+
+
+def _kinetics_with_literature_bundle() -> dict:
+    """The kinetics example, citing a paper under a title the DOI contradicts."""
+    bundle = _kinetics_bundle()
+    bundle["records"]["kinetics_uploads"][0]["literature"] = {
+        "doi": "10.1063/1.555991",
+        "title": "A Completely Different Paper",
+    }
+    return bundle
+
+
 def _direct_warnings(client, url: str, record: dict) -> list[tuple[str, str, str]]:
     """What the direct route answers for ``record``, with the write undone."""
     savepoint = client._db_session.begin_nested()
@@ -100,11 +125,12 @@ CASES: dict[str, dict[str, Any]] = {
         "required": (_WORKFLOW_WARNING, _WORKFLOW_WARNING_2, _REQUEST_WARNING),
     },
     "kinetics": {
-        "bundle": _kinetics_bundle,
+        "bundle": _kinetics_with_literature_bundle,
         "record": lambda bundle: bundle["records"]["kinetics_uploads"][0],
         "url": "/api/v1/uploads/kinetics",
         "local_ref": "kinetics_uploads[0]",
-        "required": ("missing_kinetics_interpretation_assignments",),
+        # One derived from the request, one reported by the workflow.
+        "required": ("missing_kinetics_interpretation_assignments", "literature_title_mismatch"),
     },
 }
 
