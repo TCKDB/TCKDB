@@ -20,7 +20,7 @@ from pathlib import Path
 _APP = Path(__file__).resolve().parents[2] / "app"
 
 _COMPOSITION = "assert_calculation_geometry_composition"
-_ISOTOPES = "assert_calculation_geometry_isotopes"
+_ISOTOPES = "assert_isotopes"
 _LINK_CLASSES = {"CalculationInputGeometry", "CalculationOutputGeometry"}
 
 #: ``module::function`` for every function that calls the composition check, as

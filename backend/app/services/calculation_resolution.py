@@ -77,9 +77,9 @@ from app.schemas.fragments.refs import (
     WorkflowToolReleaseRef,
 )
 from app.schemas.upload_warning import UploadWarning
+from app.services.calc_isotopes import assert_isotopes
 from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
-    assert_calculation_geometry_isotopes,
 )
 from app.services.calculation_scan_resolution import persist_calculation_scan
 from app.services.composite_result_resolution import persist_composite_result
@@ -1143,7 +1143,7 @@ def _persist_irc_result(
                 geometry_id=geometry_id,
                 field=f"irc_result.points[{point.point_index}].geometry",
             )
-            assert_calculation_geometry_isotopes(
+            assert_isotopes(
                 session,
                 calc=calculation,
                 geometry_id=geometry_id,
@@ -1226,7 +1226,7 @@ def _persist_path_search_result(
                 geometry_id=geometry_id,
                 field=f"path_search_result.points[{point.point_index}].geometry",
             )
-            assert_calculation_geometry_isotopes(
+            assert_isotopes(
                 session,
                 calc=calculation,
                 geometry_id=geometry_id,
@@ -2022,7 +2022,7 @@ def attach_calculation_input_geometries(
                 geometry_id=geom.id,
                 field=f"{context}: input_geometries[{input_order - 1}]",
             )
-            assert_calculation_geometry_isotopes(
+            assert_isotopes(
                 session,
                 calc=calc,
                 geometry_id=geom.id,
@@ -2044,7 +2044,7 @@ def attach_calculation_input_geometries(
             geometry_id=fallback_geometry_id,
             field=f"{context}: geometry_key",
         )
-        assert_calculation_geometry_isotopes(
+        assert_isotopes(
             session,
             calc=calc,
             geometry_id=fallback_geometry_id,
@@ -2131,7 +2131,7 @@ def attach_calculation_output_geometries(
                 geometry_id=geom.id,
                 field=f"{context}: output_geometries[{output_order - 1}].geometry",
             )
-            assert_calculation_geometry_isotopes(
+            assert_isotopes(
                 session,
                 calc=calc,
                 geometry_id=geom.id,
@@ -2162,7 +2162,7 @@ def attach_calculation_output_geometries(
                 geometry_id=fallback_geometry_id,
                 field=f"{context}: geometry_key",
             )
-            assert_calculation_geometry_isotopes(
+            assert_isotopes(
                 session,
                 calc=calc,
                 geometry_id=fallback_geometry_id,

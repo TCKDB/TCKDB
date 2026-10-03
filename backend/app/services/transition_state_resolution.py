@@ -14,9 +14,9 @@ from app.db.models.calculation import Calculation, CalculationOutputGeometry
 from app.db.models.common import CalculationGeometryRole
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.fragments.calculation import CalculationWithResultsPayload
+from app.services.calc_isotopes import assert_isotopes
 from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
-    assert_calculation_geometry_isotopes,
 )
 from app.services.calculation_resolution import (
     persist_additional_calculations,
@@ -112,7 +112,7 @@ def persist_ts_calculations(
         geometry_id=geometry_id,
         field="primary_opt: geometry",
     )
-    assert_calculation_geometry_isotopes(
+    assert_isotopes(
         session,
         calc=primary_calc,
         geometry_id=geometry_id,

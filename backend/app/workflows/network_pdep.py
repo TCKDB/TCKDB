@@ -66,9 +66,9 @@ from app.schemas.workflows.reaction_upload import (
     ReactionUploadRequest,
 )
 from app.services.artifact_persistence import persist_artifact
+from app.services.calc_isotopes import assert_isotopes
 from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
-    assert_calculation_geometry_isotopes,
 )
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
@@ -275,7 +275,7 @@ def _persist_calculation(
             geometry_id=effective_geometry_id,
             field=f"calculation '{calc_in.key}': geometry_key",
         )
-        assert_calculation_geometry_isotopes(
+        assert_isotopes(
             session,
             calc=calculation,
             geometry_id=effective_geometry_id,

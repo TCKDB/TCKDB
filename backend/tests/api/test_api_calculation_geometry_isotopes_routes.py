@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.calculation_geometry_composition import (
+from app.services.calc_isotopes import (
     W_CALCULATION_GEOMETRY_ISOTOPE_MISMATCH as CODE,
 )
 
