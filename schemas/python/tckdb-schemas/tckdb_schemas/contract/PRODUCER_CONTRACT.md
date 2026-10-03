@@ -238,6 +238,25 @@ TS energy-ordering energies are held against the stored energies (#638). No fiel
 - Reads: compared energies gain `stored_energy_comparison`, `not_compared_reason` and `zpe_scale_factor`
   (null on earlier records). Uploads only.
 
+### 0.80.0 - 2026-10-03
+
+A rigidly moved copy of a polyatomic geometry is no longer a way round the no-optimisation duplicate
+rule (#667, the polyatomic half of #623). No field is added, removed or renamed; one payload that was
+accepted is now refused, under the code the rule already used.
+
+- **Two single points (or two composites) on one polyatomic structure are now one duplicate, wherever
+  the structure sits (shared rule, so `/uploads/thermo`, `/uploads/statmech` and both bundle routes
+  change).** With no `opt` linked, two `sp` links (or two `composite` links) whose geometries are the
+  same structure moved rigidly, translated and/or rotated, are refused with `thermo_role_duplicate` /
+  `statmech_role_duplicate`; before, only the very same stored geometry was. "The same structure" is
+  the same atoms in the same order (element and stated isotope) whose Kabsch-aligned RMSD is within
+  the rounding of the coordinates as deposited (1.7e-6 Angstrom for coordinates written to six
+  decimals, never more than 1.7e-4 Angstrom). An enantiomer is a different structure (a mirror image counts as the same only when a rotation superposes it atom for atom). A genuinely
+  different geometry, such as another conformer or a bond length changed by more than the rounding,
+  is unchanged and still accepted. The same atoms listed in a different order are still treated as
+  different geometries (no canonical atom order exists for a bare geometry; deferred).
+- The one-atom rule of 0.74.0 is unchanged.
+
 ### 0.79.0 - 2026-10-03
 
 Network solve energy sources must belong to the subject they state an energy for (#668). No field or
