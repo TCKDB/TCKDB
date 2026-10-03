@@ -9,6 +9,9 @@ the same structure, so the links are grouped by element instead.
 A polyatomic subject is untouched: a genuinely different geometry is still a
 different structure. The polyatomic tests here were run against the rule as it
 stood before the change and pass on both sides of it; they pin that.
+
+A rigidly moved copy of a polyatomic geometry is the subject of #667 and is tested in
+``test_api_rigid_motion_duplicate_sp.py``; the polyatomic tests here use geometries that differ in shape.
 """
 
 from __future__ import annotations
@@ -345,7 +348,10 @@ def _direct_call(
                     geometry_id=geometry.id,
                     atom_index=atom_index,
                     element=element,
-                    x=float(index),
+                    # Geometry ``index`` (1 or 2) puts atom ``k`` at x = index * k: the two polyatomic
+                    # geometries differ in bond length, so they are different shapes. They used to sit
+                    # on one point, which is one structure under the rigid-motion rule (#667).
+                    x=float(index) * atom_index,
                     y=0.0,
                     z=0.0,
                     isotope_mass_number=mass,
@@ -402,7 +408,7 @@ def test_the_service_does_not_merge_two_isotopes_of_one_element(db_session):
     _direct_call(db_session, [(1, ["H"]), (1, ["H"])], isotope=2)
 
 
-def test_the_service_does_not_merge_two_polyatomic_geometry_rows(db_session):
+def test_the_service_does_not_merge_two_polyatomic_geometry_rows_of_a_different_shape(db_session):
     _direct_call(db_session, [(2, ["H", "H"]), (2, ["H", "H"])])
 
 

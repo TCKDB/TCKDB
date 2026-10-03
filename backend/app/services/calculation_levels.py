@@ -45,7 +45,9 @@ already follow for role/type compatibility:
   code. With **no** ``opt`` linked there is nothing to anchor on, so the
   same distinctness is asked of *structures*: two ``sp``s (or two
   ``composite``s) on one structure are a duplicate. A polyatomic geometry is
-  its own structure (one stored geometry row); a single atom has no geometry
+  the same structure as another when one is the other moved rigidly (a
+  Kabsch-aligned RMSD within the rounding of the stored coordinates, atom
+  order as given, #667); a single atom has no geometry
   to differ in, so every position of it is one structure, compared by element
   (``D``/``T`` read as hydrogen) and stated isotope mass number (#610, #623).
 * **R3' -- every sp must sit on some linked opt's geometry.** Silent
@@ -93,6 +95,7 @@ the ensemble-aware rules above are correct for both a single evidence chain
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, NamedTuple
@@ -102,6 +105,7 @@ from sqlalchemy.orm import Session, object_session
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import resolve_element_symbol
+from app.chemistry.torsion_fingerprint import kabsch_rmsd
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationType
 from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
@@ -435,12 +439,15 @@ def _calc_geometry_ids(calc: Calculation, *, role: str) -> set[int]:
 def _structure_key(geometry: Geometry) -> tuple[str | int | None, ...]:
     """What makes two energy calculations' geometries different structures (R2', no opt).
 
-    A polyatomic geometry is its own structure, keyed by its row id: a
-    genuinely different geometry is different evidence. A **single atom** has
-    no geometry to differ in -- every position is the same structure -- so it
-    is keyed by its element (D and T resolve to hydrogen) and its stated isotope mass number, and a copy
-    of the atom moved to another coordinate is the same structure, not a
-    second one (#623).
+    A **single atom** has no geometry to differ in -- every position is the
+    same structure -- so it is keyed by its element (D and T resolve to
+    hydrogen) and its stated isotope mass number, and a copy of the atom moved
+    to another coordinate is the same structure, not a second one (#623).
+
+    A polyatomic geometry is keyed by its row id *here*, and
+    :func:`_energies_by_structure` then merges rows that are the same structure
+    moved rigidly (#667, :func:`_same_polyatomic_structure`). The key is only
+    the starting point for that merge, never the answer.
 
     The element rather than a conformer observation, because the element is
     read from the very geometry the energy calculation declares, so the key is
@@ -457,6 +464,142 @@ def _structure_key(geometry: Geometry) -> tuple[str | int | None, ...]:
         # is the explicit field only, never inferred from a D/T spelling.
         return ("atom", resolve_element_symbol(atom.element.strip()), atom.isotope_mass_number)
     return ("geometry", geometry.id)
+
+
+#: Decimals every stored coordinate is formatted to: ``parse_xyz`` writes
+#: ``geometry.xyz_text`` (the text ``geom_hash`` is taken over) with ``.12f``.
+#: No stored coordinate carries information below this.
+_STORED_COORDINATE_DECIMALS = 12
+
+#: The fewest decimals a geometry is credited with. A geometry whose
+#: coordinates are all multiples of 1e-2 (a toy diatomic, integers) would
+#: otherwise earn a tolerance wide enough to merge genuinely different
+#: structures; coarse deposits are held to the tolerance of a 4-decimal one, so
+#: the rule errs toward "different" (the status quo) rather than toward a false
+#: refusal.
+_MIN_COORDINATE_DECIMALS = 4
+
+
+def _coordinate_decimals(coordinates: Sequence[tuple[float, float, float]]) -> int:
+    """The decimals a geometry's coordinates were actually written to.
+
+    Stored coordinates are doubles formatted to 12 decimals, so a deposit
+    written to six decimals reads back as ``0.123456000000``; the last
+    non-zero decimal over all coordinates is the precision the depositor
+    had. Clamped to ``[_MIN_COORDINATE_DECIMALS, _STORED_COORDINATE_DECIMALS]``.
+    """
+    decimals = 0
+    for coordinate in coordinates:
+        for value in coordinate:
+            text = f"{value:.{_STORED_COORDINATE_DECIMALS}f}".rstrip("0")
+            decimals = max(decimals, len(text.split(".")[1]) if "." in text else 0)
+    return max(_MIN_COORDINATE_DECIMALS, min(decimals, _STORED_COORDINATE_DECIMALS))
+
+
+def _rigid_motion_tolerance(decimals_a: int, decimals_b: int) -> float:
+    """The largest Kabsch RMSD (Angstrom) two copies of one structure can show.
+
+    Two deposits of one structure moved rigidly differ only by the rounding of
+    each: a coordinate written to ``d`` decimals is within ``0.5 * 10**-d`` of
+    the true one, so an atom is within ``sqrt(3) * 0.5 * 10**-d`` (three
+    components). The two displacements add at worst, and a root-mean-square
+    over atoms cannot exceed the worst atom; Kabsch minimises the RMSD, so it
+    cannot exceed the RMSD under the true motion. Hence
+    ``sqrt(3) / 2 * (10**-d_a + 10**-d_b)``. For two 12-decimal geometries
+    that is ~1.7e-12 A; for two 6-decimal ones ~1.7e-6 A.
+    """
+    return math.sqrt(3.0) / 2.0 * (10.0 ** -decimals_a + 10.0 ** -decimals_b)
+
+
+class _AtomsOf(NamedTuple):
+    species: tuple[tuple[str, int | None], ...]
+    coordinates: list[tuple[float, float, float]]
+    decimals: int
+
+
+def _atoms_of(geometry: Geometry) -> _AtomsOf | None:
+    """A geometry's atoms in stored order, or ``None`` when they are not all on file."""
+    rows = sorted(geometry.atoms, key=lambda atom: atom.atom_index)
+    if not rows or len(rows) != geometry.natoms:
+        return None
+    coordinates = [(row.x, row.y, row.z) for row in rows]
+    # Element and explicit isotope per atom, the atom path's own notion of "the same atom" (#663).
+    species = tuple((resolve_element_symbol(row.element.strip()), row.isotope_mass_number) for row in rows)
+    return _AtomsOf(species, coordinates, _coordinate_decimals(coordinates))
+
+
+def _same_polyatomic_structure(a: _AtomsOf, b: _AtomsOf) -> bool:
+    """Whether two geometries are one structure moved rigidly (#667).
+
+    Atom order is as given: the same atoms listed in another order are *not*
+    matched (no canonical atom order exists for a bare geometry; deferred).
+    Kabsch alignment allows a proper rotation only, so a mirror image (a
+    different enantiomer) stays a different structure.
+    """
+    if a.species != b.species:
+        return False
+    return kabsch_rmsd(a.coordinates, b.coordinates) <= _rigid_motion_tolerance(a.decimals, b.decimals)
+
+
+def _merge_rigidly_equal_geometries(geometries: Sequence[Geometry]) -> dict[int, int]:
+    """Map each polyatomic geometry id to a representative id of its structure.
+
+    Pairwise over the record's own geometries (a handful), and only within a
+    group of equal atom count, so an atom list is read from the database
+    only for a geometry that has a same-size neighbour to be compared with.
+    """
+    root = {geometry.id: geometry.id for geometry in geometries}
+
+    def find(i: int) -> int:
+        while root[i] != i:
+            root[i] = root[root[i]]
+            i = root[i]
+        return i
+
+    by_size: dict[int, list[Geometry]] = {}
+    for geometry in geometries:
+        by_size.setdefault(geometry.natoms, []).append(geometry)
+    for same_size in by_size.values():
+        if len(same_size) < 2:
+            continue
+        atoms = {geometry.id: _atoms_of(geometry) for geometry in same_size}
+        for i, first in enumerate(same_size):
+            for second in same_size[i + 1 :]:
+                a, b = atoms[first.id], atoms[second.id]
+                if a is not None and b is not None and _same_polyatomic_structure(a, b):
+                    root[find(second.id)] = find(first.id)
+    return {geometry.id: find(geometry.id) for geometry in geometries}
+
+
+def _energies_by_structure(
+    energies: Sequence[Calculation],
+) -> dict[tuple[str | int | None, ...], list[Calculation]]:
+    """Group energy calculations by the structure they ran on (R2', no opt).
+
+    An atom is grouped by :func:`_structure_key`; a polyatomic geometry by the
+    structure its row belongs to once rigidly moved copies are merged.
+    """
+    keyed: list[tuple[Calculation, tuple[str | int | None, ...]]] = []
+    polyatomic: dict[int, Geometry] = {}
+    for energy in energies:
+        # The geometry an energy calculation ran on: its input link, else
+        # (the network route links a geometry as a calculation's final
+        # output only) its output link.
+        geometry_links = energy.input_geometries or energy.output_geometries
+        for row in geometry_links:
+            key = _structure_key(row.geometry)
+            keyed.append((energy, key))
+            if key[0] == "geometry":
+                polyatomic[row.geometry.id] = row.geometry
+    representative = _merge_rigidly_equal_geometries(list(polyatomic.values()))
+    by_structure: dict[tuple[str | int | None, ...], list[Calculation]] = {}
+    for energy, key in keyed:
+        if key[0] == "geometry":
+            key = ("geometry", representative[key[1]])  # type: ignore[index]
+        claimants = by_structure.setdefault(key, [])
+        if energy not in claimants:
+            claimants.append(energy)
+    return by_structure
 
 
 def _match_energy_to_opts(
@@ -710,18 +853,13 @@ def assert_role_consistency(
     # would escape it. The same fact is still a duplicate: two sps run on one
     # structure. Energies are grouped by *structure* (:func:`_structure_key`),
     # not by geometry row: for one atom every position is the same structure,
-    # so a second sp on a shifted copy of the atom is the same duplicate. An
-    # sp that declares no geometry is not compared (absence of evidence is not
+    # so a second sp on a shifted copy of the atom is the same duplicate. A
+    # polyatomic geometry is the same structure as another when one is the
+    # other moved rigidly (#667): translated, rotated, atom order as given.
+    # An sp that declares no geometry is not compared (absence of evidence is not
     # a match), as everywhere in this module.
     if not opts:
-        by_structure: dict[tuple[str | int | None, ...], list[Calculation]] = {}
-        for energy in energies:
-            # The geometry an energy calculation ran on: its input link, else
-            # (the network route links a geometry as a calculation's final
-            # output only) its output link.
-            geometry_links = energy.input_geometries or energy.output_geometries
-            for key in {_structure_key(row.geometry) for row in geometry_links}:
-                by_structure.setdefault(key, []).append(energy)
+        by_structure = _energies_by_structure(energies)
         for (kind, *_), claimants in by_structure.items():
             if len(claimants) > 1:
                 refs = [energy.public_ref for energy in claimants]
