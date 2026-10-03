@@ -1942,6 +1942,46 @@ class ComputedReactionUploadRequest(SchemaBase):
                         declared=all_calc_keys,
                     )
 
+        # Per-species thermo declarations: the target's conformer must be one of
+        # that species's own conformers (a sibling's is not in scope, so the
+        # target is owner-correct by construction), and the protocol's
+        # supporting calculations must be declared in the bundle. Same codes
+        # as the workflow seam (ADR 0017); ownership stays the workflow's check.
+        for sp in self.species:
+            if sp.thermo is None:
+                continue
+            target = sp.thermo.thermodynamic_target
+            if target is not None and target.conformer_key is not None:
+                own_conformer_keys = {conf.key for conf in sp.conformers}
+                if target.conformer_key not in own_conformer_keys:
+                    raise undeclared_key_error(
+                        W_CONFORMER_KEY_UNDECLARED,
+                        f"species[{sp.key!r}].thermo.thermodynamic_target.conformer_key "
+                        f"'{target.conformer_key}' does not reference one of that "
+                        f"species's own conformers.",
+                        field=(
+                            f"species['{sp.key}'].thermo.thermodynamic_target"
+                            f".conformer_key"
+                        ),
+                        key=target.conformer_key,
+                        declared=own_conformer_keys,
+                    )
+            if sp.thermo.protocol is not None:
+                for i, ref in enumerate(sp.thermo.protocol.supporting_calculations):
+                    if ref.calculation_key is not None and ref.calculation_key not in all_calc_keys:
+                        raise undeclared_key_error(
+                            W_CALCULATION_KEY_UNDECLARED,
+                            f"species[{sp.key!r}].thermo.protocol.supporting_calculations"
+                            f"[{i}].calculation_key references undefined "
+                            f"calculation_key '{ref.calculation_key}'.",
+                            field=(
+                                f"species['{sp.key}'].thermo.protocol."
+                                f"supporting_calculations[{i}].calculation_key"
+                            ),
+                            key=ref.calculation_key,
+                            declared=all_calc_keys,
+                        )
+
         for sp in self.species:
             if sp.statmech is None:
                 continue

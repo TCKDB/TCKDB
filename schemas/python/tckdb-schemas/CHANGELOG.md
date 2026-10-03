@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.85.0 - 2026-10-03
+
+A thermo record can state what its values describe (`thermodynamic_target`) and how they were
+produced (`protocol`, version 1): optional attributed claims, never inferred or defaulted, `null`
+when omitted. Existing payloads are accepted unchanged. Fields and rules: `backend/schema_spec.md`,
+"Thermodynamic target and protocol declarations". New codes (`thermo_target_group_*`,
+`thermo_protocol_*`, `thermo_recipe_name_listed`, `thermo_declaration_invalid`) and the shared rule
+`thermo_declaration_error`.
+
 ## 0.81.0 - 2026-10-03
 
 TS energy-ordering energies are held against the stored energies (#638). No field is removed or changed;

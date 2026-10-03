@@ -17,6 +17,7 @@ from tckdb_schemas.thermo import (
     ThermoWilhoitBase,
     ThermoWilhoitCreate,
 )
+from tckdb_schemas.thermo_declarations import StoredThermoProtocolDeclaration
 
 from app.db.models.common import (
     EnthalpyReferenceKind,
@@ -24,6 +25,7 @@ from app.db.models.common import (
     ScientificOriginKind,
     ThermoCalculationRole,
     ThermoModelKind,
+    ThermoTargetKind,
 )
 from app.schemas.common import (
     ORMBaseSchema,
@@ -165,6 +167,15 @@ class ThermoBase(BaseModel):
         from; None for experimental/literature/group-additivity thermo.
     :param energy_level_of_theory_id: Level of theory the depositor declared
         for this record's energy; None when none was declared.
+    :param thermodynamic_target_kind: What the values are claimed to describe
+        (``equilibrium_ensemble`` or ``single_conformer``); None when no
+        target was declared. Never inferred.
+    :param target_conformer_group_id: The conformer group a ``single_conformer``
+        target names; set exactly when the kind is ``single_conformer`` and
+        owned by ``species_entry_id``.
+    :param protocol_declaration: The depositor's versioned protocol
+        declaration, in its stored form (public refs only); None when none
+        was declared.
     :param tmin_k: Optional minimum valid temperature in K.
     :param tmax_k: Optional maximum valid temperature in K.
     :param note: Optional free-text note.
@@ -179,6 +190,9 @@ class ThermoBase(BaseModel):
     software_release_id: int | None = None
     statmech_id: int | None = None
     energy_level_of_theory_id: int | None = None
+    thermodynamic_target_kind: ThermoTargetKind | None = None
+    target_conformer_group_id: int | None = None
+    protocol_declaration: StoredThermoProtocolDeclaration | None = None
 
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
@@ -208,6 +222,22 @@ class ThermoBase(BaseModel):
             and self.tmin_k > self.tmax_k
         ):
             raise ValueError("tmin_k must be less than or equal to tmax_k.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_target_group_matches_kind(self) -> Self:
+        """A group is named exactly when the target is ``single_conformer``.
+
+        The same rule as ``ck_thermo_target_group_iff_single_conformer``,
+        stated on the resolved payload so a caller that builds one directly
+        is refused before the database is. Ownership of the group is not
+        decidable here; see ``assert_thermo_target_columns``.
+        """
+        single = self.thermodynamic_target_kind is ThermoTargetKind.single_conformer
+        if single and self.target_conformer_group_id is None:
+            raise ValueError("A single_conformer target must name its conformer group.")
+        if not single and self.target_conformer_group_id is not None:
+            raise ValueError("Only a single_conformer target may name a conformer group.")
         return self
 
 

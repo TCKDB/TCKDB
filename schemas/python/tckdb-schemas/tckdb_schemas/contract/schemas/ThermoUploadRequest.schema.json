@@ -3982,6 +3982,87 @@
       "title": "ThermoCalculationRole",
       "type": "string"
     },
+    "ThermoDepartureComponent": {
+      "description": "The part of a standard recipe a depositor departed from.",
+      "enum": [
+        "geometry",
+        "frequencies",
+        "zero_point_energy",
+        "electronic_energy",
+        "empirical_correction",
+        "other"
+      ],
+      "title": "ThermoDepartureComponent",
+      "type": "string"
+    },
+    "ThermoEnsembleRepresentation": {
+      "description": "How the thermal ensemble is represented in the numbers.\n\nDeliberately separate from the target: the target says *what ensemble is\nmeant*, this says *what stood in for it*. A record can target the\nequilibrium ensemble and represent it by its lowest conformer alone.",
+      "enum": [
+        "lowest_conformer",
+        "boltzmann_conformers"
+      ],
+      "title": "ThermoEnsembleRepresentation",
+      "type": "string"
+    },
+    "ThermoFormationDerivation": {
+      "description": "How a formation enthalpy was derived from computed energies.\n\n``atomization``: from the total atomization energy and the formation\nenthalpies of the gaseous atoms. ``isodesmic``: from an isodesmic reaction\nwith reference species of known formation enthalpy. ``working_reaction``:\nfrom any other balanced working reaction (homodesmotic, hypohomodesmotic,\nisogyric, ...). A ranking established for one derivation does not transfer\nto another, so they are never merged.",
+      "enum": [
+        "atomization",
+        "isodesmic",
+        "working_reaction"
+      ],
+      "title": "ThermoFormationDerivation",
+      "type": "string"
+    },
+    "ThermoFormationReference": {
+      "additionalProperties": false,
+      "description": "How the formation enthalpy was constructed from the computed energies.\n\n:param derivation: Atomization, isodesmic or another working reaction.\n:param reference_data_source: Where the reference formation enthalpies\n    came from; omit when the source does not say.\n:param reference_data_detail: Optional free text naming the data set and\n    its version (for example ``ATcT 1.122``). Required when\n    ``reference_data_source`` is ``other``.",
+      "properties": {
+        "derivation": {
+          "$ref": "#/$defs/ThermoFormationDerivation"
+        },
+        "reference_data_detail": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Data Detail"
+        },
+        "reference_data_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThermoReferenceDataSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "derivation"
+      ],
+      "title": "ThermoFormationReference",
+      "type": "object"
+    },
+    "ThermoInternalMotion": {
+      "description": "How low-frequency internal motion was treated in the thermal contribution.",
+      "enum": [
+        "harmonic",
+        "hindered_rotors",
+        "anharmonic"
+      ],
+      "title": "ThermoInternalMotion",
+      "type": "string"
+    },
     "ThermoModelKind": {
       "description": "Explicit representation kind for a thermo record.\n\nPreviously the representation was implied by which child rows existed;\nthis enum makes it explicit so NASA-9 (arbitrary interval count) and\nWilhoit forms can be distinguished from NASA-7 / tabulated / scalar.",
       "enum": [
@@ -4229,6 +4310,196 @@
       "title": "ThermoPointCreate",
       "type": "object"
     },
+    "ThermoProtocolCalculationRef": {
+      "additionalProperties": false,
+      "description": "A supporting calculation, by local key or public ref (exactly one).\n\n:param calculation_key: Key of a calculation the same request declares.\n:param calculation_ref: Public ref (``calc_...``) of one already deposited for the same species\n    entry. Computed bundles accept keys only.",
+      "properties": {
+        "calculation_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Key"
+        },
+        "calculation_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Ref"
+        }
+      },
+      "title": "ThermoProtocolCalculationRef",
+      "type": "object"
+    },
+    "ThermoProtocolDeclaration": {
+      "additionalProperties": false,
+      "description": "The protocol a thermo record was produced with. Version 1.\n\nAn attributed claim, stored as made, not checked against the linked\ncalculations. Every block is optional; at least one statement must be present.\n\n:param version: Declaration format version; only the integer ``1`` is accepted\n    (not ``true``, ``\"1\"`` or ``1.0``).\n:param recipe: The recipe (G3, G4, G4(MP2), G4(complete), other) and version.\n:param formation_reference: How the formation enthalpy was constructed.\n:param thermal_approximation: What represents the target ensemble.\n:param departures: Stated departures from the standard recipe. Three states:\n    omitted means not stated; an empty list means the depositor states there\n    are none; a list of ``{component, description}`` names them. Only an\n    empty list says \"standard\".\n:param supporting_calculations: Calculations the declaration rests on.",
+      "properties": {
+        "departures": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ThermoProtocolDeparture"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Departures"
+        },
+        "formation_reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThermoFormationReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "recipe": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThermoProtocolRecipe"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "supporting_calculations": {
+          "items": {
+            "$ref": "#/$defs/ThermoProtocolCalculationRef"
+          },
+          "title": "Supporting Calculations",
+          "type": "array"
+        },
+        "thermal_approximation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThermoThermalApproximation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "version": {
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "title": "ThermoProtocolDeclaration",
+      "type": "object"
+    },
+    "ThermoProtocolDeparture": {
+      "additionalProperties": false,
+      "description": "One stated departure from the standard form of the declared recipe.\n\n:param component: The part of the recipe that was changed.\n:param description: What was done instead, in the depositor's words.",
+      "properties": {
+        "component": {
+          "$ref": "#/$defs/ThermoDepartureComponent"
+        },
+        "description": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "description"
+      ],
+      "title": "ThermoProtocolDeparture",
+      "type": "object"
+    },
+    "ThermoProtocolRecipe": {
+      "additionalProperties": false,
+      "description": "The recipe the energy was computed with.\n\n:param name: Which recipe; see :class:`ThermoRecipeName`.\n:param other_name: Required when ``name`` is ``other`` and refused\n    otherwise: the recipe's own name, as the source writes it.\n:param recipe_version: Optional free text naming the recipe's version or\n    reference (for example ``G4 (Curtiss 2007)``). Stored as written.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/ThermoRecipeName"
+        },
+        "other_name": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Other Name"
+        },
+        "recipe_version": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recipe Version"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ThermoProtocolRecipe",
+      "type": "object"
+    },
+    "ThermoRecipeName": {
+      "description": "The named computational recipe a record's energy comes from.\n\nThe members are the recipes a later E1 match must tell apart: standard G3,\nstandard G4, G4(MP2) and G4(complete) are four different recipes, and a\nmodification of any of them is a *departure*, not a fifth name. ``other``\ndeclares a recipe outside this list; ``other_name`` then says which.",
+      "enum": [
+        "g3",
+        "g4",
+        "g4mp2",
+        "g4_complete",
+        "other"
+      ],
+      "title": "ThermoRecipeName",
+      "type": "string"
+    },
+    "ThermoReferenceDataSource": {
+      "description": "Where the reference formation enthalpies of the derivation came from.\n\nFor ``atomization`` these are the atoms'; for a working reaction, the\nreference species'. ``other`` requires ``reference_data_detail``.",
+      "enum": [
+        "atct",
+        "nist_janaf",
+        "codata",
+        "other"
+      ],
+      "title": "ThermoReferenceDataSource",
+      "type": "string"
+    },
     "ThermoSourceCalculationIn": {
       "additionalProperties": false,
       "description": "Link between a thermo upload and a supporting calculation.\n\nExactly one of ``calculation_key`` (inline reference into the same\nupload's ``calculations`` list) or ``existing_calculation_id`` (FK\nreference to a row already persisted in the ``calculation`` table)\nmust be provided. See DR-0028 for the rationale: ARC's typical\npipeline uploads opt/freq/sp during conformer upload, so the thermo\nupload should reference those existing rows rather than re-declare\nduplicate calculations.\n\nAudience guidance:\n\n* ``calculation_key`` is the **contributor-facing** path. Web uploads,\n  community contributors, and general workflow tools should use local\n  string keys so users never need to know database IDs. The future\n  computed-species bundle endpoint will resolve calculations,\n  artifacts, thermo, and thermo source links together server-side\n  using these keys.\n* ``existing_calculation_id`` is an **advanced / programmatic**\n  mechanism for clients that are chaining from a prior TCKDB upload\n  response (e.g. ARC's adapter using IDs returned by the conformer\n  upload, or replay/admin/repair tooling). It is not intended as the\n  primary public upload UX.\n\nThe ``existing_*_id`` convention is deliberately id-based and is\n**not** a violation of the \"no FK IDs in upload schemas\" rule, which\ngoverns contributor-facing *scientific content*. A depositor describes\na molecule, not a row; this field is a client quoting back an id TCKDB\nitself issued to it, and there is no key namespace spanning two\nrequests for it to use instead. Please do not \"fix\" it into a key.\n\nThe mirror of this field is\n:class:`app.schemas.workflows.statmech_upload.StatmechSourceCalculationIn`\n``.existing_calculation_id``, which does the same job for statmech and\ncarries the fuller argument for why chaining exists at all (calculations\nare append-only and never deduplicated, so a deposit forced to re-send\nthem mints duplicate rows for the same job and destroys the meaning of\ncounting distinct calculations). The two are intended to stay\nsymmetric: an asymmetry between them is a bug, not a signal. Statmech\nreached this contract later only because PR #148 moved it to local keys\nwithout a chaining mechanism.\n\nNeither field is offered by the contribution-bundle routes, and that\nomission is deliberate on both: a bundle carries one global calc-key\nnamespace covering everything it deposits, so every citation it needs\nto make is expressible as a key within the request it arrives in.\n\n:param calculation_key: Local key of a calculation declared in\n    ``ThermoUploadRequest.calculations``.\n:param existing_calculation_id: Database id of a calculation row that\n    already exists. Intended for programmatic workflows that are\n    chaining from a prior TCKDB upload response; contributor-facing\n    bundle uploads should prefer ``calculation_key`` so users do not\n    need to know database IDs. The workflow validates\n    owner-consistency and role/type compatibility before linking.\n:param role: The scientific role the calculation plays for this thermo.",
@@ -4267,6 +4538,85 @@
         "role"
       ],
       "title": "ThermoSourceCalculationIn",
+      "type": "object"
+    },
+    "ThermoTargetDeclaration": {
+      "additionalProperties": false,
+      "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.",
+      "properties": {
+        "conformer_group_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conformer Group Ref"
+        },
+        "conformer_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conformer Key"
+        },
+        "kind": {
+          "$ref": "#/$defs/ThermoTargetKind"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "ThermoTargetDeclaration",
+      "type": "object"
+    },
+    "ThermoTargetKind": {
+      "description": "The thermodynamic target a thermo record's values are claimed to describe.\n\n``equilibrium_ensemble`` is the thermally equilibrated population of the\nspecies' conformers; ``single_conformer`` is one named conformer group\n(the record then names that group). A depositor's attributed claim:\nnever inferred from a statmech link or a conformer selection, and null\non every record deposited without one.",
+      "enum": [
+        "equilibrium_ensemble",
+        "single_conformer"
+      ],
+      "title": "ThermoTargetKind",
+      "type": "string"
+    },
+    "ThermoThermalApproximation": {
+      "additionalProperties": false,
+      "description": "The approximation that represents the target ensemble in the numbers.\n\nNot the target itself (see :class:`ThermoEnsembleRepresentation`). At\nleast one of the two fields must be given: an object that says nothing is\nnot a statement.\n\n:param ensemble_representation: Lowest conformer alone, or a Boltzmann sum\n    over several.\n:param internal_motion: Harmonic, hindered-rotor or anharmonic treatment.",
+      "properties": {
+        "ensemble_representation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThermoEnsembleRepresentation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "internal_motion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThermoInternalMotion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "ThermoThermalApproximation",
       "type": "object"
     },
     "ThermoWilhoitCreate": {
@@ -4728,6 +5078,18 @@
       "title": "Points",
       "type": "array"
     },
+    "protocol": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ThermoProtocolDeclaration"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted."
+    },
     "reference_pressure_bar": {
       "anyOf": [
         {
@@ -4802,6 +5164,18 @@
     },
     "species_entry": {
       "$ref": "#/$defs/SpeciesEntryIdentityPayload"
+    },
+    "thermodynamic_target": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ThermoTargetDeclaration"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted."
     },
     "tmax_k": {
       "anyOf": [

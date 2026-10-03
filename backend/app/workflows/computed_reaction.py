@@ -150,6 +150,11 @@ from app.services.statmech_resolution import (
     assert_statmech_role_compatible,
     collect_frequency_scale_factor_software_mismatch_warnings,
 )
+from app.services.thermo_declaration_resolution import (
+    assert_thermo_declaration,
+    assert_thermo_declaration_columns,
+    resolve_thermo_declarations,
+)
 from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
@@ -561,6 +566,10 @@ def persist_computed_reaction_upload(
     # to write. Uniqueness within a species is enforced by the request
     # model, so this map loses nothing.
     observation_id_by_conformer_key: dict[str, dict[str, int]] = {}
+    # The same per-species scoping, to each conformer's group: a thermo target
+    # that names a conformer by key resolves to the group it was assigned to,
+    # and a sibling species's conformer is not in scope.
+    group_id_by_conformer_key: dict[str, dict[str, int]] = {}
     # Review-row targets accumulated as records are written so the
     # caller's ReviewPolicy can be applied at end-of-workflow.
     review_targets: list[RecordRef] = []
@@ -590,6 +599,7 @@ def persist_computed_reaction_upload(
 
         # Conformers
         conformers_by_key = observation_id_by_conformer_key.setdefault(sp.key, {})
+        group_ids_by_key = group_id_by_conformer_key.setdefault(sp.key, {})
         for conf in sp.conformers:
             geom_payload = conf.geometry.to_payload()
             geometry = resolve_geometry_payload(session, geom_payload)
@@ -630,6 +640,7 @@ def persist_computed_reaction_upload(
             session.flush()
             observation_id_by_geometry_key[conf.geometry.key] = observation.id
             conformers_by_key[conf.key] = observation.id
+            group_ids_by_key[conf.key] = conformer_group.id
             review_targets.append(
                 RecordRef(SubmissionRecordType.conformer_group, conformer_group.id)
             )
@@ -1215,6 +1226,8 @@ def persist_computed_reaction_upload(
             )
             t = sp.thermo
             assert_enthalpy_reference(t)
+            # Before any row is written: a self-contradicting target or protocol.
+            assert_thermo_declaration(t)
 
             # Per-thermo provenance overrides the bundle-level default.
             # The bundle value describes the run; a species whose thermo
@@ -1303,9 +1316,34 @@ def persist_computed_reaction_upload(
                 warnings=sp_energy_warnings,
             )
 
+            # The target's conformer and the protocol's supporting calculations
+            # are named by this bundle's local keys; resolve them to rows of
+            # this species entry (the conformer namespace is the species' own).
+            thermo_declarations = resolve_thermo_declarations(
+                session,
+                t,
+                species_entry_id=species_entry.id,
+                conformer_group_ids_by_key=group_id_by_conformer_key.get(sp.key, {}),
+                calculations_by_key=calculation_key_to_id,
+                field_prefix=f"species[{sp.key!r}].thermo.",
+            )
+            # The reaction route writes the row itself rather than through
+            # ``persist_thermo``, so it runs the last-stop check on the resolved
+            # columns too.
+            thermo_protocol_json = assert_thermo_declaration_columns(
+                session,
+                species_entry_id=species_entry.id,
+                thermodynamic_target_kind=thermo_declarations.thermodynamic_target_kind,
+                target_conformer_group_id=thermo_declarations.target_conformer_group_id,
+                protocol_declaration=thermo_declarations.protocol_declaration,
+            )
+
             thermo = Thermo(
                 species_entry_id=species_entry.id,
                 scientific_origin=t.scientific_origin,
+                thermodynamic_target_kind=thermo_declarations.thermodynamic_target_kind,
+                target_conformer_group_id=thermo_declarations.target_conformer_group_id,
+                protocol_declaration=thermo_protocol_json,
                 # Stored as declared, after ``assert_role_consistency`` above.
                 energy_level_of_theory_id=(
                     thermo_declared_energy_lot.id

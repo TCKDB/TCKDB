@@ -14,6 +14,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import EnthalpyReferenceKind, PhaseKind, ScientificOriginKind
+from tckdb_schemas.thermo_declarations import (
+    ThermoProtocolDeclaration,
+    ThermoTargetDeclaration,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +272,32 @@ class ThermoStateFields(SchemaBase):
     )
     enthalpy_formation_0k_kj_mol: float | None = None
     enthalpy_formation_0k_uncertainty_kj_mol: float | None = Field(default=None, ge=0)
+    thermodynamic_target: ThermoTargetDeclaration | None = Field(
+        default=None,
+        description="What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted.",
+    )
+    protocol: ThermoProtocolDeclaration | None = Field(
+        default=None,
+        description="How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted.",
+    )
+
+    @model_validator(mode="after")
+    def validate_bundle_references_are_local_keys(self) -> Self:
+        """A bundle names its conformer and calculations by local key, never by public ref."""
+        target = self.thermodynamic_target
+        if target is not None and target.conformer_group_ref is not None:
+            raise ValueError(
+                "thermodynamic_target.conformer_group_ref is not accepted inside a bundle; "
+                "name the conformer declared in this bundle with conformer_key."
+            )
+        if self.protocol is not None and any(
+            c.calculation_ref is not None for c in self.protocol.supporting_calculations
+        ):
+            raise ValueError(
+                "protocol.supporting_calculations[].calculation_ref is not accepted inside a "
+                "bundle; name a calculation declared in this bundle with calculation_key."
+            )
+        return self
 
     @model_validator(mode="after")
     def apply_computed_state_defaults(self) -> Self:

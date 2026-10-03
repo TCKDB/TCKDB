@@ -3781,6 +3781,17 @@
             "title": "Points",
             "type": "array"
           },
+          "protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoProtocolDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted."
+          },
           "reference_pressure_bar": {
             "anyOf": [
               {
@@ -3837,6 +3848,17 @@
             },
             "title": "Source Calculations",
             "type": "array"
+          },
+          "thermodynamic_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoTargetDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted."
           },
           "tmax_k": {
             "anyOf": [
@@ -45399,6 +45421,88 @@
         "title": "StorageCapacityStateResponse",
         "type": "object"
       },
+      "StoredThermoProtocolCalculationRef": {
+        "additionalProperties": false,
+        "description": "A supporting calculation as stored and read back: public ref only.",
+        "properties": {
+          "calculation_ref": {
+            "minLength": 1,
+            "title": "Calculation Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "calculation_ref"
+        ],
+        "title": "StoredThermoProtocolCalculationRef",
+        "type": "object"
+      },
+      "StoredThermoProtocolDeclaration": {
+        "additionalProperties": false,
+        "description": "The stored (and served) form of :class:`ThermoProtocolDeclaration`.\n\nIdentical except that every supporting calculation is a public ref: the\nbackend resolved any local key to the calculation it named and wrote that\ncalculation's ref. What is in the database never contains a local key and\nnever a database id.",
+        "properties": {
+          "departures": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ThermoProtocolDeparture"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departures"
+          },
+          "formation_reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoFormationReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoProtocolRecipe"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "supporting_calculations": {
+            "items": {
+              "$ref": "#/components/schemas/StoredThermoProtocolCalculationRef"
+            },
+            "title": "Supporting Calculations",
+            "type": "array"
+          },
+          "thermal_approximation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoThermalApproximation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "StoredThermoProtocolDeclaration",
+        "type": "object"
+      },
       "StructureMatchSummary": {
         "description": "Per-record description of how the query matched this entry.\n\n``similarity_score`` is populated only when ``mode == similarity``.\n``matched_query`` echoes the caller-supplied query string verbatim\nso the record is self-describing; ``matched_query_kind`` is the\nrequest field the query came from.",
         "properties": {
@@ -46723,6 +46827,75 @@
         "title": "ThermoCalculationRole",
         "type": "string"
       },
+      "ThermoDepartureComponent": {
+        "description": "The part of a standard recipe a depositor departed from.",
+        "enum": [
+          "geometry",
+          "frequencies",
+          "zero_point_energy",
+          "electronic_energy",
+          "empirical_correction",
+          "other"
+        ],
+        "title": "ThermoDepartureComponent",
+        "type": "string"
+      },
+      "ThermoEnsembleRepresentation": {
+        "description": "How the thermal ensemble is represented in the numbers.\n\nDeliberately separate from the target: the target says *what ensemble is\nmeant*, this says *what stood in for it*. A record can target the\nequilibrium ensemble and represent it by its lowest conformer alone.",
+        "enum": [
+          "lowest_conformer",
+          "boltzmann_conformers"
+        ],
+        "title": "ThermoEnsembleRepresentation",
+        "type": "string"
+      },
+      "ThermoFormationDerivation": {
+        "description": "How a formation enthalpy was derived from computed energies.\n\n``atomization``: from the total atomization energy and the formation\nenthalpies of the gaseous atoms. ``isodesmic``: from an isodesmic reaction\nwith reference species of known formation enthalpy. ``working_reaction``:\nfrom any other balanced working reaction (homodesmotic, hypohomodesmotic,\nisogyric, ...). A ranking established for one derivation does not transfer\nto another, so they are never merged.",
+        "enum": [
+          "atomization",
+          "isodesmic",
+          "working_reaction"
+        ],
+        "title": "ThermoFormationDerivation",
+        "type": "string"
+      },
+      "ThermoFormationReference": {
+        "additionalProperties": false,
+        "description": "How the formation enthalpy was constructed from the computed energies.\n\n:param derivation: Atomization, isodesmic or another working reaction.\n:param reference_data_source: Where the reference formation enthalpies\n    came from; omit when the source does not say.\n:param reference_data_detail: Optional free text naming the data set and\n    its version (for example ``ATcT 1.122``). Required when\n    ``reference_data_source`` is ``other``.",
+        "properties": {
+          "derivation": {
+            "$ref": "#/components/schemas/ThermoFormationDerivation"
+          },
+          "reference_data_detail": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Data Detail"
+          },
+          "reference_data_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoReferenceDataSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "derivation"
+        ],
+        "title": "ThermoFormationReference",
+        "type": "object"
+      },
       "ThermoInBundle": {
         "additionalProperties": false,
         "description": "Thermo block within a bundle. Lives at bundle level (one thermo\nper species_entry); references calcs from any conformer via the\nbundle's global calc-key namespace.",
@@ -46854,6 +47027,17 @@
             "title": "Points",
             "type": "array"
           },
+          "protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoProtocolDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted."
+          },
           "reference_pressure_bar": {
             "anyOf": [
               {
@@ -46911,6 +47095,17 @@
             "title": "Source Calculations",
             "type": "array"
           },
+          "thermodynamic_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoTargetDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted."
+          },
           "tmax_k": {
             "anyOf": [
               {
@@ -46948,6 +47143,16 @@
         },
         "title": "ThermoInBundle",
         "type": "object"
+      },
+      "ThermoInternalMotion": {
+        "description": "How low-frequency internal motion was treated in the thermal contribution.",
+        "enum": [
+          "harmonic",
+          "hindered_rotors",
+          "anharmonic"
+        ],
+        "title": "ThermoInternalMotion",
+        "type": "string"
       },
       "ThermoMLUploadDisposition": {
         "description": "One mapped Cp(T) row's outcome. Never a database id -- see\n``ThermoMLUploadResult``.",
@@ -47973,6 +48178,165 @@
         "title": "ThermoPointRead",
         "type": "object"
       },
+      "ThermoProtocolCalculationRef": {
+        "additionalProperties": false,
+        "description": "A supporting calculation, by local key or public ref (exactly one).\n\n:param calculation_key: Key of a calculation the same request declares.\n:param calculation_ref: Public ref (``calc_...``) of one already deposited for the same species\n    entry. Computed bundles accept keys only.",
+        "properties": {
+          "calculation_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Key"
+          },
+          "calculation_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Ref"
+          }
+        },
+        "title": "ThermoProtocolCalculationRef",
+        "type": "object"
+      },
+      "ThermoProtocolDeclaration": {
+        "additionalProperties": false,
+        "description": "The protocol a thermo record was produced with. Version 1.\n\nAn attributed claim, stored as made, not checked against the linked\ncalculations. Every block is optional; at least one statement must be present.\n\n:param version: Declaration format version; only the integer ``1`` is accepted\n    (not ``true``, ``\"1\"`` or ``1.0``).\n:param recipe: The recipe (G3, G4, G4(MP2), G4(complete), other) and version.\n:param formation_reference: How the formation enthalpy was constructed.\n:param thermal_approximation: What represents the target ensemble.\n:param departures: Stated departures from the standard recipe. Three states:\n    omitted means not stated; an empty list means the depositor states there\n    are none; a list of ``{component, description}`` names them. Only an\n    empty list says \"standard\".\n:param supporting_calculations: Calculations the declaration rests on.",
+        "properties": {
+          "departures": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ThermoProtocolDeparture"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departures"
+          },
+          "formation_reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoFormationReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoProtocolRecipe"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "supporting_calculations": {
+            "items": {
+              "$ref": "#/components/schemas/ThermoProtocolCalculationRef"
+            },
+            "title": "Supporting Calculations",
+            "type": "array"
+          },
+          "thermal_approximation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoThermalApproximation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "ThermoProtocolDeclaration",
+        "type": "object"
+      },
+      "ThermoProtocolDeparture": {
+        "additionalProperties": false,
+        "description": "One stated departure from the standard form of the declared recipe.\n\n:param component: The part of the recipe that was changed.\n:param description: What was done instead, in the depositor's words.",
+        "properties": {
+          "component": {
+            "$ref": "#/components/schemas/ThermoDepartureComponent"
+          },
+          "description": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "component",
+          "description"
+        ],
+        "title": "ThermoProtocolDeparture",
+        "type": "object"
+      },
+      "ThermoProtocolRecipe": {
+        "additionalProperties": false,
+        "description": "The recipe the energy was computed with.\n\n:param name: Which recipe; see :class:`ThermoRecipeName`.\n:param other_name: Required when ``name`` is ``other`` and refused\n    otherwise: the recipe's own name, as the source writes it.\n:param recipe_version: Optional free text naming the recipe's version or\n    reference (for example ``G4 (Curtiss 2007)``). Stored as written.",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/ThermoRecipeName"
+          },
+          "other_name": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Other Name"
+          },
+          "recipe_version": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe Version"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ThermoProtocolRecipe",
+        "type": "object"
+      },
       "ThermoProvenance": {
         "description": "Thermo provenance block — keys always present, ``null`` when absent.\n\nPhase B: integer ``*_id`` fields keep their place; ``*_ref`` siblings\ncarry the public stable handles.\n\nTwo distinct kinds of \"software\" can appear on a thermo record, and\nissue #284 was exactly the two getting collapsed into one field:\n\n- ``software_release`` / ``workflow_tool_release`` — what computed\n  *this thermochemistry* (e.g. Arkane, run by ARC). Sourced strictly\n  from ``thermo.software_release_id`` / ``thermo.workflow_tool_release_id``\n  — the thermo row's own FKs, never a calculation's. When the thermo\n  carries no software of its own (a value fitted or transcribed\n  without a recorded fitting tool), both are ``null``. This is a\n  complete, honest answer for records whose only real evidence is a\n  software attribution and no source-calculation chain — it must\n  never be backfilled from ``primary_calculation.software``.\n- ``primary_calculation.software`` — what ran the *electronic\n  structure* underneath (e.g. Gaussian), nested inside the primary\n  source-calculation summary where it has always correctly lived.\n\nA client that wants \"what tool do I cite for this thermochemistry\"\nreads ``software_release`` / ``workflow_tool_release``; one that wants\n\"what ran the QM\" reads ``primary_calculation.software``. Neither\nsubstitutes for the other.\n\n``conformer_observation_id`` / ``conformer_observation_ref`` and\n``conformer_group_id`` / ``conformer_group_ref`` resolve the same\nsingle calculation used for ``primary_calculation`` one hop further,\nthrough ``calculation.conformer_observation_id`` to the conformer\nbasin it belongs to. All four are ``null`` when the record has no\nresolvable primary calculation (no source calc, direct or from the\nlinked statmech) — a record with no calculation has no conformer to\nreport, and this block does not invent one.",
         "properties": {
@@ -48291,6 +48655,16 @@
             "title": "Points",
             "type": "array"
           },
+          "protocol_declaration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoredThermoProtocolDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "reference_pressure_bar": {
             "anyOf": [
               {
@@ -48361,6 +48735,27 @@
             ],
             "title": "Statmech Id"
           },
+          "target_conformer_group_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Conformer Group Id"
+          },
+          "thermodynamic_target_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoTargetKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "tmax_k": {
             "anyOf": [
               {
@@ -48415,6 +48810,18 @@
         ],
         "title": "ThermoRead",
         "type": "object"
+      },
+      "ThermoRecipeName": {
+        "description": "The named computational recipe a record's energy comes from.\n\nThe members are the recipes a later E1 match must tell apart: standard G3,\nstandard G4, G4(MP2) and G4(complete) are four different recipes, and a\nmodification of any of them is a *departure*, not a fifth name. ``other``\ndeclares a recipe outside this list; ``other_name`` then says which.",
+        "enum": [
+          "g3",
+          "g4",
+          "g4mp2",
+          "g4_complete",
+          "other"
+        ],
+        "title": "ThermoRecipeName",
+        "type": "string"
       },
       "ThermoRecord": {
         "description": "One thermo record returned by the thermo endpoint.\n\nThe underlying schema does not store cp units explicitly; per\n``app/db/models/thermo.py``, ``ThermoPoint.cp_j_mol_k`` is the canonical\n(and only) cp representation in v0. Future schema work may surface a\ncp-units field; v0 omits it from the response.\n\nPhase B: ``thermo_ref`` is the public stable handle alongside the\ninteger ``thermo_id``.",
@@ -48551,6 +48958,21 @@
             ],
             "title": "Points"
           },
+          "protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoredThermoProtocolDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "protocol_unreadable": {
+            "default": false,
+            "title": "Protocol Unreadable",
+            "type": "boolean"
+          },
           "provenance": {
             "$ref": "#/components/schemas/ThermoProvenance"
           },
@@ -48622,6 +49044,16 @@
             "title": "Thermo Ref",
             "type": "string"
           },
+          "thermodynamic_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoTargetBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "trust": {
             "anyOf": [
               {
@@ -48654,6 +49086,17 @@
         ],
         "title": "ThermoRecord",
         "type": "object"
+      },
+      "ThermoReferenceDataSource": {
+        "description": "Where the reference formation enthalpies of the derivation came from.\n\nFor ``atomization`` these are the atoms'; for a working reaction, the\nreference species'. ``other`` requires ``reference_data_detail``.",
+        "enum": [
+          "atct",
+          "nist_janaf",
+          "codata",
+          "other"
+        ],
+        "title": "ThermoReferenceDataSource",
+        "type": "string"
       },
       "ThermoSearchRecord": {
         "description": "One result row: resolved species context + the thermo record itself.\n\nThe ``thermo`` field is the same ``ThermoRecord`` shape returned by the\nentry-id detail endpoint, so workflow tools have a single thermo schema\nto depend on regardless of how they discovered the record.",
@@ -49065,6 +49508,105 @@
         "title": "ThermoSourceCalculationRead",
         "type": "object"
       },
+      "ThermoTargetBlock": {
+        "description": "The thermodynamic target a record's depositor declared.\n\n:param kind: ``equilibrium_ensemble`` or ``single_conformer``.\n:param conformer_group_ref: Public ref of the conformer group a\n    ``single_conformer`` target names; ``null`` for an equilibrium target.",
+        "properties": {
+          "conformer_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Group Ref"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ThermoTargetKind"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ThermoTargetBlock",
+        "type": "object"
+      },
+      "ThermoTargetDeclaration": {
+        "additionalProperties": false,
+        "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.",
+        "properties": {
+          "conformer_group_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Group Ref"
+          },
+          "conformer_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Key"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ThermoTargetKind"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ThermoTargetDeclaration",
+        "type": "object"
+      },
+      "ThermoTargetKind": {
+        "description": "The thermodynamic target a thermo record's values are claimed to describe.\n\n``equilibrium_ensemble`` is the thermally equilibrated population of the\nspecies' conformers; ``single_conformer`` is one named conformer group\n(the record then names that group). A depositor's attributed claim:\nnever inferred from a statmech link or a conformer selection, and null\non every record deposited without one.",
+        "enum": [
+          "equilibrium_ensemble",
+          "single_conformer"
+        ],
+        "title": "ThermoTargetKind",
+        "type": "string"
+      },
+      "ThermoThermalApproximation": {
+        "additionalProperties": false,
+        "description": "The approximation that represents the target ensemble in the numbers.\n\nNot the target itself (see :class:`ThermoEnsembleRepresentation`). At\nleast one of the two fields must be given: an object that says nothing is\nnot a statement.\n\n:param ensemble_representation: Lowest conformer alone, or a Boltzmann sum\n    over several.\n:param internal_motion: Harmonic, hindered-rotor or anharmonic treatment.",
+        "properties": {
+          "ensemble_representation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoEnsembleRepresentation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "internal_motion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoInternalMotion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ThermoThermalApproximation",
+        "type": "object"
+      },
       "ThermoUploadRefInBundle": {
         "additionalProperties": false,
         "properties": {
@@ -49271,6 +49813,17 @@
             "title": "Points",
             "type": "array"
           },
+          "protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoProtocolDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted."
+          },
           "reference_pressure_bar": {
             "anyOf": [
               {
@@ -49340,6 +49893,17 @@
           },
           "species_entry": {
             "$ref": "#/components/schemas/SpeciesEntryIdentityPayload"
+          },
+          "thermodynamic_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoTargetDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted."
           },
           "tmax_k": {
             "anyOf": [

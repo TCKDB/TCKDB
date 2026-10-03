@@ -5,10 +5,13 @@ See docs/specs/read_api_mvp.md §Endpoint 4.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
+from tckdb_schemas.thermo_declarations import StoredThermoProtocolDeclaration
 
 from app.api.errors import not_found
 from app.db.models.calculation import (
@@ -70,6 +73,7 @@ from app.schemas.reads.scientific_thermo import (
     ThermoProvenance,
     ThermoReadRequest,
     ThermoRecord,
+    ThermoTargetBlock,
     ThermoWilhoitBlock,
 )
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
@@ -208,6 +212,8 @@ _LOT_FILTER_ROLE_PRIORITY = (
     ThermoCalculationRole.freq,
     ThermoCalculationRole.opt,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_species_thermo(
@@ -440,6 +446,21 @@ def get_species_thermo(
         + list(statmech_declared_lot_ids.values()),
     )
 
+    # Public refs of the conformer groups declared as targets, for the page.
+    target_group_ids = {
+        t.target_conformer_group_id
+        for t, _ in classified
+        if t.target_conformer_group_id is not None
+    }
+    target_group_refs: dict[int, str] = {}
+    if target_group_ids:
+        for group_id, group_ref in session.execute(
+            select(ConformerGroup.id, ConformerGroup.public_ref).where(
+                ConformerGroup.id.in_(target_group_ids)
+            )
+        ).all():
+            target_group_refs[group_id] = group_ref
+
     records: list[ThermoRecord] = []
     for t, model_kind in classified:
         sources = sources_by_thermo.get(t.id, [])
@@ -543,6 +564,20 @@ def get_species_thermo(
                 }
             )
 
+        # A stored protocol that no longer validates (written outside the upload path) must
+        # not take the whole listing down: serve the record, mark the protocol unreadable.
+        protocol = None
+        protocol_unreadable = False
+        if t.protocol_declaration is not None:
+            try:
+                protocol = StoredThermoProtocolDeclaration.model_validate(t.protocol_declaration)
+            except ValidationError:
+                protocol_unreadable = True
+                logger.warning(
+                    "thermo %s stores a protocol declaration that fails validation; served as unreadable",
+                    t.public_ref,
+                )
+
         record = ThermoRecord(
             thermo_id=t.id,
             thermo_ref=t.public_ref,
@@ -553,6 +588,16 @@ def get_species_thermo(
             phase=t.phase,
             reference_pressure_bar=t.reference_pressure_bar,
             enthalpy_reference_kind=t.enthalpy_reference_kind,
+            thermodynamic_target=(
+                ThermoTargetBlock(
+                    kind=t.thermodynamic_target_kind,
+                    conformer_group_ref=target_group_refs.get(t.target_conformer_group_id),
+                )
+                if t.thermodynamic_target_kind is not None
+                else None
+            ),
+            protocol=protocol,
+            protocol_unreadable=protocol_unreadable,
             enthalpy_formation_0k_kj_mol=t.enthalpy_formation_0k_kj_mol,
             enthalpy_formation_0k_uncertainty_kj_mol=t.enthalpy_formation_0k_uncertainty_kj_mol,
             h298_kj_mol=t.h298_kj_mol,

@@ -207,6 +207,17 @@ class ThermoDetailRecord(TypedDict, total=False):
     phase: str | None
     reference_pressure_bar: float | None
     enthalpy_reference_kind: str | None
+    # What the depositor declared the values describe: ``{"kind":
+    # "equilibrium_ensemble" | "single_conformer", "conformer_group_ref": ...}``
+    # (the ref is ``null`` for an equilibrium target). ``null`` means none was
+    # declared; it is never inferred from a statmech link.
+    thermodynamic_target: JSONDict | None
+    # The depositor's versioned protocol declaration (recipe, formation
+    # reference, thermal approximation, departures, supporting calculations
+    # by public ref). ``null`` means none was declared. An attributed claim.
+    protocol: JSONDict | None
+    # ``true`` when a stored protocol no longer validates: ``protocol`` is then ``null``.
+    protocol_unreadable: bool
     h298_kj_mol: float | None
     s298_j_mol_k: float | None
     h298_uncertainty_kj_mol: float | None

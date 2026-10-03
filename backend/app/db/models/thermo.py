@@ -13,6 +13,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
@@ -22,6 +23,7 @@ from app.db.models.common import (
     ScientificOriginKind,
     ThermoCalculationRole,
     ThermoModelKind,
+    ThermoTargetKind,
 )
 
 if TYPE_CHECKING:
@@ -71,6 +73,23 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
       elemental term not reevaluated. ``NULL`` means the reference was never
       recorded -- it is never inferred from a value, a producer or a
       neighbouring row, and never backfilled.
+    * ``thermodynamic_target_kind`` declares what the values are claimed to
+      describe: ``equilibrium_ensemble`` (the thermally equilibrated
+      population of the species' conformers) or ``single_conformer`` (one
+      named conformer group). ``NULL`` means no target was declared -- it is
+      never inferred from ``statmech_id`` or a conformer selection, and never
+      backfilled.
+    * ``target_conformer_group_id`` is the conformer group a
+      ``single_conformer`` target names, and is set exactly then
+      (``ck_thermo_target_group_iff_single_conformer``). That the group belongs
+      to this row's species entry is checked where the row is written.
+    * ``protocol_declaration`` is the depositor's versioned protocol
+      declaration -- recipe, formation-reference construction, thermal
+      approximation, departures from the standard recipe, supporting
+      calculations (by public ref) -- validated against
+      ``tckdb_schemas.thermo_declarations.StoredThermoProtocolDeclaration``.
+      An attributed claim, stored as made. ``NULL`` means none was declared.
+      All three are frozen with the rest of an accepted row.
     * ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of
       formation and standard entropy at 298.15 K.
     * ``enthalpy_formation_0k_kj_mol`` is the 0 K standard formation
@@ -163,6 +182,35 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     enthalpy_reference_kind: Mapped[Optional[EnthalpyReferenceKind]] = mapped_column(
         SAEnum(EnthalpyReferenceKind, name="enthalpy_reference_kind"), nullable=True
+    )
+
+    # Thermodynamic target declaration: what the values are claimed to describe
+    # (the equilibrium ensemble, or one conformer group of this species entry).
+    # An attributed claim, never inferred from ``statmech_id`` or a conformer
+    # selection; NULL on every row that predates the column and on any deposit
+    # that omitted it. ``target_conformer_group_id`` is set exactly when the
+    # kind is ``single_conformer`` (``ck_thermo_target_group_iff_single_conformer``);
+    # that the group belongs to this row's species entry is a cross-table fact
+    # no CHECK can state, and is enforced where the row is written
+    # (``app.services.thermo_declaration_resolution``).
+    thermodynamic_target_kind: Mapped[Optional[ThermoTargetKind]] = mapped_column(
+        SAEnum(ThermoTargetKind, name="thermo_target_kind"), nullable=True
+    )
+    target_conformer_group_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("conformer_group.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+        index=True,
+    )
+    # Versioned protocol declaration (``tckdb_schemas.thermo_declarations``,
+    # ``StoredThermoProtocolDeclaration``): recipe, formation-reference
+    # construction, thermal approximation, departures and supporting
+    # calculations, as the depositor stated them. Stores public refs, never
+    # local keys or database ids. NULL = not stated.
+    # ``none_as_null``: Python ``None`` is SQL NULL ("not stated"), never the JSON
+    # value ``null``, which would be a stored claim of nothing.
+    protocol_declaration: Mapped[Optional[dict]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
     )
 
     h298_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
@@ -273,6 +321,17 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         # trigger described above, not a CheckConstraint here -- see the
         # class docstring for why a CHECK cannot express "only when this
         # write actually touches one of these two columns".
+        CheckConstraint(
+            "(thermodynamic_target_kind IS NOT DISTINCT FROM 'single_conformer') "
+            "= (target_conformer_group_id IS NOT NULL)",
+            name="target_group_iff_single_conformer",
+        ),
+        CheckConstraint(
+            "protocol_declaration IS NULL OR ("
+            "jsonb_typeof(protocol_declaration) = 'object' "
+            "AND coalesce(jsonb_typeof(protocol_declaration -> 'version'), '') = 'number')",
+            name="protocol_declaration_versioned_object",
+        ),
         CheckConstraint("tmin_k IS NULL OR tmin_k > 0", name="tmin_k_gt_0"),
         CheckConstraint("tmax_k IS NULL OR tmax_k > 0", name="tmax_k_gt_0"),
         CheckConstraint(

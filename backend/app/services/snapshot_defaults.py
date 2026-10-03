@@ -29,6 +29,15 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     # either (ADR 0021). A level that states frozen_core or all_electron
     # includes the column, so its digest differs, as its identity does.
     ("level_of_theory", "core_treatment"): None,
+    # thermo.thermodynamic_target_kind / target_conformer_group_id /
+    # protocol_declaration: a thermo row stored before the columns existed
+    # declared no target and no protocol, which is NULL. A record that states
+    # one includes the column, so its digest differs, as its meaning does: the
+    # declaration is part of what the row claims. Adding the columns restales
+    # no stored review of any existing row.
+    ("thermo", "thermodynamic_target_kind"): None,
+    ("thermo", "target_conformer_group_id"): None,
+    ("thermo", "protocol_declaration"): None,
 }
 
 

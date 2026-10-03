@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.121.0 - 2026-10-03
+
+Thermo builders can state what a record's values describe and how they were produced
+(`tckdb-schemas` 0.85.0). Both are optional attributed claims; leave them out and the payload is
+byte-for-byte what it was.
+
+- `Thermo.scalar` / `Thermo.nasa` / `Thermo.points` accept `thermodynamic_target`
+  (`"equilibrium_ensemble"` or `"single_conformer"`), `protocol` (a `ThermoProtocolDeclaration` or the
+  equivalent dict, without its supporting calculations) and `protocol_calculations` (the
+  `Calculation` builders the protocol rests on, named by bundle key at assembly).
+- A `single_conformer` target names the species' own conformer: `ComputedSpeciesUpload` and
+  `ComputedReactionUpload` resolve it to the conformer key they mint, and refuse it
+  (`TCKDBBuilderValidationError`) when the species has no conformer in the upload. The reaction
+  block's `thermo` keeps its place in the species block either way.
+- The builder runs the shared `thermo_declaration_error` rule before any request, so a
+  self-contradicting target, an unknown protocol field or an unsupported protocol version is refused
+  locally with the server's code in the message (`thermo_target_group_required`,
+  `thermo_protocol_version_unsupported`, ...).
+- `RejectionCode` gains the codes above, regenerated from the server's catalogue:
+  `thermo_target_group_required`, `thermo_target_group_not_allowed`,
+  `thermo_target_group_owner_mismatch`, `thermo_declaration_invalid`,
+  `thermo_protocol_version_unsupported`, `thermo_protocol_calculation_owner_mismatch`.
+- Thermo reads gain `thermodynamic_target` (`kind`, `conformer_group_ref`) and `protocol`, both `null`
+  on a record that declared nothing. `ThermoDetailRecord` types them.
+- `tckdb-schemas>=0.85.0` is now required.
+- `tckdb-schemas>=0.77.0` is now required.
 ## 0.117.0 - 2026-10-03
 
 Adds the `RejectionCode.TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH` member (`tckdb-schemas` 0.81.0, #638):

@@ -61,6 +61,10 @@ from app.services.record_review import (
 )
 from app.services.species_resolution import resolve_species_entry
 from app.services.statmech_resolution import accepted_types_phrase
+from app.services.thermo_declaration_resolution import (
+    assert_thermo_declaration,
+    resolve_thermo_declarations,
+)
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
 from app.services.upload_reference import (
     W_UNKNOWN_CALCULATION_REF,
@@ -326,6 +330,10 @@ def persist_thermo_upload(
         correction's ``source_calculation_key`` does not resolve.
     """
     assert_enthalpy_reference(request)
+    # A self-contradicting target or protocol is refused before any row is
+    # written; whether its references resolve is answered further down, once
+    # the inline calculations it may cite exist.
+    assert_thermo_declaration(request)
     species_entry = resolve_species_entry(
         session, request.species_entry, created_by=created_by
     )
@@ -458,6 +466,16 @@ def persist_thermo_upload(
         warnings=warnings_out,
     )
 
+    # The target and protocol declarations: the conformer group and every
+    # supporting calculation must exist and belong to this species entry.
+    # Resolved against the inline calculations this request just persisted.
+    declarations = resolve_thermo_declarations(
+        session,
+        request,
+        species_entry_id=species_entry.id,
+        calculations_by_key=calculations_by_key,
+    )
+
     thermo_create = resolve_thermo_upload(
         session,
         request,
@@ -471,6 +489,9 @@ def persist_thermo_upload(
         update={
             "source_calculations": resolved_source_calcs,
             "statmech_id": resolved_statmech_id,
+            "thermodynamic_target_kind": declarations.thermodynamic_target_kind,
+            "target_conformer_group_id": declarations.target_conformer_group_id,
+            "protocol_declaration": declarations.protocol_declaration,
             # Stored as declared, after ``assert_role_consistency`` above.
             "energy_level_of_theory_id": (
                 declared_energy_lot.id if declared_energy_lot is not None else None

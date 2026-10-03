@@ -19,6 +19,10 @@ from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     raise_for_blocking_findings,
 )
+from tckdb_schemas.thermo_declarations import (
+    ThermoProtocolDeclaration,
+    ThermoTargetDeclaration,
+)
 
 from app.db.models.common import (
     EnthalpyReferenceKind,
@@ -183,6 +187,28 @@ class ThermoUploadRequest(SchemaBase):
     # statmech_link`` below). Stored as declared once it passes, and read
     # back as ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
+
+    # What the record's values are claimed to describe: the equilibrium
+    # ensemble, or one conformer group of this species entry. An attributed
+    # claim -- never inferred from ``existing_statmech_id`` or anything else,
+    # never defaulted, null when omitted. A ``single_conformer`` target names
+    # its group by public ref (``conformer_group_ref``); the backend checks
+    # that the group exists and belongs to this record's species entry.
+    thermodynamic_target: ThermoTargetDeclaration | None = Field(
+        default=None,
+        description="What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted.",
+    )
+
+    # How the values were produced: a versioned, schema-validated declaration
+    # (recipe, formation-reference construction, thermal approximation,
+    # departures from the standard recipe, supporting calculations). Stored as
+    # made; supporting calculations are named by a key of this request's
+    # ``calculations`` or by a public ref of a calculation already deposited
+    # for the same species entry.
+    protocol: ThermoProtocolDeclaration | None = Field(
+        default=None,
+        description="How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted.",
+    )
 
     # A minimal valid payload. Published as the JSON Schema's ``examples``, in
     # the OpenAPI document, and in the producer contract, which validates it
@@ -438,6 +464,30 @@ class ThermoUploadRequest(SchemaBase):
                     key=key,
                     declared=defined,
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_declaration_references(self) -> Self:
+        """A standalone upload names its target group by ref; no conformer key, and supporting-calculation keys must be its own."""
+        target = self.thermodynamic_target
+        if target is not None and target.conformer_key is not None:
+            raise ValueError(
+                "thermodynamic_target.conformer_key is only accepted inside a computed-species "
+                "or computed-reaction bundle, which declares conformers; name the group with "
+                "conformer_group_ref here."
+            )
+        if self.protocol is not None:
+            defined = {c.key for c in self.calculations}
+            for index, ref in enumerate(self.protocol.supporting_calculations):
+                if ref.calculation_key is not None and ref.calculation_key not in defined:
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
+                        f"protocol.supporting_calculations references undefined "
+                        f"calculation_key '{ref.calculation_key}'.",
+                        field=f"protocol.supporting_calculations[{index}].calculation_key",
+                        key=ref.calculation_key,
+                        declared=defined,
+                    )
         return self
 
     @model_validator(mode="after")
