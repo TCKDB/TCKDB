@@ -436,3 +436,35 @@ def test_ts_reference_sums_every_reactant_not_just_the_first(db_conn) -> None:
     with _isolated_session(db_conn) as session:
         _ts(session, payload({1: 2, 2: 2}))
         session.flush()
+
+
+def test_ts_reference_does_not_deduplicate_identical_reactants(db_conn) -> None:
+    """2 [2H] -> [2H][2H]: two reactant slots of one entry are two deuterons."""
+
+    def payload(isotopes: dict[int, int]) -> dict:
+        d = {"smiles": "[2H]", "charge": 0, "multiplicity": 2}
+        dd = {"smiles": "[2H][2H]", "charge": 0, "multiplicity": 1}
+        return {
+            "charge": 0,
+            "multiplicity": 1,
+            "geometry": _geom("2\nD2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.8", isotopes),
+            "reaction": {
+                "reversible": True,
+                "reactants": [{"species_entry": d}, {"species_entry": d}],
+                "products": [{"species_entry": dd}],
+            },
+            "primary_opt": {
+                "type": "opt",
+                "software_release": _SOFTWARE,
+                "level_of_theory": _LOT,
+                "opt_result": {"converged": True},
+            },
+        }
+
+    with _isolated_session(db_conn) as session:
+        with pytest.raises(CodedValueError) as excinfo:
+            _ts(session, payload({1: 2}))
+        assert excinfo.value.context["subject_substitutions"] == "2Hx2"
+    with _isolated_session(db_conn) as session:
+        _ts(session, payload({1: 2, 2: 2}))
+        session.flush()
