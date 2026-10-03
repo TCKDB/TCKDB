@@ -67,6 +67,7 @@ from tckdb_schemas.enthalpy_reference import (
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import resolve_element_symbol
+from app.chemistry.level_label import render_level_label
 from app.db.models.calculation import (
     Calculation,
     CalculationFreqMode,
@@ -221,22 +222,23 @@ class MLFilters:
 def _lot_label(lot: LevelOfTheory) -> str:
     """Build a compact, deterministic, human+machine LOT label.
 
-    ``method/basis`` core with parenthesised annotations for the parts of
-    the LOT identity that survive round-tripping (dispersion, solvent). The
-    stable machine key is ``lot_hash``; this label is the readable form.
+    ``method/basis`` with parenthesised annotations for every stated part of the level's identity (auxiliary
+    and CABS basis, dispersion, solvent and model, spin and core treatment), written by the one renderer the
+    notation of a record's levels uses (:func:`app.chemistry.level_label.render_level_label`), so the two
+    cannot disagree. Raw ``keywords`` are not written. The stable machine key is ``lot_hash``; this label is the
+    readable form and is not a key.
     """
-    core = lot.method if not lot.basis else f"{lot.method}/{lot.basis}"
-    extra: list[str] = []
-    if lot.dispersion:
-        extra.append(f"disp={lot.dispersion}")
-    if lot.solvent:
-        solvent = lot.solvent
-        if lot.solvent_model:
-            solvent = f"{lot.solvent_model}:{solvent}"
-        extra.append(f"solvent={solvent}")
-    if extra:
-        core = f"{core} ({', '.join(extra)})"
-    return core
+    return render_level_label(
+        method=lot.method,
+        basis=lot.basis,
+        aux_basis=lot.aux_basis,
+        cabs_basis=lot.cabs_basis,
+        dispersion=lot.dispersion,
+        solvent=lot.solvent,
+        solvent_model=lot.solvent_model,
+        spin_treatment=lot.spin_treatment,
+        core_treatment=lot.core_treatment,
+    )
 
 
 def _lot_block(

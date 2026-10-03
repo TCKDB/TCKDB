@@ -35,6 +35,7 @@ from app.db.models.common import (
     PressureContext,
     RecordReviewStatus,
     SCFStabilityStatus,
+    SpinTreatment,
     SubmissionRecordType,
     ValidationStatus,
 )
@@ -1062,13 +1063,17 @@ class _CalcMeta:
     __slots__ = (
         "composite_scheme",
         "id",
+        "lot_aux_basis",
         "lot_basis",
+        "lot_cabs_basis",
         "lot_core_treatment",
         "lot_dispersion",
         "lot_id",
         "lot_method",
         "lot_ref",
         "lot_solvent",
+        "lot_solvent_model",
+        "lot_spin_treatment",
         "parameters_json",
         "software_name",
         "software_release_id",
@@ -1097,6 +1102,10 @@ class _CalcMeta:
         parameters_json: dict | None,
         composite_scheme: CompositeSchemeSummary | None = None,
         lot_core_treatment: CoreTreatment | None = None,
+        lot_aux_basis: str | None = None,
+        lot_cabs_basis: str | None = None,
+        lot_solvent_model: str | None = None,
+        lot_spin_treatment: SpinTreatment | None = None,
     ):
         self.composite_scheme = composite_scheme
         self.id = id
@@ -1109,6 +1118,10 @@ class _CalcMeta:
         self.lot_dispersion = lot_dispersion
         self.lot_solvent = lot_solvent
         self.lot_core_treatment = lot_core_treatment
+        self.lot_aux_basis = lot_aux_basis
+        self.lot_cabs_basis = lot_cabs_basis
+        self.lot_solvent_model = lot_solvent_model
+        self.lot_spin_treatment = lot_spin_treatment
         self.software_release_id = software_release_id
         self.software_release_ref = software_release_ref
         self.software_name = software_name
@@ -1154,6 +1167,10 @@ def _calc_metadata(
             Software.name,
             SoftwareRelease.version,
             LevelOfTheory.core_treatment,
+            LevelOfTheory.aux_basis,
+            LevelOfTheory.cabs_basis,
+            LevelOfTheory.solvent_model,
+            LevelOfTheory.spin_treatment,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -1183,6 +1200,10 @@ def _calc_metadata(
             software_version=row[13],
             composite_scheme=schemes.get(row[3]),
             lot_core_treatment=row[14],
+            lot_aux_basis=row[15],
+            lot_cabs_basis=row[16],
+            lot_solvent_model=row[17],
+            lot_spin_treatment=row[18],
         )
         for row in rows
     }
@@ -1651,6 +1672,10 @@ def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None
         dispersion=meta.lot_dispersion,
         solvent=meta.lot_solvent,
         core_treatment=meta.lot_core_treatment,
+        aux_basis=meta.lot_aux_basis,
+        cabs_basis=meta.lot_cabs_basis,
+        solvent_model=meta.lot_solvent_model,
+        spin_treatment=meta.lot_spin_treatment,
         label="/".join(p for p in label_parts if p),
         composite_scheme=meta.composite_scheme,
     )

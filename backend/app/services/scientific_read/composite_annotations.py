@@ -21,6 +21,7 @@ from collections.abc import Mapping, Sequence
 
 from app.db.models.common import CompositeEnergyVerificationState, LegacyCompositeShape
 from app.schemas.reads.scientific_common import CompositeEnergyVerification, LevelOfTheorySummary
+from app.services.composite_verification import REASON_LOG_METHOD_MISMATCH, REASON_LOG_MISMATCH
 
 __all__ = ["legacy_composite_shape", "record_composite_verification"]
 
@@ -36,7 +37,7 @@ _SEVERITY: dict[CompositeEnergyVerificationState, int] = {
 #: ``program_reported`` whose ``reason`` says an attached log *contradicted* the number. A contradiction
 #: ranks right after ``recompute_mismatch``: a plain ``program_reported`` (no log) or an ``unverifiable``
 #: composite must not hide it.
-_CONTRADICTION_REASONS = frozenset({"log_mismatch", "log_method_mismatch"})
+_CONTRADICTION_REASONS = frozenset({REASON_LOG_MISMATCH, REASON_LOG_METHOD_MISMATCH})
 _CONTRADICTION_RANK = 1
 
 

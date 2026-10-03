@@ -853,6 +853,10 @@ def _build_calculations_section(
             CalculationGeometryValidation.validation_status,
             CalculationSCFStability.status,
             LevelOfTheory.core_treatment,
+            LevelOfTheory.aux_basis,
+            LevelOfTheory.cabs_basis,
+            LevelOfTheory.solvent_model,
+            LevelOfTheory.spin_treatment,
         )
         .join(
             TransitionStateEntry,
@@ -908,6 +912,10 @@ def _build_calculations_section(
                     dispersion=row[7],
                     solvent=row[8],
                     core_treatment=row[15],
+                    aux_basis=row[16],
+                    cabs_basis=row[17],
+                    solvent_model=row[18],
+                    spin_treatment=row[19],
                     label="/".join(p for p in (row[5] or "", row[6]) if p),
                     composite_scheme=schemes.get(row[3]),
                 )

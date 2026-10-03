@@ -15,6 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from app.chemistry.level_label import render_level_label
 from app.db.models.common import (
     CompositeAssembly,
     CompositeEnergyVerificationState,
@@ -319,6 +320,13 @@ class LevelOfTheorySummary(BaseModel):
     #: when set. Every builder passes it explicitly
     #: (``tests/invariants/test_level_summary_carries_composite_scheme.py``).
     core_treatment: CoreTreatment | None = None
+    #: The auxiliary (RI) and CABS basis sets, the solvent model and (with ``dispersion`` and ``solvent``) the
+    #: spin and core treatment are the parts of the level's identity, beside ``method`` and ``basis``, that
+    #: ``notation`` writes. ``None`` means not stated. Every builder passes them explicitly
+    #: (``tests/invariants/test_level_summary_carries_composite_scheme.py``).
+    aux_basis: str | None = None
+    cabs_basis: str | None = None
+    solvent_model: str | None = None
     label: str | None = None
     #: The composite recipe this level names, or ``None`` when the level is an
     #: ordinary one. Bound by TCKDB for a catalogued named composite method
@@ -449,22 +457,25 @@ class ScientificLevelsSummary(BaseModel):
 
 
 def level_label(level: LevelOfTheorySummary) -> str:
-    """A level written in full: ``method/basis``, then dispersion, solvent and core treatment when stated.
+    """A level written in full: ``method/basis``, then every stated part of its identity.
 
     ``display`` is method and basis only, so B3LYP-D3BJ/def2-TZVP and plain B3LYP/def2-TZVP both render
-    ``B3LYP/def2-TZVP``. A notation is a headline people read, so it spells out every part of the level's
-    identity the summary carries: ``B3LYP/def2-TZVP (disp=D3BJ, core=frozen_core)``. The parenthesised form
-    is the one the ML-dataset export already uses for its ``label``; nothing is written for a part that is
-    not stated.
+    ``B3LYP/def2-TZVP``. The notation of a record's levels is a headline people read, so it uses the one shared
+    renderer (:func:`app.chemistry.level_label.render_level_label`, also behind the ML export's ``label``): auxiliary
+    and CABS basis, dispersion, solvent with its model, spin treatment and core treatment, each only when stated.
+    Raw ``keywords`` are not written; see that module.
     """
-    extra: list[str] = []
-    if level.dispersion:
-        extra.append(f"disp={level.dispersion}")
-    if level.solvent:
-        extra.append(f"solvent={level.solvent}")
-    if level.core_treatment is not None:
-        extra.append(f"core={level.core_treatment.value}")
-    return f"{level.display} ({', '.join(extra)})" if extra else level.display
+    return render_level_label(
+        method=level.method,
+        basis=level.basis,
+        aux_basis=level.aux_basis,
+        cabs_basis=level.cabs_basis,
+        dispersion=level.dispersion,
+        solvent=level.solvent,
+        solvent_model=level.solvent_model,
+        spin_treatment=level.spin_treatment,
+        core_treatment=level.core_treatment,
+    )
 
 
 def levels_notation(*, energy: LevelOfTheorySummary | None, geometry: LevelOfTheorySummary | None) -> str | None:

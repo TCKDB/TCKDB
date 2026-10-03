@@ -193,6 +193,9 @@ def _level_summaries(session: Session, lot_ids: set[int]) -> dict[int, LevelOfTh
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
             core_treatment=lot.core_treatment,
+            aux_basis=lot.aux_basis,
+            cabs_basis=lot.cabs_basis,
+            solvent_model=lot.solvent_model,
             label=None,
             composite_scheme=schemes.get(lot.id),
         )

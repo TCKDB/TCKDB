@@ -23660,6 +23660,17 @@
       "LevelOfTheorySummary": {
         "description": "Lightweight LoT shape used in scientific provenance summaries.\n\nPhase B: ``level_of_theory_ref`` is the public stable handle; the\nexisting ``level_of_theory_id`` integer stays for the compatibility\nwindow. See ``docs/specs/public_identifier_policy.md``.",
         "properties": {
+          "aux_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aux Basis"
+          },
           "basis": {
             "anyOf": [
               {
@@ -23670,6 +23681,17 @@
               }
             ],
             "title": "Basis"
+          },
+          "cabs_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cabs Basis"
           },
           "composite_scheme": {
             "anyOf": [
@@ -23742,6 +23764,17 @@
               }
             ],
             "title": "Solvent"
+          },
+          "solvent_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solvent Model"
           },
           "spin_treatment": {
             "anyOf": [

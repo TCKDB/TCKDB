@@ -942,6 +942,10 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
             CalculationGeometryValidation.validation_status,
             CalculationSCFStability.status,
             LevelOfTheory.core_treatment,
+            LevelOfTheory.aux_basis,
+            LevelOfTheory.cabs_basis,
+            LevelOfTheory.solvent_model,
+            LevelOfTheory.spin_treatment,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -980,6 +984,10 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
             "geometry_validation": row[12],
             "scf_stability": row[13],
             "lot_core_treatment": row[14],
+            "lot_aux_basis": row[15],
+            "lot_cabs_basis": row[16],
+            "lot_solvent_model": row[17],
+            "lot_spin_treatment": row[18],
         }
         for row in rows
     }
@@ -1319,6 +1327,10 @@ def _lot_summary(meta: dict) -> LevelOfTheorySummary | None:
         dispersion=meta["lot_dispersion"],
         solvent=meta["lot_solvent"],
         core_treatment=meta["lot_core_treatment"],
+        aux_basis=meta["lot_aux_basis"],
+        cabs_basis=meta["lot_cabs_basis"],
+        solvent_model=meta["lot_solvent_model"],
+        spin_treatment=meta["lot_spin_treatment"],
         label="/".join(p for p in label_parts if p),
         composite_scheme=meta.get("composite_scheme"),
     )

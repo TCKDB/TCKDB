@@ -406,7 +406,12 @@ def test_the_kinetics_levels_of_an_sp_energy_are_not_composite(client, db_sessio
     assert levels["legacy_composite_shape"] is None
     # rotor_scan_1 is the plan's case (d): a DLPNO-CCSD(T)-F12 single point on a wB97X-D geometry.
     assert levels["geometry"] is not None
-    assert levels["notation"] == f"{levels['energy']['display']}//{levels['geometry']['display']}"
+    # The notation writes the whole level: the F12 single point states its auxiliary and CABS basis sets.
+    energy, geometry = levels["energy"], levels["geometry"]
+    assert energy["aux_basis"] and energy["cabs_basis"]
+    assert levels["notation"] == (
+        f"{energy['display']} (aux={energy['aux_basis']}, cabs={energy['cabs_basis']})//{geometry['display']}"
+    )
     assert levels["notation"].lower().startswith("dlpno-ccsd(t)-f12/") and "//" in levels["notation"]
 
 
@@ -423,3 +428,10 @@ def test_no_database_id_appears_in_any_of_the_new_fields(client, db_session):
     assert _no_ids({k: record[k] for k in ("composite_energy_verification", "legacy_composite_shape")}) == []
     # The whole levels block, which nests the level summaries, is id-free too (the integer ids are internal).
     assert _no_ids(levels) == []
+
+
+@pytest.mark.parametrize("spin", ["restricted", "unrestricted"])
+def test_the_spin_treatment_of_a_level_shows_in_a_thermo_notation(client, spin):
+    """Two levels of one method and basis that differ only in spin do not read the same."""
+    levels, _ = _thermo(client, _inline_thermo({"o": _opt({**_LOT_A, "spin_treatment": spin})}, [("o", "opt")]))
+    assert levels["notation"] == f"B3LYP/6-31G(d) (spin={spin})"
