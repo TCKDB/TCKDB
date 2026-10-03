@@ -22,6 +22,19 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## H298 candidate assessment and the E1 preference rule (2026-10-03)
+
+- tckdb-backend (service layer only; no route, wire package or client changes): a deterministic H298
+  applicability assessor (finite scalar, exact 298.15 K point, NASA-7/NASA-9 evaluated by the existing
+  engine; formation-from-elements reference, gas phase and declared target required), a versioned rule
+  registry shipped with the app, rule E1 (standard G4 over standard G3, restricted to the 38-species
+  audited manifest, curator-approved 1.0.0), and a preference engine that returns fronts, a
+  `policy_conflict` for opposing rules or cycles, and a replayable decision manifest of public refs.
+  Nothing is persisted and browse order is unchanged. Second of three changes toward method-aware
+  H298 selection; the endpoint, SDK and MCP follow. `backend/scripts/ops/thermo_h298_coverage_inventory.py`
+  reports, read-only, how many stored records can answer H298 and why the rest cannot. No schema
+  change, no new environment variable.
+
 ## Thermo target and protocol declarations (2026-10-03)
 
 - tckdb-schemas 0.85.0, tckdb-client 0.121.0 and tckdb-backend: a thermo record can state what its
