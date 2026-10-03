@@ -1108,7 +1108,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
         if self.thermo.protocol is not None:
             defined = self._all_calc_keys()
             for index, ref in enumerate(self.thermo.protocol.supporting_calculations):
-                if ref.calculation_key not in defined:
+                if ref.calculation_key is not None and ref.calculation_key not in defined:
                     raise undeclared_key_error(
                         W_CALCULATION_KEY_UNDECLARED,
                         f"thermo.protocol.supporting_calculations references undefined "

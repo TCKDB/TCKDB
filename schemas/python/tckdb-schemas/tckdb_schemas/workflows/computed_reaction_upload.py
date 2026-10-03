@@ -1968,7 +1968,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                     )
             if sp.thermo.protocol is not None:
                 for i, ref in enumerate(sp.thermo.protocol.supporting_calculations):
-                    if ref.calculation_key not in all_calc_keys:
+                    if ref.calculation_key is not None and ref.calculation_key not in all_calc_keys:
                         raise undeclared_key_error(
                             W_CALCULATION_KEY_UNDECLARED,
                             f"species[{sp.key!r}].thermo.protocol.supporting_calculations"
