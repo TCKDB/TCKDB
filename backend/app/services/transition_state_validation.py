@@ -31,16 +31,23 @@ warning while still not showing what it warns about.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.calculation import composite_arithmetic_tolerance_hartree
 from tckdb_schemas.fragments.ts_validation_evidence import (
     TransitionStateValidationEvidenceIn,
 )
 from tckdb_schemas.upload_warning import UploadWarning
 
-from app.db.models.calculation import Calculation
-from app.db.models.common import CalculationType, ReactionRole
+from app.api.error_contract import CodedValueError
+from app.db.models.calculation import (
+    Calculation,
+    CalculationInputGeometry,
+    CalculationOutputGeometry,
+)
+from app.db.models.common import CalculationGeometryRole, CalculationType, ReactionRole
 from app.db.models.reaction import ReactionEntryStructureParticipant
 from app.db.models.transition_state import (
     TransitionStateValidationEnergy,
@@ -70,6 +77,38 @@ W_MISSING_TS_IRC_EVIDENCE = "transition_state_missing_irc_evidence"
 #: Emitted when one energy kind of an ``energy_ordering`` record was taken
 #: from calculations at more than one level of theory.
 W_TS_ENERGY_ORDERING_MIXED_LEVELS = "transition_state_energy_ordering_mixed_levels"
+
+#: A stated energy contradicts the energy TCKDB stores for the calculation it
+#: cites, beyond the printed-precision tolerance (issue #638). Block tier
+#: (ADR 0008): the record names a calculation and a number, and the number is
+#: not that calculation's.
+E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH = "ts_energy_ordering_stated_energy_mismatch"
+
+#: Emitted when some stated energy of an ``energy_ordering`` record could not be
+#: held against a stored one. The record is accepted and each such energy is
+#: stored as ``not_compared`` with the reason.
+W_TS_ENERGY_ORDERING_NOT_COMPARED = "transition_state_energy_ordering_not_compared"
+
+#: ``transition_state_validation_energy.stored_energy_comparison`` values.
+COMPARISON_AGREES = "agrees"
+COMPARISON_NOT_COMPARED = "not_compared"
+
+#: Why a stated energy was not compared (``not_compared_reason``). Stable tokens.
+NOT_COMPARED_STORED_ENERGY_NOT_STATED = "stored_energy_not_stated"
+NOT_COMPARED_ZPE_NOT_STATED = "zpe_not_stated"
+NOT_COMPARED_NO_ELECTRONIC_ENERGY_TO_PAIR = "no_electronic_energy_to_pair"
+NOT_COMPARED_GEOMETRY_NOT_PAIRED = "geometry_not_paired"
+
+#: Two printed values are in every comparison of a stated electronic energy with
+#: a stored one (the stated value and the stored one), three in an E0 (E0,
+#: electronic energy, zero-point energy). The weighting is the shared one
+#: :func:`composite_arithmetic_tolerance_hartree` documents.
+_ROUNDED_QUANTITIES_ELECTRONIC = 2
+_ROUNDED_QUANTITIES_E0 = 3
+
+#: Slack for float noise in ``|stated - stored| <= tolerance``; the same value
+#: ``tckdb_schemas.composite_total`` uses for the same comparison.
+_TOLERANCE_FLOAT_SLACK = 1e-12
 
 #: The calculation types an ``energy_ordering`` energy may be taken from, by
 #: ``energy_kind``. An electronic energy is what an ``sp`` reports or what an
@@ -147,6 +186,235 @@ def _assert_energy_sources_are_comparable(
                     ),
                 )
             )
+
+
+@dataclass(frozen=True)
+class StoredEnergyComparison:
+    """What holding one stated energy against the stored one concluded.
+
+    A disagreement has no value here: it raises instead, so a row is only ever
+    written with ``agrees`` or ``not_compared``.
+    """
+
+    status: str
+    reason: str | None = None
+
+
+_AGREES = StoredEnergyComparison(COMPARISON_AGREES)
+
+
+def _stored_electronic_energy(calculation: Calculation) -> float | None:
+    """The electronic energy stored for an ``sp`` or ``opt``; None when not stated."""
+
+    if calculation.type == CalculationType.sp:
+        result = calculation.sp_result
+        return None if result is None else result.electronic_energy_hartree
+    if calculation.type == CalculationType.opt:
+        opt_result = calculation.opt_result
+        return None if opt_result is None else opt_result.final_energy_hartree
+    return None
+
+
+def _energy_geometry_ids(session: Session, calculation: Calculation) -> frozenset[int]:
+    """The geometries a calculation's energy (or ZPE) is at.
+
+    An ``sp`` and a ``freq`` are at their input geometry; an ``opt``'s energy
+    is at its final output geometry.
+    """
+
+    if calculation.type == CalculationType.opt:
+        rows = session.scalars(
+            select(CalculationOutputGeometry.geometry_id).where(
+                CalculationOutputGeometry.calculation_id == calculation.id,
+                CalculationOutputGeometry.role == CalculationGeometryRole.final,
+            )
+        ).all()
+    else:
+        rows = session.scalars(
+            select(CalculationInputGeometry.geometry_id).where(
+                CalculationInputGeometry.calculation_id == calculation.id
+            )
+        ).all()
+    return frozenset(rows)
+
+
+def _stated_energy_mismatch(
+    *,
+    field: str,
+    participant: str,
+    energy_kind: str,
+    stated: float,
+    stored: float,
+    tolerance: float,
+    stored_zpe: float | None = None,
+) -> CodedValueError:
+    """The refusal for a stated energy the cited calculation does not store.
+
+    Names the participant and both values and never a row id (DR-0028).
+    """
+
+    what = (
+        "the stored electronic energy plus the stored zero-point energy of the "
+        "frequency calculation it cites"
+        if energy_kind == "e0"
+        else "the energy stored for the calculation it cites"
+    )
+    context: dict[str, object] = {
+        "field": field,
+        "participant": participant,
+        "energy_kind": energy_kind,
+        "stated_hartree": stated,
+        "stored_hartree": stored,
+        "tolerance_hartree": tolerance,
+    }
+    if stored_zpe is not None:
+        context["stored_zpe_hartree"] = stored_zpe
+    return CodedValueError(
+        E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH,
+        (
+            f"{field} states {stated!r} Eh as the '{energy_kind}' energy of '{participant}', "
+            f"but {what} is {stored!r} Eh, a difference of {abs(stated - stored):.3e} Eh against "
+            f"a tolerance of {tolerance:.2e} Eh. State the energy the calculation stores, or cite "
+            "the calculation the number came from."
+        ),
+        context=context,
+    )
+
+
+def _compare_stated_energies_with_stored(
+    session: Session,
+    record: TransitionStateValidationEvidenceIn,
+    energy_calculation_ids: Sequence[int],
+    *,
+    field_path: str,
+    record_index: int,
+) -> list[StoredEnergyComparison]:
+    """Hold each stated energy against what TCKDB stores for its calculation.
+
+    Runs after the source-type rule, so every ``electronic`` source is an
+    ``sp`` or ``opt`` and every ``e0`` source a ``freq``.
+
+    * ``electronic``: the stated value against the cited ``sp``'s
+      ``electronic_energy_hartree`` or the cited ``opt``'s final energy.
+    * ``e0``: a ``freq`` result stores a zero-point energy and no electronic
+      energy, so the E0 is compared with the stored electronic energy of the
+      *same participant's* ``electronic`` entry in this record plus the cited
+      ``freq``'s ZPE, and only when the two calculations are at one geometry
+      (the ``sp``'s input, the ``opt``'s final, the ``freq``'s input), each
+      declared exactly once. Anything less is not a pairing, and is not guessed.
+
+    A stored value that contradicts the stated one raises
+    ``ts_energy_ordering_stated_energy_mismatch``. A comparison that cannot be
+    made (a stored energy or ZPE that is not stated, no electronic entry to
+    pair an E0 with, a pairing that cannot be established) is returned as
+    ``not_compared`` with its reason, never as agreement.
+    """
+
+    energies = list(record.energies or [])
+    calculations = [session.get(Calculation, calculation_id) for calculation_id in energy_calculation_ids]
+    results: list[StoredEnergyComparison | None] = [None] * len(energies)
+    electronic_by_participant: dict[str, tuple[Calculation, float | None]] = {}
+
+    for index, (energy, calculation) in enumerate(zip(energies, calculations, strict=True)):
+        assert calculation is not None  # resolved and ownership-checked above
+        if energy.energy_kind != "electronic":
+            continue
+        stored = _stored_electronic_energy(calculation)
+        electronic_by_participant[energy.participant] = (calculation, stored)
+        if stored is None:
+            results[index] = StoredEnergyComparison(
+                COMPARISON_NOT_COMPARED, NOT_COMPARED_STORED_ENERGY_NOT_STATED
+            )
+            continue
+        tolerance = composite_arithmetic_tolerance_hartree(_ROUNDED_QUANTITIES_ELECTRONIC)
+        if abs(energy.energy_hartree - stored) > tolerance + _TOLERANCE_FLOAT_SLACK:
+            raise _stated_energy_mismatch(
+                field=f"{field_path}[{record_index}].energies[{index}]",
+                participant=energy.participant,
+                energy_kind="electronic",
+                stated=energy.energy_hartree,
+                stored=stored,
+                tolerance=tolerance,
+            )
+        results[index] = _AGREES
+
+    for index, (energy, calculation) in enumerate(zip(energies, calculations, strict=True)):
+        assert calculation is not None
+        if energy.energy_kind != "e0":
+            continue
+        freq = calculation.freq_result
+        zpe = None if freq is None else freq.zpe_hartree
+        if zpe is None:
+            results[index] = StoredEnergyComparison(COMPARISON_NOT_COMPARED, NOT_COMPARED_ZPE_NOT_STATED)
+            continue
+        partner = electronic_by_participant.get(energy.participant)
+        if partner is None:
+            results[index] = StoredEnergyComparison(
+                COMPARISON_NOT_COMPARED, NOT_COMPARED_NO_ELECTRONIC_ENERGY_TO_PAIR
+            )
+            continue
+        partner_calculation, electronic = partner
+        if electronic is None:
+            results[index] = StoredEnergyComparison(
+                COMPARISON_NOT_COMPARED, NOT_COMPARED_STORED_ENERGY_NOT_STATED
+            )
+            continue
+        electronic_geometry = _energy_geometry_ids(session, partner_calculation)
+        freq_geometry = _energy_geometry_ids(session, calculation)
+        if len(electronic_geometry) != 1 or electronic_geometry != freq_geometry:
+            results[index] = StoredEnergyComparison(
+                COMPARISON_NOT_COMPARED, NOT_COMPARED_GEOMETRY_NOT_PAIRED
+            )
+            continue
+        stored_e0 = electronic + zpe
+        tolerance = composite_arithmetic_tolerance_hartree(_ROUNDED_QUANTITIES_E0)
+        if abs(energy.energy_hartree - stored_e0) > tolerance + _TOLERANCE_FLOAT_SLACK:
+            raise _stated_energy_mismatch(
+                field=f"{field_path}[{record_index}].energies[{index}]",
+                participant=energy.participant,
+                energy_kind="e0",
+                stated=energy.energy_hartree,
+                stored=stored_e0,
+                tolerance=tolerance,
+                stored_zpe=zpe,
+            )
+        results[index] = _AGREES
+
+    return [result for result in results if result is not None]
+
+
+def _warn_energies_not_compared(
+    record: TransitionStateValidationEvidenceIn,
+    comparisons: Sequence[StoredEnergyComparison],
+    *,
+    subject_label: str,
+    field_path: str,
+    record_index: int,
+    warnings: list[UploadWarning] | None,
+) -> None:
+    """One warning per record naming each stated energy that was not compared."""
+
+    if warnings is None:
+        return
+    skipped = [
+        f"'{energy.participant}' {energy.energy_kind} ({comparison.reason})"
+        for energy, comparison in zip(record.energies or [], comparisons, strict=True)
+        if comparison.status == COMPARISON_NOT_COMPARED
+    ]
+    if not skipped:
+        return
+    warnings.append(
+        UploadWarning(
+            field=f"{field_path}[{record_index}].energies",
+            code=W_TS_ENERGY_ORDERING_NOT_COMPARED,
+            message=(
+                f"Transition state '{subject_label}' energy_ordering states energies that could "
+                f"not be compared with the energies TCKDB stores for the calculations they cite: "
+                f"{'; '.join(skipped)}. They are stored as not compared, and the ordering rests on "
+                "the stated numbers for them."
+            ),
+        )
+    )
 
 
 def _assert_imaginary_mode_matches_freq(
@@ -334,6 +602,7 @@ def persist_transition_state_validation_evidence(
     # in the session for anything later in the same request to see. The second
     # pass only writes.
     resolved_energy_ids: list[list[int]] = []
+    resolved_comparisons: list[list[StoredEnergyComparison]] = []
     for record_index, (record, calculation_id) in enumerate(
         zip(evidence, reconstruction_calculation_ids, strict=True)
     ):
@@ -425,11 +694,33 @@ def persist_transition_state_validation_evidence(
                 record_index=record_index,
                 warnings=warnings,
             )
+            comparisons = _compare_stated_energies_with_stored(
+                session,
+                record,
+                energy_ids,
+                field_path=field_path,
+                record_index=record_index,
+            )
+            _warn_energies_not_compared(
+                record,
+                comparisons,
+                subject_label=subject_label,
+                field_path=field_path,
+                record_index=record_index,
+                warnings=warnings,
+            )
+        else:
+            comparisons = []
         resolved_energy_ids.append(energy_ids)
+        resolved_comparisons.append(comparisons)
 
     rows: list[TransitionStateValidationEvidence] = []
-    for record, calculation_id, energy_ids in zip(
-        evidence, reconstruction_calculation_ids, resolved_energy_ids, strict=True
+    for record, calculation_id, energy_ids, comparisons in zip(
+        evidence,
+        reconstruction_calculation_ids,
+        resolved_energy_ids,
+        resolved_comparisons,
+        strict=True,
     ):
         has_mapping = (
             record.reactant_participant_mapping is not None
@@ -453,8 +744,8 @@ def persist_transition_state_validation_evidence(
         )
         session.add(row)
         rows.append(row)
-        for energy, source_calculation_id in zip(
-            record.energies or [], energy_ids, strict=True
+        for energy, source_calculation_id, comparison in zip(
+            record.energies or [], energy_ids, comparisons, strict=True
         ):
             row.compared_energies.append(
                 TransitionStateValidationEnergy(
@@ -462,6 +753,8 @@ def persist_transition_state_validation_evidence(
                     energy_kind=energy.energy_kind,
                     energy_hartree=energy.energy_hartree,
                     source_calculation_id=source_calculation_id,
+                    stored_energy_comparison=comparison.status,
+                    not_compared_reason=comparison.reason,
                 )
             )
 
@@ -578,8 +871,92 @@ CHECK_TS_ENERGY_ORDERING_LEVELS = ScientificCheck(
 )
 
 
+CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
+    group="Stationary points",
+    sort_key=11,
+    code=E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH,
+    asserts=(
+        "An energy an energy-ordering record states for a participant should be "
+        "the energy TCKDB stores for the calculation the record cites: the "
+        "cited single point's electronic energy (or the optimisation's final "
+        "energy), or, for an E0, the paired stored electronic energy plus the "
+        "cited frequency calculation's zero-point energy."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional. The record names a calculation and a number; a number "
+        "that is not that calculation's stored one is a factual inconsistency "
+        "between two things the same deposit asserts, not an expectation. "
+        "Without it the ordering was checked against the depositor's own "
+        "numbers only, and a mistyped or copied value could make a record pass "
+        "that the stored energies fail. The tolerance is the shared "
+        "printed-precision one, so rounding is never refused. A comparison "
+        "that cannot be made is not a contradiction and does not block "
+        "(``CHECK_TS_ENERGY_ORDERING_NOT_COMPARED``)."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(
+            persist_transition_state_validation_evidence,
+            note=(
+                "Runs in the shared evidence seam, so the PDep bundle, the "
+                "computed-reaction bundle and the standalone upload enforce it "
+                "alike, and it holds for a payload that bypassed the wire "
+                "schemas. Wire-level checks cannot do it: the stored energies "
+                "are in the database."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "State the energy the cited calculation stores, or cite the "
+        "calculation the number came from. Where the stored energy is not "
+        "stated the energy is not compared and the upload warns."
+    ),
+)
+
+
+CHECK_TS_ENERGY_ORDERING_NOT_COMPARED = ScientificCheck(
+    group="Stationary points",
+    sort_key=12,
+    code=W_TS_ENERGY_ORDERING_NOT_COMPARED,
+    asserts=(
+        "Every energy an energy-ordering record states should be comparable "
+        "with the energy TCKDB stores for its calculation."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    tier_rationale=(
+        "Absence, not contradiction. A stored energy or zero-point energy that "
+        "is not stated, an E0 with no electronic energy to pair, or a pairing "
+        "TCKDB cannot establish leaves nothing to contradict; refusing would "
+        "lose a record that may be right. The energy is stored as not compared "
+        "with its reason, and the warning names it (ADR 0008)."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(
+            persist_transition_state_validation_evidence,
+            note=(
+                "The outcome of every comparison is stored on the compared "
+                "energy (``stored_energy_comparison`` / ``not_compared_reason``), "
+                "so a reader can tell an energy that agrees with the stored one "
+                "from one that was never held against it."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "None needed: the warning is the accommodation. Deposit the cited "
+        "calculation's energy (and the frequency's zero-point energy, with the "
+        "electronic energy at the same geometry) to make the comparison possible."
+    ),
+)
+
+
 __all__ = [
+    "E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH",
     "W_MISSING_TS_IRC_EVIDENCE",
     "W_TS_ENERGY_ORDERING_MIXED_LEVELS",
+    "W_TS_ENERGY_ORDERING_NOT_COMPARED",
     "persist_transition_state_validation_evidence",
 ]

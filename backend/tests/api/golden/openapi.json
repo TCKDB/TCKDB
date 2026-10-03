@@ -49869,7 +49869,7 @@
         "type": "object"
       },
       "TransitionStateComparedEnergySummary": {
-        "description": "One energy an ``energy_ordering`` evidence record compared.\n\n``participant`` is ``ts``, ``reactant:N`` or ``product:N``; ``energy_kind``\nis ``electronic`` or ``e0`` (electronic energy plus zero-point energy), and\nthe two are never compared with each other. ``energy_hartree`` is the\nabsolute energy as the producer reported it, and\n``source_calculation_ref`` is the calculation it was taken from.",
+        "description": "One energy an ``energy_ordering`` evidence record compared.\n\n``participant`` is ``ts``, ``reactant:N`` or ``product:N``; ``energy_kind``\nis ``electronic`` or ``e0`` (electronic energy plus zero-point energy), and\nthe two are never compared with each other. ``energy_hartree`` is the\nabsolute energy as the producer reported it, and\n``source_calculation_ref`` is the calculation it was taken from.\n\n``stored_energy_comparison`` says what holding the stated energy against\nthe energy TCKDB stores for that calculation concluded when the evidence\nwas deposited: ``agrees`` (within the printed-precision tolerance), or\n``not_compared`` with ``not_compared_reason`` saying why. Null means the\nenergy was deposited before the comparison existed. It is never a pass:\nan energy that disagreed with the stored one was refused, not stored.",
         "properties": {
           "energy_hartree": {
             "title": "Energy Hartree",
@@ -49878,6 +49878,17 @@
           "energy_kind": {
             "title": "Energy Kind",
             "type": "string"
+          },
+          "not_compared_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Compared Reason"
           },
           "participant": {
             "title": "Participant",
@@ -49893,6 +49904,17 @@
               }
             ],
             "title": "Source Calculation Ref"
+          },
+          "stored_energy_comparison": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stored Energy Comparison"
           }
         },
         "required": [

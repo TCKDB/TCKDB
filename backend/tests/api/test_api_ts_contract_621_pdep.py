@@ -18,7 +18,7 @@ import copy
 from sqlalchemy import select
 
 from app.db.models.transition_state import TransitionStateEntry
-from tests.api.test_api_ts_contract_621 import _MISSING_IRC, _codes, _energy
+from tests.api.test_api_ts_contract_621 import _MISSING_IRC, _codes, _energy, state_stored_energies
 from tests.workflows.test_network_pdep_upload import _full_payload
 
 _PDEP_URL = "/api/v1/uploads/networks/pdep"
@@ -55,8 +55,18 @@ def _mode(**overrides) -> dict:
     return record
 
 
+#: The energies ``_ordering`` states, as the calculations it cites store them
+#: (issue #638): an ordering is held against the stored values.
+_STORED_SP_HARTREE = {
+    "ts_elim_sp": -229.0,
+    "etoo_sp": -229.3,
+    "ethene_sp": -78.5,
+    "HO2_sp": -150.6,
+}
+
+
 def _payload(*extra: dict) -> dict:
-    payload = copy.deepcopy(_full_payload())
+    payload = state_stored_energies(copy.deepcopy(_full_payload()), sp=_STORED_SP_HARTREE, zpe={})
     payload["transition_states"][0]["validation_evidence"].extend(extra)
     return payload
 

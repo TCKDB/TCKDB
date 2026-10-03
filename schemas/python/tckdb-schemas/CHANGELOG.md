@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.81.0 - 2026-10-03
+
+TS energy-ordering evidence is held against the stored energies (#638). No upload field is added, removed
+or changed; a payload that was accepted is accepted unless a stated energy contradicts what TCKDB stores
+for the calculation it cites.
+
+- **`ts_energy_ordering_stated_energy_mismatch` (422).** An `energy_ordering` energy whose stated value is
+  not the energy stored for its `source_calculation_key` is refused: an `electronic` energy against the
+  cited `sp`'s electronic energy (or the cited `opt`'s final energy), an `e0` against the stored electronic
+  energy of the same participant's `electronic` entry plus the cited `freq`'s zero-point energy (only when
+  the two calculations are at one geometry). The tolerance is the printed-precision one,
+  `max(1e-6, 5e-7 * n)` hartree with n = 2 (electronic) or 3 (E0). `context` carries the field, the
+  participant, the energy kind, both values and the tolerance.
+- **`transition_state_energy_ordering_not_compared` (warning).** An energy that cannot be compared (the
+  stored energy or zero-point energy is not stated, no electronic entry exists to pair an E0 with, or the
+  geometries cannot be paired) is accepted and reported, never read as agreement.
+- Reads: each compared energy of an `energy_ordering` record gains `stored_energy_comparison` (`agrees` or
+  `not_compared`, null on a record deposited earlier) and `not_compared_reason`.
+- Uploads only: stored records read exactly as before. A record whose stated energies disagree with the
+  stored ones must state the stored values or cite the calculation the numbers came from.
+
 ## 0.77.0 - 2026-10-03
 
 Composite levels of theory, phase P7b (ADR 0021): a read-shape note only. No upload payload field is

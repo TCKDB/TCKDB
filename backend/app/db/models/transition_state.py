@@ -375,9 +375,25 @@ class TransitionStateValidationEnergy(Base):
         ),
         nullable=False,
     )
+    #: What holding ``energy_hartree`` against the energy TCKDB stores for
+    #: ``source_calculation_id`` concluded when the row was written
+    #: (issue #638): ``agrees`` (within the printed-precision tolerance) or
+    #: ``not_compared``, in which case ``not_compared_reason`` says why. NULL
+    #: means the row was deposited before the comparison existed, and is not a
+    #: pass. A *disagreement* is never stored: it refuses the deposit.
+    stored_energy_comparison: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    not_compared_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     evidence: Mapped["TransitionStateValidationEvidence"] = relationship(back_populates="compared_energies")
     source_calculation: Mapped["Calculation"] = relationship()
     __table_args__ = (
+        CheckConstraint(
+            "stored_energy_comparison IS NULL OR stored_energy_comparison IN ('agrees', 'not_compared')",
+            name="stored_energy_comparison",
+        ),
+        CheckConstraint(
+            "(stored_energy_comparison IS NOT DISTINCT FROM 'not_compared') = (not_compared_reason IS NOT NULL)",
+            name="not_compared_reason_shape",
+        ),
         CheckConstraint(
             "participant ~ '^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$'",
             name="participant_shape",

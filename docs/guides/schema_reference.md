@@ -3155,12 +3155,16 @@ the gap.
 | `energy_kind` | TEXT | no | — | — | — | not documented |
 | `energy_hartree` | FLOAT | no | — | — | — | not documented |
 | `source_calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+| `stored_energy_comparison` | TEXT | yes | — | — | — | not documented |
+| `not_compared_reason` | TEXT | yes | — | — | — | not documented |
 
 **Check constraints:**
 
 - `ck_transition_state_validation_energy_energy_finite_le_zero`: `energy_hartree <= 0 AND energy_hartree > '-Infinity'::float8`
 - `ck_transition_state_validation_energy_energy_kind`: `energy_kind IN ('electronic', 'e0')`
+- `ck_transition_state_validation_energy_not_compared_reason_shape`: `(stored_energy_comparison IS NOT DISTINCT FROM 'not_compared') = (not_compared_reason IS NOT NULL)`
 - `ck_transition_state_validation_energy_participant_shape`: `participant ~ '^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$'`
+- `ck_transition_state_validation_energy_stored_energy_comparison`: `stored_energy_comparison IS NULL OR stored_energy_comparison IN ('agrees', 'not_compared')`
 
 ### `transport`
 

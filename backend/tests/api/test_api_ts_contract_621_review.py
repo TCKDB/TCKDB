@@ -153,6 +153,20 @@ class TestMixedLevelsWarn:
         assert _MIXED not in _codes(result)
 
 
+def _bare_proton_bundle() -> dict:
+    """An electronic-only ordering with a zero-energy reactant, stored as stated.
+
+    Electronic only, because a bare proton's E0 cannot sit above zero and so
+    cannot carry a zero-point energy; the cited single points store what the
+    record states (issue #638).
+    """
+    record = _energy_ordering()
+    record["energies"] = [e for e in record["energies"] if e["energy_kind"] == "electronic"]
+    record["energies"][0] = _energy("ts", "electronic", -39.5, "ts-sp")
+    record["energies"][2] = _energy("reactant:2", "electronic", 0.0, "h-sp")
+    return _bundle([record], sp={"ts-sp": -39.5, "h-sp": 0.0})
+
+
 class TestTheBareProton:
     def test_a_zero_energy_participant_can_be_part_of_a_passing_ordering(self, client):
         """``[H+]`` has exactly zero energy, so zero must be depositable.
@@ -160,16 +174,10 @@ class TestTheBareProton:
         The saddle point is placed above the (zero-containing) reactant sum so
         the ordering rule has nothing to object to.
         """
-        record = _energy_ordering()
-        record["energies"][0] = _energy("ts", "electronic", -39.5, "ts-sp")
-        record["energies"][2] = _energy("reactant:2", "electronic", 0.0, "h-sp")
-        _ok(_post_bundle(client, _bundle([record])))
+        _ok(_post_bundle(client, _bare_proton_bundle()))
 
     def test_the_database_stores_it(self, db_session, client):
-        record = _energy_ordering()
-        record["energies"][0] = _energy("ts", "electronic", -39.5, "ts-sp")
-        record["energies"][2] = _energy("reactant:2", "electronic", 0.0, "h-sp")
-        _ok(_post_bundle(client, _bundle([record])))
+        _ok(_post_bundle(client, _bare_proton_bundle()))
         stored = db_session.execute(
             text(
                 "SELECT energy_hartree FROM transition_state_validation_energy "

@@ -1330,6 +1330,8 @@ def _build_validation_evidence(
                     energy_kind=energy.energy_kind,
                     energy_hartree=energy.energy_hartree,
                     source_calculation_ref=source_ref,
+                    stored_energy_comparison=energy.stored_energy_comparison,
+                    not_compared_reason=energy.not_compared_reason,
                 )
             )
     return [

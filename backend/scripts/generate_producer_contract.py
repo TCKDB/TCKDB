@@ -1325,8 +1325,21 @@ three validation records, at most one per `kind`, every one optional:
   finite and not positive, in hartree (zero is allowed: it is exact for the
   bare proton); a positive value is refused as a slip. A
   passing record whose *stated* numbers do not put the saddle point above each
-  side is refused. That is all TCKDB checks: the numbers are compared with each
-  other, not with the energies stored on the calculations they cite. Taking one
+  side is refused. Each stated energy is also held against what TCKDB stores
+  for the calculation it cites, within the printed-precision tolerance
+  `max(1e-6, 5e-7 * n)` hartree: an `electronic` energy against the cited
+  `sp`'s electronic energy (or the cited `opt`'s final energy), `n` = 2; an
+  `e0` against the stored electronic energy of the same participant's
+  `electronic` entry plus the cited `freq`'s zero-point energy, `n` = 3, and
+  only when those two calculations are at one geometry. A stated energy that
+  contradicts the stored one is refused with
+  `ts_energy_ordering_stated_energy_mismatch` (its `context` carries the
+  participant, the kind, both values and the tolerance). An energy that
+  cannot be compared (the stored energy or zero-point energy is not stated,
+  there is no electronic entry to pair an E0 with, or the geometries cannot be
+  paired) is accepted, stored as `not_compared` with a reason, and reported
+  with a `transition_state_energy_ordering_not_compared` warning; it is never
+  read as agreement. Taking one
   `energy_kind` from calculations at more than one level of theory is accepted
   with a `transition_state_energy_ordering_mixed_levels` warning. It is
   accepted on the computed-reaction and pressure-dependent bundles; the

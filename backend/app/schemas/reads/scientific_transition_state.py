@@ -331,12 +331,21 @@ class TransitionStateComparedEnergySummary(BaseModel):
     the two are never compared with each other. ``energy_hartree`` is the
     absolute energy as the producer reported it, and
     ``source_calculation_ref`` is the calculation it was taken from.
+
+    ``stored_energy_comparison`` says what holding the stated energy against
+    the energy TCKDB stores for that calculation concluded when the evidence
+    was deposited: ``agrees`` (within the printed-precision tolerance), or
+    ``not_compared`` with ``not_compared_reason`` saying why. Null means the
+    energy was deposited before the comparison existed. It is never a pass:
+    an energy that disagreed with the stored one was refused, not stored.
     """
 
     participant: str
     energy_kind: str
     energy_hartree: float
     source_calculation_ref: str | None = None
+    stored_energy_comparison: str | None = None
+    not_compared_reason: str | None = None
 
 
 class TransitionStateValidationEvidenceSummary(BaseModel):
