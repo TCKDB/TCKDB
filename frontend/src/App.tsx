@@ -15,6 +15,7 @@ const CalculationDetailPage = lazy(() => import("./pages/CalculationDetailPage")
 const ConformerGroupPage = lazy(() => import("./pages/ConformerGroupPage"))
 const ConformerObservationPage = lazy(() => import("./pages/ConformerObservationPage"))
 const CorrectionSchemePage = lazy(() => import("./pages/CorrectionSchemePage"))
+const CompositeSchemePage = lazy(() => import("./pages/CompositeSchemePage"))
 const CuratorQueuePage = lazy(() => import("./pages/CuratorQueuePage"))
 const FrequencyScaleFactorPage = lazy(() => import("./pages/FrequencyScaleFactorPage"))
 const GeometryDetailPage = lazy(() => import("./pages/GeometryDetailPage"))
@@ -144,6 +145,8 @@ function App() {
                 the index above it. */}
             <Route path="/methods" element={<MethodsIndexPage />} />
             <Route path="/methods/schemes/:ecsRef" element={<CorrectionSchemePage />} />
+            {/* ADR 0021, P7b: the composite recipe a level of theory is bound to. */}
+            <Route path="/methods/composite-schemes/:schemeRef" element={<CompositeSchemePage />} />
             <Route path="/methods/frequency-scale-factors/:fsfRef" element={<FrequencyScaleFactorPage />} />
             <Route path="/methods/:lotRef" element={<LevelOfTheoryPage />} />
             {/* Both render inside the same `AppShell` every public page

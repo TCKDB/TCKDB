@@ -3,16 +3,24 @@ import { Link } from "react-router-dom"
 import "../browse.css"
 import "../conformer-group.css"
 import "../methods.css"
-import { loadLevelOfTheoryBrowse, type LevelOfTheoryRecord } from "../api/methodsApi"
+import { loadLevelOfTheoryBrowse, type CoreTreatmentValue, type LevelOfTheoryRecord } from "../api/methodsApi"
 import { loadSoftwareNames, loadWorkflowToolNames, type VocabEntry } from "../api/vocabApi"
+import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
+import {
+    CORE_TREATMENT_OPTIONS,
+    EMPTY_LOT_FILTER,
+    filterLevelOfTheoryRecords,
+    isLotFilterActive,
+    type LevelOfTheoryFilter,
+} from "../domain/levelOfTheoryFilter"
 import { words } from "../domain/provenanceFormat"
 
 type LoadState<T> = { status: "loading" } | { status: "error" } | { status: "ready"; data: T }
 
-function useLoad<T>(load: (signal: AbortSignal) => Promise<T>): LoadState<T> {
+function useLoad<T>(load: (signal: AbortSignal) => Promise<T>, key = ""): LoadState<T> {
     const [state, setState] = useState<LoadState<T>>({ status: "loading" })
     useEffect(() => {
         let mounted = true
@@ -26,8 +34,10 @@ function useLoad<T>(load: (signal: AbortSignal) => Promise<T>): LoadState<T> {
                 setState({ status: "error" })
             })
         return () => { mounted = false; controller.abort() }
+        // `key` is the only input that re-runs a load (a server-side filter
+        // choice); `load` itself is a fresh closure every render.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [key])
     return state
 }
 
@@ -44,10 +54,15 @@ function useLoad<T>(load: (signal: AbortSignal) => Promise<T>): LoadState<T> {
  * (§4.2's real record page, not a thin anchor).
  */
 export default function MethodsIndexPage() {
-    const lotState = useLoad(loadLevelOfTheoryBrowse)
+    const [lotFilter, setLotFilter] = useState<LevelOfTheoryFilter>(EMPTY_LOT_FILTER)
+    // The core-treatment choice is the API's own `core_treatment` filter, so
+    // changing it re-queries; the other facets narrow what is already here.
+    const lotState = useLoad(
+        (signal) => loadLevelOfTheoryBrowse(signal, { coreTreatment: lotFilter.coreTreatment }),
+        lotFilter.coreTreatment,
+    )
     const softwareState = useLoad((signal) => loadSoftwareNames(undefined, signal))
     const workflowToolState = useLoad((signal) => loadWorkflowToolNames(undefined, signal))
-    const [lotFilter, setLotFilter] = useState<LevelOfTheoryFilter>(EMPTY_LOT_FILTER)
 
     return (
         <section className="conformer-page methods-page">
@@ -73,7 +88,10 @@ export default function MethodsIndexPage() {
                     >
                         Levels of theory
                     </SectionHeading>
-                    {lotState.status === "ready" && lotState.data.records.length > 0 && (
+                    {/* Stays visible while a server-side filter is chosen, even when
+                        it matches nothing: hiding the control that caused an empty
+                        list would leave no way back. */}
+                    {((lotState.status === "ready" && lotState.data.records.length > 0) || lotFilter.coreTreatment !== "") && (
                         <LevelOfTheoryFilterFields filter={lotFilter} onChange={setLotFilter} />
                     )}
                     <LevelOfTheoryTable filter={lotFilter} state={lotState} />
@@ -132,59 +150,6 @@ export default function MethodsIndexPage() {
 const NO_DISPERSION_TEXT = "none"
 const NO_SOLVENT_TEXT = "gas phase"
 
-type LevelOfTheoryFilter = {
-    query: string
-    hasCorrectionSchemes: boolean
-    hasFrequencyScaleFactors: boolean
-}
-
-const EMPTY_LOT_FILTER: LevelOfTheoryFilter = { query: "", hasCorrectionSchemes: false, hasFrequencyScaleFactors: false }
-
-function isLotFilterActive(filter: LevelOfTheoryFilter): boolean {
-    return filter.query.trim() !== "" || filter.hasCorrectionSchemes || filter.hasFrequencyScaleFactors
-}
-
-/**
- * Narrows the already-fetched rows in the browser rather than re-querying
- * `/level-of-theories/browse` per keystroke. MEASURED before designing:
- * that endpoint's `method`/`basis` filters are exact-match, not substring
- * (`_run_lot_query`, `backend/app/services/scientific_read/level_of_theory_
- * search.py`: `LevelOfTheory.method == request.method`) -- sending
- * partially-typed text as `method=` would silently return zero rows for
- * almost any real query (typing "wb97" would never match a stored
- * "wb97xd"), which is worse than no filter. `loadLevelOfTheoryBrowse`
- * already fetches the WHOLE usage-derived candidate set in one unfiltered
- * call (`limit=200`; this index "does not paginate" by its own design), so
- * every row this filter could ever narrow is already sitting in `records`
- * -- filtering client-side is both more correct (real substring matching)
- * and simpler than a network round trip for an archive with four rows.
- *
- * `hasCorrectionSchemes`/`hasFrequencyScaleFactors` mirror the SAME two
- * boolean params the browse endpoint accepts
- * (`has_correction_schemes`/`has_frequency_scale_factors`), applied here to
- * the identical `evidence_summary` booleans the fetch already returned --
- * so this predicate is provably what asking the server would answer, just
- * evaluated against data already in hand. Left out: `level_of_theory_ref`
- * (an internal id, not something a reader searches by), `dispersion`/
- * `solvent`/`spin_treatment` (every row on the live archive carries the
- * same null value for all three today -- a facet with one possible value
- * narrows nothing and just adds chrome), and `lot_hash` (an opaque digest,
- * never a reader-facing search key anywhere else in this app).
- */
-function filterLevelOfTheoryRecords(records: LevelOfTheoryRecord[], filter: LevelOfTheoryFilter): LevelOfTheoryRecord[] {
-    const query = filter.query.trim().toLowerCase()
-    return records.filter((record) => {
-        if (filter.hasCorrectionSchemes && !record.evidence_summary.has_correction_schemes) return false
-        if (filter.hasFrequencyScaleFactors && !record.evidence_summary.has_frequency_scale_factors) return false
-        if (query) {
-            const method = record.level_of_theory.method.toLowerCase()
-            const basis = (record.level_of_theory.basis ?? "").toLowerCase()
-            if (!method.includes(query) && !basis.includes(query)) return false
-        }
-        return true
-    })
-}
-
 /**
  * Proportionate to what four rows need (owner: "i do wonder the bigger the
  * LoT, how easy is it to search?"): one text field narrowing on method and
@@ -237,7 +202,23 @@ function LevelOfTheoryFilterFields({ filter, onChange }: {
                         </label>
                     </div>
                 </fieldset>
+                <div className="browse-filter-field">
+                    <label htmlFor="methods-lot-filter-core">Core treatment</label>
+                    <select
+                        id="methods-lot-filter-core"
+                        onChange={(event) => onChange({ ...filter, coreTreatment: event.target.value as CoreTreatmentValue | "" })}
+                        value={filter.coreTreatment}
+                    >
+                        {CORE_TREATMENT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                </div>
             </div>
+            {filter.coreTreatment !== "" && (
+                <p className="note">
+                    Only levels that state their core treatment are listed. A level that does not say is not
+                    shown under either choice.
+                </p>
+            )}
         </div>
     )
 }
@@ -252,10 +233,10 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
 
     if (state.status === "loading") return <p className="note" role="status">Loading levels of theory…</p>
     if (state.status === "error") return <p className="empty-projection" role="alert">The archive service could not load this list. Try again later.</p>
-    if (state.data.records.length === 0) return <p className="empty-projection">No levels of theory have been deposited in this archive yet.</p>
     if (records.length === 0 && isLotFilterActive(filter)) {
         return <p className="empty-projection">No levels of theory match this filter.</p>
     }
+    if (state.data.records.length === 0) return <p className="empty-projection">No levels of theory have been deposited in this archive yet.</p>
     return (
         <div className="table-scroll">
             <table className="data-table" aria-label="Levels of theory">
@@ -264,6 +245,7 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
                         <th scope="col">Level of theory</th>
                         <th scope="col">Dispersion</th>
                         <th scope="col">Solvent</th>
+                        <th scope="col">Core treatment</th>
                         <th scope="col">Calculations</th>
                     </tr>
                 </thead>
@@ -289,9 +271,13 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
                                 looking children to disambiguate from; a `<td>` does not. */}
                             <td data-label="Level of theory">
                                 <LevelOfTheoryLink levelOfTheory={record.level_of_theory} />
+                                {record.level_of_theory.composite_scheme && (
+                                    <div className="note"><CompositeSchemeLink scheme={record.level_of_theory.composite_scheme} /></div>
+                                )}
                             </td>
                             <td data-label="Dispersion">{record.level_of_theory.dispersion ?? NO_DISPERSION_TEXT}</td>
                             <td data-label="Solvent">{record.level_of_theory.solvent ?? NO_SOLVENT_TEXT}</td>
+                            <td data-label="Core treatment">{record.level_of_theory.core_treatment ? words(record.level_of_theory.core_treatment) : "not stated"}</td>
                             <td data-label="Calculations" className="num">{record.evidence_summary.calculation_usage_count}</td>
                         </tr>
                     ))}

@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { levelOfTheorySchema } from "./scientificSchemas"
+import { compositeEnergyVerificationSchema, levelOfTheorySchema } from "./scientificSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
@@ -227,6 +227,25 @@ const resultsSchema = z.object({
         converged: z.boolean().nullable().optional(),
         n_points: z.number().nullable().optional(),
         note: z.string().nullable().optional(),
+    }).passthrough().nullable().optional(),
+    // ADR 0021 / P3a: one composite energy. `assembly` is `program_run` (one
+    // program printed the number) or `assembled` (built from the energies of
+    // other calculations, listed in `inputs`). Every energy is stated-or-null.
+    composite: z.object({
+        assembly: z.string(),
+        electronic_energy_hartree: z.number().nullable().optional(),
+        e0_hartree: z.number().nullable().optional(),
+        recipe_zpe_hartree: z.number().nullable().optional(),
+        terms: z.array(z.object({
+            term_position: z.number(),
+            value_hartree: z.number(),
+        }).passthrough()).optional(),
+        inputs: z.array(z.object({
+            term_position: z.number(),
+            slot: z.string(),
+            calculation_ref: z.string(),
+            cardinal_number: z.number().nullable().optional(),
+        }).passthrough()).optional(),
     }).passthrough().nullable().optional(),
 }).passthrough()
 
@@ -469,6 +488,9 @@ const calculationRecordSchema = z.object({
     provenance: provenanceSchema,
     available_sections: availableSectionsSchema,
     results: resultsSchema.nullable().optional(),
+    // ADR 0021 / P7a. Set only on a composite calculation / a legacy deposit.
+    composite_energy_verification: compositeEnergyVerificationSchema.nullable().optional(),
+    legacy_composite_shape: z.string().nullable().optional(),
     energy_corrections: z.array(energyCorrectionSchema).nullable().optional(),
     dependencies: z.array(dependencySchema).nullable().optional(),
     artifacts: z.array(artifactSchema).nullable().optional(),

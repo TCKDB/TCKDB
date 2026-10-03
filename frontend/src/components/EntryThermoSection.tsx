@@ -9,6 +9,7 @@ import { groupByFingerprint, thermoRecordFingerprint } from "../domain/identical
 import {
     allProductLevelsAgree,
     productLevelsAgree,
+    anyNotation,
     resolveProductLevels,
     type ProductLevels,
 } from "../domain/productLevels"
@@ -531,6 +532,7 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
 function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
     const headingId = `identical-refs-${records[0].thermo_ref}`
     const levelsByRecord = records.map(thermoRecordProductLevels)
+    const showNotation = anyNotation(levelsByRecord)
     return (
         <section aria-labelledby={headingId}>
             <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
@@ -540,7 +542,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                         <tr>
                             <th scope="col">Ref</th>
                             <th scope="col">Review</th>
-                            <ProductLevelsTableHead />
+                            <ProductLevelsTableHead showNotation={showNotation} />
                             <th scope="col">Primary calculation</th>
                             <th scope="col">Freq calculation</th>
                             <th scope="col">SP calculation</th>
@@ -557,7 +559,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                                 <tr key={record.thermo_ref}>
                                     <td data-label="Ref"><code className="data">{record.thermo_ref}</code></td>
                                     <td data-label="Review">{statusLabel(record.review.status)}</td>
-                                    <ProductLevelsTableCells levels={levelsByRecord[index]} />
+                                    <ProductLevelsTableCells levels={levelsByRecord[index]} showNotation={showNotation} />
                                     <td data-label="Primary calculation">
                                         <CalculationRefCell calculationRef={primaryRef} />
                                     </td>

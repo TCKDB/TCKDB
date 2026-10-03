@@ -156,6 +156,14 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                         (#464) and never links its ref either, for the same
                                         auth-gated-route reason. */}
                                     <div>
+                                        <dt>Frequency level</dt>
+                                        <dd>
+                                            {record.frequency_level_of_theory
+                                                ? <LevelOfTheoryLink levelOfTheory={record.frequency_level_of_theory} />
+                                                : "not recorded"}
+                                        </dd>
+                                    </div>
+                                    <div>
                                         <dt>Software</dt>
                                         <dd>{softwareLabel(record.software_release) ?? "not recorded"}</dd>
                                     </div>

@@ -1,0 +1,44 @@
+/* `components/CompositeVerification.tsx` -- how far a composite energy has
+ * been checked (ADR 0021, P7a). Owns its own stylesheet, imported once from
+ * the component, like `EvidenceChecklist`/`ReviewNote`.
+ *
+ * Confirmed and neutral states reuse the site's pill primitives
+ * (`.value-pill`, `.value-pill.value-pill--muted`, design-system.css) and
+ * add nothing here. Only a CONTRADICTION gets a style of its own: a
+ * bordered block in the `--warning` (failure) register, never a pill and
+ * never muted, so a number the archive holds evidence against cannot be
+ * mistaken for one that is merely unconfirmed. Tokens only, so it
+ * retints with the theme (light and dark) like everything else. */
+.composite-verification {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    align-items: flex-start;
+}
+
+.composite-verification--contradiction {
+    padding: var(--s-3);
+    border: 1px solid var(--warning);
+    border-left-width: 4px;
+    border-radius: .3rem;
+    background: var(--surface-sunken);
+    max-width: var(--measure-note);
+}
+
+.composite-verification-lead {
+    color: var(--warning);
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+    text-transform: none;
+}
+
+.composite-verification-headline {
+    color: var(--ink);
+    font: var(--type-ui-font);
+}
+
+.composite-verification-figures {
+    margin: 0;
+    color: var(--ink-2);
+    font: var(--type-data-font);
+}

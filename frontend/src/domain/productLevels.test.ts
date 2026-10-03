@@ -15,6 +15,15 @@ const b3lyp: LevelOfTheory = { method: "b3lyp", basis: "def2tzvp", display: "b3l
 const ccsdt: LevelOfTheory = { method: "ccsd(t)", basis: "cc-pvtz", display: "ccsd(t)/cc-pvtz", level_of_theory_ref: "lot_sp" }
 const freqLot: LevelOfTheory = { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", level_of_theory_ref: "lot_freq" }
 
+/** The P7a fields a `levels` object that does not state them normalises to. */
+const NO_COMPOSITE_FACTS = {
+    notation: null,
+    geometry_source: null,
+    frequency_source: null,
+    composite_energy_verification: null,
+    legacy_composite_shape: null,
+}
+
 function role(roleName: string, level: LevelOfTheory | null): RoleLevelSource {
     return { role: roleName, level_of_theory: level }
 }
@@ -92,12 +101,12 @@ describe("resolveProductLevels", () => {
     it("prefers the server's own `levels` object when present, over any source_calculations", () => {
         const wireLevels = { geometry: b3lyp, frequency: freqLot, energy: ccsdt, energy_source: "sp" }
         const levels = resolveProductLevels(wireLevels, [role("opt", ccsdt)])
-        expect(levels).toEqual(wireLevels)
+        expect(levels).toEqual({ ...wireLevels, ...NO_COMPOSITE_FACTS })
     })
 
     it("normalises a `levels` object with missing fields to null rather than undefined", () => {
         const levels = resolveProductLevels({ geometry: b3lyp }, null)
-        expect(levels).toEqual({ geometry: b3lyp, frequency: null, energy: null, energy_source: null })
+        expect(levels).toEqual({ geometry: b3lyp, frequency: null, energy: null, energy_source: null, ...NO_COMPOSITE_FACTS })
     })
 
     it("an explicitly-empty `levels` object (every field null) is trusted as-is, never re-derived from source_calculations", () => {

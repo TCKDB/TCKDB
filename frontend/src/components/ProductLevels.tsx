@@ -1,5 +1,10 @@
 import type { ReactNode } from "react"
+import { Link } from "react-router-dom"
+import { CompositeSchemeLink } from "./CompositeSchemeLink"
+import { EnergyVerification } from "./CompositeVerification"
 import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
+import { legacyShapeText } from "../domain/compositeVerification"
+import { compositeSchemePath } from "../domain/methodsLinks"
 import { productLevelsAgree, type ProductLevels } from "../domain/productLevels"
 
 // ---------------------------------------------------------------------------
@@ -73,6 +78,35 @@ function isOtherEnergySource(source: ProductLevels["energy_source"]): boolean {
     return source != null && source !== "opt" && source !== "sp"
 }
 
+const COMPOSITE_RECIPE = "composite_recipe"
+
+/**
+ * A muted note for a Geometry/Frequencies row whose level is what a
+ * composite recipe runs internally (`geometry_source`/`frequency_source`
+ * `composite_recipe`) rather than a calculation anybody deposited: "from the
+ * CBS-QB3 recipe". The recipe is named only when the record's own energy
+ * level is bound to one (the energy level carries the scheme); otherwise
+ * the note says "the composite recipe", never a guessed name. `null` for
+ * any other source, so an ordinary row carries no note.
+ */
+function recipeSourceNote(source: string | null | undefined, energy: ProductLevels["energy"]): ReactNode | null {
+    if (source !== COMPOSITE_RECIPE) return null
+    const scheme = energy?.composite_scheme ?? null
+    return (
+        <div className="note">
+            {"from the "}
+            {scheme ? <Link to={compositeSchemePath(scheme.composite_scheme_ref)}>{scheme.name}</Link> : "composite"}
+            {" recipe"}
+        </div>
+    )
+}
+
+/** The muted legacy-shape annotation, or `null` when the record has none. */
+function LegacyShapeNote({ shape }: { shape: string | null | undefined }) {
+    const text = legacyShapeText(shape)
+    return text ? <div className="note" data-legacy-composite-shape={shape ?? undefined}>{text}</div> : null
+}
+
 /**
  * `<dt>/<dd>` pairs for one record's levels, meant to sit directly inside
  * an existing `<dl className="kv-list">` (a fragment, not its own `<dl>` —
@@ -92,8 +126,24 @@ export function ProductLevelsFact({ levels }: { levels: ProductLevels }) {
     const energyNode = energyValueNode(levels.energy, levels.energy_source)
     return (
         <>
-            <div><dt>Geometry</dt><dd>{levelNode(levels.geometry)}</dd></div>
-            <div><dt>Frequencies</dt><dd>{levelNode(levels.frequency)}</dd></div>
+            {/* The server's own `energy//geometry` shorthand is the headline
+                (ADR 0021, P7a); the three rows below stay, always, exactly
+                as the owner decided (2026-09). No notation, no headline:
+                it is never composed here. */}
+            {levels.notation && (
+                <div className="kv-list--wide" data-levels-notation="">
+                    <dt>Level of theory</dt>
+                    <dd><code className="data">{levels.notation}</code></dd>
+                </div>
+            )}
+            <div>
+                <dt>Geometry</dt>
+                <dd>{levelNode(levels.geometry)}{recipeSourceNote(levels.geometry_source, levels.energy)}</dd>
+            </div>
+            <div>
+                <dt>Frequencies</dt>
+                <dd>{levelNode(levels.frequency)}{recipeSourceNote(levels.frequency_source, levels.energy)}</dd>
+            </div>
             <div>
                 <dt>Energy</dt>
                 <dd>
@@ -105,8 +155,13 @@ export function ProductLevelsFact({ levels }: { levels: ProductLevels }) {
                         </>
                     )}
                     {note && <div className="note">{note}</div>}
+                    {levels.energy?.composite_scheme && <div className="note"><CompositeSchemeLink scheme={levels.energy.composite_scheme} /></div>}
+                    <EnergyVerification energySource={levels.energy_source} verification={levels.composite_energy_verification} />
                 </dd>
             </div>
+            {levels.legacy_composite_shape && (
+                <div className="kv-list--wide"><LegacyShapeNote shape={levels.legacy_composite_shape} /></div>
+            )}
             {/* `productLevelsAgree` alone treats all-three-`null` as
                 agreeing (one shared "not recorded" fact) -- correct for
                 that function's OTHER callers, but wrong here: a record
@@ -131,9 +186,10 @@ export function ProductLevelsFact({ levels }: { levels: ProductLevels }) {
  *  three, never collapsed to one "Level of theory" column even when every
  *  row agrees. Meant to sit inside an existing `<tr>` in a table's
  *  `<thead>`, alongside this table's other `<th>`s. */
-export function ProductLevelsTableHead() {
+export function ProductLevelsTableHead({ showNotation = false }: { showNotation?: boolean }) {
     return (
         <>
+            {showNotation && <th scope="col">Level of theory</th>}
             <th scope="col">Geometry</th>
             <th scope="col">Frequencies</th>
             <th scope="col">Energy</th>
@@ -161,14 +217,19 @@ export function ProductLevelsTableHead() {
  * a differing row to single out, so the note is just "was this row's own
  * energy sourced from a single point", full stop.)
  */
-export function ProductLevelsTableCells({ levels }: { levels: ProductLevels }) {
+export function ProductLevelsTableCells({ levels, showNotation = false }: { levels: ProductLevels; showNotation?: boolean }) {
     const note = energySourceNote(levels.energy_source)
     const otherSource = isOtherEnergySource(levels.energy_source)
     const energyNode = energyValueNode(levels.energy, levels.energy_source)
     return (
         <>
-            <td data-label="Geometry"><LevelCell level={levels.geometry} /></td>
-            <td data-label="Frequencies"><LevelCell level={levels.frequency} /></td>
+            {showNotation && (
+                <td data-label="Level of theory">
+                    {levels.notation ? <span className="data">{levels.notation}</span> : "not recorded"}
+                </td>
+            )}
+            <td data-label="Geometry"><LevelCell level={levels.geometry} />{recipeSourceNote(levels.geometry_source, levels.energy)}</td>
+            <td data-label="Frequencies"><LevelCell level={levels.frequency} />{recipeSourceNote(levels.frequency_source, levels.energy)}</td>
             <td data-label="Energy">
                 {energyNode !== null ? <span className="data">{energyNode}</span> : null}
                 {otherSource && (
@@ -178,6 +239,9 @@ export function ProductLevelsTableCells({ levels }: { levels: ProductLevels }) {
                     </>
                 )}
                 {note && <div className="note">{note}</div>}
+                {levels.energy?.composite_scheme && <div className="note"><CompositeSchemeLink scheme={levels.energy.composite_scheme} /></div>}
+                <EnergyVerification energySource={levels.energy_source} verification={levels.composite_energy_verification} />
+                <LegacyShapeNote shape={levels.legacy_composite_shape} />
             </td>
         </>
     )

@@ -151,3 +151,16 @@
     max-width: var(--measure-prose);
     color: var(--ink-2);
 }
+
+/* `CompositeSchemePage` -- one block per recipe term: a heading, its facts,
+   and its inputs table, spaced like the other stacked groups on this page
+   (`.fsf-group`). */
+.composite-term {
+    display: grid;
+    gap: var(--s-2);
+    margin: var(--s-4) 0;
+}
+
+.composite-term h3 {
+    margin: 0;
+}

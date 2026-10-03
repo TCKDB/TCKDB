@@ -16,6 +16,7 @@ import { groupByFingerprint, statmechRecordFingerprint } from "../domain/identic
 import { frequencyScaleFactorPath } from "../domain/methodsLinks"
 import {
     allProductLevelsAgree,
+    anyNotation,
     resolveProductLevels,
     type ProductLevels,
 } from "../domain/productLevels"
@@ -711,14 +712,19 @@ function freqCalcRefs(
  *  `"loading…"`/`"—"` placeholders while `statmechRecordProductLevels`
  *  hasn't resolved yet, matching `RecordCalcRefsCell`'s own loading
  *  convention. */
-function StatmechLevelsRowCells({ levels }: { levels: ProductLevels | "loading" | "error" }) {
-    if (levels === "loading") {
-        return <><td data-label="Geometry">loading…</td><td data-label="Frequencies">loading…</td><td data-label="Energy">loading…</td></>
+function StatmechLevelsRowCells({ levels, showNotation = false }: { levels: ProductLevels | "loading" | "error"; showNotation?: boolean }) {
+    if (levels === "loading" || levels === "error") {
+        const text = levels === "loading" ? "loading…" : "—"
+        return (
+            <>
+                {showNotation && <td data-label="Level of theory">{text}</td>}
+                <td data-label="Geometry">{text}</td>
+                <td data-label="Frequencies">{text}</td>
+                <td data-label="Energy">{text}</td>
+            </>
+        )
     }
-    if (levels === "error") {
-        return <><td data-label="Geometry">—</td><td data-label="Frequencies">—</td><td data-label="Energy">—</td></>
-    }
-    return <ProductLevelsTableCells levels={levels} />
+    return <ProductLevelsTableCells levels={levels} showNotation={showNotation} />
 }
 
 /**
@@ -751,7 +757,9 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
 }) {
     const headingId = `identical-refs-${records[0].statmech.statmech_ref}`
     const levelsByRecord = records.map((record) => statmechRecordProductLevels(record, sourceCalcsState))
-    const LEVEL_COLUMN_COUNT = 3
+    const readyLevels = levelsByRecord.filter((levels): levels is ProductLevels => levels !== "loading" && levels !== "error")
+    const showNotation = anyNotation(readyLevels)
+    const LEVEL_COLUMN_COUNT = showNotation ? 4 : 3
     return (
         <section aria-labelledby={headingId}>
             <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
@@ -770,7 +778,7 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
                         <tr>
                             <th scope="col">Ref</th>
                             <th scope="col">Review</th>
-                            <ProductLevelsTableHead />
+                            <ProductLevelsTableHead showNotation={showNotation} />
                             <th scope="col">Opt calc</th>
                             <th scope="col">Freq calc</th>
                             <th scope="col">SP calc</th>
@@ -794,7 +802,7 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
                                 <tr key={ref}>
                                     <td data-label="Ref"><code className="data">{ref}</code></td>
                                     <td data-label="Review">{statusLabel(record.statmech.review.status)}</td>
-                                    <StatmechLevelsRowCells levels={levelsByRecord[index]} />
+                                    <StatmechLevelsRowCells levels={levelsByRecord[index]} showNotation={showNotation} />
                                     <td data-label="Opt calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "opt")} /></td>
                                     <td data-label="Freq calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "freq")} /></td>
                                     <td data-label="SP calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "sp")} /></td>
