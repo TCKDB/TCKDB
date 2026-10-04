@@ -14,10 +14,11 @@ from tckdb_schemas.network_declarations import NetworkComparisonObjective as Obj
 
 from app.db.models.common import RecordReviewStatus
 from app.services.network_selection import NetworkRule, Scope, default_rules, select_network
-from app.services.selection_kernel import Outcome
+from app.services.selection_kernel import Outcome, Tri
 from tests.services.network_selection._requests import bundle_request, channel_request
 from tests.services.network_selection._rules import (
     FitKindRule,
+    FitTminRule,
     ProtocolRule,
     protocol,
 )
@@ -346,3 +347,90 @@ def test_nodes_that_hold_no_member_to_judge_are_never_ranked_by_a_rule(db_sessio
     (match,) = result.decision.rule_matches
     sides = {c["node_ref"]: c["preferred"] for c in match["candidates"]}
     assert {s["state"] for s in sides.values()} == {"unknown"}  # nothing to judge is unknown, never true
+
+
+# -- fit-level rules obey the same objective-key rule as candidate-level ones --------------------------------
+
+
+def _three_fits(db_session, world):
+    solve = add_solve(
+        db_session,
+        world,
+        fits=[fit_spec("assoc", rep=f"r{t}", tmin=float(t)) for t in (300, 310, 320)],
+        protocol=protocol(A_),
+    )
+    return solve, [f.public_ref for f in solve._fits]
+
+
+def _fidelity(world):
+    return channel_request(world, objective=Objective.representation_fidelity, reference_outputs="solver output table")
+
+
+def test_fit_edges_under_different_objective_keys_are_not_chained(db_session, world):
+    """300 over 310 under one key and 310 over 320 under another: no path 300 > 320, and the edges are reported unused."""
+    _, (a, b, c) = _three_fits(db_session, world)
+    rules = [
+        FitTminRule("T-K1", prefer=300.0, yield_=310.0, objective_key="k1"),
+        FitTminRule("T-K2", prefer=310.0, yield_=320.0, objective_key="k2"),
+    ]
+    (row,) = select(db_session, _fidelity(world), rules).decision.representations
+    assert row["outcome"] != "policy_preferred" and row["chosen_fit_ref"] is None
+    assert row["basis"].startswith("preference edges arose under more than one objective")
+    assert {(e["preferred"], e["dispreferred"], e["objective_key"]) for e in row["unused_edges"]} == {
+        (a, b, "k1"),
+        (b, c, "k2"),
+    }
+    assert row["edges"] == []
+
+
+def test_fit_edges_under_one_objective_key_do_chain(db_session, world):
+    _, (a, _b, _c) = _three_fits(db_session, world)
+    rules = [
+        FitTminRule("T-K1", prefer=300.0, yield_=310.0, objective_key="k1"),
+        FitTminRule("T-K1B", prefer=310.0, yield_=320.0, objective_key="k1"),
+    ]
+    (row,) = select(db_session, _fidelity(world), rules).decision.representations
+    assert row["outcome"] == "policy_preferred" and row["chosen_fit_ref"] == a and row["unused_edges"] == []
+
+
+def test_fit_level_supersession_across_keys_is_not_honoured(db_session, world):
+    """T-K2 prefers 310 over 300 and supersedes T-K1 (300 over 310): across keys that decides nothing."""
+    _three_fits(db_session, world)
+    rules = [
+        FitTminRule("T-K1", prefer=300.0, yield_=310.0, objective_key="k1"),
+        FitTminRule("T-K2", prefer=310.0, yield_=300.0, objective_key="k2", supersedes=("T-K1",)),
+    ]
+    (row,) = select(db_session, _fidelity(world), rules).decision.representations
+    assert row["chosen_fit_ref"] is None and row["outcome"] != "policy_preferred"
+    assert {e["objective_key"] for e in row["unused_edges"]} == {"k1", "k2"}
+
+
+def test_a_fit_rule_with_unknown_or_false_scope_is_recorded_not_skipped(db_session, world):
+    _three_fits(db_session, world)
+    rules = [
+        FitTminRule("T-IN", prefer=300.0, yield_=310.0, objective_key="k1"),
+        FitTminRule("T-UNKNOWN", prefer=300.0, yield_=310.0, objective_key="k2", scope_state=Tri.unknown),
+        FitTminRule("T-OUT", prefer=300.0, yield_=310.0, objective_key="k3", scope_state=Tri.false),
+    ]
+    matches = {m["rule_id"]: m for m in select(db_session, _fidelity(world), rules).decision.rule_matches}
+    assert matches["T-IN"]["applied"] is True and matches["T-IN"]["scope"]
+    assert matches["T-UNKNOWN"]["applied"] is False and matches["T-UNKNOWN"]["why"] == "scope_unknown"
+    assert matches["T-OUT"]["applied"] is False and matches["T-OUT"]["why"] == "outside_rule_scope"
+    assert all(m["level"] == "representation" for m in matches.values())
+
+
+def test_an_active_rule_that_rests_on_no_pinned_manifest_is_refused(db_session, world):
+    from app.services.network_selection.rules import active_rules, validate_rules
+
+    solve_with(db_session, world, A_)
+    unpinned = ProtocolRule("T-NOPIN", prefer=A_, yield_=B_, manifest_sha256=None)
+    for bad in (unpinned, ProtocolRule("T-SHORT", prefer=A_, yield_=B_, manifest_sha256="abc")):
+        with pytest.raises(ValueError, match="rests on no pinned audited manifest"):
+            validate_rules((bad,))
+        with pytest.raises(ValueError, match="rests on no pinned audited manifest"):
+            active_rules((bad,))
+        with pytest.raises(ValueError, match="rests on no pinned audited manifest"):
+            select(db_session, channel_request(world), [bad])
+    inactive = ProtocolRule("T-INACTIVE", prefer=A_, yield_=B_, manifest_sha256=None, status="inactive")
+    validate_rules((inactive,))  # an inactive rule applies nothing, so it needs no pin
+    assert active_rules((ProtocolRule("T-PINNED", prefer=A_, yield_=B_),))

@@ -20,8 +20,12 @@ What is specific to networks, and lives here and not in the kernel:
   stay unranked (``incomparable_alternatives``) and the edges are reported as unused.
 * **A rule applies only when active, and only to its scope.** An inactive rule appears in the decision with its
   reasons and makes no edge; an unknown prerequisite makes none either.
-* **Administrative policies other than ``method_preferred`` apply no rule.** They are the plain administrative order
-  among eligible nodes, which never reverses an accepted edge.
+* **Whether rules apply is the request's ``apply_rules`` flag, nothing else.** The engine reads no policy name: the
+  route that builds the request sets the flag from the policy. With it false, the result is the plain administrative
+  order among eligible nodes, which never reverses an accepted edge.
+* **A rule never overrides another across objective keys, at either level.** Edges of different keys are not
+  composed, so a rule's ``supersedes`` list is consulted only among edges that already share a key. Candidate-level
+  cross-key supersession is therefore not honoured by design.
 * **Alternate fits are one candidate.** Within a determination, a ``representation_fidelity`` request may compare the
   fits by representation rules; the result is nested fronts that rank no physical solve and add no independent
   confirmation. Any other request leaves the fits in administrative order, said so.
@@ -259,16 +263,25 @@ def _representations(
                 else "request_is_not_representation_fidelity"
             )
             matches.append({**header, "applied": False, "why": why})
+    # A rule's scope depends on the network and the request, not on the fits, so it is judged once and recorded:
+    # a rule whose scope is unknown or false is reported as such, never silently skipped.
+    in_scope: list[NetworkRepresentationRule] = []
+    for rule in applied:
+        header = {"rule_id": rule.rule_id, "rule_version": rule.version, "level": LEVEL_REPRESENTATION}
+        scope = rule.scope(network, request)
+        if scope.state is Tri.true:
+            in_scope.append(rule)
+            matches.append({**header, "applied": True, "scope": scope.to_dict()})
+        else:
+            why = "scope_unknown" if scope.state is Tri.unknown else "outside_rule_scope"
+            matches.append({**header, "applied": False, "why": why, "scope": scope.to_dict()})
     for candidate in candidates:
         for member in candidate.members:
             nodes = [
                 AdminNode(f.fit_ref, f.id_rank, candidate.solve.review_status, candidate.solve.created_at) for f in member.fits
             ]
             edges: list[Edge] = []
-            for rule in applied:
-                scope = rule.scope(network, request)
-                if scope.state is not Tri.true:
-                    continue
+            for rule in in_scope:
                 for a in member.fits:
                     for b in member.fits:
                         if a.fit_ref == b.fit_ref:
@@ -279,8 +292,22 @@ def _representations(
                             and rule.fit_compatible(a, b, candidate.solve).state is Tri.true
                         ):
                             edges.append(Edge(a.fit_ref, b.fit_ref, rule.rule_id, rule.version))
+            # The same rule as between candidates: edges compose only under one objective key. Under more than one
+            # none is composed (and no supersession is consulted), so the fits stay unranked and the edges are unused.
+            key_of = {r.rule_id: r.objective_key for r in in_scope}
+            unused_edges: list[dict[str, Any]] = []
+            graph_edges = edges
+            if len({key_of[e.rule_id] for e in edges}) > 1:
+                unused_edges = [
+                    {**e.to_dict(), "label": EDGE_LABEL, "objective_key": key_of[e.rule_id]}
+                    for e in sorted(set(edges), key=lambda e: (e.preferred, e.dispreferred, e.rule_id))
+                ]
+                graph_edges = []
             verdict = decide_graph(
-                nodes, edges, supersedes={r.rule_id: r.supersedes for r in applied}, admin_policy=request.admin_policy
+                nodes,
+                graph_edges,
+                supersedes={r.rule_id: r.supersedes for r in in_scope},
+                admin_policy=request.admin_policy,
             )
             rows.append(
                 {
@@ -296,7 +323,12 @@ def _representations(
                         else None
                     ),
                     "edges": [{**e.to_dict(), "label": EDGE_LABEL} for e in verdict.edges],
-                    "basis": verdict.basis if applied else BASIS_REPRESENTATIONS_ADMINISTRATIVE,
+                    "unused_edges": unused_edges,
+                    "basis": (
+                        BASIS_OBJECTIVES_NOT_COMPOSED
+                        if unused_edges
+                        else verdict.basis if applied else BASIS_REPRESENTATIONS_ADMINISTRATIVE
+                    ),
                     "shared_provenance": {"solve_ref": candidate.solve.solve_ref},
                     "independent_confirmation": False,
                 }

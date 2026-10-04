@@ -292,3 +292,68 @@ def test_a_manifest_over_the_snapshot_size_bound_is_refused_when_the_facts_alone
     with pytest.raises(CodedValueError) as caught:
         select(db_session, tight)
     assert caught.value.code == "network_selection_snapshot_too_large"
+
+
+# -- the review fixes ------------------------------------------------------------------------------------
+
+
+def test_a_recorded_ungrouped_fit_list_that_the_inputs_do_not_give_is_refused(db_session, world):
+    """A fit that states no determination is recorded as ungrouped; erasing that record is a forgery."""
+    add_solve(db_session, world, fits=[fit_spec("assoc"), fit_spec("assoc", det=None, rep="orphan")], protocol=protocol(A_))
+    result = select(db_session, channel_request(world), [RULE()])
+    manifest = wire(result.manifest)
+    assert manifest["assessments"]["ungrouped_fit_refs"], "the scenario must leave a fit ungrouped"
+    forged = copy.deepcopy(manifest)
+    forged["assessments"]["ungrouped_fit_refs"] = []
+    reseal(forged)
+    with pytest.raises(ReplayError, match="ungrouped fits"):
+        replay_network_assessment(forged)
+    with pytest.raises(ReplayError, match="ungrouped fits"):
+        replay_network(forged, rules=[RULE()])
+
+
+def test_decision_replay_takes_no_assessments_of_its_own(scenario):
+    """Handing a decision replay forged assessments used to reproduce any winner; the parameter is gone."""
+    _, manifest, _ = scenario
+    with pytest.raises(TypeError):
+        replay_network_decision(manifest, rules=[RULE()], assessments=manifest["assessments"])  # type: ignore[call-arg]
+    # And the decision replay recomputes: forging an assessment's eligibility cannot change what it returns.
+    forged = copy.deepcopy(manifest)
+    for row in forged["assessments"]["determinations"]:
+        row["physically_eligible"] = not row["physically_eligible"]
+    reseal(forged)
+    assert replay_network_decision(forged, rules=[RULE()]) == manifest["decision"]
+    with pytest.raises(ReplayError):
+        replay_network(forged, rules=[RULE()])
+
+
+def test_the_observed_review_statuses_must_be_those_of_the_captured_solves(scenario):
+    _, manifest, _ = scenario
+    assert manifest["visibility"]["review_statuses_observed"]
+    forged = copy.deepcopy(manifest)
+    forged["visibility"]["review_statuses_observed"] = ["approved", "rejected"]
+    assert forged["visibility"]["review_statuses_observed"] != manifest["visibility"]["review_statuses_observed"]
+    reseal(forged)
+    for level in (
+        replay_network_assessment,
+        lambda m: replay_network_decision(m, rules=[RULE()]),
+        lambda m: replay_network(m, rules=[RULE()]),
+    ):
+        with pytest.raises(ReplayError, match="observed review statuses"):
+            level(forged)
+
+
+def test_the_same_bundle_in_another_order_is_the_same_request_with_the_same_digest(db_session, world):
+    channels = ("assoc", "elim")
+    outputs = [{"channel_key": c, "availability": "supplied", "required": True} for c in channels]
+    options = {
+        "fits": [fit_spec("assoc"), fit_spec("elim")],
+        "solve_target": target(world, outputs=outputs),
+        "product_sets": [{"key": "both", "members": [("d_assoc", []), ("d_elim", [])]}],
+    }
+    add_solve(db_session, world, protocol=protocol(A_), **options)
+    forward = select(db_session, bundle_request(world, *channels), [RULE()])
+    backward = select(db_session, bundle_request(world, *reversed(channels)), [RULE()])
+    assert forward.manifest["request"]["outputs"] == backward.manifest["request"]["outputs"]
+    assert forward.manifest["digest"] == backward.manifest["digest"]
+    assert [o["channel_key"] for o in forward.manifest["request"]["outputs"]] == sorted(channels)

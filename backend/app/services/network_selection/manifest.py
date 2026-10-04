@@ -199,15 +199,22 @@ def _recompute_assessments(
     return dets, bundles, ungrouped
 
 
-def replay_network_assessment(manifest: dict[str, Any]) -> dict[str, Any]:
-    """Recompute every applicability verdict from the captured normalised inputs; no database.
+def _check_consistency(manifest: dict[str, Any]) -> None:
+    """Facts the manifest states twice must agree: the review statuses it says it observed are the solves' own."""
+    observed = sorted({str(s["review_status"]) for s in manifest["solves"]})
+    if manifest["visibility"]["review_statuses_observed"] != observed:
+        raise ReplayError("the recorded observed review statuses are not the review statuses of the captured solves")
 
-    :returns: ``{"determinations": [...], "bundles": [...], "ungrouped_fit_refs": [...]}`` as recomputed.
-    :raises ReplayError: unknown format or version, or any recomputed verdict (or the grouping it rests on) that
-        differs from the recorded one: a candidate recorded as eligible that the inputs do not make eligible, or the
-        reverse, is a forged or stale document.
-    """
+
+_Verified = tuple[
+    NetworkRequest, NetworkFacts, tuple[SolveFacts, ...], list[DeterminationAssessment], list[BundleAssessment], list[str]
+]
+
+
+def _verified_assessments(manifest: dict[str, Any]) -> _Verified:
+    """Recompute every verdict from the captured inputs and refuse any that differs from the recorded one."""
     _check_versions(manifest)
+    _check_consistency(manifest)
     request, network, solves = _inputs(manifest)
     dets, bundles, ungrouped = _recompute_assessments(request, network, solves)
     recomputed: dict[str, Any] = {
@@ -230,34 +237,54 @@ def replay_network_assessment(manifest: dict[str, Any]) -> dict[str, Any]:
             )
     if recomputed["ungrouped_fit_refs"] != recorded["ungrouped_fit_refs"]:
         raise ReplayError("the recorded ungrouped fits are not the ones the captured inputs leave ungrouped")
-    return recomputed
+    return request, network, solves, dets, bundles, ungrouped
 
 
-def replay_network_decision(
+def replay_network_assessment(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Recompute every applicability verdict from the captured normalised inputs; no database.
+
+    :returns: ``{"determinations": [...], "bundles": [...], "ungrouped_fit_refs": [...]}`` as recomputed.
+    :raises ReplayError: unknown format or version, or any recomputed verdict (or the grouping it rests on) that
+        differs from the recorded one: a candidate recorded as eligible that the inputs do not make eligible, or the
+        reverse, is a forged or stale document.
+    """
+    _, _, _, dets, bundles, ungrouped = _verified_assessments(manifest)
+    return {
+        "determinations": [a.to_dict() for a in dets],
+        "bundles": [b.to_dict() for b in bundles],
+        "ungrouped_fit_refs": list(ungrouped),
+    }
+
+
+def _decide_from(
     manifest: dict[str, Any],
-    *,
-    rules: Sequence[NetworkRule] | None = None,
-    assessments: dict[str, Any] | None = None,
+    rules: Sequence[NetworkRule] | None,
+    request: NetworkRequest,
+    network: NetworkFacts,
+    solves: tuple[SolveFacts, ...],
+    dets: list[DeterminationAssessment],
+    bundles: list[BundleAssessment],
 ) -> dict[str, Any]:
+    used = _rules_for(manifest, rules)
+    candidates = build_candidates(request, solves, dets, bundles)
+    return decide(candidates, network=network, request=request, rules=used).to_dict()
+
+
+def replay_network_decision(manifest: dict[str, Any], *, rules: Sequence[NetworkRule] | None = None) -> dict[str, Any]:
     """Recompute edges, conflicts, fronts and the selection from *recomputed* assessments; no database.
 
-    The candidates are built from freshly recomputed verdicts, never from recorded eligibility flags. Pass the
-    result of :func:`replay_network_assessment` as ``assessments`` to avoid recomputing it.
+    The candidates are built from freshly recomputed verdicts, never from recorded eligibility flags, and a caller
+    cannot hand in assessments of its own: a decision replay that trusted them would reproduce any winner.
 
     :returns: ``NetworkDecision.to_dict()``.
     :raises ReplayError: for an unknown version, or a rule version, status or audited manifest the running
         registry does not carry.
     """
     _check_versions(manifest)
-    used = _rules_for(manifest, rules)
+    _check_consistency(manifest)
     request, network, solves = _inputs(manifest)
-    if assessments is None:
-        dets, bundles, _ = _recompute_assessments(request, network, solves)
-    else:
-        dets = [DeterminationAssessment.from_dict(a) for a in assessments["determinations"]]
-        bundles = [BundleAssessment.from_dict(b) for b in assessments["bundles"]]
-    candidates = build_candidates(request, solves, dets, bundles)
-    return decide(candidates, network=network, request=request, rules=used).to_dict()
+    dets, bundles, _ = _recompute_assessments(request, network, solves)
+    return _decide_from(manifest, rules, request, network, solves, dets, bundles)
 
 
 def replay_network(
@@ -271,8 +298,8 @@ def replay_network(
     """
     if check_digest and "digest" in manifest and manifest["digest"]["value"] != manifest_digest(manifest):
         raise ReplayError("the manifest does not match its recorded digest")
-    assessments = replay_network_assessment(manifest)
-    decision = replay_network_decision(manifest, rules=rules, assessments=assessments)
+    request, network, solves, dets, bundles, _ = _verified_assessments(manifest)
+    decision = _decide_from(manifest, rules, request, network, solves, dets, bundles)
     if decision["outcome"] != manifest["outcome"]:
         raise ReplayError(
             f"the recomputed outcome {decision['outcome']!r} differs from the recorded {manifest['outcome']!r}"

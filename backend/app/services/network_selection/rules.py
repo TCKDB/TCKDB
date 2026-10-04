@@ -28,6 +28,7 @@ Three things keep a rule honest, as in the other registries:
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -95,6 +96,8 @@ class NetworkRule(ABC):
     interpretation: str = ""
     supersedes: tuple[str, ...] = ()
     inactive_reasons: tuple[str, ...] = ()
+    #: SHA-256 of the audited manifest the rule rests on. An *active* rule must carry one (see :func:`validate_rules`).
+    manifest_sha256: str | None = None
 
     @property
     @abstractmethod
@@ -128,7 +131,7 @@ class NetworkRule(ABC):
 
     def describe(self) -> dict[str, Any]:
         """The registry entry as a decision manifest records it."""
-        return {
+        entry: dict[str, Any] = {
             "rule_id": self.rule_id,
             "version": self.version,
             "level": self.level,
@@ -146,6 +149,9 @@ class NetworkRule(ABC):
             "exclusions": self.exclusions(),
             "exceptions": self.exceptions(),
         }
+        if self.manifest_sha256 is not None:
+            entry["manifest_sha256"] = self.manifest_sha256
+        return entry
 
 
 class NetworkRepresentationRule(NetworkRule):
@@ -175,6 +181,9 @@ class NetworkRepresentationRule(NetworkRule):
         return RuleMatch(Tri.true, ())
 
 
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+
+
 def validate_rules(rules: tuple[NetworkRule, ...]) -> None:
     """Refuse a registry that cannot be applied honestly: duplicate ids, or a rule with no objective key.
 
@@ -183,13 +192,17 @@ def validate_rules(rules: tuple[NetworkRule, ...]) -> None:
     """
     seen: set[str] = set()
     for rule in rules:
-        if rule.rule_id in seen:
-            raise ValueError(f"rule ids must be distinct: {rule.rule_id!r} is registered twice")
-        seen.add(rule.rule_id)
+        name = rule.rule_id  # a rule's name, not a database key
+        if name in seen:
+            raise ValueError(f"rule names must be distinct: {name!r} is registered twice")
+        seen.add(name)
         if not rule.objective_key.strip():
-            raise ValueError(f"rule {rule.rule_id!r} has an empty objective_key")
+            raise ValueError(f"rule {name!r} has an empty objective_key")
         if not isinstance(rule.objective, NetworkComparisonObjective):
-            raise ValueError(f"rule {rule.rule_id!r} names no comparison objective")
+            raise ValueError(f"rule {name!r} names no comparison objective")
+        pin = rule.manifest_sha256
+        if rule.status == RULE_ACTIVE and not (isinstance(pin, str) and _SHA256.fullmatch(pin)):
+            raise ValueError(f"active rule {name!r} rests on no pinned audited manifest (a SHA-256 is required)")
 
 
 def default_rules() -> tuple[NetworkRule, ...]:
@@ -198,5 +211,10 @@ def default_rules() -> tuple[NetworkRule, ...]:
 
 
 def active_rules(rules: tuple[NetworkRule, ...] | None = None) -> tuple[NetworkRule, ...]:
-    """Rules with status ``active``; inactive and revoked rules are never applied."""
-    return tuple(r for r in (default_rules() if rules is None else rules) if r.status == RULE_ACTIVE)
+    """Rules with status ``active``; inactive and revoked rules are never applied.
+
+    :raises ValueError: an active rule that rests on no pinned audited manifest (see :func:`validate_rules`).
+    """
+    registry = tuple(default_rules() if rules is None else rules)
+    validate_rules(registry)
+    return tuple(r for r in registry if r.status == RULE_ACTIVE)

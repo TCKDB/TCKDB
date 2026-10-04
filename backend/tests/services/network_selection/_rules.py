@@ -15,6 +15,9 @@ from app.services.network_selection.rules import (
 )
 from app.services.selection_kernel import RuleMatch, Tri
 
+#: A synthetic pin: an active rule must name the audited manifest it rests on. These fixtures rest on none.
+SYNTHETIC_PIN = "5" * 64
+
 REDUCTION = {"version": 1, "reduction_method": "chemically_significant_eigenvalues"}
 OTHER_REDUCTION = {"version": 1, "reduction_method": "modified_strong_collision"}
 THIRD_REDUCTION = {"version": 1, "reduction_method": "reservoir_state"}
@@ -46,7 +49,7 @@ class ProtocolRule(NetworkRule):
         supersedes: tuple[str, ...] = (),
         compat: tuple[str, ...] = (),
         channels: dict[str, tuple[str, str]] | None = None,
-        manifest_sha256: str | None = None,
+        manifest_sha256: str | None = SYNTHETIC_PIN,
     ) -> None:
         self.rule_id = rule_id
         self.version = "0.0.0-test"
@@ -58,7 +61,7 @@ class ProtocolRule(NetworkRule):
         self._compat = compat
         # channel -> (preferred value, yielding value); overrides the global pair for that channel
         self._channels = channels or {}
-        self._sha = manifest_sha256
+        self.manifest_sha256 = manifest_sha256
         self.inactive_reasons = ("synthetic test rule",) if status != RULE_ACTIVE else ()
 
     @property
@@ -90,12 +93,6 @@ class ProtocolRule(NetworkRule):
                 return RuleMatch(Tri.false, (f"{name}_differs",))
         return RuleMatch(Tri.true, ())
 
-    def describe(self) -> dict:
-        entry = super().describe()
-        if self._sha is not None:
-            entry["manifest_sha256"] = self._sha
-        return entry
-
 
 class FitKindRule(NetworkRepresentationRule):
     """TEST FIXTURE: among alternate fits of one determination, prefer ``prefer`` model kind over ``yield_``."""
@@ -104,6 +101,7 @@ class FitKindRule(NetworkRepresentationRule):
         self.rule_id = rule_id
         self.version = "0.0.0-test"
         self.objective_key = objective_key
+        self.manifest_sha256 = SYNTHETIC_PIN
         self._prefer, self._yield = prefer, yield_
 
     @property
@@ -118,3 +116,37 @@ class FitKindRule(NetworkRepresentationRule):
 
     def fit_yielding(self, fit: FitFacts, solve: SolveFacts) -> RuleMatch:
         return RuleMatch(Tri.true if fit.model_kind == self._yield else Tri.false, (fit.model_kind,))
+
+
+class FitTminRule(NetworkRepresentationRule):
+    """TEST FIXTURE: among alternate fits, prefer the one whose lowest temperature is ``prefer`` over ``yield_``."""
+
+    def __init__(
+        self,
+        rule_id: str,
+        *,
+        prefer: float,
+        yield_: float,
+        objective_key: str,
+        supersedes: tuple[str, ...] = (),
+        scope_state: Tri = Tri.true,
+    ) -> None:
+        self.rule_id = rule_id
+        self.version = "0.0.0-test"
+        self.objective_key = objective_key
+        self.manifest_sha256 = SYNTHETIC_PIN
+        self.supersedes = supersedes
+        self._prefer, self._yield, self._scope = prefer, yield_, scope_state
+
+    @property
+    def status(self) -> str:
+        return RULE_ACTIVE
+
+    def scope(self, network: NetworkFacts, request: NetworkRequest) -> RuleMatch:
+        return RuleMatch(self._scope, ("test_scope",))
+
+    def fit_preferred(self, fit: FitFacts, solve: SolveFacts) -> RuleMatch:
+        return RuleMatch(Tri.true if fit.tmin_k == self._prefer else Tri.false, ())
+
+    def fit_yielding(self, fit: FitFacts, solve: SolveFacts) -> RuleMatch:
+        return RuleMatch(Tri.true if fit.tmin_k == self._yield else Tri.false, ())

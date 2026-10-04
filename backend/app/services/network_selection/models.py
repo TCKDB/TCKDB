@@ -227,6 +227,8 @@ class NetworkRequest:
             keys = [o.channel_key for o in self.outputs]
             if len(set(keys)) != len(keys):
                 raise ValueError("a required output is listed once")
+            # The list is a set: the same bundle in another order is the same request, with the same digest.
+            object.__setattr__(self, "outputs", tuple(sorted(self.outputs, key=lambda o: o.channel_key)))
             if len(self.outputs) > self.bounds.required_outputs:
                 # A coded refusal (not a bare ValueError), so the route that builds the request maps it to the 422.
                 raise CodedValueError(
