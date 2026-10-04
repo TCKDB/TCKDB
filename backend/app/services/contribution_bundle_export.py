@@ -21,6 +21,7 @@ packaging, public API routes. The service is consumed by the
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -131,6 +132,9 @@ class BundleExportOmission:
         other field are unaffected. A tabulated point left with no value
         at all is dropped, and its temperature listed in
         ``points_dropped_at_k``.
+        ``"determination_key_suffixed"`` -- the record's determination shares its key, source and
+        reaction content with a different determination in the same export, which would merge them on
+        import; its key was exported with a ``~2``-style suffix to keep them apart.
         ``"declaration_pruned"`` -- the record was exported, but part of its
         declarations were left out because a portable bundle
         cannot carry it: a ``single_conformer`` target names a conformer group
@@ -437,6 +441,7 @@ def export_kinetics_bundle(
 
     kinetics_rows = _load_kinetics_rows(session, kinetics_ids)
     kinetics_uploads = [_kinetics_to_upload(row, omissions) for row in kinetics_rows]
+    _keep_determinations_distinct(kinetics_rows, kinetics_uploads, omissions)
 
     local_refs: dict[str, BundleLocalRefEntry] = {}
     for row in kinetics_rows:
@@ -919,6 +924,56 @@ def _kinetics_to_upload(
         )
 
     return payload
+
+
+def _keep_determinations_distinct(
+    rows: Sequence[Kinetics], uploads: Sequence[dict[str, Any]], omissions: list[BundleExportOmission] | None
+) -> None:
+    """Make exported determinations that are different rows state different content.
+
+    On import, records of one bundle share a determination when they state the same key, direction,
+    source and reaction content. Two determinations of the exporting database can be exactly that
+    alike (the same key deposited twice, on two reaction entries that read identically), and would
+    merge into one on re-import. The later one's key gets a ``~2``, ``~3`` ... suffix, never a key
+    another exported determination of the same content already uses, so the bundle re-imports to the
+    same number of determinations. Records of one determination keep one key. Reported as a
+    ``"determination_key_suffixed"`` omission naming the record by public ref.
+    """
+    owners: dict[str, dict[int, str]] = {}
+    for row, upload in zip(rows, uploads, strict=True):
+        declared = upload.get("determination")
+        if declared is None or row.determination_id is None:
+            continue
+        signature = json.dumps(
+            {name: upload.get(name) for name in ("direction", "literature", "workflow_tool_release", "reaction")},
+            sort_keys=True,
+            default=str,
+        )
+        keys = owners.setdefault(signature, {})
+        if row.determination_id in keys:
+            declared["key"] = keys[row.determination_id]
+            continue
+        key = declared["key"]
+        taken = set(keys.values())
+        n = 1
+        while key in taken:
+            n += 1
+            key = f"{declared['key']}~{n}"
+        keys[row.determination_id] = key
+        if key != declared["key"]:
+            if omissions is not None:
+                omissions.append(
+                    BundleExportOmission(
+                        action="determination_key_suffixed",
+                        ref=row.public_ref,
+                        detail=(
+                            f"Its determination shares the key {declared['key']!r}, the source and the reaction "
+                            f"with another exported determination, which would merge them on import; the key "
+                            f"was exported as {key!r}."
+                        ),
+                    )
+                )
+            declared["key"] = key
 
 
 def _collider_species_payload(session: Session | None, species_ref: str) -> dict[str, Any] | None:

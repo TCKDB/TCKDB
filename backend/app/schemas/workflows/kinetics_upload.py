@@ -114,7 +114,7 @@ class KineticsReactionParticipantUpload(SchemaBase):
 class KineticsReactionUpload(SchemaBase):
     """Workflow-facing reaction content embedded in a kinetics upload.
 
-    :param reversible: Omitted: the rate joins the one stored reaction with these participants, else is stored reversible, with a warning.
+    :param reversible: Omitted: taken from the one stored reaction with these participants, else refused.
     :param reaction_family: Optional reaction-family label.
     :param reaction_family_source_note: Required when ``reaction_family`` is not a supported canonical family.
     :param reactants: Ordered structured participants on the reactant side.

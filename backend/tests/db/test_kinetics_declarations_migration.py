@@ -294,6 +294,22 @@ def test_a_determination_stays_immutable_while_shared(db_session):
         )
 
 
+def test_a_determination_a_record_cites_cannot_be_deleted_but_an_orphan_can(db_session):
+    entry = _reaction_entry(db_session)
+    literature = make_literature(db_session).id
+    cited = _determination(db_session, entry, literature)
+    _insert_kinetics(db_session, entry, determination_id=cited, representation_role="complete")
+    # The immutability trigger refuses UPDATE only; what protects a cited determination from deletion is
+    # the foreign key, so every record that states it keeps what it states.
+    with pytest.raises(IntegrityError, match="fk_kinetics_determination_id"), db_session.begin_nested():
+        db_session.execute(text("DELETE FROM kinetics_determination WHERE id = :id"), {"id": cited})
+    # A determination no record cites (left behind when its only record was rolled back or removed) states
+    # nothing for anyone, so removing it changes no record.
+    orphan = _determination(db_session, entry, literature, key="orphan")
+    db_session.execute(text("DELETE FROM kinetics_determination WHERE id = :id"), {"id": orphan})
+    assert db_session.scalar(text("SELECT count(*) FROM kinetics_determination WHERE id = :id"), {"id": orphan}) == 0
+
+
 def test_a_determination_needs_a_source_and_a_bounded_key_and_a_hash(db_session):
     entry = _reaction_entry(db_session)
     literature = make_literature(db_session).id

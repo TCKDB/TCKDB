@@ -567,6 +567,7 @@ def persist_network_pdep_upload(
             reaction_upload,
             created_by=created_by,
             review_policy=review_policy,
+            warnings=warning_sink,
         )
         reaction_key_to_entry[rxn.key] = reaction_entry
 

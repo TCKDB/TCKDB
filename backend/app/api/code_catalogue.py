@@ -1596,7 +1596,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("kinetics_determination_mismatch", 422, Surface.coded_exception,
             "backend/app/services/kinetics_declaration_resolution.py",
             shape=Shape.relationship,
-            note="context.reason names reaction, direction, source or target."),
+            note="context.reason names reaction, direction, source, target or role."),
     ApiCode("kinetics_interpretation_conformer_selection_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
             shape=Shape.relationship,
@@ -1630,6 +1630,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("kinetics_protocol_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/kinetics_declaration_resolution.py",
             shape=Shape.relationship),
+    ApiCode("reaction_reversible_required", 422, Surface.coded_exception,
+            "backend/app/workflows/reaction.py"),
     ApiCode("last_admin_demotion", 409, Surface.message_prefix,
             "backend/app/api/routes/admin.py",
             note=(

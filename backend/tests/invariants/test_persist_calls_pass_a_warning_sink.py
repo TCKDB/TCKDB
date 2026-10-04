@@ -34,9 +34,6 @@ NO_SINK_ALLOWLIST = {
     "persist_conformer_upload": (
         "reports its warnings on ``outcome.warnings``; the worker extends its result with them"
     ),
-    "persist_reaction_upload": (
-        "has no workflow-level warnings; its request-level ones come from ``reaction_request_warnings``"
-    ),
     "persist_computed_reaction_upload": (
         "returns its warnings in ``result['warnings']``; the worker merges them behind the request-level ones"
     ),

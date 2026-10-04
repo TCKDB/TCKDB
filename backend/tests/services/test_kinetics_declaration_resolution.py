@@ -845,3 +845,86 @@ def test_a_channel_target_must_be_a_transition_state_of_the_records_reaction_in_
             db_session, _payload(determination=foreign), reaction_entry=world.other,
             literature_id=world.literature.id, workflow_tool_release_id=None, ts_scope="reaction",
         )
+
+
+# ---------------------------------------------------------------------------
+# #694 review: the target is part of identity, and a determination holds one role
+# ---------------------------------------------------------------------------
+
+
+def test_the_same_key_on_one_entry_with_a_different_target_is_a_different_determination(db_session, world):
+    whole = _resolve(db_session, world, _payload(determination=_determination(key="same")))
+    channel = _resolve(
+        db_session,
+        world,
+        _payload(
+            determination=_determination(
+                key="same", target_kind="resolved_channel", transition_state_entry_ref=world.ts_entry.public_ref
+            )
+        ),
+    )
+    assert whole.determination_id != channel.determination_id
+    rows = db_session.scalars(select(KineticsDetermination).where(KineticsDetermination.determination_key == "same")).all()
+    assert len(rows) == 2 and {r.target_kind.value for r in rows} == {"whole_reaction", "resolved_channel"}
+    # Restating either one joins it rather than minting a third.
+    again = _resolve(db_session, world, _payload(determination=_determination(key="same")))
+    assert again.determination_id == whole.determination_id
+
+
+def _record_of(db_session, world, resolved, role):
+    row = Kinetics(
+        reaction_entry_id=world.entry.id,
+        scientific_origin=ScientificOriginKind.computed,
+        a=1.0,
+        direction=KineticsDirection.forward,
+        literature_id=world.literature.id,
+        determination_id=resolved.determination_id,
+        representation_role=role,
+    )
+    db_session.add(row)
+    db_session.flush()
+    return row
+
+
+def test_a_determination_holds_one_role_and_a_record_of_the_other_role_is_refused(db_session, world):
+    first = _resolve(db_session, world, _payload(determination=_determination()))
+    _record_of(db_session, world, first, KineticsRepresentationRole.complete)
+    same = _resolve(db_session, world, _payload(determination=_determination()))
+    assert same.determination_id == first.determination_id
+    with pytest.raises(CodedValueError) as exc:
+        _resolve(db_session, world, _payload(determination=_determination(representation_role="additive_component")))
+    assert exc.value.code == "kinetics_determination_mismatch" and exc.value.context["reason"] == "role"
+    # The other way round: additive components first, a complete record second.
+    other = _resolve(db_session, world, _payload(determination=_determination(key="parts", representation_role="additive_component")))
+    _record_of(db_session, world, other, KineticsRepresentationRole.additive_component)
+    with pytest.raises(CodedValueError) as exc:
+        _resolve(db_session, world, _payload(determination=_determination(key="parts")))
+    assert exc.value.context["reason"] == "role"
+
+
+def test_the_last_stop_refuses_a_second_role_in_a_determination_too(db_session, world):
+    columns = _columns(db_session, world)
+    _record_of(db_session, world, SimpleNamespace(determination_id=columns["determination_id"]), KineticsRepresentationRole.complete)
+    assert assert_kinetics_declaration_columns(db_session, **columns) == (None, None)
+    columns["representation_role"] = KineticsRepresentationRole.additive_component
+    with pytest.raises(CodedValueError) as exc:
+        assert_kinetics_declaration_columns(db_session, **columns)
+    assert exc.value.code == "kinetics_determination_mismatch" and exc.value.context["reason"] == "role"
+
+
+def test_the_last_stop_reads_the_products_for_a_reverse_order(db_session, world):
+    # H + H -> H2: the reverse coefficient is of the one product, first order; the forward one is second order.
+    from tckdb_schemas.kinetics_declarations import StoredKineticsApplicabilityDeclaration
+
+    def declared(order):
+        return StoredKineticsApplicabilityDeclaration(version=1, claim_origin="source_publication", reaction_order=order)
+
+    columns = _columns(db_session, world, determination_id=None, representation_role=None)
+    def at(direction, order):
+        return {**columns, "direction": direction, "applicability_declaration": declared(order)}
+
+    assert assert_kinetics_declaration_columns(db_session, **at(KineticsDirection.reverse, 1))
+    with pytest.raises(CodedValueError) as exc:
+        assert_kinetics_declaration_columns(db_session, **at(KineticsDirection.reverse, 2))
+    assert exc.value.code == "kinetics_declaration_contradicts_record"
+    assert assert_kinetics_declaration_columns(db_session, **at(KineticsDirection.forward, 2))

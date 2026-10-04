@@ -30,7 +30,7 @@ they are not independent evidence for each other. Say so:
   reaction.
 - `representation_role` is `complete` for a fit of the whole determination, or `additive_component` for one
   term of a determination that is a sum of records. An additive component is not a total-rate candidate on
-  its own.
+  its own. One determination holds one role: a record of the other role is refused.
 - **Sharing.** Every upload creates its own reaction entry, and a determination belongs to one entry. To add a
   second representation, cite the first one's ref: `{"determination_ref": "kdet_...", "representation_role":
   "complete"}`. The record is stored under the determination's own reaction entry, so its reaction content must

@@ -2004,7 +2004,7 @@ validated form, with supporting calculations as public refs.
 | `thermal_approximation.ensemble_representation` | What stands in for the target ensemble: `lowest_conformer` or `boltzmann_conformers`. **Separate from the target**: the target says what ensemble is meant, this says what represents it. |
 | `thermal_approximation.internal_motion` | `harmonic`, `hindered_rotors` or `anharmonic`. |
 | `departures` | Stated departures from the standard form of the declared recipe: a list of `{component, description}` (`geometry`, `frequencies`, `zero_point_energy`, `electronic_energy`, `empirical_correction`, `other`). **Three states**: omitted means not stated; `[]` means the depositor states there are none; a list names them. "Standard" can only be established by `[]`. |
-| `supporting_calculations` | Calculations the declaration rests on, by local key (`calculation_key`) or public ref (`calculation_ref`, standalone and contribution-bundle routes only). Must belong to the record's own species entry. Stored as public refs. |
+| `supporting_calculations` | Calculations the declaration rests on, by local key (`calculation_key`, bundle uploads only: `/uploads/kinetics` carries no calculations, so a key there is refused as `calculation_key_undeclared`) or public ref (`calculation_ref`, standalone and contribution-bundle routes only). Must belong to the record's own species entry. Stored as public refs. |
 
 The vocabulary is deliberately small: it stores only what a job states, and a
 value is added when a real deposit needs it (adding an enum member or an
@@ -2175,12 +2175,26 @@ workflow, which build the `kinetics` row.
 ### `reaction.reversible` on the kinetics route (#598)
 
 `chem_reaction.reversible` is part of a graph reaction's identity (the stoichiometry hash), and that is
-unchanged. On `/uploads/kinetics` the field is optional, because a rate does not need it: an omitted value is
-*not stated*. A rate that does not state it joins the one stored reaction with its participants; when none is
-stored it is stored as reversible, the default the transition-state and computed-reaction routes already apply
-(an elementary step is reversible by microscopic reversibility), and the response carries a
-`reaction_reversible_defaulted` warning so the value is never read as a claim. When both twins are stored it
-takes the same default. A transition-state-anchored rate that omits it simply inherits the anchored reaction's
-value; one that states the opposite is still refused. Separately, every reaction-resolving route that returns
-warnings reports `reaction_reversible_twin` when the reaction it attached to has a twin (same participants,
+unchanged. On `/uploads/kinetics`, and in the reactions of `/uploads/networks`, the field is optional, because
+a rate does not need it: an omitted value is *not stated*, and is never guessed (the transition-state and
+computed-reaction routes state `reversible`, defaulting it in their own schema; a bare rate has no such context).
+A deposit that does not state it takes the value of the one stored reaction with its participants, or of the
+reaction its transition state or cited determination anchors it to. When nothing can be inherited (none is
+stored, or both twins are), it is refused with `reaction_reversible_required` and the producer states
+`reversible: true` or `false`. There is no nullable column and no default. A transition-state-anchored rate
+that states the opposite of the anchored reaction is still refused. Separately, every route that can create a
+reaction (reactions, kinetics, computed reactions, bundles, networks and pressure-dependent networks, and their
+job results) reports `reaction_reversible_twin` when the reaction it attached to has a twin (same participants,
 opposite `reversible`), naming the twin by public ref.
+
+### Determinations: roles, deletion, and order
+
+- One determination holds either `complete` representations or `additive_component` records, never both:
+  selection reads the role to decide whether a record is a total rate. A record of the other role is refused
+  (`kinetics_determination_mismatch`, `context.reason` `role`).
+- A cited determination cannot be deleted (the foreign key from `kinetics.determination_id`); the immutability
+  trigger refuses UPDATE only. A determination no record cites may be deleted: it states nothing for anyone.
+- `applicability.reaction_order` is the order of the side the record's direction names: the reactant count for
+  a forward coefficient, the product count for a reverse one (plus one for a simple third-body reaction). A net
+  rate, or one whose direction is not stated, is not checked. The separate `a_units` molecularity check on the
+  standalone route still reads the reactant count only, whatever the direction (pre-existing, unchanged).

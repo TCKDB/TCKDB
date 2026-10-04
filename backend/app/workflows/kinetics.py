@@ -72,11 +72,6 @@ from app.services.kinetics_ts_scope import (
 from app.services.kinetics_ts_scope import (
     transition_state_belongs_to_rate as _transition_state_belongs_to_rate,
 )
-from app.services.reaction_resolution import (
-    W_REACTION_REVERSIBLE_DEFAULTED,
-    compress_species_stoichiometry,
-    resolve_unstated_reversible,
-)
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -92,7 +87,7 @@ from app.services.upload_reference import (
     W_UNKNOWN_TRANSITION_STATE_ENTRY_REF,
     unknown_reference,
 )
-from app.workflows.reaction import persist_reaction_upload
+from app.workflows.reaction import persist_reaction_upload, reversible_or_inherited
 
 
 def _find_sp_for_species(
@@ -276,45 +271,6 @@ def _request_matches_entry(
     expected.sort(key=lambda item: (item[0].value, item[1]))
     stated = request.reaction.reversible
     return (stated is None or stated == reaction_entry.reaction.reversible) and submitted == expected
-
-
-def _unstated_reversible(
-    session: Session,
-    request: KineticsUploadRequest,
-    created_by: int | None,
-    warning_sink: list[UploadWarning],
-) -> bool:
-    """The ``reversible`` value for a rate that did not state one; never a reason to mint a reaction.
-
-    Whether a reaction is reversible is part of its graph identity, but a rate does not have to
-    say. Unstated is unknown, so the rate joins the single stored reaction with its participants;
-    only when there is none is the default of the transition-state and computed-reaction routes
-    stored, with a ``reaction_reversible_defaulted`` warning so the value is never mistaken for a
-    claim.
-    """
-    reactants = compress_species_stoichiometry(
-        [resolve_species_entry(session, p.species_entry, created_by=created_by) for p in request.reaction.reactants]
-    )
-    products = compress_species_stoichiometry(
-        [resolve_species_entry(session, p.species_entry, created_by=created_by) for p in request.reaction.products]
-    )
-    value, how = resolve_unstated_reversible(
-        session, reactant_stoichiometry=reactants, product_stoichiometry=products
-    )
-    if how == "defaulted":
-        warning_sink.append(
-            UploadWarning(
-                field="reaction.reversible",
-                code=W_REACTION_REVERSIBLE_DEFAULTED,
-                message=(
-                    "reaction.reversible was not stated and no stored reaction with these participants could "
-                    "be joined, so the reaction is stored as reversible (an elementary step is reversible by "
-                    "microscopic reversibility, as on the transition-state and computed-reaction routes). "
-                    "State reversible to make it a claim."
-                ),
-            )
-        )
-    return value
 
 
 def determination_content_key(request: KineticsUploadRequest) -> str | None:
@@ -947,7 +903,7 @@ def persist_kinetics_upload(
     if reaction_entry is None:
         reversible = request.reaction.reversible
         if reversible is None:
-            reversible = _unstated_reversible(session, request, created_by, warning_sink)
+            reversible = reversible_or_inherited(session, request.reaction, created_by=created_by)
         reaction_entry = persist_reaction_upload(
             session,
             ReactionUploadRequest(

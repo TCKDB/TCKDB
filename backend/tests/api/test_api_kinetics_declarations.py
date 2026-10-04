@@ -718,6 +718,41 @@ def test_an_applicability_declaration_that_contradicts_the_record_is_refused(cli
     assert _count(db_session, Kinetics) == 0
 
 
+DISSOCIATION = {
+    "reversible": False,
+    "reactants": [{"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}}],
+    "products": [
+        {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+        {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    "direction,order,accepted",
+    [
+        ("forward", 1, True),  # H2 -> 2 H: the forward coefficient is first order
+        ("forward", 2, False),
+        ("reverse", 2, True),  # 2 H -> H2 read the other way: second order
+        ("reverse", 1, False),
+        ("net", 1, True),  # a net rate has no order this layer can state
+        ("net", 2, True),
+    ],
+)
+def test_the_declared_order_is_the_order_of_the_side_the_direction_names(client, db_session, direction, order, accepted):
+    # per_s whatever the direction: the A-units molecularity check reads the reactant count only (a
+    # separate, pre-existing blindness this change does not touch).
+    body = _standalone(direction=direction, a_units="per_s", applicability=_applicability(reaction_order=order))
+    body["reaction"] = DISSOCIATION
+    response = client.post(KINETICS, json=body)
+    if accepted:
+        assert response.status_code == 201, response.text[:800]
+    else:
+        assert _code(response) == "kinetics_declaration_contradicts_record"
+        assert any("applicability.reaction_order" in e["msg"] and direction in e["msg"] for e in response.json()["detail"])
+        assert _count(db_session, Kinetics) == 0
+
+
 def test_a_cited_determinations_target_is_compared_with_the_declared_scope(client, db_session):
     assert client.post(KINETICS, json=_standalone(determination=_determination("set-A"))).status_code == 201
     det = db_session.scalars(select(KineticsDetermination)).one()
@@ -897,10 +932,10 @@ def test_an_exported_bundle_carries_the_portable_declarations_and_reimports_into
         "protocol": {**PROTOCOL},
     }
     assert client.post(
-        KINETICS, json=_standalone(determination=_determination("set-A"), **declared)
+        KINETICS, json=_standalone(determination=_determination("set-A", role="additive_component"), **declared)
     ).status_code == 201
     det = db_session.scalars(select(KineticsDetermination)).one()
-    # A second representation of the same determination: it cites the ref, which anchors it.
+    # A second component of the same determination: it cites the ref, which anchors it.
     assert client.post(
         KINETICS,
         json=_standalone(
@@ -910,11 +945,7 @@ def test_an_exported_bundle_carries_the_portable_declarations_and_reimports_into
     ).status_code == 201
     rows = db_session.scalars(select(Kinetics).order_by(Kinetics.id)).all()
     assert rows[0].determination_id == rows[1].determination_id == det.id
-    # The role is the record's own, not the determination's: one read, two roles.
-    assert [_read(client, row)["determination"]["representation_role"] for row in rows] == [
-        "complete",
-        "additive_component",
-    ]
+    assert [_read(client, row)["determination"]["representation_role"] for row in rows] == ["additive_component"] * 2
 
     omissions: list[BundleExportOmission] = []
     bundle = export_kinetics_bundle(
@@ -928,7 +959,7 @@ def test_an_exported_bundle_carries_the_portable_declarations_and_reimports_into
     assert omissions == []
     uploads = bundle.records.kinetics_uploads
     assert [u.determination.key for u in uploads] == ["set-A", "set-A"]
-    assert [u.determination.representation_role.value for u in uploads] == ["complete", "additive_component"]
+    assert [u.determination.representation_role.value for u in uploads] == ["additive_component"] * 2
     assert all(u.direction.value == "forward" for u in uploads)
     # The collider travels as species content, never as the exporting database's ref.
     assert uploads[0].applicability.colliders[0].species.smiles == "N#N"
@@ -949,7 +980,7 @@ def test_an_exported_bundle_carries_the_portable_declarations_and_reimports_into
     assert imported[0].determination_id == imported[1].determination_id is not None
     assert imported[0].determination_id != det.id
     assert imported[0].reaction_entry_id == imported[1].reaction_entry_id != rows[0].reaction_entry_id
-    assert [k.representation_role.value for k in imported] == ["complete", "additive_component"]
+    assert [k.representation_role.value for k in imported] == ["additive_component"] * 2
     assert [k.applicability_declaration for k in imported] == [rows[0].applicability_declaration] * 2
     assert [k.protocol_declaration for k in imported] == [rows[0].protocol_declaration] * 2
     assert _count(db_session, KineticsDetermination) == 2
@@ -987,6 +1018,99 @@ def test_two_unrelated_uploads_with_the_same_key_in_one_bundle_do_not_share_a_de
     assert imported[0].reaction_entry_id != imported[1].reaction_entry_id
 
 
+def _round_trip(db_session, kinetics_ids, omissions=None):
+    from uuid import uuid4
+
+    from app.db.models.app_user import AppUser
+    from app.db.models.common import AppUserRole
+    from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+    from app.services.contribution_bundle_export import export_kinetics_bundle
+    from app.workflows.contribution_bundle_submit import submit_contribution_bundle
+
+    bundle = export_kinetics_bundle(
+        db_session, kinetics_ids=kinetics_ids, title="Round trip", summary="Round trip.",
+        exporter_label="t", omissions=omissions,
+    )
+    actor = AppUser(username=f"decl-{uuid4().hex[:10]}", role=AppUserRole.user)
+    db_session.add(actor)
+    db_session.flush()
+    submitted = submit_contribution_bundle(
+        db_session, ContributionBundleV0.model_validate_json(bundle.model_dump_json()), actor=actor
+    )
+    db_session.flush()
+    ids = [r.record_id for r in submitted.records if r.record_type.value == SubmissionRecordType.kinetics.value]
+    return bundle, [db_session.get(Kinetics, i) for i in ids]
+
+
+def test_two_determinations_with_one_key_source_and_reaction_stay_two_after_an_export_and_re_import(client, db_session):
+    # The same key deposited twice, from the same source, on two reaction entries that read identically.
+    for _ in range(2):
+        assert client.post(KINETICS, json=_standalone(determination=_determination("set-A"))).status_code == 201
+    rows = db_session.scalars(select(Kinetics).order_by(Kinetics.id)).all()
+    assert rows[0].determination_id != rows[1].determination_id and rows[0].reaction_entry_id != rows[1].reaction_entry_id
+    before = _count(db_session, KineticsDetermination)
+
+    omissions: list = []
+    bundle, imported = _round_trip(db_session, [r.id for r in rows], omissions)
+
+    keys = [u.determination.key for u in bundle.records.kinetics_uploads]
+    assert keys == ["set-A", "set-A~2"], "the later determination's key is suffixed, the first is untouched"
+    (omission,) = omissions
+    assert omission.action == "determination_key_suffixed" and omission.ref == rows[1].public_ref
+    assert "set-A" in omission.detail and str(rows[1].id) not in omission.detail
+    assert imported[0].determination_id != imported[1].determination_id
+    assert imported[0].reaction_entry_id != imported[1].reaction_entry_id
+    assert _count(db_session, KineticsDetermination) == before + 2, "the same number of determinations as the source"
+
+
+def test_a_suffixed_key_never_collides_with_a_key_the_export_already_carries(client, db_session):
+    # Determinations "set-A", "set-A" (a second one) and a third literally called "set-A~2".
+    for key in ("set-A", "set-A", "set-A~2"):
+        assert client.post(KINETICS, json=_standalone(determination=_determination(key))).status_code == 201
+    rows = db_session.scalars(select(Kinetics).order_by(Kinetics.id)).all()
+    bundle, imported = _round_trip(db_session, [r.id for r in rows])
+    keys = [u.determination.key for u in bundle.records.kinetics_uploads]
+    assert len(set(keys)) == 3 and keys[0] == "set-A"
+    assert len({k.determination_id for k in imported}) == 3
+
+
+def test_records_of_one_determination_keep_one_key_and_report_no_omission(client, db_session):
+    assert client.post(KINETICS, json=_standalone(determination=_determination("set-A"))).status_code == 201
+    det = db_session.scalars(select(KineticsDetermination)).one()
+    cite = {"determination_ref": det.public_ref, "representation_role": "complete"}
+    assert client.post(KINETICS, json=_standalone(determination=cite, a=2.0e13)).status_code == 201
+    rows = db_session.scalars(select(Kinetics).order_by(Kinetics.id)).all()
+    omissions: list = []
+    bundle, imported = _round_trip(db_session, [r.id for r in rows], omissions)
+    assert [u.determination.key for u in bundle.records.kinetics_uploads] == ["set-A", "set-A"]
+    assert omissions == []
+    assert imported[0].determination_id == imported[1].determination_id
+
+
+def test_a_determination_cannot_mix_complete_and_additive_records(client, db_session):
+    assert client.post(KINETICS, json=_standalone(determination=_determination("set-A"))).status_code == 201
+    det = db_session.scalars(select(KineticsDetermination)).one()
+    mixed = {"determination_ref": det.public_ref, "representation_role": "additive_component"}
+    response = client.post(KINETICS, json=_standalone(determination=mixed))
+    assert _code(response) == "kinetics_determination_mismatch"
+    assert response.json()["context"]["reason"] == "role"
+    assert _count(db_session, Kinetics) == 1
+    # The same record in the determination's own role is accepted.
+    same = {"determination_ref": det.public_ref, "representation_role": "complete"}
+    assert client.post(KINETICS, json=_standalone(determination=same)).status_code == 201
+
+
+def test_each_record_reads_its_own_determinations_role(client, db_session):
+    assert client.post(KINETICS, json=_standalone(determination=_determination("whole"))).status_code == 201
+    parts = _determination("parts", role="additive_component")
+    assert client.post(KINETICS, json=_standalone(determination=parts)).status_code == 201
+    rows = db_session.scalars(select(Kinetics).order_by(Kinetics.id)).all()
+    assert [_read(client, row)["determination"]["representation_role"] for row in rows] == [
+        "complete",
+        "additive_component",
+    ]
+
+
 def test_an_export_reports_what_a_portable_bundle_cannot_carry(client, db_session, corpus):
     from app.services.contribution_bundle_export import export_kinetics_bundle
 
@@ -1016,3 +1140,15 @@ def test_an_export_reports_what_a_portable_bundle_cannot_carry(client, db_sessio
 def test_the_record_type_of_a_determination_is_not_a_reviewable_record():
     # A determination is identity, not a record a reviewer approves: it has no review type.
     assert "kinetics_determination" not in {t.value for t in SubmissionRecordType}
+
+
+def test_the_standalone_route_has_no_calculation_keys_so_a_key_is_always_refused(client, db_session, corpus):
+    # /uploads/kinetics carries no calculations, so there is nothing a calculation_key could name. A key is
+    # refused with the shared code; a calculation_ref is how the route cites a calculation.
+    protocol = {**PROTOCOL, "supporting_calculations": [{"calculation_key": "x", "purpose": "geometry"}]}
+    response = client.post(KINETICS, json=_standalone(protocol=protocol))
+    assert _code(response) == "calculation_key_undeclared"
+    assert response.json()["context"]["declared_keys"] == []
+    assert _count(db_session, Kinetics) == 0
+    by_ref = {**PROTOCOL, "supporting_calculations": [{"calculation_ref": corpus.h_calc.public_ref, "purpose": "geometry"}]}
+    assert _post_stored_entry_rate(client, corpus, protocol=by_ref).status_code == 201

@@ -367,6 +367,23 @@ def test_the_declared_order_matches_the_reaction_and_a_third_body_adds_one():
     assert _error(_applicability(reaction_order=3), _facts(n_reactants=None)) is None
 
 
+def test_the_order_follows_the_direction_the_coefficient_describes():
+    # H2 -> 2 H: one reactant, two products.
+    sides = {"n_reactants": 1, "n_products": 2}
+    assert _error(_applicability(reaction_order=1), _facts(direction="forward", **sides)) is None
+    assert _error(_applicability(reaction_order=2), _facts(direction="forward", **sides)) is not None
+    assert _error(_applicability(reaction_order=2), _facts(direction="reverse", **sides)) is None
+    assert _error(_applicability(reaction_order=1), _facts(direction="reverse", **sides)) is not None
+    # A third body adds one on whichever side is the rate's own.
+    assert _error(_applicability(reaction_order=3), _facts(direction="reverse", is_third_body=True, **sides)) is None
+    # A net rate, or one that does not say, has no order to compare: skipped, never assumed.
+    for direction in ("net", None):
+        for order in (1, 2, 3):
+            assert _error(_applicability(reaction_order=order), _facts(direction=direction, **sides)) is None
+    # The product count is unknown for a request that does not carry one: nothing to compare.
+    assert _error(_applicability(reaction_order=3), _facts(direction="reverse", n_reactants=1, n_products=None)) is None
+
+
 def test_the_declared_scope_agrees_with_the_determination_target():
     declared = _applicability(scope="resolved_channel")
     assert _error(declared, _facts(), determination_target_kind="resolved_channel") is None
@@ -556,3 +573,35 @@ def test_record_facts_read_a_standalone_request_and_a_bundle_block_alike():
     assert (bundle.n_reactants, bundle.has_falloff, bundle.has_third_body_efficiencies) == (3, False, False)
     with_falloff = kinetics_record_facts({**BASE, "model_kind": "troe", "falloff": {"low_a": 1.0}})
     assert with_falloff.has_falloff is True
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("reaction_order", "2"),
+        ("pressure_domain_min_bar", "0.1"),
+        ("pressure_domain_max_bar", "10"),
+        ("default_third_body_efficiency", "1.0"),
+    ],
+)
+def test_a_numeric_field_is_never_coerced_from_a_string(field, value):
+    base = _applicability(
+        collider_kind="composition_dependent",
+        pressure_dependence="pressure_dependent",
+        pressure_domain_min_bar=0.1,
+        pressure_domain_max_bar=10.0,
+        default_third_body_efficiency=1.0,
+        reaction_order=2,
+    )
+    KineticsApplicabilityDeclaration.model_validate(base)  # the declaration itself is accepted as built
+    with pytest.raises(ValidationError):
+        KineticsApplicabilityDeclaration.model_validate({**base, field: value})
+
+
+def test_a_mole_fraction_is_never_coerced_from_a_string():
+    good = _applicability(**_mixture(0.79, 0.21))
+    KineticsApplicabilityDeclaration.model_validate(good)
+    bad = _applicability(**_mixture(0.79, 0.21))
+    bad["colliders"][0]["mole_fraction"] = "0.79"
+    with pytest.raises(ValidationError):
+        KineticsApplicabilityDeclaration.model_validate(bad)

@@ -370,14 +370,14 @@ class KineticsCollider(SchemaBase):
     """
 
     species: SpeciesEntryIdentityPayload
-    mole_fraction: float | None = Field(default=None, gt=0, le=1, allow_inf_nan=False)
+    mole_fraction: float | None = Field(default=None, gt=0, le=1, allow_inf_nan=False, strict=True)
 
 
 class StoredKineticsCollider(SchemaBase):
     """A collider as stored and read back: the species public ref, and its mole fraction."""
 
     species_ref: str = Field(min_length=1)
-    mole_fraction: float | None = Field(default=None, gt=0, le=1, allow_inf_nan=False)
+    mole_fraction: float | None = Field(default=None, gt=0, le=1, allow_inf_nan=False, strict=True)
 
 
 def _check_colliders(kind: Any, colliders: list[Any], default_efficiency: Any) -> None:
@@ -436,14 +436,14 @@ class KineticsApplicabilityDeclaration(SchemaBase):
     observable: KineticsObservable | None = None
     coefficient_basis: KineticsCoefficientBasis | None = None
     scope: KineticsDeterminationTargetKind | None = None
-    reaction_order: int | None = Field(default=None, ge=1, le=4)
+    reaction_order: int | None = Field(default=None, ge=1, le=4, strict=True)
     rate_progress_convention: KineticsRateProgressConvention | None = None
     pressure_dependence: KineticsPressureDependence | None = None
-    pressure_domain_min_bar: float | None = Field(default=None, gt=0, allow_inf_nan=False)
-    pressure_domain_max_bar: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    pressure_domain_min_bar: float | None = Field(default=None, gt=0, allow_inf_nan=False, strict=True)
+    pressure_domain_max_bar: float | None = Field(default=None, gt=0, allow_inf_nan=False, strict=True)
     collider_kind: KineticsColliderKind | None = None
     colliders: list[KineticsCollider] = Field(default_factory=list)
-    default_third_body_efficiency: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    default_third_body_efficiency: float | None = Field(default=None, ge=0, allow_inf_nan=False, strict=True)
     claim_origin: KineticsClaimOrigin
 
     @field_validator("version")
@@ -721,6 +721,7 @@ class KineticsRecordFacts:
     model_kind: str | None = None
     is_third_body: bool | None = None
     n_reactants: int | None = None
+    n_products: int | None = None
     pressure_context: str | None = None
     pressure_bar: float | None = None
     has_network_kinetics: bool | None = None
@@ -742,11 +743,15 @@ def kinetics_record_facts(payload: Any) -> KineticsRecordFacts:
     """
     reaction = _get(payload, "reaction")
     n_reactants: int | None
+    n_products: int | None
     if reaction is not None:
         n_reactants = len(_get(reaction, "reactants") or [])
+        n_products = len(_get(reaction, "products") or [])
     else:
         keys = _get(payload, "reactant_keys")
         n_reactants = len(keys) if keys is not None else None
+        product_keys = _get(payload, "product_keys")
+        n_products = len(product_keys) if product_keys is not None else None
     model_kind = _value(_get(payload, "model_kind"))
     if _has_field(payload, "falloff"):
         has_falloff = _get(payload, "falloff") is not None
@@ -762,6 +767,7 @@ def kinetics_record_facts(payload: Any) -> KineticsRecordFacts:
         model_kind=model_kind,
         is_third_body=_get(payload, "is_third_body"),
         n_reactants=n_reactants or None,
+        n_products=n_products or None,
         pressure_context=_value(_get(payload, "pressure_context")),
         pressure_bar=_get(payload, "pressure_bar"),
         has_network_kinetics=_get(payload, "network_kinetics_ref") is not None,
@@ -897,14 +903,18 @@ def kinetics_applicability_error(
         )
 
     order = _get(applicability, "reaction_order")
-    if order is not None and facts.n_reactants is not None and facts.is_third_body is not None:
-        expected = facts.n_reactants + (1 if facts.is_third_body and not facts.has_falloff else 0)
+    # The coefficient's order is the number of species on the side it is a rate *of*: the reactants
+    # for a forward rate, the products for a reverse one. A net rate, or one whose direction is not
+    # stated, has no order this layer can state, so the rule is skipped, never assumed.
+    side = {"forward": facts.n_reactants, "reverse": facts.n_products}.get(facts.direction or "")
+    if order is not None and side is not None and facts.is_third_body is not None:
+        expected = side + (1 if facts.is_third_body and not facts.has_falloff else 0)
         if order != expected:
             return _contradiction(
                 "reaction_order",
-                f"declares order {order} but the reaction's coefficient has order {expected} "
-                f"({facts.n_reactants} reactant(s)"
-                + (", plus the third body" if expected > facts.n_reactants else "")
+                f"declares order {order} but the {facts.direction} coefficient has order {expected} "
+                f"({side} {'reactant' if facts.direction == 'forward' else 'product'}(s)"
+                + (", plus the third body" if expected > side else "")
                 + ").",
             )
     return None

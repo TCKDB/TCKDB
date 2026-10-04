@@ -277,7 +277,9 @@ def _run_reaction(session: Session, job: UploadJob, review_policy: ReviewPolicy)
 
     request = ReactionUploadRequest.model_validate(job.payload)
     warnings = reaction_request_warnings(request)
-    entry = persist_reaction_upload(session, request, created_by=job.created_by, review_policy=review_policy)
+    entry = persist_reaction_upload(
+        session, request, created_by=job.created_by, review_policy=review_policy, warnings=warnings
+    )
     return {
         "type": "reaction_entry",
         "id": entry.id,

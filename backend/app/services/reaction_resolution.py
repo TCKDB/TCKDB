@@ -1107,10 +1107,6 @@ def _resolve_chem_reaction(
 #: The code of the warning a deposit gets when a graph reaction with the same participants and the
 #: opposite ``reversible`` value already exists.
 W_REACTION_REVERSIBLE_TWIN = "reaction_reversible_twin"
-#: The code of the warning a deposit gets when it did not state ``reversible`` and none could be inherited.
-W_REACTION_REVERSIBLE_DEFAULTED = "reaction_reversible_defaulted"
-
-
 def _reaction_with_hash(session: Session, *, reversible: bool, reactants: Mapping[int, int], products: Mapping[int, int]):
     return session.scalar(
         select(ChemReaction).where(
@@ -1140,21 +1136,18 @@ def reversible_twin(
     )
 
 
-def resolve_unstated_reversible(
+def inherit_reversible(
     session: Session,
     *,
     reactant_stoichiometry: Mapping[int, int],
     product_stoichiometry: Mapping[int, int],
-) -> tuple[bool, str]:
-    """The ``reversible`` value to store for a deposit that did not state one, and how it was found.
+) -> bool | None:
+    """The ``reversible`` value of the one stored graph reaction with these participants, else ``None``.
 
-    A deposit that does not say whether its reaction is reversible has not made a claim, so it
-    must not create a new reaction merely to carry a guess. When exactly one graph reaction with
-    these participants is already stored, the deposit joins it (``"inherited"``). When none is,
-    the value is the one the transition-state and computed-reaction routes already default to
-    (reversible: an elementary step is reversible by microscopic reversibility) and the deposit is
-    told so (``"defaulted"``). When both twins exist the deposit cannot be placed by inheritance and
-    takes the same default (``"defaulted"``).
+    A deposit that does not say whether its reaction is reversible has made no claim, so it must
+    neither create a reaction to carry a guess nor be given a default: it joins the single stored
+    reaction with its participants. With none stored, or with both twins stored, there is nothing
+    to inherit and the caller refuses, asking the producer to state it.
     """
     reversible_row = _reaction_with_hash(
         session, reversible=True, reactants=reactant_stoichiometry, products=product_stoichiometry
@@ -1163,10 +1156,10 @@ def resolve_unstated_reversible(
         session, reversible=False, reactants=reactant_stoichiometry, products=product_stoichiometry
     )
     if reversible_row is not None and irreversible_row is None:
-        return True, "inherited"
+        return True
     if irreversible_row is not None and reversible_row is None:
-        return False, "inherited"
-    return True, "defaulted"
+        return False
+    return None
 
 
 def resolve_chem_reaction(

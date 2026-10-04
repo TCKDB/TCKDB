@@ -74,7 +74,7 @@ from app.db.models.common import (
     KineticsRepresentationRole,
     ReactionRole,
 )
-from app.db.models.kinetics import KineticsDetermination
+from app.db.models.kinetics import Kinetics, KineticsDetermination
 from app.db.models.network import Network
 from app.db.models.network_pdep import (
     NetworkChannel,
@@ -350,6 +350,29 @@ def _check_joinable(
         )
 
 
+def _check_role_consistent(
+    session: Session, determination_id: int, role: KineticsRepresentationRole, *, field: str
+) -> None:
+    """A determination's records are all complete representations or all additive components.
+
+    Selection reads the role to decide whether a record is a total rate or a piece of one, so one
+    determination that mixed the two would have no consistent meaning. A record whose role differs
+    from the role of those already in the determination is refused.
+    """
+    other = session.scalar(
+        select(Kinetics.representation_role)
+        .where(Kinetics.determination_id == determination_id, Kinetics.representation_role != role)
+        .limit(1)
+    )
+    if other is not None:
+        raise _mismatch(
+            field,
+            "role",
+            f"The determination's other records are {_enum_value(other)}, but this record is {role.value}. "
+            "A determination holds either complete representations or additive components, not both.",
+        )
+
+
 def _find_or_create_determination(
     session: Session,
     *,
@@ -533,8 +556,8 @@ def _calculation_by_ref(session: Session, ref: str, *, field: str) -> Calculatio
             kind="calculation",
             ref=ref,
             remedy=(
-                "Declare the job inline in this request with a calculation_key, or deposit it "
-                "first and cite the ref this API returned for it."
+                "Cite the ref this API returned for the calculation. (A bundle can instead declare "
+                "the job inline and name it by calculation_key; /uploads/kinetics has no inline calculations.)"
             ),
         )
     return calc
@@ -710,6 +733,7 @@ def resolve_kinetics_declarations(
             field=f"{field_prefix}determination",
         )
         role = KineticsRepresentationRole(_enum_value(_attr(determination_payload, "representation_role")))
+        _check_role_consistent(session, determination_row.id, role, field=f"{field_prefix}determination")
 
     applicability_stored = None
     if applicability_payload is not None:
@@ -753,6 +777,20 @@ def resolve_kinetics_declarations(
         applicability_declaration=applicability_stored,
         protocol_declaration=protocol_stored,
     )
+
+
+def _participant_count(session: Session, reaction_entry_id: int, role: ReactionRole) -> int | None:
+    count = len(
+        list(
+            session.scalars(
+                select(ReactionEntryStructureParticipant.id).where(
+                    ReactionEntryStructureParticipant.reaction_entry_id == reaction_entry_id,
+                    ReactionEntryStructureParticipant.role == role,
+                )
+            )
+        )
+    )
+    return count or None
 
 
 def assert_kinetics_declaration_columns(
@@ -832,6 +870,9 @@ def assert_kinetics_declaration_columns(
             workflow_tool_release_id=workflow_tool_release_id,
             field="determination",
         )
+        _check_role_consistent(
+            session, determination_row.id, KineticsRepresentationRole(_enum_value(representation_role)), field="determination"
+        )
 
     reaction_entry = session.get(ReactionEntry, reaction_entry_id)
     facts = KineticsRecordFacts(
@@ -839,19 +880,8 @@ def assert_kinetics_declaration_columns(
         scientific_origin=_enum_value(scientific_origin),
         model_kind=_enum_value(model_kind),
         is_third_body=is_third_body,
-        n_reactants=(
-            len(
-                list(
-                    session.scalars(
-                        select(ReactionEntryStructureParticipant.id).where(
-                            ReactionEntryStructureParticipant.reaction_entry_id == reaction_entry_id,
-                            ReactionEntryStructureParticipant.role == ReactionRole.reactant,
-                        )
-                    )
-                )
-            )
-            or None
-        ),
+        n_reactants=_participant_count(session, reaction_entry_id, ReactionRole.reactant),
+        n_products=_participant_count(session, reaction_entry_id, ReactionRole.product),
         pressure_context=_enum_value(pressure_context),
         pressure_bar=pressure_bar,
         has_network_kinetics=network_kinetics_id is not None,

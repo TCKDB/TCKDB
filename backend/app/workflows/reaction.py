@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 from tckdb_schemas.upload_warning import UploadWarning
 
+from app.api.error_contract import CodedValueError
 from app.db.models.common import ReactionRole, SubmissionRecordType
 from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticipant
 from app.schemas.workflows.reaction_upload import (
@@ -11,6 +12,7 @@ from app.schemas.workflows.reaction_upload import (
 )
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
+    inherit_reversible,
     resolve_chem_reaction,
 )
 from app.services.record_review import (
@@ -18,7 +20,9 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
-from app.services.species_resolution import resolve_species_entry_reference
+from app.services.species_resolution import resolve_species_entry, resolve_species_entry_reference
+
+CODE_REACTION_REVERSIBLE_REQUIRED = "reaction_reversible_required"
 
 
 def _resolve_participant_upload(
@@ -42,6 +46,40 @@ def _resolve_participant_upload(
         payload=participant.species_entry,
         created_by=created_by,
     )
+
+
+def reversible_or_inherited(session: Session, reaction, *, created_by: int | None = None) -> bool:
+    """The ``reversible`` value of an embedded reaction block: as stated, else inherited, else refused.
+
+    Whether a reaction is reversible is part of its graph identity, but a rate (or a network)
+    need not say. Unstated is unknown and is never guessed: the block joins the single stored
+    reaction with its participants. With none stored, or with both ``reversible`` twins stored,
+    there is nothing to inherit, so the deposit is refused (``reaction_reversible_required``)
+    and the producer states it. Every route whose reaction block may omit ``reversible``
+    (standalone kinetics, networks) resolves it here.
+
+    :param reaction: Anything with ``reversible``, ``reactants`` and ``products`` (participants
+        carrying a ``species_entry`` identity payload).
+    """
+    if reaction.reversible is not None:
+        return reaction.reversible
+    reactants = compress_species_stoichiometry(
+        [resolve_species_entry(session, p.species_entry, created_by=created_by) for p in reaction.reactants]
+    )
+    products = compress_species_stoichiometry(
+        [resolve_species_entry(session, p.species_entry, created_by=created_by) for p in reaction.products]
+    )
+    value = inherit_reversible(session, reactant_stoichiometry=reactants, product_stoichiometry=products)
+    if value is None:
+        raise CodedValueError(
+            CODE_REACTION_REVERSIBLE_REQUIRED,
+            "reaction.reversible was not stated, and there is no single stored reaction with these "
+            "participants to take it from (none is stored, or both a reversible and an irreversible one "
+            "are). State reversible: true or false.",
+            context={"field": "reaction.reversible"},
+            message_prefix=False,
+        )
+    return value
 
 
 def persist_reaction_upload(

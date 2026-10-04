@@ -226,7 +226,7 @@ Every entry of `schemas/python/tckdb-schemas/CHANGELOG.md`, newest first, copied
 
 Kinetics records can declare their determination, applicability and protocol (`tckdb_schemas.kinetics_declarations`),
 all optional, on `KineticsUploadRequest` and `BundleKineticsIn` (which also gains `direction`). `reaction.reversible`
-on `/uploads/kinetics` is optional: omitted means not stated (#598). New `kinetics_*` refusal codes and
+on `/uploads/kinetics` is optional: unstated is inherited or refused, never guessed (#598). New `kinetics_*` refusal codes and
 `unknown_kinetics_determination_ref`, `unknown_network_channel`.
 
 ### 0.95.0 - 2026-10-04
@@ -1855,6 +1855,16 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 
 ### Code group 22
 
+1 code on 3 surfaces: [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
+
+| Code | Status | Traced via |
+|---|---|---|
+| [`reaction_reversible_required`](#c-reaction-reversible-required) | 422 | route handler |
+
+<a id="cg-23"></a>
+
+### Code group 23
+
 3 codes on 2 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest).
 
 | Code | Status | Traced via |
@@ -1863,9 +1873,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`scf_stability_source_calculation_owner_mismatch`](#c-scf-stability-source-calculation-owner-mismatch) | 422 | payload validation; route handler |
 | [`scf_stability_source_geometry_mismatch`](#c-scf-stability-source-geometry-mismatch) | 422 | payload validation; route handler |
 
-<a id="cg-23"></a>
+<a id="cg-24"></a>
 
-### Code group 23
+### Code group 24
 
 6 codes on 2 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest).
 
@@ -1878,9 +1888,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`transition_state_reaction_coordinate_ambiguous`](#c-transition-state-reaction-coordinate-ambiguous) | 422 | payload validation |
 | [`transition_state_reaction_coordinate_not_designated`](#c-transition-state-reaction-coordinate-not-designated) | 422 | payload validation |
 
-<a id="cg-24"></a>
+<a id="cg-25"></a>
 
-### Code group 24
+### Code group 25
 
 2 codes on 2 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
@@ -1889,9 +1899,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`atom_map_atoms_unaccounted_for`](#c-atom-map-atoms-unaccounted-for) | 422 | payload validation; route handler |
 | [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | payload validation; route handler |
 
-<a id="cg-25"></a>
+<a id="cg-26"></a>
 
-### Code group 25
+### Code group 26
 
 1 code on 2 surfaces: [`ConformerUploadRequest`](#s-conformeruploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest).
 
@@ -1899,9 +1909,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 |---|---|---|
 | [`statmech_calculation_key_undeclared`](#c-statmech-calculation-key-undeclared) | 422 | payload validation; route handler |
 
-<a id="cg-26"></a>
+<a id="cg-27"></a>
 
-### Code group 26
+### Code group 27
 
 2 codes on 2 surfaces: [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1910,9 +1920,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`arrhenius_a_units_molecularity_mismatch`](#c-arrhenius-a-units-molecularity-mismatch) | 422 | payload validation; route handler |
 | [`unsupported_reaction_molecularity`](#c-unsupported-reaction-molecularity) | 422 | payload validation; route handler |
 
-<a id="cg-27"></a>
+<a id="cg-28"></a>
 
-### Code group 27
+### Code group 28
 
 1 code on 2 surfaces: [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1920,9 +1930,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 |---|---|---|
 | [`thermo_statmech_owner_mismatch`](#c-thermo-statmech-owner-mismatch) | 422 | route handler |
 
-<a id="cg-28"></a>
+<a id="cg-29"></a>
 
-### Code group 28
+### Code group 29
 
 3 codes on 2 surfaces: [`ArtifactsUploadRequest`](#s-artifactsuploadrequest), [`RightsAttestationCreate`](#s-rightsattestationcreate).
 
@@ -2660,9 +2670,9 @@ Nested models (86; fields and rules in the [model reference](#model-reference)):
 - [Code group 19](#cg-19): 1 code, returned on 3 surfaces
 - [Code group 20](#cg-20): 15 codes, returned on 3 surfaces
 - [Code group 21](#cg-21): 12 codes, returned on 3 surfaces
-- [Code group 22](#cg-22): 3 codes, returned on 2 surfaces
-- [Code group 23](#cg-23): 6 codes, returned on 2 surfaces
-- [Code group 24](#cg-24): 2 codes, returned on 2 surfaces
+- [Code group 23](#cg-23): 3 codes, returned on 2 surfaces
+- [Code group 24](#cg-24): 6 codes, returned on 2 surfaces
+- [Code group 25](#cg-25): 2 codes, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -2855,7 +2865,7 @@ Nested models (71; fields and rules in the [model reference](#model-reference)):
 - [Code group 16](#cg-16): 20 codes, returned on 4 surfaces
 - [Code group 18](#cg-18): 1 code, returned on 3 surfaces
 - [Code group 19](#cg-19): 1 code, returned on 3 surfaces
-- [Code group 22](#cg-22): 3 codes, returned on 2 surfaces
+- [Code group 23](#cg-23): 3 codes, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -3016,7 +3026,7 @@ Nested models (56; fields and rules in the [model reference](#model-reference)):
 - [Code group 11](#cg-11): 3 codes, returned on 6 surfaces
 - [Code group 12](#cg-12): 8 codes, returned on 5 surfaces
 - [Code group 13](#cg-13): 1 code, returned on 5 surfaces
-- [Code group 25](#cg-25): 1 code, returned on 2 surfaces
+- [Code group 26](#cg-26): 1 code, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -3219,7 +3229,8 @@ Nested models (25; fields and rules in the [model reference](#model-reference)):
 - [Code group 14](#cg-14): 1 code, returned on 5 surfaces
 - [Code group 17](#cg-17): 1 code, returned on 4 surfaces
 - [Code group 20](#cg-20): 15 codes, returned on 3 surfaces
-- [Code group 26](#cg-26): 2 codes, returned on 2 surfaces
+- [Code group 22](#cg-22): 1 code, returned on 3 surfaces
+- [Code group 27](#cg-27): 2 codes, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -3279,8 +3290,8 @@ Payload model `app.schemas.workflows.network_upload.NetworkUploadRequest`; JSON 
 - [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) (422)
 - [`species_kind_conflict`](#c-species-kind-conflict) (422)
 - [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) (422)
+- [`reaction_reversible_required`](#c-reaction-reversible-required) (422)
 - [`stored_species_smiles_unparseable`](#c-stored-species-smiles-unparseable) (422)
-- [`level_of_theory_method_is_compound`](#c-level-of-theory-method-is-compound) (422)
 
 ### Routes
 
@@ -3332,6 +3343,7 @@ Nested models (9; fields and rules in the [model reference](#model-reference)):
 - [Code group 3](#cg-3): 1 code, returned on 13 surfaces
 - [Code group 4](#cg-4): 5 codes, returned on 12 surfaces
 - [Code group 10](#cg-10): 3 codes, returned on 7 surfaces
+- [Code group 22](#cg-22): 1 code, returned on 3 surfaces
 
 ### Minimal valid example
 
@@ -3542,7 +3554,7 @@ Nested models (62; fields and rules in the [model reference](#model-reference)):
 - [Code group 15](#cg-15): 1 code, returned on 5 surfaces
 - [Code group 18](#cg-18): 1 code, returned on 3 surfaces
 - [Code group 21](#cg-21): 12 codes, returned on 3 surfaces
-- [Code group 23](#cg-23): 6 codes, returned on 2 surfaces
+- [Code group 24](#cg-24): 6 codes, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -3849,7 +3861,7 @@ Nested models (52; fields and rules in the [model reference](#model-reference)):
 - [Code group 8](#cg-8): 30 codes, returned on 9 surfaces
 - [Code group 9](#cg-9): 1 code, returned on 8 surfaces
 - [Code group 12](#cg-12): 8 codes, returned on 5 surfaces
-- [Code group 25](#cg-25): 1 code, returned on 2 surfaces
+- [Code group 26](#cg-26): 1 code, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -4067,7 +4079,7 @@ Nested models (66; fields and rules in the [model reference](#model-reference)):
 - [Code group 15](#cg-15): 1 code, returned on 5 surfaces
 - [Code group 16](#cg-16): 20 codes, returned on 4 surfaces
 - [Code group 17](#cg-17): 1 code, returned on 4 surfaces
-- [Code group 27](#cg-27): 1 code, returned on 2 surfaces
+- [Code group 28](#cg-28): 1 code, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -4361,7 +4373,7 @@ Nested models (57; fields and rules in the [model reference](#model-reference)):
 - [Code group 10](#cg-10): 3 codes, returned on 7 surfaces
 - [Code group 11](#cg-11): 3 codes, returned on 6 surfaces
 - [Code group 21](#cg-21): 12 codes, returned on 3 surfaces
-- [Code group 24](#cg-24): 2 codes, returned on 2 surfaces
+- [Code group 25](#cg-25): 2 codes, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -4742,8 +4754,9 @@ Nested models (90; fields and rules in the [model reference](#model-reference)):
 - [Code group 16](#cg-16): 20 codes, returned on 4 surfaces
 - [Code group 17](#cg-17): 1 code, returned on 4 surfaces
 - [Code group 20](#cg-20): 15 codes, returned on 3 surfaces
-- [Code group 26](#cg-26): 2 codes, returned on 2 surfaces
-- [Code group 27](#cg-27): 1 code, returned on 2 surfaces
+- [Code group 22](#cg-22): 1 code, returned on 3 surfaces
+- [Code group 27](#cg-27): 2 codes, returned on 2 surfaces
+- [Code group 28](#cg-28): 1 code, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -4871,7 +4884,7 @@ The root model declares no validators.
 - [Code group 1](#cg-1): 3 codes, returned on 16 surfaces
 - [Code group 3](#cg-3): 1 code, returned on 13 surfaces
 - [Code group 7](#cg-7): 2 codes, returned on 10 surfaces
-- [Code group 28](#cg-28): 3 codes, returned on 2 surfaces
+- [Code group 29](#cg-29): 3 codes, returned on 2 surfaces
 
 ### Example (shape only)
 
@@ -4951,7 +4964,7 @@ No marked rule or register check is reached from these handlers.
 
 - [Code group 1](#cg-1): 3 codes, returned on 16 surfaces
 - [Code group 2](#cg-2): 4 codes, returned on 14 surfaces
-- [Code group 28](#cg-28): 3 codes, returned on 2 surfaces
+- [Code group 29](#cg-29): 3 codes, returned on 2 surfaces
 
 ### Example (shape only)
 
@@ -7156,14 +7169,14 @@ Unknown keys are refused.
 | `observable` | `KineticsObservable` \| null | no |  |  | `rate_coefficient`, `rate_of_progress`, `effective_global_law` |
 | `coefficient_basis` | `KineticsCoefficientBasis` \| null | no |  |  | `elementary_coefficient`, `third_body_kernel`, `composition_effective_coefficient` |
 | `scope` | `KineticsDeterminationTargetKind` \| null | no |  |  | `whole_reaction`, `resolved_channel` | Agrees with the determination. |
-| `reaction_order` | integer \| null | no |  |  | >= 1; <= 4 |
+| `reaction_order` | integer \| null | no |  |  | strict; >= 1; <= 4 |
 | `rate_progress_convention` | `KineticsRateProgressConvention` \| null | no |  |  | `reaction_progress`, `reactant_loss` |
 | `pressure_dependence` | `KineticsPressureDependence` \| null | no |  |  | `independent`, `high_pressure_limit`, `fixed_pressure`, `pressure_dependent` |
-| `pressure_domain_min_bar` | number \| null | no |  | bar | > 0 | Validity domain, with the maximum. |
-| `pressure_domain_max_bar` | number \| null | no |  | bar | > 0 |
+| `pressure_domain_min_bar` | number \| null | no |  | bar | strict; > 0 | Validity domain, with the maximum. |
+| `pressure_domain_max_bar` | number \| null | no |  | bar | strict; > 0 |
 | `collider_kind` | `KineticsColliderKind` \| null | no |  |  | `not_dependent`, `specified_collider`, `fixed_mixture`, `composition_dependent` |
 | `colliders` | array of [`KineticsCollider`](#m-kineticscollider) | no | `[]` |
-| `default_third_body_efficiency` | number \| null | no |  |  | >= 0 | For ``composition_dependent``. |
+| `default_third_body_efficiency` | number \| null | no |  |  | strict; >= 0 | For ``composition_dependent``. |
 | `claim_origin` | `KineticsClaimOrigin` | yes |  |  | `source_publication`, `depositor_interpretation` |
 
 - **KineticsApplicabilityDeclaration.validate_content** (model, after; can refuse): At least one claim; a pressure domain with both bounds; colliders as the kind needs.
@@ -7182,7 +7195,7 @@ Unknown keys are refused.
 | Field | Type | Req | Default | Values / constraints | Description |
 |---|---|---|---|---|---|
 | `species` | [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload) | yes |
-| `mole_fraction` | number \| null | no |  | > 0; <= 1 | Of each component of a ``fixed_mixture`` only. |
+| `mole_fraction` | number \| null | no |  | strict; > 0; <= 1 | Of each component of a ``fixed_mixture`` only. |
 
 <a id="m-kineticsdeterminationdeclaration"></a>
 
@@ -7312,7 +7325,7 @@ Unknown keys are refused.
 
 | Field | Type | Req | Default | Values / constraints | Description |
 |---|---|---|---|---|---|
-| `reversible` | boolean \| null | no |  |  | Omitted: the rate joins the one stored reaction with these participants, else is stored reversible, with a warning. |
+| `reversible` | boolean \| null | no |  |  | Omitted: taken from the one stored reaction with these participants, else refused. |
 | `reaction_family` | string \| null | no |  |  | Optional reaction-family label. |
 | `reaction_family_source_note` | string \| null | no |  |  | Required when ``reaction_family`` is not a supported canonical family. |
 | `reactants` | array of [`KineticsReactionParticipantUpload`](#m-kineticsreactionparticipantupload) | yes |  | length >= 1 | Ordered structured participants on the reactant side. |
@@ -9945,7 +9958,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/kinetics_declaration_resolution.py`.
 - The body's `context` names the things involved.
 - Message: "{field} names {what} that does not belong to this record's reaction."
-- Note: context.reason names reaction, direction, source or target.
+- Note: context.reason names reaction, direction, source, target or role.
 
 <a id="c-kinetics-interpretation-conformer-selection-owner-mismatch"></a>
 
@@ -10097,6 +10110,13 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: 'Reaction is not element-balanced (reaction_mass_balance_failed).'
 - Scientific check: [`validate_reaction_elemental_balance`](#k-validate-reaction-elemental-balance).
+
+<a id="c-reaction-reversible-required"></a>
+
+#### `reaction_reversible_required`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/workflows/reaction.py`.
+- Message: 'reaction.reversible was not stated, and there is no single stored reaction with these participants to take it from (none is stored, or both a reversible and an irreversible one are). State reversible: true or false.'
 
 <a id="c-request-validation-error"></a>
 

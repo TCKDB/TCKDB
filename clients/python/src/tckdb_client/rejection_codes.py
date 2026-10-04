@@ -238,6 +238,7 @@ class RejectionCode(str, Enum):
     REACTION_ENTRY_HANDLE_CONFLICT = "reaction_entry_handle_conflict"
     REACTION_HANDLE_CONFLICT = "reaction_handle_conflict"
     REACTION_MASS_BALANCE_FAILED = "reaction_mass_balance_failed"
+    REACTION_REVERSIBLE_REQUIRED = "reaction_reversible_required"
     RECORD_HAS_NO_SUBJECT = "record_has_no_subject"
     RECORD_NOT_APPROVED = "record_not_approved"
     RECORD_REF_NOT_SELECTABLE = "record_ref_not_selectable"
@@ -493,6 +494,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.REACTION_ENTRY_HANDLE_CONFLICT,
         RejectionCode.REACTION_HANDLE_CONFLICT,
         RejectionCode.REACTION_MASS_BALANCE_FAILED,
+        RejectionCode.REACTION_REVERSIBLE_REQUIRED,
         RejectionCode.RECORD_HAS_NO_SUBJECT,
         RejectionCode.RECORD_NOT_APPROVED,
         RejectionCode.RECORD_REF_NOT_SELECTABLE,
@@ -783,6 +785,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.REACTION_ENTRY_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.REACTION_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.REACTION_MASS_BALANCE_FAILED: frozenset({422}),
+    RejectionCode.REACTION_REVERSIBLE_REQUIRED: frozenset({422}),
     RejectionCode.RECORD_HAS_NO_SUBJECT: frozenset({422}),
     RejectionCode.RECORD_NOT_APPROVED: frozenset({422}),
     RejectionCode.RECORD_REF_NOT_SELECTABLE: frozenset({422}),

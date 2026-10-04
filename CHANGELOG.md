@@ -42,12 +42,18 @@ declarations on kinetics, with upload and read round trips.** Selection, assessm
   the rest as `declaration_pruned`.
 - Replacing an accepted kinetics record also checks that both records declare the same target when both declare
   one.
-- Fixes #598. `reaction.reversible` is optional on `/uploads/kinetics`: omitted means not stated, so the rate joins
-  the one stored reaction with those participants instead of minting a new one, and only when there is none is it
-  stored as reversible (the transition-state and computed-reaction default), with a `reaction_reversible_defaulted`
-  warning. A deposit that makes or hits a graph reaction whose twin (same participants, opposite `reversible`) is
-  stored now gets a `reaction_reversible_twin` warning on every reaction-resolving route that returns warnings.
-  Reaction identity is unchanged.
+- Fixes #598. `reaction.reversible` is optional on `/uploads/kinetics` and in a network's reactions: omitted means
+  not stated, and it is never guessed. The deposit takes the value of the one stored reaction with those
+  participants (or of the reaction its transition state or determination anchors it to); when there is nothing to
+  inherit, or both twins are stored, it is refused with `reaction_reversible_required` and the producer states it.
+  A deposit that makes or hits a graph reaction whose twin (same participants, opposite `reversible`) is stored
+  gets a `reaction_reversible_twin` warning on every route that creates reactions (reactions, kinetics, computed
+  reactions, bundles, networks, pressure-dependent networks) and in the matching job results. Reaction identity is
+  unchanged.
+- A determination holds either complete representations or additive components (`kinetics_determination_mismatch`,
+  `context.reason` `role`). A declared `reaction_order` is the order of the side its direction names (reactants
+  forward, products reverse; a net rate is not checked). Numeric declaration fields are strict (`"2"` is refused).
+  An export that would merge two distinct determinations on import suffixes the later one's key and says so.
 - Deploy: apply the migration first, then the backend, then clients. Environment variables: none.
 
 ## Hessian and scan-point geometries are now checked (2026-10-04)
