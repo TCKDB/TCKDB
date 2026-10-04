@@ -33,7 +33,10 @@ MAX_CANDIDATES = 500
 #: Version of the selection semantics (outcomes, front construction, eligibility). A change to any of
 #: them is a new version, and a decision manifest records the version it was made under.
 POLICY_NAME = "h298_method_preferred"
-POLICY_VERSION = "1"
+#: 2: a superseded rule is removed before conflicts are judged (the shared kernel's fix; it cannot change an answer
+#: while the registry holds one rule, but a manifest made under version 1 was decided under the old semantics and
+#: is refused by ``replay_decision`` rather than silently re-answered).
+POLICY_VERSION = "2"
 MANIFEST_FORMAT_VERSION = 1
 
 

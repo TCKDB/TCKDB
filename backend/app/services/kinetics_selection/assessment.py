@@ -139,7 +139,10 @@ def _falloff_complete(kind: str, falloff: dict[str, Any]) -> bool:
 def _check_units(c: NormalizedKinetics, declared_order: int | None, f: _Findings) -> None:
     """Every term, entry and block of the representation has its units; the orders agree with each other and with
     the declared order. Missing units are ``unresolved``; mixed orders, or an order other than the declared one,
-    are ``incompatible``. A falloff's low-pressure units are one order higher than its high-pressure line."""
+    are ``incompatible``. A falloff's low-pressure units are one order higher than its high-pressure line.
+
+    Also stated here because it surprised a reviewer once: an established pressure independence answers a
+    high-pressure-limit request as well as a finite one (see :func:`_check_pressure`); the reverse is not true."""
     kind = c.model_kind
     if kind == "multi_arrhenius":
         units = list(c.arrhenius_units)
@@ -147,9 +150,10 @@ def _check_units(c: NormalizedKinetics, declared_order: int | None, f: _Findings
         units = list(c.plog_units)
     else:
         units = [c.a_units]
-    if not units or any(u is None for u in units):
-        if units or kind in _ARRHENIUS_LIKE or kind in _FALLOFF_MODELS or kind == "chebyshev":
-            f.unresolved("a_units_not_recorded")
+    if not units:
+        return  # a multi-Arrhenius or PLOG fit with nothing in it: reported as missing content, not as missing units
+    if any(u is None for u in units):
+        f.unresolved("a_units_not_recorded")
         return
     orders = {_ORDER_BY_UNITS[u] for u in units if u is not None}
     if len(orders) > 1:

@@ -93,7 +93,7 @@ def test_an_older_qualifying_g4_is_selected_over_a_newer_g3_while_browse_still_l
         {"preferred": old_g4.public_ref, "dispreferred": new_g3.public_ref, "rule_id": "E1", "rule_version": "1.0.0"}
     ]
     assert body["policy"]["rules"][0]["rule_id"] == "E1"
-    assert body["policy"]["name"] == "h298_method_preferred" and body["policy"]["version"] == "1"
+    assert body["policy"]["name"] == "h298_method_preferred" and body["policy"]["version"] == "2"
 
 
 def test_the_response_echoes_the_normalised_request_and_the_effective_floor(client, db_session, methane):

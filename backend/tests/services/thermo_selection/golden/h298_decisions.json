@@ -8657,7 +8657,7 @@
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 3,
@@ -9324,7 +9324,7 @@
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 4,
@@ -10013,7 +10013,7 @@
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 3,
@@ -10620,7 +10620,7 @@
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 3,
@@ -11156,7 +11156,7 @@
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 2,
@@ -11672,7 +11672,7 @@
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 2,
@@ -12047,7 +12047,7 @@
     "outcome": "no_applicable_candidate",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 0,
@@ -12371,7 +12371,7 @@
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 2,
@@ -12627,7 +12627,7 @@
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 3,
@@ -12945,7 +12945,7 @@
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 2,
@@ -13378,7 +13378,7 @@
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 2,
@@ -13807,7 +13807,7 @@
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 2,
@@ -14147,7 +14147,7 @@
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 2,
@@ -14551,7 +14551,7 @@
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 4,
@@ -14931,7 +14931,7 @@
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 4,
@@ -15308,7 +15308,7 @@
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 4,
@@ -15682,7 +15682,7 @@
     "outcome": "sole_eligible_candidate",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 1,
@@ -16179,7 +16179,7 @@
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 2,
@@ -16721,7 +16721,7 @@
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 4,
@@ -17027,7 +17027,7 @@
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "1"
+     "version": "2"
     },
     "population": {
      "assessed": 2,

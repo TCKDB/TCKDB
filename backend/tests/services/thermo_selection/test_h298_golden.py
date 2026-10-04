@@ -173,3 +173,17 @@ def test_the_golden_matrix_reaches_every_outcome_it_claims_to():
     assert any(d["opposing_pairs"] for d in golden["decisions"].values())
     assert any(d["administrative_first"] for d in golden["decisions"].values())
     assert all(m.get("replay") == m["manifest"]["decision"] for m in golden["manifests"].values() if "replay" in m)
+
+
+def test_a_manifest_made_under_the_first_policy_version_is_refused_not_re_answered():
+    from app.services.thermo_selection.manifest import ReplayError
+    from app.services.thermo_selection.models import POLICY_NAME, POLICY_VERSION
+
+    assert POLICY_VERSION == "2"
+    golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
+    manifest = golden["manifests"]["e1_g4_over_g3"]["manifest"]
+    assert manifest["policy"] == {"name": POLICY_NAME, "version": POLICY_VERSION}
+    old = json.loads(json.dumps(manifest))
+    old["policy"]["version"] = "1"
+    with pytest.raises(ReplayError, match="this registry replays h298_method_preferred v2"):
+        replay_decision(old, rules=(E1Rule(),))
