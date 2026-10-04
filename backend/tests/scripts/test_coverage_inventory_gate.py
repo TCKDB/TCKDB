@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -93,3 +94,35 @@ def test_the_report_runs_in_a_read_only_repeatable_read_transaction(db_engine, c
 
     print_read_only_report(url, report)
     assert json.loads(capsys.readouterr().out) == {"isolation": "repeatable read", "read_only": "on"}
+
+
+@pytest.mark.parametrize("which", sorted(SCRIPTS))
+@pytest.mark.parametrize("empty", [["--database-url="], ["--database-url", ""], ["--database-url", "   "]])
+def test_an_empty_database_url_is_refused_and_never_falls_back_to_the_configured_database(which, empty):
+    """``--database-url "$URL"`` with ``URL`` unset must not read the configured (live) database.
+
+    A listener stands in for the configured database: the script is pointed at it through the DB_* environment, and
+    it must exit 2 having made no connection to it at all.
+    """
+    script, _ = SCRIPTS[which]
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(8)
+        listener.settimeout(0.5)
+        env = {**UNREACHABLE, "DB_PORT": str(listener.getsockname()[1])}
+        result = _run(script, *empty, env=env)
+        try:
+            listener.accept()
+            connected = True
+        except TimeoutError:
+            connected = False
+    assert result.returncode == 2, (empty, result.stderr)
+    assert "empty" in result.stderr and result.stdout == ""
+    assert not connected, "the script connected to the configured database"
+
+
+def test_the_helper_refuses_an_empty_url_too():
+    for value in ("", "  "):
+        with pytest.raises(SystemExit) as caught:
+            choose_database_url(["--database-url", value], prog="p", description="d")
+        assert caught.value.code == 2

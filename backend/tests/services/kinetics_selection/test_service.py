@@ -687,7 +687,7 @@ def test_the_exclusion_listing_is_bounded_and_the_total_is_always_reported(db_se
     assert result.visible_candidates == 1
 
 
-def test_the_read_runs_in_one_read_only_repeatable_read_snapshot(db_engine, monkeypatch):
+def test_the_read_runs_in_one_read_only_repeatable_read_snapshot(unpooled_engine, monkeypatch):
     from sqlalchemy import text
     from sqlalchemy.orm import Session
 
@@ -700,7 +700,7 @@ def test_the_read_runs_in_one_read_only_repeatable_read_snapshot(db_engine, monk
         return real(session, **kwargs)
 
     monkeypatch.setattr(service_module, "scan_population", spy)
-    with Session(db_engine) as session:
+    with Session(unpooled_engine) as session:
         with pytest.raises(NotFoundError):
             assess_reaction_entry_kinetics(session, reaction_entry_id=2**40, request=REQUEST)
         session.rollback()
@@ -720,17 +720,17 @@ def test_a_session_already_in_a_weaker_transaction_is_refused_unless_the_caller_
     assert len(accepted.assessments) == 1
 
 
-def test_a_repeatable_read_transaction_that_can_write_is_not_a_read_only_snapshot(db_engine):
+def test_a_repeatable_read_transaction_that_can_write_is_not_a_read_only_snapshot(unpooled_engine):
     from sqlalchemy.orm import Session
 
     from app.services.read_snapshot import SnapshotNotConsistentError, begin_read_snapshot
 
-    with Session(db_engine) as session:
+    with Session(unpooled_engine) as session:
         session.connection(execution_options={"isolation_level": "REPEATABLE READ"})  # read-write
         with pytest.raises(SnapshotNotConsistentError, match="not read-only"):
             begin_read_snapshot(session)
         assert begin_read_snapshot(session, require=False) == "repeatable read"
         session.rollback()
-    with Session(db_engine) as session:
+    with Session(unpooled_engine) as session:
         assert begin_read_snapshot(session) == "repeatable read"  # the one the helper starts itself
         session.rollback()

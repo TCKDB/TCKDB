@@ -35,7 +35,11 @@ def choose_database_url(argv: Sequence[str] | None, *, prog: str, description: s
         ),
     )
     args = parser.parse_args(argv)
-    if args.database_url:
+    if args.database_url is not None:
+        # An empty value is not a name: ``--database-url "$URL"`` with ``URL`` unset must not fall through to the
+        # configured (inside a deployed container, the live) database.
+        if not args.database_url.strip():
+            parser.error("--database-url is empty; name the database to read, or pass --use-configured-database")
         return str(args.database_url)
     from app.api.config import settings
 

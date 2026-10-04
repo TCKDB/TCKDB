@@ -116,7 +116,7 @@ declarations on kinetics, with upload and read round trips.** Selection, assessm
 
 ## Method-aware kinetics selection endpoint (2026-10-04)
 
-- tckdb-backend, tckdb-client 0.130.0, tckdb-schemas 0.98.0 and tckdb-mcp 0.4.0: a read-only
+- tckdb-backend, tckdb-client 0.133.0, tckdb-schemas 0.102.0 and tckdb-mcp 0.4.0: a read-only
   `POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select` assesses every visible kinetics
   record of a reaction entry against one stated gas-phase rate-coefficient question (direction, target, coefficient
   basis, temperature window, pressure, collider) and returns the outcome (`policy_preferred`,
