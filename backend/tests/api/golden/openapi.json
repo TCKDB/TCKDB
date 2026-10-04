@@ -58858,7 +58858,7 @@
     }
   },
   "info": {
-    "description": "Thermochemical and Kinetics Database API",
+    "description": "Theoretical Chemical Kinetics Database API",
     "title": "TCKDB",
     "version": "0.1.0"
   },
