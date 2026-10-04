@@ -216,6 +216,12 @@ RECORD_CHILD_EXCLUSIONS: dict[tuple[str, str], str] = {
     ("network_channel", "network_kinetics"): (
         "owned by its network_solve parent, and shipped under network_solve"
     ),
+    # A state energy has a composite key (solve, state), so a nested child has no single id
+    # to hang on; its per-participant sources ship flat under network_solve, each row carrying
+    # the state's composition hash, the participant's species ref and the calculation ref.
+    ("network_solve_state_energy", "network_solve_state_energy_source"): (
+        "owned by its network_solve parent, and shipped under network_solve"
+    ),
     ("transition_state_entry", "transition_state_validation_evidence"): (
         "shipped under transition_state_entry itself"
     ),

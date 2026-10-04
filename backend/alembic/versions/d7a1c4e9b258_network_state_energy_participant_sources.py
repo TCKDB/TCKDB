@@ -12,7 +12,9 @@ Schema
   ``(solve_id, state_id, species_entry_id)``. ``stoichiometry`` is not repeated: it lives on
   ``network_state_participant`` (``2A`` is one participant with coefficient 2), so no copy index is
   needed. Composite foreign keys tie the row to an existing state energy and to a participant of that
-  very state; ``calculation_id`` is a plain foreign key (the upload service checks type and owner).
+  very state, with plain foreign keys on ``state_id`` and ``species_entry_id`` as well (the release
+  serializer resolves a key through the column's own target); ``calculation_id`` is a plain foreign key
+  (the upload service checks type and owner).
 * Three nullable columns on ``network_solve_state_energy``:
   ``source_sum_comparison`` (``agrees`` or ``not_compared``; a disagreement is never stored, it refuses
   the deposit) and ``source_sum_not_compared_reason`` (a fixed set of tokens, present exactly when the
@@ -123,6 +125,20 @@ def upgrade() -> None:
             ["state_id", "species_entry_id"],
             ["network_state_participant.state_id", "network_state_participant.species_entry_id"],
             name="fk_nsse_source_participant",
+            initially="IMMEDIATE",
+            deferrable=True,
+        ),
+        sa.ForeignKeyConstraint(
+            ["state_id"],
+            ["network_state.id"],
+            name="fk_nsse_source_state_id_network_state",
+            initially="IMMEDIATE",
+            deferrable=True,
+        ),
+        sa.ForeignKeyConstraint(
+            ["species_entry_id"],
+            ["species_entry.id"],
+            name="fk_nsse_source_species_entry_id_species_entry",
             initially="IMMEDIATE",
             deferrable=True,
         ),

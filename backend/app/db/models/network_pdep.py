@@ -643,8 +643,31 @@ class NetworkSolveStateEnergySource(Base):
     __tablename__ = "network_solve_state_energy_source"
 
     solve_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    state_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    species_entry_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # ``state_id`` and ``species_entry_id`` also carry plain single-column foreign keys to the
+    # tables they identify. The composite keys below enforce the pairing, but the release
+    # serializer resolves a foreign key to a public ref or natural key through the column's own
+    # target, and a composite target (a state energy, a participant) has neither: without these
+    # a released row would name no state and no species.
+    state_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "network_state.id",
+            name="fk_nsse_source_state_id_network_state",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=False,
+    )
+    species_entry_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "species_entry.id",
+            name="fk_nsse_source_species_entry_id_species_entry",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=False,
+    )
     calculation_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
