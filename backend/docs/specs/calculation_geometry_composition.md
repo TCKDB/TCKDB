@@ -229,24 +229,41 @@ linkage — is unchanged.
 ## Where the check runs
 
 One function, `assert_calculation_geometry_composition`, called from every site
-that inserts a `calculation_input_geometry` or `calculation_output_geometry`
-row. There are eight, in four modules, and a guard test
-(`tests/services/test_calculation_geometry_composition_guard.py`) fails if a
-ninth appears without one — the same device the scientific-check register uses
-to stop a declaration going unregistered.
+that attaches a stored geometry to a calculation, with its isotope sibling
+`calc_isotopes.assert_isotopes` beside it. The sites are the
+`calculation_input_geometry` and `calculation_output_geometry` inserts, and --
+since #680 -- the geometry-bearing children that hold their own `geometry_id`:
+
+* `calc_hessian.geometry_id` (field `hessian.geometry`), from an upload payload
+  and from the best-effort artifact hook. `hessian_reanalysis` takes its atomic
+  masses from this geometry, so before #680 a wrong-element or wrong-isotope
+  Hessian geometry yielded wrong frequencies with no refusal. In the artifact
+  hook a refusal is not an upload failure: it takes the hook's ordinary failure
+  path (savepoint rolled back, warning logged, no `calc_hessian` row).
+* `calc_scan_point.geometry_id` (field `scan_result.points[N].geometry`), for an
+  inline geometry and a by-id one alike.
+* `calc_irc_point` and `calc_path_search_point` produce an output-geometry row
+  in the same function and were already covered; they are named in the guard so
+  removing that row cannot silently drop their check.
+
+A guard test (`tests/services/test_calculation_geometry_composition_guard.py`)
+fails if a function that constructs any of those classes does not call the
+check, or if a known site disappears -- the same device the scientific-check
+register uses to stop a declaration going unregistered. A second test derives
+the list from the schema: any table with a `calculation_id` and a foreign key to
+`geometry` must have its class in the guard or be exempted with a reason (today
+only `calc_geometry_validation`, which records a comparison between geometries
+already linked to the calculation).
 
 Deliberately **out of scope**, and stated rather than left to be discovered:
 
-* `calc_scan_point.geometry_id`, `calc_irc_point.geometry_id` and
-  `calc_path_search_point.geometry_id` where they do *not* also produce an
-  output-geometry row. IRC and path-search points do produce one and are
-  therefore covered; a scan point's geometry is stored on the point row only.
-* `calc_hessian.geometry_id`. It is resolved from its own payload and bound to
-  the Hessian, not to the calculation's geometry lists.
-
-Both are real remaining holes. They are narrower than the one closed here,
-they reach different tables, and folding them in would mean four more call
-sites checked less carefully rather than eight checked properly.
+* `transition_state_validation_evidence.transition_state_geometry_id` and the
+  reaction atom-map geometry columns. They carry a `source_calculation_id` (or
+  none) rather than a `calculation_id`: they name the saddle-point geometry a
+  mapping's atom indices count into, are not attachments to a calculation's
+  geometry lists, and are compared against the saddle point's own composition
+  by `validate_transition_state_composition`. Whether they also need the
+  isotope check is not decided here.
 
 ## Found while tracing the seam, not fixed here
 

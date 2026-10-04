@@ -27,7 +27,19 @@ from pathlib import Path
 
 _APP = Path(__file__).resolve().parents[2] / "app"
 
-_LINK_CLASSES = {"CalculationInputGeometry", "CalculationOutputGeometry"}
+#: Every ORM class that attaches a stored geometry to a calculation. The first
+#: two are the input/output links; the rest are the geometry-bearing children
+#: #680 found unchecked (a Hessian's frame, a scan point) plus the IRC and
+#: path-search points, which share a function with an output link but are
+#: named here so removing that link cannot silently drop their check.
+_LINK_CLASSES = {
+    "CalculationInputGeometry",
+    "CalculationOutputGeometry",
+    "CalculationHessian",
+    "CalculationScanPoint",
+    "CalculationIRCPoint",
+    "CalculationPathSearchPoint",
+}
 _CHECKER = "assert_calculation_geometry_composition"
 
 #: The construction sites as of #143, as ``module::function``. Listed so that
@@ -38,6 +50,10 @@ _EXPECTED_SITES = {
     "services/calculation_resolution.py::_persist_path_search_result",
     "services/calculation_resolution.py::attach_calculation_input_geometries",
     "services/calculation_resolution.py::attach_calculation_output_geometries",
+    "services/calculation_resolution.py::persist_calculation_result",
+    "services/calculation_scan_resolution.py::persist_calculation_scan",
+    "services/hessian_extraction.py::_insert",
+    "services/input_geometry_extraction.py::_mint_and_link_extracted_geometry",
     "services/transition_state_resolution.py::persist_ts_calculations",
     "workflows/network_pdep.py::_persist_calculation",
 }
@@ -81,8 +97,8 @@ def test_every_geometry_link_site_checks_composition() -> None:
         )
     )
     assert not unchecked, (
-        "These functions insert a calculation_input_geometry or "
-        "calculation_output_geometry row without calling "
+        "These functions attach a geometry to a calculation (an input/output "
+        "link, a Hessian, a scan, IRC or path-search point) without calling "
         f"{_CHECKER}: {unchecked}. A geometry linked to a calculation must be "
         "made of the atoms of the subject that calculation is filed under; see "
         "backend/docs/specs/calculation_geometry_composition.md."
@@ -98,3 +114,59 @@ def test_the_known_write_sites_have_not_silently_disappeared() -> None:
         f"These geometry-link write sites no longer exist: {missing}. If that "
         "is intended, update _EXPECTED_SITES and say why in the commit."
     )
+
+
+#: Tables that hold a ``geometry.id`` foreign key *and* a ``calculation_id``,
+#: and so could attach a geometry to a calculation, but deliberately do not,
+#: with the reason.
+_EXEMPT_TABLES = {
+    "calc_geometry_validation": (
+        "records a comparison between geometries that are ALREADY linked to the "
+        "calculation (it reads them back from the input/output links), so it "
+        "attaches nothing new"
+    ),
+}
+
+
+def _geometry_bearing_calculation_tables() -> set[str]:
+    from app.db import models  # noqa: F401  (registers every table)
+    from app.db.base import Base
+
+    found: set[str] = set()
+    for table in Base.metadata.tables.values():
+        if "calculation_id" not in table.c:
+            continue
+        if any(fk.column.table.name == "geometry" for fk in table.foreign_keys):
+            found.add(table.name)
+    return found
+
+
+def test_every_geometry_bearing_calculation_table_is_covered_or_exempt() -> None:
+    """A new geometry-bearing child of ``calculation`` cannot slip past the checks.
+
+    Derived from the schema, not from the list above: a future table with a
+    ``calculation_id`` and a geometry foreign key fails here until its class is
+    added to ``_LINK_CLASSES`` (and so to the structural test) or it is exempted
+    with a reason.
+    """
+
+    from app.db.base import Base
+
+    class_for_table = {
+        mapper.local_table.name: mapper.class_.__name__
+        for mapper in Base.registry.mappers
+    }
+    tables = _geometry_bearing_calculation_tables()
+    assert tables, "found no geometry-bearing calculation tables -- the metadata walk broke"
+    uncovered = sorted(
+        table
+        for table in tables
+        if table not in _EXEMPT_TABLES and class_for_table[table] not in _LINK_CLASSES
+    )
+    assert not uncovered, (
+        f"These tables link a geometry to a calculation but their ORM class is "
+        f"not in _LINK_CLASSES: {uncovered}. Add the class (and check it at its "
+        "write site), or exempt the table with a reason."
+    )
+    stale = sorted(t for t in _EXEMPT_TABLES if t not in tables)
+    assert not stale, f"_EXEMPT_TABLES names tables that no longer qualify: {stale}"

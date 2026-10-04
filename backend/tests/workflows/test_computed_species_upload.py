@@ -2213,8 +2213,22 @@ def test_bundle_scan_inline_point_geometry_populates_geometry_id(db_conn) -> Non
     scan_idx = next(i for i, c in enumerate(additional) if c["type"] == "scan")
     scan_result = _ethane_scan_result_payload(points=3)
     for i, point in enumerate(scan_result["points"], start=1):
+        # Ethane, with the carbon-carbon distance stepped per point so the
+        # three geometries are distinct. A scan point's geometry is held to the
+        # species' composition (#680), so a stand-in one-atom structure is no
+        # longer a valid fixture.
         point["geometry"] = {
-            "xyz_text": f"1\nscan-pt-{i}\nH 0.0 0.0 {0.10 * i:.3f}",
+            "xyz_text": (
+                f"8\nscan-pt-{i}\n"
+                f"C 0.000 0.000 {0.762 + 0.01 * i:.3f}\n"
+                f"C 0.000 0.000 {-0.762 - 0.01 * i:.3f}\n"
+                "H 1.018 0.000 1.157\n"
+                "H -0.509 -0.882 1.157\n"
+                "H -0.509 0.882 1.157\n"
+                "H -1.018 0.000 -1.157\n"
+                "H 0.509 0.882 -1.157\n"
+                "H 0.509 -0.882 -1.157"
+            ),
         }
     additional[scan_idx] = {**additional[scan_idx], "scan_result": scan_result}
     bundle = ComputedSpeciesUploadRequest(**payload)

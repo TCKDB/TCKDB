@@ -1474,6 +1474,21 @@ def persist_calculation_result(
         # content-addressed geometry seam dedupes by XYZ hash, so this
         # normally resolves to the same row as the calc's input geometry.
         hess_geom = resolve_geometry_payload(session, hess.geometry)
+        # A Hessian is read back with masses taken from this geometry
+        # (``hessian_reanalysis``), so a wrong element or isotope here would
+        # yield wrong frequencies with no refusal (#680).
+        assert_calculation_geometry_composition(
+            session,
+            calc=calculation,
+            geometry_id=hess_geom.id,
+            field="hessian.geometry",
+        )
+        assert_isotopes(
+            session,
+            calc=calculation,
+            geometry_id=hess_geom.id,
+            field="hessian.geometry",
+        )
         session.add(
             CalculationHessian(
                 calculation_id=calculation.id,

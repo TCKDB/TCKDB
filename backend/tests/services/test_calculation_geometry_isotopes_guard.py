@@ -21,7 +21,14 @@ _APP = Path(__file__).resolve().parents[2] / "app"
 
 _COMPOSITION = "assert_calculation_geometry_composition"
 _ISOTOPES = "assert_isotopes"
-_LINK_CLASSES = {"CalculationInputGeometry", "CalculationOutputGeometry"}
+_LINK_CLASSES = {
+    "CalculationInputGeometry",
+    "CalculationOutputGeometry",
+    "CalculationHessian",
+    "CalculationScanPoint",
+    "CalculationIRCPoint",
+    "CalculationPathSearchPoint",
+}
 
 #: ``module::function`` for every function that calls the composition check, as
 #: of #666. Listed so a *removed* site is as visible as an unchecked one.
@@ -30,6 +37,9 @@ _EXPECTED_SITES = {
     "services/calculation_resolution.py::_persist_path_search_result",
     "services/calculation_resolution.py::attach_calculation_input_geometries",
     "services/calculation_resolution.py::attach_calculation_output_geometries",
+    "services/calculation_resolution.py::persist_calculation_result",
+    "services/calculation_scan_resolution.py::persist_calculation_scan",
+    "services/hessian_extraction.py::_insert",
     "services/input_geometry_extraction.py::_mint_and_link_extracted_geometry",
     "services/transition_state_resolution.py::persist_ts_calculations",
     "workflows/network_pdep.py::_persist_calculation",

@@ -29,6 +29,13 @@ atom count matches the parsed matrix dimension. Zero or several input
 geometries, a missing geometry, or a ``natoms`` mismatch all mean *skip*
 rather than risk binding a Hessian to the wrong geometry.
 
+**Composition and isotopes (#680).** The bound geometry is also held to the
+calculation's subject: the same two checks every geometry link gets run before
+the row is written, because ``hessian_reanalysis`` takes its masses from this
+geometry. A refusal is not an upload failure -- it takes this hook's ordinary
+failure path (savepoint rolled back, warning logged, no ``calc_hessian`` row),
+so the artifact is stored and the Hessian is simply not.
+
 **Best-effort and never raises.** Artifact upload is canonical and must not
 be aborted by an extraction failure — the whole body is wrapped so any
 error is logged and swallowed, matching the sibling energy hook.
@@ -53,6 +60,10 @@ from app.db.models.common import ArtifactKind, CalculationType
 from app.db.models.geometry import Geometry, GeometryAtom
 from app.schemas.fragments.artifact import ArtifactIn
 from app.services.best_effort import isolated_best_effort
+from app.services.calc_isotopes import assert_isotopes
+from app.services.calculation_geometry_composition import (
+    assert_calculation_geometry_composition,
+)
 from app.services.hessian_parsing import (
     HESSIAN_PARSER_VERSION,
     ParsedHessian,
@@ -255,6 +266,24 @@ def _insert(
     """
     savepoint = session.begin_nested()
     try:
+        # Same composition and isotope claims as every other geometry link
+        # (#680). Inside the savepoint on purpose: a refusal takes the
+        # existing path below -- roll back, log a warning, store nothing -- and
+        # never fails the artifact upload. The geometry is normally the
+        # calculation's own, already-checked input geometry, so this is a
+        # backstop that also keeps the structural guard honest.
+        assert_calculation_geometry_composition(
+            session,
+            calc=calculation,
+            geometry_id=geometry_id,
+            field="hessian_extraction",
+        )
+        assert_isotopes(
+            session,
+            calc=calculation,
+            geometry_id=geometry_id,
+            field="hessian_extraction",
+        )
         session.add(
             CalculationHessian(
                 calculation=calculation,
