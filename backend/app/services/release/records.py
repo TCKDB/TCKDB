@@ -407,12 +407,18 @@ class RefResolver:
         """
         targets: dict[str, tuple[str, str]] = {}
         for column in table.c:
-            for fk in column.foreign_keys:
+            # A column can carry its own foreign key and also sit inside a composite one that guards a scope
+            # (``network_kinetics``: ``solve_id`` and ``channel_id`` are in the determination-scope key).
+            # The column's own foreign key says what it identifies, so it wins; a composite key resolves a
+            # column only when nothing simpler does.
+            for fk in sorted(column.foreign_keys, key=lambda f: len(f.constraint.elements) if f.constraint else 1):
                 target = fk.column.table
                 if "public_ref" in target.c:
                     targets[column.name] = (target.name, "public_ref")
-                elif target.name in NATURAL_KEYS:
+                    break
+                if target.name in NATURAL_KEYS:
                     targets[column.name] = (target.name, NATURAL_KEYS[target.name])
+                    break
         return targets
 
     @staticmethod
