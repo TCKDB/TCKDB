@@ -1380,6 +1380,7 @@ def test_solve_detail_reads_scoped_energy_transfer_and_state_energies(
         "partial_sources": False,
         "source_sum_comparison": None,
         "source_sum_not_compared_reason": None,
+        "energy_precision_kj_mol": None,
     }]
 
 
