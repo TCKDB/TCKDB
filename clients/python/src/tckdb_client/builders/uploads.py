@@ -951,6 +951,14 @@ class ComputedReactionUpload:
                         "is not present in calculations nor in "
                         "species_calculations."
                     )
+            for purpose, calc in kin.protocol_calculations:
+                if not self._calc_anywhere(calc):
+                    raise TCKDBBuilderValidationError(
+                        f"reaction.kinetics[{ki}] protocol_calculation "
+                        f"purpose={purpose!r} references a Calculation that "
+                        "is not present in calculations nor in "
+                        "species_calculations."
+                    )
 
         # Thermo source_calculations (when present) must resolve to
         # this species's calculation bucket. The computed-reaction

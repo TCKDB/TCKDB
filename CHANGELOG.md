@@ -22,6 +22,28 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A kinetics record can declare its determination, applicability and protocol (2026-10-04)
+
+Change 1 of 4 of the kinetics applicability and method-aware selection plan: **persist the missing scientific
+declarations on kinetics, with upload and read round trips.** Selection, assessment, the rule registry, the
+`/kinetics/select` endpoint, the SDK selector and MCP are not in this change.
+
+- tckdb-backend, tckdb-schemas 0.96.0 and tckdb-client 0.128.0. New table `kinetics_determination` (public ref
+  `kdet`, immutable from creation, deduplicated on a content hash) and four nullable `kinetics` columns:
+  `determination_id`, `representation_role`, `applicability_declaration`, `protocol_declaration`. Migration
+  `c7a2e5d9b148`, additive, no backfill; every existing record reads `null` for all four and that means "not
+  stated".
+- Wire: `determination`, `applicability` and `protocol` on `/uploads/kinetics` and on each fit of
+  `/uploads/computed-reaction` (and so in contribution bundles); a bundle fit also takes `direction` (`forward`
+  or `net`). Vocabulary and rules are in `schema_spec.md`. An applicability claim that contradicts a stored column
+  (direction, pressure context, model kind, third-body flag, order) is refused.
+- Reads: `determination`, `applicability`, `protocol` on every kinetics record. Release serialisation embeds the
+  determination; the archive carries the table; contribution-bundle export carries what is portable and reports
+  the rest as `declaration_pruned`.
+- Replacing an accepted kinetics record also checks that both records declare the same target when both declare
+  one.
+- Deploy: apply the migration first, then the backend, then clients. Environment variables: none.
+
 ## Hessian and scan-point geometries are now checked (2026-10-04)
 
 - tckdb-backend and tckdb-schemas 0.94.0 (changelog and contract note only; no payload field, client

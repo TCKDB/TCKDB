@@ -178,8 +178,14 @@ class RejectionCode(str, Enum):
     INVALID_STRUCTURE_QUERY = "invalid_structure_query"
     INVALID_TEMPERATURE_RANGE = "invalid_temperature_range"
     IRC_RESULT_NOT_FOUND = "irc_result_not_found"
+    KINETICS_DECLARATION_CONTRADICTS_RECORD = "kinetics_declaration_contradicts_record"
+    KINETICS_DECLARATION_INVALID = "kinetics_declaration_invalid"
+    KINETICS_DECLARATION_VERSION_UNSUPPORTED = "kinetics_declaration_version_unsupported"
+    KINETICS_DETERMINATION_INVALID = "kinetics_determination_invalid"
+    KINETICS_DETERMINATION_MISMATCH = "kinetics_determination_mismatch"
     KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH = "kinetics_interpretation_conformer_selection_owner_mismatch"
     KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH = "kinetics_interpretation_statmech_owner_mismatch"
+    KINETICS_PROTOCOL_CALCULATION_OWNER_MISMATCH = "kinetics_protocol_calculation_owner_mismatch"
     LAST_ADMIN_DEMOTION = "last_admin_demotion"
     LEVEL_OF_THEORY_HANDLE_CONFLICT = "level_of_theory_handle_conflict"
     LEVEL_OF_THEORY_METHOD_IS_COMPOUND = "level_of_theory_method_is_compound"
@@ -329,6 +335,8 @@ class RejectionCode(str, Enum):
     UNKNOWN_CURATION_POLICY = "unknown_curation_policy"
     UNKNOWN_ELEMENT_SYMBOL = "unknown_element_symbol"
     UNKNOWN_INCLUDE_TOKEN = "unknown_include_token"
+    UNKNOWN_KINETICS_DETERMINATION_REF = "unknown_kinetics_determination_ref"
+    UNKNOWN_NETWORK_CHANNEL = "unknown_network_channel"
     UNKNOWN_NETWORK_KINETICS_REF = "unknown_network_kinetics_ref"
     UNKNOWN_RECORD = "unknown_record"
     UNKNOWN_RECORD_TYPE = "unknown_record_type"
@@ -432,8 +440,14 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.INVALID_RANGE,
         RejectionCode.INVALID_STRUCTURE_QUERY,
         RejectionCode.INVALID_TEMPERATURE_RANGE,
+        RejectionCode.KINETICS_DECLARATION_CONTRADICTS_RECORD,
+        RejectionCode.KINETICS_DECLARATION_INVALID,
+        RejectionCode.KINETICS_DECLARATION_VERSION_UNSUPPORTED,
+        RejectionCode.KINETICS_DETERMINATION_INVALID,
+        RejectionCode.KINETICS_DETERMINATION_MISMATCH,
         RejectionCode.KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
         RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
+        RejectionCode.KINETICS_PROTOCOL_CALCULATION_OWNER_MISMATCH,
         RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT,
         RejectionCode.LEVEL_OF_THEORY_METHOD_IS_COMPOUND,
         RejectionCode.LEVEL_OF_THEORY_METHOD_WITH_COMPOSITE_SCHEME,
@@ -709,8 +723,14 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.INVALID_STRUCTURE_QUERY: frozenset({422}),
     RejectionCode.INVALID_TEMPERATURE_RANGE: frozenset({422}),
     RejectionCode.IRC_RESULT_NOT_FOUND: frozenset({404}),
+    RejectionCode.KINETICS_DECLARATION_CONTRADICTS_RECORD: frozenset({422}),
+    RejectionCode.KINETICS_DECLARATION_INVALID: frozenset({422}),
+    RejectionCode.KINETICS_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
+    RejectionCode.KINETICS_DETERMINATION_INVALID: frozenset({422}),
+    RejectionCode.KINETICS_DETERMINATION_MISMATCH: frozenset({422}),
     RejectionCode.KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.KINETICS_PROTOCOL_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.LAST_ADMIN_DEMOTION: frozenset({409}),
     RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.LEVEL_OF_THEORY_METHOD_IS_COMPOUND: frozenset({422}),
@@ -860,6 +880,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNKNOWN_CURATION_POLICY: frozenset({404}),
     RejectionCode.UNKNOWN_ELEMENT_SYMBOL: frozenset({422}),
     RejectionCode.UNKNOWN_INCLUDE_TOKEN: frozenset({422}),
+    RejectionCode.UNKNOWN_KINETICS_DETERMINATION_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_NETWORK_CHANNEL: frozenset({404}),
     RejectionCode.UNKNOWN_NETWORK_KINETICS_REF: frozenset({404}),
     RejectionCode.UNKNOWN_RECORD: frozenset({404}),
     RejectionCode.UNKNOWN_RECORD_TYPE: frozenset({422}),

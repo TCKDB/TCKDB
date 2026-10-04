@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     PrimaryKeyConstraint,
     SmallInteger,
+    String,
     Text,
     UniqueConstraint,
 )
@@ -26,9 +27,11 @@ from app.db.models.common import (
     KineticsCalculationRole,
     KineticsDegeneracyConvention,
     KineticsDegeneracyInterpretation,
+    KineticsDeterminationTargetKind,
     KineticsDirection,
     KineticsEnsemblePolicy,
     KineticsModelKind,
+    KineticsRepresentationRole,
     KineticsStandardStateConvention,
     KineticsUncertaintyKind,
     PressureContext,
@@ -39,13 +42,120 @@ from app.db.models.common import (
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation, CalculationArtifact
     from app.db.models.literature import Literature
-    from app.db.models.network_pdep import NetworkKinetics
+    from app.db.models.network_pdep import NetworkChannel, NetworkKinetics
     from app.db.models.reaction import ReactionEntry
     from app.db.models.software import SoftwareRelease
     from app.db.models.species import ConformerSelection, Species
     from app.db.models.statmech import Statmech
     from app.db.models.transition_state import TransitionStateEntry
     from app.db.models.workflow import WorkflowToolRelease
+
+
+class KineticsDetermination(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
+    """One complete determination of a rate: what several kinetics records are fits of.
+
+    A measurement set or one computed rate. Fitted representations of it (an Arrhenius
+    fit and a Chebyshev fit of the same data) point here and share it, so they are not
+    counted as independent support for one another; separate physical calculations or
+    measurements are separate rows.
+
+    **Identity, not provenance.** Its identity is content: the reaction entry, the direction,
+    the declared target (the whole reaction, or one channel named by a transition-state entry
+    or a network channel), the source attribution (literature, workflow-tool release) and a
+    source-scoped ``determination_key``. ``identity_hash`` is the digest of that content,
+    unique, so the same content resolves to one row and an upload that restates it joins it.
+
+    **Immutable from creation**, including while shared by several records: a trigger refuses
+    every UPDATE (``trg_kinetics_determination_immutable``). A record that needs a different
+    determination joins another row; it does not change this one.
+
+    The columns are deliberately the ones that *say what the rate is of*. Nothing here is
+    inferred from a record's own columns: a determination exists only because a depositor
+    stated one. Records deposited without one have no determination and read as unresolved.
+    """
+
+    __tablename__ = "kinetics_determination"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    reaction_entry_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("reaction_entry.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+        index=True,
+    )
+    direction: Mapped[KineticsDirection] = mapped_column(
+        SAEnum(KineticsDirection, name="kinetics_direction", create_type=False),
+        nullable=False,
+    )
+    target_kind: Mapped[KineticsDeterminationTargetKind] = mapped_column(
+        SAEnum(KineticsDeterminationTargetKind, name="kinetics_determination_target_kind"),
+        nullable=False,
+    )
+    target_transition_state_entry_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "transition_state_entry.id",
+            name="fk_kinetics_determination_target_ts_entry",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=True,
+    )
+    target_network_channel_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "network_channel.id",
+            name="fk_kinetics_determination_target_network_channel",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=True,
+    )
+    literature_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("literature.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+    )
+    workflow_tool_release_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "workflow_tool_release.id",
+            name="fk_kinetics_determination_workflow_tool_release",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=True,
+    )
+    determination_key: Mapped[str] = mapped_column(Text, nullable=False)
+    identity_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+    reaction_entry: Mapped["ReactionEntry"] = relationship()
+    target_transition_state_entry: Mapped[Optional["TransitionStateEntry"]] = relationship()
+    target_network_channel: Mapped[Optional["NetworkChannel"]] = relationship()
+    literature: Mapped[Optional["Literature"]] = relationship()
+    workflow_tool_release: Mapped[Optional["WorkflowToolRelease"]] = relationship()
+    kinetics_records: Mapped[list["Kinetics"]] = relationship(back_populates="determination")
+
+    __table_args__ = (
+        CheckConstraint(
+            "(target_kind = 'whole_reaction' "
+            "AND target_transition_state_entry_id IS NULL "
+            "AND target_network_channel_id IS NULL) "
+            "OR (target_kind = 'resolved_channel' "
+            "AND num_nonnulls(target_transition_state_entry_id, target_network_channel_id) = 1)",
+            name="target_matches_kind",
+        ),
+        CheckConstraint(
+            "literature_id IS NOT NULL OR workflow_tool_release_id IS NOT NULL",
+            name="source_required",
+        ),
+        CheckConstraint(
+            "length(btrim(determination_key)) > 0 AND length(determination_key) <= 128",
+            name="key_bounded",
+        ),
+        CheckConstraint("identity_hash ~ '^[0-9a-f]{64}$'", name="identity_hash_sha256_hex"),
+    )
 
 
 class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
@@ -89,6 +199,36 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         nullable=False,
         default=False,
         server_default="false",
+    )
+
+    # The determination this record is one representation of, and its role there
+    # (kinetics selection). Attributed claims, never inferred: NULL on every record
+    # that predates the columns or was deposited without them, and then the record's
+    # scientific meaning is reported as unresolved rather than guessed. Set together
+    # or not at all (``ck_kinetics_determination_iff_role``). That the determination
+    # is of this record's reaction entry and direction is a cross-table fact no CHECK
+    # can state; it is enforced where the row is written
+    # (``app.services.kinetics_declaration_resolution``).
+    determination_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("kinetics_determination.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+        index=True,
+    )
+    representation_role: Mapped[Optional[KineticsRepresentationRole]] = mapped_column(
+        SAEnum(KineticsRepresentationRole, name="kinetics_representation_role"),
+        nullable=True,
+    )
+    # Versioned declarations (``tckdb_schemas.kinetics_declarations``):
+    # what the coefficient is a coefficient of, and how the rate was produced.
+    # Stored in their public-ref form, never with a local key or a database id.
+    # ``none_as_null``: Python ``None`` is SQL NULL ("not stated"), never the JSON
+    # value ``null``, which would be a stored claim of nothing.
+    applicability_declaration: Mapped[Optional[dict]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
+    protocol_declaration: Mapped[Optional[dict]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
     )
 
     literature_id: Mapped[Optional[int]] = mapped_column(
@@ -174,6 +314,9 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     reaction_entry: Mapped["ReactionEntry"] = relationship(
         back_populates="kinetics_records"
     )
+    determination: Mapped[Optional["KineticsDetermination"]] = relationship(
+        back_populates="kinetics_records"
+    )
     literature: Mapped[Optional["Literature"]] = relationship()
     workflow_tool_release: Mapped[Optional["WorkflowToolRelease"]] = relationship(
         back_populates="kinetics_records"
@@ -248,6 +391,27 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         CheckConstraint(
             "pressure_context <> 'apparent_at_pressure' OR pressure_bar IS NOT NULL",
             name="apparent_pressure_requires_pressure_bar",
+        ),
+        # A record states its role exactly when it states a determination. ``IS NULL``
+        # never yields NULL, so the equality of the two tests cannot pass on NULL.
+        CheckConstraint(
+            "(determination_id IS NULL) = (representation_role IS NULL)",
+            name="determination_iff_role",
+        ),
+        # The ``coalesce`` matters: an object with no ``version`` key makes
+        # ``jsonb_typeof(... -> 'version')`` NULL, the whole predicate NULL, and a CHECK
+        # passes on NULL.
+        CheckConstraint(
+            "applicability_declaration IS NULL OR ("
+            "jsonb_typeof(applicability_declaration) = 'object' "
+            "AND coalesce(jsonb_typeof(applicability_declaration -> 'version'), '') = 'number')",
+            name="applicability_declaration_versioned_object",
+        ),
+        CheckConstraint(
+            "protocol_declaration IS NULL OR ("
+            "jsonb_typeof(protocol_declaration) = 'object' "
+            "AND coalesce(jsonb_typeof(protocol_declaration -> 'version'), '') = 'number')",
+            name="protocol_declaration_versioned_object",
         ),
     )
 

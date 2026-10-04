@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.96.0 - 2026-10-04
+
+A kinetics record can declare its determination, its applicability and its protocol. New module
+`tckdb_schemas.kinetics_declarations` and two new enums (`KineticsRepresentationRole`,
+`KineticsDeterminationTargetKind`). All three declarations are optional; an upload that omits them is unchanged.
+
+- `KineticsUploadRequest` and `BundleKineticsIn` gain `determination`, `applicability` and `protocol`;
+  `BundleKineticsIn` also gains `direction` (`forward` or `net`: a bundle fit is stored under an entry oriented as
+  its own keys, so a reverse fit swaps `reactant_keys` and `product_keys`).
+- Refusal codes (all 422 unless stated): `kinetics_determination_invalid`, `kinetics_determination_mismatch`,
+  `kinetics_declaration_contradicts_record`, `kinetics_declaration_version_unsupported`,
+  `kinetics_declaration_invalid`, `kinetics_protocol_calculation_owner_mismatch`, and the 404s
+  `unknown_kinetics_determination_ref` and `unknown_network_channel`.
+- The producer contract's size ceiling is not raised: the declaration vocabulary is flattened to five models and
+  the contract stays under 700,000 bytes.
+
 ## 0.95.0 - 2026-10-04
 
 A network state energy can name one source calculation per participant, and is held against their sum
@@ -51,6 +67,7 @@ upload warnings. Existing payloads are accepted as before.
 - Producers: the hydrazine ingester now cites every participant's single point for a multi-species state
   (`source_calculation_keys`) and a single participant's with `source_calculation_key`. A list on a
   one-participant state also fills the older single slot, so `source_calculation_ref` keeps the source.
+
 
 ## 0.94.0 - 2026-10-04
 

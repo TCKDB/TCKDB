@@ -1824,6 +1824,10 @@ the gap.
 | `model_kind` | KineticsModelKind (enum) | no | modified_arrhenius | — | `arrhenius`, `modified_arrhenius`, `multi_arrhenius`, `lindemann`, `troe`, `sri`, `plog`, `chebyshev` | not documented |
 | `direction` | KineticsDirection (enum) | yes | — | — | `forward`, `reverse`, `net` | not documented |
 | `is_third_body` | BOOLEAN | no | false | — | — | not documented |
+| `determination_id` | BIGINT | yes | — | kinetics_determination.id | — | not documented |
+| `representation_role` | KineticsRepresentationRole (enum) | yes | — | — | `complete`, `additive_component` | not documented |
+| `applicability_declaration` | JSONB | yes | — | — | — | not documented |
+| `protocol_declaration` | JSONB | yes | — | — | — | not documented |
 | `literature_id` | BIGINT | yes | — | literature.id | — | not documented |
 | `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |
 | `software_release_id` | BIGINT | yes | — | software_release.id | — | not documented |
@@ -1854,8 +1858,11 @@ the gap.
 - `ck_kinetics_a_uncertainty_kind_required_with_value`: `(a_uncertainty IS NULL) = (a_uncertainty_kind IS NULL)`
 - `ck_kinetics_a_uncertainty_multiplicative_ge_1`: `a_uncertainty_kind <> 'multiplicative' OR a_uncertainty >= 1.0`
 - `ck_kinetics_apparent_pressure_requires_pressure_bar`: `pressure_context <> 'apparent_at_pressure' OR pressure_bar IS NOT NULL`
+- `ck_kinetics_applicability_declaration_versioned_object`: `applicability_declaration IS NULL OR (jsonb_typeof(applicability_declaration) = 'object' AND coalesce(jsonb_typeof(applicability_declaration -> 'version'), '') = 'number')`
 - `ck_kinetics_degeneracy_finite_positive`: `degeneracy IS NULL OR (degeneracy > 0 AND degeneracy < 'Infinity'::double precision)`
+- `ck_kinetics_determination_iff_role`: `(determination_id IS NULL) = (representation_role IS NULL)`
 - `ck_kinetics_pressure_bar_gt_0`: `pressure_bar IS NULL OR pressure_bar > 0`
+- `ck_kinetics_protocol_declaration_versioned_object`: `protocol_declaration IS NULL OR (jsonb_typeof(protocol_declaration) = 'object' AND coalesce(jsonb_typeof(protocol_declaration -> 'version'), '') = 'number')`
 - `ck_kinetics_t0_k_finite_positive`: `t0_k > 0 AND t0_k <= 10000`
 - `ck_kinetics_tmax_k_gt_0`: `tmax_k IS NULL OR tmax_k > 0`
 - `ck_kinetics_tmin_k_gt_0`: `tmin_k IS NULL OR tmin_k > 0`
@@ -1902,6 +1909,35 @@ the gap.
 
 - `ck_kinetics_chebyshev_cheb_n_pressure_ge_1`: `n_pressure >= 1`
 - `ck_kinetics_chebyshev_cheb_n_temperature_ge_1`: `n_temperature >= 1`
+
+### `kinetics_determination`
+
+**Role:** role not stated on the model
+
+**Purpose:** One complete determination of a rate: what several kinetics records are fits of.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `reaction_entry_id` | BIGINT | no | — | reaction_entry.id | — | not documented |
+| `direction` | KineticsDirection (enum) | no | — | — | `forward`, `reverse`, `net` | not documented |
+| `target_kind` | KineticsDeterminationTargetKind (enum) | no | — | — | `whole_reaction`, `resolved_channel` | not documented |
+| `target_transition_state_entry_id` | BIGINT | yes | — | transition_state_entry.id | — | not documented |
+| `target_network_channel_id` | BIGINT | yes | — | network_channel.id | — | not documented |
+| `literature_id` | BIGINT | yes | — | literature.id | — | not documented |
+| `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |
+| `determination_key` | TEXT | no | — | — | — | not documented |
+| `identity_hash` | VARCHAR(64) | no | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
+| `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_kinetics_determination_identity_hash_sha256_hex`: `identity_hash ~ '^[0-9a-f]{64}$'`
+- `ck_kinetics_determination_key_bounded`: `length(btrim(determination_key)) > 0 AND length(determination_key) <= 128`
+- `ck_kinetics_determination_source_required`: `literature_id IS NOT NULL OR workflow_tool_release_id IS NOT NULL`
+- `ck_kinetics_determination_target_matches_kind`: `(target_kind = 'whole_reaction' AND target_transition_state_entry_id IS NULL AND target_network_channel_id IS NULL) OR (target_kind = 'resolved_channel' AND num_nonnulls(target_transition_state_entry_id, target_network_channel_id) = 1)`
 
 ### `kinetics_falloff`
 

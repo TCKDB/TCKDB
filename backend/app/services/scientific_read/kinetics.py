@@ -10,12 +10,19 @@ records and never gate validity.
 
 from __future__ import annotations
 
+import logging
 import math
 from collections import defaultdict
 from collections.abc import Mapping
+from dataclasses import dataclass
 
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased, selectinload
+from tckdb_schemas.kinetics_declarations import (
+    StoredKineticsApplicabilityDeclaration,
+    StoredKineticsProtocolDeclaration,
+)
 
 from app.api.errors import not_found
 from app.db.models.calculation import (
@@ -32,6 +39,7 @@ from app.db.models.common import (
     KineticsCalculationRole,
     KineticsDegeneracyConvention,
     KineticsModelKind,
+    KineticsRepresentationRole,
     PressureContext,
     RecordReviewStatus,
     SCFStabilityStatus,
@@ -42,13 +50,15 @@ from app.db.models.common import (
 from app.db.models.kinetics import (
     Kinetics,
     KineticsArrheniusEntry,
+    KineticsDetermination,
     KineticsInterpretationAssignment,
     KineticsSourceCalculation,
     KineticsTunnelingApplication,
 )
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
-from app.db.models.network_pdep import NetworkKinetics
+from app.db.models.network import Network
+from app.db.models.network_pdep import NetworkChannel, NetworkKinetics
 from app.db.models.reaction import ReactionEntry
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import ConformerAssignmentScheme, ConformerGroup, ConformerSelection, Species
@@ -74,6 +84,8 @@ from app.schemas.reads.scientific_kinetics import (
     ArrheniusParameters,
     ChebyshevBlock,
     FalloffBlock,
+    KineticsDeterminationBlock,
+    KineticsDeterminationTargetBlock,
     KineticsInterpretationAssignmentBlock,
     KineticsProvenance,
     KineticsReadRequest,
@@ -122,6 +134,8 @@ from app.services.trust import (
     build_trust_fragment,
     evaluate_loaded_kinetics,
 )
+
+logger = logging.getLogger(__name__)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "provenance",
@@ -510,6 +524,10 @@ def get_reaction_kinetics(
         {k.network_kinetics_id for k in kinetics_rows if k.network_kinetics_id},
     )
 
+    determination_blocks = _determination_blocks(
+        session, {k.determination_id for k in kinetics_rows if k.determination_id}
+    )
+
     # DR-0032: resolve third-body collider species → public refs (batched to
     # avoid an N+1 over the eager-loaded third_body_efficiencies children).
     collider_refs = _species_refs(
@@ -617,6 +635,8 @@ def get_reaction_kinetics(
             ts_sp_calc_id=ts_sp_calc_id,
         )
 
+        declarations = _declaration_blocks(k, determination_blocks)
+
         records.append(
             KineticsRecord(
                 kinetics_id=k.id,
@@ -624,6 +644,10 @@ def get_reaction_kinetics(
                 scientific_origin=k.scientific_origin,
                 model_kind=k.model_kind,
                 direction=k.direction,
+                determination=declarations.determination,
+                applicability=declarations.applicability,
+                protocol=declarations.protocol,
+                declaration_unreadable=declarations.unreadable,
                 review=badges[k.id],
                 supersession=supersessions.get(k.id),
                 parameters=ArrheniusParameters(
@@ -1531,6 +1555,93 @@ def _falloff_block(kinetics: Kinetics) -> FalloffBlock | None:
         sri_d=fo.sri_d,
         sri_e=fo.sri_e,
     )
+
+
+@dataclass(frozen=True)
+class _DeclarationBlocks:
+    determination: KineticsDeterminationBlock | None = None
+    applicability: StoredKineticsApplicabilityDeclaration | None = None
+    protocol: StoredKineticsProtocolDeclaration | None = None
+    unreadable: bool = False
+
+
+def _determination_blocks(
+    session: Session, determination_ids: set[int]
+) -> dict[int, KineticsDeterminationBlock]:
+    """Public blocks of the determinations the listed records belong to, in one pass."""
+    if not determination_ids:
+        return {}
+    rows = session.execute(
+        select(
+            KineticsDetermination,
+            TransitionStateEntry.public_ref,
+            Network.public_ref,
+            NetworkChannel.channel_key,
+        )
+        .outerjoin(
+            TransitionStateEntry,
+            TransitionStateEntry.id == KineticsDetermination.target_transition_state_entry_id,
+        )
+        .outerjoin(
+            NetworkChannel, NetworkChannel.id == KineticsDetermination.target_network_channel_id
+        )
+        .outerjoin(Network, Network.id == NetworkChannel.network_id)
+        .where(KineticsDetermination.id.in_(determination_ids))
+    ).all()
+    blocks: dict[int, KineticsDeterminationBlock] = {}
+    for det, ts_ref, network_ref, channel_key in rows:
+        blocks[det.id] = KineticsDeterminationBlock(
+            determination_ref=det.public_ref,
+            key=det.determination_key,
+            direction=det.direction,
+            target=KineticsDeterminationTargetBlock(
+                kind=det.target_kind,
+                transition_state_entry_ref=ts_ref,
+                network_ref=network_ref,
+                channel_key=channel_key,
+            ),
+            # The role is the record's own; filled per record by the caller.
+            representation_role=KineticsRepresentationRole.complete,
+        )
+    return blocks
+
+
+def _declaration_blocks(
+    kinetics: Kinetics, determination_blocks: dict[int, KineticsDeterminationBlock]
+) -> _DeclarationBlocks:
+    """The declarations of one record, read back; a stored value that no longer validates is
+    reported as unreadable rather than taking the whole listing down."""
+    determination = None
+    if kinetics.determination_id is not None:
+        shared = determination_blocks.get(kinetics.determination_id)
+        if shared is not None and kinetics.representation_role is not None:
+            determination = shared.model_copy(
+                update={"representation_role": kinetics.representation_role}
+            )
+    applicability = protocol = None
+    unreadable = False
+    if kinetics.applicability_declaration is not None:
+        try:
+            applicability = StoredKineticsApplicabilityDeclaration.model_validate(
+                kinetics.applicability_declaration
+            )
+        except ValidationError:
+            unreadable = True
+            logger.warning(
+                "kinetics %s stores an applicability declaration that fails validation; "
+                "served as unreadable",
+                kinetics.public_ref,
+            )
+    if kinetics.protocol_declaration is not None:
+        try:
+            protocol = StoredKineticsProtocolDeclaration.model_validate(kinetics.protocol_declaration)
+        except ValidationError:
+            unreadable = True
+            logger.warning(
+                "kinetics %s stores a protocol declaration that fails validation; served as unreadable",
+                kinetics.public_ref,
+            )
+    return _DeclarationBlocks(determination, applicability, protocol, unreadable)
 
 
 def _third_body_blocks(

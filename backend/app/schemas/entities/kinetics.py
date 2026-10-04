@@ -1,6 +1,10 @@
 from typing import Self
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+from tckdb_schemas.kinetics_declarations import (
+    StoredKineticsApplicabilityDeclaration,
+    StoredKineticsProtocolDeclaration,
+)
 
 from app.db.models.common import (
     ArrheniusAUnits,
@@ -8,6 +12,7 @@ from app.db.models.common import (
     KineticsDegeneracyConvention,
     KineticsDirection,
     KineticsModelKind,
+    KineticsRepresentationRole,
     KineticsUncertaintyKind,
     PressureContext,
     ScientificOriginKind,
@@ -63,6 +68,13 @@ class KineticsBase(BaseModel):
     :param scientific_origin: Scientific origin category for this kinetics record.
     :param model_kind: Kinetics functional form.
     :param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).
+    :param determination_id: The determination this record is a representation of; set
+        together with ``representation_role`` or not at all.
+    :param representation_role: This record's role in that determination.
+    :param applicability_declaration: The depositor's versioned applicability declaration,
+        in its stored form (public refs only); None when none was declared.
+    :param protocol_declaration: The depositor's versioned protocol declaration, in its
+        stored form; None when none was declared.
     :param literature_id: Optional linked literature row.
     :param workflow_tool_release_id: Optional workflow provenance.
     :param software_release_id: Optional software provenance.
@@ -84,6 +96,11 @@ class KineticsBase(BaseModel):
     model_kind: KineticsModelKind = KineticsModelKind.modified_arrhenius
     direction: KineticsDirection | None = None
     is_third_body: bool = False
+
+    determination_id: int | None = None
+    representation_role: KineticsRepresentationRole | None = None
+    applicability_declaration: StoredKineticsApplicabilityDeclaration | None = None
+    protocol_declaration: StoredKineticsProtocolDeclaration | None = None
 
     literature_id: int | None = None
     workflow_tool_release_id: int | None = None
@@ -117,6 +134,21 @@ class KineticsBase(BaseModel):
     @classmethod
     def _normalize_tunneling(cls, v):
         return normalize_tunneling_model(v)
+
+    @model_validator(mode="after")
+    def validate_determination_iff_role(self) -> Self:
+        """A determination and the role in it are stated together or not at all.
+
+        The same rule as ``ck_kinetics_determination_iff_role``, stated on the resolved
+        payload so a caller that builds one directly is refused before the database is.
+        Whether the determination is of this record's reaction entry and direction is not
+        decidable here; see ``assert_kinetics_declaration_columns``.
+        """
+        if (self.determination_id is None) != (self.representation_role is None):
+            raise ValueError(
+                "determination_id and representation_role are both present or both absent."
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_pressure_context(self) -> Self:

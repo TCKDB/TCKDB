@@ -375,6 +375,20 @@ class KineticsDirection(str, Enum):
     net = "net"
 
 
+class KineticsRepresentationRole(str, Enum):
+    """What a kinetics record is within its determination (kinetics selection)."""
+
+    complete = "complete"
+    additive_component = "additive_component"
+
+
+class KineticsDeterminationTargetKind(str, Enum):
+    """The rate a kinetics determination is declared to describe."""
+
+    whole_reaction = "whole_reaction"
+    resolved_channel = "resolved_channel"
+
+
 class KineticsDegeneracyConvention(str, Enum):
     """Whether a stored reaction-path degeneracy is already in the rate."""
 

@@ -2742,7 +2742,7 @@
       },
       "BundleKineticsIn": {
         "additionalProperties": false,
-        "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional finite, strictly positive multiplicative\n    reaction-path degeneracy associated with the reported kinetics\n    expression. ``None`` means no claim is made; do not interpret it as\n    ``1.0``.\n:param degeneracy_convention: Whether degeneracy is already included in\n    the reported rate. Defaults to ``unknown`` for legacy producers.\n:param note: Optional note.\n\n:param t0_k: Reference temperature T0 in K, so that\n    ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.\n:param interpretation_assignments: Which statmech records the rate's\n    partition functions came from. The same model, validation and\n    persistence as ``KineticsUploadRequest``; every reference is a public\n    ref of a record deposited earlier (see\n    :mod:`tckdb_schemas.fragments.kinetics_evidence`).\n:param tunneling_application: The typed, replayable tunneling evidence,\n    cross-checked against ``tunneling_model`` exactly as the standalone\n    route does.\n:param network_kinetics_ref: Public ref of the master-equation solve a\n    fitted rate delegates its pressure dependence to.\n\nThis model and ``KineticsUploadRequest`` share their kinetics-evidence\nmodels and their cross-field checks (``kinetics_evidence``), so the two\nroutes refuse the same interpretation and tunneling mistakes. The\npressure-dependent child-row forms (PLOG, Chebyshev, falloff,\nsum-of-Arrhenius) stay standalone-only.",
+        "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional finite, strictly positive multiplicative\n    reaction-path degeneracy associated with the reported kinetics\n    expression. ``None`` means no claim is made; do not interpret it as\n    ``1.0``.\n:param degeneracy_convention: Whether degeneracy is already included in\n    the reported rate. Defaults to ``unknown`` for legacy producers.\n:param note: Optional note.\n\n:param t0_k: Reference temperature T0 in K, so that\n    ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.\n:param interpretation_assignments: Which statmech records the rate's\n    partition functions came from. The same model, validation and\n    persistence as ``KineticsUploadRequest``; every reference is a public\n    ref of a record deposited earlier (see\n    :mod:`tckdb_schemas.fragments.kinetics_evidence`).\n:param tunneling_application: The typed, replayable tunneling evidence,\n    cross-checked against ``tunneling_model`` exactly as the standalone\n    route does.\n:param network_kinetics_ref: Public ref of the master-equation solve a\n    fitted rate delegates its pressure dependence to.\n:param direction: ``forward`` or ``net`` only (a reverse fit swaps the keys).\n:param determination: Needs ``direction`` and the bundle's literature or workflow tool.\n:param applicability: Optional declaration of what the coefficient is.\n:param protocol: Optional declaration of how the rate was produced.\n\nThis model and ``KineticsUploadRequest`` share their kinetics-evidence\nmodels and their cross-field checks (``kinetics_evidence``), so the two\nroutes refuse the same interpretation and tunneling mistakes. The\npressure-dependent child-row forms (PLOG, Chebyshev, falloff,\nsum-of-Arrhenius) stay standalone-only.",
         "properties": {
           "a": {
             "anyOf": [
@@ -2786,6 +2786,16 @@
               }
             ]
           },
+          "applicability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsApplicabilityDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "d_reported_ea": {
             "anyOf": [
               {
@@ -2812,6 +2822,26 @@
           "degeneracy_convention": {
             "$ref": "#/components/schemas/KineticsDegeneracyConvention",
             "default": "unknown"
+          },
+          "determination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsDeterminationDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/tckdb_schemas__enums__KineticsDirection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "interpretation_assignments": {
             "items": {
@@ -2903,6 +2933,16 @@
             "minItems": 1,
             "title": "Product Keys",
             "type": "array"
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsProtocolDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reactant_keys": {
             "items": {
@@ -20356,7 +20396,7 @@
           "direction": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/KineticsDirection"
+                "$ref": "#/components/schemas/KineticsDirection-Output"
               },
               {
                 "type": "null"
@@ -20579,6 +20619,172 @@
         "title": "KineticsAnalyticsResponse",
         "type": "object"
       },
+      "KineticsApplicabilityDeclaration": {
+        "additionalProperties": false,
+        "description": "What the stored coefficient is a coefficient *of*. Version 1.\n\nAn attributed claim, stored as made. Every statement is optional: an omitted one is unknown,\nnever \"universally valid\". ``claim_origin`` is required.\n\n``collider_kind`` ``specified_collider`` lists one collider and no mole fraction;\n``fixed_mixture`` lists at least two, each with a mole fraction, summing to one within an\nabsolute 1e-9 (never renormalised), none repeated; the other kinds list none.\n\n:param version: Only the integer ``1``.\n:param scope: Agrees with the determination target.\n:param pressure_domain_min_bar: Stated validity domain (with the maximum), if pressure dependent.\n:param default_third_body_efficiency: For ``composition_dependent``: the efficiency of an unlisted collider.",
+        "properties": {
+          "claim_origin": {
+            "$ref": "#/components/schemas/KineticsClaimOrigin"
+          },
+          "coefficient_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsCoefficientBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collider_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsColliderKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "colliders": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsCollider"
+            },
+            "title": "Colliders",
+            "type": "array"
+          },
+          "default_third_body_efficiency": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Third Body Efficiency"
+          },
+          "observable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsObservable"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsPhase"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pressure_dependence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsPressureDependence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pressure_domain_max_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure Domain Max Bar"
+          },
+          "pressure_domain_min_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure Domain Min Bar"
+          },
+          "rate_progress_convention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsRateProgressConvention"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reaction_order": {
+            "anyOf": [
+              {
+                "maximum": 4.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reaction Order"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsDeterminationTargetKind-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "claim_origin"
+        ],
+        "title": "KineticsApplicabilityDeclaration",
+        "type": "object"
+      },
+      "KineticsBarrierBasis": {
+        "description": "Which barrier the energies describe: electronic only, or including zero-point energy.",
+        "enum": [
+          "classical_electronic",
+          "zpe_corrected"
+        ],
+        "title": "KineticsBarrierBasis",
+        "type": "string"
+      },
+      "KineticsCalculationPurpose": {
+        "description": "What a supporting calculation supplies to the rate.",
+        "enum": [
+          "geometry",
+          "frequency",
+          "electronic_energy",
+          "zero_point_energy",
+          "irc"
+        ],
+        "title": "KineticsCalculationPurpose",
+        "type": "string"
+      },
       "KineticsCalculationRole": {
         "enum": [
           "reactant_energy",
@@ -20590,6 +20796,73 @@
           "fit_source"
         ],
         "title": "KineticsCalculationRole",
+        "type": "string"
+      },
+      "KineticsClaimOrigin": {
+        "description": "Whose claim a declaration is: the source's own statement, or the depositor's reading.",
+        "enum": [
+          "source_publication",
+          "depositor_interpretation"
+        ],
+        "title": "KineticsClaimOrigin",
+        "type": "string"
+      },
+      "KineticsCoefficientBasis": {
+        "description": "What the coefficient still needs before it is a rate.\n\n``third_body_kernel`` is the coefficient of a simple ``+M`` reaction, still to be multiplied\nby an effective collider concentration; ``composition_effective_coefficient`` is already\nevaluated for one declared mixture.",
+        "enum": [
+          "elementary_coefficient",
+          "third_body_kernel",
+          "composition_effective_coefficient"
+        ],
+        "title": "KineticsCoefficientBasis",
+        "type": "string"
+      },
+      "KineticsCollider": {
+        "additionalProperties": false,
+        "description": "One collider by species content, and its mole fraction in a mixture.\n\n:param mole_fraction: Of each component of a ``fixed_mixture`` only.",
+        "properties": {
+          "mole_fraction": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mole Fraction"
+          },
+          "species": {
+            "$ref": "#/components/schemas/SpeciesEntryIdentityPayload"
+          }
+        },
+        "required": [
+          "species"
+        ],
+        "title": "KineticsCollider",
+        "type": "object"
+      },
+      "KineticsColliderKind": {
+        "description": "Which collider the coefficient is for.\n\n``composition_dependent`` depends on the composition it is evaluated in, through the record's\nown third-body efficiencies.",
+        "enum": [
+          "not_dependent",
+          "specified_collider",
+          "fixed_mixture",
+          "composition_dependent"
+        ],
+        "title": "KineticsColliderKind",
+        "type": "string"
+      },
+      "KineticsConformerTreatment": {
+        "description": "How the conformers of a stationary point enter the rate.",
+        "enum": [
+          "single_conformer",
+          "boltzmann_ensemble",
+          "multistructural"
+        ],
+        "title": "KineticsConformerTreatment",
         "type": "string"
       },
       "KineticsDegeneracyConvention": {
@@ -20613,7 +20886,192 @@
         "title": "KineticsDegeneracyInterpretation",
         "type": "string"
       },
-      "KineticsDirection": {
+      "KineticsDepartureComponent": {
+        "description": "The part of the declared method a depositor departed from.",
+        "enum": [
+          "geometry",
+          "frequencies",
+          "zero_point_energy",
+          "electronic_energy",
+          "empirical_correction",
+          "tunneling",
+          "other"
+        ],
+        "title": "KineticsDepartureComponent",
+        "type": "string"
+      },
+      "KineticsDeterminationBlock": {
+        "description": "The determination a record is a representation of, and its role in it.\n\nRecords that share ``determination_ref`` are alternate representations of one\ndetermination, not independent determinations. ``null`` on a record means none was\ndeclared, never \"standalone\".\n\n:param determination_ref: Public ref (``kdet_...``).\n:param key: The source-scoped determination key the depositor stated.\n:param direction: The direction the determination is of, relative to the reaction entry.\n:param target: What it is the rate of.\n:param representation_role: This record's role in it.",
+        "properties": {
+          "determination_ref": {
+            "title": "Determination Ref",
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/KineticsDirection-Output"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "representation_role": {
+            "$ref": "#/components/schemas/KineticsRepresentationRole-Output"
+          },
+          "target": {
+            "$ref": "#/components/schemas/KineticsDeterminationTargetBlock"
+          }
+        },
+        "required": [
+          "determination_ref",
+          "key",
+          "direction",
+          "target",
+          "representation_role"
+        ],
+        "title": "KineticsDeterminationBlock",
+        "type": "object"
+      },
+      "KineticsDeterminationDeclaration": {
+        "additionalProperties": false,
+        "description": "The determination a record belongs to, and the record's role in it.\n\nA determination is one complete determination of a rate, such as a measurement set or one\ncomputed rate. Several fitted representations of it share it and do not count as independent\nsupport for each other; separate calculations or measurements are separate determinations.\n\nGive exactly one locator. ``key`` with ``target_kind`` states the content (the backend finds\nor creates the determination from the record's reaction entry, direction, target, source and\nthis key); ``determination_ref`` joins one already deposited, and anchors the record to that\ndetermination's reaction entry. A ``resolved_channel`` target names its channel exactly once:\n``transition_state_entry_ref``, or ``network_ref`` with ``channel_key``.\n\n:param determination_ref: Public ref (``kdet_...``) of an existing determination.\n:param key: Source-scoped key (a data set or run label).\n:param target_kind: Required with ``key``; refused with a ref.\n:param transition_state_entry_ref: Public ref (``tse_...``) of the saddle point.\n:param network_ref: Public ref (``net_...``) of the network.\n:param channel_key: Key of the channel in that network.",
+        "properties": {
+          "channel_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Key"
+          },
+          "determination_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Determination Ref"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "network_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Ref"
+          },
+          "representation_role": {
+            "$ref": "#/components/schemas/KineticsRepresentationRole-Input"
+          },
+          "target_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsDeterminationTargetKind-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transition_state_entry_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Entry Ref"
+          }
+        },
+        "required": [
+          "representation_role"
+        ],
+        "title": "KineticsDeterminationDeclaration",
+        "type": "object"
+      },
+      "KineticsDeterminationTargetBlock": {
+        "description": "What a determination is the rate of.\n\n:param kind: ``whole_reaction`` or ``resolved_channel``.\n:param transition_state_entry_ref: Public ref of the saddle point a resolved channel names.\n:param network_ref: Public ref of the network a resolved channel names.\n:param channel_key: Key of that channel in the network.",
+        "properties": {
+          "channel_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Key"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/app__db__models__common__KineticsDeterminationTargetKind"
+          },
+          "network_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Ref"
+          },
+          "transition_state_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Entry Ref"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "KineticsDeterminationTargetBlock",
+        "type": "object"
+      },
+      "KineticsDeterminationTargetKind-Input": {
+        "description": "The rate a kinetics determination is declared to describe.",
+        "enum": [
+          "whole_reaction",
+          "resolved_channel"
+        ],
+        "title": "KineticsDeterminationTargetKind",
+        "type": "string"
+      },
+      "KineticsDirection-Output": {
         "description": "Direction a reaction-level kinetics fit describes (DR-0036).\n\nGraph-level ``chem_reaction.reversible`` only says a reaction *can* run\nboth ways; it cannot tell apart a forward-rate fit from a reverse-rate\nfit deposited against the same ``reaction_entry``. This per-record enum\ndisambiguates the two so both can coexist distinctly (needed for\nChemkin/Cantera round-trip, where forward and reverse rates are given\nas separate expressions).\n\n``forward`` / ``reverse`` are relative to the reaction_entry's stored\nreactant→product orientation. ``net`` marks a rate that already folds\nboth directions (e.g. an apparent/observed net rate). A ``NULL`` column\nmeans the producer did not specify — the historical default, so existing\nrows are unaffected.",
         "enum": [
           "forward",
@@ -20632,6 +21090,15 @@
           "other"
         ],
         "title": "KineticsEnsemblePolicy",
+        "type": "string"
+      },
+      "KineticsGeometryRelation": {
+        "description": "Whether the stationary-point geometries come from the energy level or another level.",
+        "enum": [
+          "optimized_at_energy_level",
+          "optimized_at_other_level"
+        ],
+        "title": "KineticsGeometryRelation",
         "type": "string"
       },
       "KineticsInterpretationAssignmentBlock": {
@@ -20807,6 +21274,19 @@
         "title": "KineticsInterpretationAssignmentUpload",
         "type": "object"
       },
+      "KineticsMethodKind": {
+        "description": "How the rate was obtained.\n\n``saddle_point_tst`` is transition-state theory at a fixed saddle point, ``variational_tst``\na variational treatment, ``barrierless_capture`` a capture treatment and ``master_equation``\na pressure-dependent rate from a solve. ``other`` requires ``method_other_name``.",
+        "enum": [
+          "experimental",
+          "saddle_point_tst",
+          "variational_tst",
+          "barrierless_capture",
+          "master_equation",
+          "other"
+        ],
+        "title": "KineticsMethodKind",
+        "type": "string"
+      },
       "KineticsModelKind": {
         "enum": [
           "arrhenius",
@@ -20820,6 +21300,202 @@
         ],
         "title": "KineticsModelKind",
         "type": "string"
+      },
+      "KineticsObservable": {
+        "description": "The kind of kinetic quantity the stored expression is.\n\nA rate of progress needs the concentrations of its law and a global law is a fitted\nempirical law; both can be stated so they are reported as what they are, and a\nrate-coefficient selector treats them as unsupported.",
+        "enum": [
+          "rate_coefficient",
+          "rate_of_progress",
+          "effective_global_law"
+        ],
+        "title": "KineticsObservable",
+        "type": "string"
+      },
+      "KineticsPathTreatment": {
+        "description": "How the reaction paths between the same reactants and products were treated.",
+        "enum": [
+          "single_path",
+          "multipath_truncated",
+          "multipath_full"
+        ],
+        "title": "KineticsPathTreatment",
+        "type": "string"
+      },
+      "KineticsPhase": {
+        "description": "The phase the coefficient describes. Gas only: the vocabulary starts here.",
+        "enum": [
+          "gas"
+        ],
+        "title": "KineticsPhase",
+        "type": "string"
+      },
+      "KineticsPressureDependence": {
+        "description": "What the coefficient means with respect to pressure.\n\n``independent`` is established pressure independence (a null pressure context is not that);\n``fixed_pressure`` is an apparent coefficient at the record's own ``pressure_bar``;\n``pressure_dependent`` is a surface or model carrying its own pressure dependence.",
+        "enum": [
+          "independent",
+          "high_pressure_limit",
+          "fixed_pressure",
+          "pressure_dependent"
+        ],
+        "title": "KineticsPressureDependence",
+        "type": "string"
+      },
+      "KineticsProtocolCalculationRef": {
+        "additionalProperties": false,
+        "description": "A supporting calculation, by local key or public ref (exactly one), and what it supplies.\n\n:param calculation_key: Key of a calculation in this request.\n:param calculation_ref: Public ref (``calc_...``).",
+        "properties": {
+          "calculation_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Key"
+          },
+          "calculation_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Ref"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/KineticsCalculationPurpose"
+          }
+        },
+        "required": [
+          "purpose"
+        ],
+        "title": "KineticsProtocolCalculationRef",
+        "type": "object"
+      },
+      "KineticsProtocolDeclaration": {
+        "additionalProperties": false,
+        "description": "The protocol a rate was produced with. Version 1.\n\nAn attributed claim, stored as made and not checked against the linked calculations (a later\nselection step reads what the links show and reports a claim as declared, verified or\ncontradicted). Every statement is optional; at least one is required.\n\n:param version: Only the integer ``1``.\n:param method_other_name: Required for ``other``; refused otherwise.\n:param departures: Omitted: not stated. Empty: none. Else the parts changed.",
+        "properties": {
+          "barrier_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsBarrierBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conformer_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsConformerTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "departures": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/KineticsDepartureComponent"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departures"
+          },
+          "geometry_relation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsGeometryRelation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsMethodKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method_other_name": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Other Name"
+          },
+          "path_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsPathTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rotor_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsRotorTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "supporting_calculations": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsProtocolCalculationRef"
+            },
+            "title": "Supporting Calculations",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "zero_point_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsZeroPointTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "KineticsProtocolDeclaration",
+        "type": "object"
       },
       "KineticsProvenance": {
         "description": "Provenance block per Phase 2.2 — every key always present, ``null`` if absent.\n\nTS-chain fields populated only for TS-backed computational kinetics. The\nservice must never fabricate TS links for non-TS-backed records.\n\n**``ts_opt_calculation_id``/``ts_opt_calculation_ref`` are always\n``null``, even on a TS-backed record.** ``_KINETICS_ROLE_COMPATIBILITY``\n(``app/services/kinetics_resolution.py``) permits only ``sp`` under the\n``ts_energy`` role and only ``freq`` under the ``freq`` role -- no\nkinetics source-calculation role accepts an optimisation, so no legal\nupload can ever cite one here. This is a deliberate, narrow claim\n(\"which calculation did this record's own citations name\"), not a data\ngap: the optimisation's level of theory is not lost, just not reachable\nthrough a direct citation. It is resolved one hop further -- via the\ncited ``freq``'s ``freq_on`` or the cited ``sp``'s ``single_point_on``\n``calculation_dependency`` parent edge -- into\n``KineticsRecord.levels.geometry`` instead; see that field and\n:func:`app.services.scientific_read.kinetics._build_kinetics_levels`\nfor the mechanism.\n\nPhase B: ``*_ref`` siblings carry the public stable handles for each\ninteger ``*_id`` field. The nested summary objects (path_search,\nprimary_level_of_theory, primary_software, etc.) carry their own\n``*_ref`` fields per their schemas.",
@@ -21035,6 +21711,15 @@
         "title": "KineticsProvenance",
         "type": "object"
       },
+      "KineticsRateProgressConvention": {
+        "description": "How the coefficient is normalised for a reactant with stoichiometric coefficient above one.\n\n``reactant_loss`` defines it on a reactant's loss rate, which for ``2 A -> products`` is\ntwice the rate of progress.",
+        "enum": [
+          "reaction_progress",
+          "reactant_loss"
+        ],
+        "title": "KineticsRateProgressConvention",
+        "type": "string"
+      },
       "KineticsReactionParticipantUpload": {
         "additionalProperties": false,
         "description": "Workflow-facing ordered participant slot for a kinetics upload.\n\n:param species_entry: Species-entry identity payload to resolve or create.\n:param note: Optional note stored on the structured participant row.",
@@ -21160,6 +21845,16 @@
               }
             ]
           },
+          "applicability_declaration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoredKineticsApplicabilityDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -21192,10 +21887,21 @@
             "$ref": "#/components/schemas/KineticsDegeneracyConvention",
             "default": "unknown"
           },
+          "determination_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Determination Id"
+          },
           "direction": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/KineticsDirection"
+                "$ref": "#/components/schemas/KineticsDirection-Output"
               },
               {
                 "type": "null"
@@ -21314,9 +22020,29 @@
               }
             ]
           },
+          "protocol_declaration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoredKineticsProtocolDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "reaction_entry_id": {
             "title": "Reaction Entry Id",
             "type": "integer"
+          },
+          "representation_role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsRepresentationRole-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "scientific_origin": {
             "$ref": "#/components/schemas/ScientificOriginKind"
@@ -21404,6 +22130,16 @@
       "KineticsRecord": {
         "description": "One kinetics record returned by the kinetics endpoint.\n\nPhase B: ``kinetics_ref`` is the public stable handle alongside\n``kinetics_id``.",
         "properties": {
+          "applicability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoredKineticsApplicabilityDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "assessments": {
             "anyOf": [
               {
@@ -21424,10 +22160,25 @@
               }
             ]
           },
+          "declaration_unreadable": {
+            "default": false,
+            "title": "Declaration Unreadable",
+            "type": "boolean"
+          },
+          "determination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsDeterminationBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "direction": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/KineticsDirection"
+                "$ref": "#/components/schemas/KineticsDirection-Output"
               },
               {
                 "type": "null"
@@ -21543,6 +22294,16 @@
               }
             ]
           },
+          "protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoredKineticsProtocolDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "provenance": {
             "$ref": "#/components/schemas/KineticsProvenance"
           },
@@ -21645,6 +22406,34 @@
         ],
         "title": "KineticsRecord",
         "type": "object"
+      },
+      "KineticsRepresentationRole-Input": {
+        "description": "What a kinetics record is within its determination (kinetics selection).",
+        "enum": [
+          "complete",
+          "additive_component"
+        ],
+        "title": "KineticsRepresentationRole",
+        "type": "string"
+      },
+      "KineticsRepresentationRole-Output": {
+        "description": "What a kinetics record is within the determination it belongs to.\n\n``complete``: a fitted representation of the whole determination, usable\nas a total-rate candidate on its own (a multi-Arrhenius or PLOG parent is\none complete representation however many child rows it has).\n``additive_component``: one term of a determination that is the sum of\nseveral records; on its own it is not a total-rate candidate.\nNULL (with no determination) means the record never said: a record\ndeposited before determinations existed, or without one.",
+        "enum": [
+          "complete",
+          "additive_component"
+        ],
+        "title": "KineticsRepresentationRole",
+        "type": "string"
+      },
+      "KineticsRotorTreatment": {
+        "description": "How internal rotation and vibration enter the partition functions.",
+        "enum": [
+          "rigid_rotor_harmonic_oscillator",
+          "hindered_rotor",
+          "anharmonic"
+        ],
+        "title": "KineticsRotorTreatment",
+        "type": "string"
       },
       "KineticsSearchReactionContext": {
         "description": "Resolved reaction/reaction-entry identity context for a kinetics record.\n\nPhase B: ``reaction_ref`` and ``reaction_entry_ref`` are the public\nstable handles alongside the integer IDs.",
@@ -22425,7 +23214,7 @@
       },
       "KineticsUploadRequest": {
         "additionalProperties": false,
-        "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param t0_k: Reference temperature T0 in K, so that\n    ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
+        "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param t0_k: Reference temperature T0 in K, so that\n    ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param determination: Needs ``direction`` and a literature or workflow tool.\n:param applicability: Optional declaration of what the coefficient is.\n:param protocol: Optional declaration of how the rate was produced.\n:param note: Optional free-text note.",
         "examples": [
           {
             "a": 1230000000000.0,
@@ -22506,6 +23295,16 @@
               }
             ]
           },
+          "applicability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsApplicabilityDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "arrhenius_entries": {
             "items": {
               "$ref": "#/components/schemas/MultiArrheniusEntryUpload"
@@ -22550,10 +23349,20 @@
             "$ref": "#/components/schemas/KineticsDegeneracyConvention",
             "default": "unknown"
           },
+          "determination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsDeterminationDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "direction": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/KineticsDirection"
+                "$ref": "#/components/schemas/app__db__models__common__KineticsDirection"
               },
               {
                 "type": "null"
@@ -22674,6 +23483,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/app__db__models__common__PressureContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsProtocolDeclaration"
               },
               {
                 "type": "null"
@@ -22856,6 +23675,17 @@
         ],
         "title": "KineticsUploadResult",
         "type": "object"
+      },
+      "KineticsZeroPointTreatment": {
+        "description": "How zero-point energy was obtained.",
+        "enum": [
+          "harmonic_unscaled",
+          "harmonic_scaled",
+          "anharmonic",
+          "none"
+        ],
+        "title": "KineticsZeroPointTreatment",
+        "type": "string"
       },
       "LegacyCompositeShape": {
         "description": "A record shape from before the ``composite`` calculation type existed (ADR 0021, P7a).\n\nAnnotated on reads, never repaired: the derived levels of such a record are\nexactly what they were, so a depositor's data is not silently re-read as\nsomething it did not claim to be.\n\n``composite_role_on_non_composite_calculation``: a calculation of another type\nis linked under the role ``composite``.\n``named_method_level_on_non_composite_calculation``: an ``opt`` or ``sp`` ran at\nthe level of a catalogued named composite method (CBS-QB3, G4, ...).",
@@ -45638,6 +46468,319 @@
         "title": "StorageCapacityStateResponse",
         "type": "object"
       },
+      "StoredKineticsApplicabilityDeclaration": {
+        "additionalProperties": false,
+        "description": "The stored (and served) form: every collider is a species public ref.",
+        "properties": {
+          "claim_origin": {
+            "$ref": "#/components/schemas/KineticsClaimOrigin"
+          },
+          "coefficient_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsCoefficientBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collider_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsColliderKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "colliders": {
+            "items": {
+              "$ref": "#/components/schemas/StoredKineticsCollider"
+            },
+            "title": "Colliders",
+            "type": "array"
+          },
+          "default_third_body_efficiency": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Third Body Efficiency"
+          },
+          "observable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsObservable"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsPhase"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pressure_dependence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsPressureDependence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pressure_domain_max_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure Domain Max Bar"
+          },
+          "pressure_domain_min_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure Domain Min Bar"
+          },
+          "rate_progress_convention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsRateProgressConvention"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reaction_order": {
+            "anyOf": [
+              {
+                "maximum": 4.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reaction Order"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/tckdb_schemas__enums__KineticsDeterminationTargetKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "claim_origin"
+        ],
+        "title": "StoredKineticsApplicabilityDeclaration",
+        "type": "object"
+      },
+      "StoredKineticsCollider": {
+        "additionalProperties": false,
+        "description": "A collider as stored and read back: the species public ref, and its mole fraction.",
+        "properties": {
+          "mole_fraction": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mole Fraction"
+          },
+          "species_ref": {
+            "minLength": 1,
+            "title": "Species Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species_ref"
+        ],
+        "title": "StoredKineticsCollider",
+        "type": "object"
+      },
+      "StoredKineticsProtocolCalculationRef": {
+        "additionalProperties": false,
+        "description": "A supporting calculation as stored and read back: public ref and purpose.",
+        "properties": {
+          "calculation_ref": {
+            "minLength": 1,
+            "title": "Calculation Ref",
+            "type": "string"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/KineticsCalculationPurpose"
+          }
+        },
+        "required": [
+          "calculation_ref",
+          "purpose"
+        ],
+        "title": "StoredKineticsProtocolCalculationRef",
+        "type": "object"
+      },
+      "StoredKineticsProtocolDeclaration": {
+        "additionalProperties": false,
+        "description": "The stored (and served) form: every supporting calculation is a public ref.",
+        "properties": {
+          "barrier_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsBarrierBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conformer_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsConformerTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "departures": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/KineticsDepartureComponent"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departures"
+          },
+          "geometry_relation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsGeometryRelation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsMethodKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method_other_name": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Other Name"
+          },
+          "path_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsPathTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rotor_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsRotorTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "supporting_calculations": {
+            "items": {
+              "$ref": "#/components/schemas/StoredKineticsProtocolCalculationRef"
+            },
+            "title": "Supporting Calculations",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "zero_point_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsZeroPointTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "StoredKineticsProtocolDeclaration",
+        "type": "object"
+      },
       "StoredThermoProtocolCalculationRef": {
         "additionalProperties": false,
         "description": "A supporting calculation as stored and read back: public ref only.",
@@ -55611,6 +56754,25 @@
         "title": "EnergyCorrectionApplicationRole",
         "type": "string"
       },
+      "app__db__models__common__KineticsDeterminationTargetKind": {
+        "description": "The rate a kinetics determination is declared to describe.\n\n``whole_reaction``: the coefficient of the reaction entry as a whole.\n``resolved_channel``: one named pathway, identified by a validated\ntransition state entry or by a network channel locator.",
+        "enum": [
+          "whole_reaction",
+          "resolved_channel"
+        ],
+        "title": "KineticsDeterminationTargetKind",
+        "type": "string"
+      },
+      "app__db__models__common__KineticsDirection": {
+        "description": "Direction a reaction-level kinetics fit describes (DR-0036).\n\nGraph-level ``chem_reaction.reversible`` only says a reaction *can* run\nboth ways; it cannot tell apart a forward-rate fit from a reverse-rate\nfit deposited against the same ``reaction_entry``. This per-record enum\ndisambiguates the two so both can coexist distinctly (needed for\nChemkin/Cantera round-trip, where forward and reverse rates are given\nas separate expressions).\n\n``forward`` / ``reverse`` are relative to the reaction_entry's stored\nreactant→product orientation. ``net`` marks a rate that already folds\nboth directions (e.g. an apparent/observed net rate). A ``NULL`` column\nmeans the producer did not specify — the historical default, so existing\nrows are unaffected.",
+        "enum": [
+          "forward",
+          "reverse",
+          "net"
+        ],
+        "title": "KineticsDirection",
+        "type": "string"
+      },
       "app__db__models__common__KineticsUncertaintyKind": {
         "description": "Interpretation of a kinetics scalar uncertainty.\n\n``multiplicative``: factor f, where the true value lies in\n``[value/f, value*f]`` (must be >= 1). The convention for Arrhenius A.\n\n``additive``: same units as the value; symmetric ±delta. Rare for A\nbut supported for completeness.",
         "enum": [
@@ -57541,6 +58703,25 @@
           "custom"
         ],
         "title": "EnergyCorrectionApplicationRole",
+        "type": "string"
+      },
+      "tckdb_schemas__enums__KineticsDeterminationTargetKind": {
+        "description": "The rate a kinetics determination is declared to describe.",
+        "enum": [
+          "whole_reaction",
+          "resolved_channel"
+        ],
+        "title": "KineticsDeterminationTargetKind",
+        "type": "string"
+      },
+      "tckdb_schemas__enums__KineticsDirection": {
+        "description": "Direction a reaction-level kinetics fit describes (DR-0036).",
+        "enum": [
+          "forward",
+          "reverse",
+          "net"
+        ],
+        "title": "KineticsDirection",
         "type": "string"
       },
       "tckdb_schemas__enums__KineticsUncertaintyKind": {
@@ -69630,7 +70811,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/KineticsDirection"
+                  "$ref": "#/components/schemas/app__db__models__common__KineticsDirection"
                 },
                 {
                   "type": "null"

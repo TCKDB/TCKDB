@@ -1443,13 +1443,16 @@ Fields:
 - `degeneracy`
 - `degeneracy_convention`
 - `tunneling_model`
+- `determination_id`, `representation_role` (see "Kinetics determination, applicability and protocol declarations")
+- `applicability_declaration`, `protocol_declaration` (JSONB, versioned)
 - `note`
 - `created_at`
 - `created_by`
 
-Related table:
+Related tables:
 
 - `kinetics_source_calculation(kinetics_id, calculation_id, role)`
+- `kinetics_determination` (identity; see below)
 
 Notes:
 
@@ -2032,3 +2035,139 @@ a method name alone satisfies no later evidence requirement.
   row of the exporting database and so cannot travel: a `single_conformer`
   target's group and the protocol's supporting calculations. Left out means
   absent, never replaced.
+
+## Kinetics determination, applicability and protocol declarations (2026-10-04)
+
+One new identity table and four nullable columns on `kinetics` let a depositor state three
+things a rate record could not state before. All are **attributed claims**: stored as made,
+never inferred, never defaulted, never backfilled. Every record deposited before this revision
+reads `NULL` for all four, and `NULL` means "not stated": not "a standalone rate", not
+"universally valid", not "standard". A selector built on these reads absence as *unresolved*.
+
+- `kinetics.determination_id` (FK to `kinetics_determination`) and `kinetics.representation_role`
+  (`kinetics_representation_role`: `complete` | `additive_component`), set together or not at all
+  (`ck_kinetics_determination_iff_role`).
+- `kinetics.applicability_declaration` and `kinetics.protocol_declaration` (JSONB). The database
+  checks only that each is an object with a numeric `version`
+  (`ck_kinetics_applicability_declaration_versioned_object`,
+  `ck_kinetics_protocol_declaration_versioned_object`); their shape is owned by
+  `tckdb_schemas.kinetics_declarations` (`extra="forbid"`, only version `1`).
+
+### The determination (`kinetics_determination`, public ref prefix `kdet`)
+
+One complete determination of a rate: a measurement set, or one computed rate. Several fitted
+representations of it (an Arrhenius fit and a Chebyshev fit of the same data, a multi-Arrhenius or
+PLOG parent with all its children) share it and are **not** independent support for one another;
+separate calculations or measurements are separate determinations. A separately uploaded additive
+component is declared `additive_component`: it is not a total-rate candidate on its own.
+
+- **Identity is content**: the reaction entry, the direction, the declared target
+  (`target_kind` `whole_reaction`, or `resolved_channel` naming exactly one of a
+  `transition_state_entry_ref` or a `network_ref` with `channel_key`), the source attribution
+  (literature, workflow-tool release) and a source-scoped `key`. `identity_hash` is the unique
+  SHA-256 of that content, so the same content resolves to one row. The record's fitting software is
+  deliberately not part of it: two fits of one determination may come from different tools.
+- **Immutable from creation**, including while shared: `trg_kinetics_determination_immutable`
+  refuses every UPDATE. A record that needs a different determination joins another row.
+- **Why the reaction entry is in the identity, and what that means for sharing.** Every upload
+  mints its own `reaction_entry`, and a determination is of one entry, so two separate uploads
+  never share a determination by restating its content. A record joins an existing determination
+  by citing `determination_ref`, which also **anchors the record to that determination's reaction
+  entry** (the submitted reaction content must be exactly that entry's, as for a transition-state
+  ref). Within one reaction bundle the fits share the bundle's entry, and within one contribution
+  bundle import, uploads that state the same determination content (same key, direction,
+  whole-reaction target, source and reaction) are anchored to one entry as the export grouped them.
+  A resolved-channel determination is anchored by its transition state, as a rate's tunneling or
+  interpretation evidence is.
+- **What a record must state to join**: its own `direction` (never inferred; the bundle route
+  accepts `forward` or `net` only, because a bundle fit is stored under an entry oriented as its own
+  keys, so a reverse fit swaps them) and a source (`literature` or `workflow_tool_release`).
+  Citing a ref requires the same reaction entry (by anchoring), direction and source attribution
+  (`kinetics_determination_mismatch`, `context.reason`).
+- A channel target must belong to the record's reaction: a transition state of that entry
+  (`"entry"` scope on the standalone route, any entry of the same reaction and structures on the
+  bundle route) or a network channel linked to it, either as the record's own
+  `network_kinetics` channel or through a channel micro-reaction of the same reaction.
+- Replacement of an accepted record also checks the declared target: where both records state a
+  determination, the two must be of the same `target_kind` and the same transition state or channel
+  (the determination key and source are not compared: a re-measurement is another determination of
+  the same target). Where either states none, nothing can be compared and the replacement is allowed;
+  the record's read keeps saying `determination: null`.
+
+### Applicability declaration (version 1)
+
+What the stored coefficient is a coefficient *of*. Every statement is optional (omitted = unknown);
+`claim_origin` (`source_publication` | `depositor_interpretation`) is required.
+
+| Field | Meaning |
+| --- | --- |
+| `phase` | `gas` (the vocabulary starts there). |
+| `observable` | `rate_coefficient`, `rate_of_progress`, `effective_global_law`. The last two can be stated so they are reported as what they are; a rate-coefficient selector treats them as unsupported. |
+| `coefficient_basis` | `elementary_coefficient`, `third_body_kernel` (a simple `+M` coefficient still to be multiplied by an effective collider concentration), `composition_effective_coefficient` (already evaluated for one declared mixture). |
+| `scope` | `whole_reaction` or `resolved_channel`; must agree with the determination's `target_kind`. |
+| `reaction_order` | Concentration order of the coefficient (reactants, plus one for a simple third-body kernel). |
+| `rate_progress_convention` | `reaction_progress` or `reactant_loss` (the factor of two for `2 A -> products`). |
+| `pressure_dependence` | `independent` (established; a null pressure context is not that), `high_pressure_limit`, `fixed_pressure`, `pressure_dependent`; with `pressure_domain_min_bar`/`pressure_domain_max_bar` (both or neither) for a pressure-dependent model's stated validity domain. |
+| `collider_kind` | `not_dependent`, `specified_collider` (one collider, no mole fraction), `fixed_mixture` (at least two, each with a mole fraction summing to one within an absolute 1e-9, never renormalised, none repeated), `composition_dependent` (through the record's own efficiencies, with the source's `default_third_body_efficiency` if it states one). Colliders are species content on the wire and species public refs once stored. |
+
+**The existing columns stay authoritative.** A declaration that contradicts one is refused
+(`kinetics_declaration_contradicts_record`), never reconciled: a pressure claim against
+`pressure_context`/`pressure_bar`/`model_kind`/a network link (a fixed pressure needs the record's own
+`apparent_at_pressure` and `pressure_bar`; a PLOG, Chebyshev, falloff or network-linked record cannot
+be declared pressure independent, limiting or fixed), the coefficient basis against `is_third_body`,
+the collider kind against the record's third-body or falloff treatment, the order against the
+reaction's reactant count, and the scope against the determination's target. A column that is not
+stated is not a contradiction. Temperature bounds, units and degeneracy keep their own columns and
+are not restated here.
+
+### Protocol declaration (version 1)
+
+How the rate was produced; an attributed claim, **not verified** against the linked calculations (a
+later selection step reads what the links show and reports a claim as declared, verified or
+contradicted). At least one statement is required; all are optional.
+
+| Field | Meaning |
+| --- | --- |
+| `method_kind` | `experimental`, `saddle_point_tst`, `variational_tst`, `barrierless_capture`, `master_equation`, `other` (then `method_other_name` is required). Must agree with the record's `scientific_origin` (`kinetics_declaration_contradicts_record`). |
+| `barrier_basis` | `classical_electronic` or `zpe_corrected`. |
+| `zero_point_treatment` | `harmonic_unscaled`, `harmonic_scaled`, `anharmonic`, `none`. |
+| `geometry_relation` | `optimized_at_energy_level` or `optimized_at_other_level`. |
+| `rotor_treatment` / `conformer_treatment` / `path_treatment` | `rigid_rotor_harmonic_oscillator`/`hindered_rotor`/`anharmonic`; `single_conformer`/`boltzmann_ensemble`/`multistructural`; `single_path`/`multipath_truncated`/`multipath_full`. |
+| `departures` | Three states: omitted = not stated; `[]` = none; a list of parts changed from the standard form of the method (`geometry`, `frequencies`, `zero_point_energy`, `electronic_energy`, `empirical_correction`, `tunneling`, `other`). Only `[]` says "standard". |
+| `supporting_calculations` | `{calculation_key | calculation_ref, purpose}` (`geometry`, `frequency`, `electronic_energy`, `zero_point_energy`, `irc`); each calculation must belong to a participant of the record's reaction or to its transition state (`kinetics_protocol_calculation_owner_mismatch`). Stored as public refs. |
+
+The tunneling model stays in its existing column (`tunneling_model`, with
+`kinetics_tunneling_application`); the energy and statistical-mechanics interpretation links stay in
+`kinetics_source_calculation` and `kinetics_interpretation_assignment`. The protocol adds only what no
+column or link states.
+
+### Where each rule is enforced
+
+Three layers, none removable because another exists: the request schema (`kinetics_declaration_error`,
+shared with the client builder), `resolve_kinetics_declarations` (re-derives every check from the
+declaration, so a `model_construct` payload is judged the same) and
+`assert_kinetics_declaration_columns`, the last stop in `persist_kinetics` and in the reaction bundle
+workflow, which build the `kinetics` row.
+
+### Lifecycle
+
+- **Immutability.** `trg_as_root_kinetics` refuses any UPDATE of an accepted kinetics row, whichever
+  column it touches, so the four columns are frozen with the row; the determination is immutable on
+  its own. No accepted-science repair declaration lists them.
+- **Digests.** The four columns are registered in `UNCHANGED_DEFAULTS` with value `NULL`: a legacy row's
+  consistency-input hash and reproducibility snapshot are what they were before the revision, and a
+  record that states one hashes differently. Unlike the thermo declarations they are **not** kept out of
+  the consistency hash: the declared meaning is part of what a stored advisory finding rests on. The linked
+  determination's content is added to both snapshots only when a record has one.
+- **Reads.** `KineticsRecord.determination` (`determination_ref`, `key`, `direction`, `target`,
+  `representation_role`), `applicability`, `protocol` (stored forms); all `null` for a legacy record. A
+  stored declaration that no longer validates is served as `null` with `declaration_unreadable: true` and
+  logged; it never fails the listing.
+- **Contribution bundles.** Export carries the record's `direction`, `is_third_body`, `pressure_context`
+  and `pressure_bar` (the columns a declaration is checked against), a whole-reaction determination
+  (key, target, role), the applicability declaration with its colliders as species content, and the
+  protocol without its supporting calculations. It leaves out, and reports as a `declaration_pruned`
+  omission, what names a row of the exporting database: a resolved-channel determination and the
+  supporting calculations. Left out means absent, never replaced.
+- **Release and archive.** A released kinetics record ships its determination embedded (without the
+  identity hash, which digests this database's ids); the archive carries the table.

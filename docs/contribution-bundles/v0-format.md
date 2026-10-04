@@ -183,6 +183,15 @@ Family rules for v0:
   **must not** contain any `thermo_uploads`.
 - Mixed bundles are explicitly rejected.
 
+### Kinetics declarations in a bundle
+
+A `kinetics_uploads` entry may carry `determination`, `applicability` and `protocol` (see
+`backend/schema_spec.md` § "Kinetics determination, applicability and protocol declarations"). Uploads of
+one bundle that state the same determination content (key, direction, whole-reaction target, source and
+reaction) are imported under one reaction entry and share one determination, as the exporter grouped
+them. The exporter writes what a portable bundle can carry and reports what it cannot (a
+resolved-channel determination, a protocol's supporting calculations) as a `declaration_pruned` omission.
+
 ### Exporting legacy thermo rows (undeclared enthalpy)
 
 `ThermoUploadRequest.enthalpy_reference_kind` declares what an exported

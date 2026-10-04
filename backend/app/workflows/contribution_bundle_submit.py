@@ -290,6 +290,9 @@ def _import_kinetics_bundle(
     match ``POST /uploads/kinetics``.
     """
     records: list[ContributionBundleSubmittedRecord] = []
+    # One bundle import: uploads that state the same determination content share one
+    # reaction entry and so one determination, as the exported bundle grouped them.
+    determination_anchors: dict[str, int] = {}
     for index, upload in enumerate(bundle.records.kinetics_uploads):
         local_ref = f"kinetics_uploads[{index}]"
         warnings = kinetics_request_warnings(upload)
@@ -299,6 +302,7 @@ def _import_kinetics_bundle(
             created_by=actor_id,
             review_policy=review_policy,
             warnings=warnings,
+            determination_anchors=determination_anchors,
         )
         messages_out.extend(
             _import_warning_messages(

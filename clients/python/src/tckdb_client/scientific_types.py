@@ -266,6 +266,15 @@ class KineticsDetailRecord(TypedDict, total=False):
     supersession: SupersessionNotice | None
     kinetics_id: int
     direction: str | None
+    # What the depositor declared (attributed claims, not verified facts): the determination
+    # this record is a representation of, what the coefficient is, and how the rate was
+    # produced. ``null`` means not stated, never "standalone" or "universally valid".
+    determination: JSONDict | None
+    applicability: JSONDict | None
+    protocol: JSONDict | None
+    # ``True`` when a stored declaration no longer validates (written outside the upload
+    # path): the declaration reads ``null`` and the rest of the record is served.
+    declaration_unreadable: bool
     tunneling_model: str | None
     is_third_body: bool
     pressure_context: JSONDict | None

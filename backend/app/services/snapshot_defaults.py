@@ -38,6 +38,19 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     ("thermo", "thermodynamic_target_kind"): None,
     ("thermo", "target_conformer_group_id"): None,
     ("thermo", "protocol_declaration"): None,
+    # kinetics.determination_id / representation_role / applicability_declaration /
+    # protocol_declaration: a kinetics row stored before the columns existed declared no
+    # determination, no role, no applicability and no protocol, which is NULL. A record that
+    # states one includes the column, so its digest differs, as its meaning does: unlike the
+    # thermo declarations these are *not* kept out of the consistency hash, so a stored
+    # advisory finding goes stale when a record's declared meaning changes. The linked
+    # determination's own content is added to both snapshots only when a record has one
+    # (``consistency.kinetics`` and ``reproducibility_rubric``), so a legacy record gains no
+    # key. Adding the columns restales no stored review or assessment of any existing row.
+    ("kinetics", "determination_id"): None,
+    ("kinetics", "representation_role"): None,
+    ("kinetics", "applicability_declaration"): None,
+    ("kinetics", "protocol_declaration"): None,
 }
 
 
