@@ -1,0 +1,218 @@
+# Candidate pressure-dependent network preference rules, audit manifest version 0.1.0 (2026-10-04).
+#
+# NOTHING HERE IS ACTIVE. Every entry has activation_approved: false, no curator acceptance and a list of
+# blockers, and the registry (app.services.network_selection.rules) loads this file only against its pinned
+# SHA-256 and registers each entry INACTIVE. An agent never activates a rule: activation needs the owner's signed
+# acceptance in this file AND the rule's predicates to be implemented and reviewed, and neither exists. A change to
+# an entry, a blocker or a source list is a new manifest version, a new pin and a new rule version, never an
+# in-place edit.
+#
+# Provenance of what follows. These are the council examples of the Network-v1 proposal (council rationale of
+# 2026-10-04, section 3). The council read the ACP paper's open-access HTML and first-party RMG/Cantera
+# documentation, saw the Johnson/Green article only through indexed primary-article passages (direct opens returned
+# 403), and saw Jasper/Miller at abstract level. No paywalled paper was downloaded for this audit, no numerical
+# table was extracted and no fit or benchmark was reconstructed. Each entry therefore says what is missing, and
+# `evidence_needed` lists exactly which paper, table or data the owner would have to supply or authorise before any
+# of them could be considered.
+manifest_version: 0.1.0
+manifest_date: '2026-10-04'
+audit_status: inactive_registered_with_missing_prerequisites
+rules:
+
+- rule_id: N-AMEDRO-HE-FC
+  version: 0.1.0
+  objective: representation_fidelity
+  objective_key: named_dataset_reproduction_falloff_broadening
+  observable: rate_coefficient
+  activation_approved: false
+  owner_acceptance: null
+  citation: Amedro, D. et al., Atmos. Chem. Phys. 20, 3091-3105 (2020), OH + NO2 (+M) total loss in He, N2 and humid mixtures. https://acp.copernicus.org/articles/20/3091/2020/
+  council_observation: >-
+    The study distinguishes product-summed loss from HNO3-only formation and shows bath-sensitive falloff. Its He fit
+    with Fc = 0.32 reproduces the stated dataset better than imposing the N2 value 0.39.
+  proposed_statement: >-
+    For the named OH + NO2 dataset in He, a representation fitted with the He-specific broadening factor is preferred
+    over one that imposes the N2 factor, on the objective of reproducing that dataset. A named-dataset reproduction
+    objective, not independent physical validation and not a universal predictive-accuracy claim.
+  required_predicates:
+  - The candidate's observable is total loss of OH + NO2 (not HNO3-only formation) and its coefficient basis states the bath.
+  - The candidate's bath is He (a specified collider); a humid or mixed bath needs an applicable mixture treatment.
+  - The two representations being compared are fits of the same pinned dataset, with the dataset members named.
+  - The temperature and pressure domain of the request lies inside the dataset's domain.
+  exceptions:
+  - A request for HNO3-only formation (needs branching evidence this study does not give for the requested form).
+  - A humid or composition-dependent bath.
+  activation_blockers:
+  - id: compared_objects_are_falloff_fits
+    text: The compared objects are Troe falloff fits (an elementary kinetics model with a broadening factor Fc). Network
+      selection compares Chebyshev and PLOG products of one solve; a Troe-form pair is not a pair of network fits, so no
+      network rule can be stated until the owner decides whether such a comparison belongs to elementary kinetics only.
+  - id: dataset_members_not_extracted
+    text: The experimental points (temperature, pressure, bath, measured rate coefficient and uncertainty) were not
+      extracted, so the reproduction metric, the domain and the member list the rule needs cannot be pinned.
+  - id: fit_parameters_not_audited
+    text: k0, kinf and Fc values per bath, and the fitting procedure, were read at abstract and summary level only.
+  - id: no_verified_evidence_state
+    text: TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that
+      needs verified dataset-reproduction evidence cannot be satisfied.
+  evidence_needed:
+  - source: Amedro et al., Atmos. Chem. Phys. 20, 3091 (2020), open access
+    items: the table of experimental conditions and measured rate coefficients, the table of fitted k0, kinf and Fc per bath, the uncertainty statement
+  - source: the same paper's supplement, if any
+    items: the full dataset in machine-readable form
+  - source: owner decision
+    items: whether a Troe-falloff comparison is in scope for network selection at all
+
+- rule_id: N-JG-REDUCTION-FIDELITY
+  version: 0.1.0
+  objective: model_fidelity
+  objective_key: reduction_fidelity_to_energy_grained_flux
+  observable: rate_coefficient
+  activation_approved: false
+  owner_acceptance: null
+  citation: Johnson, M. S. and Green, W. H., Faraday Discuss. (2022), https://pubs.rsc.org/en/content/articlehtml/2022/fd/d2fd00040g (acetyl + O2 in N2).
+  council_observation: >-
+    Controlled reductions are compared against energy-grained master-equation fluxes. SLS variants improve some tested
+    low-pressure cases, while every tested reduction fails in some conditions and a modified-barrier case defeats a
+    universal hierarchy.
+  proposed_statement: >-
+    For one pinned PES variant, bath, temperature and pressure cell set, initialization, observation window and error
+    metric, a reduction shown to track the energy-grained flux more closely is preferred over one shown to track it
+    less closely, on the objective of fidelity to that pinned master-equation model.
+  required_predicates:
+  - Both candidates carry the same pinned physical model (PES variant and inputs) and differ only in the reduction.
+  - The request lies inside the tested temperature and pressure cells, with the same initialization and observation window.
+  - The reference model is a pinned energy-grained solve of that PES, named in the request.
+  - The comparison metric and its reference uncertainty are stated.
+  exceptions:
+  - The modified-barrier case, where the council records that no universal reduction hierarchy holds.
+  - Any condition the study reports as a failure of every tested reduction.
+  activation_blockers:
+  - id: exact_cells_and_metric_unaudited
+    text: The tested PES variants, bath composition, temperature and pressure cells, initial and source conditions,
+      observation time and metric were seen only through indexed passages; detailed figures and data are unaudited.
+  - id: article_inaccessible_to_the_auditor
+    text: Direct access to the article returned 403; the full text, figures and any supplement were not read.
+  - id: reduction_vocabulary_unmapped
+    text: The study's "SLS" and other reduction variants have not been mapped to TCKDB's reduction vocabulary, and that
+      mapping must not be guessed.
+  - id: transient_flux_is_not_a_phenomenological_coefficient
+    text: Fidelity of a transient flux does not independently validate the physical chemistry or identify a unique
+      phenomenological coefficient; a time-regime mapping for the requested observable is not defined.
+  evidence_needed:
+  - source: Johnson and Green, Faraday Discuss. (2022), d2fd00040g, full text (RSC; the owner must supply it)
+    items: the definition of each reduction variant, the PES variants, the bath, every temperature and pressure cell tested, initial conditions, observation time, the error metric and the per-cell results
+  - source: the same article's electronic supplementary information
+    items: the numerical data behind the comparison figures
+  - source: owner decision
+    items: the mapping from the study's reduction names to TCKDB's reduction_method vocabulary, and a time-regime mapping
+
+- rule_id: N-JM-CH4-TRANSFER
+  version: 0.1.0
+  objective: physical_accuracy
+  objective_key: energy_transfer_interaction_potential
+  observable: rate_coefficient
+  activation_approved: false
+  owner_acceptance: null
+  citation: Jasper, A. W. and Miller, J. A., J. Phys. Chem. A (2011), https://pubs.acs.org/doi/abs/10.1021/jp200048n (CH4 collisional energy transfer).
+  council_observation: >-
+    The studied interaction-potential comparison identifies useful transfer-physics distinctions; changing the
+    intramolecular electronic treatment did not necessarily improve transfer averages. The accessible evidence is
+    abstract-level.
+  proposed_statement: >-
+    For CH4 in the studied baths and temperature range, a collisional energy-transfer treatment built on one studied
+    interaction potential is preferred over one built on another, on the objective of agreement with the study's
+    reference transfer data. No universal whole-rate level-of-theory preference.
+  required_predicates:
+  - The candidates differ only in the energy-transfer treatment (the interaction potential), the rest of the coupled protocol verified equal.
+  - The bath and the temperature range lie inside the studied baths and range.
+  - The reference transfer data and their uncertainty are pinned.
+  exceptions:
+  - A claim that a better intramolecular electronic treatment improves energy transfer (the council records it did not necessarily).
+  activation_blockers:
+  - id: abstract_level_evidence_only
+    text: Only the abstract was accessible. The exact interaction potentials, baths, temperature range, reference data and
+      uncertainties were not extracted.
+  - id: transfer_treatment_not_a_typed_field
+    text: A network protocol declaration (version 1) has no field naming the interaction potential or transfer-kernel model
+      behind a solve's energy-transfer rows, so a candidate cannot state the property the rule would compare.
+  - id: whole_rate_comparison_not_supported
+    text: A comparison of the transfer treatment alone says nothing about the rate unless every other contribution is
+      verified equal, which needs the typed protocol fields above.
+  evidence_needed:
+  - source: Jasper and Miller, J. Phys. Chem. A (2011), jp200048n, full text (ACS; the owner must supply it)
+    items: the interaction potentials compared, the baths, the temperature range, the transfer-average results and their uncertainties
+  - source: the same article's supporting information
+    items: tabulated transfer averages per potential, bath and temperature
+  - source: owner decision
+    items: a typed energy-transfer treatment declaration (a new protocol vocabulary entry)
+
+- rule_id: N-ME-CONVERGENCE
+  version: 0.1.0
+  objective: model_fidelity
+  objective_key: same_model_numerical_convergence
+  observable: rate_coefficient
+  activation_approved: false
+  owner_acceptance: null
+  citation: proposed evidence rule; RMG master-equation theory documentation (https://reactionmechanismgenerator.github.io/RMG-Py/theory/pdep/master_equation.html) is background, not a comparison.
+  council_observation: >-
+    A verified converged determination may be preferred to a demonstrated inaccurate discretization or reduction of
+    the same physical model, for the same objective, with reference uncertainty and fit error controlled. Grain count
+    alone, a smaller training residual alone, or convergence to an inaccurate physical model establishes nothing.
+  proposed_statement: >-
+    Between two solves of the same pinned physical model, one with verified convergence evidence over the whole
+    requested domain is preferred to one with demonstrated inadequate convergence, on the objective of fidelity to
+    that model.
+  required_predicates:
+  - Both solves carry the same pinned physical model, and differ only in discretization or reduction.
+  - Convergence evidence is verified (not declared) for the preferred solve over the whole requested domain, with its reference and uncertainty.
+  - Inadequate convergence is demonstrated for the yielding solve, not merely unstated.
+  - The fit error of each representation is controlled.
+  exceptions:
+  - A larger grain count or a lower fit residual without controlled convergence evidence.
+  activation_blockers:
+  - id: no_source_comparison
+    text: This is a proposed evidence rule. No source comparison or benchmark was audited, and no convergence reference
+      is pinned.
+  - id: no_verification_step
+    text: A producer's convergence entry is stored as declared; TCKDB has no step that verifies it, so the prerequisite
+      "verified" cannot be satisfied for any record.
+  - id: same_model_not_expressible
+    text: "Two solves being of the same physical model is not a stated fact in the schema (no model identity beyond the
+      network and the declared protocol), so the pair's compatibility cannot be verified."
+  evidence_needed:
+  - source: owner decision
+    items: the convergence criterion, the reference (a pinned converged solve) and its uncertainty, and the verification procedure that would turn a declared entry into a verified one
+  - source: a controlled-convergence study of a real network (to be named by the owner)
+    items: the grain, energy-ceiling and reduction sweeps with their error metric over the stated domain
+
+- rule_id: N-REP-HELDOUT
+  version: 0.1.0
+  objective: representation_fidelity
+  objective_key: heldout_representation_validation
+  observable: rate_coefficient
+  activation_approved: false
+  owner_acceptance: null
+  citation: proposed evidence rule (the Network-v1 council record, section 3, "alternate fits of one solve").
+  council_observation: >-
+    Demonstrated independent representation fidelity can select a better fit for a declared domain metric while
+    retaining common-source dependence. Fit quality does not rank different physical solves.
+  proposed_statement: >-
+    Between two alternate fits of one solve's output, the fit with a better held-out error under one declared metric
+    over the requested domain is preferred, on the objective of fidelity to the supplied output. It ranks no physical
+    solve and adds no independent confirmation.
+  required_predicates:
+  - Both fits are representations of the same determination.
+  - A held-out (independently checked) point set, its domain and its metric are pinned for the supplied output.
+  - The error of each fit is verified on that set over the whole requested domain.
+  exceptions:
+  - Training-set residual alone.
+  activation_blockers:
+  - id: no_pinned_heldout_set
+    text: No held-out point set or supplied-output dataset is pinned for any stored solve.
+  - id: no_verification_step
+    text: A producer's representation-validation entry is stored as declared and is never verified, so the prerequisite
+      cannot be satisfied.
+  evidence_needed:
+  - source: owner decision
+    items: the held-out set and metric to pin for a named solve, and the procedure that verifies a representation-validation entry
