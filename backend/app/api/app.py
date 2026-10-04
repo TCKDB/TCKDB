@@ -127,7 +127,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="TCKDB",
         version="0.1.0",
-        description="Thermochemical and Kinetics Database API",
+        description="Theoretical Chemical Kinetics Database API",
         lifespan=_lifespan,
         **docs_kwargs,
     )

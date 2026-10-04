@@ -75,8 +75,9 @@ programmatic ingestion.
 
 A short summary:
 
-> TCKDB is a provenance-rich thermochemistry and kinetics database for
-> computational and experimental chemical data.
+> TCKDB, the Theoretical Chemical Kinetics Database, is a provenance-rich
+> thermochemistry and kinetics database for computational and experimental
+> chemical data.
 
 The point is not just storage — it is **queryable scientific records
 with provenance and trust state**, addressed by stable public refs and

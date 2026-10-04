@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## TCKDB is the Theoretical Chemical Kinetics Database (2026-10-04)
+
+- `CITATION.cff`, the API description, the documentation site description and the README now spell TCKDB out as
+  the Theoretical Chemical Kinetics Database, the project's original name, which the web interface already used.
+  Nothing else changes.
+
 ## The XYG3 barrier rule reads a record's declared level (2026-10-04)
 
 - The rule `K-XYG3-B3LYP-BARRIER` (still inactive and unsigned; rule 0.2.0, manifest 0.2.0) takes its method evidence

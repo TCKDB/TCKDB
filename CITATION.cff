@@ -28,7 +28,7 @@
 # who needs to cite the numbers reaches the dataset release anyway, which
 # names its own license in the manifest it is cited by.
 cff-version: 1.2.0
-title: "TCKDB — Thermochemical and Kinetics Database"
+title: "TCKDB — Theoretical Chemical Kinetics Database"
 message: >-
   If you use this software, please cite it using the metadata in this file.
   If you use data obtained from a TCKDB instance, please additionally cite
