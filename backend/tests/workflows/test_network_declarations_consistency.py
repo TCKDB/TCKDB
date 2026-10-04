@@ -27,7 +27,6 @@ from tests.workflows.test_network_declarations import (
     _refusal,
     _target,
 )
-from tests.workflows.test_network_pdep_upload import _full_payload
 
 
 def accepted(payload: dict) -> NetworkPDepUploadRequest:
@@ -172,7 +171,7 @@ def test_a_declared_validity_equal_to_or_inside_the_solves_range_is_accepted() -
         {"temperature_min_k": 400.0, "temperature_max_k": 1000.0, "pressure_min_bar": 0.1, "pressure_max_bar": 10.0},
     ):
         payload["solve"]["target"]["validity"] = validity
-        payload["solve"]["target"]["outputs"] = [o for o in _target()["outputs"]]
+        payload["solve"]["target"]["outputs"] = list(_target()["outputs"])
         assert accepted(payload).solve.target.validity is not None
 
 
