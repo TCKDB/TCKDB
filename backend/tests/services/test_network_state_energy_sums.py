@@ -249,3 +249,41 @@ def test_the_warnings_name_partial_sources_once_and_skip_unsourced_states() -> N
         ("network_state_energy_sources_partial", "solve.state_energies[0]"),
         ("network_state_energy_sum_not_compared", "solve.state_energies"),
     ]
+
+
+def _chain(offsets_kj, precision=None):
+    """Five single-point states on a lowest_state zero, each stated off its sum by an offset."""
+    zero = EnergyZeroConvention.lowest_state
+    return [
+        _state(
+            index,
+            f"s{index}",
+            (-10.0 + 0.5 * index - -10.0) * H + offset,
+            [(f"a{index}", 1, _sp(-10.0 + 0.5 * index))],
+            zero=zero,
+            precision=precision,
+        )
+        for index, offset in enumerate(offsets_kj)
+    ]
+
+
+@pytest.mark.parametrize("precision", [None, 4.184, 0.1])
+def test_a_chain_of_drifting_offsets_is_refused_though_no_state_has_a_majority(precision) -> None:
+    """0, 0, 3.5, 7, 7 kJ/mol: neighbours are inside the allowance, the ends are 7 kJ/mol apart."""
+    with pytest.raises(CodedValueError) as raised:
+        compare_state_energy_sums(_chain((0.0, 0.0, 3.5, 7.0, 7.0), precision))
+    context = raised.value.context
+    assert raised.value.code == "network_state_energy_sum_mismatch"
+    assert context["inconsistent_state_keys"], context
+
+
+def test_a_chain_inside_the_allowance_is_not_refused() -> None:
+    results = compare_state_energy_sums(_chain((0.0, 0.0, 1.0, 2.0, 2.0)))
+    assert all(r.status in ("agrees", "not_compared") for r in results)
+
+
+def test_no_state_with_a_bad_pair_is_ever_stored_as_agreeing() -> None:
+    """Three states where only one pair is bad: it refuses, so no result can say agrees for them."""
+    with pytest.raises(CodedValueError):
+        compare_state_energy_sums(_chain((0.0, 0.0, 0.0, 0.0, 9.0)))
+

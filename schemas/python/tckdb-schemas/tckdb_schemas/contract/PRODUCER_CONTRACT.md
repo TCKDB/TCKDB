@@ -9863,7 +9863,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/network_energy_sources.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
-- Note: A network solve's state energy cites one calculation per participant and contradicts the sum of the stored energies, weighted by stoichiometry, beyond the printed-precision tolerance max(1e-6, 5e-7 * n) hartree (n = 1 + the sum of the stoichiometric coefficients on an absolute zero; n = 2 + both states' coefficient sums when two states on a shared lowest_state / entrance_channel zero are compared as a difference).
+- Note: A network solve's state energy cites one calculation per participant and contradicts the sum of the stored energies, weighted by stoichiometry, beyond both printed precision (max(1e-6, 5e-7 * n) hartree; n = 1 + the sum of the stoichiometric coefficients on an absolute zero, 2 + both states' coefficient sums for a difference on a shared lowest_state / entrance_channel zero) and the honest-rounding allowance: half of energy_precision_kj_mol (1 kcal/mol when not stated) per stated energy, plus 1e-6 of the value on an absolute energy.
 - Scientific check: [`persist_transition_state_validation_evidence`](#k-persist-transition-state-validation-evidence).
 
 <a id="c-network-state-key-undeclared"></a>

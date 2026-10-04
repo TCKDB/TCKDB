@@ -737,7 +737,8 @@ def _sum_mismatch(
             f"'{energy.state_key}' and '{against.energy.state_key}' differ by {stated_gap!r} "
             f"kJ/mol, but the sums of the energies stored for the calculations they cite differ "
             f"by {stored_gap!r} kJ/mol (disagreement {gap:.3e}, beyond the {bound:.3e} that "
-            "printed-precision and rounding explain). One of the two states' energies or sources "
+            "printed-precision and rounding explain). Either state may be the wrong one: one of the two "
+            "states' energies or sources "
             "is wrong."
         )
     return CodedValueError(E_NETWORK_STATE_ENERGY_SUM_MISMATCH, message, context=context)
@@ -762,9 +763,10 @@ def compare_state_energy_sums(energies: Sequence[StateEnergyToCompare]) -> list[
     raises. Between the two the energy is ``not_compared`` / ``stated_precision_unknown``, unless
     the producer stated ``energy_precision_kj_mol`` for it.
 
-    Several states on a shared zero are compared pairwise. The one blamed is the outlier: a state
-    inconsistent with a strict majority of the others. With two states neither can be called the
-    outlier, so both are named in the refusal.
+    Several states on a shared zero are compared pairwise, and a pair beyond the allowance always
+    refuses. The majority vote only picks the state named: the outlier inconsistent with a strict
+    majority of the others, else the state with the most bad pairs. Its partners are listed in
+    ``inconsistent_state_keys``; with two states either may be the wrong one.
 
     :raises CodedValueError: ``network_state_energy_sum_mismatch``.
     """
@@ -828,10 +830,14 @@ def compare_state_energy_sums(energies: Sequence[StateEnergyToCompare]) -> list[
         inconsistent = {
             a: [b for b in range(count) if b != a and _pair(a, b)[0] == "bad"] for a in range(count)
         }
-        # Blame the outliers: states inconsistent with a strict majority of the others.
-        blamed = [a for a in range(count) if 2 * len(inconsistent[a]) > count - 1]
-        if blamed:
-            a = blamed[0]
+        # Any pair beyond the allowance is a provable contradiction: refuse. The majority vote only
+        # chooses whom to name: the outlier inconsistent with a strict majority of the others; when
+        # nobody has a majority (two states, or a chain of drifting offsets) the state with the
+        # most bad pairs, the earliest on a tie.
+        in_conflict = [a for a in range(count) if inconsistent[a]]
+        if in_conflict:
+            outliers = [a for a in in_conflict if 2 * len(inconsistent[a]) > count - 1]
+            a = outliers[0] if outliers else max(in_conflict, key=lambda x: (len(inconsistent[x]), -x))
             partners = sorted(inconsistent[a], key=lambda b: group[b][0])
             b = partners[0]
             _band, tolerance, allowance, difference = _pair(a, b)
