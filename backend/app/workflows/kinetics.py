@@ -72,15 +72,15 @@ from app.services.kinetics_ts_scope import (
 from app.services.kinetics_ts_scope import (
     transition_state_belongs_to_rate as _transition_state_belongs_to_rate,
 )
-from app.services.record_review import (
-    RecordRef,
-    ReviewPolicy,
-    apply_review_policy,
-)
 from app.services.reaction_resolution import (
     W_REACTION_REVERSIBLE_DEFAULTED,
     compress_species_stoichiometry,
     resolve_unstated_reversible,
+)
+from app.services.record_review import (
+    RecordRef,
+    ReviewPolicy,
+    apply_review_policy,
 )
 from app.services.species_resolution import resolve_species, resolve_species_entry
 from app.services.upload_reference import (
