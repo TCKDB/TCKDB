@@ -367,6 +367,10 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 #: a ceiling exists to notice regrowth, and 10 percent (68 KB) is about eight of the contract-touching
 #: pull requests that each hit the old one, so none would be asked to trim. 22 KB covers two such
 #: pull requests landing together; a third has to find savings first.
+#:
+#: At 0.98.0 "What changed" stopped copying every changelog entry (69 KB, a tenth of the file and growing
+#: each release) and prints the newest few; the full changelog ships beside the contract. 696_926 to
+#: 634_736 bytes, with the ceiling left where it was.
 MARKDOWN_BYTE_CEILING = 700_000
 
 

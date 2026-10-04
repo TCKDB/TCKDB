@@ -151,6 +151,7 @@ PYPROJECT = PACKAGE_ROOT / "pyproject.toml"
 CHANGELOG = PACKAGE_ROOT / "CHANGELOG.md"
 CONTRACT_DIR = PACKAGE_ROOT / "tckdb_schemas" / "contract"
 MARKDOWN_NAME = "PRODUCER_CONTRACT.md"
+CHANGELOG_NAME = "CHANGELOG.md"
 SCHEMA_SUBDIR = "schemas"
 SCHEMA_SUFFIX = ".schema.json"
 
@@ -1501,6 +1502,10 @@ class ChangelogError(Exception):
     """The package version has no CHANGELOG entry."""
 
 
+#: How many changelog entries "What changed" prints. The full history (69 KB by 0.97.0, a tenth of the
+#: contract and growing with every release) ships as its own file, which ``--since`` reads.
+RECENT_CHANGES = 5
+
 #: How many refusals a surface's "Will be refused if" list prints.
 TOP_REFUSALS = 8
 
@@ -2007,12 +2012,13 @@ class ContractBuilder:
         out = [
             "## What changed",
             "",
-            "Every entry of `schemas/python/tckdb-schemas/CHANGELOG.md`, newest first,"
-            " copied verbatim. `python -m tckdb_schemas.contract --since <version>` prints"
-            " only the entries newer than the version your adapter targets.",
+            f"The newest {RECENT_CHANGES} entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied"
+            " verbatim. Every entry ships beside this file as `CHANGELOG.md`;"
+            " `python -m tckdb_schemas.contract --since <version>` prints the ones newer than the version"
+            " your adapter targets.",
             "",
         ]
-        for entry in entries:
+        for entry in entries[:RECENT_CHANGES]:
             # A heading inside an entry is demoted below the entry's own
             # level, so it can never end the section it is quoted in.
             body = re.sub(r"(?m)^(#+) ", lambda m: "###" + m.group(1) + " ", entry.body)
@@ -2535,7 +2541,7 @@ class ContractBuilder:
     # -- files ---------------------------------------------------------------
 
     def render_files(self) -> dict[str, str]:
-        files = {MARKDOWN_NAME: self.render_markdown()}
+        files = {MARKDOWN_NAME: self.render_markdown(), CHANGELOG_NAME: CHANGELOG.read_text()}
         for surface in self.surfaces:
             files[surface.schema_file] = json_schema_text(surface.model)
         return files
@@ -2551,6 +2557,9 @@ def committed_files() -> dict[str, str]:
     markdown = CONTRACT_DIR / MARKDOWN_NAME
     if markdown.exists():
         files[MARKDOWN_NAME] = markdown.read_text()
+    changelog = CONTRACT_DIR / CHANGELOG_NAME
+    if changelog.exists():
+        files[CHANGELOG_NAME] = changelog.read_text()
     schema_dir = CONTRACT_DIR / SCHEMA_SUBDIR
     if schema_dir.exists():
         for path in sorted(schema_dir.glob(f"*{SCHEMA_SUFFIX}")):
