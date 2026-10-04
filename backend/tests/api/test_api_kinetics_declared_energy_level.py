@@ -11,6 +11,7 @@ ignored, read filled from a linked calculation, mismatch check skipped, export o
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import select
 
 from app.db.models.kinetics import Kinetics
@@ -206,17 +207,20 @@ def _import_warnings(db_session, kinetics_id: int) -> list:
     return row, warnings
 
 
-def test_a_bundle_import_links_every_participant_or_none_and_still_stores_the_level(client, db_session):
-    """Kills: partial linking (the ``links = []`` reset removed). One participant is ambiguous."""
+@pytest.mark.parametrize(
+    "ambiguous", [_METHYL, _H_ATOM, _METHANE], ids=["first_reactant", "middle_reactant", "last_product"]
+)
+def test_a_bundle_import_links_every_participant_or_none_and_still_stores_the_level(client, db_session, ambiguous):
+    """Kills: partial linking (the ``links = []`` reset removed), wherever the failing participant sits."""
     for species in (_METHYL, _H_ATOM, _METHANE):
         _deposit(client, species, primary=_sp_calc(_OTHER))
     resp = _kinetics(client, energy_level=_OTHER)
     assert resp.status_code == 201, resp.text[:600]
     original = _latest(db_session)
     assert _source_links(db_session, original.id) == 3
-    # A second single point for the LAST participant at the same level makes only it ambiguous, after the
-    # others have resolved: a partial link set would show up here.
-    _deposit(client, _METHANE, primary=_sp_calc(_OTHER))
+    # A second single point at the same level makes that one participant ambiguous; the others still resolve,
+    # so a partial link set would show up as a nonzero count.
+    _deposit(client, ambiguous, primary=_sp_calc(_OTHER))
 
     _bundle, imported = _round_trip(db_session, [original.id])
 
@@ -237,7 +241,8 @@ def test_a_bundle_import_that_links_nothing_says_why(client, db_session):
     assert "energy_level_stored_without_source_calculations" not in {w.code for w in linked_warnings}
 
     _deposit(client, _METHYL, primary=_sp_calc(_OTHER))
-    _row, ambiguous = _import_warnings(db_session, original.id)
+    ambiguous_row, ambiguous = _import_warnings(db_session, original.id)
+    assert _source_links(db_session, ambiguous_row.id) == 0
     (warning,) = [w for w in ambiguous if w.code == "energy_level_stored_without_source_calculations"]
     assert "more than one" in warning.message
 
@@ -261,8 +266,6 @@ def test_a_contradiction_names_each_calculation_once(client):
 
 def test_only_a_missing_or_ambiguous_lookup_is_forgiven_on_bundle_import(client, db_session, monkeypatch):
     """Kills: ``except ValueError`` swallowing a coded refusal from the resolution itself."""
-    import pytest
-
     from app.api.error_contract import CodedValueError
     from app.workflows import kinetics as workflow
 
