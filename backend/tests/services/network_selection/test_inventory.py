@@ -42,7 +42,7 @@ def seeded(db_session, world):
         world,
         fits=[
             fit_spec("assoc", det=None, tmin=None, tmax=None),
-            fit_spec("elim", det=None, model="chebyshev", pmin=None, pmax=None, stores_log10=None, units=None),
+            fit_spec("elim", det=None, model="chebyshev", pmin=None, pmax=None, stores_log10=None, units=None, pressure_units=None),
         ],
         solve_target=None,
         bath=[],
@@ -111,8 +111,8 @@ def test_the_inventory_counts_what_each_solve_states_and_leaves_unstated(db_sess
     # grouping
     assert (d("grouping", "fits", "grouped"), d("grouping", "fits", "ungrouped")) == (5, 3)
     assert (d("grouping", "roles", "complete"), d("grouping", "roles", "additive_component")) == (4, 1)
-    assert d("grouping", "determinations_with_one_fit_or_alternates", "alternates") == 1
-    assert d("grouping", "determinations_with_one_fit_or_alternates", "one_fit") == 3
+    assert d("grouping", "determinations_by_fit_count", "alternates") == 1
+    assert d("grouping", "determinations_by_fit_count", "one_fit") == 3
 
     # domain
     assert (d("domain", "bath", "none"), d("domain", "bath", "one_species"), d("domain", "bath", "mixture")) == (1, 3, 1)
@@ -127,7 +127,7 @@ def test_the_inventory_counts_what_each_solve_states_and_leaves_unstated(db_sess
         "tabulated": 1,
         "tabulated_points": 2,
     }
-    assert d("domain", "fit_units", "rate_units_not_stated") == 1
+    assert d("domain", "fit_units", "rate_units_not_stated") == 1 and d("domain", "fit_units", "axis_units_not_stated") == 1
 
     # protocol and evidence
     assert (d("protocol", "declaration", "absent"), d("protocol", "declaration", "valid"), d("protocol", "declaration", "unreadable")) == (3, 1, 1)
@@ -152,6 +152,9 @@ def test_the_inventory_counts_what_each_solve_states_and_leaves_unstated(db_sess
         "domain:physical_validity_not_declared": 1,
         "domain:fit_rate_units_not_stated": 1,
         "domain:plog_temperature_support_not_bounded": 1,
+        "domain:chebyshev_mapping_domain_missing": 1,
+        "domain:chebyshev_log_convention_not_stated": 1,
+        "domain:axis_units_not_stated": 1,
         "grouping:fit_without_determination": 3,
     }
     assert {k: d("unresolved_categories", k) for k in expected} == expected
@@ -199,3 +202,92 @@ def test_the_script_is_a_thin_read_only_wrapper_over_the_inventory():
     # The script imports and exposes main; it is not run here (that would touch whatever database is configured).
     compiled = subprocess.run([sys.executable, "-m", "py_compile", str(Path(__file__).parents[3] / "scripts" / "inventory_network_coverage.py")], capture_output=True)
     assert compiled.returncode == 0, compiled.stderr
+
+
+# -- the review fixes: declarations, orphan determinations, gaps, batching and zeros ---------------------------
+
+
+@pytest.fixture
+def seeded_declarations(db_session, world):
+    """One solve whose fits and determinations state their claims badly, in every way the assessor distinguishes."""
+    baseline = network_coverage_inventory(db_session)
+    # d_assoc states an observable this server cannot read.
+    fits = [fit_spec("assoc", observable={"observable": "nonsense"}), fit_spec("elim"), fit_spec("diss")]
+    solve = add_solve(db_session, world, fits=fits, review=None)
+    assoc_fit, _elim_fit, diss_fit = solve._fits
+    assoc_fit.representation_declaration = {"version": 1, "key": "x", "fit_origin": "nobody_we_know"}  # unreadable
+    db_session.delete(diss_fit)  # d_diss keeps a valid observable and now has no fit
+    db_session.flush()
+    return baseline
+
+
+def test_unreadable_fit_and_observable_declarations_are_counted_not_dropped(db_session, seeded_declarations):
+    after = network_coverage_inventory(db_session)
+    d = lambda *path: delta(after, seeded_declarations, *path)  # noqa: E731
+    representation = ("grouping", "representation_declaration")
+    assert (d(*representation, "unreadable"), d(*representation, "absent"), d(*representation, "valid")) == (1, 0, 1)  # absent: a CHECK
+    observable = ("grouping", "observable_declaration")
+    assert (d(*observable, "unreadable"), d(*observable, "absent"), d(*observable, "valid")) == (1, 0, 2)  # never absent: NOT NULL
+    for key in (
+        "grouping:representation_declaration_unreadable",
+        "grouping:observable_declaration_unreadable",
+    ):
+        assert d("unresolved_categories", key) == 1, key
+
+
+def test_a_determination_with_no_fit_is_its_own_category_and_the_counts_sum_to_the_total(db_session, seeded_declarations):
+    after = network_coverage_inventory(db_session)
+    d = lambda *path: delta(after, seeded_declarations, *path)  # noqa: E731
+    by_count = ("grouping", "determinations_by_fit_count")
+    assert (d(*by_count, "no_fit"), d(*by_count, "one_fit"), d(*by_count, "alternates")) == (1, 2, 0)
+    assert d("unresolved_categories", "grouping:determination_has_no_fit") == 1
+    assert d("determinations") == 3
+    assert sum(after["grouping"]["determinations_by_fit_count"].values()) == after["determinations"]
+
+
+@pytest.fixture
+def seeded_domain(db_session, world):
+    baseline = network_coverage_inventory(db_session)
+    # No solve scope, and a PLOG fit with no entries.
+    add_solve(
+        db_session,
+        world,
+        fits=[fit_spec("assoc", plog=[])],
+        scope={"tmin_k": None, "tmax_k": None, "pmin_bar": None, "pmax_bar": None},
+        review=None,
+    )
+    # A physical validity stated only on an output: that is a stated validity.
+    on_output = [{"channel_key": "assoc", "availability": "supplied", "required": True, "validity": validity()}]
+    add_solve(db_session, world, fits=[fit_spec("assoc")], solve_target=target(world, validity=None, outputs=on_output), review=None)
+    # No validity anywhere.
+    bare = [{"channel_key": "assoc", "availability": "supplied", "required": True}]
+    add_solve(db_session, world, fits=[fit_spec("assoc")], solve_target=target(world, validity=None, outputs=bare), review=None)
+    return baseline
+
+
+def test_missing_solve_scope_and_plog_entries_and_output_only_validity_are_counted_exactly(db_session, seeded_domain):
+    after = network_coverage_inventory(db_session)
+    d = lambda *path: delta(after, seeded_domain, *path)  # noqa: E731
+    assert d("unresolved_categories", "domain:solve_scope_not_stated") == 1
+    assert d("domain", "fit_support_gaps", "plog_without_entries") == 1
+    # Only the third solve states no validity at all; the second states one on its output.
+    assert d("unresolved_categories", "domain:physical_validity_not_declared") == 1
+    assert d("target", "claims_stated", "validity") == 1  # the first solve's default target; the other two state none
+
+
+def test_the_report_is_the_same_whatever_the_batch_size(db_session, seeded):
+    whole = network_coverage_inventory(db_session)
+    assert whole["network_solves"] >= 5
+    assert network_coverage_inventory(db_session, batch_size=1) == whole
+    assert network_coverage_inventory(db_session, batch_size=2) == whole
+
+
+def test_every_known_category_is_reported_even_when_nothing_was_found(db_session, world):
+    from app.services.network_selection.inventory import FIT_SUPPORT_GAPS, UNRESOLVED_CATEGORIES
+
+    report = network_coverage_inventory(db_session)
+    assert set(UNRESOLVED_CATEGORIES) <= set(report["unresolved_categories"])
+    assert set(FIT_SUPPORT_GAPS) <= set(report["domain"]["fit_support_gaps"])
+    assert {"absent", "valid", "unreadable"} <= set(report["grouping"]["representation_declaration"])
+    assert {"one_fit", "alternates", "no_fit"} <= set(report["grouping"]["determinations_by_fit_count"])
+    assert all(isinstance(v, int) and v >= 0 for v in report["unresolved_categories"].values())

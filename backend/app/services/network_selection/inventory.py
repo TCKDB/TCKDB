@@ -25,12 +25,14 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from tckdb_schemas.network_declarations import (
+    NetworkObservableDeclaration,
     NetworkProtocolDeclaration,
+    NetworkRepresentationDeclaration,
     NetworkValidationDeclaration,
     StoredNetworkTargetDeclaration,
 )
 
-from app.db.models.common import SubmissionRecordType
+from app.db.models.common import NetworkKineticsModelKind, NetworkRepresentationRole, RecordReviewStatus, SubmissionRecordType
 from app.db.models.network_pdep import (
     NetworkKinetics,
     NetworkKineticsChebyshev,
@@ -44,6 +46,45 @@ from app.services.network_selection.models import BOUNDS_V1
 from app.services.scientific_read.common import fetch_review_badges
 
 TARGET_CLAIMS = ("partition", "boundaries", "regime", "validity", "bath_scope", "outputs", "product_sets")
+
+#: Every category the inventory can count. Each is reported, with zero when nothing was found, so that "zero found"
+#: and "not measured" read differently.
+UNRESOLVED_CATEGORIES = (
+    "target:not_declared",
+    "target:unreadable",
+    *(f"target:{claim}_not_declared" for claim in TARGET_CLAIMS),
+    "protocol:not_declared",
+    "protocol:unreadable",
+    "grouping:fit_without_determination",
+    "grouping:determination_has_no_fit",
+    "grouping:representation_declaration_not_declared",
+    "grouping:representation_declaration_unreadable",
+    "grouping:observable_declaration_not_declared",
+    "grouping:observable_declaration_unreadable",
+    "domain:bath_not_stated",
+    "domain:solve_scope_not_stated",
+    "domain:physical_validity_not_declared",
+    "domain:fit_rate_units_not_stated",
+    "domain:axis_units_not_stated",
+    "domain:chebyshev_mapping_domain_missing",
+    "domain:chebyshev_log_convention_not_stated",
+    "domain:plog_temperature_support_not_bounded",
+)
+FIT_SUPPORT_GAPS = (
+    "chebyshev_without_coefficients",
+    "chebyshev_mapping_domain_missing",
+    "chebyshev_log_convention_not_stated",
+    "plog_without_entries",
+    "plog_without_temperature_bounds",
+    "tabulated",
+    "tabulated_points",
+)
+STATES = ("absent", "valid", "unreadable")
+BUNDLE_READINESS = ("declares_a_product_set", "declares_catalog_and_boundaries", "full_network_ready")
+
+
+def _zeros(keys) -> Counter[str]:
+    return Counter({key: 0 for key in keys})
 
 
 def _batches(session: Session, size: int) -> Iterator[list[int]]:
@@ -68,22 +109,24 @@ def _state(model: type[BaseModel], raw: Any) -> tuple[str, Any]:
 def network_coverage_inventory(session: Session, *, batch_size: int = 100) -> dict[str, Any]:
     """Count stored network solves, fits and determinations by what they state. Read-only."""
     solves: Counter[str] = Counter()
-    by_kind: Counter[str] = Counter()
-    by_review: Counter[str] = Counter()
-    target_state: Counter[str] = Counter()
-    claims: Counter[str] = Counter()
-    protocol_state: Counter[str] = Counter()
-    validation_state: Counter[str] = Counter()
+    by_kind: Counter[str] = _zeros(("computed", "reported"))
+    by_review: Counter[str] = _zeros(status.value for status in RecordReviewStatus)
+    target_state: Counter[str] = _zeros(STATES)
+    claims: Counter[str] = _zeros(TARGET_CLAIMS)
+    protocol_state: Counter[str] = _zeros(STATES)
+    validation_state: Counter[str] = _zeros(STATES)
+    representation_state: Counter[str] = _zeros(STATES)
+    observable_state: Counter[str] = _zeros(STATES)
     evidence_kinds: Counter[str] = Counter()
-    bath: Counter[str] = Counter()
-    unresolved: Counter[str] = Counter()
-    bundle_ready: Counter[str] = Counter()
-    fit_model: Counter[str] = Counter()
-    fit_group: Counter[str] = Counter()
-    fit_roles: Counter[str] = Counter()
-    fit_domain: Counter[str] = Counter()
-    fit_units: Counter[str] = Counter()
-    per_determination: Counter[int] = Counter()
+    bath: Counter[str] = _zeros(("none", "one_species", "mixture"))
+    unresolved: Counter[str] = _zeros(UNRESOLVED_CATEGORIES)
+    bundle_ready: Counter[str] = _zeros(BUNDLE_READINESS)
+    fit_model: Counter[str] = _zeros(kind.value for kind in NetworkKineticsModelKind)
+    fit_group: Counter[str] = _zeros(("grouped", "ungrouped"))
+    fit_roles: Counter[str] = _zeros([*(role.value for role in NetworkRepresentationRole), "unstated"])
+    fit_domain: Counter[str] = _zeros(FIT_SUPPORT_GAPS)
+    fit_units: Counter[str] = _zeros(("rate_units_not_stated", "axis_units_not_stated"))
+    determination_fit_counts: Counter[str] = _zeros(("one_fit", "alternates", "no_fit"))
 
     for ids in _batches(session, batch_size):
         rows = list(session.scalars(select(NetworkSolve).where(NetworkSolve.id.in_(ids)).order_by(NetworkSolve.id)))
@@ -116,11 +159,16 @@ def network_coverage_inventory(session: Session, *, batch_size: int = 100) -> di
                 .group_by(NetworkKineticsPoint.network_kinetics_id)
             ).tuples().all()
         )
-        det_ids = {
-            d.id: d.solve_id
-            for d in session.scalars(select(NetworkKineticsDetermination).where(NetworkKineticsDetermination.solve_id.in_(ids)))
-        }
+        determinations = list(
+            session.scalars(select(NetworkKineticsDetermination).where(NetworkKineticsDetermination.solve_id.in_(ids)))
+        )
+        det_ids = {d.id: d.solve_id for d in determinations}
         solves["determinations"] += len(det_ids)
+        for determination in determinations:
+            obs_state, _ = _state(NetworkObservableDeclaration, determination.observable_declaration)
+            observable_state[obs_state] += 1
+            if obs_state != "valid":
+                unresolved["grouping:observable_declaration_" + ("not_declared" if obs_state == "absent" else "unreadable")] += 1
         fits_by_solve: dict[int, list[NetworkKinetics]] = {}
         for fit in fits:
             fits_by_solve.setdefault(fit.solve_id, []).append(fit)
@@ -130,8 +178,11 @@ def network_coverage_inventory(session: Session, *, batch_size: int = 100) -> di
                 unresolved["grouping:fit_without_determination"] += 1
             else:
                 fit_group["grouped"] += 1
-                per_determination[fit.determination_id] += 1
                 fit_roles[fit.representation_role.value if fit.representation_role else "unstated"] += 1
+                rep_state, _ = _state(NetworkRepresentationDeclaration, fit.representation_declaration)
+                representation_state[rep_state] += 1
+                if rep_state != "valid":
+                    unresolved["grouping:representation_declaration_" + ("not_declared" if rep_state == "absent" else "unreadable")] += 1
             if fit.rate_units is None:
                 fit_units["rate_units_not_stated"] += 1
                 unresolved["domain:fit_rate_units_not_stated"] += 1
@@ -140,8 +191,13 @@ def network_coverage_inventory(session: Session, *, batch_size: int = 100) -> di
                     fit_domain["chebyshev_without_coefficients"] += 1
                 if None in (fit.tmin_k, fit.tmax_k, fit.pmin_bar, fit.pmax_bar):
                     fit_domain["chebyshev_mapping_domain_missing"] += 1
+                    unresolved["domain:chebyshev_mapping_domain_missing"] += 1
                 if fit.stores_log10_k is None:
                     fit_domain["chebyshev_log_convention_not_stated"] += 1
+                    unresolved["domain:chebyshev_log_convention_not_stated"] += 1
+                if fit.pressure_units is None or fit.temperature_units is None:
+                    fit_units["axis_units_not_stated"] += 1
+                    unresolved["domain:axis_units_not_stated"] += 1
             elif fit.model_kind.value == "plog":
                 if not plog_counts.get(fit.id):
                     fit_domain["plog_without_entries"] += 1
@@ -151,6 +207,14 @@ def network_coverage_inventory(session: Session, *, batch_size: int = 100) -> di
             else:
                 fit_domain["tabulated"] += 1
                 fit_domain["tabulated_points"] += point_counts.get(fit.id, 0)
+
+        for det_id in det_ids:
+            count = sum(1 for fit in fits if fit.determination_id == det_id)
+            if count == 0:
+                determination_fit_counts["no_fit"] += 1
+                unresolved["grouping:determination_has_no_fit"] += 1
+            else:
+                determination_fit_counts["one_fit" if count == 1 else "alternates"] += 1
 
         for solve in rows:
             solves["solves"] += 1
@@ -191,7 +255,6 @@ def network_coverage_inventory(session: Session, *, batch_size: int = 100) -> di
             if not fits_by_solve.get(solve.id):
                 solves["solves_without_fits"] += 1
 
-    alternates = Counter("one_fit" if n == 1 else "alternates" for n in per_determination.values())
     return {
         "bounds_version": BOUNDS_V1.version,
         "network_solves": solves["solves"],
@@ -207,7 +270,9 @@ def network_coverage_inventory(session: Session, *, batch_size: int = 100) -> di
         "grouping": {
             "fits": dict(sorted(fit_group.items())),
             "roles": dict(sorted(fit_roles.items())),
-            "determinations_with_one_fit_or_alternates": dict(sorted(alternates.items())),
+            "determinations_by_fit_count": dict(sorted(determination_fit_counts.items())),
+            "representation_declaration": dict(sorted(representation_state.items())),
+            "observable_declaration": dict(sorted(observable_state.items())),
         },
         "domain": {
             "bath": dict(sorted(bath.items())),
