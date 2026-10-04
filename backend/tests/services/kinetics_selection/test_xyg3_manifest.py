@@ -120,7 +120,9 @@ def test_it_loads_but_is_not_activatable_and_names_every_blocker():
     assert len(reasons) == 6 and reasons[-1].startswith("not approved")
 
 
-def test_a_document_that_claims_approval_must_carry_an_acceptance_and_no_blockers():
+def test_a_document_that_claims_approval_must_carry_an_acceptance_and_no_blockers(monkeypatch):
+    from tests.services.kinetics_selection._support import pinned_rule
+
     approved = doc(activation_approved=True)
     with pytest.raises(ManifestError, match="no curator acceptance"):
         parse_xyg3_barrier_manifest(approved)
@@ -130,8 +132,9 @@ def test_a_document_that_claims_approval_must_carry_an_acceptance_and_no_blocker
     cleared = doc(activation_approved=True, curator_acceptance={"accepted_by": "owner", "date": "2026-10-05"},
                   activation_blockers=[])
     manifest = parse_xyg3_barrier_manifest(cleared)
-    assert manifest.activatable and XYG3B3LYPBarrierRule(manifest).status == "active"
-    assert XYG3B3LYPBarrierRule(manifest).inactive_reasons == ()
+    assert manifest.activatable
+    rule = pinned_rule(cleared, monkeypatch)  # the only way an approved manifest reaches the rule: a new pin
+    assert rule.status == "active" and rule.inactive_reasons == ()
 
 
 def test_a_document_that_is_not_approved_must_say_why():
@@ -161,4 +164,22 @@ def test_a_document_that_disagrees_with_itself_does_not_load(mutate, message):
     raw = copy.deepcopy(RAW)
     mutate(raw)
     with pytest.raises(ManifestError, match=message):
+        parse_xyg3_barrier_manifest(raw)
+
+
+def test_the_degenerate_flag_follows_the_species_and_the_identity_exchanges_say_so():
+    manifest = load_xyg3_barrier_manifest(expected_sha256=XYG3_MANIFEST_SHA256)
+    flagged = {m["member_id"] for m in RAW["members"] if m["degenerate_identity_reaction"]}
+    same_species = {m.member_id for m in manifest.members if m.reactant_signature == m.product_signature}
+    assert flagged == same_species
+    # The two complex-to-complex exchanges were once recorded as not degenerate while their species were identical.
+    assert {"NHT08", "NHT10"} <= flagged
+    assert manifest.version == "0.2.0" and [h["version"] for h in RAW["manifest_history"]] == ["0.1.0", "0.2.0"]
+
+
+@pytest.mark.parametrize("member_id,flag", [("NHT08", False), ("HT01", True)])
+def test_a_flag_that_disagrees_with_the_species_does_not_load(member_id, flag):
+    raw = copy.deepcopy(RAW)
+    next(m for m in raw["members"] if m["member_id"] == member_id)["degenerate_identity_reaction"] = flag
+    with pytest.raises(ManifestError, match="degenerate_identity_reaction"):
         parse_xyg3_barrier_manifest(raw)

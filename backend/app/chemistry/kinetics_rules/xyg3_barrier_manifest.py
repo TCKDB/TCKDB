@@ -148,7 +148,7 @@ def _member(raw: dict[str, Any]) -> BarrierMember:
         f"{raw['member_id']}: identity_status {raw['identity_status']!r} is not resolved",
     )
     _require(bool(raw["reactants"]) and bool(raw["products"]), f"{raw['member_id']}: a side has no species")
-    return BarrierMember(
+    member = BarrierMember(
         member_id=raw["member_id"],
         dataset=raw["dataset"],
         subset=raw["subset"],
@@ -159,6 +159,15 @@ def _member(raw: dict[str, Any]) -> BarrierMember:
         identity_status=raw["identity_status"],
         source=raw["best_estimate_source"],
     )
+    flag = raw.get("degenerate_identity_reaction")
+    _require(isinstance(flag, bool), f"{member.member_id}: degenerate_identity_reaction must be true or false")
+    identical = member.reactant_signature == member.product_signature
+    _require(
+        flag == identical,
+        f"{member.member_id}: degenerate_identity_reaction is {flag} but its reactants "
+        f"{'equal' if identical else 'differ from'} its products",
+    )
+    return member
 
 
 def parse_xyg3_barrier_manifest(raw: dict[str, Any]) -> XYG3BarrierManifest:

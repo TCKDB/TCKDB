@@ -1,4 +1,4 @@
-# XYG3 vs B3LYP classical-barrier audit manifest, version 0.1.0 (2026-10-04). NOT approved for activation:
+# XYG3 vs B3LYP classical-barrier audit manifest, version 0.2.0 (2026-10-04). NOT approved for activation:
 # status.activation_approved is false and status.activation_blockers says why. Compiled from the five
 # owner-supplied papers listed under sources (SHA-256 pinned there) and copied here unchanged except for this
 # header. Loaded by app.chemistry.kinetics_rules.xyg3_barrier_manifest. A change to a member, a barrier
@@ -8,12 +8,16 @@ rule_statement: For a computed rate coefficient whose classical electronic barri
   preference over the same barrier evaluated with B3LYP, restricted to the 38 reactions (76 barrier heights) of the HTBH38/04
   and NHTBH38/04 benchmark sets, and only where the remaining treatment of the two rates is verified compatible. An expected-performance
   inference, not a validated accuracy of any individual rate.
-manifest_version: 0.1.0
+manifest_version: 0.2.0
 manifest_date: '2026-10-04'
 manifest_history:
 - version: 0.1.0
   date: '2026-10-04'
   note: Membership read in full from the supplied PDFs; rule NOT activated (see status.activation_blockers).
+- version: 0.2.0
+  date: '2026-10-04'
+  note: NHT08 and NHT10 degenerate_identity_reaction corrected from false to true (their reactant and product species are
+    identical, the same as NHT09's); no number, member or blocker changed. Rule NOT activated.
 status:
   membership_listed_complete: true
   membership_listing_sources:
@@ -1344,7 +1348,7 @@ members:
   best_estimate_source: Table 2 (ref 63)
   identity_status: resolved_complex_caveat
   matchable_as_a_tckdb_reaction: true
-  degenerate_identity_reaction: false
+  degenerate_identity_reaction: true
 - member_id: NHT09
   dataset: NHTBH38/04
   subset: NS
@@ -1414,7 +1418,7 @@ members:
   best_estimate_source: Table 2 (ref 63)
   identity_status: resolved_complex_caveat
   matchable_as_a_tckdb_reaction: true
-  degenerate_identity_reaction: false
+  degenerate_identity_reaction: true
 - member_id: NHT11
   dataset: NHTBH38/04
   subset: NS

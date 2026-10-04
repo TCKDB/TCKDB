@@ -105,3 +105,21 @@ def finite(low: float, high: float | None = None) -> PressureRequest:
 
 def collider(*refs: str, fractions: tuple[float, ...] | None = None) -> ColliderRequest:
     return ColliderRequest(tuple(refs), fractions)
+
+
+def pinned_rule(raw: dict[str, Any], monkeypatch):
+    """The XYG3 rule over an edited manifest document, which is only possible by pinning the edited bytes.
+
+    The rule refuses any manifest whose digest is not the pinned one; a test that wants to see what an approved
+    manifest would do has to say so by moving the pin, exactly what a real approval is (a new manifest, a new pin).
+    """
+    import hashlib
+
+    import yaml
+
+    from app.chemistry.kinetics_rules.xyg3_barrier_manifest import parse_xyg3_barrier_manifest_bytes
+    from app.services.kinetics_selection import rules as rules_module
+
+    data = yaml.safe_dump(raw, sort_keys=False).encode()
+    monkeypatch.setattr(rules_module, "XYG3_MANIFEST_SHA256", hashlib.sha256(data).hexdigest())
+    return rules_module.XYG3B3LYPBarrierRule(parse_xyg3_barrier_manifest_bytes(data, expected_sha256=None))
