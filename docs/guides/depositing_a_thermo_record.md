@@ -199,13 +199,15 @@ polyatomic species whose only linked calculations are `sp`s.
     an atom stated as 2H is never taken for a 1H, and `D` and `T` count as 2H and
     3H. Interchangeable atoms (the three H of a CH3) are handled: any one
     relabelling that superposes is enough.
-  - *Limits.* The search is bounded: geometries over 200 atoms are not
-    searched, and a pair that needs more than 256 trial alignments (for
-    example a very large, highly symmetric, chiral cluster) is left undecided
-    and counted as **different**, as is anything after a record's first
-    4,096 trial alignments. In those cases a duplicate energy on a reordered
-    copy is not caught; ordinary molecules need one alignment and a few
-    milliseconds.
+  - *Limits.* The search is bounded, and past any bound a pair is left
+    undecided and counted as **different**: geometries over 200 atoms are not
+    searched; a pair needing more than 256 trial alignments or examining more
+    than 50,000 candidate placements (for example a very large, highly
+    symmetric, chiral cluster) is undecided; and a record has a fixed budget of
+    4,096 alignments and 50 million work units over all its pairs (a pair of
+    different shapes costs about n^2/2 units and is dismissed at once). In those
+    cases a duplicate energy on a reordered copy is not caught; ordinary
+    molecules need one alignment and a few milliseconds.
   - A moved copy written to three or fewer decimals may not be recognised (such
     coordinates are held to the four-decimal tolerance).
 - **A single atom.** An atom has no geometry to differ in, so "one

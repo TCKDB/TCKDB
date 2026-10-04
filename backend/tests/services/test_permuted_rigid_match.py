@@ -376,3 +376,155 @@ def test_timing_of_a_typical_pair_is_milliseconds():
 def test_unequal_inputs_are_different_not_an_error():
     assert find_matching_permutation([(0, 0, 0)], ["H"], [], [], tolerance=TOL).outcome == "different"
     assert find_matching_permutation([(0, 0, 0)], ["H"], [(0, 0, 0)], ["H"], tolerance=TOL).outcome == "different"
+
+
+# ---- the final proper-rotation test is load-bearing --------------------------------------------------------------
+
+
+def _puckered_chlorofluorobenzene(pucker: float, mirror: bool = False):
+    """para-C6H4FCl flattened onto its plane, one ring carbon lifted ``pucker`` Angstrom out of it.
+
+    The flat molecule is achiral; the lift makes it chiral by 0.002 A, and its
+    mirror image (``mirror=True``) is the lift the other way.
+    """
+    atoms = _embedded("Fc1ccc(Cl)cc1")
+    points = np.array([c for _, c in atoms])
+    centred = points - points.mean(axis=0)
+    _u, _s, vt = np.linalg.svd(centred)
+    flat = centred @ vt.T
+    flat[:, 2] = 0.0
+    ring_carbon = next(i for i, (el, _) in enumerate(atoms) if el == "C")
+    flat[ring_carbon, 2] = pucker
+    if mirror:
+        flat[:, 2] *= -1.0
+    return [(el, tuple(float(v) for v in row)) for (el, _), row in zip(atoms, flat, strict=True)]
+
+
+def test_a_nearly_planar_chiral_geometry_is_not_matched_to_its_relabelled_mirror_image():
+    """Every distance agrees and the anchors fit it; only the proper-rotation RMSD says the 0.002 A pucker is the wrong way."""
+    first = _round(_puckered_chlorofluorobenzene(0.002))
+    mirrored = _moved_and_permuted(_puckered_chlorofluorobenzene(0.002, mirror=True), seed=4)
+    assert _search(first, mirrored).outcome == "different"
+    again = _moved_and_permuted(_puckered_chlorofluorobenzene(0.002), seed=4)
+    assert _search(first, again).outcome == "matched", "the control: the same pucker, shuffled, is the same structure"
+
+
+# ---- a permutation is a bijection ------------------------------------------------------------------------------
+
+
+def test_a_matched_permutation_is_always_a_bijection_even_under_a_huge_tolerance():
+    """Two atoms 0.02 A apart would both be nearest to one image; the bijection test, not the RMSD, refuses that."""
+    first = [("C", (0.0, 0.0, 0.0)), ("C", (0.02, 0.0, 0.0)), ("O", (3.0, 0.0, 0.0)), ("N", (0.0, 3.0, 0.0))]
+    second = [("C", (0.0, 0.0, 0.0)), ("C", (-0.5, 0.0, 0.0)), ("O", (3.0, 0.0, 0.0)), ("N", (0.0, 3.0, 0.0))]
+    found = _search(first, second, tolerance=1.0)
+    if found.outcome == "matched":
+        assert sorted(found.permutation) == [0, 1, 2, 3]
+
+
+# ---- the filters agree with the verdict ------------------------------------------------------------------------
+
+
+def test_a_move_inside_the_rms_tolerance_is_a_duplicate_in_either_atom_order():
+    """One atom moved 2.5 x tolerance is an RMSD of about 0.7 x tolerance: one structure, in the given order or shuffled.
+
+    A per-atom prefilter of 2 x tolerance would refuse the shuffled one while
+    the same-order test accepts the other.
+    """
+    from app.services.calculation_levels import _AtomsOf, _same_polyatomic_structure
+
+    base = _round(_butane(180.0))
+    nudged = [(el, (x, y + (2.5 * TOL if i == 5 else 0.0), z)) for i, (el, (x, y, z)) in enumerate(base)]
+
+    def atoms(geometry):
+        return _AtomsOf(tuple((el, None) for el, _ in geometry), [c for _, c in geometry], 6)
+
+    first = atoms(base)
+    assert kabsch_rmsd(first.coordinates, atoms(nudged).coordinates) < TOL
+    assert _same_polyatomic_structure(first, atoms(nudged)) is True
+    order = list(range(len(nudged)))
+    random.Random(2).shuffle(order)
+    assert _same_polyatomic_structure(first, atoms([nudged[i] for i in order])) is True
+
+
+# ---- cost of a record --------------------------------------------------------------------------------------------
+
+
+def _fake_geometry(geometry_id: int, atoms):
+    from types import SimpleNamespace
+
+    rows = [
+        SimpleNamespace(atom_index=k + 1, element=el, x=x, y=y, z=z, isotope_mass_number=None)
+        for k, (el, (x, y, z)) in enumerate(atoms)
+    ]
+    return SimpleNamespace(id=geometry_id, natoms=len(rows), atoms=rows)
+
+
+def _random_atoms(rng, n: int):
+    return [("C" if k % 3 else "H", tuple(float(v) for v in rng.normal(scale=6.0, size=3))) for k in range(n)]
+
+
+def test_a_record_of_many_large_distinct_geometries_costs_a_bounded_amount(monkeypatch):
+    """40 distinct 200-atom geometries, 780 pairs: the gate answers each in O(n^2), no candidate table is built."""
+    from app.services import calculation_levels as levels
+
+    spent: list = []
+    real_budget = levels.SearchBudget
+
+    def spying_budget():
+        budget = real_budget()
+        spent.append(budget)
+        return budget
+
+    monkeypatch.setattr(levels, "SearchBudget", spying_budget)
+    rng = np.random.default_rng(0)
+    geometries = [_fake_geometry(g, _random_atoms(rng, 200)) for g in range(40)]
+    started = time.perf_counter()
+    roots = levels._merge_rigidly_equal_geometries(geometries)
+    elapsed = time.perf_counter() - started
+    assert roots == {g.id: g.id for g in geometries}
+    gate_units = 780 * (200 * 199 // 2)
+    budget = spent[0]
+    assert prm.MAX_WORK_PER_RECORD - budget.work_left == gate_units, "only the O(n^2) gate was charged: no pair got past it"
+    assert budget.fits_left == prm.MAX_FITS_PER_RECORD
+    assert elapsed < 2.0, f"{elapsed:.2f} s for 40 x 200 atoms (main: well under 1 s; before the gate: 8 s)"
+
+
+def test_pairs_already_in_one_structure_are_not_compared_again(monkeypatch):
+    """Ten relabelled copies of one geometry need nine joins, not forty-five comparisons."""
+    from app.services import calculation_levels as levels
+
+    calls = []
+    real = levels._same_polyatomic_structure
+
+    def counting(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(levels, "_same_polyatomic_structure", counting)
+    base = _random_atoms(np.random.default_rng(3), 30)
+    geometries = []
+    for g in range(10):
+        order = list(range(30))
+        random.Random(g).shuffle(order)
+        geometries.append(_fake_geometry(g, [base[i] for i in order]))
+    roots = levels._merge_rigidly_equal_geometries(geometries)
+    assert len(set(roots.values())) == 1
+    assert len(calls) == 9
+
+
+def test_the_work_budget_caps_pairs_that_pass_the_gate(monkeypatch):
+    """Copies that all pass the gate (relabelled duplicates of one 200-atom geometry) still stop at the budget."""
+    from app.services import calculation_levels as levels
+
+    base = _random_atoms(np.random.default_rng(1), 200)
+    geometries = []
+    for g in range(30):
+        order = list(range(200))
+        random.Random(g).shuffle(order)
+        geometries.append(_fake_geometry(g, [base[i] for i in order]))
+    monkeypatch.setattr(prm, "MAX_WORK_PER_RECORD", 3 * 200**3)
+    started = time.perf_counter()
+    roots = levels._merge_rigidly_equal_geometries(geometries)
+    elapsed = time.perf_counter() - started
+    assert len(set(roots.values())) > 1, "the budget ran out before every copy was joined: capped pairs are different"
+    assert elapsed < 5.0

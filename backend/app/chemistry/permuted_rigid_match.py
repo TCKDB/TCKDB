@@ -30,8 +30,10 @@ verified.
 
 **Cost is bounded, and a bound is a refusal to match.** The search is capped on
 the number of atoms, on the number of rigid fits tried for one pair, on the
-candidate anchor sets examined, and (through :class:`SearchBudget`) on the fits
-spent across a whole record. Past any cap the answer is ``"capped"`` and the
+candidate anchor sets examined for one pair (50,000), and (through
+:class:`SearchBudget`) on the fits and work units spent across a whole record.
+A cheap O(n^2) gate on the sorted list of all pairwise distances sends different
+shapes away before anything O(n^3) is built. Past any cap the answer is ``"capped"`` and the
 caller treats the pair as *different*, which is the behaviour before this
 search existed: a duplicate energy that slips past a cap is accepted, never a
 distinct one refused.
@@ -39,9 +41,11 @@ distinct one refused.
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from collections.abc import Hashable, Sequence
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Literal
 
 import numpy as np
@@ -78,11 +82,60 @@ _MIN_ANCHOR_SINE = 1e-3
 _PREFERRED_ANCHOR_SINE = 0.1
 
 
+#: Work units a whole record may spend. One unit is roughly one array element touched: a pair's
+#: distance-list gate costs n(n-1)/2, the per-atom candidate table n^3, a rigid fit 4 n^2. At
+#: n = 200 that is 2e4, 8e6 and 1.6e5 units, so the budget pays for a handful of full searches on
+#: the largest geometries searched at all and for thousands of gate comparisons.
+MAX_WORK_PER_RECORD = 50_000_000
+
+
 @dataclass
 class SearchBudget:
-    """Fits left for one record, shared by every pair it compares."""
+    """What one record may spend on relabelling searches, shared by every pair it compares.
+
+    Two limits: rigid ``fits`` and ``work`` units (the gate and the candidate
+    table, which are not fits, are charged here too). Past either, a pair is
+    ``"capped"``.
+    """
 
     fits_left: int = field(default_factory=lambda: MAX_FITS_PER_RECORD)
+    work_left: int = field(default_factory=lambda: MAX_WORK_PER_RECORD)
+
+    def charge(self, units: int) -> bool:
+        """Spend ``units``; ``False`` (and nothing left) when they are not there."""
+        if units > self.work_left:
+            self.work_left = 0
+            return False
+        self.work_left -= units
+        return True
+
+
+class PreparedGeometry:
+    """One geometry's atoms with the rotation-invariant tables a search reads, built once.
+
+    A record compares every same-size pair of its geometries; the distance
+    matrix and the sorted list of all pairwise distances of one geometry are
+    the same for every partner, so they are computed on first use and kept.
+    """
+
+    def __init__(self, coordinates: Coordinates, nuclides: Sequence[Hashable]) -> None:
+        self.n = len(coordinates)
+        self.nuclides = list(nuclides)
+        self.nuclide_counts: Counter[Hashable] = Counter(self.nuclides)
+        self._coordinates = coordinates
+
+    @cached_property
+    def array(self) -> np.ndarray:
+        return np.asarray(self._coordinates, dtype=np.float64)
+
+    @cached_property
+    def distances(self) -> np.ndarray:
+        return np.linalg.norm(self.array[:, None, :] - self.array[None, :, :], axis=2)
+
+    @cached_property
+    def pair_distances(self) -> np.ndarray:
+        """Every pairwise distance, sorted: the cheap shape signature the gate compares."""
+        return np.sort(self.distances[np.triu_indices(self.n, 1)])
 
 
 @dataclass(frozen=True)
@@ -162,13 +215,26 @@ def find_matching_permutation(
     :param tolerance: Largest Kabsch RMSD (Angstrom) at which the relabelled
         ``b`` still counts as the same structure as ``a``; the caller's rounding
         bound. Proper rotations only: a mirror image is not a match.
-    :param budget: The record's remaining fits, decremented as they are spent.
+    :param budget: The record's remaining work, decremented as it is spent.
     :returns: A :class:`PermutationSearch`; only ``"matched"`` means "same".
     """
-    n = len(coords_a)
-    if n != len(coords_b) or len(nuclides_a) != n or len(nuclides_b) != n:
+    return match_prepared(
+        PreparedGeometry(coords_a, nuclides_a), PreparedGeometry(coords_b, nuclides_b), tolerance=tolerance, budget=budget
+    )
+
+
+def match_prepared(
+    first: PreparedGeometry,
+    second: PreparedGeometry,
+    *,
+    tolerance: float,
+    budget: SearchBudget | None = None,
+) -> PermutationSearch:
+    """:func:`find_matching_permutation` on geometries whose tables are already built (or shared)."""
+    n = first.n
+    if n != second.n:
         return PermutationSearch("different")
-    if Counter(nuclides_a) != Counter(nuclides_b):
+    if first.nuclide_counts != second.nuclide_counts:
         return PermutationSearch("different")
     if n < 2:
         # One atom has no order to differ in; the caller's own comparison covers it.
@@ -176,20 +242,30 @@ def find_matching_permutation(
     if n > MAX_ATOMS:
         return PermutationSearch("capped")
 
-    a = np.asarray(coords_a, dtype=np.float64)
-    b = np.asarray(coords_b, dtype=np.float64)
-    dist_a = np.linalg.norm(a[:, None, :] - a[None, :, :], axis=2)
-    dist_b = np.linalg.norm(b[:, None, :] - b[None, :, :], axis=2)
-    # Each distance in one copy is within 2 * tolerance of its image in the other
-    # (each atom is within `tolerance` of its image under the true motion), and sorting is
-    # 1-Lipschitz in the sup norm, so sorted distance lists of the same atom differ by at
-    # most that. A rotation-invariant necessary condition, used only to prune.
-    pair_slack = 2.0 * tolerance + _FLOAT_SLACK
+    # If the Kabsch RMSD of the relabelled copy is within `tolerance`, every atom is within
+    # sqrt(n) * tolerance of its image under the best motion, so every pairwise distance is within
+    # 2 sqrt(n) * tolerance. That bound, and not a per-atom one, is what the RMSD verdict allows, so
+    # the filters below never refuse a pair the verdict would accept.
+    pair_slack = 2.0 * math.sqrt(n) * tolerance + _FLOAT_SLACK
+
+    # Gate, O(n^2): the sorted list of all pairwise distances is the same for a rigid copy in any
+    # atom order (sorting is 1-Lipschitz in the sup norm). Different shapes stop here, before the
+    # O(n^3) candidate table below, which is what a record of many large distinct geometries would
+    # otherwise pay for every pair.
+    if budget is not None and not budget.charge(n * (n - 1) // 2):
+        return PermutationSearch("capped")
+    if float(np.abs(first.pair_distances - second.pair_distances).max()) > pair_slack:
+        return PermutationSearch("different")
+
+    if budget is not None and not budget.charge(n**3):
+        return PermutationSearch("capped")
+    a, b = first.array, second.array
+    dist_a, dist_b = first.distances, second.distances
     sorted_a = np.sort(dist_a, axis=1)
     sorted_b = np.sort(dist_b, axis=1)
     codes: dict[Hashable, int] = {}
-    code_a = np.array([codes.setdefault(x, len(codes)) for x in nuclides_a])
-    code_b = np.array([codes.setdefault(x, len(codes)) for x in nuclides_b])
+    code_a = np.array([codes.setdefault(x, len(codes)) for x in first.nuclides])
+    code_b = np.array([codes.setdefault(x, len(codes)) for x in second.nuclides])
     compatible = np.zeros((n, n), dtype=bool)
     for i in range(n):
         same_nuclide = code_b == code_a[i]
@@ -230,6 +306,8 @@ def find_matching_permutation(
                     picked.append(b2)
                 if fits >= MAX_FITS_PER_PAIR or (budget is not None and budget.fits_left <= 0):
                     return PermutationSearch("capped", fits=fits)
+                if budget is not None and not budget.charge(4 * n * n):
+                    return PermutationSearch("capped", fits=fits)
                 fits += 1
                 if budget is not None:
                     budget.fits_left -= 1
@@ -249,4 +327,3 @@ def find_matching_permutation(
                 if kabsch_rmsd(a_list, permuted) <= tolerance:
                     return PermutationSearch("matched", tuple(int(j) for j in nearest), fits)
     return PermutationSearch("different", fits=fits)
-

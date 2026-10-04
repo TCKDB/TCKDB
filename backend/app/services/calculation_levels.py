@@ -107,7 +107,7 @@ from sqlalchemy.orm import Session, object_session
 from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import resolve_element_symbol
 from app.chemistry.isotopes import implied_isotope_mass_number
-from app.chemistry.permuted_rigid_match import SearchBudget, find_matching_permutation
+from app.chemistry.permuted_rigid_match import PreparedGeometry, SearchBudget, match_prepared
 from app.chemistry.torsion_fingerprint import kabsch_rmsd
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationType
@@ -546,7 +546,12 @@ def _atoms_of(geometry: Geometry) -> _AtomsOf | None:
     return _AtomsOf(species, coordinates, _coordinate_decimals(coordinates))
 
 
-def _same_polyatomic_structure(a: _AtomsOf, b: _AtomsOf, budget: SearchBudget | None = None) -> bool:
+def _same_polyatomic_structure(
+    a: _AtomsOf,
+    b: _AtomsOf,
+    budget: SearchBudget | None = None,
+    prepared: tuple[PreparedGeometry, PreparedGeometry] | None = None,
+) -> bool:
     """Whether two geometries are one structure moved rigidly (#667), atoms in any order (#679).
 
     Same elements and stated isotopes in the same order are compared directly
@@ -566,9 +571,11 @@ def _same_polyatomic_structure(a: _AtomsOf, b: _AtomsOf, budget: SearchBudget | 
         return True
     if Counter(a.species) != Counter(b.species):
         return False
-    found = find_matching_permutation(
-        a.coordinates, a.species, b.coordinates, b.species, tolerance=tolerance, budget=budget
+    first, second = prepared or (
+        PreparedGeometry(a.coordinates, a.species),
+        PreparedGeometry(b.coordinates, b.species),
     )
+    found = match_prepared(first, second, tolerance=tolerance, budget=budget)
     return found.outcome == "matched"
 
 
@@ -578,11 +585,22 @@ def _merge_rigidly_equal_geometries(geometries: Sequence[Geometry]) -> dict[int,
     Pairwise over the record's own geometries (a handful), and only within a
     group of equal atom count, so an atom list is read from the database
     only for a geometry that has a same-size neighbour to be compared with.
-    One :class:`SearchBudget` is shared by every pair, so the relabelling search
-    (#679) costs a record a bounded amount however many geometries it links.
+    One :class:`SearchBudget` is shared by every pair, and a pair already in one
+    structure through a third geometry is not compared again. The relabelling
+    search (#679) is charged to that budget: a gate on the sorted distance list
+    (about n^2/2 units per pair), the candidate table (n^3) and each fit (4 n^2).
+    What is *not* charged is building each geometry's distance tables once,
+    O(n^2 log n) per geometry, linear in the number of geometries; so the cost is
+    that plus a fixed budget, not a quantity that grows with the number of pairs.
     """
     root = {geometry.id: geometry.id for geometry in geometries}
     budget = SearchBudget()
+    prepared: dict[int, PreparedGeometry] = {}
+
+    def tables(geometry_id: int, atoms: _AtomsOf) -> PreparedGeometry:
+        if geometry_id not in prepared:
+            prepared[geometry_id] = PreparedGeometry(atoms.coordinates, atoms.species)
+        return prepared[geometry_id]
 
     def find(i: int) -> int:
         while root[i] != i:
@@ -599,8 +617,13 @@ def _merge_rigidly_equal_geometries(geometries: Sequence[Geometry]) -> dict[int,
         atoms = {geometry.id: _atoms_of(geometry) for geometry in same_size}
         for i, first in enumerate(same_size):
             for second in same_size[i + 1 :]:
+                if find(first.id) == find(second.id):
+                    continue
                 a, b = atoms[first.id], atoms[second.id]
-                if a is not None and b is not None and _same_polyatomic_structure(a, b, budget):
+                if a is None or b is None:
+                    continue
+                pair = (tables(first.id, a), tables(second.id, b))
+                if _same_polyatomic_structure(a, b, budget, pair):
                     root[find(second.id)] = find(first.id)
     return {geometry.id: find(geometry.id) for geometry in geometries}
 

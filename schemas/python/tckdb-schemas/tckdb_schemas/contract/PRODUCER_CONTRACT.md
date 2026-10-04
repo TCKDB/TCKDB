@@ -238,9 +238,10 @@ accepted is now refused, under the code the rule already used.
   the precision of the coordinates). Only atoms of the same element and the same stated isotope are
   exchanged (`D`/`T` count as 2H/3H), and an enantiomer stays a different structure in any order.
 - **The search is bounded, and past a bound a pair is treated as different** (the behaviour before this
-  change): geometries over 200 atoms, a pair needing more than 256 trial alignments, and a record's
-  trial alignments beyond 4,096 are not decided. A duplicate energy on a reordered copy of such a
-  structure is therefore still accepted. Ordinary molecules need one alignment.
+  change): geometries over 200 atoms, a pair needing more than 256 trial alignments or examining more
+  than 50,000 candidate placements, and a record's work beyond 4,096 alignments or 50 million work units
+  are not decided. A duplicate energy on a reordered copy of such a structure is therefore still
+  accepted. Ordinary molecules need one alignment.
 - The same-order comparison of 0.80.0 and the one-atom rule of 0.74.0 are unchanged.
 
 ### 0.90.0 - 2026-10-03
