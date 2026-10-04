@@ -24,17 +24,19 @@ dataset must never require a code release.
 
 ## Hessian and scan-point geometries are now checked (2026-10-04)
 
-- tckdb-backend (no wire package, client or schema change; no new environment variable, no new refusal
-  code): a Hessian's geometry and every scan point's geometry are now held to the subject their
+- tckdb-backend and tckdb-schemas 0.94.0 (changelog and contract note only; no payload field, client
+  change, new environment variable or new refusal code): a Hessian's geometry, every scan point's geometry
+  and every IRC point's geometry (including the TS-marker point and `both`, which were stored unchecked) are
+  now held to the subject their
   calculation is filed under, by the same two checks the input/output geometry links already ran
   (`calculation_geometry_composition_mismatch` and `calculation_geometry_isotope_mismatch`, #680). **A
-  wrong-element or wrong-isotope Hessian or scan-point geometry that was previously accepted is now
-  refused**, with `field` naming `hessian.geometry` or `scan_result.points[N].geometry`. This matters most
+  wrong-element or wrong-isotope Hessian, scan-point or IRC-point geometry that was previously accepted is now
+  refused**, with `field` naming `hessian.geometry`, `scan_result.points[N].geometry` or `irc_result.points[N].geometry`. This matters most
   for the Hessian: `hessian_reanalysis` takes its atomic masses from that geometry, so a deuterated
   Hessian geometry under a protium species used to yield deuterium frequencies on reanalysis with no
   refusal. A Hessian recovered from an uploaded artifact is checked too; there a refusal never fails the
   upload, the Hessian is simply not stored (warning logged). Species stored before #66 with isotope labels
-  on `species.smiles` and no `isotope_key` are now read through that SMILES, as the consistency checks
+  on `species.smiles` and no `isotope_key` are now read through that SMILES, and so does the Hessian reanalysis protium check, as the consistency checks
   already did. Existing stored data is unaffected; only uploads are judged.
 
 ## Method-aware H298 selection endpoint (2026-10-03)

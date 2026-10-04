@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.94.0 - 2026-10-04
+
+A Hessian's geometry, every scan point's geometry and every IRC point's geometry are now checked against the
+subject their calculation is filed under (#680). No payload field is added, removed or changed.
+
+- **Payloads that were accepted are now refused.** A wrong-element or wrong-isotope geometry at
+  `hessian.geometry`, at `scan_result.points[N].geometry` or at `irc_result.points[N].geometry` (any point
+  direction, including the TS-marker point and `both`) is refused with the existing codes
+  `calculation_geometry_composition_mismatch` (422) and `calculation_geometry_isotope_mismatch` (422), the
+  same ones already raised for input and output geometries; `context.field` names the path. Before, such a
+  geometry was stored: a deuterated Hessian geometry under a protium species gave deuterium frequencies on
+  reanalysis. The contract's per-route refusal lists are unchanged (the codes were already listed for these
+  routes).
+- A Hessian recovered from an uploaded artifact is checked too; there a mismatch never fails the upload, the
+  Hessian is simply not stored.
+- A species stored before the label-stripping change with isotope labels on its SMILES and no isotope key is
+  read through that SMILES when its isotope content is compared.
+
 ## 0.93.0 - 2026-10-04
 
 The same molecule with its atoms listed in another order is no longer a way round the no-optimisation

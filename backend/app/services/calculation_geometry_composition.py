@@ -439,9 +439,9 @@ CHECK_CALCULATION_GEOMETRY_COMPOSITION = ScientificCheck(
                 "``calculation_output_geometry`` inserts, on both the "
                 "producer-explicit branch and the ``geometry_key``/fallback "
                 "branch, and the geometry-bearing children -- a Hessian's "
-                "geometry (upload and best-effort artifact hook) and scan "
-                "points (#680). A guard test fails if a site appears "
-                "unchecked or disappears. ``calc_isotopes.assert_isotopes`` "
+                "geometry (upload and best-effort artifact hook), scan points "
+                "and every IRC point (#680). A guard test fails if a "
+                "construction is unchecked or a site disappears. ``calc_isotopes.assert_isotopes`` "
                 "extends the claim to isotopes (own code, by count)."
             ),
         ),
@@ -452,9 +452,12 @@ CHECK_CALCULATION_GEOMETRY_COMPOSITION = ScientificCheck(
         "belongs to. Absence does not block -- a ``pseudo`` owner, a "
         "transition state whose reaction records no reactants or a pseudo "
         "reactant, and an unparseable stored SMILES are all left unjudged. "
-        "Only atom counts are compared, so isotopologues, scan and IRC "
-        "points, constitutional isomers and dissociated optimisations all "
-        "pass."
+        "Only atom counts are compared, so a scan or IRC point at stretched "
+        "or rearranged coordinates passes -- scan and IRC points are "
+        "themselves checked, and a point of a different molecule is refused "
+        "-- as do constitutional isomers and dissociated optimisations. "
+        "Isotopologues pass this check; the isotope check "
+        "(``calculation_geometry_isotope_mismatch``) judges them separately."
     ),
     divergence=(
         "A documented false *acceptance*, restated because a referee will "

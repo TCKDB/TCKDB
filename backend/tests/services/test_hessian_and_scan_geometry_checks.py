@@ -32,15 +32,19 @@ from app.db.models.calculation import (
     Calculation,
     CalculationHessian,
     CalculationInputGeometry,
+    CalculationIRCPoint,
     CalculationScanPoint,
 )
 from app.db.models.common import ArtifactKind, CalculationType, HessianSource
+from app.db.models.geometry import GeometryAtom
 from app.schemas.entities.calculation import CalculationScanResultCreate
 from app.schemas.fragments.artifact import ArtifactIn
+from app.schemas.fragments.calculation import CalculationWithResultsPayload
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.computed_species_upload import ComputedSpeciesUploadRequest
 from app.services import hessian_extraction
 from app.services.calc_isotopes import assert_isotopes
+from app.services.calculation_resolution import persist_calculation_result
 from app.services.calculation_scan_resolution import persist_calculation_scan
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.hessian_parsing import ParsedHessian
@@ -579,3 +583,75 @@ def test_an_unlabelled_legacy_species_is_still_all_standard(db_session) -> None:
     assert_isotopes(db_session, calc=calc, geometry_id=protium, field="hessian.geometry")
     with pytest.raises(CodedValueError):
         assert_isotopes(db_session, calc=calc, geometry_id=deuterium, field="hessian.geometry")
+
+
+def test_reanalysis_reads_a_legacy_entry_the_way_the_upload_check_does(db_session) -> None:
+    """Write and read agree (#680): upload accepts a deuterated Hessian under a
+    legacy ``[2H][2H]`` NULL-key species, so reanalysis must not then call that
+    entry protium and refuse the same Hessian as an isotope conflict."""
+
+    from app.services.hessian_reanalysis import _declares_isotope_under_protium
+
+    geometry_id = _h2_geometry_row(db_session, mass_numbers=(2, 2))
+    deuterium_atoms = list(
+        db_session.scalars(select(GeometryAtom).where(GeometryAtom.geometry_id == geometry_id))
+    )
+    legacy = _legacy_calc(db_session, "[2H][2H]")
+    ordinary = _legacy_calc(db_session, "[H][H]")
+
+    assert _declares_isotope_under_protium(legacy, deuterium_atoms) is False
+    assert _declares_isotope_under_protium(ordinary, deuterium_atoms) is True
+
+
+# ---------------------------------------------------------------------------
+# IRC points: every direction, not only forward/reverse (#680)
+# ---------------------------------------------------------------------------
+
+
+def _irc_payload(direction: str | None, xyz: str, isotopes: dict[int, int] | None) -> CalculationWithResultsPayload:
+    point: dict = {"point_index": 0, "geometry": _geom(xyz, isotopes), "is_ts": direction is None}
+    if direction is not None:
+        point["direction"] = direction
+    return CalculationWithResultsPayload.model_validate(
+        {
+            "type": "irc",
+            "software_release": _SOFTWARE,
+            "level_of_theory": _LOT,
+            "irc_result": {"points": [point]},
+        }
+    )
+
+
+def _irc_calc(session: Session) -> Calculation:
+    species = make_species(session, smiles="[H][H]", inchi_key=next_inchi_key("IRCH"))
+    entry = make_species_entry(session, species)
+    return make_calculation(session, type=CalculationType.irc, species_entry_id=entry.id)
+
+
+_IRC_DIRECTIONS = [None, "forward", "reverse", "both"]
+
+
+@pytest.mark.parametrize("direction", _IRC_DIRECTIONS, ids=str)
+@pytest.mark.parametrize(
+    ("xyz", "isotopes", "code"),
+    [(_H2, {1: 2, 2: 2}, _ISOTOPE), (_HN, None, _COMPOSITION)],
+    ids=["wrong_isotope", "wrong_element"],
+)
+def test_an_irc_point_geometry_is_refused_whatever_its_direction(
+    db_session, direction, xyz, isotopes, code
+) -> None:
+    calc = _irc_calc(db_session)
+    with pytest.raises(CodedValueError) as excinfo:
+        persist_calculation_result(db_session, calc, _irc_payload(direction, xyz, isotopes))
+    assert excinfo.value.code == code
+    assert excinfo.value.context["field"] == "irc_result.points[0].geometry"
+
+
+@pytest.mark.parametrize("direction", _IRC_DIRECTIONS, ids=str)
+def test_a_matching_irc_point_geometry_is_accepted_whatever_its_direction(
+    db_session, direction
+) -> None:
+    calc = _irc_calc(db_session)
+    persist_calculation_result(db_session, calc, _irc_payload(direction, _H2, None))
+    db_session.flush()
+    assert db_session.scalar(select(func.count()).select_from(CalculationIRCPoint)) == 1

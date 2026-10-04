@@ -1,50 +1,38 @@
 """Every site that links a geometry to a calculation must check its composition.
 
 The rule in ``app.services.calculation_geometry_composition`` is only as good
-as its coverage, and coverage here is not a property of one function: rows in
-``calculation_input_geometry`` and ``calculation_output_geometry`` are inserted
-from eight places across four modules, which is exactly the shape that let the
-gap exist in the first place — ``attach_calculation_output_geometries`` was
-never the only writer, and a reader who found the check there would reasonably
-conclude the seam was covered.
+as its coverage, and coverage here is not a property of one function: geometry
+rows reach a calculation from many places across several modules, which is
+exactly the shape that let the gap exist in the first place --
+``attach_calculation_output_geometries`` was never the only writer, and a reader
+who found the check there would reasonably conclude the seam was covered.
 
 This guard makes the omission loud instead of silent. It parses the source for
-constructions of the two ORM link classes and requires each enclosing function
-to call ``assert_calculation_geometry_composition``. It is the same device the
-scientific-check register uses to stop a declaration going unregistered, and it
-is deliberately structural rather than behavioural: a new write path added
-without a check fails here even if no test happens to exercise it.
+constructions of the geometry-bearing ORM classes and requires **each
+construction** (not each enclosing function) to be preceded by a call to
+``assert_calculation_geometry_composition`` on the same ``geometry_id``; see
+``_geometry_link_guard`` for what that does and does not prove. Per function was
+not enough: ``_persist_irc_result`` called the check, but only on the
+forward/reverse branch, and the TS-marker point was written outside it (#680).
 
-If a future site legitimately cannot check — it links a geometry before the
-calculation's owner is known, say — the honest fix is to make that explicit
+If a future site legitimately cannot check -- it links a geometry before the
+calculation's owner is known, say -- the honest fix is to make that explicit
 here with the reason, not to widen the pattern.
 """
 
 from __future__ import annotations
 
-import ast
-from pathlib import Path
+from tests.services._geometry_link_guard import (
+    LINK_CLASSES,
+    construction_sites,
+    unchecked_constructions,
+)
 
-_APP = Path(__file__).resolve().parents[2] / "app"
-
-#: Every ORM class that attaches a stored geometry to a calculation. The first
-#: two are the input/output links; the rest are the geometry-bearing children
-#: #680 found unchecked (a Hessian's frame, a scan point) plus the IRC and
-#: path-search points, which share a function with an output link but are
-#: named here so removing that link cannot silently drop their check.
-_LINK_CLASSES = {
-    "CalculationInputGeometry",
-    "CalculationOutputGeometry",
-    "CalculationHessian",
-    "CalculationScanPoint",
-    "CalculationIRCPoint",
-    "CalculationPathSearchPoint",
-}
 _CHECKER = "assert_calculation_geometry_composition"
 
-#: The construction sites as of #143, as ``module::function``. Listed so that
-#: a *removed* check is as visible as an added-and-unchecked one: if this set
-#: shrinks, someone deleted a write path and should say so.
+#: The construction sites, as ``module::function``. Listed so that a *removed*
+#: check is as visible as an added-and-unchecked one: if this set shrinks,
+#: someone deleted a write path and should say so.
 _EXPECTED_SITES = {
     "services/calculation_resolution.py::_persist_irc_result",
     "services/calculation_resolution.py::_persist_path_search_result",
@@ -59,56 +47,23 @@ _EXPECTED_SITES = {
 }
 
 
-def _enclosing_functions_that_construct_links() -> dict[str, ast.FunctionDef]:
-    """Map ``module::function`` to the function node, for every write site."""
+def test_every_geometry_link_construction_is_preceded_by_the_composition_check() -> None:
+    assert construction_sites(), "found no geometry-link write sites at all -- the AST walk broke"
 
-    found: dict[str, ast.FunctionDef] = {}
-    for path in sorted(_APP.rglob("*.py")):
-        if path.name == "__init__.py" or "db/models" in path.as_posix():
-            continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            constructs = any(
-                isinstance(inner, ast.Call)
-                and isinstance(inner.func, ast.Name)
-                and inner.func.id in _LINK_CLASSES
-                for inner in ast.walk(node)
-            )
-            if constructs:
-                key = f"{path.relative_to(_APP).as_posix()}::{node.name}"
-                found[key] = node
-    return found
-
-
-def test_every_geometry_link_site_checks_composition() -> None:
-    sites = _enclosing_functions_that_construct_links()
-    assert sites, "found no geometry-link write sites at all — the AST walk broke"
-
-    unchecked = sorted(
-        key
-        for key, node in sites.items()
-        if not any(
-            isinstance(inner, ast.Call)
-            and isinstance(inner.func, ast.Name)
-            and inner.func.id == _CHECKER
-            for inner in ast.walk(node)
-        )
-    )
+    unchecked = unchecked_constructions(_CHECKER)
     assert not unchecked, (
-        "These functions attach a geometry to a calculation (an input/output "
-        "link, a Hessian, a scan, IRC or path-search point) without calling "
-        f"{_CHECKER}: {unchecked}. A geometry linked to a calculation must be "
-        "made of the atoms of the subject that calculation is filed under; see "
-        "backend/docs/specs/calculation_geometry_composition.md."
+        "These constructions attach a geometry to a calculation (an input/output "
+        "link, a Hessian, a scan, IRC or path-search point) with no preceding "
+        f"{_CHECKER} on the same geometry_id: {unchecked}. A geometry linked to "
+        "a calculation must be made of the atoms of the subject that calculation "
+        "is filed under; see backend/docs/specs/calculation_geometry_composition.md."
     )
 
 
 def test_the_known_write_sites_have_not_silently_disappeared() -> None:
     """A shrinking set means a write path was removed, which is also news."""
 
-    sites = set(_enclosing_functions_that_construct_links())
+    sites = set(construction_sites())
     missing = sorted(_EXPECTED_SITES - sites)
     assert not missing, (
         f"These geometry-link write sites no longer exist: {missing}. If that "
@@ -116,14 +71,52 @@ def test_the_known_write_sites_have_not_silently_disappeared() -> None:
     )
 
 
-#: Tables that hold a ``geometry.id`` foreign key *and* a ``calculation_id``,
-#: and so could attach a geometry to a calculation, but deliberately do not,
-#: with the reason.
+def test_an_unchecked_site_in_a_function_that_checks_elsewhere_is_caught() -> None:
+    """The guard's own mutation: the #680 IRC shape, in miniature.
+
+    A function that calls the checker inside one branch and builds a row outside
+    it passes a per-function guard and fails this one.
+    """
+
+    import ast
+
+    from tests.services import _geometry_link_guard as g
+
+    source = (
+        "def persist(session, calc, points):\n"
+        "    for point in points:\n"
+        "        session.add(CalculationIRCPoint(geometry_id=point.gid))\n"
+        "        if point.role:\n"
+        f"            {_CHECKER}(session, calc=calc, geometry_id=point.gid)\n"
+        "            session.add(CalculationOutputGeometry(geometry_id=point.gid))\n"
+    )
+    tree = ast.parse(source)
+    parents = g._parents(tree)
+    verdicts = {
+        node.func.id: g._checked_before(node, parents, _CHECKER)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in LINK_CLASSES
+    }
+    assert verdicts == {"CalculationIRCPoint": False, "CalculationOutputGeometry": True}
+
+
+#: Tables with a foreign key to ``geometry`` AND a foreign key to ``calculation``
+#: (by foreign-key target, whatever the column is called: ``calculation_id``,
+#: ``source_calculation_id``, ``reconstruction_calculation_id``), that could
+#: attach a geometry to a calculation but deliberately do not, with the reason.
 _EXEMPT_TABLES = {
     "calc_geometry_validation": (
         "records a comparison between geometries that are ALREADY linked to the "
         "calculation (it reads them back from the input/output links), so it "
         "attaches nothing new"
+    ),
+    "transition_state_validation_evidence": (
+        "its saddle-point geometry (transition_state_geometry_id) is the TS "
+        "calculation's own input geometry, which was composition- and "
+        "isotope-checked when it was linked; the row names it, it does not "
+        "attach a new one"
     ),
 }
 
@@ -134,9 +127,8 @@ def _geometry_bearing_calculation_tables() -> set[str]:
 
     found: set[str] = set()
     for table in Base.metadata.tables.values():
-        if "calculation_id" not in table.c:
-            continue
-        if any(fk.column.table.name == "geometry" for fk in table.foreign_keys):
+        targets = {fk.column.table.name for fk in table.foreign_keys}
+        if "calculation" in targets and "geometry" in targets:
             found.add(table.name)
     return found
 
@@ -144,10 +136,11 @@ def _geometry_bearing_calculation_tables() -> set[str]:
 def test_every_geometry_bearing_calculation_table_is_covered_or_exempt() -> None:
     """A new geometry-bearing child of ``calculation`` cannot slip past the checks.
 
-    Derived from the schema, not from the list above: a future table with a
-    ``calculation_id`` and a geometry foreign key fails here until its class is
-    added to ``_LINK_CLASSES`` (and so to the structural test) or it is exempted
-    with a reason.
+    Derived from the schema by foreign-key target, not from the list above and
+    not from a column name: a future table with *any* foreign key to
+    ``calculation`` and one to ``geometry`` fails here until its class is added
+    to the guard's link classes (and so to the structural test) or it is
+    exempted with a reason.
     """
 
     from app.db.base import Base
@@ -161,12 +154,12 @@ def test_every_geometry_bearing_calculation_table_is_covered_or_exempt() -> None
     uncovered = sorted(
         table
         for table in tables
-        if table not in _EXEMPT_TABLES and class_for_table[table] not in _LINK_CLASSES
+        if table not in _EXEMPT_TABLES and class_for_table[table] not in LINK_CLASSES
     )
     assert not uncovered, (
         f"These tables link a geometry to a calculation but their ORM class is "
-        f"not in _LINK_CLASSES: {uncovered}. Add the class (and check it at its "
-        "write site), or exempt the table with a reason."
+        f"not in the guard's LINK_CLASSES: {uncovered}. Add the class (and check "
+        "it at its write site), or exempt the table with a reason."
     )
     stale = sorted(t for t in _EXEMPT_TABLES if t not in tables)
     assert not stale, f"_EXEMPT_TABLES names tables that no longer qualify: {stale}"

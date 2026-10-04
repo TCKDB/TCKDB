@@ -41,7 +41,7 @@ _ISOTOPE_CACHE_KEY = "_calculation_geometry_isotope_reference_cache"
 IsotopeCounts = dict[tuple[str, int], int]
 
 
-def _entry_isotope_counts(entry: SpeciesEntry, species: Species) -> IsotopeCounts | None:
+def entry_isotope_counts(entry: SpeciesEntry, species: Species) -> IsotopeCounts | None:
     """Return the ``(element, mass_number)`` counts a species entry declares.
 
     The entry's isotopes live on ``species_entry.isotope_key`` -- the canonical
@@ -54,11 +54,17 @@ def _entry_isotope_counts(entry: SpeciesEntry, species: Species) -> IsotopeCount
     its isotope labels in ``species.smiles`` and has no ``isotope_key``; the
     migration that added the column deliberately did not backfill it (the
     label was free text, deriving a key would be a guess). So when
-    ``isotope_key`` is ``NULL`` the species SMILES is read for labels, exactly
-    as :func:`app.services.consistency.stoichiometry.entry_facts` does
-    (``facts.has_isotopes or isotope_key is not None``): neither source can
-    hide the other. For a row written after #66 the SMILES carries no label,
-    so the fallback yields the same empty mapping and changes nothing.
+    ``isotope_key`` is ``NULL`` the species SMILES is read for labels, as
+    :func:`app.services.consistency.stoichiometry.entry_facts` reads both
+    sources. The two differ in one way: ``entry_facts`` ORs the key and the
+    label (it only asks "are there isotopes at all"), whereas here the key wins
+    when present and the SMILES is consulted only when the key is ``NULL``,
+    because a count needs one source, not two. For a row written after #66 the
+    SMILES carries no label, so the fallback yields the same empty mapping and
+    changes nothing.
+
+    Shared with :mod:`app.services.hessian_reanalysis`, so the upload check and
+    the read-time check cannot disagree about what an entry declares.
 
     An unparseable key or SMILES is an absence, not a refusal.
     """
@@ -91,7 +97,7 @@ def _species_entry_isotope_reference(
         return None
     if species.kind == MoleculeKind.electron:
         return {}
-    return _entry_isotope_counts(entry, species)
+    return entry_isotope_counts(entry, species)
 
 
 def _transition_state_entry_isotope_reference(
@@ -111,7 +117,7 @@ def _transition_state_entry_isotope_reference(
     for species, entry in rows:
         if species.kind == MoleculeKind.electron:
             continue
-        counts = _entry_isotope_counts(entry, species)
+        counts = entry_isotope_counts(entry, species)
         if counts is None:
             return None
         for key, n in counts.items():
