@@ -15,6 +15,12 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import SelectionPolicy
+from app.services.selection_kernel import (  # noqa: F401  (re-exported: the vocabulary moved to the kernel)
+    Edge,
+    Outcome,
+    RuleMatch,
+    Tri,
+)
 
 #: The one quantity this selector answers.
 QUANTITY = "formation_enthalpy_298k"
@@ -48,35 +54,6 @@ class Applicability(str, Enum):
     incompatible = "incompatible"
     unsupported = "unsupported"
     unresolved = "unresolved"
-
-
-class Outcome(str, Enum):
-    policy_preferred = "policy_preferred"
-    incomparable_alternatives = "incomparable_alternatives"
-    sole_eligible_candidate = "sole_eligible_candidate"
-    no_applicable_candidate = "no_applicable_candidate"
-    policy_conflict = "policy_conflict"
-    #: The visible population exceeded the cap, so nothing was assessed and nothing is selected.
-    bounded_search_exceeded = "bounded_search_exceeded"
-
-
-class Tri(str, Enum):
-    """A rule prerequisite: established, refuted, or not knowable from what the record links."""
-
-    true = "true"
-    false = "false"
-    unknown = "unknown"
-
-
-@dataclass(frozen=True)
-class RuleMatch:
-    """One side of a rule evaluated on one candidate, with the reasons for the verdict."""
-
-    state: Tri
-    reasons: tuple[str, ...] = ()
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"state": self.state.value, "reasons": list(self.reasons)}
 
 
 @dataclass(frozen=True)
@@ -237,24 +214,6 @@ class CandidateAssessment:
             "blocking": list(self.blocking),
             "advisory": list(self.advisory),
             "physically_eligible": self.physically_eligible,
-        }
-
-
-@dataclass(frozen=True)
-class Edge:
-    """A preference: ``preferred`` precedes ``dispreferred`` under one rule version."""
-
-    preferred: str
-    dispreferred: str
-    rule_id: str
-    rule_version: str
-
-    def to_dict(self) -> dict[str, str]:
-        return {
-            "preferred": self.preferred,
-            "dispreferred": self.dispreferred,
-            "rule_id": self.rule_id,
-            "rule_version": self.rule_version,
         }
 
 

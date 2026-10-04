@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 from app.db.models.common import RecordReviewStatus as S
+from app.db.models.common import ThermoTargetKind
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.thermo_selection import engine
 from app.services.thermo_selection.manifest import build_manifest, replay_decision
@@ -31,7 +32,6 @@ from app.services.thermo_selection.models import (
     Tri,
 )
 from app.services.thermo_selection.rules import RULE_REVOKED, E1Rule
-from app.db.models.common import ThermoTargetKind
 from tests.services.thermo_selection._support import cand, protocol, subject_for
 from tests.services.thermo_selection.test_engine import LabelRule
 
@@ -68,7 +68,7 @@ def _scenarios():
         LabelRule("R1", {"a"}, {"b"}), LabelRule("R2", {"b"}, {"a"}, supersedes=("R1",)))
     yield "opposing_mutual_supersession", _abc()[:2], (
         LabelRule("R1", {"a"}, {"b"}, supersedes=("R2",)), LabelRule("R2", {"b"}, {"a"}, supersedes=("R1",)))
-    yield "conflict_elsewhere", _abc()[:2] + [labelled("y", "y", id_rank=9), labelled("z", "z", id_rank=8)], (
+    yield "conflict_elsewhere", [*_abc()[:2], labelled("y", "y", id_rank=9), labelled("z", "z", id_rank=8)], (
         LabelRule("R1", {"a"}, {"b"}), LabelRule("R2", {"b"}, {"a"}), LabelRule("R3", {"z"}, {"y"}))
     yield "inactive_rule", _abc()[:2], (revoked,)
     yield "unknown_scope", _abc()[:2], (LabelRule("R1", {"a"}, {"b"}, scope_state=Tri.unknown),)
@@ -76,7 +76,7 @@ def _scenarios():
     yield "single", _abc()[:1], (e1,)
     yield "empty", [], (e1,)
     yield "no_rules_incomparable", _abc(), ()
-    yield "two_fronts_admin_order", _abc() + [labelled("d", "d", age_days=0, id_rank=0)], (LabelRule("R1", {"a", "b"}, {"c"}),)
+    yield "two_fronts_admin_order", [*_abc(), labelled("d", "d", age_days=0, id_rank=0)], (LabelRule("R1", {"a", "b"}, {"c"}),)
 
 
 def _generate():
