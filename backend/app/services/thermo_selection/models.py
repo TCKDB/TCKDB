@@ -10,12 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
 from typing import Any
 
 from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.selection_kernel import (  # noqa: F401  (re-exported: the vocabulary moved to the kernel)
+    Applicability,
     Edge,
     Outcome,
     RuleMatch,
@@ -35,25 +35,6 @@ MAX_CANDIDATES = 500
 POLICY_NAME = "h298_method_preferred"
 POLICY_VERSION = "1"
 MANIFEST_FORMAT_VERSION = 1
-
-
-class Applicability(str, Enum):
-    """Whether one record can supply the requested quantity.
-
-    ``applicable``   every requirement is established.
-    ``incompatible`` something is known to be wrong for this request (another phase, another
-                     target, no H298 content, a domain that excludes 298.15 K, a defective fit).
-    ``unsupported``  the record may hold the answer but in a form this release does not
-                     evaluate (a Wilhoit fit alone).
-    ``unresolved``   a required fact was never recorded (the enthalpy reference, the target,
-                     the phase). Never guessed.
-    Precedence when several apply: incompatible, unsupported, unresolved.
-    """
-
-    applicable = "applicable"
-    incompatible = "incompatible"
-    unsupported = "unsupported"
-    unresolved = "unresolved"
 
 
 @dataclass(frozen=True)

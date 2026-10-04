@@ -22,6 +22,24 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Kinetics applicability assessment and the shared selection kernel (2026-10-04)
+
+**Change 2 of 4 of kinetics method-aware selection: a service that assesses which stored rates answer a
+requested gas-phase rate coefficient, and the graph kernel it shares with the H298 selector.** There is no
+endpoint, SDK or MCP tool yet (change 4), and no preference rule (change 3).
+
+- tckdb-backend and tckdb-client 0.129.0 (the regenerated rejection codes only). New
+  `app.services.selection_kernel`: conflicts, preference fronts, administrative order and outcomes over refs and
+  attributed edges, extracted from the H298 engine. H298 decisions and manifests are byte-identical: a golden
+  generated before the extraction pins fifteen scenarios under every administrative policy.
+- New `app.services.kinetics_selection`: a loader (one consistent snapshot per reaction entry), an assessor and a
+  grouping by determination. Each record is `applicable`, `incompatible`, `unsupported` or `unresolved` with
+  reasons; an unstated fact is unknown and never a default, so a record that says less cannot beat one that says
+  more. Alternate fits of one determination are one candidate. A visible population over 500 records is refused
+  before anything is assessed (`kinetics_selection_population_too_large`, HTTP 422 once routed), never truncated,
+  and rows the read profile hides are not counted, listed or named.
+- Nothing is written, no migration, no new environment variable, and existing kinetics browsing keeps its order.
+
 ## A kinetics record can declare its determination, applicability and protocol (2026-10-04)
 
 Change 1 of 4 of the kinetics applicability and method-aware selection plan: **persist the missing scientific

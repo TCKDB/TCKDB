@@ -23,7 +23,7 @@ from app.services.selection_kernel.graph import (
     resolve_opposing,
     strongly_connected,
 )
-from app.services.selection_kernel.vocabulary import Edge, Outcome, RuleMatch, Tri
+from app.services.selection_kernel.vocabulary import Applicability, Edge, Outcome, RuleMatch, Tri
 
 __all__ = [
     "ADMIN_FIRST_BASIS",
@@ -34,6 +34,7 @@ __all__ = [
     "BASIS_PREFERRED",
     "BASIS_SOLE",
     "AdminNode",
+    "Applicability",
     "Edge",
     "GraphVerdict",
     "Outcome",

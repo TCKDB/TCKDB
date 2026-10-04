@@ -10789,6 +10789,7 @@ Refusals a client can receive that no producer route's code path was traced to: 
 - `invalid_structure_query` (422)
 - `invalid_temperature_range` (422)
 - `irc_result_not_found` (404)
+- `kinetics_selection_population_too_large` (422)
 - `last_admin_demotion` (409)
 - `level_of_theory_handle_conflict` (422)
 - `limit_too_large` (422)

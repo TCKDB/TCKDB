@@ -186,6 +186,7 @@ class RejectionCode(str, Enum):
     KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH = "kinetics_interpretation_conformer_selection_owner_mismatch"
     KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH = "kinetics_interpretation_statmech_owner_mismatch"
     KINETICS_PROTOCOL_CALCULATION_OWNER_MISMATCH = "kinetics_protocol_calculation_owner_mismatch"
+    KINETICS_SELECTION_POPULATION_TOO_LARGE = "kinetics_selection_population_too_large"
     LAST_ADMIN_DEMOTION = "last_admin_demotion"
     LEVEL_OF_THEORY_HANDLE_CONFLICT = "level_of_theory_handle_conflict"
     LEVEL_OF_THEORY_METHOD_IS_COMPOUND = "level_of_theory_method_is_compound"
@@ -449,6 +450,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
         RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
         RejectionCode.KINETICS_PROTOCOL_CALCULATION_OWNER_MISMATCH,
+        RejectionCode.KINETICS_SELECTION_POPULATION_TOO_LARGE,
         RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT,
         RejectionCode.LEVEL_OF_THEORY_METHOD_IS_COMPOUND,
         RejectionCode.LEVEL_OF_THEORY_METHOD_WITH_COMPOSITE_SCHEME,
@@ -733,6 +735,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.KINETICS_PROTOCOL_CALCULATION_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.KINETICS_SELECTION_POPULATION_TOO_LARGE: frozenset({422}),
     RejectionCode.LAST_ADMIN_DEMOTION: frozenset({409}),
     RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.LEVEL_OF_THEORY_METHOD_IS_COMPOUND: frozenset({422}),
