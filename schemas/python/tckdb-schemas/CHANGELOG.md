@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.91.0 - 2026-10-04
+## 0.93.0 - 2026-10-04
 
 The same molecule with its atoms listed in another order is no longer a way round the no-optimisation
 duplicate rule (#679, follow-up to #667). No field is added, removed or renamed; one payload that was
