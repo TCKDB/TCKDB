@@ -461,3 +461,19 @@ def test_a_fit_of_another_solve_or_network_is_refused_when_its_content_is_loaded
     with pytest.raises(CodedValueError) as caught:
         export_module._load_fits(db_session, "net_doesnotexistdoesnotexist", a.public_ref, [a._fits[0].public_ref])
     assert caught.value.context["not_found_or_hidden"] == [a._fits[0].public_ref]
+
+
+def test_a_relabelled_review_basis_is_refused_even_when_the_digest_is_resealed(client, db_session, world, two):
+    """Relabel an exploratory manifest as curated while an unreviewed solve stays in it, then re-seal."""
+    a, b = two  # a is not_reviewed, b approved
+    manifest = manifest_of(client, world)
+    forged = copy.deepcopy(manifest)
+    forged["visibility"]["read_profile"] = "curated"
+    forged["request"]["profile"] = "curated"
+    forged["request"]["effective_review_statuses"] = ["approved"]
+    reseal(forged)
+    response = export(
+        client, world, forged, b._dets["d_assoc"].public_ref, [b._fits[0].public_ref], allow_administrative_choice=True
+    )
+    assert code(response) == "network_export_manifest_invalid" and context(response)["reason"] == "replay_failed"
+    assert "review status" in context(response)["detail"]
