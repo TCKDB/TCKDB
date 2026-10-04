@@ -17,8 +17,14 @@ What is specific to kinetics, and lives here and not in the kernel:
   (``incomparable_alternatives``) and the edges are reported as unused, with the reason.
 * **A rule applies only when active, and only to its scope.** An inactive rule appears in the decision with
   its reasons and makes no edge. An unknown prerequisite makes no edge either.
-* **Administrative policies other than ``method_preferred`` apply no rule.** They are the plain
-  administrative order among eligible determinations.
+* **A request that does not apply rules applies none.** ``apply_rules`` is false for every administrative policy
+  (``default``, ``most_reviewed``, ``latest``); the determinations are then in the plain administrative order.
+* **A rule names its objective.** An empty ``objective_key`` is refused: two rules with no stated objective must not
+  be read as comparing the same thing and composed.
+* **Supersession is within one objective.** Rules that arise under more than one objective are not composed at all,
+  so a rule that supersedes another but compares a different objective never overrides it: both sets of edges are
+  reported as unused and the determinations stay unranked. This is policy, not an omission: a precedence across
+  objectives would itself be a claim about which part of a rate matters more, and no council or curator has made it.
 
 Conflicts, fronts and outcomes are the kernel's (:mod:`app.services.selection_kernel`).
 """
@@ -162,6 +168,9 @@ def decide(
     rule_by_id = {r.rule_id: r for r in applied_rules}
     if len(rule_by_id) != len(applied_rules):
         raise ValueError("rule ids must be distinct")
+    unnamed = sorted(r.rule_id for r in applied_rules if not r.objective_key)
+    if unnamed:
+        raise ValueError(f"every rule names the objective it compares on; no objective_key on {unnamed}")
 
     edges: list[Edge] = []
     pair_checks: list[dict[str, Any]] = []

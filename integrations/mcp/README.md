@@ -32,6 +32,7 @@ committed backend OpenAPI golden snapshot at
 | `tckdb_get_reaction_entry_kinetics` | `GET /api/v1/scientific/reaction-entries/{rxe_ref}/kinetics` | Entry-scoped kinetics |
 | `tckdb_get_species_entry_thermo` | `GET /api/v1/scientific/species-entries/{spe_ref}/thermo` | Entry-scoped thermo |
 | `tckdb_select_species_entry_thermo` | `POST /api/v1/scientific/species-entries/{spe_ref}/thermo/select` | Method-aware 298 K formation-enthalpy selection |
+| `tckdb_select_reaction_entry_kinetics` | `POST /api/v1/scientific/reaction-entries/{rxe_ref}/kinetics/select` | Method-aware gas-phase rate-coefficient selection |
 | `tckdb_get_geometry` | `GET /api/v1/scientific/geometries/{geom_ref}` | Geometry detail |
 | `tckdb_get_reaction_entry_full` | `GET /api/v1/scientific/reaction-entries/{rxe_ref}/full` | Composite reaction record |
 | `tckdb_calculation_search` | `POST /api/v1/scientific/calculations/search` | Calculation search |
@@ -484,6 +485,7 @@ after both prefix and path-safety validation.
 
 ```text
 reaction_entry_ref: string         # REQUIRED, must start with "rxe_"
+quantity?: "rate_coefficient"      # must be this if given (server refuses otherwise)
 temperature_min?: number
 temperature_max?: number
 pressure?: number
@@ -579,6 +581,43 @@ scientifically selected, and a `selection` with `administrative: true` is a
 review and recency choice, not a method claim. There is no candidate-cap
 argument: the cap is fixed by the server. See
 `docs/guides/selecting_thermo_for_h298.md`.
+
+### `tckdb_select_reaction_entry_kinetics`
+
+Ask which stored kinetics record of a reaction entry to use for one stated gas-phase rate-coefficient question, and
+why. Read-only; the browse order of `tckdb_get_reaction_entry_kinetics` is unchanged.
+
+```text
+reaction_entry_ref: string         # REQUIRED, must start with "rxe_"
+direction: "forward" | "reverse"   # REQUIRED, relative to the stored orientation
+target: object                     # REQUIRED
+  kind: "whole_reaction" | "resolved_channel"
+  transition_state_entry_ref?: string   # "tse_...", for a resolved_channel
+  network_ref?: string                  # "net_...", with channel_key, for a resolved_channel
+  channel_key?: string
+coefficient_basis: "elementary_coefficient" | "third_body_kernel" | "composition_effective_coefficient"  # REQUIRED
+temperature_min_k: number          # REQUIRED, positive
+temperature_max_k: number          # REQUIRED, positive
+pressure: object                   # REQUIRED
+  kind: "independent" | "high_pressure_limit" | "finite"
+  min_bar?: number                 # finite only
+  max_bar?: number                 # finite only (equal for a point)
+collider?: object                  # required for a finite pressure and a composition-effective coefficient
+  components: [{species_ref: "spc_...", mole_fraction?: number}]
+policy?: "method_preferred" | "default" | "most_reviewed" | "latest"
+mode?: "all" | "first"             # default "all"
+min_review_status?: string
+phase?: string                     # must be "gas" if given (server refuses otherwise)
+profile?: "exploratory" | "curated"
+```
+
+Output: the server response, unchanged. `outcome` and `basis` are the server's explanation and should be quoted
+verbatim. `incomparable_alternatives` and `policy_conflict` mean nothing was scientifically selected,
+`sole_eligible_candidate` is not a comparative accuracy claim, and a `selection` with `administrative: true` is a
+review and recency choice, not a method claim. A selection names a determination with every eligible fitted
+representation of it, and `disclosures` lists the records that did not compete. Every rule in this release is
+inactive, so `method_preferred` ranks nothing yet. There is no candidate-cap or paging argument: the cap is fixed by
+the server and this tool never pages the population. See `docs/guides/selecting_kinetics.md`.
 
 ### `tckdb_get_geometry`
 

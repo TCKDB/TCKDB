@@ -153,5 +153,10 @@ def _candidate_fields(candidate: dict[str, Any]) -> dict[str, Any]:
 
 
 def replay_matches(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] | None = None) -> bool:
-    """True when replaying the manifest reproduces the decision it records."""
-    return replay_decision(manifest, rules=rules) == manifest["decision"]
+    """True when replaying the manifest reproduces the decision it records and the outcome it states.
+
+    The top-level ``outcome`` is compared too: it is a summary a reader trusts, so an edit of it that the decision
+    does not support must not "match".
+    """
+    replayed = replay_decision(manifest, rules=rules)
+    return replayed == manifest["decision"] and replayed["outcome"] == manifest["outcome"]

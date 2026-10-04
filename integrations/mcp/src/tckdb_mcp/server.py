@@ -21,6 +21,7 @@ from .tools import health as health_tool
 from .tools import kinetics_search as kinetics_search_tool
 from .tools import reaction_full as reaction_full_tool
 from .tools import reaction_kinetics as reaction_kinetics_tool
+from .tools import reaction_kinetics_selection as reaction_kinetics_selection_tool
 from .tools import reactions as reactions_tool
 from .tools import scientific_reads as scientific_reads_tools
 from .tools import species as species_tool
@@ -53,6 +54,11 @@ def list_tools_payload() -> list[dict[str, Any]]:
             "name": reaction_kinetics_tool.TOOL_NAME,
             "description": reaction_kinetics_tool.TOOL_DESCRIPTION,
             "inputSchema": reaction_kinetics_tool.INPUT_SCHEMA,
+        },
+        {
+            "name": reaction_kinetics_selection_tool.TOOL_NAME,
+            "description": reaction_kinetics_selection_tool.TOOL_DESCRIPTION,
+            "inputSchema": reaction_kinetics_selection_tool.INPUT_SCHEMA,
         },
         {
             "name": species_thermo_tool.TOOL_NAME,
@@ -108,6 +114,8 @@ def dispatch_tool(
         return reactions_tool.run(client, config, arguments)
     if name == reaction_kinetics_tool.TOOL_NAME:
         return reaction_kinetics_tool.run(client, config, arguments)
+    if name == reaction_kinetics_selection_tool.TOOL_NAME:
+        return reaction_kinetics_selection_tool.run(client, config, arguments)
     if name == species_thermo_tool.TOOL_NAME:
         return species_thermo_tool.run(client, config, arguments)
     if name == species_thermo_selection_tool.TOOL_NAME:

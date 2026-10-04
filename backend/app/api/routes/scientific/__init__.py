@@ -10,6 +10,8 @@ Sub-routers:
     reactions.router        → /scientific/reactions/search (GET, POST)
     reactions_browse.router → /scientific/reactions/browse
     kinetics.router         → /scientific/reaction-entries/{id}/kinetics
+    kinetics_selection.router
+                            → /scientific/reaction-entries/{ref}/kinetics/select (+ /manifest)
     thermo.router           → /scientific/species-entries/{id}/thermo
     thermo_selection.router → /scientific/species-entries/{ref}/thermo/select (+ /manifest)
     species_subresources.router
@@ -58,6 +60,7 @@ from app.api.routes.scientific import (
     geometries,
     kinetics,
     kinetics_search,
+    kinetics_selection,
     level_of_theory,
     level_of_theory_browse,
     literature,
@@ -108,6 +111,8 @@ scientific_router.include_router(species_browse.router)
 scientific_router.include_router(reactions_browse.router)
 scientific_router.include_router(reactions.router)
 scientific_router.include_router(kinetics.router)
+# Method-aware kinetics selection; a sibling of the per-entry kinetics browse, same prefix, deeper path.
+scientific_router.include_router(kinetics_selection.router)
 scientific_router.include_router(thermo.router)
 # Method-aware H298 selection; a sibling of the per-entry thermo browse, same prefix, deeper path.
 scientific_router.include_router(thermo_selection.router)

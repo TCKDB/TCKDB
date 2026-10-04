@@ -351,3 +351,11 @@ def test_the_manifest_lists_candidates_in_id_order_whatever_order_the_result_hol
     manifest = build_manifest(shuffled, result.decision)
     ranks = [c["id_rank"] for c in manifest["candidates"]]
     assert len(ranks) == 2 and ranks == sorted(ranks)
+
+
+def test_an_edited_top_level_outcome_is_not_a_match_even_when_the_decision_is_untouched(db_session, world, two):
+    manifest = json.loads(json.dumps(select(db_session, world.entry).manifest))
+    assert replay_matches(manifest, rules=(RULE,)) and manifest["outcome"] == "policy_preferred"
+    manifest["outcome"] = "incomparable_alternatives"
+    assert manifest["decision"]["outcome"] == "policy_preferred"
+    assert not replay_matches(manifest, rules=(RULE,))

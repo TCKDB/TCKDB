@@ -206,3 +206,19 @@ replayable decision manifest (`/thermo/select/manifest`). More than 500 visible 
 (422 `thermo_selection_population_too_large`). It persists nothing and creates no endorsement. Records
 outside the effective review floor are listed only when the read profile has no floor of its own. Guide:
 [`docs/guides/selecting_thermo_for_h298.md`](../../../docs/guides/selecting_thermo_for_h298.md).
+
+## Method-aware kinetics selection
+
+Browsing is unchanged. A separate, opt-in read, `POST /scientific/reaction-entries/{ref}/kinetics/select`, answers one
+stated gas-phase rate-coefficient question (direction, target, coefficient basis, temperature window, pressure,
+collider). A record answers it only if its stored claims say so (`applicable`, `incompatible`, `unsupported` or
+`unresolved`; unstated is unknown, never a default); alternate fits of one determination are one candidate. A
+pressure-independent record also answers a high-pressure-limit request. A versioned, typed rule registry orders
+determinations before the review and recency order, which then only sorts within a preference front; every rule in
+this release is inactive, so the answer is usually `incomparable_alternatives` or `sole_eligible_candidate`. It
+returns one of `policy_preferred`, `incomparable_alternatives`, `sole_eligible_candidate`, `no_applicable_candidate`
+or `policy_conflict`, with the assessments, determinations, relations, fronts, rule versions and disclosures, and a
+replayable decision manifest (`/kinetics/select/manifest`) read in one read-only REPEATABLE READ snapshot. More than
+500 visible records is refused (422 `kinetics_selection_population_too_large`). It persists nothing and creates no
+endorsement. Records outside the effective review floor are listed only when the read profile has no floor of its own.
+Guide: [`docs/guides/selecting_kinetics.md`](../../../docs/guides/selecting_kinetics.md).

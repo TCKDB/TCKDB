@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.100.0 - 2026-10-04
+
+No wire model changes. Contract notes the read-only kinetics select endpoints.
+
 ## 0.99.0 - 2026-10-04
 
 `BundleKineticsIn` can declare `energy_level_of_theory`, optional and stored as declared (as on `KineticsUploadRequest`). A

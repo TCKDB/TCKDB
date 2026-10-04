@@ -140,6 +140,41 @@ def validate_thermo_selection_rules() -> None:
         ) from exc
 
 
+class KineticsSelectionRulesError(RuntimeError):
+    """Raised when the shipped kinetics-selection rule registry cannot be built.
+
+    The registry pins its audited barrier manifest by SHA-256, so an edited, truncated or
+    internally inconsistent manifest refuses to load. Without this check that refusal would first
+    surface as a 500 on the first ``/kinetics/select`` request; with it the deploy fails instead.
+    """
+
+
+def validate_kinetics_selection_rules() -> None:
+    """Build the kinetics rule registry now, so a bad manifest pin stops the boot.
+
+    Runs in every deployment mode, ``local`` included: it reads one packaged file and needs no
+    network or database. The result is cached by ``default_rules``, so the first request reuses it.
+
+    :raises KineticsSelectionRulesError: the registry (or a manifest it pins) does not load.
+    """
+    from app.chemistry.kinetics_rules.xyg3_barrier_manifest import ManifestError
+    from app.services.kinetics_selection.rules import default_rules
+
+    # Narrow on purpose: a manifest that fails its pin or its audit (ManifestError), or one that is
+    # missing from the package (OSError). Anything else is a defect and should surface as itself.
+    try:
+        default_rules()
+    except ManifestError as exc:
+        raise KineticsSelectionRulesError(
+            f"kinetics selection rule registry failed to load: the packaged XYG3 barrier manifest was refused: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise KineticsSelectionRulesError(
+            f"kinetics selection rule registry failed to load: the packaged XYG3 barrier manifest file could not "
+            f"be read ({type(exc).__name__}: {exc})"
+        ) from exc
+
+
 #: The only encoding this deployment is designed for. Anything else stores
 #: bytes without validating them (``SQL_ASCII``) or silently transcodes.
 EXPECTED_SERVER_ENCODING = "UTF8"

@@ -493,3 +493,12 @@ def test_a_siblings_declared_energy_level_is_not_borrowed_by_a_record_that_links
     assert by_ref[sibling.public_ref]["linked_recipe_keys"] == ["g4"]
     assert by_ref[bare.public_ref]["linked_recipe_keys"] == []
     assert by_ref[other.public_ref]["linked_recipe_keys"] == []
+
+
+def test_an_edited_top_level_outcome_is_not_a_match_even_when_the_decision_is_untouched(db_session, methane):
+    manifest = json.loads(json.dumps(_scenario(db_session, methane).manifest))
+    assert replay_matches(manifest)
+    other = "incomparable_alternatives" if manifest["outcome"] != "incomparable_alternatives" else "policy_preferred"
+    manifest["outcome"] = other
+    assert manifest["decision"]["outcome"] != other
+    assert not replay_matches(manifest)

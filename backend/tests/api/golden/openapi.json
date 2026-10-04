@@ -20755,7 +20755,7 @@
           "scope": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/KineticsDeterminationTargetKind-Input"
+                "$ref": "#/components/schemas/tckdb_schemas__enums__KineticsDeterminationTargetKind"
               },
               {
                 "type": "null"
@@ -21013,7 +21013,7 @@
           "target_kind": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/KineticsDeterminationTargetKind-Input"
+                "$ref": "#/components/schemas/tckdb_schemas__enums__KineticsDeterminationTargetKind"
               },
               {
                 "type": "null"
@@ -21084,15 +21084,6 @@
         ],
         "title": "KineticsDeterminationTargetBlock",
         "type": "object"
-      },
-      "KineticsDeterminationTargetKind-Input": {
-        "description": "The rate a kinetics determination is declared to describe.",
-        "enum": [
-          "whole_reaction",
-          "resolved_channel"
-        ],
-        "title": "KineticsDeterminationTargetKind",
-        "type": "string"
       },
       "KineticsDirection-Output": {
         "description": "Direction a reaction-level kinetics fit describes (DR-0036).\n\nGraph-level ``chem_reaction.reversible`` only says a reaction *can* run\nboth ways; it cannot tell apart a forward-rate fit from a reverse-rate\nfit deposited against the same ``reaction_entry``. This per-record enum\ndisambiguates the two so both can coexist distinctly (needed for\nChemkin/Cantera round-trip, where forward and reverse rates are given\nas separate expressions).\n\n``forward`` / ``reverse`` are relative to the reaction_entry's stored\nreactant→product orientation. ``net`` marks a rate that already folds\nboth directions (e.g. an apparent/observed net rate). A ``NULL`` column\nmeans the producer did not specify — the historical default, so existing\nrows are unaffected.",
@@ -22777,6 +22768,1204 @@
           }
         },
         "title": "KineticsSearchRequest",
+        "type": "object"
+      },
+      "KineticsSelectionCandidate": {
+        "description": "One assessed record: its stored claims, its applicability to the question, and whether it competed.",
+        "properties": {
+          "advisory": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Advisory",
+            "type": "array"
+          },
+          "applicability": {
+            "description": "applicable, incompatible, unsupported or unresolved.",
+            "title": "Applicability",
+            "type": "string"
+          },
+          "applicability_declaration": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicability Declaration"
+          },
+          "applicability_state": {
+            "description": "absent, valid or unreadable. Absent is 'not stated', never a default.",
+            "title": "Applicability State",
+            "type": "string"
+          },
+          "blocking": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocking",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "determination_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Determination Ref"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "eligible": {
+            "description": "Applicable, with no blocking finding: it competes in the ordering.",
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "kinetics_ref": {
+            "title": "Kinetics Ref",
+            "type": "string"
+          },
+          "model_kind": {
+            "title": "Model Kind",
+            "type": "string"
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protocol"
+          },
+          "protocol_state": {
+            "description": "absent, valid or unreadable. Absent is 'not stated', never 'standard'.",
+            "title": "Protocol State",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsSelectionReason"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "representation_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Representation Role"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "scientific_origin": {
+            "title": "Scientific Origin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kinetics_ref",
+          "review_status",
+          "created_at",
+          "scientific_origin",
+          "model_kind",
+          "applicability_state",
+          "protocol_state",
+          "applicability",
+          "eligible"
+        ],
+        "title": "KineticsSelectionCandidate",
+        "type": "object"
+      },
+      "KineticsSelectionColliderComponent": {
+        "additionalProperties": false,
+        "properties": {
+          "mole_fraction": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mole Fraction"
+          },
+          "species_ref": {
+            "description": "Public species ref (spc_...).",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Species Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species_ref"
+        ],
+        "title": "KineticsSelectionColliderComponent",
+        "type": "object"
+      },
+      "KineticsSelectionColliderEcho": {
+        "properties": {
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsSelectionColliderComponent"
+            },
+            "title": "Components",
+            "type": "array"
+          }
+        },
+        "required": [
+          "components"
+        ],
+        "title": "KineticsSelectionColliderEcho",
+        "type": "object"
+      },
+      "KineticsSelectionColliderIn": {
+        "additionalProperties": false,
+        "description": "A specified collider (one component, no fraction) or an explicit mole-fraction mixture (two or more\ncomponents, each with a fraction, summing to one; never renormalised).",
+        "properties": {
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsSelectionColliderComponent"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Components",
+            "type": "array"
+          }
+        },
+        "required": [
+          "components"
+        ],
+        "title": "KineticsSelectionColliderIn",
+        "type": "object"
+      },
+      "KineticsSelectionDetermination": {
+        "properties": {
+          "determination_ref": {
+            "title": "Determination Ref",
+            "type": "string"
+          },
+          "representation_count": {
+            "title": "Representation Count",
+            "type": "integer"
+          },
+          "representation_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Representation Refs",
+            "type": "array"
+          },
+          "representative_ref": {
+            "title": "Representative Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "determination_ref",
+          "representation_refs",
+          "representative_ref",
+          "representation_count"
+        ],
+        "title": "KineticsSelectionDetermination",
+        "type": "object"
+      },
+      "KineticsSelectionDirection": {
+        "description": "Relative to the reaction entry's stored reactant-to-product orientation. A net rate is not selectable.",
+        "enum": [
+          "forward",
+          "reverse"
+        ],
+        "title": "KineticsSelectionDirection",
+        "type": "string"
+      },
+      "KineticsSelectionDisclosures": {
+        "description": "What the result does not cover. Never empty by omission: a withheld list says so.",
+        "properties": {
+          "excluded_by_review": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsSelectionExcluded"
+            },
+            "title": "Excluded By Review",
+            "type": "array"
+          },
+          "excluded_by_review_withheld": {
+            "description": "True whenever the read profile has a review floor of its own (curated): records outside the effective floor are then never listed or counted, whether or not any exist, so the field cannot reveal that they do. False under a profile with no floor, where they are listed.",
+            "title": "Excluded By Review Withheld",
+            "type": "boolean"
+          },
+          "excluded_count": {
+            "description": "How many records the effective floor excluded (0 when withheld).",
+            "title": "Excluded Count",
+            "type": "integer"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "unresolved_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Refs",
+            "type": "array"
+          },
+          "unsupported_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported Refs",
+            "type": "array"
+          },
+          "visible_candidates": {
+            "description": "Records at or above the effective floor (the assessed population).",
+            "title": "Visible Candidates",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "visible_candidates",
+          "excluded_count",
+          "excluded_by_review_withheld"
+        ],
+        "title": "KineticsSelectionDisclosures",
+        "type": "object"
+      },
+      "KineticsSelectionEdge": {
+        "properties": {
+          "dispreferred": {
+            "title": "Dispreferred",
+            "type": "string"
+          },
+          "label": {
+            "description": "Always 'expected-performance inference': a benchmark, not a measurement.",
+            "title": "Label",
+            "type": "string"
+          },
+          "objective_key": {
+            "title": "Objective Key",
+            "type": "string"
+          },
+          "preferred": {
+            "title": "Preferred",
+            "type": "string"
+          },
+          "rule_id": {
+            "description": "The registry key of the rule. Not a database id.",
+            "title": "Rule Id",
+            "type": "string",
+            "x-tckdb-policy-hidden": true
+          },
+          "rule_version": {
+            "title": "Rule Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "preferred",
+          "dispreferred",
+          "rule_version",
+          "label",
+          "objective_key"
+        ],
+        "title": "KineticsSelectionEdge",
+        "type": "object"
+      },
+      "KineticsSelectionExcluded": {
+        "properties": {
+          "kinetics_ref": {
+            "title": "Kinetics Ref",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          }
+        },
+        "required": [
+          "kinetics_ref",
+          "review_status",
+          "reason"
+        ],
+        "title": "KineticsSelectionExcluded",
+        "type": "object"
+      },
+      "KineticsSelectionManifest": {
+        "description": "The replayable decision manifest of ``POST .../kinetics/select/manifest``.\n\nPublic refs only. Holds the normalised request, the snapshot isolation it was read under, every assessed\ncandidate with its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the\ndeterminations the eligible ones form, the rules consulted with each rule's verdict per determination, the\npair checks, the preference edges, the fronts and the administrative order: enough to recompute the decision\nwith no database.",
+        "properties": {
+          "candidates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "decision": {
+            "additionalProperties": true,
+            "title": "Decision",
+            "type": "object"
+          },
+          "determinations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Determinations",
+            "type": "array"
+          },
+          "disclosures": {
+            "additionalProperties": true,
+            "title": "Disclosures",
+            "type": "object"
+          },
+          "manifest_format_version": {
+            "title": "Manifest Format Version",
+            "type": "integer"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/KineticsSelectionOutcome"
+          },
+          "policy": {
+            "additionalProperties": true,
+            "title": "Policy",
+            "type": "object"
+          },
+          "population": {
+            "additionalProperties": true,
+            "title": "Population",
+            "type": "object"
+          },
+          "request": {
+            "$ref": "#/components/schemas/KineticsSelectionManifestRequest"
+          },
+          "snapshot_isolation": {
+            "title": "Snapshot Isolation",
+            "type": "string"
+          },
+          "subject": {
+            "additionalProperties": true,
+            "title": "Subject",
+            "type": "object"
+          }
+        },
+        "required": [
+          "manifest_format_version",
+          "policy",
+          "request",
+          "snapshot_isolation",
+          "subject",
+          "population",
+          "candidates",
+          "determinations",
+          "decision",
+          "outcome"
+        ],
+        "title": "KineticsSelectionManifest",
+        "type": "object"
+      },
+      "KineticsSelectionManifestRequest": {
+        "additionalProperties": true,
+        "description": "The manifest's normalised request, with the read profile it was made under. Further keys the decision\nrecorded are kept.",
+        "properties": {
+          "administrative_policy": {
+            "title": "Administrative Policy",
+            "type": "string"
+          },
+          "coefficient_basis": {
+            "title": "Coefficient Basis",
+            "type": "string"
+          },
+          "collider": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collider"
+          },
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "effective_review_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Effective Review Statuses",
+            "type": "array"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "title": "Phase",
+            "type": "string"
+          },
+          "pressure": {
+            "additionalProperties": true,
+            "title": "Pressure",
+            "type": "object"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "string"
+          },
+          "target": {
+            "additionalProperties": true,
+            "title": "Target",
+            "type": "object"
+          },
+          "temperature_max_k": {
+            "title": "Temperature Max K",
+            "type": "number"
+          },
+          "temperature_min_k": {
+            "title": "Temperature Min K",
+            "type": "number"
+          }
+        },
+        "required": [
+          "quantity",
+          "phase",
+          "direction",
+          "target",
+          "coefficient_basis",
+          "temperature_min_k",
+          "temperature_max_k",
+          "pressure",
+          "effective_review_statuses",
+          "administrative_policy"
+        ],
+        "title": "KineticsSelectionManifestRequest",
+        "type": "object"
+      },
+      "KineticsSelectionMode": {
+        "description": "``all`` returns the whole assessed population; ``first`` also names a determination when it can.",
+        "enum": [
+          "all",
+          "first"
+        ],
+        "title": "KineticsSelectionMode",
+        "type": "string"
+      },
+      "KineticsSelectionOutcome": {
+        "description": "The selection basis (the service ``Outcome`` outside the bounded-search refusal, which the endpoint reports\nas the 422 ``kinetics_selection_population_too_large`` instead).",
+        "enum": [
+          "policy_preferred",
+          "incomparable_alternatives",
+          "sole_eligible_candidate",
+          "no_applicable_candidate",
+          "policy_conflict"
+        ],
+        "title": "KineticsSelectionOutcome",
+        "type": "string"
+      },
+      "KineticsSelectionPick": {
+        "description": "The determination this response names (with every one of its eligible fitted representations).",
+        "properties": {
+          "administrative": {
+            "description": "True when the determination was chosen by review/recency order among unranked alternatives. That is not a claim that it is method-superior.",
+            "title": "Administrative",
+            "type": "boolean"
+          },
+          "basis": {
+            "enum": [
+              "policy_preferred",
+              "sole_eligible_candidate",
+              "administrative_first"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "determination_ref": {
+            "title": "Determination Ref",
+            "type": "string"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "kinetics_refs": {
+            "description": "Every eligible fitted representation of the determination, in administrative order. Alternate fits of one determination are not independent confirmation, and the first is not scientifically superior.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Kinetics Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "determination_ref",
+          "kinetics_refs",
+          "basis",
+          "administrative",
+          "explanation"
+        ],
+        "title": "KineticsSelectionPick",
+        "type": "object"
+      },
+      "KineticsSelectionPolicy": {
+        "description": "Which ordering the request asks for.\n\n``method_preferred``  apply the registered, audited kinetics rules; the review/recency order only sorts\n                      within a preference front. Every rule shipped in this release is inactive, so the\n                      answer is the administrative order among eligible determinations, labelled as such.\n``default``, ``most_reviewed``, ``latest``\n                      administrative order only (no rules), exactly as on the browse endpoints.",
+        "enum": [
+          "method_preferred",
+          "default",
+          "most_reviewed",
+          "latest"
+        ],
+        "title": "KineticsSelectionPolicy",
+        "type": "string"
+      },
+      "KineticsSelectionPolicyInfo": {
+        "description": "The selection semantics and the rule versions that were consulted.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "description": "Registry entries consulted: rule id, version, status (every rule shipped is inactive), objective, evidence type and limits, and why an inactive rule is inactive.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "rules_applied": {
+            "description": "False under an administrative policy: no rule was consulted, only the administrative order.",
+            "title": "Rules Applied",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "rules_applied"
+        ],
+        "title": "KineticsSelectionPolicyInfo",
+        "type": "object"
+      },
+      "KineticsSelectionPressureEcho": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/KineticsSelectionPressureKind"
+          },
+          "max_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Bar"
+          },
+          "min_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Bar"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "KineticsSelectionPressureEcho",
+        "type": "object"
+      },
+      "KineticsSelectionPressureIn": {
+        "additionalProperties": false,
+        "description": "Pressure as asked: independent, the high-pressure limit, or a finite window in bar (a point when equal).",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/KineticsSelectionPressureKind"
+          },
+          "max_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Bar"
+          },
+          "min_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Bar"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "KineticsSelectionPressureIn",
+        "type": "object"
+      },
+      "KineticsSelectionPressureKind": {
+        "enum": [
+          "independent",
+          "high_pressure_limit",
+          "finite"
+        ],
+        "title": "KineticsSelectionPressureKind",
+        "type": "string"
+      },
+      "KineticsSelectionReason": {
+        "properties": {
+          "applicability": {
+            "title": "Applicability",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "applicability"
+        ],
+        "title": "KineticsSelectionReason",
+        "type": "object"
+      },
+      "KineticsSelectionRelations": {
+        "description": "Preference relations between eligible determinations, and any contradiction among them.",
+        "properties": {
+          "cycles": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Cycles",
+            "type": "array"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsSelectionEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "opposing_pairs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Opposing Pairs",
+            "type": "array"
+          },
+          "overridden_edges": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Overridden Edges",
+            "type": "array"
+          },
+          "unused_edges": {
+            "description": "Edges under more than one objective are not composed; they are listed here.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Unused Edges",
+            "type": "array"
+          }
+        },
+        "title": "KineticsSelectionRelations",
+        "type": "object"
+      },
+      "KineticsSelectionRequest": {
+        "additionalProperties": false,
+        "description": "Request body. ``quantity`` and ``phase`` may be omitted; if given they must agree with the endpoint.",
+        "properties": {
+          "coefficient_basis": {
+            "$ref": "#/components/schemas/KineticsCoefficientBasis"
+          },
+          "collider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsSelectionColliderIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for a finite pressure and for a composition-effective coefficient; optional otherwise."
+          },
+          "direction": {
+            "$ref": "#/components/schemas/KineticsSelectionDirection"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional floor, applied on top of the read profile's floor (the stricter wins)."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/KineticsSelectionMode",
+            "default": "all"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Normalised to gas. Any other phase is refused."
+          },
+          "policy": {
+            "$ref": "#/components/schemas/KineticsSelectionPolicy",
+            "default": "method_preferred"
+          },
+          "pressure": {
+            "$ref": "#/components/schemas/KineticsSelectionPressureIn"
+          },
+          "quantity": {
+            "const": "rate_coefficient",
+            "default": "rate_coefficient",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/KineticsSelectionTargetIn"
+          },
+          "temperature_max_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "Temperature Max K",
+            "type": "number"
+          },
+          "temperature_min_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "Temperature Min K",
+            "type": "number"
+          }
+        },
+        "required": [
+          "direction",
+          "target",
+          "coefficient_basis",
+          "temperature_min_k",
+          "temperature_max_k",
+          "pressure"
+        ],
+        "title": "KineticsSelectionRequest",
+        "type": "object"
+      },
+      "KineticsSelectionRequestEcho": {
+        "description": "The normalised request, as the server understood it.",
+        "properties": {
+          "coefficient_basis": {
+            "$ref": "#/components/schemas/KineticsCoefficientBasis"
+          },
+          "collider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsSelectionColliderEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "direction": {
+            "$ref": "#/components/schemas/KineticsSelectionDirection"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "$ref": "#/components/schemas/KineticsSelectionMode"
+          },
+          "phase": {
+            "const": "gas",
+            "default": "gas",
+            "title": "Phase",
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/KineticsSelectionPolicy"
+          },
+          "pressure": {
+            "$ref": "#/components/schemas/KineticsSelectionPressureEcho"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "quantity": {
+            "const": "rate_coefficient",
+            "default": "rate_coefficient",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "reaction_entry_ref": {
+            "title": "Reaction Entry Ref",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/KineticsSelectionTargetEcho"
+          },
+          "temperature_max_k": {
+            "title": "Temperature Max K",
+            "type": "number"
+          },
+          "temperature_min_k": {
+            "title": "Temperature Min K",
+            "type": "number"
+          }
+        },
+        "required": [
+          "reaction_entry_ref",
+          "direction",
+          "target",
+          "coefficient_basis",
+          "temperature_min_k",
+          "temperature_max_k",
+          "pressure",
+          "policy",
+          "mode"
+        ],
+        "title": "KineticsSelectionRequestEcho",
+        "type": "object"
+      },
+      "KineticsSelectionResponse": {
+        "description": "The decision, its basis, and everything it rests on, as public refs only.",
+        "properties": {
+          "administrative_order": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Administrative Order",
+            "type": "array"
+          },
+          "basis": {
+            "description": "One sentence saying why this outcome, in plain terms.",
+            "title": "Basis",
+            "type": "string"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsSelectionCandidate"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "determinations": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsSelectionDetermination"
+            },
+            "title": "Determinations",
+            "type": "array"
+          },
+          "disclosures": {
+            "$ref": "#/components/schemas/KineticsSelectionDisclosures"
+          },
+          "fronts": {
+            "description": "Preference fronts of determinations, best first; within a front unranked.",
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Fronts",
+            "type": "array"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/KineticsSelectionOutcome"
+          },
+          "pair_checks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Pair Checks",
+            "type": "array"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/KineticsSelectionPolicyInfo"
+          },
+          "relations": {
+            "$ref": "#/components/schemas/KineticsSelectionRelations"
+          },
+          "request": {
+            "$ref": "#/components/schemas/KineticsSelectionRequestEcho"
+          },
+          "review": {
+            "$ref": "#/components/schemas/KineticsSelectionReview"
+          },
+          "rule_matches": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rule Matches",
+            "type": "array"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsSelectionPick"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "request",
+          "review",
+          "policy",
+          "outcome",
+          "basis",
+          "disclosures"
+        ],
+        "title": "KineticsSelectionResponse",
+        "type": "object"
+      },
+      "KineticsSelectionReview": {
+        "description": "The review floor actually applied: the request's floor combined with the read profile's.",
+        "properties": {
+          "effective_floor": {
+            "$ref": "#/components/schemas/RecordReviewStatus",
+            "description": "The weakest review status a candidate may have. Rejected and deprecated never compete."
+          },
+          "effective_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Effective Statuses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "effective_floor",
+          "effective_statuses"
+        ],
+        "title": "KineticsSelectionReview",
+        "type": "object"
+      },
+      "KineticsSelectionTargetEcho": {
+        "properties": {
+          "channel_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Key"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/app__db__models__common__KineticsDeterminationTargetKind"
+          },
+          "network_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Ref"
+          },
+          "transition_state_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Entry Ref"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "KineticsSelectionTargetEcho",
+        "type": "object"
+      },
+      "KineticsSelectionTargetIn": {
+        "additionalProperties": false,
+        "description": "The rate asked for: the whole reaction, or one resolved channel.",
+        "properties": {
+          "channel_key": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The network channel's key. With network_ref, resolved channels only.",
+            "title": "Channel Key"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/app__db__models__common__KineticsDeterminationTargetKind",
+            "description": "whole_reaction, or resolved_channel together with a transition state entry or a network channel."
+          },
+          "network_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public network ref (net_...). With channel_key, resolved channels only.",
+            "title": "Network Ref"
+          },
+          "transition_state_entry_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public transition-state-entry ref (tse_...). Resolved channels only.",
+            "title": "Transition State Entry Ref"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "KineticsSelectionTargetIn",
         "type": "object"
       },
       "KineticsSourceCalculationIn": {
@@ -82650,6 +83839,174 @@
           }
         },
         "summary": "Reaction Kinetics",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select": {
+      "post": {
+        "description": "Assess every visible kinetics record of the entry against the question and say which, if any, to use.\n\nA record answers the question only if its stored claims say so (direction, target, coefficient basis, phase,\ntemperature and pressure coverage, collider); a missing fact makes it ``unresolved`` and a form this selector\ndoes not evaluate makes it ``unsupported``, never applicable by default. ``outcome`` is the selection basis:\n``policy_preferred`` (a registered, active rule leaves one determination with nothing preferred over it),\n``incomparable_alternatives`` (the rules do not rank the leading determinations), ``sole_eligible_candidate``,\n``no_applicable_candidate`` or ``policy_conflict`` (opposing rules or a cycle: nothing is selected). Every\nrule shipped in this release is inactive, so ``method_preferred`` ranks nothing today and says so.\n\nMore than 500 visible candidates is refused with 422 ``kinetics_selection_population_too_large``: nothing is\nassessed, because a winner picked from part of the population would say nothing about the rest. Only records\nvisible under the caller's read profile are counted.\n\n``mode=first`` may name a determination among unranked first-front alternatives; the ``selection`` then says\n``administrative_first`` and that this is not a method claim. A determination is returned with every eligible\nfitted representation of it.",
+        "operationId": "select_reaction_kinetics_api_v1_scientific_reaction_entries__reaction_entry_ref__kinetics_select_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reaction_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Reaction Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KineticsSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KineticsSelectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select kinetics for a stated gas-phase rate-coefficient question",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest": {
+      "post": {
+        "description": "The same request as ``/kinetics/select``, answered with the decision manifest as a download.\n\nThe manifest holds the normalised request, the snapshot isolation it was read under, every assessed candidate\nwith its normalised inputs, the determinations, the rules consulted, each comparison and the administrative\norder, as public refs only. It is enough to recompute the decision with no database. It is a new snapshot of\nthe current data, not a retrieval of an earlier selection. The same visibility rules apply as for\n``/kinetics/select``.",
+        "operationId": "select_reaction_kinetics_manifest_api_v1_scientific_reaction_entries__reaction_entry_ref__kinetics_select_manifest_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reaction_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Reaction Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KineticsSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KineticsSelectionManifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download the replayable decision manifest for a kinetics selection",
         "tags": [
           "scientific"
         ]

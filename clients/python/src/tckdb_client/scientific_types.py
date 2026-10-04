@@ -1207,6 +1207,138 @@ class ThermoSelectionResponse(TypedDict):
     disclosures: ThermoSelectionDisclosures
 
 
+class KineticsSelectionTargetIn(TypedDict, total=False):
+    """The rate asked for: ``{"kind": "whole_reaction"}`` or a resolved channel.
+
+    A ``resolved_channel`` names either ``transition_state_entry_ref`` (a public ``tse_...`` ref) or
+    ``network_ref`` (``net_...``) with ``channel_key``; a ``whole_reaction`` names none of them.
+    """
+
+    kind: Required[Literal["whole_reaction", "resolved_channel"]]
+    transition_state_entry_ref: str
+    network_ref: str
+    channel_key: str
+
+
+class KineticsSelectionPressureIn(TypedDict, total=False):
+    """Pressure as asked. ``finite`` needs ``min_bar`` and ``max_bar`` (equal for a point); the others carry none."""
+
+    kind: Required[Literal["independent", "high_pressure_limit", "finite"]]
+    min_bar: float
+    max_bar: float
+
+
+class KineticsSelectionColliderComponent(TypedDict, total=False):
+    species_ref: Required[str]
+    mole_fraction: float
+
+
+class KineticsSelectionColliderIn(TypedDict):
+    """One component without a fraction is a specified collider; two or more with fractions summing to one is a
+    mixture (never renormalised)."""
+
+    components: list[KineticsSelectionColliderComponent]
+
+
+class KineticsSelectionRequest(TypedDict, total=False):
+    """Body of ``POST .../kinetics/select``. ``direction``, ``target``, ``coefficient_basis``, the temperature
+    window and ``pressure`` are required; a ``collider`` is required for a finite pressure and for a
+    composition-effective coefficient."""
+
+    direction: Required[Literal["forward", "reverse"]]
+    target: Required[KineticsSelectionTargetIn]
+    coefficient_basis: Required[
+        Literal["elementary_coefficient", "third_body_kernel", "composition_effective_coefficient"]
+    ]
+    temperature_min_k: Required[float]
+    temperature_max_k: Required[float]
+    pressure: Required[KineticsSelectionPressureIn]
+    collider: KineticsSelectionColliderIn
+    quantity: Literal["rate_coefficient"]
+    phase: Literal["gas"]
+    policy: Literal["method_preferred", "default", "most_reviewed", "latest"]
+    mode: Literal["all", "first"]
+    min_review_status: str
+
+
+KineticsSelectionOutcomeToken: TypeAlias = Literal[
+    "policy_preferred",
+    "incomparable_alternatives",
+    "sole_eligible_candidate",
+    "no_applicable_candidate",
+    "policy_conflict",
+]
+
+
+class KineticsSelectionPick(TypedDict):
+    """The determination the response names (with every eligible fitted representation of it), and exactly why.
+
+    ``administrative`` is true when it was chosen by review/recency order among alternatives the rules do not rank:
+    that is not a claim it is method-superior. Alternate fits of one determination are not independent confirmation.
+    """
+
+    determination_ref: str
+    kinetics_refs: list[str]
+    basis: Literal["policy_preferred", "sole_eligible_candidate", "administrative_first"]
+    administrative: bool
+    explanation: str
+
+
+class KineticsSelectionCandidate(TypedDict):
+    kinetics_ref: str
+    review_status: str
+    created_at: str
+    scientific_origin: str
+    model_kind: str
+    direction: str | None
+    determination_ref: str | None
+    representation_role: str | None
+    applicability_state: str
+    applicability_declaration: JSONDict | None
+    protocol_state: str
+    protocol: JSONDict | None
+    applicability: str
+    reasons: list[JSONDict]
+    blocking: list[str]
+    advisory: list[str]
+    eligible: bool
+
+
+class KineticsSelectionDisclosures(TypedDict):
+    unresolved_refs: list[str]
+    unsupported_refs: list[str]
+    visible_candidates: int
+    excluded_by_review: list[JSONDict]
+    excluded_count: int
+    excluded_by_review_withheld: bool
+    notes: list[str]
+
+
+class KineticsSelectionResponse(TypedDict):
+    """The decision, its basis, and everything it rests on, as public refs only.
+
+    ``outcome`` is the selection basis. Preserve it and ``basis`` verbatim when reporting a result:
+    ``incomparable_alternatives`` and ``policy_conflict`` mean nothing was scientifically selected, and a
+    ``sole_eligible_candidate`` is not a comparative accuracy claim. A winner is scoped to the eligible population;
+    ``disclosures`` lists the candidates that did not compete.
+    """
+
+    request: JSONDict
+    review: JSONDict
+    policy: JSONDict
+    outcome: KineticsSelectionOutcomeToken
+    basis: str
+    selection: KineticsSelectionPick | None
+    fronts: list[list[str]]
+    administrative_order: list[str]
+    determinations: list[JSONDict]
+    candidates: list[KineticsSelectionCandidate]
+    relations: JSONDict
+    rule_matches: list[JSONDict]
+    pair_checks: list[JSONDict]
+    disclosures: KineticsSelectionDisclosures
+
+
 class ObservationRecord(TypedDict, total=False):
     """One ``molecular_property_observation`` row (Phase C-E5).
 
@@ -1365,6 +1497,16 @@ __all__ = [
     "KineticsRecord",
     "KineticsSearchRecord",
     "KineticsSearchResponse",
+    "KineticsSelectionCandidate",
+    "KineticsSelectionColliderComponent",
+    "KineticsSelectionColliderIn",
+    "KineticsSelectionDisclosures",
+    "KineticsSelectionOutcomeToken",
+    "KineticsSelectionPick",
+    "KineticsSelectionPressureIn",
+    "KineticsSelectionRequest",
+    "KineticsSelectionResponse",
+    "KineticsSelectionTargetIn",
     "LevelOfTheoryDetailResponse",
     "LevelOfTheoryRecord",
     "LevelOfTheorySearchResponse",
