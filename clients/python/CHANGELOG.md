@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.135.0 - 2026-10-04
+
+`export_selected_network_kinetics(network_ref, *, manifest, node_ref, representation_refs, format=None,
+allow_administrative_choice=None, energy_units=None, naming_policy=None, profile=None)` posts to
+`/scientific/networks/{ref}/kinetics/export-selected` and serialises one network selection you saved with
+`get_network_kinetics_selection_manifest`. The server replays the manifest, re-checks it against its own content under
+one snapshot and refuses a stale, forged or incomplete one with a structured 422 (`network_export_manifest_invalid`,
+`network_export_manifest_stale`, `network_export_choice_not_allowed`, `network_export_representation_choice_invalid`,
+`network_export_unsupported_form`, now in `RejectionCode`). `allow_administrative_choice` is false on the server unless
+you pass true. It takes a public `net_` ref only (an integer id is refused before any request); `None` options are
+dropped, never sent as null. New typed shapes `NetworkSelectedKineticsExportRequest` and `NetworkSelectedKineticsExport`.
+
 ## 0.134.0 - 2026-10-04
 
 Method-aware selection among a network's stored pressure-dependent solves, for one stated gas-phase question

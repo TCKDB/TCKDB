@@ -94,8 +94,38 @@ reasoning from the captured inputs and checks that the document agrees with itse
 profile and captured solves are consistent), but it does not authenticate where those inputs came from. Only the export
 endpoint compares them with what the server holds.
 
+## Exporting a selection
+
+`POST /api/v1/scientific/networks/{network_ref}/kinetics/export-selected` serialises one selection, after checking it.
+You send the manifest you saved from `.../select/manifest` exactly as downloaded, the node you chose (`node_ref`) and
+`representation_refs`: exactly one eligible fitted representation for every member of that node. `format` is `native`
+(default) or `chemkin`. You send no rule, no verdict the server should believe and no database id.
+
+The server does not trust the manifest's digest. It requires the manifest complete and for this network, replays it from
+its own captured inputs, then re-runs the selection against its own content and your authorised population in one
+snapshot and requires everything scientific to match. Each refusal is a 422, nothing is exported, and the code says why:
+
+| Code | Meaning |
+| --- | --- |
+| `network_export_manifest_invalid` | incomplete, another network's, too large, or it does not replay (edited, or a forgery that was resealed) |
+| `network_export_manifest_stale` | the content, review states, rules, population or read profile no longer match: run a fresh selection |
+| `network_export_choice_not_allowed` | not the selected node; an unranked alternative without `allow_administrative_choice` (false by default); or a selection that chose nothing |
+| `network_export_representation_choice_invalid` | not exactly one eligible fit per member, or a fit that is not this node's |
+| `network_export_unsupported_form` | a form or species with no CHEMKIN serialisation, or two chosen channels with one equation |
+
+`allow_administrative_choice` permits exporting one of several unranked leading alternatives, and the response then says
+`administrative: true`: a review and recency choice, not a method claim. It never bypasses a conflict, an empty
+selection, an incomplete membership or an unsupported form.
+
+Native output keeps every form with its solve, determination and representation refs, the channel's directed endpoints
+(with species), units and the stored numbers. CHEMKIN output is **forward-only** (`=>`): no reverse coefficient is
+derived from reversibility, and no thermodynamics are written, so there is no reverse or equilibrium assumption; both are
+listed in `assumptions`. `DUPLICATE` is never written: a collision between two chosen channels is refused (CHEMKIN) or
+reported (`equation_collisions`, native), never added. Replaying a historical decision as it was is a separate, deferred
+operation.
+
 ## From the client and the MCP
 
-`TCKDBClient.select_network_kinetics` and `get_network_kinetics_selection_manifest`, and the MCP tool
-`tckdb_select_network_kinetics`, send exactly the fields you give them, drop `None` values and quote the ref into the
+`TCKDBClient.select_network_kinetics`, `get_network_kinetics_selection_manifest` and `export_selected_network_kinetics`,
+and the MCP tools `tckdb_select_network_kinetics` and `tckdb_export_selected_network_kinetics`, send exactly the fields you give them, drop `None` values and quote the ref into the
 path. None of them caps or pages the population.

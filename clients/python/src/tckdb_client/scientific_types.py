@@ -1477,6 +1477,42 @@ class NetworkSelectionResponse(TypedDict):
     disclosures: NetworkSelectionDisclosures
 
 
+class NetworkSelectedKineticsExportRequest(TypedDict, total=False):
+    """Body of ``POST .../networks/{ref}/kinetics/export-selected``.
+
+    ``manifest`` is the document saved from ``.../select/manifest``, exactly as downloaded. ``node_ref`` is the chosen
+    node and ``representation_refs`` names exactly one eligible fit for every member of it. There is no field for a
+    rule, a verdict the server should believe or a database id.
+    """
+
+    manifest: Required[JSONDict]
+    node_ref: Required[str]
+    representation_refs: Required[list[str]]
+    format: Literal["native", "chemkin"]
+    allow_administrative_choice: bool
+    energy_units: str
+    naming_policy: Literal["formula", "public_ref"]
+
+
+class NetworkSelectedKineticsExport(TypedDict):
+    """One verified selection, serialised. CHEMKIN output is forward-only and carries no thermodynamics; read
+    ``assumptions`` and ``provenance`` before relying on it. ``administrative`` is true when the caller accepted one
+    of several unranked alternatives, which is not a method claim."""
+
+    request: JSONDict
+    format: Literal["native", "chemkin"]
+    network_ref: str
+    node_ref: str
+    solve_ref: str
+    selection_basis: str
+    administrative: bool
+    provenance: JSONDict
+    assumptions: list[str]
+    members: list[JSONDict]
+    files: dict[str, str] | None
+    equation_collisions: list[JSONDict]
+
+
 class ObservationRecord(TypedDict, total=False):
     """One ``molecular_property_observation`` row (Phase C-E5).
 
@@ -1660,6 +1696,8 @@ __all__ = [
     "NetworkKineticsSearchResponse",
     "NetworkRecord",
     "NetworkSearchResponse",
+    "NetworkSelectedKineticsExport",
+    "NetworkSelectedKineticsExportRequest",
     "NetworkSelectionBathComponent",
     "NetworkSelectionBathIn",
     "NetworkSelectionBoundaryIn",

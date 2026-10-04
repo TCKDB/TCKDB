@@ -175,3 +175,55 @@ def test_too_many_required_outputs_is_one_coded_refusal_through_all_three_and_no
     with pytest.raises(MCPToolError) as mcp_error:
         mcp({"network_ref": world.ref, **body})
     assert mcp_error.value.to_payload()["code"] == "network_selection_population_too_large"
+
+
+EXPORT_TOOL = "tckdb_export_selected_network_kinetics"
+
+
+@pytest.fixture
+def mcp_export(client):
+    with TCKDBHttpClient(BASE, None, 5.0, transport=_Bridge(client)) as c:
+        yield lambda arguments: dispatch_tool(EXPORT_TOOL, arguments, c, Config.from_env(env={}))
+
+
+def _manifest(client, world):
+    response = client.post(f"/api/v1/scientific/networks/{world.ref}/kinetics/select/manifest", json=question(world))
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_an_export_is_the_same_answer_through_all_three(client, sdk, mcp_export, world, two):
+    a, _ = two
+    manifest = _manifest(client, world)
+    choice = {
+        "manifest": manifest,
+        "node_ref": a._dets["d_assoc"].public_ref,
+        "representation_refs": [a._fits[0].public_ref],
+        "allow_administrative_choice": True,
+        "format": "chemkin",
+    }
+    api = client.post(f"/api/v1/scientific/networks/{world.ref}/kinetics/export-selected", json=choice)
+    assert api.status_code == 200, api.text
+    via_sdk = sdk.export_selected_network_kinetics(world.ref, **choice)
+    via_mcp = mcp_export({"network_ref": world.ref, **choice})
+    assert api.json() == via_sdk == via_mcp
+    assert api.json()["administrative"] is True and "chem.inp" in api.json()["files"]
+
+
+def test_an_export_refusal_carries_the_same_status_and_code_through_all_three(client, sdk, mcp_export, world, two):
+    a, _ = two
+    manifest = _manifest(client, world)
+    # The default (administrative choice not accepted) over an unranked selection.
+    choice = {
+        "manifest": manifest,
+        "node_ref": a._dets["d_assoc"].public_ref,
+        "representation_refs": [a._fits[0].public_ref],
+    }
+    api = client.post(f"/api/v1/scientific/networks/{world.ref}/kinetics/export-selected", json=choice)
+    assert api.status_code == 422 and api.json()["code"] == "network_export_choice_not_allowed"
+    with pytest.raises(TCKDBHTTPError) as sdk_error:
+        sdk.export_selected_network_kinetics(world.ref, **choice)
+    assert sdk_error.value.status_code == 422 and sdk_error.value.code == "network_export_choice_not_allowed"
+    with pytest.raises(MCPToolError) as mcp_error:
+        mcp_export({"network_ref": world.ref, **choice})
+    assert mcp_error.value.to_payload()["code"] == "network_export_choice_not_allowed"

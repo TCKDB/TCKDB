@@ -22,6 +22,31 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Network selected export (2026-10-04)
+
+**Chunk 6 of 6 of pressure-dependent network selection: serialise a verified selection.** `POST
+/api/v1/scientific/networks/{network_ref}/kinetics/export-selected` takes the decision manifest a caller saved from
+`.../kinetics/select/manifest`, the node it chose and exactly one representation for every member of that node, and
+returns the native serialisation (solve, determination and representation provenance, directed channel endpoints and
+the stored numbers) or a forward-only CHEMKIN `chem.inp`. Read-only.
+
+- **The manifest is checked against the server, not its digest.** The server requires it complete and for this network,
+  replays it at both levels from its own captured inputs, then re-runs the selection from its request under one
+  read-only REPEATABLE READ snapshot (opened before the ref is resolved) and requires the scientific content, rules,
+  read profile and population to be identical. A change is `network_export_manifest_stale` and needs a fresh selection;
+  an old decision is never silently updated.
+- **The choice must be one the decision allows.** The selected node when the selection chose one; an unranked
+  leading-front node only with `allow_administrative_choice` (false by default); nothing from a conflict or an empty
+  selection, whatever the flag. Exactly one eligible representation per member: alternatives are never added alongside
+  the choice and `DUPLICATE` is never written.
+- **No derived reverse.** CHEMKIN is `=>` only and carries no thermodynamics, so no reverse or equilibrium assumption is
+  made; the output records both. Forms with no CHEMKIN serialisation (a tabulated fit, a Chebyshev not stored as log10 k,
+  a missing mapping domain, a species without a composition) and two chosen channels sharing one equation are a structured
+  `network_export_unsupported_form` naming each; a native export keeps every form and reports equation collisions.
+- `tckdb-client` 0.135.0 adds `export_selected_network_kinetics`, `tckdb-mcp` 0.6.0 adds
+  `tckdb_export_selected_network_kinetics`, and `tckdb-schemas` 0.104.0 adds the five refusal codes and the contract route
+  row. See `docs/guides/selecting_network_kinetics.md`.
+
 ## Network selection endpoints, client method and MCP tool (2026-10-04)
 
 **Chunk 5 of 6 of pressure-dependent network selection: the public face.** `POST

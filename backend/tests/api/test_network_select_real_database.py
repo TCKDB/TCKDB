@@ -149,3 +149,33 @@ def test_an_unknown_network_is_a_404_and_an_integer_a_422_through_the_real_depen
     assert unknown.status_code == 404
     integer = real_app_client.post("/api/v1/scientific/networks/1/kinetics/select", json=question(committed))
     assert integer.status_code == 422
+
+
+@pytest.mark.parametrize("fmt", ["native", "chemkin"])
+def test_export_selected_answers_200_over_committed_rows_from_a_downloaded_manifest(real_app_client, committed, fmt):
+    base = f"/api/v1/scientific/networks/{committed.network}/kinetics"
+    manifest = real_app_client.post(base + "/select/manifest", json=question(committed)).json()
+    response = real_app_client.post(
+        base + "/export-selected",
+        json={
+            "manifest": manifest, "node_ref": committed.determination,
+            "representation_refs": [committed.fit], "format": fmt,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["solve_ref"] == committed.solve and body["selection_basis"] == "sole_eligible_candidate"
+    assert body["members"][0]["representation"]["kinetics_ref"] == committed.fit
+    if fmt == "chemkin":
+        assert "=>" in body["files"]["chem.inp"]
+
+
+def test_export_selected_refuses_a_forged_manifest_through_the_real_dependency_too(real_app_client, committed):
+    base = f"/api/v1/scientific/networks/{committed.network}/kinetics"
+    manifest = real_app_client.post(base + "/select/manifest", json=question(committed)).json()
+    manifest["decision"]["basis"] = "edited"
+    response = real_app_client.post(
+        base + "/export-selected",
+        json={"manifest": manifest, "node_ref": committed.determination, "representation_refs": [committed.fit]},
+    )
+    assert response.status_code == 422 and response.json()["code"] == "network_export_manifest_invalid"

@@ -14,6 +14,7 @@ Sub-routers:
                             → /scientific/reaction-entries/{ref}/kinetics/select (+ /manifest)
     network_selection.router
                             → /scientific/networks/{ref}/kinetics/select (+ /manifest)
+    network_export.router   → /scientific/networks/{ref}/kinetics/export-selected
     thermo.router           → /scientific/species-entries/{id}/thermo
     thermo_selection.router → /scientific/species-entries/{ref}/thermo/select (+ /manifest)
     species_subresources.router
@@ -67,6 +68,7 @@ from app.api.routes.scientific import (
     level_of_theory_browse,
     literature,
     meta,
+    network_export,
     network_selection,
     networks,
     networks_browse,
@@ -161,6 +163,7 @@ scientific_router.include_router(networks.router)
 scientific_router.include_router(networks.solve_router)
 # Method-aware network selection: POST-only, multi-segment, so the catch-all above cannot shadow it.
 scientific_router.include_router(network_selection.router)
+scientific_router.include_router(network_export.router)
 scientific_router.include_router(networks.kinetics_router)
 scientific_router.include_router(literature.router)
 scientific_router.include_router(corrections.fsf_router)
