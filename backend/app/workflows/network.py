@@ -47,7 +47,9 @@ def persist_network_upload(
         persist_reaction_upload(
             session,
             ReactionUploadRequest(
-                reversible=reversible_or_inherited(session, reaction.reaction, created_by=created_by),
+                reversible=reversible_or_inherited(
+                    session, reaction.reaction, created_by=created_by, field=f"reactions[{index}].reaction.reversible"
+                ),
                 reaction_family=reaction.reaction.reaction_family,
                 reaction_family_source_note=(
                     reaction.reaction.reaction_family_source_note
@@ -71,7 +73,7 @@ def persist_network_upload(
             review_policy=review_policy,
             warnings=warnings_out,
         ).id
-        for reaction in request.reactions
+        for index, reaction in enumerate(request.reactions)
     ]
 
     network_create = resolve_network_upload(

@@ -842,7 +842,9 @@ def render_field_table(model: type[BaseModel], names: ModelNames) -> list[str]:
     # The Unit column is left off a table in which no field has a unit.
     with_unit = any(row.unit for row in rows)
     header = ["Field", "Type", "Req", "Default"] + (["Unit"] if with_unit else []) + ["Values / constraints", "Description"]
-    lines = [unknown, "", "| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+    # No closing pipe on any line of a field table: Markdown does not need one, and it is the largest
+    # repeated byte cost in the document.
+    lines = [unknown, "", "| " + " | ".join(header), "|" + "---|" * (len(header) - 1) + "---"]
     for row in rows:
         cells = [
             f"`{row.wire_name}`",
@@ -857,7 +859,7 @@ def render_field_table(model: type[BaseModel], names: ModelNames) -> list[str]:
         # always-present first three are kept.
         while len(cells) > 3 and not cells[-1]:
             cells.pop()
-        lines.append("| " + " | ".join(cells) + " |")
+        lines.append("| " + " | ".join(cells))
     if not rows:
         lines.append("| (no fields) |")
     return lines

@@ -163,17 +163,15 @@ def _value(obj: Any) -> Any:
 
 
 class KineticsDeterminationDeclaration(SchemaBase):
-    """The determination a record belongs to, and the record's role in it.
+    """The determination a record belongs to, and its role in it.
 
-    A determination is one complete determination of a rate, such as a measurement set or one
-    computed rate. Several fitted representations of it share it and do not count as independent
-    support for each other; separate calculations or measurements are separate determinations.
+    One determination is one complete determination of a rate (a measurement set, one computed
+    rate); its fitted representations share it and are not independent support for each other.
 
-    Give exactly one locator. ``key`` with ``target_kind`` states the content (the backend finds
-    or creates the determination from the record's reaction entry, direction, target, source and
-    this key); ``determination_ref`` joins one already deposited, and anchors the record to that
-    determination's reaction entry. A ``resolved_channel`` target names its channel exactly once:
-    ``transition_state_entry_ref``, or ``network_ref`` with ``channel_key``.
+    Give exactly one locator: ``key`` with ``target_kind`` states the content (the backend finds
+    or creates it from the reaction entry, direction, target, source and key), or
+    ``determination_ref`` joins one already deposited. A ``resolved_channel`` names its channel
+    once: ``transition_state_entry_ref``, or ``network_ref`` with ``channel_key``.
 
     :param determination_ref: Public ref (``kdet_...``) of an existing determination.
     :param key: Source-scoped key.
@@ -181,6 +179,7 @@ class KineticsDeterminationDeclaration(SchemaBase):
     :param transition_state_entry_ref: Public ref (``tse_...``).
     :param network_ref: Public ref (``net_...``).
     :param channel_key: Channel key in that network.
+    :param group: Contribution-bundle import only: groups records of one import. Never stored.
     """
 
     determination_ref: str | None = Field(default=None, min_length=1)
@@ -189,6 +188,7 @@ class KineticsDeterminationDeclaration(SchemaBase):
     transition_state_entry_ref: str | None = Field(default=None, min_length=1)
     network_ref: str | None = Field(default=None, min_length=1)
     channel_key: str | None = Field(default=None, min_length=1)
+    group: str | None = Field(default=None, min_length=1, max_length=128)
     representation_role: KineticsRepresentationRole
 
     @model_validator(mode="after")
@@ -238,6 +238,11 @@ def kinetics_determination_error(determination: Any) -> tuple[str, str] | None:
             W_KINETICS_DETERMINATION_INVALID,
             "A determination gives exactly one of determination_ref (join an existing "
             "determination) or key with target_kind (state its content).",
+        )
+    if ref is not None and _get(determination, "group") is not None:
+        return (
+            W_KINETICS_DETERMINATION_INVALID,
+            "A determination_ref names its determination already; a bundle group handle goes with a key.",
         )
     if ref is not None and (kind is not None or locators):
         return (
@@ -992,12 +997,10 @@ def kinetics_declaration_error(
 ) -> tuple[str, str] | None:
     """A kinetics record's optional determination, applicability and protocol must be coherent.
 
-    A determination names exactly one of ``determination_ref`` or ``key`` with ``target``, and a
-    record that joins one states its own ``direction`` and a source (literature or workflow-tool
-    release). ``applicability`` and ``protocol`` are versioned (only ``1``); unknown fields and
-    values are refused. An applicability declaration that contradicts a stored column of the
-    record (direction, pressure context, model kind, third-body flag, order) is refused, as is an
-    experimental method on a computed record or the reverse. Claims, never inferred or defaulted.
+    A determination names one of ``determination_ref`` or ``key`` with a target, and a record that
+    joins one states its ``direction`` and a source. ``applicability`` and ``protocol`` are versioned
+    (only ``1``); unknown fields and values are refused, as is an applicability that contradicts a
+    stored column of the record, or an experimental method on a computed record or the reverse.
 
     :param has_source: Whether the record names a source attribution. The caller that knows
         (the standalone request, a bundle root, a service holding resolved ids) passes it;

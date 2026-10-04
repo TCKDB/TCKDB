@@ -1042,6 +1042,10 @@ def _round_trip(db_session, kinetics_ids, omissions=None):
     return bundle, [db_session.get(Kinetics, i) for i in ids]
 
 
+def _stored_keys(db_session) -> list[str]:
+    return list(db_session.scalars(select(KineticsDetermination.determination_key).order_by(KineticsDetermination.id)))
+
+
 def test_two_determinations_with_one_key_source_and_reaction_stay_two_after_an_export_and_re_import(client, db_session):
     # The same key deposited twice, from the same source, on two reaction entries that read identically.
     for _ in range(2):
@@ -1053,28 +1057,36 @@ def test_two_determinations_with_one_key_source_and_reaction_stay_two_after_an_e
     omissions: list = []
     bundle, imported = _round_trip(db_session, [r.id for r in rows], omissions)
 
-    keys = [u.determination.key for u in bundle.records.kinetics_uploads]
-    assert keys == ["set-A", "set-A~2"], "the later determination's key is suffixed, the first is untouched"
-    (omission,) = omissions
-    assert omission.action == "determination_key_suffixed" and omission.ref == rows[1].public_ref
-    assert "set-A" in omission.detail and str(rows[1].id) not in omission.detail
+    # The key is exactly what the depositor stated; a bundle-local handle separates the two.
+    uploads = bundle.records.kinetics_uploads
+    assert [u.determination.key for u in uploads] == ["set-A", "set-A"]
+    assert [u.determination.group for u in uploads] == ["d1", "d2"]
+    assert omissions == [], "nothing was left out and nothing was renamed, so there is nothing to report"
     assert imported[0].determination_id != imported[1].determination_id
     assert imported[0].reaction_entry_id != imported[1].reaction_entry_id
     assert _count(db_session, KineticsDetermination) == before + 2, "the same number of determinations as the source"
+    # The handle is never stored: both re-imported determinations carry the key as stated.
+    assert _stored_keys(db_session)[-2:] == ["set-A", "set-A"]
+    assert "group" not in {c.name for c in KineticsDetermination.__table__.columns}
 
 
-def test_a_suffixed_key_never_collides_with_a_key_the_export_already_carries(client, db_session):
+def test_a_mixed_export_and_its_re_export_keep_every_key_as_stated_and_every_determination_apart(client, db_session):
     # Three determinations all called "set-A" and a fourth literally called "set-A~2".
     for key in ("set-A", "set-A", "set-A", "set-A~2"):
         assert client.post(KINETICS, json=_standalone(determination=_determination(key))).status_code == 201
     rows = db_session.scalars(select(Kinetics).order_by(Kinetics.id)).all()
-    bundle, imported = _round_trip(db_session, [r.id for r in rows])
-    keys = [u.determination.key for u in bundle.records.kinetics_uploads]
-    assert len(set(keys)) == 4 and keys[0] == "set-A" and keys[1:3] == ["set-A~2", "set-A~3"]
+    first, imported = _round_trip(db_session, [r.id for r in rows])
+    assert [u.determination.key for u in first.records.kinetics_uploads] == ["set-A", "set-A", "set-A", "set-A~2"]
+    assert [u.determination.group for u in first.records.kinetics_uploads] == ["d1", "d2", "d3", "d4"]
     assert len({k.determination_id for k in imported}) == 4
+    # Exporting what was imported again changes nothing: still four determinations, keys still as stated.
+    second, reimported = _round_trip(db_session, [k.id for k in imported])
+    assert [u.determination.key for u in second.records.kinetics_uploads] == ["set-A", "set-A", "set-A", "set-A~2"]
+    assert len({k.determination_id for k in reimported}) == 4
+    assert _stored_keys(db_session)[-4:] == ["set-A", "set-A", "set-A", "set-A~2"]
 
 
-def test_records_of_one_determination_keep_one_key_and_report_no_omission(client, db_session):
+def test_records_of_one_determination_share_one_handle_and_stay_one_determination(client, db_session):
     assert client.post(KINETICS, json=_standalone(determination=_determination("set-A"))).status_code == 201
     det = db_session.scalars(select(KineticsDetermination)).one()
     cite = {"determination_ref": det.public_ref, "representation_role": "complete"}
@@ -1082,9 +1094,24 @@ def test_records_of_one_determination_keep_one_key_and_report_no_omission(client
     rows = db_session.scalars(select(Kinetics).order_by(Kinetics.id)).all()
     omissions: list = []
     bundle, imported = _round_trip(db_session, [r.id for r in rows], omissions)
-    assert [u.determination.key for u in bundle.records.kinetics_uploads] == ["set-A", "set-A"]
+    assert [u.determination.group for u in bundle.records.kinetics_uploads] == ["d1", "d1"]
     assert omissions == []
     assert imported[0].determination_id == imported[1].determination_id
+
+
+def test_a_group_handle_is_for_a_bundle_import_only(client, db_session):
+    grouped = _determination("set-A")
+    grouped["group"] = "d1"
+    standalone = client.post(KINETICS, json=_standalone(determination=grouped))
+    assert _code(standalone) == "kinetics_determination_invalid"
+    assert standalone.json()["context"]["field"] == "determination.group"
+    assert _count(db_session, Kinetics) == 0
+    # The fits of one reaction upload already share a determination by key.
+    refused = client.post(BUNDLE, json=_bundle(determination=grouped, direction="forward"))
+    assert _code(refused) == "kinetics_determination_invalid"
+    # A handle goes with a key, never with a determination_ref.
+    cited = {"determination_ref": "kdet_" + "a" * 26, "representation_role": "complete", "group": "d1"}
+    assert _code(client.post(KINETICS, json=_standalone(determination=cited))) == "kinetics_determination_invalid"
 
 
 def test_a_determination_cannot_mix_complete_and_additive_records(client, db_session):

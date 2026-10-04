@@ -48,7 +48,9 @@ def _resolve_participant_upload(
     )
 
 
-def reversible_or_inherited(session: Session, reaction, *, created_by: int | None = None) -> bool:
+def reversible_or_inherited(
+    session: Session, reaction, *, created_by: int | None = None, field: str = "reaction.reversible"
+) -> bool:
     """The ``reversible`` value of an embedded reaction block: as stated, else inherited, else refused.
 
     Whether a reaction is reversible is part of its graph identity, but a rate (or a network)
@@ -60,6 +62,7 @@ def reversible_or_inherited(session: Session, reaction, *, created_by: int | Non
 
     :param reaction: Anything with ``reversible``, ``reactants`` and ``products`` (participants
         carrying a ``species_entry`` identity payload).
+    :param field: The path of the field in the request, named in the refusal.
     """
     if reaction.reversible is not None:
         return reaction.reversible
@@ -76,7 +79,7 @@ def reversible_or_inherited(session: Session, reaction, *, created_by: int | Non
             "reaction.reversible was not stated, and there is no single stored reaction with these "
             "participants to take it from (none is stored, or both a reversible and an irreversible one "
             "are). State reversible: true or false.",
-            context={"field": "reaction.reversible"},
+            context={"field": field},
             message_prefix=False,
         )
     return value

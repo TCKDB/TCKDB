@@ -3707,7 +3707,7 @@
     },
     "KineticsDeterminationDeclaration": {
       "additionalProperties": false,
-      "description": "The determination a record belongs to, and the record's role in it.\n\nA determination is one complete determination of a rate, such as a measurement set or one\ncomputed rate. Several fitted representations of it share it and do not count as independent\nsupport for each other; separate calculations or measurements are separate determinations.\n\nGive exactly one locator. ``key`` with ``target_kind`` states the content (the backend finds\nor creates the determination from the record's reaction entry, direction, target, source and\nthis key); ``determination_ref`` joins one already deposited, and anchors the record to that\ndetermination's reaction entry. A ``resolved_channel`` target names its channel exactly once:\n``transition_state_entry_ref``, or ``network_ref`` with ``channel_key``.\n\n:param determination_ref: Public ref (``kdet_...``) of an existing determination.\n:param key: Source-scoped key.\n:param target_kind: Required with ``key``.\n:param transition_state_entry_ref: Public ref (``tse_...``).\n:param network_ref: Public ref (``net_...``).\n:param channel_key: Channel key in that network.",
+      "description": "The determination a record belongs to, and its role in it.\n\nOne determination is one complete determination of a rate (a measurement set, one computed\nrate); its fitted representations share it and are not independent support for each other.\n\nGive exactly one locator: ``key`` with ``target_kind`` states the content (the backend finds\nor creates it from the reaction entry, direction, target, source and key), or\n``determination_ref`` joins one already deposited. A ``resolved_channel`` names its channel\nonce: ``transition_state_entry_ref``, or ``network_ref`` with ``channel_key``.\n\n:param determination_ref: Public ref (``kdet_...``) of an existing determination.\n:param key: Source-scoped key.\n:param target_kind: Required with ``key``.\n:param transition_state_entry_ref: Public ref (``tse_...``).\n:param network_ref: Public ref (``net_...``).\n:param channel_key: Channel key in that network.\n:param group: Contribution-bundle import only: groups records of one import. Never stored.",
       "properties": {
         "channel_key": {
           "anyOf": [
@@ -3734,6 +3734,20 @@
           ],
           "default": null,
           "title": "Determination Ref"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group"
         },
         "key": {
           "anyOf": [

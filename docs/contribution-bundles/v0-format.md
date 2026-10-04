@@ -190,9 +190,12 @@ A `kinetics_uploads` entry may carry `determination`, `applicability` and `proto
 one bundle that state the same determination content (key, direction, whole-reaction target, source and
 reaction) are imported under one reaction entry and share one determination, as the exporter grouped
 them. The exporter writes what a portable bundle can carry and reports what it cannot (a
-resolved-channel determination, a protocol's supporting calculations) as a `declaration_pruned` omission. Two exported determinations that share a key, source and reaction
-content would merge on import, so the later one's key is exported with a `~2`-style suffix (a
-`determination_key_suffixed` omission), and the bundle re-imports to the same number of determinations.
+resolved-channel determination, a protocol's supporting calculations) as a `declaration_pruned` omission. Each exported determination carries a bundle-local `determination.group` handle
+(`d1`, `d2`, ... in export order): records of one import that state the same handle and content share a
+determination, so two determinations that share a key, source and reaction content stay two after a re-import.
+The `key` is always exactly what the depositor stated. The handle only groups records inside one import, is
+never stored, and is refused on `/uploads/kinetics` and on the fits of a computed-reaction upload. The export
+CLI prints every omission, so `declaration_pruned` is never silent.
 
 ### Exporting legacy thermo rows (undeclared enthalpy)
 

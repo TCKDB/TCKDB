@@ -10,6 +10,7 @@ from tckdb_schemas.fragments.kinetics_evidence import (
     KineticsInterpretationAssignmentUpload,
     KineticsTunnelingApplicationUpload,
 )
+from tckdb_schemas.kinetics_declarations import W_KINETICS_DETERMINATION_INVALID
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.api.error_contract import CodedValueError
@@ -281,8 +282,9 @@ def determination_content_key(request: KineticsUploadRequest) -> str | None:
     entry: by a transition-state ref, by citing the determination's ref, or, inside one bundle
     import, by stating the same determination content. The key is that content: the
     determination's key, the record's direction, the target, the whole source attribution, and
-    the reaction it is of. A channel target names rows of the database, so it never enters a
-    bundle-scoped key (a channel is anchored by its own refs).
+    the reaction it is of, and the bundle-local ``group`` handle when one is stated, which is how an
+    export keeps two determinations that read alike apart. A channel target names rows of the database,
+    so it never enters a bundle-scoped key (a channel is anchored by its own refs).
     """
     determination = request.determination
     if determination is None or determination.key is None:
@@ -292,6 +294,7 @@ def determination_content_key(request: KineticsUploadRequest) -> str | None:
     return json.dumps(
         {
             "key": determination.key,
+            "group": determination.group,
             "direction": request.direction.value if request.direction is not None else None,
             "literature": (
                 request.literature.model_dump(mode="json") if request.literature is not None else None
@@ -860,6 +863,14 @@ def persist_kinetics_upload(
     :returns: Newly created ``Kinetics`` row attached to a backend-resolved reaction entry.
     """
     warning_sink = warnings if warnings is not None else []
+    if determination_anchors is None and request.determination is not None and request.determination.group is not None:
+        raise CodedValueError(
+            W_KINETICS_DETERMINATION_INVALID,
+            "determination.group groups the records of one contribution bundle import; this upload is "
+            "not part of one, so it states none.",
+            context={"field": "determination.group"},
+            message_prefix=False,
+        )
 
     # 1. Resolve reaction
     #    Pass the same review_policy so the reaction_entry created en route is

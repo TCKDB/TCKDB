@@ -605,3 +605,15 @@ def test_a_mole_fraction_is_never_coerced_from_a_string():
     bad["colliders"][0]["mole_fraction"] = "0.79"
     with pytest.raises(ValidationError):
         KineticsApplicabilityDeclaration.model_validate(bad)
+
+
+def test_a_bundle_group_handle_goes_with_a_key_and_never_with_a_determination_ref():
+    keyed = {"key": "set-A", "target_kind": "whole_reaction", "representation_role": "complete", "group": "d1"}
+    assert KineticsDeterminationDeclaration.model_validate(keyed).group == "d1"
+    cited = {"determination_ref": "kdet_" + "a" * 26, "representation_role": "complete"}
+    assert KineticsDeterminationDeclaration.model_validate(cited).group is None
+    with pytest.raises(ValidationError, match="group handle goes with a key"):
+        KineticsDeterminationDeclaration.model_validate({**cited, "group": "d1"})
+    for bad in ("", "x" * 129):
+        with pytest.raises(ValidationError):
+            KineticsDeterminationDeclaration.model_validate({**keyed, "group": bad})

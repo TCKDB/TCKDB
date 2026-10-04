@@ -53,7 +53,9 @@ declarations on kinetics, with upload and read round trips.** Selection, assessm
 - A determination holds either complete representations or additive components (`kinetics_determination_mismatch`,
   `context.reason` `role`). A declared `reaction_order` is the order of the side its direction names (reactants
   forward, products reverse; a net rate is not checked). Numeric declaration fields are strict (`"2"` is refused).
-  An export that would merge two distinct determinations on import suffixes the later one's key and says so.
+  An export gives each determination a bundle-local `determination.group` handle (never stored, bundle imports
+  only), so two determinations that read alike stay two after a re-import, with every key exactly as stated; the
+  export CLI now prints the omissions of a kinetics export.
 - Deploy: apply the migration first, then the backend, then clients. Environment variables: none.
 
 ## Hessian and scan-point geometries are now checked (2026-10-04)

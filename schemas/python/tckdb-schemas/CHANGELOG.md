@@ -5,7 +5,7 @@
 Kinetics records can declare their determination, applicability and protocol (`tckdb_schemas.kinetics_declarations`),
 all optional, on `KineticsUploadRequest` and `BundleKineticsIn` (which also gains `direction`). `reaction.reversible`
 on `/uploads/kinetics` is optional: unstated is inherited or refused, never guessed (#598). New `kinetics_*` refusal codes and
-`unknown_kinetics_determination_ref`, `unknown_network_channel`.
+`unknown_kinetics_determination_ref`, `unknown_network_channel`. A determination may carry a bundle-local `group`.
 
 ## 0.95.0 - 2026-10-04
 

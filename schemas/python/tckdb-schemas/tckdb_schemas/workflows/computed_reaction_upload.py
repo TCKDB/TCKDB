@@ -1453,8 +1453,14 @@ class BundleKineticsIn(SchemaBase):
 
     @model_validator(mode="after")
     def validate_declarations(self) -> Self:
-        """The declarations are coherent (``kinetics_declaration_error``)."""
+        """The declarations are coherent (``kinetics_declaration_error``); a fit states no ``group`` handle."""
         error = kinetics_declaration_error(self)
+        if error is None and self.determination is not None and self.determination.group is not None:
+            error = (
+                W_KINETICS_DETERMINATION_INVALID,
+                "determination.group is for a contribution bundle's kinetics uploads; the fits of one "
+                "reaction upload already share a determination by key.",
+            )
         if error is not None:
             code, message = error
             raise CodedValidationError(

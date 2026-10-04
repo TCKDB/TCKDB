@@ -214,6 +214,7 @@ def test_the_network_route_names_a_twin_inherits_and_refuses_like_the_kinetics_r
     # Refused when nothing can be inherited, with the same coded error (not raw pydantic text).
     refused = client.post(NETWORK_ROUTE, json=_network(None))
     assert _code(refused) == REQUIRED and refused.json()["code"] != "validation_error"
+    assert refused.json()["context"]["field"] == "reactions[0].reaction.reversible"
     assert _reactions(db_session) == []
     # A stated value stores; the opposite value on a later network is a twin.
     assert client.post(NETWORK_ROUTE, json=_network(False)).status_code == 201
@@ -222,6 +223,24 @@ def test_the_network_route_names_a_twin_inherits_and_refuses_like_the_kinetics_r
     assert _reactions(db_session) == [False, True]
     # Both stored: nothing to inherit.
     assert _code(client.post(NETWORK_ROUTE, json=_network(None))) == REQUIRED
+
+
+def test_the_network_refusal_names_the_reaction_that_did_not_state_it(client):
+    body = {
+        "name": "second reaction omits it",
+        "reactions": [
+            {"reaction": _reaction_body(True)},
+            {
+                "reaction": {
+                    "reactants": [{"species_entry": {"smiles": "[Ar]", "charge": 0, "multiplicity": 1}}],
+                    "products": [{"species_entry": {"smiles": "[Kr]", "charge": 0, "multiplicity": 1}}],
+                }
+            },
+        ],
+    }
+    refused = client.post(NETWORK_ROUTE, json=body)
+    assert _code(refused) == REQUIRED
+    assert refused.json()["context"]["field"] == "reactions[1].reaction.reversible"
 
 
 @pytest.mark.parametrize("stored", [True, False])
