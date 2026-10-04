@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.100.0 - 2026-10-04
+## 0.101.0 - 2026-10-04
 
 No wire model changes. Contract notes the read-only kinetics select endpoints.
 
