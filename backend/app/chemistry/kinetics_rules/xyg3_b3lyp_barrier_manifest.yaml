@@ -1,0 +1,1724 @@
+# XYG3 vs B3LYP classical-barrier audit manifest, version 0.1.0 (2026-10-04). NOT approved for activation:
+# status.activation_approved is false and status.activation_blockers says why. Compiled from the five
+# owner-supplied papers listed under sources (SHA-256 pinned there) and copied here unchanged except for this
+# header. Loaded by app.chemistry.kinetics_rules.xyg3_barrier_manifest. A change to a member, a barrier
+# height or a blocker is a new manifest version and a new rule version, never an in-place edit.
+rule_id: K-XYG3-B3LYP-BARRIER
+rule_statement: For a computed rate coefficient whose classical electronic barrier is evaluated with XYG3, an expected-performance
+  preference over the same barrier evaluated with B3LYP, restricted to the 38 reactions (76 barrier heights) of the HTBH38/04
+  and NHTBH38/04 benchmark sets, and only where the remaining treatment of the two rates is verified compatible. An expected-performance
+  inference, not a validated accuracy of any individual rate.
+manifest_version: 0.1.0
+manifest_date: '2026-10-04'
+manifest_history:
+- version: 0.1.0
+  date: '2026-10-04'
+  note: Membership read in full from the supplied PDFs; rule NOT activated (see status.activation_blockers).
+status:
+  membership_listed_complete: true
+  membership_listing_sources:
+  - ZHAO_2005_SI Table S1 (HTBH38/04, 19 reactions)
+  - ZHAO_2005 Table 2 (NHTBH38/04, 19 reactions)
+  count_stated_by_source:
+    reactions: 38
+    barrier_heights: 76
+    HT38: 38
+    HAT12: 12
+    NS16: 16
+    UM10: 10
+  count_found:
+    reactions: 38
+    barrier_heights: 76
+  identity_unresolved: 0
+  members_with_a_complex_identity_caveat: 4
+  activation_approved: false
+  activation_recommendation: 'Do not activate. Membership is complete by listing, but the evidence cannot establish the comparison
+    the rule would need: see activation_blockers. Activation also needs explicit owner or curator sign-off, which has not
+    been given.'
+  curator_acceptance: null
+  activation_blockers:
+  - id: comparator_protocol_unverified
+    text: Zhang 2009 Table 2 marks B3LYP (4.28 / 4.23 / 8.49 / 3.25 / 2.02) as the authors' own 6-311+G(3df,2p) calculation,
+      but all five numbers are identical to the B3LYP/MG3S values Zhao-Gonzalez-Garcia-Truhlar printed in 2005 (jp045141s
+      Tables 4 and 5, including the uncorrected 4.28 total). A recomputation in another basis would not reproduce five columns
+      to 0.01 kcal/mol. The paper therefore does not establish an XYG3 versus B3LYP comparison in one basis set.
+  - id: only_aggregate_evidence
+    text: Zhang 2009 and its SI give subset mean unsigned errors only. The SI holds heats of formation (Table S1) and no per-reaction
+      XYG3 barrier heights, so no member-by-member advantage can be checked; the rule would extend subset-level evidence to
+      each listed member.
+  - id: reference_geometry_not_expressible
+    text: Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration
+      can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry.
+  - id: electronic_method_not_a_protocol_field
+    text: The protocol declaration has no electronic method or basis. XYG3 and B3LYP could only be read from linked or supporting
+      calculations, and a source-calculation link does not establish that its energy was used.
+  - id: correction_changes_a_cited_total
+    text: 'The 2006 correction (jp061040d) changes the printed totals: B3LYP non-HT(38) 4.34 -> 4.58 and all(76) 4.28 -> 4.40.
+      Zhang 2009 prints the uncorrected 4.28, so the paper''s all-76 gap to B3LYP is 3.26 as printed and 3.38 corrected. Subset
+      columns are unaffected.'
+sources:
+- id: ZHANG_2009
+  citation: Y. Zhang, X. Xu, W. A. Goddard III, Proc. Natl. Acad. Sci. USA 106, 4963-4968 (2009)
+  doi: 10.1073/pnas.0901093106
+  file: zhang-et-al-2009-doubly-hybrid-density-functional-for-accurate-descriptions-of-nonbond-interactions-thermochemistry-and.pdf
+  sha256: 74dcba277bfd8918536baf0b33ee96f362321ffa8971d23e6af4496a04e88a31
+  read_from: owner-supplied PDF, full text
+  used_for: Table 2 barrier-height MADs; training set; basis sets; footnotes
+- id: ZHANG_2009_SI
+  citation: Zhang, Xu, Goddard, PNAS 106, 4963 (2009), Supporting Information
+  file: 0901093106si.pdf
+  sha256: e5966e798df1969653db038ec55a0401c789ae52a0363e1d0dce510fae6e143d
+  read_from: owner-supplied PDF, full text
+  used_for: 'Confirmed: heats of formation only (Table S1), no per-reaction barrier heights'
+- id: ZHAO_2005
+  citation: Y. Zhao, N. Gonzalez-Garcia, D. G. Truhlar, J. Phys. Chem. A 109, 2012-2018 (2005)
+  doi: 10.1021/jp045141s
+  file: jp045141s.pdf
+  sha256: 495be9b4316776ce9e73cd826fc4422a58ed8fd95d798529528f872ead899e4b
+  read_from: owner-supplied PDF, full text
+  used_for: NHTBH38/04 members and best estimates (Table 2); B3LYP/MG3S mean errors (Tables 4, 5); geometry and basis (section
+    2.6)
+- id: ZHAO_2005_SI
+  citation: Supporting Information for jp045141s (revised Dec. 4, 2004)
+  file: jp045141s_si_001.pdf
+  sha256: 70ca3d2407b81afcefa133b998d58305c84d1b849bc43a4d161153b444dbdeb0
+  read_from: owner-supplied PDF, full text
+  used_for: HTBH38/04 members and best estimates (Table S1); per-reaction B3LYP/MG3S barrier heights for the non-HT set (Table
+    S3)
+- id: ZHAO_2005_CORRECTION
+  citation: Additions and Corrections, J. Phys. Chem. A 110, 4942 (2006)
+  doi: 10.1021/jp061040d
+  file: jp061040d_corrections.pdf
+  sha256: 5affa31612d4c2fa0be1af1b80c0b72a374245203ae1bea6098bcee7a0d437f5
+  read_from: owner-supplied PDF, full text
+  used_for: Corrected Table 4 total (38) and Table 5 columns after the CH3 + FCl -> CH3F + Cl barrier heights were wrongly
+    left out of the totals
+corrections_applied:
+- source: ZHAO_2005_CORRECTION
+  target: ZHAO_2005 Table 4, total (38)
+  printed:
+    B3LYP_mse: -4.17
+    B3LYP_mue: 4.34
+  corrected:
+    B3LYP_mse: -4.42
+    B3LYP_mue: 4.58
+  reason: CH3 + FCl -> CH3F + Cl barrier heights were left out of the total
+  recomputed_here: 'from SI Table S3 and Table 2: 36 barrier heights without that reaction give MSE -4.17 and MUE 4.34 (the
+    printed values); all 38 give -4.40 and 4.56 (published 4.58)'
+- source: ZHAO_2005_CORRECTION
+  target: ZHAO_2005 Table 5, non-HT (38) and total (76) columns, and footnote a
+  printed:
+    B3LYP_total76_mue: 4.28
+  corrected:
+    B3LYP_total76_mue: 4.4
+  reason: same omission; footnote a was misplaced
+  effect_on_this_rule: Zhang 2009 Table 2 prints B3LYP all-76 as 4.28, the uncorrected value; HAT12, NS16, UM10 and HT38 columns
+    are unchanged
+protocol_facts:
+  barrier_quantity: classical (electronic, no zero-point energy) forward and reverse barrier heights at the saddle point,
+    relative to the reactants (or reactant complex) of the direction named
+  barrier_quantity_evidence:
+  - 'ZHAO_2005 section 2.1: the experimental route is rejected for the ''difficulty of inverting the experimental data to
+    obtain a classical BH'''
+  - 'ZHAO_2005 Table 1: W1 components are SCF limit, CCSD limit, (T) limit, core correlation and relativistic, spin-orbit;
+    there is no zero-point term'
+  - 'ZHANG_2009 Table 2 footnote: geometries and reference energies taken from the Truhlar database; no frequency calculation
+    is involved'
+  scaled_zpe_factor_0_9877: 'applies only to the heats-of-formation calculations (ZHANG_2009 Table 1: B3LYP/6-311+G(d,p) frequencies
+    scaled by 0.9877); it is not part of the barrier-height comparison'
+  directions: each reaction contributes a forward and a reverse barrier height relative to its listed orientation; HT38 =
+    19 x 2, HAT12 = 6 x 2, NS16 = 8 x 2, UM10 = 5 x 2
+  reference_geometry: QCISD/MG3, from the Truhlar group database website, for every method
+  xyg3:
+    basis: 6-311+G(3df,2p)
+    orbitals_and_density: self-consistent B3LYP
+    parameters:
+      c1: 0.8033
+      c2: 0.2107
+      c3: 0.3211
+    training_set: G3/99 heats of formation only (223 molecules); barrier heights and noncovalent interactions are not in the
+      training set (ZHANG_2009 p. 4966)
+  b3lyp:
+    basis_as_footnoted_by_zhang: 6-311+G(3df,2p) (own calculation, footnote *)
+    basis_in_the_identical_published_numbers: MG3S at QCISD/MG3 geometries (jp045141s section 2.6; SI Tables S2-S5 footnote
+      b)
+    training: parametrized only against thermochemistry (jp045141s introduction), so barrier heights are out of sample
+  out_of_sample: barrier heights are out of sample for both XYG3 and B3LYP; they were in the M06 training set
+aggregates:
+  zhang_2009_table_2_mad_kcal_mol:
+    XYG3:
+      all_76: 1.02
+      HT38: 0.75
+      HAT12: 1.38
+      NS16: 1.42
+      UM10: 0.98
+    B3LYP:
+      all_76: 4.28
+      HT38: 4.23
+      HAT12: 8.49
+      NS16: 3.25
+      UM10: 2.02
+    B2PLYP:
+      all_76: 1.94
+      HT38: 1.81
+      HAT12: 3.06
+      NS16: 2.16
+      UM10: 0.73
+    M06-2X:
+      all_76: 1.2
+      HT38: 1.13
+      HAT12: 1.61
+      NS16: 1.22
+      UM10: 0.92
+  zhao_2005_b3lyp_mg3s_published:
+    original_table_4_5:
+      HAT12_mue: 8.49
+      NS16_mue: 3.25
+      UM10_mue: 2.02
+      nonHT38_mue_as_printed: 4.34
+      HT38_mue: 4.23
+      all76_mue_as_printed: 4.28
+    corrected_2006:
+      nonHT38_mue: 4.58
+      nonHT38_mse: -4.42
+      all76_mue: 4.4
+      all76_mse: -4.28
+reproduction_checks:
+- claim: B3LYP NS16 MUE 3.25 and UM10 MUE 2.02 (jp045141s Table 4)
+  result: 'reproduced exactly from SI Table S3 and Table 2: 3.25 and 2.02 (UM10 MSE -1.42)'
+- claim: B3LYP HAT12 MUE 8.49 (jp045141s Table 4)
+  result: 'not reproduced exactly: the SI and Table 2 values I read give 8.42 (a total of 0.88 kcal/mol over 12 barrier heights).
+    Unresolved; it does not change any conclusion'
+- claim: B3LYP non-HT(38) total, printed 4.34 and corrected 4.58
+  result: 36 barrier heights (CH3 + FCl omitted) give 4.34, matching the printed total; 38 give 4.56, matching the correction
+    to 0.02
+evidence_limits:
+- id: aggregate_not_per_member
+  text: Mean unsigned errors over a subset do not say XYG3 beats B3LYP for any particular reaction.
+- id: single_geometry
+  text: All energies are single points at QCISD/MG3 geometries; performance with other geometries is not tested.
+- id: classical_barrier_only
+  text: The evidence concerns classical electronic barriers; it does not cover zero-point-corrected barriers, tunneling, partition
+    functions, anharmonicity or fit quality.
+- id: complex_identity
+  text: Four nucleophilic-substitution members (eight barrier heights) are between ion-molecule complexes. A complex is matched
+    by the InChIKey of its disconnected structure and a vdw_complex entry kind; that key does not say which fragment carries
+    the ion (F-...CH3F and FCH3...F- share one), so those members match by identity only.
+- id: main_group_only
+  text: Main-group, closed- and open-shell species of the listed reactions only; the paper notes XYG3 can break the variational
+    principle with near-degeneracy, for example transition metals.
+- id: not_a_rate_accuracy
+  text: A better classical barrier is not a better rate; the rule is an expected-performance inference.
+scope_conditions:
+  phase: gas
+  charge: per member
+  excluded_by_construction:
+  - any reaction not in this list (no 'similar reaction' predicate)
+  - zero-point-corrected barriers
+members:
+- member_id: HT01
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: HCl
+    name: hydrogen chloride
+    smiles: Cl
+    inchikey: VEXZGXHMUGYJMC-UHFFFAOYSA-N
+    molecular_formula: HCl
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: H2
+    name: hydrogen molecule
+    smiles: '[H][H]'
+    inchikey: UFHFLCQGNIYNRP-UHFFFAOYSA-N
+    molecular_formula: H2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: Cl
+    name: chlorine atom
+    smiles: '[Cl]'
+    inchikey: ZAMOUSCENKQFHK-UHFFFAOYSA-N
+    molecular_formula: Cl
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  classical_barrier_forward_kcal_mol: 5.7
+  classical_barrier_reverse_kcal_mol: 8.7
+  best_estimate_source: 'SI Table S1 #1'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT02
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: OH
+    name: hydroxyl radical
+    smiles: '[OH]'
+    inchikey: TUJKJAMUKRIRHC-UHFFFAOYSA-N
+    molecular_formula: HO
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: H2
+    name: hydrogen molecule
+    smiles: '[H][H]'
+    inchikey: UFHFLCQGNIYNRP-UHFFFAOYSA-N
+    molecular_formula: H2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: H2O
+    name: water
+    smiles: O
+    inchikey: XLYOFNOQVPJJNP-UHFFFAOYSA-N
+    molecular_formula: H2O
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  classical_barrier_forward_kcal_mol: 5.1
+  classical_barrier_reverse_kcal_mol: 21.2
+  best_estimate_source: 'SI Table S1 #2'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT03
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: CH3
+    name: methyl radical
+    smiles: '[CH3]'
+    inchikey: WCYWZMWISLQXQU-UHFFFAOYSA-N
+    molecular_formula: CH3
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: H2
+    name: hydrogen molecule
+    smiles: '[H][H]'
+    inchikey: UFHFLCQGNIYNRP-UHFFFAOYSA-N
+    molecular_formula: H2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: CH4
+    name: methane
+    smiles: C
+    inchikey: VNWKTOKETHGBQD-UHFFFAOYSA-N
+    molecular_formula: CH4
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  classical_barrier_forward_kcal_mol: 12.1
+  classical_barrier_reverse_kcal_mol: 15.3
+  best_estimate_source: 'SI Table S1 #3'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT04
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: OH
+    name: hydroxyl radical
+    smiles: '[OH]'
+    inchikey: TUJKJAMUKRIRHC-UHFFFAOYSA-N
+    molecular_formula: HO
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: CH4
+    name: methane
+    smiles: C
+    inchikey: VNWKTOKETHGBQD-UHFFFAOYSA-N
+    molecular_formula: CH4
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: CH3
+    name: methyl radical
+    smiles: '[CH3]'
+    inchikey: WCYWZMWISLQXQU-UHFFFAOYSA-N
+    molecular_formula: CH3
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: H2O
+    name: water
+    smiles: O
+    inchikey: XLYOFNOQVPJJNP-UHFFFAOYSA-N
+    molecular_formula: H2O
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  classical_barrier_forward_kcal_mol: 6.7
+  classical_barrier_reverse_kcal_mol: 19.6
+  best_estimate_source: 'SI Table S1 #4'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT05
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: H2
+    name: hydrogen molecule
+    smiles: '[H][H]'
+    inchikey: UFHFLCQGNIYNRP-UHFFFAOYSA-N
+    molecular_formula: H2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: H2
+    name: hydrogen molecule
+    smiles: '[H][H]'
+    inchikey: UFHFLCQGNIYNRP-UHFFFAOYSA-N
+    molecular_formula: H2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  classical_barrier_forward_kcal_mol: 9.6
+  classical_barrier_reverse_kcal_mol: 9.6
+  best_estimate_source: 'SI Table S1 #5'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: true
+- member_id: HT06
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: OH
+    name: hydroxyl radical
+    smiles: '[OH]'
+    inchikey: TUJKJAMUKRIRHC-UHFFFAOYSA-N
+    molecular_formula: HO
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: NH3
+    name: ammonia
+    smiles: N
+    inchikey: QGZKDVFQNNGYKY-UHFFFAOYSA-N
+    molecular_formula: H3N
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: H2O
+    name: water
+    smiles: O
+    inchikey: XLYOFNOQVPJJNP-UHFFFAOYSA-N
+    molecular_formula: H2O
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: NH2
+    name: amino radical
+    smiles: '[NH2]'
+    inchikey: MDFFNEOEWAXZRQ-UHFFFAOYSA-N
+    molecular_formula: H2N
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  classical_barrier_forward_kcal_mol: 3.2
+  classical_barrier_reverse_kcal_mol: 12.7
+  best_estimate_source: 'SI Table S1 #6'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT07
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: HCl
+    name: hydrogen chloride
+    smiles: Cl
+    inchikey: VEXZGXHMUGYJMC-UHFFFAOYSA-N
+    molecular_formula: HCl
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: CH3
+    name: methyl radical
+    smiles: '[CH3]'
+    inchikey: WCYWZMWISLQXQU-UHFFFAOYSA-N
+    molecular_formula: CH3
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  products:
+  - key: Cl
+    name: chlorine atom
+    smiles: '[Cl]'
+    inchikey: ZAMOUSCENKQFHK-UHFFFAOYSA-N
+    molecular_formula: Cl
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: CH4
+    name: methane
+    smiles: C
+    inchikey: VNWKTOKETHGBQD-UHFFFAOYSA-N
+    molecular_formula: CH4
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  classical_barrier_forward_kcal_mol: 1.7
+  classical_barrier_reverse_kcal_mol: 7.9
+  best_estimate_source: 'SI Table S1 #7'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT08
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: OH
+    name: hydroxyl radical
+    smiles: '[OH]'
+    inchikey: TUJKJAMUKRIRHC-UHFFFAOYSA-N
+    molecular_formula: HO
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: C2H6
+    name: ethane
+    smiles: CC
+    inchikey: OTMSDBZUPAUEDD-UHFFFAOYSA-N
+    molecular_formula: C2H6
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: H2O
+    name: water
+    smiles: O
+    inchikey: XLYOFNOQVPJJNP-UHFFFAOYSA-N
+    molecular_formula: H2O
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: C2H5
+    name: ethyl radical
+    smiles: C[CH2]
+    inchikey: QUPDWYMUPZLYJZ-UHFFFAOYSA-N
+    molecular_formula: C2H5
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  classical_barrier_forward_kcal_mol: 3.4
+  classical_barrier_reverse_kcal_mol: 19.9
+  best_estimate_source: 'SI Table S1 #8'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT09
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: F
+    name: fluorine atom
+    smiles: '[F]'
+    inchikey: YCKRFDGAMUMZLT-UHFFFAOYSA-N
+    molecular_formula: F
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: H2
+    name: hydrogen molecule
+    smiles: '[H][H]'
+    inchikey: UFHFLCQGNIYNRP-UHFFFAOYSA-N
+    molecular_formula: H2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: HF
+    name: hydrogen fluoride
+    smiles: F
+    inchikey: KRHYYFGTRYWZRS-UHFFFAOYSA-N
+    molecular_formula: HF
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  classical_barrier_forward_kcal_mol: 1.8
+  classical_barrier_reverse_kcal_mol: 33.4
+  best_estimate_source: 'SI Table S1 #9'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT10
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: O3P
+    name: oxygen atom, 3P
+    smiles: '[O]'
+    inchikey: QVGXLLKOCUKJST-UHFFFAOYSA-N
+    molecular_formula: O
+    charge: 0
+    multiplicity: 3
+    kind: atom
+  - key: CH4
+    name: methane
+    smiles: C
+    inchikey: VNWKTOKETHGBQD-UHFFFAOYSA-N
+    molecular_formula: CH4
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: OH
+    name: hydroxyl radical
+    smiles: '[OH]'
+    inchikey: TUJKJAMUKRIRHC-UHFFFAOYSA-N
+    molecular_formula: HO
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: CH3
+    name: methyl radical
+    smiles: '[CH3]'
+    inchikey: WCYWZMWISLQXQU-UHFFFAOYSA-N
+    molecular_formula: CH3
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  classical_barrier_forward_kcal_mol: 13.7
+  classical_barrier_reverse_kcal_mol: 8.1
+  best_estimate_source: 'SI Table S1 #10'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT11
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: PH3
+    name: phosphine
+    smiles: P
+    inchikey: XYFCBTPGUUZFHI-UHFFFAOYSA-N
+    molecular_formula: H3P
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: PH2
+    name: phosphino radical
+    smiles: '[PH2]'
+    inchikey: FVZVCSNXTFCBQU-UHFFFAOYSA-N
+    molecular_formula: H2P
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: H2
+    name: hydrogen molecule
+    smiles: '[H][H]'
+    inchikey: UFHFLCQGNIYNRP-UHFFFAOYSA-N
+    molecular_formula: H2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  classical_barrier_forward_kcal_mol: 3.1
+  classical_barrier_reverse_kcal_mol: 23.2
+  best_estimate_source: 'SI Table S1 #11'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT12
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: OH
+    name: hydroxyl radical
+    smiles: '[OH]'
+    inchikey: TUJKJAMUKRIRHC-UHFFFAOYSA-N
+    molecular_formula: HO
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  products:
+  - key: H2
+    name: hydrogen molecule
+    smiles: '[H][H]'
+    inchikey: UFHFLCQGNIYNRP-UHFFFAOYSA-N
+    molecular_formula: H2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: O3P
+    name: oxygen atom, 3P
+    smiles: '[O]'
+    inchikey: QVGXLLKOCUKJST-UHFFFAOYSA-N
+    molecular_formula: O
+    charge: 0
+    multiplicity: 3
+    kind: atom
+  classical_barrier_forward_kcal_mol: 10.7
+  classical_barrier_reverse_kcal_mol: 13.1
+  best_estimate_source: 'SI Table S1 #12'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT13
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: H2S
+    name: hydrogen sulfide
+    smiles: S
+    inchikey: RWSOTUBLDIXVET-UHFFFAOYSA-N
+    molecular_formula: H2S
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: H2
+    name: hydrogen molecule
+    smiles: '[H][H]'
+    inchikey: UFHFLCQGNIYNRP-UHFFFAOYSA-N
+    molecular_formula: H2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: HS
+    name: mercapto radical
+    smiles: '[SH]'
+    inchikey: PXQLVRUNWNTZOS-UHFFFAOYSA-N
+    molecular_formula: HS
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  classical_barrier_forward_kcal_mol: 3.5
+  classical_barrier_reverse_kcal_mol: 17.3
+  best_estimate_source: 'SI Table S1 #13'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT14
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: O3P
+    name: oxygen atom, 3P
+    smiles: '[O]'
+    inchikey: QVGXLLKOCUKJST-UHFFFAOYSA-N
+    molecular_formula: O
+    charge: 0
+    multiplicity: 3
+    kind: atom
+  - key: HCl
+    name: hydrogen chloride
+    smiles: Cl
+    inchikey: VEXZGXHMUGYJMC-UHFFFAOYSA-N
+    molecular_formula: HCl
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: OH
+    name: hydroxyl radical
+    smiles: '[OH]'
+    inchikey: TUJKJAMUKRIRHC-UHFFFAOYSA-N
+    molecular_formula: HO
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: Cl
+    name: chlorine atom
+    smiles: '[Cl]'
+    inchikey: ZAMOUSCENKQFHK-UHFFFAOYSA-N
+    molecular_formula: Cl
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  classical_barrier_forward_kcal_mol: 9.8
+  classical_barrier_reverse_kcal_mol: 10.4
+  best_estimate_source: 'SI Table S1 #14'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT15
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: NH2
+    name: amino radical
+    smiles: '[NH2]'
+    inchikey: MDFFNEOEWAXZRQ-UHFFFAOYSA-N
+    molecular_formula: H2N
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: CH3
+    name: methyl radical
+    smiles: '[CH3]'
+    inchikey: WCYWZMWISLQXQU-UHFFFAOYSA-N
+    molecular_formula: CH3
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  products:
+  - key: CH4
+    name: methane
+    smiles: C
+    inchikey: VNWKTOKETHGBQD-UHFFFAOYSA-N
+    molecular_formula: CH4
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: NH
+    name: imidogen, 3Sigma-
+    smiles: '[NH]'
+    inchikey: PDCKRJPYJMCOFO-UHFFFAOYSA-N
+    molecular_formula: HN
+    charge: 0
+    multiplicity: 3
+    kind: radical
+  classical_barrier_forward_kcal_mol: 8.0
+  classical_barrier_reverse_kcal_mol: 22.4
+  best_estimate_source: 'SI Table S1 #15'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT16
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: NH2
+    name: amino radical
+    smiles: '[NH2]'
+    inchikey: MDFFNEOEWAXZRQ-UHFFFAOYSA-N
+    molecular_formula: H2N
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: C2H5
+    name: ethyl radical
+    smiles: C[CH2]
+    inchikey: QUPDWYMUPZLYJZ-UHFFFAOYSA-N
+    molecular_formula: C2H5
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  products:
+  - key: C2H6
+    name: ethane
+    smiles: CC
+    inchikey: OTMSDBZUPAUEDD-UHFFFAOYSA-N
+    molecular_formula: C2H6
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: NH
+    name: imidogen, 3Sigma-
+    smiles: '[NH]'
+    inchikey: PDCKRJPYJMCOFO-UHFFFAOYSA-N
+    molecular_formula: HN
+    charge: 0
+    multiplicity: 3
+    kind: radical
+  classical_barrier_forward_kcal_mol: 7.5
+  classical_barrier_reverse_kcal_mol: 18.3
+  best_estimate_source: 'SI Table S1 #16'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT17
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: C2H6
+    name: ethane
+    smiles: CC
+    inchikey: OTMSDBZUPAUEDD-UHFFFAOYSA-N
+    molecular_formula: C2H6
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: NH2
+    name: amino radical
+    smiles: '[NH2]'
+    inchikey: MDFFNEOEWAXZRQ-UHFFFAOYSA-N
+    molecular_formula: H2N
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  products:
+  - key: NH3
+    name: ammonia
+    smiles: N
+    inchikey: QGZKDVFQNNGYKY-UHFFFAOYSA-N
+    molecular_formula: H3N
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: C2H5
+    name: ethyl radical
+    smiles: C[CH2]
+    inchikey: QUPDWYMUPZLYJZ-UHFFFAOYSA-N
+    molecular_formula: C2H5
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  classical_barrier_forward_kcal_mol: 10.4
+  classical_barrier_reverse_kcal_mol: 17.4
+  best_estimate_source: 'SI Table S1 #17'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT18
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: NH2
+    name: amino radical
+    smiles: '[NH2]'
+    inchikey: MDFFNEOEWAXZRQ-UHFFFAOYSA-N
+    molecular_formula: H2N
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: CH4
+    name: methane
+    smiles: C
+    inchikey: VNWKTOKETHGBQD-UHFFFAOYSA-N
+    molecular_formula: CH4
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: CH3
+    name: methyl radical
+    smiles: '[CH3]'
+    inchikey: WCYWZMWISLQXQU-UHFFFAOYSA-N
+    molecular_formula: CH3
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: NH3
+    name: ammonia
+    smiles: N
+    inchikey: QGZKDVFQNNGYKY-UHFFFAOYSA-N
+    molecular_formula: H3N
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  classical_barrier_forward_kcal_mol: 14.5
+  classical_barrier_reverse_kcal_mol: 17.8
+  best_estimate_source: 'SI Table S1 #18'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: HT19
+  dataset: HTBH38/04
+  subset: HT
+  reactants:
+  - key: pentadiene
+    name: (Z)-1,3-pentadiene, s-trans
+    smiles: C/C=C\C=C
+    inchikey: PMJHHCWVYXUKFD-PLNGDYQASA-N
+    molecular_formula: C5H8
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: pentadiene
+    name: (Z)-1,3-pentadiene, s-trans
+    smiles: C/C=C\C=C
+    inchikey: PMJHHCWVYXUKFD-PLNGDYQASA-N
+    molecular_formula: C5H8
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  classical_barrier_forward_kcal_mol: 38.4
+  classical_barrier_reverse_kcal_mol: 38.4
+  best_estimate_source: 'SI Table S1 #19'
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: true
+- member_id: NHT01
+  dataset: NHTBH38/04
+  subset: HAT
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: N2O
+    name: nitrous oxide
+    smiles: '[N-]=[N+]=O'
+    inchikey: GQPLMRYTRLFLPF-UHFFFAOYSA-N
+    molecular_formula: N2O
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: OH
+    name: hydroxyl radical
+    smiles: '[OH]'
+    inchikey: TUJKJAMUKRIRHC-UHFFFAOYSA-N
+    molecular_formula: HO
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: N2
+    name: dinitrogen
+    smiles: N#N
+    inchikey: IJGRMHOSHXDMSA-UHFFFAOYSA-N
+    molecular_formula: N2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  classical_barrier_forward_kcal_mol: 18.14
+  classical_barrier_reverse_kcal_mol: 83.22
+  best_estimate_source: Table 2
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT02
+  dataset: NHTBH38/04
+  subset: HAT
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: HF
+    name: hydrogen fluoride
+    smiles: F
+    inchikey: KRHYYFGTRYWZRS-UHFFFAOYSA-N
+    molecular_formula: HF
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: HF
+    name: hydrogen fluoride
+    smiles: F
+    inchikey: KRHYYFGTRYWZRS-UHFFFAOYSA-N
+    molecular_formula: HF
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  classical_barrier_forward_kcal_mol: 42.18
+  classical_barrier_reverse_kcal_mol: 42.18
+  best_estimate_source: Table 2
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: true
+- member_id: NHT03
+  dataset: NHTBH38/04
+  subset: HAT
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: HCl
+    name: hydrogen chloride
+    smiles: Cl
+    inchikey: VEXZGXHMUGYJMC-UHFFFAOYSA-N
+    molecular_formula: HCl
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: HCl
+    name: hydrogen chloride
+    smiles: Cl
+    inchikey: VEXZGXHMUGYJMC-UHFFFAOYSA-N
+    molecular_formula: HCl
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  classical_barrier_forward_kcal_mol: 18.0
+  classical_barrier_reverse_kcal_mol: 18.0
+  best_estimate_source: Table 2 (BH42/04, refs 30, 34)
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: true
+- member_id: NHT04
+  dataset: NHTBH38/04
+  subset: HAT
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: CH3F
+    name: fluoromethane
+    smiles: CF
+    inchikey: NBVXSUQYWXRMNV-UHFFFAOYSA-N
+    molecular_formula: CH3F
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: HF
+    name: hydrogen fluoride
+    smiles: F
+    inchikey: KRHYYFGTRYWZRS-UHFFFAOYSA-N
+    molecular_formula: HF
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: CH3
+    name: methyl radical
+    smiles: '[CH3]'
+    inchikey: WCYWZMWISLQXQU-UHFFFAOYSA-N
+    molecular_formula: CH3
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  classical_barrier_forward_kcal_mol: 30.38
+  classical_barrier_reverse_kcal_mol: 57.02
+  best_estimate_source: Table 2
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT05
+  dataset: NHTBH38/04
+  subset: HAT
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: F2
+    name: fluorine
+    smiles: FF
+    inchikey: PXGOKWXKJXAPGV-UHFFFAOYSA-N
+    molecular_formula: F2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: HF
+    name: hydrogen fluoride
+    smiles: F
+    inchikey: KRHYYFGTRYWZRS-UHFFFAOYSA-N
+    molecular_formula: HF
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: F
+    name: fluorine atom
+    smiles: '[F]'
+    inchikey: YCKRFDGAMUMZLT-UHFFFAOYSA-N
+    molecular_formula: F
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  classical_barrier_forward_kcal_mol: 2.27
+  classical_barrier_reverse_kcal_mol: 106.18
+  best_estimate_source: Table 2
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT06
+  dataset: NHTBH38/04
+  subset: HAT
+  reactants:
+  - key: CH3
+    name: methyl radical
+    smiles: '[CH3]'
+    inchikey: WCYWZMWISLQXQU-UHFFFAOYSA-N
+    molecular_formula: CH3
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: FCl
+    name: chlorine fluoride
+    smiles: FCl
+    inchikey: OMRRUNXAWXNVFW-UHFFFAOYSA-N
+    molecular_formula: ClF
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: CH3F
+    name: fluoromethane
+    smiles: CF
+    inchikey: NBVXSUQYWXRMNV-UHFFFAOYSA-N
+    molecular_formula: CH3F
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: Cl
+    name: chlorine atom
+    smiles: '[Cl]'
+    inchikey: ZAMOUSCENKQFHK-UHFFFAOYSA-N
+    molecular_formula: Cl
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  classical_barrier_forward_kcal_mol: 7.43
+  classical_barrier_reverse_kcal_mol: 60.17
+  best_estimate_source: Table 2
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT07
+  dataset: NHTBH38/04
+  subset: NS
+  reactants:
+  - key: F-
+    name: fluoride
+    smiles: '[F-]'
+    inchikey: KRHYYFGTRYWZRS-UHFFFAOYSA-M
+    molecular_formula: F-
+    charge: -1
+    multiplicity: 1
+    kind: ion
+  - key: CH3F
+    name: fluoromethane
+    smiles: CF
+    inchikey: NBVXSUQYWXRMNV-UHFFFAOYSA-N
+    molecular_formula: CH3F
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: CH3F
+    name: fluoromethane
+    smiles: CF
+    inchikey: NBVXSUQYWXRMNV-UHFFFAOYSA-N
+    molecular_formula: CH3F
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: F-
+    name: fluoride
+    smiles: '[F-]'
+    inchikey: KRHYYFGTRYWZRS-UHFFFAOYSA-M
+    molecular_formula: F-
+    charge: -1
+    multiplicity: 1
+    kind: ion
+  classical_barrier_forward_kcal_mol: -0.34
+  classical_barrier_reverse_kcal_mol: -0.34
+  best_estimate_source: Table 2 (ref 63)
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: true
+- member_id: NHT08
+  dataset: NHTBH38/04
+  subset: NS
+  reactants:
+  - key: F-...CH3F
+    name: F- ... CH3F ion-molecule complex
+    smiles: '[F-].CF'
+    inchikey: VAEBUSUJXCLCKH-UHFFFAOYSA-M
+    molecular_formula: CH3F2-
+    charge: -1
+    multiplicity: 1
+    kind: complex
+  products:
+  - key: FCH3...F-
+    name: FCH3 ... F- ion-molecule complex
+    smiles: '[F-].CF'
+    inchikey: VAEBUSUJXCLCKH-UHFFFAOYSA-M
+    molecular_formula: CH3F2-
+    charge: -1
+    multiplicity: 1
+    kind: complex
+  classical_barrier_forward_kcal_mol: 13.38
+  classical_barrier_reverse_kcal_mol: 13.38
+  best_estimate_source: Table 2 (ref 63)
+  identity_status: resolved_complex_caveat
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT09
+  dataset: NHTBH38/04
+  subset: NS
+  reactants:
+  - key: Cl-
+    name: chloride
+    smiles: '[Cl-]'
+    inchikey: VEXZGXHMUGYJMC-UHFFFAOYSA-M
+    molecular_formula: Cl-
+    charge: -1
+    multiplicity: 1
+    kind: ion
+  - key: CH3Cl
+    name: chloromethane
+    smiles: CCl
+    inchikey: NEHMKBQYUWJMIP-UHFFFAOYSA-N
+    molecular_formula: CH3Cl
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: CH3Cl
+    name: chloromethane
+    smiles: CCl
+    inchikey: NEHMKBQYUWJMIP-UHFFFAOYSA-N
+    molecular_formula: CH3Cl
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: Cl-
+    name: chloride
+    smiles: '[Cl-]'
+    inchikey: VEXZGXHMUGYJMC-UHFFFAOYSA-M
+    molecular_formula: Cl-
+    charge: -1
+    multiplicity: 1
+    kind: ion
+  classical_barrier_forward_kcal_mol: 3.1
+  classical_barrier_reverse_kcal_mol: 3.1
+  best_estimate_source: Table 2 (ref 67)
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: true
+- member_id: NHT10
+  dataset: NHTBH38/04
+  subset: NS
+  reactants:
+  - key: Cl-...CH3Cl
+    name: Cl- ... CH3Cl ion-molecule complex
+    smiles: '[Cl-].CCl'
+    inchikey: FCVCYPORNYEAAV-UHFFFAOYSA-M
+    molecular_formula: CH3Cl2-
+    charge: -1
+    multiplicity: 1
+    kind: complex
+  products:
+  - key: ClCH3...Cl-
+    name: ClCH3 ... Cl- ion-molecule complex
+    smiles: '[Cl-].CCl'
+    inchikey: FCVCYPORNYEAAV-UHFFFAOYSA-M
+    molecular_formula: CH3Cl2-
+    charge: -1
+    multiplicity: 1
+    kind: complex
+  classical_barrier_forward_kcal_mol: 13.61
+  classical_barrier_reverse_kcal_mol: 13.61
+  best_estimate_source: Table 2 (ref 63)
+  identity_status: resolved_complex_caveat
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT11
+  dataset: NHTBH38/04
+  subset: NS
+  reactants:
+  - key: F-
+    name: fluoride
+    smiles: '[F-]'
+    inchikey: KRHYYFGTRYWZRS-UHFFFAOYSA-M
+    molecular_formula: F-
+    charge: -1
+    multiplicity: 1
+    kind: ion
+  - key: CH3Cl
+    name: chloromethane
+    smiles: CCl
+    inchikey: NEHMKBQYUWJMIP-UHFFFAOYSA-N
+    molecular_formula: CH3Cl
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: CH3F
+    name: fluoromethane
+    smiles: CF
+    inchikey: NBVXSUQYWXRMNV-UHFFFAOYSA-N
+    molecular_formula: CH3F
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: Cl-
+    name: chloride
+    smiles: '[Cl-]'
+    inchikey: VEXZGXHMUGYJMC-UHFFFAOYSA-M
+    molecular_formula: Cl-
+    charge: -1
+    multiplicity: 1
+    kind: ion
+  classical_barrier_forward_kcal_mol: -12.54
+  classical_barrier_reverse_kcal_mol: 20.11
+  best_estimate_source: Table 2 (ref 63)
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT12
+  dataset: NHTBH38/04
+  subset: NS
+  reactants:
+  - key: F-...CH3Cl
+    name: F- ... CH3Cl ion-molecule complex
+    smiles: '[F-].CCl'
+    inchikey: DSFRTDXWEXEMJT-UHFFFAOYSA-M
+    molecular_formula: CH3ClF-
+    charge: -1
+    multiplicity: 1
+    kind: complex
+  products:
+  - key: FCH3...Cl-
+    name: FCH3 ... Cl- ion-molecule complex
+    smiles: '[Cl-].CF'
+    inchikey: NIFDMQJMUQOKJU-UHFFFAOYSA-M
+    molecular_formula: CH3ClF-
+    charge: -1
+    multiplicity: 1
+    kind: complex
+  classical_barrier_forward_kcal_mol: 2.89
+  classical_barrier_reverse_kcal_mol: 29.62
+  best_estimate_source: Table 2 (ref 63)
+  identity_status: resolved_complex_caveat
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT13
+  dataset: NHTBH38/04
+  subset: NS
+  reactants:
+  - key: OH-
+    name: hydroxide
+    smiles: '[OH-]'
+    inchikey: XLYOFNOQVPJJNP-UHFFFAOYSA-M
+    molecular_formula: HO-
+    charge: -1
+    multiplicity: 1
+    kind: ion
+  - key: CH3F
+    name: fluoromethane
+    smiles: CF
+    inchikey: NBVXSUQYWXRMNV-UHFFFAOYSA-N
+    molecular_formula: CH3F
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: CH3OH
+    name: methanol
+    smiles: CO
+    inchikey: OKKJLVBELUTLKV-UHFFFAOYSA-N
+    molecular_formula: CH4O
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  - key: F-
+    name: fluoride
+    smiles: '[F-]'
+    inchikey: KRHYYFGTRYWZRS-UHFFFAOYSA-M
+    molecular_formula: F-
+    charge: -1
+    multiplicity: 1
+    kind: ion
+  classical_barrier_forward_kcal_mol: -2.78
+  classical_barrier_reverse_kcal_mol: 17.33
+  best_estimate_source: Table 2
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT14
+  dataset: NHTBH38/04
+  subset: NS
+  reactants:
+  - key: OH-...CH3F
+    name: OH- ... CH3F ion-molecule complex
+    smiles: '[OH-].CF'
+    inchikey: UBVCNYXNJLMXTH-UHFFFAOYSA-M
+    molecular_formula: CH4FO-
+    charge: -1
+    multiplicity: 1
+    kind: complex
+  products:
+  - key: HOCH3...F-
+    name: HOCH3 ... F- ion-molecule complex
+    smiles: '[F-].CO'
+    inchikey: OVBWSLYEJSVSAD-UHFFFAOYSA-M
+    molecular_formula: CH4FO-
+    charge: -1
+    multiplicity: 1
+    kind: complex
+  classical_barrier_forward_kcal_mol: 10.96
+  classical_barrier_reverse_kcal_mol: 47.2
+  best_estimate_source: Table 2
+  identity_status: resolved_complex_caveat
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT15
+  dataset: NHTBH38/04
+  subset: UM
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: N2
+    name: dinitrogen
+    smiles: N#N
+    inchikey: IJGRMHOSHXDMSA-UHFFFAOYSA-N
+    molecular_formula: N2
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: HN2
+    name: diazenyl radical, HNN
+    smiles: N=[N]
+    inchikey: NALBLJLOBICXRH-UHFFFAOYSA-N
+    molecular_formula: HN2
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  classical_barrier_forward_kcal_mol: 14.69
+  classical_barrier_reverse_kcal_mol: 10.72
+  best_estimate_source: Table 2
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT16
+  dataset: NHTBH38/04
+  subset: UM
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: CO
+    name: carbon monoxide
+    smiles: '[C-]#[O+]'
+    inchikey: UGFAIRIUMAVXCW-UHFFFAOYSA-N
+    molecular_formula: CO
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: HCO
+    name: formyl radical
+    smiles: '[CH]=O'
+    inchikey: CFHIDWOYWUOIHU-UHFFFAOYSA-N
+    molecular_formula: CHO
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  classical_barrier_forward_kcal_mol: 3.17
+  classical_barrier_reverse_kcal_mol: 22.68
+  best_estimate_source: Table 2
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT17
+  dataset: NHTBH38/04
+  subset: UM
+  reactants:
+  - key: H
+    name: hydrogen atom
+    smiles: '[H]'
+    inchikey: YZCKVEUIGOORGS-UHFFFAOYSA-N
+    molecular_formula: H
+    charge: 0
+    multiplicity: 2
+    kind: atom
+  - key: C2H4
+    name: ethylene
+    smiles: C=C
+    inchikey: VGGSQFUCUMXWEO-UHFFFAOYSA-N
+    molecular_formula: C2H4
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: C2H5
+    name: ethyl radical
+    smiles: C[CH2]
+    inchikey: QUPDWYMUPZLYJZ-UHFFFAOYSA-N
+    molecular_formula: C2H5
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  classical_barrier_forward_kcal_mol: 1.72
+  classical_barrier_reverse_kcal_mol: 41.75
+  best_estimate_source: Table 2 (ref 68; Vr from ref 68 and W1 reaction energy)
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT18
+  dataset: NHTBH38/04
+  subset: UM
+  reactants:
+  - key: CH3
+    name: methyl radical
+    smiles: '[CH3]'
+    inchikey: WCYWZMWISLQXQU-UHFFFAOYSA-N
+    molecular_formula: CH3
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  - key: C2H4
+    name: ethylene
+    smiles: C=C
+    inchikey: VGGSQFUCUMXWEO-UHFFFAOYSA-N
+    molecular_formula: C2H4
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: C3H7
+    name: n-propyl radical
+    smiles: CC[CH2]
+    inchikey: OCBFFGCSTGGPSQ-UHFFFAOYSA-N
+    molecular_formula: C3H7
+    charge: 0
+    multiplicity: 2
+    kind: radical
+  classical_barrier_forward_kcal_mol: 6.85
+  classical_barrier_reverse_kcal_mol: 32.97
+  best_estimate_source: Table 2
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false
+- member_id: NHT19
+  dataset: NHTBH38/04
+  subset: UM
+  reactants:
+  - key: HCN
+    name: hydrogen cyanide
+    smiles: C#N
+    inchikey: LELOWRISYMNNSU-UHFFFAOYSA-N
+    molecular_formula: CHN
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  products:
+  - key: HNC
+    name: hydrogen isocyanide
+    smiles: '[C-]#[NH+]'
+    inchikey: QIUBLANJVAOHHY-UHFFFAOYSA-N
+    molecular_formula: CHN
+    charge: 0
+    multiplicity: 1
+    kind: molecule
+  classical_barrier_forward_kcal_mol: 48.16
+  classical_barrier_reverse_kcal_mol: 33.11
+  best_estimate_source: Table 2
+  identity_status: resolved
+  matchable_as_a_tckdb_reaction: true
+  degenerate_identity_reaction: false

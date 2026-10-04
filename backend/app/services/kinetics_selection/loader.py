@@ -26,14 +26,22 @@ from tckdb_schemas.kinetics_declarations import (
 
 from app.api.error_contract import CodedValueError
 from app.api.errors import not_found
-from app.db.models.common import ReactionRole, RecordReviewStatus, SubmissionRecordType
+from app.db.models.calculation import Calculation
+from app.db.models.common import KineticsCalculationRole, ReactionRole, RecordReviewStatus, SubmissionRecordType
 from app.db.models.kinetics import Kinetics, KineticsDetermination
+from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.network import Network
 from app.db.models.network_pdep import NetworkChannel, NetworkKinetics
-from app.db.models.reaction import ReactionEntry, ReactionParticipant
-from app.db.models.species import Species
+from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticipant, ReactionParticipant
+from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionStateEntry
-from app.services.kinetics_selection.models import DeterminationFacts, KineticsRequest, NormalizedKinetics
+from app.services.kinetics_selection.models import (
+    DeterminationFacts,
+    KineticsRequest,
+    KineticsSubject,
+    NormalizedKinetics,
+    SpeciesFact,
+)
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
 
@@ -74,6 +82,7 @@ class LoadedPopulation:
     """The loaded, normalised population, in id order."""
 
     entry: ReactionEntry
+    subject: KineticsSubject
     rows: list[Kinetics]
     candidates: dict[int, NormalizedKinetics] = field(default_factory=dict)
 
@@ -143,14 +152,85 @@ def load_population(session: Session, scan: PopulationScan) -> LoadedPopulation:
     entry = session.get(ReactionEntry, scan.reaction_entry_id)
     if entry is None:
         raise not_found("reaction_entry", row_id=scan.reaction_entry_id)
+    subject = load_subject(session, entry)
     if not scan.population_ids:
-        return LoadedPopulation(entry=entry, rows=[])
+        return LoadedPopulation(entry=entry, subject=subject, rows=[])
     rows = list(
         session.scalars(
             select(Kinetics).where(Kinetics.id.in_(scan.population_ids)).options(*_LOAD_OPTIONS).order_by(Kinetics.id)
         ).all()
     )
-    return LoadedPopulation(entry=entry, rows=rows, candidates=normalize_rows(session, entry, rows, scan.review_status))
+    return LoadedPopulation(
+        entry=entry, subject=subject, rows=rows, candidates=normalize_rows(session, entry, rows, scan.review_status)
+    )
+
+
+def load_subject(session: Session, entry: ReactionEntry) -> KineticsSubject:
+    """The reaction entry's participants in its stored orientation, as public refs and identity facts."""
+    rows = session.execute(
+        select(ReactionEntryStructureParticipant.role, SpeciesEntry, Species)
+        .join(SpeciesEntry, SpeciesEntry.id == ReactionEntryStructureParticipant.species_entry_id)
+        .join(Species, Species.id == SpeciesEntry.species_id)
+        .where(ReactionEntryStructureParticipant.reaction_entry_id == entry.id)
+        .order_by(ReactionEntryStructureParticipant.role, ReactionEntryStructureParticipant.participant_index)
+    ).all()
+
+    def fact(species_entry: SpeciesEntry, species: Species) -> SpeciesFact:
+        return SpeciesFact(
+            species_entry_ref=species_entry.public_ref,
+            inchi_key=species.inchi_key,
+            charge=species.charge,
+            multiplicity=species.multiplicity,
+            isotope_key=species_entry.isotope_key,
+            electronic_state_kind=species_entry.electronic_state_kind.value,
+            entry_kind=species_entry.kind.value,
+        )
+
+    return KineticsSubject(
+        reaction_entry_ref=entry.public_ref,
+        reactants=tuple(fact(e, s) for role, e, s in rows if role is ReactionRole.reactant),
+        products=tuple(fact(e, s) for role, e, s in rows if role is ReactionRole.product),
+    )
+
+
+_ENERGY_ROLES = frozenset(
+    {KineticsCalculationRole.ts_energy, KineticsCalculationRole.reactant_energy, KineticsCalculationRole.product_energy}
+)
+
+
+def _declared_levels(session: Session, protocols: dict[str, dict | None]) -> dict[str, list[dict]]:
+    """The levels of theory of each record's own protocol-declared electronic-energy calculations."""
+    wanted = {
+        support["calculation_ref"]
+        for protocol in protocols.values()
+        if protocol
+        for support in protocol.get("supporting_calculations") or ()
+        if support["purpose"] == "electronic_energy"
+    }
+    by_ref: dict[str, tuple[str | None, str | None]] = {}
+    if wanted:
+        for ref, method, basis in session.execute(
+            select(Calculation.public_ref, LevelOfTheory.method, LevelOfTheory.basis)
+            .outerjoin(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
+            .where(Calculation.public_ref.in_(wanted))
+        ):
+            by_ref[ref] = (method, basis)
+    levels: dict[str, list[dict]] = {}
+    for kinetics_ref, protocol in protocols.items():
+        for support in (protocol or {}).get("supporting_calculations") or ():
+            if support["purpose"] != "electronic_energy":
+                continue
+            method, basis = by_ref.get(support["calculation_ref"], (None, None))
+            levels.setdefault(kinetics_ref, []).append(
+                {
+                    "source": "protocol_declared",
+                    "role": "electronic_energy",
+                    "calculation_ref": support["calculation_ref"],
+                    "method": method,
+                    "basis": basis,
+                }
+            )
+    return levels
 
 
 def _declaration(model, raw) -> tuple[str, dict | None]:
@@ -240,8 +320,23 @@ def normalize_rows(
 
     reactant_stoichiometries = stoichiometries(ReactionRole.reactant)
     product_stoichiometries = stoichiometries(ReactionRole.product)
+    protocols: dict[str, dict | None] = {}
+    for k in rows:
+        protocols[k.public_ref] = _declaration(StoredKineticsProtocolDeclaration, k.protocol_declaration)[1]
+    declared_levels = _declared_levels(session, protocols)
     candidates: dict[int, NormalizedKinetics] = {}
     for rank, k in enumerate(rows, start=1):
+        linked_levels = [
+            {
+                "source": "source_link",
+                "role": link.role.value,
+                "calculation_ref": link.calculation.public_ref,
+                "method": link.calculation.lot.method if link.calculation.lot is not None else None,
+                "basis": link.calculation.lot.basis if link.calculation.lot is not None else None,
+            }
+            for link in sorted(k.source_calculations, key=lambda x: (x.role.value, x.calculation.public_ref))
+            if link.role in _ENERGY_ROLES and link.calculation is not None
+        ]
         applicability_state, applicability = _declaration(
             StoredKineticsApplicabilityDeclaration, k.applicability_declaration
         )
@@ -313,5 +408,6 @@ def normalize_rows(
                 if k.falloff is not None
                 else None
             ),
+            energy_levels=(*declared_levels.get(k.public_ref, []), *linked_levels),
         )
     return candidates
