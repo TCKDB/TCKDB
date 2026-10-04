@@ -65,6 +65,7 @@ class NetworkExportRequestEcho(ProfiledRequestEcho):
     node_ref: str
     format: Literal["native", "chemkin"]
     allow_administrative_choice: bool
+    include_reported: bool = False
 
 
 class NetworkSelectedKineticsExport(BaseModel):

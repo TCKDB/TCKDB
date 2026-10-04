@@ -28369,6 +28369,11 @@
             "title": "Format",
             "type": "string"
           },
+          "include_reported": {
+            "default": false,
+            "title": "Include Reported",
+            "type": "boolean"
+          },
           "network_ref": {
             "title": "Network Ref",
             "type": "string"

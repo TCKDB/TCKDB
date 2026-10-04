@@ -51,6 +51,7 @@ from app.db.models.network_pdep import (
 from app.db.models.species import Species, SpeciesEntry
 from app.services.network_selection.manifest import ReplayError, replay_network
 from app.services.network_selection.models import BOUNDS_V1, NetworkRequest
+from app.services.network_selection.public import profile_has_floor, redact_manifest
 from app.services.network_selection.selection import select_network
 from app.services.scientific_read.chemkin_serialize import (
     _EA_UNIT_HEADERS,
@@ -357,12 +358,13 @@ def _species_content(session: Session, refs: set[str]) -> dict[str, dict[str, An
 def _solve_origin(session: Session, manifest: dict[str, Any], solve_ref: str) -> dict[str, Any]:
     """The solve's kind (from the verified manifest) and the literature a reported solve was transcribed from."""
     kind = next(s["kind"] for s in manifest["solves"] if s["solve_ref"] == solve_ref)
-    literature_ref = session.scalar(
-        select(Literature.public_ref)
+    row = session.execute(
+        select(Literature.public_ref, Literature.doi)
         .join(NetworkSolve, NetworkSolve.literature_id == Literature.id)
         .where(NetworkSolve.public_ref == solve_ref)
-    )
-    return {"solve_ref": solve_ref, "solve_kind": kind, "literature_ref": literature_ref}
+    ).first()
+    literature_ref, doi = (row[0], row[1]) if row is not None else (None, None)
+    return {"solve_ref": solve_ref, "solve_kind": kind, "literature_ref": literature_ref, "literature_doi": doi}
 
 
 def _endpoints(manifest: dict[str, Any], channel_key: str) -> dict[str, Any]:
@@ -529,10 +531,11 @@ def _chemkin_files(
     lines = []
     origin_note = ""
     if reported:
-        origin_note = f" [reported; literature {origin['literature_ref']}]"
+        cited = origin["literature_ref"] + (f" doi:{origin['literature_doi']}" if origin["literature_doi"] else "")
+        origin_note = f" [reported; literature {cited}]"
         lines += [
             f"! TCKDB: solve {origin['solve_ref']} is kind=reported. Its rates were transcribed from the literature "
-            f"({origin['literature_ref']}), not derived by TCKDB (ADR 0010).",
+            f"({cited}), not derived by TCKDB (ADR 0010).",
             "! Requested explicitly with include_reported; every reaction below carries the same note.",
         ]
     lines += ["ELEMENTS", " ".join(elements) or " ", "END", "", "SPECIES"]
@@ -647,7 +650,9 @@ def export_selected(
             "submitted_manifest_digest": manifest["digest"],
             # What the server derived itself, reading now under its own snapshot.
             "verified": {
-                "manifest_digest": live["digest"],
+                # The digest of the manifest this caller would download for the same request (redacted as that
+                # route redacts it), so an honest, unchanged manifest's digest equals submitted_manifest_digest.
+                "manifest_digest": redact_manifest(live, withhold_excluded=profile_has_floor())["digest"],
                 "snapshot_isolation": live["snapshot_isolation"],
                 "policy": live["policy"],
             },
@@ -672,7 +677,7 @@ def export_selected(
         )
     logger.info(
         "network selected export: actor=%s network=%s digest=%s format=%s members=%d administrative=%s",
-        actor, network_ref, live["digest"]["value"], choice.format, len(members), administrative,
+        actor, network_ref, manifest["digest"]["value"], choice.format, len(members), administrative,
     )
     return result
 

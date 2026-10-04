@@ -533,7 +533,7 @@ def test_a_reported_solve_reaches_chemkin_only_when_asked_for_and_then_with_its_
     out = export(client, world, manifest, det, [fit], format="chemkin", include_reported=True).json()
     text = out["files"]["chem.inp"]
     literature = out["provenance"]["origin"]["literature_ref"]
-    assert literature and f"[reported; literature {literature}]" in text and "kind=reported" in text.splitlines()[0]
+    assert literature and f"[reported; literature {literature}" in text and "kind=reported" in text.splitlines()[0]
     assert "ADR 0010" in text and any("transcribed" in a for a in out["assumptions"])
     native = export(client, world, manifest, det, [fit]).json()  # native carries the kind, so it is not gated
     assert native["members"][0]["solve_kind"] == "reported" and native["members"][0]["literature_ref"] == literature
@@ -697,3 +697,57 @@ def test_the_live_selection_always_runs_under_the_servers_bounds(db_session, wor
     with pytest.raises(RuntimeError):
         export_module._live_selection(db_session, {"request": request}, require_snapshot=False)
     assert seen["bounds"] == BOUNDS_V1
+
+
+def test_editing_a_stored_chebyshev_coefficient_in_place_makes_the_manifest_stale(client, db_session, world):
+    from sqlalchemy import select
+
+    from app.db.models.network_pdep import NetworkKineticsChebyshev
+
+    spec = fit_spec("assoc", model="chebyshev", rep="cheb", pmin=0.1, pmax=10.0)
+    solve = add_solve(db_session, world, fits=[spec], protocol=protocol(A_), review=None)
+    det, fit = solve._dets["d_assoc"].public_ref, solve._fits[0].public_ref
+    manifest = manifest_of(client, world)
+    row = db_session.scalars(
+        select(NetworkKineticsChebyshev).where(NetworkKineticsChebyshev.network_kinetics_id == solve._fits[0].id)
+    ).one()
+    row.coefficients = {"coeffs": [[9.0, 0.5], [0.25, 0.125]]}  # same fit, a different number
+    db_session.flush()
+    response = export(client, world, manifest, det, [fit], format="chemkin")
+    assert code(response) == "network_export_manifest_stale" and "solves" in context(response)["differs"]
+
+
+def test_the_verified_digest_is_the_digest_an_honest_caller_holds(client, db_session, world, one):
+    solve, det, fit = one
+    manifest = manifest_of(client, world)
+    out = export(client, world, manifest, det, [fit]).json()
+    assert out["provenance"]["verified"]["manifest_digest"] == out["provenance"]["submitted_manifest_digest"] == manifest["digest"]
+    add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(B_))  # the population changes
+    fresh = manifest_of(client, world)
+    assert fresh["digest"] != manifest["digest"]  # a different selection has a different digest
+    changed = export(client, world, fresh, det, [fit], allow_administrative_choice=True).json()
+    assert changed["provenance"]["verified"]["manifest_digest"] == changed["provenance"]["submitted_manifest_digest"] == fresh["digest"]
+    assert changed["provenance"]["verified"]["manifest_digest"] != out["provenance"]["verified"]["manifest_digest"]
+
+
+def test_the_request_echo_says_whether_reported_rates_were_asked_for(client, db_session, world):
+    _, det, fit = _reported_world(db_session, world)
+    manifest = manifest_of(client, world)
+    assert export(client, world, manifest, det, [fit]).json()["request"]["include_reported"] is False
+    asked = export(client, world, manifest, det, [fit], format="chemkin", include_reported=True).json()
+    assert asked["request"]["include_reported"] is True
+
+
+def test_a_literature_doi_is_written_beside_its_ref_in_the_chemkin_annotation(client, db_session, world):
+    from sqlalchemy import select
+
+    from app.db.models.literature import Literature
+
+    solve, det, fit = _reported_world(db_session, world)
+    literature = db_session.scalars(select(Literature).where(Literature.id == solve.literature_id)).one()
+    literature.doi = "10.1000/example.doi"
+    db_session.flush()
+    out = export(client, world, manifest_of(client, world), det, [fit], format="chemkin", include_reported=True).json()
+    text = out["files"]["chem.inp"]
+    assert f"literature {literature.public_ref} doi:10.1000/example.doi]" in text
+    assert f"({literature.public_ref} doi:10.1000/example.doi)" in text.splitlines()[0]

@@ -88,6 +88,7 @@ def export_selected_network_kinetics(
             "node_ref": body.node_ref,
             "format": body.format,
             "allow_administrative_choice": body.allow_administrative_choice,
+            "include_reported": body.include_reported,
         },
         **result,
     )
