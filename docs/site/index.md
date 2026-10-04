@@ -2,8 +2,8 @@
 
 ![TCKDB wordmark](../assets/tckdb-wordmark.png){ width="760" }
 
-TCKDB is a thermochemistry and kinetics database for computational and
-experimental chemistry records. It stores scientific values together
+TCKDB, the Theoretical Chemical Kinetics Database, is a thermochemistry and
+kinetics database for computational and experimental chemistry records. It stores scientific values together
 with the context needed to trust them: geometries, calculations,
 levels of theory, software versions, workflow provenance, artifacts,
 and review state.
