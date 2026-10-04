@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime
-from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import func, select
@@ -50,7 +49,6 @@ from tests.services.scientific_read._factories import (
     attach_kinetics_third_body_efficiency,
     make_chem_reaction,
     make_kinetics,
-    make_literature,
     make_network,
     make_network_channel,
     make_network_solve,
@@ -72,17 +70,6 @@ REQUEST = KineticsRequest(
     temperature_max_k=1500.0,
     pressure=PressureRequest(PressureKind.independent),
 )
-
-
-@pytest.fixture
-def world(db_session):
-    h = make_species_entry(db_session, make_species(db_session, smiles="[H]", multiplicity=2, inchi_key=next_inchi_key("KSA")))
-    ch4 = make_species_entry(db_session, make_species(db_session, smiles="C", multiplicity=1, inchi_key=next_inchi_key("KSB")))
-    h2 = make_species_entry(db_session, make_species(db_session, smiles="[H][H]", multiplicity=1, inchi_key=next_inchi_key("KSC")))
-    ch3 = make_species_entry(db_session, make_species(db_session, smiles="[CH3]", multiplicity=2, inchi_key=next_inchi_key("KSD")))
-    reaction = make_chem_reaction(db_session, reactants=[h.species, ch4.species], products=[h2.species, ch3.species])
-    entry = make_reaction_entry(db_session, reaction=reaction, reactant_entries=[h, ch4], product_entries=[h2, ch3])
-    return SimpleNamespace(entry=entry, literature=make_literature(db_session), h=h, ch4=ch4)
 
 
 def determination(session, world, key, entry=None, **target):

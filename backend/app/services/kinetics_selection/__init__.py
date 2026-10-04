@@ -7,6 +7,7 @@ fronts, outcomes) is shared with the thermo selector in :mod:`app.services.selec
 Nothing here is wired to a route yet, and nothing here persists a selection.
 """
 
+from app.services.kinetics_selection.manifest import ReplayError, replay_decision, replay_matches
 from app.services.kinetics_selection.models import (
     MAX_CANDIDATES,
     POLICY_NAME,
@@ -19,6 +20,7 @@ from app.services.kinetics_selection.models import (
     PressureRequest,
     TargetRequest,
 )
+from app.services.kinetics_selection.selection import KineticsSelection, select_reaction_entry_kinetics
 from app.services.kinetics_selection.service import assess_reaction_entry_kinetics
 
 __all__ = [
@@ -29,8 +31,13 @@ __all__ = [
     "KineticsAssessment",
     "KineticsAssessmentResult",
     "KineticsRequest",
+    "KineticsSelection",
     "PressureKind",
     "PressureRequest",
+    "ReplayError",
     "TargetRequest",
     "assess_reaction_entry_kinetics",
+    "replay_decision",
+    "replay_matches",
+    "select_reaction_entry_kinetics",
 ]

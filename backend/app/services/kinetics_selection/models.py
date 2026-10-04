@@ -167,6 +167,7 @@ class KineticsRequest:
     min_review_status: RecordReviewStatus | None = None
     admin_policy: SelectionPolicy = SelectionPolicy.default
     max_candidates: int = MAX_CANDIDATES
+    apply_rules: bool = True
 
     def __post_init__(self) -> None:
         if self.direction not in (KineticsDirection.forward, KineticsDirection.reverse):
@@ -201,8 +202,42 @@ class KineticsRequest:
             "collider": self.collider.to_dict() if self.collider is not None else None,
             "min_review_status": self.min_review_status.value if self.min_review_status else None,
             "administrative_policy": self.admin_policy.value,
+            "apply_rules": self.apply_rules,
             "max_candidates": self.max_candidates,
         }
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> KineticsRequest:
+        """Rebuild a request from its manifest form (the inverse of :meth:`to_dict`)."""
+        if raw["quantity"] != QUANTITY or raw["phase"] != PHASE:
+            raise ValueError("a manifest request is for a gas-phase rate coefficient")
+        pressure = raw["pressure"]
+        collider = raw["collider"]
+        return cls(
+            direction=KineticsDirection(raw["direction"]),
+            target=TargetRequest(
+                kind=KineticsDeterminationTargetKind(raw["target"]["kind"]),
+                transition_state_entry_ref=raw["target"]["transition_state_entry_ref"],
+                network_ref=raw["target"]["network_ref"],
+                channel_key=raw["target"]["channel_key"],
+            ),
+            coefficient_basis=KineticsCoefficientBasis(raw["coefficient_basis"]),
+            temperature_min_k=raw["temperature_min_k"],
+            temperature_max_k=raw["temperature_max_k"],
+            pressure=PressureRequest(PressureKind(pressure["kind"]), pressure["min_bar"], pressure["max_bar"]),
+            collider=(
+                ColliderRequest(
+                    tuple(collider["species_refs"]),
+                    tuple(collider["mole_fractions"]) if collider["mole_fractions"] is not None else None,
+                )
+                if collider is not None
+                else None
+            ),
+            min_review_status=RecordReviewStatus(raw["min_review_status"]) if raw["min_review_status"] else None,
+            admin_policy=SelectionPolicy(raw["administrative_policy"]),
+            max_candidates=raw["max_candidates"],
+            apply_rules=raw["apply_rules"],
+        )
 
 
 @dataclass(frozen=True)
@@ -275,6 +310,11 @@ class NormalizedKinetics:
     product_stoichiometries: tuple[int, ...] = ()
     #: The reference temperature the stored expression is written against; disclosed, never used to change it.
     t0_k: float | None = None
+    #: The levels of theory of the calculations the record itself names, as ``{"source", "role", "calculation_ref",
+    #: "method", "basis"}``: ``protocol_declared`` (the protocol's own supporting calculations, the depositor's claim of
+    #: which jobs gave the energy) and ``source_link`` (the record's own source-calculation links, which do not
+    #: establish that an energy was used). Nothing is read from a sibling record.
+    energy_levels: tuple[dict[str, Any], ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -313,6 +353,7 @@ class NormalizedKinetics:
             "falloff": dict(self.falloff) if self.falloff is not None else None,
             "product_stoichiometries": list(self.product_stoichiometries),
             "t0_k": self.t0_k,
+            "energy_levels": [dict(level) for level in self.energy_levels],
         }
 
     @classmethod
@@ -331,7 +372,52 @@ class NormalizedKinetics:
                 "plog_units": tuple(raw["plog_units"]),
                 "falloff": dict(raw["falloff"]) if raw["falloff"] is not None else None,
                 "product_stoichiometries": tuple(raw["product_stoichiometries"]),
+                "energy_levels": tuple(dict(level) for level in raw["energy_levels"]),
             }
+        )
+
+
+@dataclass(frozen=True)
+class SpeciesFact:
+    """One participant of the reaction entry as a rule needs to see it (public ref, identity, state)."""
+
+    species_entry_ref: str
+    inchi_key: str
+    charge: int
+    multiplicity: int
+    isotope_key: str | None
+    electronic_state_kind: str
+    entry_kind: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return dict(self.__dict__)
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> SpeciesFact:
+        return cls(**raw)
+
+
+@dataclass(frozen=True)
+class KineticsSubject:
+    """The reaction entry every candidate belongs to: its participants in the entry's stored orientation."""
+
+    reaction_entry_ref: str
+    reactants: tuple[SpeciesFact, ...]
+    products: tuple[SpeciesFact, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "reaction_entry_ref": self.reaction_entry_ref,
+            "reactants": [s.to_dict() for s in self.reactants],
+            "products": [s.to_dict() for s in self.products],
+        }
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> KineticsSubject:
+        return cls(
+            reaction_entry_ref=raw["reaction_entry_ref"],
+            reactants=tuple(SpeciesFact.from_dict(s) for s in raw["reactants"]),
+            products=tuple(SpeciesFact.from_dict(s) for s in raw["products"]),
         )
 
 
@@ -410,6 +496,7 @@ class KineticsAssessmentResult:
     """
 
     request: KineticsRequest
+    subject: KineticsSubject
     effective_statuses: tuple[RecordReviewStatus, ...]
     total_rows: int
     visible_candidates: int

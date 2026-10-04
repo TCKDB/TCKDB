@@ -131,6 +131,7 @@ def assess_reaction_entry_kinetics(
         )
     return KineticsAssessmentResult(
         request=request,
+        subject=loaded.subject,
         effective_statuses=tuple(sorted(scan.effective_statuses, key=lambda s: s.value)),
         total_rows=scan.total_rows,
         visible_candidates=len(scan.population_ids),
