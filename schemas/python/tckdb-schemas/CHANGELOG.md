@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.95.0 - 2026-10-04
+
+A network state energy can name one source calculation per participant, and is held against their sum
+(#678). One new optional field on `POST /uploads/networks/pdep`, one new block-tier refusal and two new
+upload warnings. Existing payloads are accepted as before.
+
+- **`solve.state_energies[].source_calculation_keys`** (new, optional): a list of
+  `{species_key, calculation_key}`, one per participant of the state. Send it or the older
+  `source_calculation_key`, never both (a plain 422). Each calculation passes the existing
+  `network_energy_source_type_mismatch` type rule and must belong to *exactly* the participant it is
+  listed beside, otherwise `network_energy_source_subject_mismatch`; a `species_key` that is not a
+  participant of the state is refused the same way, at `...source_calculation_keys[j].species_key`.
+  `source_calculation_key` is unchanged and still accepts the calculation of any one participant.
+- **`energy_precision_kj_mol`** (new, optional, positive): the rounding unit of `energy_kj_mol`. State
+  unrounded kJ/mol derived from hartree with 2625.499639, or state this field; precision is never
+  inferred from the digits of the number. It is stored and read back.
+- **`network_state_energy_sum_mismatch` (422, block).** When every participant of a state has a source,
+  TCKDB compares the stated `energy_kj_mol` with `sum(stoichiometry * stored energy)` in three bands.
+  Within the printed-precision tolerance `max(1e-6, 5e-7 * n)` hartree, `n = 1 + sum(stoichiometry)`, the
+  energy **agrees**. Beyond it but within an honest-rounding allowance (half `energy_precision_kj_mol`,
+  or half of 1 kcal/mol = 2.09 kJ/mol when not stated, per stated energy, plus `1e-6 * |energy|` on an
+  absolute energy for the spread of hartree-to-kJ/mol constants) it is stored **not compared**
+  (`stated_precision_unknown`) with a warning, so a value rounded to 0.1 kJ/mol, converted from kcal/mol
+  to two decimals, or converted with 2625.5 or 627.509 x 4.184 is never refused; if you state
+  `energy_precision_kj_mol` the rounding is accounted for and it agrees. Only beyond the allowance is it
+  refused. Defined for `correction_convention: electronic_only` (an `sp`, `opt` or `composite`
+  energy) and, only where every source is a `composite` storing an E0, `electronic_plus_zpe`.
+  `energy_zero_convention: absolute` is compared directly. `lowest_state` and `entrance_channel` shift
+  every state of the solve by one constant, so those are compared as *differences* between states
+  (`n = 2 + sum(nu_i) + sum(nu_j)`); the state blamed is the outlier inconsistent with a majority of the
+  others, and with two states `context` names both. `context` names the field, the state and both
+  numbers; no database id.
+- **`network_state_energy_sum_not_compared` (warning).** A sum that cannot be formed is never refused
+  and never guessed: `atom_and_bond_corrected`, `thermal_enthalpy_298k` and `other` corrections
+  (`convention_not_summable`), `electronic_plus_zpe` with an `sp`/`opt`/`freq` source
+  (`zpe_not_in_source`), `separated_reactants` and `other` zeros (`energy_zero_not_comparable`), a
+  source that stores no such energy (`stored_energy_not_stated`), a state alone on its shared zero
+  (`no_second_state_on_the_same_zero`), and a stated number beyond printed precision but inside honest
+  rounding (`stated_precision_unknown`). The outcome is stored with its reason. A state with no source
+  at all is stored as not compared (`no_source_stated`) without a warning: nothing was claimed.
+- **`network_state_energy_sources_partial` (warning).** A source on some but not all of a state's
+  participants, which includes a single `source_calculation_key` on a multi-species state. It is
+  accepted and read back as partial; no other participant's source is borrowed.
+- **Reads.** `NetworkSolveStateEnergySummary` gains `sources[]` (`species_entry_ref`, `stoichiometry`,
+  `calculation_ref`), `partial_sources`, `source_sum_comparison` (`agrees`, `not_compared` or null for a
+  row deposited before the check), `source_sum_not_compared_reason` and `energy_precision_kj_mol`. `source_calculation_ref` is the
+  older single slot, one summand of several on a multi-species state. Stored networks read as they did,
+  with the new fields describing what they hold.
+- Producers: the hydrazine ingester now cites every participant's single point for a multi-species state
+  (`source_calculation_keys`) and a single participant's with `source_calculation_key`. A list on a
+  one-participant state also fills the older single slot, so `source_calculation_ref` keeps the source.
+
 ## 0.94.0 - 2026-10-04
 
 A Hessian's geometry, every scan point's geometry and every IRC point's geometry are now checked against the

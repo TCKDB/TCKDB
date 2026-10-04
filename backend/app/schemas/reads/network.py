@@ -138,8 +138,22 @@ class NetworkSolveEnergyTransferRead(ORMBaseSchema):
     note: str | None = None
 
 
+class NetworkSolveStateEnergySourceRead(BaseModel):
+    """The calculation one participant of a state contributes to its energy."""
+
+    species_entry_id: int | None = None
+    stoichiometry: int | None = None
+    calculation_id: int
+
+
 class NetworkSolveStateEnergyRead(ORMBaseSchema):
-    """One explicit state energy used by a master-equation solve."""
+    """One explicit state energy used by a master-equation solve.
+
+    ``source_calculation_id`` is the older single slot: on a state with several participants it is
+    one summand of several. ``sources`` lists one calculation per participant and
+    ``partial_sources`` is true when they cover some but not all of them.
+    ``source_sum_comparison`` is null on a row deposited before the sum check existed.
+    """
 
     solve_id: int
     state_id: int
@@ -147,6 +161,11 @@ class NetworkSolveStateEnergyRead(ORMBaseSchema):
     energy_zero_convention: str
     correction_convention: str
     source_calculation_id: int | None = None
+    sources: list[NetworkSolveStateEnergySourceRead] = Field(default_factory=list)
+    partial_sources: bool = False
+    source_sum_comparison: str | None = None
+    source_sum_not_compared_reason: str | None = None
+    energy_precision_kj_mol: float | None = None
 
 
 class NetworkSolveSourceCalculationRead(ORMBaseSchema):

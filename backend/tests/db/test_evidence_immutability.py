@@ -39,6 +39,7 @@ from sqlalchemy.exc import DBAPIError
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
+    CalculationType,
     EnergyCorrectionConvention,
     EnergyZeroConvention,
     KineticsDegeneracyInterpretation,
@@ -370,6 +371,73 @@ def test_solve_inputs_of_an_unapproved_solve_stay_editable(db_session) -> None:
 
     db_session.delete(bundle.barrier)
     db_session.delete(bundle.state_energy)
+    db_session.flush()
+
+
+def _sourced_bundle(db_session, tag: str):
+    """A solve bundle whose state energy cites one calculation for its one participant (#678)."""
+    from app.db.models.network_pdep import NetworkSolveStateEnergySource, NetworkStateParticipant
+
+    bundle = _solve_bundle(db_session, tag)
+    species = make_species(db_session, smiles="[H][H]", inchi_key=f"{tag}H2".ljust(27, "A")[:27])
+    entry = make_species_entry(db_session, species)
+    db_session.add(
+        NetworkStateParticipant(state_id=bundle.state_energy.state_id, species_entry_id=entry.id, stoichiometry=1)
+    )
+    first = make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
+    second = make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
+    db_session.flush()
+    source = NetworkSolveStateEnergySource(
+        solve_id=bundle.solve.id,
+        state_id=bundle.state_energy.state_id,
+        species_entry_id=entry.id,
+        calculation_id=first.id,
+    )
+    db_session.add(source)
+    db_session.flush()
+    return bundle, source, entry, second
+
+
+def test_participant_sources_of_an_approved_solve_are_frozen(db_session) -> None:
+    """The source rows are as immutable as the state energy they explain (#678)."""
+    from app.db.models.network_pdep import NetworkSolveStateEnergySource
+
+    actor = _curator(db_session, "source-curator")
+    bundle, source, entry, other_calculation = _sourced_bundle(db_session, "SRCFRZ")
+    _approve(
+        db_session,
+        record_type=SubmissionRecordType.network_solve,
+        record_id=bundle.solve.id,
+        actor=actor,
+    )
+
+    with pytest.raises(DBAPIError), db_session.begin_nested():
+        source.calculation_id = other_calculation.id
+        db_session.flush()
+
+    with pytest.raises(DBAPIError), db_session.begin_nested():
+        db_session.delete(source)
+        db_session.flush()
+
+    # Adding one is refused as well (a second participant's source would be a new claim).
+    with pytest.raises(DBAPIError), db_session.begin_nested():
+        db_session.add(
+            NetworkSolveStateEnergySource(
+                solve_id=bundle.solve.id,
+                state_id=bundle.state_energy.state_id,
+                species_entry_id=entry.id,
+                calculation_id=other_calculation.id,
+            )
+        )
+        db_session.flush()
+
+
+def test_participant_sources_of_an_unapproved_solve_stay_editable(db_session) -> None:
+    bundle, source, _entry, other_calculation = _sourced_bundle(db_session, "SRCOPEN")
+    source.calculation_id = other_calculation.id
+    db_session.flush()
+    assert source.calculation_id == other_calculation.id
+    db_session.delete(source)
     db_session.flush()
 
 

@@ -51,6 +51,7 @@ from app.db.models.network_pdep import (
     NetworkSolveEnergyTransfer,
     NetworkSolveSourceCalculation,
     NetworkSolveStateEnergy,
+    NetworkSolveStateEnergySource,
     NetworkState,
     NetworkStateParticipant,
 )
@@ -83,6 +84,7 @@ from app.schemas.reads.scientific_network import (
     NetworkSolveCoreBlock,
     NetworkSolveEnergyTransferSummary,
     NetworkSolveEvidenceSummary,
+    NetworkSolveStateEnergySourceSummary,
     NetworkSolveStateEnergySummary,
     NetworkSolveSummary,
     NetworkSourceCalculationSummary,
@@ -1350,6 +1352,7 @@ def _build_state_energies_for_solve(
             NetworkSolveStateEnergy,
             NetworkState.composition_hash.label("state_composition_hash"),
             Calculation.public_ref.label("source_calculation_ref"),
+            Calculation.species_entry_id.label("source_species_entry_id"),
         )
         .join(NetworkState, NetworkState.id == NetworkSolveStateEnergy.state_id)
         .outerjoin(
@@ -1359,17 +1362,94 @@ def _build_state_energies_for_solve(
         .where(NetworkSolveStateEnergy.solve_id == solve_id)
         .order_by(NetworkState.composition_hash.asc())
     ).all()
-    return [
-        NetworkSolveStateEnergySummary(
-            state_composition_hash=row.state_composition_hash,
-            energy_kj_mol=row.NetworkSolveStateEnergy.energy_kj_mol,
-            energy_zero_convention=row.NetworkSolveStateEnergy.energy_zero_convention,
-            correction_convention=row.NetworkSolveStateEnergy.correction_convention,
-            convention_note=row.NetworkSolveStateEnergy.convention_note,
-            source_calculation_ref=row.source_calculation_ref,
+    state_ids = [row.NetworkSolveStateEnergy.state_id for row in rows]
+
+    # Every participant of each state: the denominator of ``partial_sources``, and the
+    # species ref a source is listed under.
+    participants_by_state: dict[int, dict[int, tuple[str, int]]] = {}
+    if state_ids:
+        for participant in session.execute(
+            select(
+                NetworkStateParticipant.state_id,
+                NetworkStateParticipant.species_entry_id,
+                NetworkStateParticipant.stoichiometry,
+                SpeciesEntry.public_ref,
+            )
+            .join(SpeciesEntry, SpeciesEntry.id == NetworkStateParticipant.species_entry_id)
+            .where(NetworkStateParticipant.state_id.in_(state_ids))
+        ).all():
+            participants_by_state.setdefault(participant.state_id, {})[
+                participant.species_entry_id
+            ] = (participant.public_ref, participant.stoichiometry)
+
+    listed_by_state: dict[int, list[tuple[int, str]]] = {}
+    for source in session.execute(
+        select(
+            NetworkSolveStateEnergySource.state_id,
+            NetworkSolveStateEnergySource.species_entry_id,
+            Calculation.public_ref,
         )
-        for row in rows
-    ]
+        .join(Calculation, Calculation.id == NetworkSolveStateEnergySource.calculation_id)
+        .where(NetworkSolveStateEnergySource.solve_id == solve_id)
+        .order_by(
+            NetworkSolveStateEnergySource.state_id,
+            NetworkSolveStateEnergySource.species_entry_id,
+        )
+    ).all():
+        listed_by_state.setdefault(source.state_id, []).append(
+            (source.species_entry_id, source.public_ref)
+        )
+
+    summaries: list[NetworkSolveStateEnergySummary] = []
+    for row in rows:
+        energy = row.NetworkSolveStateEnergy
+        participants = participants_by_state.get(energy.state_id, {})
+        sources: list[NetworkSolveStateEnergySourceSummary] = []
+        covered: set[int] = set()
+        for species_entry_id, calculation_ref in listed_by_state.get(energy.state_id, []):
+            ref, stoichiometry = participants[species_entry_id]
+            covered.add(species_entry_id)
+            sources.append(
+                NetworkSolveStateEnergySourceSummary(
+                    species_entry_ref=ref,
+                    stoichiometry=stoichiometry,
+                    calculation_ref=calculation_ref,
+                )
+            )
+        if not sources and row.source_calculation_ref is not None:
+            # The older single slot: it covers the participant whose calculation it is, and
+            # nothing else. Read back as stored, never completed from another row.
+            owner = row.source_species_entry_id
+            if owner in participants:
+                ref, stoichiometry = participants[owner]
+                covered.add(owner)
+                sources.append(
+                    NetworkSolveStateEnergySourceSummary(
+                        species_entry_ref=ref,
+                        stoichiometry=stoichiometry,
+                        calculation_ref=row.source_calculation_ref,
+                    )
+                )
+            else:
+                sources.append(
+                    NetworkSolveStateEnergySourceSummary(calculation_ref=row.source_calculation_ref)
+                )
+        summaries.append(
+            NetworkSolveStateEnergySummary(
+                state_composition_hash=row.state_composition_hash,
+                energy_kj_mol=energy.energy_kj_mol,
+                energy_zero_convention=energy.energy_zero_convention,
+                correction_convention=energy.correction_convention,
+                convention_note=energy.convention_note,
+                source_calculation_ref=row.source_calculation_ref,
+                sources=sources,
+                partial_sources=bool(sources) and len(covered) < len(participants),
+                source_sum_comparison=energy.source_sum_comparison,
+                source_sum_not_compared_reason=energy.source_sum_not_compared_reason,
+                energy_precision_kj_mol=energy.energy_precision_kj_mol,
+            )
+        )
+    return summaries
 
 
 def _build_channel_barriers_for_solve(

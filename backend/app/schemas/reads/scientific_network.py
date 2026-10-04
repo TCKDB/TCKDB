@@ -468,8 +468,33 @@ class NetworkSolveEnergyTransferSummary(BaseModel):
     note: str | None = None
 
 
+class NetworkSolveStateEnergySourceSummary(BaseModel):
+    """The calculation one participant of a state contributes to its energy.
+
+    ``species_entry_ref`` is the participant it is the source for; null only for a legacy single
+    source that belongs to no participant of the state (never inferred from another row).
+    ``stoichiometry`` is that participant's coefficient in the state.
+    """
+
+    species_entry_ref: str | None = None
+    stoichiometry: int | None = None
+    calculation_ref: str
+
+
 class NetworkSolveStateEnergySummary(BaseModel):
-    """A solve-specific state energy and its explicit conventions."""
+    """A solve-specific state energy and its explicit conventions.
+
+    A state with several species has an energy that is a sum, so its sources are listed per
+    participant in ``sources``. ``source_calculation_ref`` is the older single slot: on a state
+    with more than one participant it is one summand of several, never the whole of it. When
+    ``sources`` name some but not all participants ``partial_sources`` is true; no other
+    participant's source is borrowed from elsewhere.
+
+    ``source_sum_comparison`` is what the upload concluded when it held the stated energy against
+    the sum of the stored energies of ``sources``: ``agrees``, or ``not_compared`` with
+    ``source_sum_not_compared_reason``. Null on a row deposited before the comparison existed
+    (not assessed, not a pass). A disagreement is never stored: it refused the upload.
+    """
 
     state_composition_hash: str
     energy_kj_mol: float
@@ -477,6 +502,11 @@ class NetworkSolveStateEnergySummary(BaseModel):
     correction_convention: EnergyCorrectionConvention
     convention_note: str | None = None
     source_calculation_ref: str | None = None
+    sources: list[NetworkSolveStateEnergySourceSummary] = Field(default_factory=list)
+    partial_sources: bool = False
+    source_sum_comparison: Literal["agrees", "not_compared"] | None = None
+    source_sum_not_compared_reason: str | None = None
+    energy_precision_kj_mol: float | None = None
 
 
 class NetworkSolveChannelBarrierSummary(BaseModel):
@@ -576,6 +606,7 @@ __all__ = [
     "NetworkSolveCoreBlock",
     "NetworkSolveEnergyTransferSummary",
     "NetworkSolveEvidenceSummary",
+    "NetworkSolveStateEnergySourceSummary",
     "NetworkSolveStateEnergySummary",
     "NetworkSolveSummary",
     "NetworkSourceCalculationSummary",

@@ -1244,6 +1244,18 @@ Each `network_solve_state_energy` row gives one state energy in fixed
 `energy_kj_mol`, with mandatory `energy_zero_convention` and
 `correction_convention`, and may cite its source calculation. A complete
 uploaded solve supplies exactly one such row for every network state.
+A state with several species has an energy that is a sum, so the single
+`source_calculation_id` can only be one summand of several. Since #678 the
+`network_solve_state_energy_source` child table holds one calculation per
+participant, keyed `(solve_id, state_id, species_entry_id)` and tied by composite
+foreign keys to the state energy and to a participant of that very state
+(stoichiometry stays on `network_state_participant`, so `2A` is one row, not a
+copy index). The upload holds the stated energy against the sum of the stored
+energies, weighted by stoichiometry, and records the outcome on the state
+energy as `source_sum_comparison` (`agrees` / `not_compared`) with
+`source_sum_not_compared_reason`; a contradiction refuses the upload and no
+computed total is stored. NULL outcome columns mean the row predates the check.
+A legacy single source on a multi-species state reads back as `partial_sources`.
 `network_solve_bath_gas` is a normalized composition (mole fractions sum to
 one), while `network_solve_energy_transfer` declares its `scope`: a `per_well`
 row names both a state and a collider species, and a `network_wide` row names

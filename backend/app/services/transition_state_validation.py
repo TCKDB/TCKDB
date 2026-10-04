@@ -67,6 +67,12 @@ from app.services.calculation_ownership import (
     assert_calculation_owned_by,
 )
 from app.services.local_key_resolution import resolve_calculation_key
+from app.services.network_energy_sources import (
+    E_NETWORK_STATE_ENERGY_SUM_MISMATCH,
+    W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED,
+    collect_state_energy_source_warnings,
+    compare_state_energy_sums,
+)
 from app.services.reaction_atom_map import (
     validate_atom_map_agrees_with_irc_evidence,
 )
@@ -927,13 +933,16 @@ CHECK_TS_ENERGY_ORDERING_LEVELS = ScientificCheck(
 CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
     group="Stationary points",
     sort_key=11,
-    code=E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH,
+    code=(E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH, E_NETWORK_STATE_ENERGY_SUM_MISMATCH),
     asserts=(
-        "A stated energy-ordering energy should be the energy TCKDB stores for "
-        "its cited calculation: the single point's (or optimisation's) energy, "
-        "or for an E0 the paired electronic energy plus the cited frequency's "
-        "ZPE, scaled by the stated ``zpe_scale_factor``. An E0 with no stated "
-        "factor is never refused."
+        "A stated energy should be the energy TCKDB stores for the "
+        "calculation(s) it cites. An energy-ordering energy is the single "
+        "point's (or optimisation's) energy, or for an E0 the paired "
+        "electronic energy plus the cited frequency's ZPE, scaled by the "
+        "stated ``zpe_scale_factor``; an E0 with no stated factor is never "
+        "refused. A network state energy that cites one calculation per "
+        "participant is the stoichiometric sum of their stored energies (on "
+        "a zero shared by the solve's states, the difference between states)."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -944,9 +953,13 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
         "Without it the ordering was checked against the depositor's own "
         "numbers only, and a mistyped or copied value could make a record pass "
         "that the stored energies fail. The tolerance is the shared "
-        "printed-precision one, so rounding is never refused. A comparison "
-        "that cannot be made is not a contradiction and does not block "
-        "(``CHECK_TS_ENERGY_ORDERING_NOT_COMPARED``)."
+        "printed-precision one, so printed rounding is never refused; a "
+        "network state energy stated in kJ/mol is further allowed half a "
+        "rounding unit (stated, else 1 kcal/mol) plus the spread of "
+        "hartree-to-kJ/mol constants, and a value inside that allowance but "
+        "beyond printed precision is stored as not compared, never refused. "
+        "A comparison that cannot be made is not a contradiction and does not "
+        "block (``CHECK_TS_ENERGY_ORDERING_NOT_COMPARED``)."
     ),
     adr="0008",
     enforced_by=(
@@ -960,10 +973,22 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
                 "are in the database."
             ),
         ),
+        PythonCheck(
+            compare_state_energy_sums,
+            note=(
+                "The network route: reads the stored energies off the persisted "
+                "calculations, so it holds for a payload that bypassed the wire "
+                "schema. Run once per solve, after every state energy is "
+                "resolved, because the shared-zero conventions compare states "
+                "with each other and blame the outlier by majority."
+            ),
+        ),
     ),
     escape_hatch=(
         "State the stored energy, or cite the calculation the number came "
-        "from. An E0 built with a scaled ZPE states ``zpe_scale_factor``."
+        "from. An E0 built with a scaled ZPE states ``zpe_scale_factor``. A "
+        "network state energy states unrounded kJ/mol derived from hartree "
+        "(x 2625.499639), or ``energy_precision_kj_mol``; sources are optional."
     ),
 )
 
@@ -971,10 +996,11 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
 CHECK_TS_ENERGY_ORDERING_NOT_COMPARED = ScientificCheck(
     group="Stationary points",
     sort_key=12,
-    code=W_TS_ENERGY_ORDERING_NOT_COMPARED,
+    code=(W_TS_ENERGY_ORDERING_NOT_COMPARED, W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED),
     asserts=(
-        "Every energy an energy-ordering record states should be comparable "
-        "with the energy TCKDB stores for its calculation."
+        "Every energy an energy-ordering record or a network state energy "
+        "states should be comparable with the energy TCKDB stores for the "
+        "calculation(s) it cites."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
@@ -996,10 +1022,26 @@ CHECK_TS_ENERGY_ORDERING_NOT_COMPARED = ScientificCheck(
                 "from one that was never held against it."
             ),
         ),
+        PythonCheck(
+            collect_state_energy_source_warnings,
+            note=(
+                "The network route: the outcome is stored on the state energy "
+                "(``source_sum_comparison`` / ``source_sum_not_compared_reason``). "
+                "Reasons include a convention with no stored per-source terms, a "
+                "zero no other state shares, a source with no stored energy of "
+                "the needed kind, a state alone on its zero and "
+                "``stated_precision_unknown`` (beyond printed precision, inside "
+                "honest rounding of the stated kJ/mol). Sources on only some "
+                "participants warn separately, with "
+                "``network_state_energy_sources_partial``."
+            ),
+        ),
     ),
     escape_hatch=(
         "None needed: the warning is the accommodation. Deposit the cited "
-        "energy (and the ZPE, at the electronic energy's geometry) to compare."
+        "energy (and the ZPE, at the electronic energy's geometry) to compare; "
+        "for a network state energy, cite every participant with an sp, opt or "
+        "composite calculation and state ``energy_precision_kj_mol``."
     ),
 )
 

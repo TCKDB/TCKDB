@@ -570,30 +570,32 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None needed: the warning is the accommodation. Take every energy of a kind at one level, or accept the warning.
 
-### 23. A stated energy-ordering energy should be the energy TCKDB stores for its cited calculation: the single point's (or optimisation's) energy, or for an E0 the paired electronic energy plus the cited frequency's ZPE, scaled by the stated `zpe_scale_factor`. An E0 with no stated factor is never refused.
+### 23. A stated energy should be the energy TCKDB stores for the calculation(s) it cites. An energy-ordering energy is the single point's (or optimisation's) energy, or for an E0 the paired electronic energy plus the cited frequency's ZPE, scaled by the stated `zpe_scale_factor`; an E0 with no stated factor is never refused. A network state energy that cites one calculation per participant is the stoichiometric sum of their stored energies (on a zero shared by the solve's states, the difference between states).
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `block` |
-| **Code** | `ts_energy_ordering_stated_energy_mismatch` |
+| **Code** | `ts_energy_ordering_stated_energy_mismatch`, `network_state_energy_sum_mismatch` |
 | **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
 | **Governing ADR** | 0008 |
 
-**Why this tier.** Definitional. The record names a calculation and a number; a number that is not that calculation's stored one is a factual inconsistency between two things the same deposit asserts, not an expectation. Without it the ordering was checked against the depositor's own numbers only, and a mistyped or copied value could make a record pass that the stored energies fail. The tolerance is the shared printed-precision one, so rounding is never refused. A comparison that cannot be made is not a contradiction and does not block (`CHECK_TS_ENERGY_ORDERING_NOT_COMPARED`).
+**Why this tier.** Definitional. The record names a calculation and a number; a number that is not that calculation's stored one is a factual inconsistency between two things the same deposit asserts, not an expectation. Without it the ordering was checked against the depositor's own numbers only, and a mistyped or copied value could make a record pass that the stored energies fail. The tolerance is the shared printed-precision one, so printed rounding is never refused; a network state energy stated in kJ/mol is further allowed half a rounding unit (stated, else 1 kcal/mol) plus the spread of hartree-to-kJ/mol constants, and a value inside that allowance but beyond printed precision is stored as not compared, never refused. A comparison that cannot be made is not a contradiction and does not block (`CHECK_TS_ENERGY_ORDERING_NOT_COMPARED`).
 
 **Enforced at.**
 
 - `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py::persist_transition_state_validation_evidence`
   *Runs in the shared evidence seam, so the PDep bundle, the computed-reaction bundle and the standalone upload enforce it alike, and it holds for a payload that bypassed the wire schemas. Wire-level checks cannot do it: the stored energies are in the database.*
+- `compare_state_energy_sums` — `backend/app/services/network_energy_sources.py::compare_state_energy_sums`
+  *The network route: reads the stored energies off the persisted calculations, so it holds for a payload that bypassed the wire schema. Run once per solve, after every state energy is resolved, because the shared-zero conventions compare states with each other and blame the outlier by majority.*
 
-**Escape hatch.** State the stored energy, or cite the calculation the number came from. An E0 built with a scaled ZPE states `zpe_scale_factor`.
+**Escape hatch.** State the stored energy, or cite the calculation the number came from. An E0 built with a scaled ZPE states `zpe_scale_factor`. A network state energy states unrounded kJ/mol derived from hartree (x 2625.499639), or `energy_precision_kj_mol`; sources are optional.
 
-### 24. Every energy an energy-ordering record states should be comparable with the energy TCKDB stores for its calculation.
+### 24. Every energy an energy-ordering record or a network state energy states should be comparable with the energy TCKDB stores for the calculation(s) it cites.
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `warn` |
-| **Code** | `transition_state_energy_ordering_not_compared` |
+| **Code** | `transition_state_energy_ordering_not_compared`, `network_state_energy_sum_not_compared` |
 | **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload |
 | **Governing ADR** | 0008 |
 
@@ -603,8 +605,10 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 - `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py::persist_transition_state_validation_evidence`
   *The outcome of every comparison is stored on the compared energy (`stored_energy_comparison` / `not_compared_reason`), so a reader can tell an energy that agrees with the stored one from one that was never held against it.*
+- `collect_state_energy_source_warnings` — `backend/app/services/network_energy_sources.py::collect_state_energy_source_warnings`
+  *The network route: the outcome is stored on the state energy (`source_sum_comparison` / `source_sum_not_compared_reason`). Reasons include a convention with no stored per-source terms, a zero no other state shares, a source with no stored energy of the needed kind, a state alone on its zero and `stated_precision_unknown` (beyond printed precision, inside honest rounding of the stated kJ/mol). Sources on only some participants warn separately, with `network_state_energy_sources_partial`.*
 
-**Escape hatch.** None needed: the warning is the accommodation. Deposit the cited energy (and the ZPE, at the electronic energy's geometry) to compare.
+**Escape hatch.** None needed: the warning is the accommodation. Deposit the cited energy (and the ZPE, at the electronic energy's geometry) to compare; for a network state energy, cite every participant with an sp, opt or composite calculation and state `energy_precision_kj_mol`.
 
 ## Atom mapping across a reaction
 

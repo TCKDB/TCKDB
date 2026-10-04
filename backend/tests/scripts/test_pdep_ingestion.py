@@ -18,6 +18,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -33,6 +34,8 @@ from app.db.models.network_pdep import (
     NetworkKineticsChebyshev,
     NetworkSolve,
     NetworkSolveEnergyTransfer,
+    NetworkSolveStateEnergy,
+    NetworkSolveStateEnergySource,
     NetworkState,
 )
 from app.db.models.transition_state import TransitionStateEntry
@@ -989,3 +992,62 @@ def test_atom_in_the_network_still_supplies_the_solve_its_energy_and_source(tmp_
     solve = payload["solve"]
     assert {"calculation_key": "H2_sp", "role": "well_energy"} in solve["source_calculations"]
     assert len(solve["state_energies"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# One source per participant, and the sum check (#678)
+# ---------------------------------------------------------------------------
+
+
+def test_the_two_species_state_cites_every_participants_single_point() -> None:
+    """The hydrazine bimolecular state is H2 + H2NN; the well is one species."""
+    payload, _gap = build_network_pdep_payload(FIXTURE_DIR)
+    by_state = {entry["state_key"]: entry for entry in payload["solve"]["state_energies"]}
+    bimolecular = by_state["st_H2_H2NN"]
+    assert "source_calculation_key" not in bimolecular
+    assert bimolecular["source_calculation_keys"] == [
+        {"species_key": "H2", "calculation_key": "H2_sp"},
+        {"species_key": "H2NN", "calculation_key": "H2NN_sp"},
+    ]
+    (well,) = [entry for key, entry in by_state.items() if key != "st_H2_H2NN"]
+    assert "source_calculation_keys" not in well and well["source_calculation_key"].endswith("_sp")
+
+
+def test_the_hydrazine_state_energies_agree_with_the_sum_of_their_stored_sources(db_engine) -> None:
+    """Round trip: build, persist, and every state energy is stored as agreeing with its sources.
+
+    The ingester states ``lowest_state`` / ``electronic_only``, so the check that runs here is the
+    shared-zero difference between the two states.
+    """
+    request = build_network_pdep_request(FIXTURE_DIR)
+    with _rolled_back_session(db_engine) as session:
+        network = persist_network_pdep_upload(session, request, created_by=None)
+        session.flush()
+        energies = session.scalars(
+            select(NetworkSolveStateEnergy)
+            .join(NetworkState, NetworkState.id == NetworkSolveStateEnergy.state_id)
+            .where(NetworkState.network_id == network.id)
+        ).all()
+        assert len(energies) == 2
+        assert {(e.source_sum_comparison, e.source_sum_not_compared_reason) for e in energies} == {("agrees", None)}
+        sources = session.scalars(
+            select(NetworkSolveStateEnergySource)
+            .join(NetworkState, NetworkState.id == NetworkSolveStateEnergySource.state_id)
+            .where(NetworkState.network_id == network.id)
+        ).all()
+        assert len(sources) == 2  # H2 and H2NN, both under the bimolecular state
+        cited = {session.get(Calculation, s.calculation_id).species_entry_id for s in sources}
+        assert cited == {s.species_entry_id for s in sources}
+        assert len(cited) == 2
+
+
+def test_a_hydrazine_state_energy_that_is_off_its_sources_is_refused(db_engine) -> None:
+    """The same payload with the bimolecular energy moved by 50 kJ/mol (1 kJ/mol would be rounding)."""
+    payload, _gap = build_network_pdep_payload(FIXTURE_DIR)
+    bimolecular = next(e for e in payload["solve"]["state_energies"] if e["state_key"] == "st_H2_H2NN")
+    bimolecular["energy_kj_mol"] += 50.0
+    request = NetworkPDepUploadRequest(**payload)
+    with _rolled_back_session(db_engine) as session:
+        with pytest.raises(CodedValueError) as raised:
+            persist_network_pdep_upload(session, request, created_by=None)
+    assert raised.value.code == "network_state_energy_sum_mismatch"

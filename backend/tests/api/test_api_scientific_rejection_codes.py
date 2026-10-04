@@ -1181,3 +1181,26 @@ class TestStatedEnergyAgainstStoredEnergy:
         assert context["stored_hartree"] == -40.9, context
         assert context["field"] == "transition_state.validation_evidence[0].energies[0]", context
         assert not any(key == "id" or key.endswith(("_id", "_ids")) for key in context), context
+
+
+# ---------------------------------------------------------------------------
+# A network state energy against the sum of its per-participant sources (#678)
+# ---------------------------------------------------------------------------
+
+
+class TestNetworkStateEnergySum:
+    def test_a_state_energy_one_term_short_names_its_code_in_the_envelope(self, client):
+        """The entrance state is ethyl + O2 (-230.0 Eh); the payload states ethyl alone."""
+        from app.chemistry.units import HARTREE_TO_KJ_MOL
+        from tests.api.test_api_network_pdep_state_energy_sources import _payload
+
+        payload = _payload()
+        payload["solve"]["state_energies"][0]["energy_kj_mol"] = -79.8 * HARTREE_TO_KJ_MOL
+        body = _assert_code(
+            client.post("/api/v1/uploads/networks/pdep", json=payload),
+            "network_state_energy_sum_mismatch",
+        )
+        context = body["context"]
+        assert context["field"] == "solve.state_energies[0].energy_kj_mol", context
+        assert context["state_key"] == "entrance", context
+        assert not any(key == "id" or key.endswith(("_id", "_ids")) for key in context), context

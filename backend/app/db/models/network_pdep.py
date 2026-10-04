@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     Double,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     PrimaryKeyConstraint,
@@ -583,15 +584,130 @@ class NetworkSolveStateEnergy(Base):
         BigInteger, ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"), nullable=True
     )
 
+    #: What comparing the stated energy with the sum of its per-participant
+    #: sources concluded at upload (#678): ``agrees`` or ``not_compared``. NULL
+    #: means the row was deposited before the comparison existed, and is not a
+    #: pass. A *disagreement* is never stored: it refuses the deposit. No computed
+    #: total is stored either; the sum is recomputed, never kept.
+    source_sum_comparison: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    #: Why the comparison could not be made. Present exactly when
+    #: ``source_sum_comparison`` is ``not_compared``.
+    source_sum_not_compared_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    #: The rounding unit of ``energy_kj_mol`` the producer stated, when it stated one. NULL is
+    #: "not stated" (never inferred from the digits of the number).
+    energy_precision_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+
     solve: Mapped["NetworkSolve"] = relationship(back_populates="state_energies")
     state: Mapped["NetworkState"] = relationship()
     source_calculation: Mapped[Optional["Calculation"]] = relationship()
+    #: One calculation per participant (#678); empty on a row that used the
+    #: single ``source_calculation_id`` slot.
+    participant_sources: Mapped[list["NetworkSolveStateEnergySource"]] = relationship(
+        back_populates="state_energy",
+        viewonly=True,
+    )
 
     __table_args__ = (
         CheckConstraint(
             "(energy_zero_convention <> 'other' AND correction_convention <> 'other') "
             "OR convention_note IS NOT NULL",
             name="other_note",
+        ),
+        CheckConstraint(
+            "source_sum_comparison IS NULL OR source_sum_comparison IN ('agrees', 'not_compared')",
+            name="sum_comparison",
+        ),
+        CheckConstraint(
+            "(source_sum_comparison IS NOT DISTINCT FROM 'not_compared') = "
+            "(source_sum_not_compared_reason IS NOT NULL)",
+            name="sum_reason_shape",
+        ),
+        CheckConstraint(
+            "source_sum_not_compared_reason IS NULL OR source_sum_not_compared_reason IN ("
+            "'no_source_stated', 'sources_incomplete', 'convention_not_summable', "
+            "'energy_zero_not_comparable', 'stored_energy_not_stated', 'zpe_not_in_source', "
+            "'no_second_state_on_the_same_zero', 'stated_precision_unknown')",
+            name="sum_reason_token",
+        ),
+        CheckConstraint(
+            "energy_precision_kj_mol IS NULL OR "
+            "(energy_precision_kj_mol > 0 AND energy_precision_kj_mol < 'Infinity'::float8)",
+            name="energy_precision_positive",
+        ),
+    )
+
+
+class NetworkSolveStateEnergySource(Base):
+    """The calculation one participant of a state contributes to its energy (#678).
+
+    A bimolecular state's energy is a sum over its species, so one source slot
+    cannot name where it came from. One row per participant: ``stoichiometry``
+    lives on the participant row (``2A`` is one participant with coefficient 2),
+    so no copy index is needed. The composite foreign keys tie the row to an
+    existing state energy and to a participant of that very state. Whose
+    calculation it is, and its type, are checked by the upload service.
+    """
+
+    __tablename__ = "network_solve_state_energy_source"
+
+    solve_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # ``state_id`` and ``species_entry_id`` also carry plain single-column foreign keys to the
+    # tables they identify. The composite keys below enforce the pairing, but the release
+    # serializer resolves a foreign key to a public ref or natural key through the column's own
+    # target, and a composite target (a state energy, a participant) has neither: without these
+    # a released row would name no state and no species.
+    state_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "network_state.id",
+            name="fk_nsse_source_state_id_network_state",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=False,
+    )
+    species_entry_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "species_entry.id",
+            name="fk_nsse_source_species_entry_id_species_entry",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=False,
+    )
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "calculation.id",
+            name="fk_nsse_source_calculation_id_calculation",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=False,
+    )
+
+    state_energy: Mapped["NetworkSolveStateEnergy"] = relationship(
+        back_populates="participant_sources",
+        viewonly=True,
+    )
+    calculation: Mapped["Calculation"] = relationship()
+
+    __table_args__ = (
+        PrimaryKeyConstraint("solve_id", "state_id", "species_entry_id"),
+        ForeignKeyConstraint(
+            ["solve_id", "state_id"],
+            ["network_solve_state_energy.solve_id", "network_solve_state_energy.state_id"],
+            name="fk_nsse_source_state_energy",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        ForeignKeyConstraint(
+            ["state_id", "species_entry_id"],
+            ["network_state_participant.state_id", "network_state_participant.species_entry_id"],
+            name="fk_nsse_source_participant",
+            deferrable=True,
+            initially="IMMEDIATE",
         ),
     )
 

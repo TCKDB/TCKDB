@@ -1013,6 +1013,84 @@ def test_network_structure_rows_name_their_channel_and_state(
     assert "state_id" not in energy
 
 
+def test_a_released_solve_ships_each_participants_source_with_refs_only(db_session, curator) -> None:
+    """The per-participant sources of a state energy ship under the solve (#678).
+
+    The row's composite key is (solve, state, species entry), so it ships flat under
+    ``network_solve``: the state as its composition hash, the participant and the cited
+    calculation as public refs, and no integer id.
+    """
+    from app.db.models.common import (
+        CalculationType,
+        EnergyCorrectionConvention,
+        EnergyZeroConvention,
+        NetworkStateKind,
+        RecordReviewStatus,
+        SubmissionRecordType,
+    )
+    from app.db.models.network_pdep import (
+        NetworkSolveStateEnergy,
+        NetworkSolveStateEnergySource,
+        NetworkStateParticipant,
+    )
+    from app.services.record_review import set_record_review_status
+    from app.services.release.records import serialize_records
+    from tests.services.scientific_read._factories import (
+        make_calculation,
+        make_network,
+        make_network_solve,
+        make_network_state,
+        make_species,
+        make_species_entry,
+    )
+
+    network = make_network(db_session)
+    state = make_network_state(
+        db_session,
+        network=network,
+        kind=NetworkStateKind.bimolecular,
+        composition_hash="c" * 64,
+        label="H2 + N2",
+    )
+    entry = make_species_entry(db_session, make_species(db_session, smiles="[H][H]"))
+    db_session.add(NetworkStateParticipant(state_id=state.id, species_entry_id=entry.id, stoichiometry=1))
+    calculation = make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
+    solve = make_network_solve(db_session, network=network)
+    db_session.add(
+        NetworkSolveStateEnergy(
+            solve_id=solve.id,
+            state_id=state.id,
+            energy_kj_mol=-1.5,
+            energy_zero_convention=EnergyZeroConvention.absolute,
+            correction_convention=EnergyCorrectionConvention.electronic_only,
+        )
+    )
+    db_session.flush()
+    db_session.add(
+        NetworkSolveStateEnergySource(
+            solve_id=solve.id, state_id=state.id, species_entry_id=entry.id, calculation_id=calculation.id
+        )
+    )
+    db_session.flush()
+    set_record_review_status(
+        db_session,
+        record_type=SubmissionRecordType.network_solve,
+        record_id=solve.id,
+        status=RecordReviewStatus.approved,
+        actor=curator,
+    )
+
+    payload = serialize_records(
+        db_session, record_type=SubmissionRecordType.network_solve, record_ids=[solve.id]
+    )[solve.id]
+
+    (source,) = payload["network_solve_state_energy_source"]
+    assert source["state_composition_hash"] == state.composition_hash
+    assert source["species_entry_ref"] == entry.public_ref
+    assert source["calculation_ref"] == calculation.public_ref
+    assert not any(key.endswith("_id") for key in source), source
+
+
 def test_natural_key_field_names_are_deterministic():
     """Pin the emitted names so a rename is a visible, deliberate change."""
     from app.services.release.records import RefResolver

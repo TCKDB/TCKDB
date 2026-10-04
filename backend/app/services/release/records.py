@@ -125,6 +125,7 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
         ChildTable("network_solve_bath_gas", "solve_id"),
         ChildTable("network_solve_energy_transfer", "solve_id"),
         ChildTable("network_solve_state_energy", "solve_id"),
+        ChildTable("network_solve_state_energy_source", "solve_id"),
         ChildTable("network_solve_channel_barrier", "solve_id"),
         ChildTable("network_solve_source_calculation", "solve_id"),
         ChildTable(
@@ -213,6 +214,12 @@ RECORD_CHILD_EXCLUSIONS: dict[tuple[str, str], str] = {
         "owned by its network_solve parent, and shipped under network_solve"
     ),
     ("network_channel", "network_kinetics"): (
+        "owned by its network_solve parent, and shipped under network_solve"
+    ),
+    # A state energy has a composite key (solve, state), so a nested child has no single id
+    # to hang on; its per-participant sources ship flat under network_solve, each row carrying
+    # the state's composition hash, the participant's species ref and the calculation ref.
+    ("network_solve_state_energy", "network_solve_state_energy_source"): (
         "owned by its network_solve parent, and shipped under network_solve"
     ),
     ("transition_state_entry", "transition_state_validation_evidence"): (

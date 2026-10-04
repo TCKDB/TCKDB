@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import DataIntegrityError, NotFoundError
 from app.api.routes._pagination import PaginatedResponse
+from app.db.models.calculation import Calculation
 from app.db.models.common import NetworkKineticsModelKind
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
@@ -29,6 +30,7 @@ from app.db.models.network_pdep import (
     NetworkSolveEnergyTransfer,
     NetworkSolveSourceCalculation,
     NetworkSolveStateEnergy,
+    NetworkSolveStateEnergySource,
     NetworkState,
     NetworkStateParticipant,
 )
@@ -52,6 +54,7 @@ from app.schemas.reads.network import (
     NetworkSolveListItemRead,
     NetworkSolveSourceCalculationRead,
     NetworkSolveStateEnergyRead,
+    NetworkSolveStateEnergySourceRead,
     NetworkSpeciesLinkRead,
     NetworkStateParticipantRead,
     NetworkStateRead,
@@ -136,6 +139,55 @@ def _count_solve_children(
         .group_by(table.solve_id)
     ).all()
     return {row[0]: row[1] for row in rows}
+
+
+def _state_energy_reads(
+    session: Session, solve_id: int, rows: list[NetworkSolveStateEnergy]
+) -> list[NetworkSolveStateEnergyRead]:
+    """State energies with their per-participant sources and ``partial_sources`` (#678)."""
+    participants: dict[int, set[int]] = {}
+    coefficient: dict[tuple[int, int], int] = {}
+    state_ids = [row.state_id for row in rows]
+    if state_ids:
+        for participant in session.scalars(
+            select(NetworkStateParticipant).where(NetworkStateParticipant.state_id.in_(state_ids))
+        ):
+            participants.setdefault(participant.state_id, set()).add(participant.species_entry_id)
+            coefficient[(participant.state_id, participant.species_entry_id)] = participant.stoichiometry
+    listed: dict[int, list[NetworkSolveStateEnergySourceRead]] = {}
+    for source in session.scalars(
+        select(NetworkSolveStateEnergySource)
+        .where(NetworkSolveStateEnergySource.solve_id == solve_id)
+        .order_by(NetworkSolveStateEnergySource.state_id, NetworkSolveStateEnergySource.species_entry_id)
+    ):
+        listed.setdefault(source.state_id, []).append(
+            NetworkSolveStateEnergySourceRead(
+                species_entry_id=source.species_entry_id,
+                stoichiometry=coefficient.get((source.state_id, source.species_entry_id)),
+                calculation_id=source.calculation_id,
+            )
+        )
+    reads: list[NetworkSolveStateEnergyRead] = []
+    for row in rows:
+        read = NetworkSolveStateEnergyRead.model_validate(row)
+        sources = listed.get(row.state_id, [])
+        if not sources and row.source_calculation_id is not None:
+            # The older single slot covers the participant whose calculation it is, only.
+            calculation = session.get(Calculation, row.source_calculation_id)
+            owner = None if calculation is None else calculation.species_entry_id
+            in_state = owner in participants.get(row.state_id, set())
+            sources = [
+                NetworkSolveStateEnergySourceRead(
+                    species_entry_id=owner if in_state else None,
+                    stoichiometry=coefficient.get((row.state_id, owner)) if in_state and owner is not None else None,
+                    calculation_id=row.source_calculation_id,
+                )
+            ]
+        covered = {source.species_entry_id for source in sources if source.species_entry_id is not None}
+        read.sources = sources
+        read.partial_sources = bool(sources) and len(covered) < len(participants.get(row.state_id, set()))
+        reads.append(read)
+    return reads
 
 
 def _literature_read(lit) -> LiteratureRead | None:
@@ -604,10 +656,7 @@ def get_network_solve(
             NetworkSolveEnergyTransferRead.model_validate(row)
             for row in energy_transfer_rows
         ],
-        state_energies=[
-            NetworkSolveStateEnergyRead.model_validate(row)
-            for row in state_energies
-        ],
+        state_energies=_state_energy_reads(session, solve_id, list(state_energies)),
         source_calculations=[
             NetworkSolveSourceCalculationRead.model_validate(sc) for sc in source_calcs
         ],

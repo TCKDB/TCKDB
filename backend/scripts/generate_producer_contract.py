@@ -2346,7 +2346,14 @@ class ContractBuilder:
                 out.append(f"- [`{key.split(':', 1)[1]}`](#{self.rule_anchor(key)}) ({tiers})")
             elif check is not None:
                 codes = ", ".join(f"`{code}`" for code in check.codes) or "no code"
-                out.append(f"- **`{key}`** (reached from {via}; {check.tier.value}; {codes}): {_one_line(check.asserts)}")
+                owner = next((k for k, (checks, _t) in shared.items() if check in checks), None)
+                if owner is not None:
+                    # The same register entry is enforced by a function several surfaces reach and by
+                    # this one; its body is printed once, in the shared section.
+                    same = f"same check as [`{owner.split(':', 1)[1]}`](#{self.rule_anchor(owner)})"
+                    out.append(f"- **`{key}`** (reached from {via}; {check.tier.value}; {codes}): {same}")
+                else:
+                    out.append(f"- **`{key}`** (reached from {via}; {check.tier.value}; {codes}): {_one_line(check.asserts)}")
         out.append("")
 
         out += self._render_surface_codes(surface)

@@ -1766,6 +1766,27 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "network_energy_source_type_mismatch: that one is about the "
                 "calculation's type, this one about whose calculation it is."
             )),
+    ApiCode("network_state_energy_sum_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/network_energy_sources.py",
+            shape=Shape.relationship,
+            note=(
+                "A network solve's state energy cites one calculation per "
+                "participant and contradicts the sum of the stored energies, "
+                "weighted by stoichiometry, beyond both printed precision "
+                "(max(1e-6, 5e-7 * n) hartree; n = 1 + the sum of the "
+                "stoichiometric coefficients on an absolute zero, 2 + both "
+                "states' coefficient sums for a difference on a shared "
+                "lowest_state / entrance_channel zero) and the honest-rounding "
+                "allowance: half of energy_precision_kj_mol (1 kcal/mol when "
+                "not stated) per stated energy, plus 1e-6 of the value on an "
+                "absolute energy. Between the two the energy is stored as not "
+                "compared (stated_precision_unknown) and the upload warns. On "
+                "a shared zero any pair of states beyond the allowance refuses; "
+                "the context names the outlier (else the state with most bad "
+                "pairs) and lists its partners, and with two states either may "
+                "be wrong. A sum that cannot be formed is not refused: the "
+                "energy is stored as not compared and the upload warns."
+            )),
     ApiCode("network_kinetics_batch_evaluate_grid_too_large", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/network_kinetics_batch_evaluate.py",
             shape=Shape.relationship,
