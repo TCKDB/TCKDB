@@ -38,6 +38,8 @@ from app.services.network_selection.loader import (
     scan_population,
 )
 from app.services.network_selection.models import (
+    BundleAssessment,
+    DeterminationAssessment,
     NetworkAssessmentResult,
     NetworkFacts,
     NetworkRequest,
@@ -122,8 +124,8 @@ def assess_network(
     check_request_against_network(request, network)
     check_snapshot_size(request.bounds, snapshot_size_bytes(request, network, solves))
 
-    determination_assessments = []
-    bundle_assessments = []
+    determination_assessments: list[DeterminationAssessment] = []
+    bundle_assessments: list[BundleAssessment] = []
     ungrouped: list[str] = []
     if request.scope is Scope.single_channel:
         determination_assessments, ungrouped = assess_channel_scope(solves, network, request)
@@ -132,13 +134,12 @@ def assess_network(
         wanted = {o.channel_key for o in request.required_outputs()}
         for solve in solves:
             ungrouped.extend(ungrouped_fits(solve, wanted))
-    judged = [*determination_assessments, *bundle_assessments]
-    unresolved = tuple(
-        getattr(a, "determination_ref", None) or a.node_ref for a in judged if a.applicability is Applicability.unresolved
-    )
-    unsupported = tuple(
-        getattr(a, "determination_ref", None) or a.node_ref for a in judged if a.applicability is Applicability.unsupported
-    )
+    judged: list[tuple[str, Applicability]] = [
+        *((a.determination_ref, a.applicability) for a in determination_assessments),
+        *((b.node_ref, b.applicability) for b in bundle_assessments),
+    ]
+    unresolved = tuple(ref for ref, applicability in judged if applicability is Applicability.unresolved)
+    unsupported = tuple(ref for ref, applicability in judged if applicability is Applicability.unsupported)
     notes: list[str] = []
     if unresolved or unsupported:
         notes.append(SCOPE_NOTE.format(unresolved=len(unresolved), unsupported=len(unsupported)))

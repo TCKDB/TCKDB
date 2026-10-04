@@ -351,11 +351,26 @@ def test_an_unstated_bath_is_unresolved(db_session, world):
 # -- output catalog, protocol, evidence, solve kinds --------------------------------------------
 
 
-def test_a_channel_declared_unavailable_or_zero_cannot_also_be_a_determination(db_session, world):
-    outputs = [{"channel_key": "assoc", "availability": "declared_zero", "zero_basis": "source_statement", "required": True}]
+@pytest.mark.parametrize(
+    "entry, code",
+    [
+        ({"availability": "declared_zero", "zero_basis": "source_statement"}, "zero_claim_contradicts_determination"),
+        ({"availability": "unavailable"}, "output_declared_unavailable"),
+    ],
+)
+def test_a_channel_declared_unavailable_or_zero_cannot_also_be_a_determination(db_session, world, entry, code):
+    outputs = [{"channel_key": "assoc", "required": True, **entry}]
     add_solve(db_session, world, fits=[fit_spec("assoc")], solve_target=target(world, outputs=outputs))
     a = only(assess(db_session, channel_request(world)))
-    assert a.applicability is A.incompatible and "zero_claim_contradicts_determination" in codes(a)
+    assert a.applicability is A.incompatible and code in codes(a)
+    # The twin: the same catalog entry for another channel does not touch this one.
+    add_solve(
+        db_session,
+        world,
+        fits=[fit_spec("assoc", det="d2")],
+        solve_target=target(world, outputs=[{**outputs[0], "channel_key": "elim"}]),
+    )
+    assert assess(db_session, channel_request(world)).determination_assessments[1].applicability is A.applicable
 
 
 def test_an_applicable_solve_with_unknown_protocol_stays_eligible_and_says_so(db_session, world):

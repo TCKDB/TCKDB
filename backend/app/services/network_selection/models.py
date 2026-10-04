@@ -25,6 +25,7 @@ from tckdb_schemas.network_declarations import (
     NetworkRegimeKind,
 )
 
+from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.selection_kernel import Applicability
@@ -227,7 +228,19 @@ class NetworkRequest:
             if len(set(keys)) != len(keys):
                 raise ValueError("a required output is listed once")
             if len(self.outputs) > self.bounds.required_outputs:
-                raise ValueError(f"at most {self.bounds.required_outputs} required outputs")
+                # A coded refusal (not a bare ValueError), so the route that builds the request maps it to the 422.
+                raise CodedValueError(
+                    "network_selection_population_too_large",
+                    f"the request lists {len(self.outputs)} required outputs, over the selection limit of "
+                    f"{self.bounds.required_outputs}; nothing was assessed.",
+                    context={
+                        "bound": "required_outputs",
+                        "visible": len(self.outputs),
+                        "limit": self.bounds.required_outputs,
+                        "bounds_version": self.bounds.version,
+                    },
+                    message_prefix=False,
+                )
         if (self.source_composition_hash is None) != (self.sink_composition_hash is None):
             raise ValueError("source and sink composition hashes are stated together")
         has_model, has_outputs = self.reference_model_ref is not None, self.reference_outputs is not None
@@ -627,6 +640,9 @@ class BundleAssessment:
     applicability: Applicability
     reasons: tuple[Reason, ...]
     member_refs: tuple[str, ...] = ()
+    #: ``(determination ref, eligible fit refs)`` of each member that answers a required output, with the fits the
+    #: set holds (a member may pin which representations the set contains).
+    member_fit_refs: tuple[tuple[str, tuple[str, ...]], ...] = ()
     coverage: tuple[OutputCoverage, ...] = ()
 
     @property
@@ -643,6 +659,7 @@ class BundleAssessment:
             "applicability": self.applicability.value,
             "reasons": [r.to_dict() for r in self.reasons],
             "member_refs": list(self.member_refs),
+            "member_fit_refs": [[ref, list(fits)] for ref, fits in self.member_fit_refs],
             "coverage": [c.to_dict() for c in self.coverage],
             "physically_eligible": self.physically_eligible,
         }
@@ -658,6 +675,7 @@ class BundleAssessment:
             applicability=Applicability(raw["applicability"]),
             reasons=tuple(Reason(r["code"], Applicability(r["applicability"])) for r in raw["reasons"]),
             member_refs=tuple(raw["member_refs"]),
+            member_fit_refs=tuple((ref, tuple(fits)) for ref, fits in raw["member_fit_refs"]),
             coverage=tuple(OutputCoverage.from_dict(c) for c in raw["coverage"]),
         )
 

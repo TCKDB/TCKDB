@@ -268,3 +268,91 @@ def test_a_solve_without_product_sets_cannot_answer_a_bundle_and_is_noted(db_ses
     result = assess(db_session, bundle_request(world))
     assert result.bundle_assessments == ()
     assert any("declare no product set" in n for n in result.notes)
+
+
+# -- a node of declared zeros is still a node of one solve ------------------------------------------
+
+
+def zero_node(db_session, world, **changes):
+    """A solve whose only requested output (``elim``) is a declared zero; its product set holds ``assoc`` only."""
+    zero = out("elim", "declared_zero", zero_basis="source_statement")
+    options = {
+        "fits": [fit_spec("assoc")],
+        "solve_target": target(world, outputs=[out("assoc"), zero]),
+        "product_sets": [{"key": "p", "members": [("d_assoc", [])]}],
+    }
+    options.update(changes)
+    return add_solve(db_session, world, **options)
+
+
+def test_a_node_whose_only_requested_output_is_a_declared_zero_is_certified_against_the_solve_it_comes_from(db_session, world):
+    from app.services.network_selection import BathRequest, PartitionRequest
+
+    zero_node(db_session, world)
+    ok = assess(db_session, bundle_request(world, "elim"))
+    assert ok.bundle_assessments[0].applicability is A.applicable
+    assert coverage(ok.bundle_assessments[0]) == {"elim": "declared_zero"}
+    # Each fact below is wrong for the solve, and none of them is checked by a member: the node answers for them.
+    wrong_bath = bundle_request(world, "elim", bath=BathRequest((world.he.public_ref,)))
+    wrong_partition = bundle_request(
+        world, "elim", partition=PartitionRequest(retained=(world.hashes["ent"], world.hashes["well"]), eliminated=(world.hashes["exit"],))
+    )
+    for request, code in (
+        (wrong_bath, "bath_species_differ"),
+        (wrong_partition, "partition_differs"),
+        (bundle_request(world, "elim", temperature_max_k=2500.0), "request_outside_solve_scope"),
+    ):
+        node = assess(db_session, request).bundle_assessments[0]
+        assert node.applicability is A.incompatible and code in reasons(node), (code, reasons(node))
+        assert not node.physically_eligible
+    zero_node(db_session, world, solve_target=target(world, outputs=[out("assoc"), out("elim", "declared_zero", zero_basis="source_statement")], partition=None))
+    undeclared = assess(db_session, bundle_request(world, "elim")).bundle_assessments[1]
+    assert undeclared.applicability is A.unresolved and "partition_not_declared" in reasons(undeclared)
+
+
+def test_a_solve_level_finding_is_the_nodes_own_and_is_not_repeated_for_every_member(db_session, world):
+    two_channel_solve(db_session, world, solve_target=target(world, outputs=[out("assoc"), out("elim")], partition=None))
+    (node,) = assess(db_session, bundle_request(world)).bundle_assessments
+    assert [r.code for r in node.reasons].count("partition_not_declared") == 1
+    assert not any("partition_not_declared" in r.code and r.code.startswith("member:") for r in node.reasons)
+
+
+def test_a_declared_zero_is_a_claim_about_a_domain_and_must_cover_the_whole_request(db_session, world):
+    zero = out("elim", "declared_zero", zero_basis="source_statement", validity=validity(temperature_max_k=600.0))
+    zero_node(db_session, world, solve_target=target(world, outputs=[out("assoc"), zero]))
+    (narrow,) = assess(db_session, bundle_request(world, "elim")).bundle_assessments
+    assert narrow.applicability is A.incompatible and "request_outside_zero_claim_validity:elim" in reasons(narrow)
+    within = assess(db_session, bundle_request(world, "elim", temperature_min_k=400.0, temperature_max_k=600.0)).bundle_assessments[0]
+    assert within.applicability is A.applicable  # the same claim, over a window it covers
+    zero_node(
+        db_session,
+        world,
+        solve_target=target(world, validity=None, outputs=[out("assoc"), out("elim", "declared_zero", zero_basis="source_statement")]),
+    )
+    unstated = assess(db_session, bundle_request(world, "elim")).bundle_assessments[1]
+    assert unstated.applicability is A.unresolved and "zero_claim_validity_not_declared:elim" in reasons(unstated)
+
+
+def test_a_determination_in_two_sets_keeps_one_verdict_and_each_set_its_own_holding(db_session, world):
+    add_solve(
+        db_session,
+        world,
+        fits=[
+            fit_spec("assoc", rep="plog1"),
+            fit_spec("assoc", rep="cheb1", model="chebyshev", pmin=0.01, pmax=100.0),
+            fit_spec("elim"),
+        ],
+        solve_target=target(world, outputs=[out("assoc"), out("elim")]),
+        product_sets=[
+            {"key": "plog_only", "members": [("d_assoc", ["plog1"]), ("d_elim", [])]},
+            {"key": "cheb_only", "members": [("d_assoc", ["cheb1"]), ("d_elim", [])]},
+        ],
+    )
+    result = assess(db_session, bundle_request(world))
+    plog_node, cheb_node = result.bundle_assessments
+    (assoc_assessment,) = [a for a in result.determination_assessments if a.channel_key == "assoc"]
+    assert len(assoc_assessment.eligible_fit_refs) == 2  # the determination's own verdict names both fits
+    holdings = {n.product_set_key: dict(n.member_fit_refs) for n in (plog_node, cheb_node)}
+    assert len(holdings["plog_only"][assoc_assessment.determination_ref]) == 1
+    assert len(holdings["cheb_only"][assoc_assessment.determination_ref]) == 1
+    assert holdings["plog_only"][assoc_assessment.determination_ref] != holdings["cheb_only"][assoc_assessment.determination_ref]

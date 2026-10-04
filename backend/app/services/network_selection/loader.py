@@ -62,6 +62,7 @@ from app.services.network_selection.models import (
     StateFact,
 )
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.network_declarations import solve_ref_is_visible
 
 #: The exclusion listing is bounded; the total is always reported.
 MAX_EXCLUDED_LISTED = 100
@@ -293,6 +294,25 @@ def _finite_matrix(matrix: object, rows: int, cols: int) -> bool:
     )
 
 
+def _withhold_hidden_references(session: Session, validation: dict | None) -> dict | None:
+    """Withhold a validation entry's reference to a solve the caller may not see.
+
+    The captured facts, and so the manifest, must not carry a ref the read profile hides, and the evidence it would
+    have supported must not count: the entry keeps its other content, its reference is ``None`` and
+    ``reference_withheld`` is true. A reference to a solve that does not exist is treated identically, so the facts
+    do not say which it was.
+    """
+    if validation is None:
+        return None
+    entries = []
+    for entry in validation["entries"]:
+        ref = entry.get("reference_solve_ref")
+        if ref is not None and not solve_ref_is_visible(session, ref):
+            entry = {**entry, "reference_solve_ref": None, "reference_withheld": True}
+        entries.append(entry)
+    return {**validation, "entries": entries}
+
+
 def load_population(session: Session, scan: PopulationScan, request: NetworkRequest) -> tuple[NetworkFacts, tuple[SolveFacts, ...]]:
     """Load and normalise the scanned population (and the network's own facts)."""
     network = load_network_facts(session, scan.network_id, scan.network_ref)
@@ -332,19 +352,19 @@ def load_population(session: Session, scan: PopulationScan, request: NetworkRequ
         )
     }
     plog: dict[int, list[NetworkKineticsPlog]] = {}
-    for row in session.scalars(
+    for plog_row in session.scalars(
         select(NetworkKineticsPlog)
         .where(NetworkKineticsPlog.network_kinetics_id.in_(fit_ids))
         .order_by(NetworkKineticsPlog.pressure_bar, NetworkKineticsPlog.entry_index)
     ):
-        plog.setdefault(row.network_kinetics_id, []).append(row)
+        plog.setdefault(plog_row.network_kinetics_id, []).append(plog_row)
     points: dict[int, list[NetworkKineticsPoint]] = {}
-    for row in session.scalars(
+    for point_row in session.scalars(
         select(NetworkKineticsPoint)
         .where(NetworkKineticsPoint.network_kinetics_id.in_(fit_ids))
         .order_by(NetworkKineticsPoint.temperature_k, NetworkKineticsPoint.pressure_bar)
     ):
-        points.setdefault(row.network_kinetics_id, []).append(row)
+        points.setdefault(point_row.network_kinetics_id, []).append(point_row)
 
     fit_facts: dict[int, list[FitFacts]] = {}
     for rank, f in enumerate(fits, start=1):
@@ -406,6 +426,7 @@ def load_population(session: Session, scan: PopulationScan, request: NetworkRequ
         target_state, target = _declaration(StoredNetworkTargetDeclaration, s.target_declaration)
         protocol_state, protocol = _declaration(NetworkProtocolDeclaration, s.protocol_declaration)
         validation_state, validation = _declaration(NetworkValidationDeclaration, s.validation_declaration)
+        validation = _withhold_hidden_references(session, validation)
         out.append(
             SolveFacts(
                 solve_ref=s.public_ref,

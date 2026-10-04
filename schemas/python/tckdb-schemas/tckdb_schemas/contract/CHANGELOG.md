@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.102.0 - 2026-10-04
+
+New refusal codes `network_selection_population_too_large` and `network_selection_snapshot_too_large` (a network selection over a bound of the versioned engineering limits). No upload model changed.
+
 ## 0.101.0 - 2026-10-04
 
 A network solve can declare its target, protocol and validation, and a fit its determination and representation

@@ -158,54 +158,72 @@ def _check_identity(det: DeterminationFacts, network: NetworkFacts, request: Net
             f.incompatible("directed_endpoints_mismatch")
 
 
-def _check_target(
-    det: DeterminationFacts, solve: SolveFacts, network: NetworkFacts, request: NetworkRequest, observable: NetworkObservable, f: Findings
+def _check_observable(
+    det: DeterminationFacts, network: NetworkFacts, request: NetworkRequest, observable: NetworkObservable, f: Findings
 ) -> None:
+    """What the determination's coefficient is, against what was asked: observable, basis, degeneracy, order."""
     if det.observable_state != "valid" or det.observable is None:
         f.unresolved("observable_declaration_unreadable")
-    else:
-        if det.observable["observable"] != observable.value:
-            f.incompatible("observable_mismatch")
-        if det.observable["coefficient_basis"] != request.coefficient_basis:
-            f.incompatible("coefficient_basis_mismatch")
-        if request.degeneracy_applied is not None and det.observable["degeneracy_applied"] != request.degeneracy_applied:
-            f.incompatible("degeneracy_convention_mismatch")
-        order = expected_order(network, det.channel_key)
-        if order is not None and det.observable["reaction_order"] != order:
-            f.incompatible("order_contradicts_channel_source")
+        return
+    if det.observable["observable"] != observable.value:
+        f.incompatible("observable_mismatch")
+    if det.observable["coefficient_basis"] != request.coefficient_basis:
+        f.incompatible("coefficient_basis_mismatch")
+    if request.degeneracy_applied is not None and det.observable["degeneracy_applied"] != request.degeneracy_applied:
+        f.incompatible("degeneracy_convention_mismatch")
+    order = expected_order(network, det.channel_key)
+    if order is not None and det.observable["reaction_order"] != order:
+        f.incompatible("order_contradicts_channel_source")
+
+
+def check_solve_level(solve: SolveFacts, request: NetworkRequest, f: Findings) -> None:
+    """What every output of one solve shares, whatever the outputs are: the target's partition, boundaries and
+    regime, the bath and the solve's own scope.
+
+    A bundle node runs this once, whatever its members are (including none, when every output is a declared zero):
+    a node is certified as a whole or not at all, so the solve it comes from has to answer the request's partition,
+    bath and window on its own account.
+    """
     if solve.target_state == "absent":
         f.unresolved("target_not_declared")
-        return
-    if solve.target_state == "unreadable" or solve.target is None:
+    elif solve.target_state == "unreadable" or solve.target is None:
         f.unresolved("target_declaration_unreadable")
-        return
-    target = solve.target
-    partition = target.get("partition")
-    if partition is None:
-        f.unresolved("partition_not_declared")
     else:
-        declared = (
-            tuple(sorted(partition["retained"])),
-            tuple(sorted(partition["eliminated"])),
-            tuple(sorted(tuple(sorted(lump["members"])) for lump in partition["lumps"])),
-        )
-        if declared != request.partition.normalized():
-            f.incompatible("partition_differs")
-    declared_boundaries = {b["state_key"]: b["kind"] for b in target.get("boundaries") or ()}
-    for state_hash, kind in request.boundaries:
-        if state_hash not in declared_boundaries:
-            f.unresolved(f"boundary_not_declared:{state_hash[:12]}")
-        elif declared_boundaries[state_hash] != kind:
-            f.incompatible(f"boundary_differs:{state_hash[:12]}")
-    regime = target.get("regime")
-    if regime is None:
-        f.unresolved("regime_not_declared")
-    elif regime["kind"] != request.regime_kind.value:
-        f.incompatible("regime_differs")
-    elif request.regime_kind is NetworkRegimeKind.initial_population_restricted:
-        if sorted(regime["initial_state_keys"]) != sorted(request.initial_state_hashes):
-            f.incompatible("initial_population_differs")
-    for entry in target.get("outputs") or ():
+        target = solve.target
+        partition = target.get("partition")
+        if partition is None:
+            f.unresolved("partition_not_declared")
+        else:
+            declared = (
+                tuple(sorted(partition["retained"])),
+                tuple(sorted(partition["eliminated"])),
+                tuple(sorted(tuple(sorted(lump["members"])) for lump in partition["lumps"])),
+            )
+            if declared != request.partition.normalized():
+                f.incompatible("partition_differs")
+        declared_boundaries = {b["state_key"]: b["kind"] for b in target.get("boundaries") or ()}
+        for state_hash, kind in request.boundaries:
+            if state_hash not in declared_boundaries:
+                f.unresolved(f"boundary_not_declared:{state_hash[:12]}")
+            elif declared_boundaries[state_hash] != kind:
+                f.incompatible(f"boundary_differs:{state_hash[:12]}")
+        regime = target.get("regime")
+        if regime is None:
+            f.unresolved("regime_not_declared")
+        elif regime["kind"] != request.regime_kind.value:
+            f.incompatible("regime_differs")
+        elif request.regime_kind is NetworkRegimeKind.initial_population_restricted:
+            if sorted(regime["initial_state_keys"]) != sorted(request.initial_state_hashes):
+                f.incompatible("initial_population_differs")
+    _check_bath(solve, request, f)
+    _check_solve_scope(solve, request, f)
+
+
+def _check_output_catalog(det: DeterminationFacts, solve: SolveFacts, f: Findings) -> None:
+    """An output the catalog calls unavailable or zero cannot also be a determination of the solve."""
+    if solve.target_state != "valid" or solve.target is None:
+        return
+    for entry in solve.target.get("outputs") or ():
         if entry["channel_key"] != det.channel_key:
             continue
         if entry["availability"] == "unavailable":
@@ -360,7 +378,10 @@ def evidence_states(solve: SolveFacts) -> dict[str, str]:
     ``verified`` and ``contradicted`` need a verification this release does not make, so neither is ever
     reported; a producer's own claim never satisfies a prerequisite that needs verified evidence.
     """
-    stated = {entry["kind"] for entry in (solve.validation or {}).get("entries", ())} if solve.validation_state == "valid" else set()
+    entries = (solve.validation or {}).get("entries", ()) if solve.validation_state == "valid" else ()
+    # An entry whose reference the caller may not see cannot be used, and says nothing about why: that kind of evidence
+    # reads as unavailable, exactly as if it had not been stated.
+    stated = {entry["kind"] for entry in entries if not entry.get("reference_withheld")}
     return {kind: ("declared" if kind in stated else "unavailable") for kind in EVIDENCE_KINDS}
 
 
@@ -374,9 +395,9 @@ def assess_determination(
     """Assess one determination of one channel, and every complete representation it holds."""
     shared = Findings()
     _check_identity(det, network, request, shared)
-    _check_target(det, solve, network, request, observable, shared)
-    _check_bath(solve, request, shared)
-    _check_solve_scope(solve, request, shared)
+    _check_observable(det, network, request, observable, shared)
+    check_solve_level(solve, request, shared)
+    _check_output_catalog(det, solve, shared)
     validity = _check_validity(solve, det.channel_key, request, shared)
     order = expected_order(network, det.channel_key)
 
@@ -463,10 +484,18 @@ def assess_bundle_scope(
 ) -> tuple[list[BundleAssessment], list[DeterminationAssessment]]:
     """Assess every declared product set of every admitted solve against the bundle request.
 
-    A node is a declared complete solve and product set, never a combination of whatever fits exist. Every
-    required output must be answered inside the node, by a member determination that is itself applicable for the
-    whole request, or by a declared zero; nothing is filled from another solve. Returns the node verdicts and the
-    member determination verdicts they rest on (each determination once).
+    A node is a declared complete solve and product set, never a combination of whatever fits exist. It is
+    certified as a whole or not at all:
+
+    * the solve it comes from must answer the request's partition, boundaries, regime, bath and window on its own
+      account (:func:`check_solve_level`), whatever mix of members and declared zeros the set holds;
+    * every required output must be answered inside the node, by a member determination that is itself applicable
+      for the whole request, or by a declared zero whose own declared validity covers the whole request; nothing is
+      filled from another solve.
+
+    Returns the node verdicts and the node-independent verdict of each member determination (each once). What a
+    product set *holds* of a determination (the fits it pins) is the node's own ``member_fit_refs``: a determination
+    in two sets with different pinned representations keeps one verdict and two different holdings.
     """
     nodes: list[BundleAssessment] = []
     members: dict[str, DeterminationAssessment] = {}
@@ -475,10 +504,15 @@ def assess_bundle_scope(
         by_ref = {d.determination_ref: d for d in solve.determinations}
         target = solve.target if solve.target_state == "valid" else None
         catalog = {e["channel_key"]: e for e in (target or {}).get("outputs") or ()}
+        solve_level = Findings()
+        check_solve_level(solve, request, solve_level)
+        solve_level_codes = {r.code for r in solve_level.reasons}
         for product_set in _product_sets(solve):
             rank += 1
             f = Findings()
+            f.reasons.extend(solve_level.reasons)
             member_refs: list[str] = []
+            node_fits: list[tuple[str, tuple[str, ...]]] = []
             covered: dict[str, str] = {}
             pinned = network_product_set_content_hash(
                 [(m["determination_ref"], list(m["representation_keys"])) for m in product_set["members"]]
@@ -495,6 +529,7 @@ def assess_bundle_scope(
                 if wanted is None:
                     continue  # a member beyond the request's outputs does not answer it, and does not harm it
                 assessed = assess_determination(det, solve, network, request, wanted.observable)
+                members.setdefault(det.determination_ref, assessed)
                 if member["representation_keys"]:
                     chosen = {
                         fit.fit_ref
@@ -513,29 +548,41 @@ def assess_bundle_scope(
                     narrowed = tuple(r for r in assessed.eligible_fit_refs if r in chosen)
                     if assessed.eligible_fit_refs and not narrowed:
                         assessed = DeterminationAssessment(
-                            **{**assessed.__dict__, "applicability": Applicability.incompatible, "eligible_fit_refs": (),
-                               "reasons": (*assessed.reasons, Reason("no_chosen_representation_is_eligible", Applicability.incompatible))}
+                            **{
+                                **assessed.__dict__,
+                                "applicability": Applicability.incompatible,
+                                "eligible_fit_refs": (),
+                                "reasons": (
+                                    *assessed.reasons,
+                                    Reason("no_chosen_representation_is_eligible", Applicability.incompatible),
+                                ),
+                            }
                         )
                     else:
                         assessed = DeterminationAssessment(**{**assessed.__dict__, "eligible_fit_refs": narrowed})
-                members[det.determination_ref] = assessed
+                covered[det.channel_key] = det.determination_ref
                 if assessed.physically_eligible:
-                    covered[det.channel_key] = det.determination_ref
+                    node_fits.append((det.determination_ref, assessed.eligible_fit_refs))
                 else:
+                    # The solve-level findings are already the node's own; they are not repeated per member.
                     for reason in assessed.reasons:
-                        f.add(f"member:{det.determination_key}:{reason.code}", reason.applicability)
+                        if reason.code not in solve_level_codes:
+                            f.add(f"member:{det.determination_key}:{reason.code}", reason.applicability)
                     if not assessed.reasons:
                         f.unresolved(f"member:{det.determination_key}:not_eligible")
-                    covered[det.channel_key] = det.determination_ref
             coverage: list[OutputCoverage] = []
             for out in request.required_outputs():
                 entry = catalog.get(out.channel_key)
                 if out.channel_key in covered:
-                    ref = covered[out.channel_key]
-                    status = "determination"
-                    coverage.append(OutputCoverage(out.channel_key, status, ref))
+                    coverage.append(OutputCoverage(out.channel_key, "determination", covered[out.channel_key]))
                 elif entry is not None and entry["availability"] == "declared_zero":
                     coverage.append(OutputCoverage(out.channel_key, "declared_zero"))
+                    # A zero claim is a claim about a domain: it must be stated for the whole request.
+                    validity = declared_validity(target, out.channel_key)
+                    if validity is None:
+                        f.unresolved(f"zero_claim_validity_not_declared:{out.channel_key}")
+                    elif not _domain_inside(request, validity):
+                        f.incompatible(f"request_outside_zero_claim_validity:{out.channel_key}")
                 elif entry is not None and entry["availability"] == "unavailable":
                     coverage.append(OutputCoverage(out.channel_key, "unavailable"))
                     f.incompatible(f"required_output_unavailable:{out.channel_key}")
@@ -557,6 +604,7 @@ def assess_bundle_scope(
                     applicability=f.verdict(),
                     reasons=tuple(f.reasons),
                     member_refs=tuple(member_refs),
+                    member_fit_refs=tuple(node_fits),
                     coverage=tuple(coverage),
                 )
             )

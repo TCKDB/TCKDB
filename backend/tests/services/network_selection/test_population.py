@@ -148,19 +148,24 @@ def test_nothing_is_assessed_or_chosen_from_a_prefix_when_a_bound_is_exceeded(db
 @pytest.mark.parametrize(
     "bound, limit_ok, build",
     [
-        ("kinetics_parents", 3, "fits"),
+        ("kinetics_parents", 4, "fits"),
         ("channel_nodes", 2, "determinations"),
         ("bundle_nodes", 2, "product_sets"),
         ("states", 3, "network"),
         ("channels", 4, "network"),
         ("evidence_entries", 2, "evidence"),
-        ("numeric_cells", 7, "cells"),
+        ("numeric_cells", 9, "cells"),
     ],
 )
 def test_every_bound_is_enforced_at_its_limit_and_refused_one_beyond(db_session, world, bound, limit_ok, build):
     bundle = bound == "bundle_nodes"
     if build == "fits":
-        add_solve(db_session, world, fits=[fit_spec("assoc"), fit_spec("assoc", det="d2"), fit_spec("assoc", det="d3")])
+        # Three fits of the requested channel and one of another: parents are counted before any channel filter.
+        add_solve(
+            db_session,
+            world,
+            fits=[fit_spec("assoc"), fit_spec("assoc", det="d2"), fit_spec("assoc", det="d3"), fit_spec("elim")],
+        )
     elif build == "determinations":
         add_solve(db_session, world, fits=[fit_spec("assoc"), fit_spec("assoc", det="d2")])
     elif build == "product_sets":
@@ -177,11 +182,16 @@ def test_every_bound_is_enforced_at_its_limit_and_refused_one_beyond(db_session,
     elif build == "evidence":
         entry = {"kind": "convergence", "metric": "max_relative_error", "value": 0.01, "domain": validity()}
         add_solve(db_session, world, fits=[fit_spec("assoc")], validation={"version": 1, "entries": [entry, entry]})
-    elif build == "cells":  # 3 PLOG rows + a 2 x 2 Chebyshev grid
+    elif build == "cells":  # 3 PLOG rows + a 2 x 2 Chebyshev grid + 2 tabulated points
+        points = [(1000.0, 1.0, 1.0e-12), (1200.0, 1.0, 2.0e-12)]
         add_solve(
             db_session,
             world,
-            fits=[fit_spec("assoc"), fit_spec("assoc", det="d2", model="chebyshev", pmin=0.01, pmax=100.0)],
+            fits=[
+                fit_spec("assoc"),
+                fit_spec("assoc", det="d2", model="chebyshev", pmin=0.01, pmax=100.0),
+                fit_spec("assoc", det="d3", model="tabulated", points=points),
+            ],
         )
     else:
         add_solve(db_session, world, fits=[fit_spec("assoc")])
@@ -192,8 +202,10 @@ def test_every_bound_is_enforced_at_its_limit_and_refused_one_beyond(db_session,
 
 
 def test_the_number_of_required_outputs_is_bounded_when_the_request_is_built(world):
-    with pytest.raises(ValueError, match="at most 1 required outputs"):
+    with pytest.raises(CodedValueError) as caught:  # a coded refusal, so the route maps it to the 422
         with_bounds(bundle_request(world, "assoc", "elim"), required_outputs=1)
+    assert caught.value.code == "network_selection_population_too_large"
+    assert caught.value.context == {"bound": "required_outputs", "visible": 2, "limit": 1, "bounds_version": "1"}
     check_bound(dataclasses.replace(BOUNDS_V1, required_outputs=1), "required_outputs", 1)
     with pytest.raises(CodedValueError):
         check_bound(dataclasses.replace(BOUNDS_V1, required_outputs=1), "required_outputs", 2)
@@ -358,3 +370,37 @@ def test_a_request_round_trips_through_its_manifest_form(world):
 def test_the_applicability_vocabulary_is_the_shared_kernels(db_session, world):
     add_solve(db_session, world, fits=[fit_spec("assoc")])
     assert assess(db_session, channel_request(world)).determination_assessments[0].applicability is A.applicable
+
+
+def test_a_reference_to_a_hidden_solve_is_withheld_from_the_facts_and_the_evidence_it_would_support_does_not_count(db_session, world):
+    hidden = add_solve(db_session, world, fits=[fit_spec("assoc", det="hid")], review=S.not_reviewed)
+
+    def citing(ref: str):
+        entry = {"kind": "model_fidelity", "domain": validity(), "reference_solve_ref": ref}
+        return add_solve(
+            db_session, world, fits=[fit_spec("assoc", det="cit")], validation={"version": 1, "entries": [entry]}
+        )
+
+    cited = citing(hidden.public_ref)
+    absent = citing("nsolve_doesnotexist")
+    visible = assess(db_session, channel_request(world))
+    by_solve = {s.solve_ref: s for s in visible.solves}
+    assert by_solve[cited.public_ref].validation["entries"][0]["reference_solve_ref"] == hidden.public_ref  # exploratory: visible
+    assessed = {a.solve_ref: a for a in visible.determination_assessments}
+    assert assessed[cited.public_ref].evidence["model_fidelity"] == "declared"
+
+    token = curated()
+    try:
+        result = assess(db_session, channel_request(world))
+    finally:
+        reset_current_read_profile(token)
+    facts = {s.solve_ref: s for s in result.solves}
+    for solve in (cited, absent):
+        entry = facts[solve.public_ref].validation["entries"][0]
+        assert entry["reference_solve_ref"] is None and entry["reference_withheld"] is True
+    # Nothing in the captured facts says which of the two it was, or that the hidden solve exists.
+    assert facts[cited.public_ref].validation == facts[absent.public_ref].validation
+    assert hidden.public_ref not in json.dumps([s.to_dict() for s in result.solves])
+    for solve in (cited, absent):
+        evidence = {a.solve_ref: a for a in result.determination_assessments}[solve.public_ref].evidence
+        assert evidence["model_fidelity"] == "unavailable"  # an unusable reference supports nothing
