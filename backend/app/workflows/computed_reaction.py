@@ -108,6 +108,10 @@ from app.services.hessian_extraction import (
 from app.services.input_geometry_extraction import (
     try_extract_input_geometry_from_artifact_upload,
 )
+from app.services.kinetics_declaration_resolution import (
+    assert_kinetics_declaration_columns,
+    resolve_kinetics_declarations,
+)
 from app.services.kinetics_resolution import (
     assert_kinetics_source_role_compatible,
     resolve_network_kinetics_ref,
@@ -726,6 +730,7 @@ def persist_computed_reaction_upload(
 
     chem_reaction = resolve_chem_reaction(
         session,
+        warnings_out=sp_energy_warnings,
         reversible=request.reversible,
         reaction_family=request.reaction_family,
         reaction_family_source_note=request.reaction_family_source_note,
@@ -1714,6 +1719,7 @@ def persist_computed_reaction_upload(
 
             kin_chem_rxn = resolve_chem_reaction(
                 session,
+                warnings_out=sp_energy_warnings,
                 reversible=request.reversible,
                 reaction_family=request.reaction_family,
                 reaction_family_source_note=request.reaction_family_source_note,
@@ -1825,11 +1831,56 @@ def persist_computed_reaction_upload(
             field_prefix=kin_field_prefix,
         )
 
+        # The determination, applicability and protocol the fit declares, resolved by the
+        # same service as the standalone route (here the transition state may be any entry
+        # of the same graph reaction, as for the fit's own tunneling evidence).
+        declarations = resolve_kinetics_declarations(
+            session,
+            kin,
+            reaction_entry=kin_entry,
+            literature_id=literature.id if literature else None,
+            workflow_tool_release_id=(
+                workflow_tool_release.id if workflow_tool_release else None
+            ),
+            network_kinetics_id=kin_network_kinetics_id,
+            ts_scope="reaction",
+            calculations_by_key=calculation_key_to_id,
+            created_by=created_by,
+            field_prefix=kin_field_prefix,
+        )
+        # The row is built here rather than by ``persist_kinetics``, so it takes the same
+        # last-stop check on the resolved columns.
+        declared_applicability, declared_protocol = assert_kinetics_declaration_columns(
+            session,
+            reaction_entry_id=kin_entry.id,
+            direction=kin.direction,
+            scientific_origin=kin.scientific_origin,
+            model_kind=kin.model_kind,
+            is_third_body=kin.is_third_body,
+            pressure_context=kin.pressure_context,
+            pressure_bar=kin.pressure_bar,
+            literature_id=literature.id if literature else None,
+            workflow_tool_release_id=(
+                workflow_tool_release.id if workflow_tool_release else None
+            ),
+            network_kinetics_id=kin_network_kinetics_id,
+            determination_id=declarations.determination_id,
+            representation_role=declarations.representation_role,
+            applicability_declaration=declarations.applicability_declaration,
+            protocol_declaration=declarations.protocol_declaration,
+            ts_scope="reaction",
+        )
+
         kinetics = Kinetics(
             reaction_entry_id=kin_entry.id,
             scientific_origin=kin.scientific_origin,
             model_kind=kin.model_kind,
+            direction=kin.direction,
             is_third_body=kin.is_third_body,
+            determination_id=declarations.determination_id,
+            representation_role=declarations.representation_role,
+            applicability_declaration=declared_applicability,
+            protocol_declaration=declared_protocol,
             literature_id=literature.id if literature else None,
             software_release_id=(
                 bundle_analysis_software_release.id

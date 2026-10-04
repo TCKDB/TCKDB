@@ -210,6 +210,12 @@ RECORD_CHILD_EXCLUSIONS: dict[tuple[str, str], str] = {
     ("transition_state_entry", "kinetics_tunneling_application"): (
         "owned by its kinetics parent, and shipped under kinetics"
     ),
+    # A determination is identity shared by several kinetics records, not a part of
+    # any one saddle point; it ships embedded under each kinetics record that
+    # belongs to it (``determination``), by ``_determination_payloads``.
+    ("transition_state_entry", "kinetics_determination"): (
+        "identity shared by kinetics records, and embedded under each of them"
+    ),
     ("transition_state_entry", "network_solve_channel_barrier"): (
         "owned by its network_solve parent, and shipped under network_solve"
     ),
@@ -535,13 +541,53 @@ def serialize_records(
         for spec in RECORD_VALUE_TABLES[record_type]
     }
 
+    determinations = (
+        _determination_payloads(
+            session,
+            resolver,
+            {p["determination_id"] for p in rows.values() if p.get("determination_id")},
+        )
+        if record_type is SubmissionRecordType.kinetics
+        else {}
+    )
+
     rendered: dict[int, dict[str, Any]] = {}
     for record_id, payload in rows.items():
         encoded = resolver.encode_row(table, payload)
         for spec in RECORD_VALUE_TABLES[record_type]:
             encoded[spec.table] = child_payloads[spec.table].get(record_id, [])
+        if record_type is SubmissionRecordType.kinetics and payload.get("determination_id"):
+            # ``determination_ref`` is already in the row; the content it stands for ships
+            # with it, so a released record's determination can be read without this database.
+            encoded["determination"] = determinations.get(payload["determination_id"])
         rendered[record_id] = encoded
     return rendered
+
+
+def _determination_payloads(
+    session: Session, resolver: "RefResolver", determination_ids: set[int]
+) -> dict[int, dict[str, Any]]:
+    """The content of each determination a batch of kinetics records belongs to.
+
+    ``identity_hash`` is left out: it is a digest of this database's row ids, which a
+    release must not carry.
+    """
+    if not determination_ids:
+        return {}
+    table = _table("kinetics_determination")
+    rows = [
+        dict(row)
+        for row in session.execute(
+            select(table).where(table.c.id.in_(sorted(determination_ids)))
+        ).mappings()
+    ]
+    resolver.prime(table, rows)
+    out: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        encoded = resolver.encode_row(table, row)
+        encoded.pop("identity_hash", None)
+        out[row["id"]] = encoded
+    return out
 
 
 def subject_identities(

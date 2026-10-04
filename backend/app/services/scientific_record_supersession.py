@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import DomainError
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
+from app.db.models.kinetics import KineticsDetermination
 from app.db.models.record_review import RecordReview
 from app.db.models.scientific_record_supersession import ScientificRecordSupersession
 from app.services.accepted_science import (
@@ -20,6 +21,36 @@ from app.services.accepted_science import (
 from app.services.record_review import set_record_review_status
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
+
+
+def _assert_kinetics_targets_compatible(session: Session, old_root, new_root) -> None:
+    """A replacement of a kinetics record is a replacement of the same declared target.
+
+    Where both records declare a determination, the two must be determinations *of the same
+    target*: both the whole reaction, or both the same resolved channel. A re-measurement or
+    a better fit is a different determination of the same target, so the determination (its
+    key, its source) is not compared, only what it is the rate of. Where either record
+    declares none, nothing can be compared and the replacement is allowed; the absence is not
+    hidden, because a record's read states ``determination: null`` and never "standalone".
+    """
+    if old_root.determination_id is None or new_root.determination_id is None:
+        return
+    old, new = (
+        session.get(KineticsDetermination, old_root.determination_id),
+        session.get(KineticsDetermination, new_root.determination_id),
+    )
+    if old is None or new is None:  # pragma: no cover - the foreign key guarantees both
+        return
+    if (
+        old.target_kind,
+        old.target_transition_state_entry_id,
+        old.target_network_channel_id,
+    ) != (
+        new.target_kind,
+        new.target_transition_state_entry_id,
+        new.target_network_channel_id,
+    ):
+        raise DomainError("Supersession records must describe the same determination target")
 
 
 @dataclass(frozen=True)
@@ -116,6 +147,8 @@ def supersede_scientific_record(
     new_root = roots[(record_type, superseding_record_id)]
     if supersession_subject(old_root, record_type) != supersession_subject(new_root, record_type):
         raise DomainError("Supersession records must describe the same subject")
+    if record_type is SubmissionRecordType.kinetics:
+        _assert_kinetics_targets_compatible(session, old_root, new_root)
 
     if old_review.status is RecordReviewStatus.approved:
         set_record_review_status(

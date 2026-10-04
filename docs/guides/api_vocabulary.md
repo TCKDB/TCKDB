@@ -61,10 +61,10 @@ Three things are deliberately absent:
 | Kind of token | Count | Read from |
 | --- | --- | --- |
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
-| Identifier prefixes | 38 | `backend/app/services/public_refs.py` |
+| Identifier prefixes | 39 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 264 | `backend/app/api/code_catalogue.py` |
-| **total** | **565** | |
+| Refusal codes a caller can receive | 273 | `backend/app/api/code_catalogue.py` |
+| **total** | **575** | |
 
 ## How a record is named
 
@@ -95,7 +95,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `wfr_` | workflow tool release | yes |
 | `wft_` | workflow tool | yes |
 
-### Opaque prefixes (25)
+### Opaque prefixes (26)
 
 | Prefix | Names a | Same on every instance? |
 | --- | --- | --- |
@@ -106,6 +106,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `co_` | conformer observation | no — one row, one database |
 | `cpol_` | curation policy | no — one row, one database |
 | `gasch_` | group additivity scheme | no — one row, one database |
+| `kdet_` | kinetics determination | no — one row, one database |
 | `kin_` | kinetics | no — one row, one database |
 | `mpo_` | molecular property observation | no — one row, one database |
 | `net_` | network | no — one row, one database |
@@ -687,7 +688,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `rights_attestation_requires_curator` | a thing |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (20 codes)
+### HTTP 404 (22 codes)
 
 | Code | Names |
 | --- | --- |
@@ -704,6 +705,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_conformer_group_ref` | a thing |
 | `unknown_conformer_selection` | a thing |
 | `unknown_curation_policy` | a thing |
+| `unknown_kinetics_determination_ref` | a thing |
+| `unknown_network_channel` | a thing |
 | `unknown_network_kinetics_ref` | a thing |
 | `unknown_record` | a thing |
 | `unknown_release` | a thing |
@@ -747,7 +750,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (211 codes)
+### HTTP 422 (218 codes)
 
 | Code | Names |
 | --- | --- |
@@ -831,8 +834,14 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `invalid_range` | a relationship — read `context` |
 | `invalid_structure_query` | a thing |
 | `invalid_temperature_range` | a relationship — read `context` |
+| `kinetics_declaration_contradicts_record` | a relationship — read `context` |
+| `kinetics_declaration_invalid` | a thing |
+| `kinetics_declaration_version_unsupported` | a thing |
+| `kinetics_determination_invalid` | a relationship — read `context` |
+| `kinetics_determination_mismatch` | a relationship — read `context` |
 | `kinetics_interpretation_conformer_selection_owner_mismatch` | a relationship — read `context` |
 | `kinetics_interpretation_statmech_owner_mismatch` | a relationship — read `context` |
+| `kinetics_protocol_calculation_owner_mismatch` | a relationship — read `context` |
 | `level_of_theory_handle_conflict` | a relationship — read `context` |
 | `level_of_theory_method_is_compound` | a thing |
 | `level_of_theory_method_with_composite_scheme` | a relationship — read `context` |
@@ -878,6 +887,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `reaction_entry_handle_conflict` | a relationship — read `context` |
 | `reaction_handle_conflict` | a relationship — read `context` |
 | `reaction_mass_balance_failed` | a relationship — read `context` |
+| `reaction_reversible_required` | a thing |
 | `record_has_no_subject` | a thing |
 | `record_not_approved` | a thing |
 | `record_ref_not_selectable` | a thing |

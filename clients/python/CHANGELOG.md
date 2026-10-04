@@ -1,10 +1,20 @@
 # Changelog
 
+## 0.128.0 - 2026-10-04
+
+`Kinetics.modified_arrhenius` can state a fit's `direction`, `determination`, `applicability` and `protocol`
+(`tckdb-schemas` 0.96.0), optional attributed claims checked here by the rule the server applies and never
+defaulted. A protocol's supporting calculations are given as `protocol_calculations`, `(purpose, Calculation)`
+pairs the assembler names by bundle key. A fit that declares nothing emits the payload it always did.
+`KineticsDetailRecord` gains `determination`, `applicability`, `protocol` and `declaration_unreadable`.
+`RejectionCode` gains the kinetics declaration codes, regenerated from the server's catalogue.
+
 ## 0.127.0 - 2026-10-04
 
 Adds the `RejectionCode.NETWORK_STATE_ENERGY_SUM_MISMATCH` member (`tckdb-schemas` 0.95.0, #678): the
 network-PDep upload now refuses a state energy that contradicts the sum of the energies stored for the
 per-participant source calculations it cites. Nothing in the client's code changes.
+
 
 ## 0.126.0 - 2026-10-03
 

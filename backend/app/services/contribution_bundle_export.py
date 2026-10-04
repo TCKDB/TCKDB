@@ -27,7 +27,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import ValidationError
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, object_session
 from tckdb_schemas.enthalpy_reference import (
     W_ENTHALPY_DECLARATION_ABSENT,
     enthalpy_reference_error,
@@ -46,7 +47,7 @@ from app.db.models.reaction import (
     ChemReaction,
     ReactionEntryStructureParticipant,
 )
-from app.db.models.species import SpeciesEntry
+from app.db.models.species import Species, SpeciesEntry
 from app.db.models.thermo import (
     Thermo,
     ThermoNASA,
@@ -131,7 +132,7 @@ class BundleExportOmission:
         at all is dropped, and its temperature listed in
         ``points_dropped_at_k``.
         ``"declaration_pruned"`` -- the record was exported, but part of its
-        target or protocol declaration was left out because a portable bundle
+        declarations were left out because a portable bundle
         cannot carry it: a ``single_conformer`` target names a conformer group
         of *this* database, and a protocol's supporting calculations are named
         by public ref to calculations of this database. Left out means absent,
@@ -419,15 +420,24 @@ def export_kinetics_bundle(
         BundleSubmissionSourceKind.local_bundle
     ),
     rights: DepositRights | None = None,
+    omissions: list[BundleExportOmission] | None = None,
 ) -> ContributionBundleV0:
-    """Export selected kinetics rows as a validated kinetics contribution bundle."""
+    """Export selected kinetics rows as a validated kinetics contribution bundle.
+
+    :param omissions: Optional sink. A kinetics record's determination, applicability and
+        protocol declarations are carried over when a portable bundle can carry them; what
+        names a row of *this* database (a determination's channel target, a protocol's
+        supporting calculations) is left out, absent and never replaced, and reported here as
+        a ``"declaration_pruned"`` omission naming the record by public ref.
+    """
     if not kinetics_ids:
         raise ContributionBundleExportError(
             "At least one kinetics_id is required to export a kinetics bundle."
         )
 
     kinetics_rows = _load_kinetics_rows(session, kinetics_ids)
-    kinetics_uploads = [_kinetics_to_upload(row) for row in kinetics_rows]
+    kinetics_uploads = [_kinetics_to_upload(row, omissions) for row in kinetics_rows]
+    _group_determinations(kinetics_rows, kinetics_uploads)
 
     local_refs: dict[str, BundleLocalRefEntry] = {}
     for row in kinetics_rows:
@@ -820,7 +830,9 @@ def _thermo_wilhoit_payload(w: ThermoWilhoit) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _kinetics_to_upload(kinetics: Kinetics) -> dict[str, Any]:
+def _kinetics_to_upload(
+    kinetics: Kinetics, omissions: list[BundleExportOmission] | None = None
+) -> dict[str, Any]:
     """Reconstruct an upload-equivalent kinetics dict from a ``Kinetics`` row."""
     entry = kinetics.reaction_entry
     chem_reaction = entry.reaction
@@ -854,6 +866,14 @@ def _kinetics_to_upload(kinetics: Kinetics) -> dict[str, Any]:
         "reaction": reaction_payload,
         "scientific_origin": kinetics.scientific_origin.value,
         "model_kind": kinetics.model_kind.value,
+        # The columns a declaration is checked against, so an exported declaration is
+        # never refused on import for a column the export forgot to carry.
+        "direction": kinetics.direction.value if kinetics.direction is not None else None,
+        "is_third_body": kinetics.is_third_body,
+        "pressure_context": (
+            kinetics.pressure_context.value if kinetics.pressure_context is not None else None
+        ),
+        "pressure_bar": kinetics.pressure_bar,
         "a": kinetics.a,
         "a_units": kinetics.a_units.value if kinetics.a_units is not None else None,
         "n": kinetics.n,
@@ -891,7 +911,134 @@ def _kinetics_to_upload(kinetics: Kinetics) -> dict[str, Any]:
     if workflow_tool is not None:
         payload["workflow_tool_release"] = workflow_tool
 
+    notes = _add_kinetics_declarations(payload, kinetics)
+    if notes and omissions is not None:
+        omissions.append(
+            BundleExportOmission(
+                action="declaration_pruned", ref=kinetics.public_ref, detail=" ".join(notes)
+            )
+        )
+
     return payload
+
+
+def _group_determinations(rows: Sequence[Kinetics], uploads: Sequence[dict[str, Any]]) -> None:
+    """Give each exported determination a bundle-local ``group`` handle, so a re-import keeps them as exported.
+
+    On import, records of one bundle share a determination when they state the same key, direction, source
+    and reaction content. Two determinations of the exporting database can be exactly that alike (the same
+    key deposited twice on two reaction entries that read identically) and would merge. A handle per
+    determination (``d1``, ``d2``, ... in export order) separates them without touching a key: the key stays
+    exactly as the depositor stated it, and the handle is used to group records inside the import and is
+    never stored.
+    """
+    handles: dict[int, str] = {}
+    for row, upload in zip(rows, uploads, strict=True):
+        declared = upload.get("determination")
+        if declared is None or row.determination_id is None:
+            continue
+        declared["group"] = handles.setdefault(row.determination_id, f"d{len(handles) + 1}")
+
+
+def _collider_species_payload(session: Session | None, species_ref: str) -> dict[str, Any] | None:
+    """A collider's species content, so a declaration names it without a database reference."""
+    if session is None:
+        return None
+    species = session.scalar(select(Species).where(Species.public_ref == species_ref))
+    if species is None:
+        return None
+    return {
+        "species": {
+            "smiles": species.smiles,
+            "charge": species.charge,
+            "multiplicity": species.multiplicity,
+        }
+    }
+
+
+def _portable_applicability(
+    session: Session | None, stored: dict[str, Any]
+) -> tuple[dict[str, Any] | None, str | None]:
+    """The applicability declaration with its colliders as species content.
+
+    Returns ``(declaration, note)``; ``declaration`` is ``None`` when a collider cannot be named
+    by content (its species is not readable), and then the whole declaration is left out rather
+    than exported with a collider missing.
+    """
+    portable = dict(stored)
+    if not stored.get("colliders"):
+        return portable, None
+    colliders = []
+    for item in stored["colliders"]:
+        named = _collider_species_payload(session, item["species_ref"])
+        if named is None:
+            return None, "a declared collider's species is not readable"
+        if "mole_fraction" in item:
+            named["mole_fraction"] = item["mole_fraction"]
+        colliders.append(named)
+    portable["colliders"] = colliders
+    return portable, None
+
+
+def _add_kinetics_declarations(payload: dict[str, Any], kinetics: Kinetics) -> list[str]:
+    """Write the portable part of the declarations into ``payload``.
+
+    A bundle must be importable on any instance, so what names a row of *this* database is
+    left out and reported rather than exported, and what is left out is absent, never replaced
+    by something that reads differently. A determination states its key, the record's own
+    direction and source (both already exported) and a whole-reaction target, and so re-resolves
+    to one determination on import; a resolved-channel target names a transition state or a
+    network channel of this database, so the whole determination is left out (it cannot be
+    stated without its target). The applicability declaration carries over with its colliders
+    as species content. A protocol carries over minus its supporting calculations, which are
+    public refs to calculations of this database.
+
+    :returns: Sentences for the omission detail; empty when nothing was left out.
+    """
+    notes: list[str] = []
+    session = object_session(kinetics)
+
+    determination = kinetics.determination
+    if determination is not None and kinetics.representation_role is not None:
+        if determination.target_kind.value == "whole_reaction":
+            payload["determination"] = {
+                "key": determination.determination_key,
+                "target_kind": "whole_reaction",
+                "representation_role": kinetics.representation_role.value,
+            }
+        else:
+            notes.append(
+                "Its determination is of a resolved channel that names a transition state or "
+                "network channel of this database, which a portable bundle cannot carry, so "
+                "the determination was left out (absent, not replaced by a whole-reaction one)."
+            )
+
+    if kinetics.applicability_declaration is not None:
+        portable, why = _portable_applicability(session, kinetics.applicability_declaration)
+        if portable is None:
+            notes.append(f"Its applicability declaration was left out: {why}.")
+        else:
+            payload["applicability"] = portable
+
+    if kinetics.protocol_declaration is not None:
+        protocol = {
+            key: value
+            for key, value in kinetics.protocol_declaration.items()
+            if key != "supporting_calculations"
+        }
+        if kinetics.protocol_declaration.get("supporting_calculations"):
+            notes.append(
+                "Its protocol declaration's supporting calculations are public refs to "
+                "calculations of this database, which a portable bundle cannot carry, so "
+                "they were left out."
+            )
+        if any(key not in {"version", "supporting_calculations"} for key in protocol):
+            payload["protocol"] = protocol
+        else:
+            notes.append(
+                "Nothing else was stated in the protocol declaration, so it was left out entirely."
+            )
+    return notes
 
 
 def _kinetics_participant_payload(

@@ -14,7 +14,7 @@ from app.services.record_review import (
     apply_review_policy,
 )
 from app.services.species_resolution import resolve_species_entry
-from app.workflows.reaction import persist_reaction_upload
+from app.workflows.reaction import persist_reaction_upload, reversible_or_inherited
 
 
 def persist_network_upload(
@@ -47,7 +47,9 @@ def persist_network_upload(
         persist_reaction_upload(
             session,
             ReactionUploadRequest(
-                reversible=reaction.reaction.reversible,
+                reversible=reversible_or_inherited(
+                    session, reaction.reaction, created_by=created_by, field=f"reactions[{index}].reaction.reversible"
+                ),
                 reaction_family=reaction.reaction.reaction_family,
                 reaction_family_source_note=(
                     reaction.reaction.reaction_family_source_note
@@ -69,8 +71,9 @@ def persist_network_upload(
             ),
             created_by=created_by,
             review_policy=review_policy,
+            warnings=warnings_out,
         ).id
-        for reaction in request.reactions
+        for index, reaction in enumerate(request.reactions)
     ]
 
     network_create = resolve_network_upload(

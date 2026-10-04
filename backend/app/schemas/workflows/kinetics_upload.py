@@ -15,6 +15,13 @@ from tckdb_schemas.fragments.kinetics_evidence import (
     check_tunneling_declaration_agrees,
     default_tunneling_model_from_application,
 )
+from tckdb_schemas.kinetics_declarations import (
+    KineticsApplicabilityDeclaration,
+    KineticsDeterminationDeclaration,
+    KineticsProtocolDeclaration,
+    kinetics_declaration_context,
+    kinetics_declaration_error,
+)
 from tckdb_schemas.rights import DepositRights
 
 from app.chemistry.units import validate_a_units_for_molecularity
@@ -107,14 +114,14 @@ class KineticsReactionParticipantUpload(SchemaBase):
 class KineticsReactionUpload(SchemaBase):
     """Workflow-facing reaction content embedded in a kinetics upload.
 
-    :param reversible: Whether the uploaded reaction is reversible.
+    :param reversible: Omitted: taken from the one stored reaction with these participants, else refused.
     :param reaction_family: Optional reaction-family label.
     :param reaction_family_source_note: Required when ``reaction_family`` is not a supported canonical family.
     :param reactants: Ordered structured participants on the reactant side.
     :param products: Ordered structured participants on the product side.
     """
 
-    reversible: bool
+    reversible: bool | None = None
     reaction_family: str | None = None
     reaction_family_source_note: str | None = None
     reactants: list[KineticsReactionParticipantUpload] = Field(min_length=1)
@@ -288,6 +295,9 @@ class KineticsUploadRequest(SchemaBase):
     :param degeneracy: Optional finite, strictly positive reaction-path degeneracy.
     :param degeneracy_convention: Whether degeneracy is already included in the rate.
     :param tunneling_model: Optional tunneling model label.
+    :param determination: Needs ``direction`` and a literature or workflow tool.
+    :param applicability: Optional declaration of what the coefficient is.
+    :param protocol: Optional declaration of how the rate was produced.
     :param note: Optional free-text note.
     """
 
@@ -341,6 +351,13 @@ class KineticsUploadRequest(SchemaBase):
     model_kind: KineticsModelKind = KineticsModelKind.modified_arrhenius
     direction: KineticsDirection | None = None
     is_third_body: bool = False
+
+    # Optional, attributed claims (never inferred, never defaulted, null when not
+    # stated). Their rules are ``kinetics_declaration_error``, shared with the bundle
+    # route, the workflows and the client builder.
+    determination: KineticsDeterminationDeclaration | None = None
+    applicability: KineticsApplicabilityDeclaration | None = None
+    protocol: KineticsProtocolDeclaration | None = None
 
     energy_level_of_theory: LevelOfTheoryRef | None = None
 
@@ -653,6 +670,20 @@ class KineticsUploadRequest(SchemaBase):
             n_products=len(self.reaction.products),
             has_tunneling_application=self.tunneling_application is not None,
         )
+        return self
+
+    @model_validator(mode="after")
+    def validate_declarations(self) -> Self:
+        """The declarations are coherent (``kinetics_declaration_error``)."""
+        error = kinetics_declaration_error(
+            self,
+            has_source=self.literature is not None or self.workflow_tool_release is not None,
+        )
+        if error is not None:
+            code, message = error
+            raise CodedValidationError(
+                code, message, context=kinetics_declaration_context(code, message), message_prefix=False
+            )
         return self
 
     @model_validator(mode="after")

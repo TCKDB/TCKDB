@@ -104,6 +104,13 @@ def _kinetics(**changes: Any) -> dict:
     return bundle
 
 
+def _kinetics_without_reversible(_session: Session) -> dict:
+    """A rate that does not state ``reaction.reversible``, with nothing stored to take it from."""
+    bundle = _kinetics()
+    del bundle["records"]["kinetics_uploads"][0]["reaction"]["reversible"]
+    return bundle
+
+
 def _interpretations(statmech_ref: str) -> list[dict]:
     """A complete interpretation set for H + H -> H2, all naming one ref."""
     conventions = {
@@ -165,6 +172,13 @@ _LOT = {"method": "ccsd(t)", "basis": "cc-pvtz"}
 #: before #577 except ``preview_blocking_smiles``, whose refusal the preview
 #: already saw but reported without submit's code.
 REFUSED: dict[str, tuple[Callable[[Session], dict], int, str]] = {
+    # app/workflows/reaction.py reversible_or_inherited: an unstated reaction.reversible with no single
+    # stored reaction to inherit it from is refused, never defaulted (#598).
+    "kinetics_reaction_reversible_required": (
+        _kinetics_without_reversible,
+        422,
+        "reaction_reversible_required",
+    ),
     # app/workflows/thermo.py assert_enthalpy_reference, called first in
     # persist_thermo_upload -- the gap #577 was filed for.
     "thermo_enthalpy_declaration_absent": (
@@ -506,6 +520,23 @@ def test_dry_run_refuses_an_undeclared_enthalpy_as_submit_does(client) -> None:
     assert sub.status_code == 422, sub.text
     assert sub.json()["code"] == "enthalpy_declaration_absent"
     assert errors[0]["message"] == sub.json()["detail"]
+
+
+def test_dry_run_previews_an_unstated_reversible_from_the_one_stored_reaction(client) -> None:
+    """An unstated ``reaction.reversible`` is taken from the single stored reaction, and the preview says so."""
+    stated = _kinetics()["records"]["kinetics_uploads"][0]["reaction"]
+    reaction = {"reversible": False, "reactants": stated["reactants"], "products": stated["products"]}
+    assert client.post("/api/v1/uploads/reactions", json=reaction).status_code == 201
+
+    bundle = _kinetics_without_reversible(client._db_session)
+    dry = client.post(DRY_RUN, json=bundle)
+    assert dry.status_code == 200, dry.text
+    items = [i for i in dry.json()["items"] if i["record_type"] == "chem_reaction"]
+    assert [i["action"] for i in items] == ["would_reuse"], items
+    assert _dry_run_errors(dry.json()) == []
+    sub = client.post(SUBMIT, json=bundle)
+    assert sub.status_code == 201, sub.text
+    assert client._db_session.scalar(select(func.count()).select_from(ChemReaction)) == 1
 
 
 # ---------------------------------------------------------------------------

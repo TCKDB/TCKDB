@@ -71,6 +71,7 @@ nav:
       - Internal ID Visibility: specs/internal_ids_visibility_policy.md
   - Guides:
       - Depositing a Thermo Record: guides/depositing_a_thermo_record.md
+      - Declaring a Kinetics Record: guides/declaring_a_kinetics_record.md
       - Selecting Thermo for H298: guides/selecting_thermo_for_h298.md
       - Query Cookbook: guides/scientific_query_cookbook.md
       - Schema Reference: guides/schema_reference.md

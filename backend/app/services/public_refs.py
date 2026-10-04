@@ -74,6 +74,10 @@ PREFIXES: dict[str, str] = {
     "Calculation": "calc",
     "Thermo": "thm",
     "Kinetics": "kin",
+    # A complete determination of a rate (kinetics selection). Opaque: the identity
+    # content names this instance's reaction entry, so the same canonical content
+    # is not the same identity on another instance. Deduplicated on identity_hash.
+    "KineticsDetermination": "kdet",
     "Statmech": "sm",
     "Transport": "trn",
     "ConformerGroup": "cg",

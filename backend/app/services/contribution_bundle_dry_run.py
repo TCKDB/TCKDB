@@ -52,7 +52,7 @@ from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.literature_metadata import normalize_doi, normalize_isbn
-from app.services.reaction_resolution import reaction_stoichiometry_hash
+from app.services.reaction_resolution import inherit_reversible, reaction_stoichiometry_hash
 from app.services.software_resolution import normalize_software_name
 from app.services.species_resolution import null_safe_equals
 
@@ -417,7 +417,7 @@ def _preview_species_entry_identity(
 def _preview_chem_reaction(
     session: Session,
     *,
-    reversible: bool,
+    reversible: bool | None,
     reactant_species: Sequence[Species | None],
     product_species: Sequence[Species | None],
     local_ref: str,
@@ -430,7 +430,23 @@ def _preview_chem_reaction(
     without issuing the lookup query. This is conservative and never
     falsely promises ``would_reuse``.
     """
+    # An unstated value that cannot be taken from one stored reaction is refused by the import
+    # (``reaction_reversible_required``). The preview does not decide that: the submit rehearsal that
+    # runs beside it is the verdict and reports the refusal itself, so this item only says what it
+    # could not know.
+    refused = ContributionBundleDryRunItem(
+        record_type=DryRunRecordType.chem_reaction,
+        action=DryRunAction.would_create,
+        reason=(
+            "reaction.reversible is not stated and no single stored reaction with these participants "
+            "was found to take it from; the import is refused unless it is stated "
+            "(reaction_reversible_required)."
+        ),
+        local_ref=local_ref,
+    )
     if any(s is None for s in reactant_species) or any(s is None for s in product_species):
+        if reversible is None:
+            return refused
         return ContributionBundleDryRunItem(
             record_type=DryRunRecordType.chem_reaction,
             action=DryRunAction.would_create,
@@ -443,6 +459,12 @@ def _preview_chem_reaction(
 
     reactant_stoich = _compress_species_stoich(reactant_species)
     product_stoich = _compress_species_stoich(product_species)
+    if reversible is None:
+        reversible = inherit_reversible(
+            session, reactant_stoichiometry=reactant_stoich, product_stoichiometry=product_stoich
+        )
+        if reversible is None:
+            return refused
     stoichiometry_hash = reaction_stoichiometry_hash(
         reversible=reversible,
         reactants=reactant_stoich,

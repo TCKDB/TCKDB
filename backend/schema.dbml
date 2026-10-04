@@ -327,6 +327,11 @@ enum KineticsDegeneracyInterpretation {
   other
 }
 
+enum KineticsDeterminationTargetKind {
+  whole_reaction
+  resolved_channel
+}
+
 enum KineticsDirection {
   forward
   reverse
@@ -350,6 +355,11 @@ enum KineticsModelKind {
   sri
   plog
   chebyshev
+}
+
+enum KineticsRepresentationRole {
+  complete
+  additive_component
 }
 
 enum KineticsStandardStateConvention {
@@ -2207,6 +2217,10 @@ Table kinetics {
   model_kind KineticsModelKind [not null, default: 'modified_arrhenius']
   direction KineticsDirection
   is_third_body boolean [not null, default: 'false']
+  determination_id bigint [ref: > kinetics_determination.id]
+  representation_role KineticsRepresentationRole
+  applicability_declaration jsonb
+  protocol_declaration jsonb
   literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   software_release_id bigint [ref: > software_release.id]
@@ -2233,6 +2247,7 @@ Table kinetics {
   public_ref string [not null]
 
   indexes {
+    determination_id [name: 'ix_kinetics_determination_id']
     literature_id [name: 'ix_kinetics_literature_id']
     network_kinetics_id [name: 'ix_kinetics_network_kinetics_id']
     public_ref [unique, name: 'ix_kinetics_public_ref']
@@ -2242,8 +2257,11 @@ Table kinetics {
     `(a_uncertainty IS NULL) = (a_uncertainty_kind IS NULL)` [name: 'ck_kinetics_a_uncertainty_kind_required_with_value']
     `a_uncertainty_kind <> 'multiplicative' OR a_uncertainty >= 1.0` [name: 'ck_kinetics_a_uncertainty_multiplicative_ge_1']
     `pressure_context <> 'apparent_at_pressure' OR pressure_bar IS NOT NULL` [name: 'ck_kinetics_apparent_pressure_requires_pressure_bar']
+    `applicability_declaration IS NULL OR (jsonb_typeof(applicability_declaration) = 'object' AND coalesce(jsonb_typeof(applicability_declaration -> 'version'), '') = 'number')` [name: 'ck_kinetics_applicability_declaration_versioned_object']
     `degeneracy IS NULL OR (degeneracy > 0 AND degeneracy < 'Infinity'::double precision)` [name: 'ck_kinetics_degeneracy_finite_positive']
+    `(determination_id IS NULL) = (representation_role IS NULL)` [name: 'ck_kinetics_determination_iff_role']
     `pressure_bar IS NULL OR pressure_bar > 0` [name: 'ck_kinetics_pressure_bar_gt_0']
+    `protocol_declaration IS NULL OR (jsonb_typeof(protocol_declaration) = 'object' AND coalesce(jsonb_typeof(protocol_declaration -> 'version'), '') = 'number')` [name: 'ck_kinetics_protocol_declaration_versioned_object']
     `t0_k > 0 AND t0_k <= 10000` [name: 'ck_kinetics_t0_k_finite_positive']
     `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_kinetics_tmax_k_gt_0']
     `tmin_k IS NULL OR tmin_k > 0` [name: 'ck_kinetics_tmin_k_gt_0']
@@ -2289,6 +2307,37 @@ Table kinetics_chebyshev {
   }
 
   Note: 'Chebyshev-polynomial k(T,P) surface for a kinetics record.'
+}
+
+Table kinetics_determination {
+  id bigint [pk, not null]
+  reaction_entry_id bigint [not null, ref: > reaction_entry.id]
+  direction KineticsDirection [not null]
+  target_kind KineticsDeterminationTargetKind [not null]
+  target_transition_state_entry_id bigint [ref: > transition_state_entry.id]
+  target_network_channel_id bigint [ref: > network_channel.id]
+  literature_id bigint [ref: > literature.id]
+  workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
+  determination_key text [not null]
+  identity_hash string [not null]
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_kinetics_determination_public_ref']
+    reaction_entry_id [name: 'ix_kinetics_determination_reaction_entry_id']
+    identity_hash [unique, name: 'uq_kinetics_determination_identity_hash']
+  }
+
+  checks {
+    `identity_hash ~ '^[0-9a-f]{64}$'` [name: 'ck_kinetics_determination_identity_hash_sha256_hex']
+    `length(btrim(determination_key)) > 0 AND length(determination_key) <= 128` [name: 'ck_kinetics_determination_key_bounded']
+    `literature_id IS NOT NULL OR workflow_tool_release_id IS NOT NULL` [name: 'ck_kinetics_determination_source_required']
+    `(target_kind = 'whole_reaction' AND target_transition_state_entry_id IS NULL AND target_network_channel_id IS NULL) OR (target_kind = 'resolved_channel' AND num_nonnulls(target_transition_state_entry_id, target_network_channel_id) = 1)` [name: 'ck_kinetics_determination_target_matches_kind']
+  }
+
+  Note: 'One complete determination of a rate: what several kinetics records are fits of.'
 }
 
 Table kinetics_falloff {

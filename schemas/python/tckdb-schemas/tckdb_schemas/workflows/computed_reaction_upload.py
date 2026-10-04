@@ -25,6 +25,7 @@ from tckdb_schemas.bundle_source_rules import (
     owner_mismatch_error,
     scf_source_geometry_error,
 )
+from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import (
     ActivationEnergyUnits,
@@ -32,6 +33,7 @@ from tckdb_schemas.enums import (
     CalculationType,
     KineticsCalculationRole,
     KineticsDegeneracyConvention,
+    KineticsDirection,
     KineticsModelKind,
     KineticsUncertaintyKind,
     MoleculeKind,
@@ -60,6 +62,14 @@ from tckdb_schemas.fragments.kinetics_evidence import (
     check_interpretation_set,
     check_tunneling_declaration_agrees,
     default_tunneling_model_from_application,
+)
+from tckdb_schemas.kinetics_declarations import (
+    W_KINETICS_DETERMINATION_INVALID,
+    KineticsApplicabilityDeclaration,
+    KineticsDeterminationDeclaration,
+    KineticsProtocolDeclaration,
+    kinetics_declaration_context,
+    kinetics_declaration_error,
 )
 from tckdb_schemas.fragments.reaction_atom_map import (
     AtomMapParticipantGeometry,
@@ -1263,6 +1273,10 @@ class BundleKineticsIn(SchemaBase):
         route does.
     :param network_kinetics_ref: Public ref of the master-equation solve a
         fitted rate delegates its pressure dependence to.
+    :param direction: ``forward`` or ``net`` only (a reverse fit swaps the keys).
+    :param determination: Needs ``direction`` and the bundle's literature or workflow tool.
+    :param applicability: Optional declaration of what the coefficient is.
+    :param protocol: Optional declaration of how the rate was produced.
 
     This model and ``KineticsUploadRequest`` share their kinetics-evidence
     models and their cross-field checks (``kinetics_evidence``), so the two
@@ -1276,7 +1290,12 @@ class BundleKineticsIn(SchemaBase):
 
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
     model_kind: KineticsModelKind = KineticsModelKind.modified_arrhenius
+    direction: KineticsDirection | None = None
     is_third_body: bool = False
+
+    determination: KineticsDeterminationDeclaration | None = None
+    applicability: KineticsApplicabilityDeclaration | None = None
+    protocol: KineticsProtocolDeclaration | None = None
 
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
@@ -1419,6 +1438,34 @@ class BundleKineticsIn(SchemaBase):
             and self.tmin_k > self.tmax_k
         ):
             raise ValueError("tmin_k must be <= tmax_k.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_direction_is_relative_to_own_entry(self) -> Self:
+        """``reverse`` cannot be stated: a reverse fit swaps ``reactant_keys`` and ``product_keys``."""
+        if self.direction is KineticsDirection.reverse:
+            raise ValueError(
+                "direction 'reverse' cannot be stated on a bundle kinetics fit: it is stored "
+                "under a reaction entry oriented as its own reactant_keys/product_keys. "
+                "Swap reactant_keys and product_keys to deposit the reverse-direction fit."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_declarations(self) -> Self:
+        """The declarations are coherent (``kinetics_declaration_error``); a fit states no ``group`` handle."""
+        error = kinetics_declaration_error(self)
+        if error is None and self.determination is not None and self.determination.group is not None:
+            error = (
+                W_KINETICS_DETERMINATION_INVALID,
+                "determination.group is for a contribution bundle's kinetics uploads; the fits of one "
+                "reaction upload already share a determination by key.",
+            )
+        if error is not None:
+            code, message = error
+            raise CodedValidationError(
+                code, message, context=kinetics_declaration_context(code, message), message_prefix=False
+            )
         return self
 
     @model_validator(mode="after")
@@ -1824,6 +1871,23 @@ class ComputedReactionUploadRequest(SchemaBase):
         return self
 
     @model_validator(mode="after")
+    def validate_determination_source(self) -> Self:
+        """A fit that joins a determination needs the bundle's literature or workflow tool."""
+        if self.literature is not None or self.workflow_tool_release is not None:
+            return self
+        for index, kin in enumerate(self.kinetics):
+            if kin.determination is not None:
+                raise CodedValidationError(
+                    W_KINETICS_DETERMINATION_INVALID,
+                    f"kinetics[{index}] joins a determination but the bundle names no "
+                    "literature or workflow_tool_release; a determination key is scoped to "
+                    "a source.",
+                    context={"field": f"kinetics[{index}].determination", "missing": "source"},
+                    message_prefix=False,
+                )
+        return self
+
+    @model_validator(mode="after")
     def validate_calculation_key_refs(self) -> Self:
         """Validate every local-key reference to a calculation resolves.
 
@@ -1899,6 +1963,25 @@ class ComputedReactionUploadRequest(SchemaBase):
                             f"calculation_key"
                         ),
                         key=entry.calculation_key,
+                        declared=all_calc_keys,
+                    )
+
+        # A kinetics protocol's supporting calculations name bundle calculations by
+        # key (or by ref, which resolves in the database), same contract as above.
+        for kin_index, kin in enumerate(self.kinetics):
+            if kin.protocol is None:
+                continue
+            for entry_index, supporting in enumerate(kin.protocol.supporting_calculations):
+                if supporting.calculation_key is not None and supporting.calculation_key not in all_calc_keys:
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
+                        f"kinetics[{kin_index}].protocol.supporting_calculations references "
+                        f"unknown calculation_key='{supporting.calculation_key}'.",
+                        field=(
+                            f"kinetics[{kin_index}].protocol.supporting_calculations"
+                            f"[{entry_index}].calculation_key"
+                        ),
+                        key=supporting.calculation_key,
                         declared=all_calc_keys,
                     )
 

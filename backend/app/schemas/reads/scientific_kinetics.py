@@ -12,6 +12,10 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
+from tckdb_schemas.kinetics_declarations import (
+    StoredKineticsApplicabilityDeclaration,
+    StoredKineticsProtocolDeclaration,
+)
 
 from app.db.models.common import (
     ArrheniusAUnits,
@@ -19,9 +23,11 @@ from app.db.models.common import (
     EnergyZeroConvention,
     KineticsDegeneracyConvention,
     KineticsDegeneracyInterpretation,
+    KineticsDeterminationTargetKind,
     KineticsDirection,
     KineticsEnsemblePolicy,
     KineticsModelKind,
+    KineticsRepresentationRole,
     KineticsStandardStateConvention,
     KineticsUncertaintyKind,
     PressureContext,
@@ -361,6 +367,42 @@ class KineticsProvenance(BaseModel):
     network_kinetics_ref: str | None = None
 
 
+class KineticsDeterminationTargetBlock(BaseModel):
+    """What a determination is the rate of.
+
+    :param kind: ``whole_reaction`` or ``resolved_channel``.
+    :param transition_state_entry_ref: Public ref of the saddle point a resolved channel names.
+    :param network_ref: Public ref of the network a resolved channel names.
+    :param channel_key: Key of that channel in the network.
+    """
+
+    kind: KineticsDeterminationTargetKind
+    transition_state_entry_ref: str | None = None
+    network_ref: str | None = None
+    channel_key: str | None = None
+
+
+class KineticsDeterminationBlock(BaseModel):
+    """The determination a record is a representation of, and its role in it.
+
+    Records that share ``determination_ref`` are alternate representations of one
+    determination, not independent determinations. ``null`` on a record means none was
+    declared, never "standalone".
+
+    :param determination_ref: Public ref (``kdet_...``).
+    :param key: The source-scoped determination key the depositor stated.
+    :param direction: The direction the determination is of, relative to the reaction entry.
+    :param target: What it is the rate of.
+    :param representation_role: This record's role in it.
+    """
+
+    determination_ref: str
+    key: str
+    direction: KineticsDirection
+    target: KineticsDeterminationTargetBlock
+    representation_role: KineticsRepresentationRole
+
+
 class KineticsRecord(BaseModel):
     """One kinetics record returned by the kinetics endpoint.
 
@@ -373,6 +415,21 @@ class KineticsRecord(BaseModel):
     scientific_origin: ScientificOriginKind
     model_kind: KineticsModelKind
     direction: KineticsDirection | None = None
+    #: The determination this record was declared a representation of; ``null`` means no
+    #: determination was declared (every record deposited before declarations existed).
+    #: Never inferred from direction, model kind or source links.
+    determination: KineticsDeterminationBlock | None = None
+    #: What the depositor declared the coefficient is a coefficient of (phase, observable,
+    #: basis, pressure and collider meaning); ``null`` means none was declared. An attributed
+    #: claim, not a verified fact.
+    applicability: StoredKineticsApplicabilityDeclaration | None = None
+    #: How the depositor declared the rate was produced; ``null`` means none was declared.
+    #: An attributed claim, not a verified fact.
+    protocol: StoredKineticsProtocolDeclaration | None = None
+    #: ``true`` when a declaration is stored but no longer validates against its schema (a
+    #: value written outside the upload path). The declaration is then ``null`` and the rest
+    #: of the record is served; ``null`` alone still means "not stated".
+    declaration_unreadable: bool = False
     review: RecordReviewBadge
     #: Correction notice, present only when this record has been replaced.
     #: ``null`` on a current record — and always computed, never behind an

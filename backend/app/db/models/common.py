@@ -879,6 +879,34 @@ class KineticsDirection(str, Enum):
     net = "net"
 
 
+class KineticsRepresentationRole(str, Enum):
+    """What a kinetics record is within the determination it belongs to.
+
+    ``complete``: a fitted representation of the whole determination, usable
+    as a total-rate candidate on its own (a multi-Arrhenius or PLOG parent is
+    one complete representation however many child rows it has).
+    ``additive_component``: one term of a determination that is the sum of
+    several records; on its own it is not a total-rate candidate.
+    NULL (with no determination) means the record never said: a record
+    deposited before determinations existed, or without one.
+    """
+
+    complete = "complete"
+    additive_component = "additive_component"
+
+
+class KineticsDeterminationTargetKind(str, Enum):
+    """The rate a kinetics determination is declared to describe.
+
+    ``whole_reaction``: the coefficient of the reaction entry as a whole.
+    ``resolved_channel``: one named pathway, identified by a validated
+    transition state entry or by a network channel locator.
+    """
+
+    whole_reaction = "whole_reaction"
+    resolved_channel = "resolved_channel"
+
+
 class KineticsDegeneracyConvention(str, Enum):
     """Whether a stored reaction-path degeneracy is already in the rate."""
 

@@ -115,6 +115,15 @@ W_UNKNOWN_CALCULATION_ARTIFACT_REF = "unknown_calculation_artifact_ref"
 #: A ``network_kinetics_ref`` names no network_kinetics row.
 W_UNKNOWN_NETWORK_KINETICS_REF = "unknown_network_kinetics_ref"
 
+#: A ``determination_ref`` names no kinetics determination.
+W_UNKNOWN_KINETICS_DETERMINATION_REF = "unknown_kinetics_determination_ref"
+
+#: A determination's network-channel locator -- ``(network ref, channel key)`` -- names no
+#: stored channel. One code for a pair, as for an artifact locator: the pair can fail because
+#: the network is missing or because it holds no channel with that key, and ``context`` carries
+#: both halves so the caller can tell which.
+W_UNKNOWN_NETWORK_CHANNEL = "unknown_network_channel"
+
 #: A ``conformer_selection.conformer_group_ref`` names no conformer group.
 #: Its own code rather than
 #: :data:`app.services.conformer_selection_locator.W_UNKNOWN_CONFORMER_SELECTION`,
@@ -200,6 +209,8 @@ __all__ = [
     "W_UNKNOWN_CALCULATION_ARTIFACT_REF",
     "W_UNKNOWN_CALCULATION_REF",
     "W_UNKNOWN_CONFORMER_GROUP_REF",
+    "W_UNKNOWN_KINETICS_DETERMINATION_REF",
+    "W_UNKNOWN_NETWORK_CHANNEL",
     "W_UNKNOWN_NETWORK_KINETICS_REF",
     "W_UNKNOWN_STATMECH_REF",
     "W_UNKNOWN_TRANSITION_STATE_ENTRY_REF",

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from collections import Counter
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,8 +10,10 @@ from tckdb_schemas.fragments.kinetics_evidence import (
     KineticsInterpretationAssignmentUpload,
     KineticsTunnelingApplicationUpload,
 )
+from tckdb_schemas.kinetics_declarations import W_KINETICS_DETERMINATION_INVALID
 from tckdb_schemas.upload_warning import UploadWarning
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.units import convert_ea_to_kj_mol
 from app.db.models.calculation import Calculation, CalculationArtifact
 from app.db.models.common import (
@@ -26,6 +27,7 @@ from app.db.models.kinetics import (
     Kinetics,
     KineticsArrheniusEntry,
     KineticsChebyshev,
+    KineticsDetermination,
     KineticsFalloff,
     KineticsInterpretationAssignment,
     KineticsPlog,
@@ -63,7 +65,14 @@ from app.services.conformer_selection_locator import (
     selection_kind_token,
     unknown_conformer_selection,
 )
+from app.services.kinetics_declaration_resolution import W_KINETICS_DETERMINATION_MISMATCH
 from app.services.kinetics_resolution import persist_kinetics, resolve_kinetics_upload
+from app.services.kinetics_ts_scope import (
+    TransitionStateScope,
+)
+from app.services.kinetics_ts_scope import (
+    transition_state_belongs_to_rate as _transition_state_belongs_to_rate,
+)
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -74,11 +83,12 @@ from app.services.upload_reference import (
     W_UNKNOWN_CALCULATION_ARTIFACT_REF,
     W_UNKNOWN_CALCULATION_REF,
     W_UNKNOWN_CONFORMER_GROUP_REF,
+    W_UNKNOWN_KINETICS_DETERMINATION_REF,
     W_UNKNOWN_STATMECH_REF,
     W_UNKNOWN_TRANSITION_STATE_ENTRY_REF,
     unknown_reference,
 )
-from app.workflows.reaction import persist_reaction_upload
+from app.workflows.reaction import persist_reaction_upload, reversible_or_inherited
 
 
 def _find_sp_for_species(
@@ -180,15 +190,22 @@ def _resolve_ts_anchored_reaction_entry(
     }
     if request.tunneling_application is not None:
         ts_refs.add(request.tunneling_application.transition_state_entry_ref)
+    target_ref = None
+    if request.determination is not None:
+        # A determination of one resolved channel is of that saddle point's reaction entry.
+        target_ref = request.determination.transition_state_entry_ref
+        ts_refs.add(target_ref)
     ts_refs.discard(None)
     if not ts_refs:
         return None
     if len(ts_refs) != 1:
         raise ValueError(
-            "transition-state interpretation and tunneling evidence must reference the same TS entry."
+            "transition-state interpretation, tunneling evidence and determination target "
+            "must reference the same TS entry."
         )
 
     ts_ref = next(iter(ts_refs))
+    named_by_target = ts_ref == target_ref
     reaction_entry_id = session.scalar(
         select(TransitionState.reaction_entry_id)
         .join(TransitionStateEntry, TransitionStateEntry.transition_state_id == TransitionState.id)
@@ -197,7 +214,11 @@ def _resolve_ts_anchored_reaction_entry(
     if reaction_entry_id is None:
         raise unknown_reference(
             code=W_UNKNOWN_TRANSITION_STATE_ENTRY_REF,
-            field="transition_state_entry_ref",
+            field=(
+                "determination.transition_state_entry_ref"
+                if named_by_target
+                else "transition_state_entry_ref"
+            ),
             kind="transition_state_entry",
             ref=ts_ref,
             remedy=(
@@ -209,6 +230,29 @@ def _resolve_ts_anchored_reaction_entry(
     reaction_entry = session.get(ReactionEntry, reaction_entry_id)
     assert reaction_entry is not None
 
+    if not _request_matches_entry(session, request, reaction_entry, created_by=created_by):
+        if named_by_target:
+            raise CodedValueError(
+                W_KINETICS_DETERMINATION_MISMATCH,
+                "determination.transition_state_entry_ref names a transition state "
+                "that does not belong to this record's reaction.",
+                context={"field": "determination.transition_state_entry_ref", "reason": "target"},
+                message_prefix=False,
+            )
+        raise ValueError(
+            "submitted reaction content and direction do not match the reaction entry owned by the declared TS."
+        )
+    return reaction_entry
+
+
+def _request_matches_entry(
+    session: Session,
+    request: KineticsUploadRequest,
+    reaction_entry: ReactionEntry,
+    *,
+    created_by: int | None,
+) -> bool:
+    """Whether the submitted reaction content is exactly this entry's structured reaction."""
     submitted = [
         (ReactionRole.reactant, index, resolve_species_entry(session, item.species_entry, created_by=created_by).id)
         for index, item in enumerate(request.reaction.reactants, start=1)
@@ -226,63 +270,107 @@ def _resolve_ts_anchored_reaction_entry(
     ]
     submitted.sort(key=lambda item: (item[0].value, item[1]))
     expected.sort(key=lambda item: (item[0].value, item[1]))
-    if request.reaction.reversible != reaction_entry.reaction.reversible or submitted != expected:
-        raise ValueError(
-            "submitted reaction content and direction do not match the reaction entry owned by the declared TS."
-        )
-    return reaction_entry
+    stated = request.reaction.reversible
+    return (stated is None or stated == reaction_entry.reaction.reversible) and submitted == expected
 
 
-#: How a rate's transition state must relate to the reaction entry the rate is
-#: stored under. ``"entry"``: it is one of that entry's own transition states
-#: (the standalone route, where the entry is derived from the TS). ``"reaction"``:
-#: it belongs to *some* entry of the same graph reaction (the reaction bundle,
-#: which always mints a new reaction entry, so it can never be the entry of a
-#: transition state deposited earlier).
-TransitionStateScope = Literal["entry", "reaction"]
+def determination_content_key(request: KineticsUploadRequest) -> str | None:
+    """What makes two uploads in one bundle state the same determination, or ``None`` if none is stated.
+
+    Every reaction entry is created by exactly one upload, so a determination (which is of a
+    reaction entry) is shared by a later upload only if that upload is anchored to the same
+    entry: by a transition-state ref, by citing the determination's ref, or, inside one bundle
+    import, by stating the same determination content. The key is that content: the
+    determination's key, the record's direction, the target, the whole source attribution, and
+    the reaction it is of, and the bundle-local ``group`` handle when one is stated, which is how an
+    export keeps two determinations that read alike apart. A channel target names rows of the database,
+    so it never enters a bundle-scoped key (a channel is anchored by its own refs).
+    """
+    determination = request.determination
+    if determination is None or determination.key is None:
+        return None
+    if determination.target_kind is None or determination.target_kind.value != "whole_reaction":
+        return None
+    return json.dumps(
+        {
+            "key": determination.key,
+            "group": determination.group,
+            "direction": request.direction.value if request.direction is not None else None,
+            "literature": (
+                request.literature.model_dump(mode="json") if request.literature is not None else None
+            ),
+            "workflow_tool_release": (
+                request.workflow_tool_release.model_dump(mode="json")
+                if request.workflow_tool_release is not None
+                else None
+            ),
+            "reaction": request.reaction.model_dump(mode="json"),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 
 
-def _transition_state_belongs_to_rate(
+def _resolve_anchored_reaction_entry(
     session: Session,
-    ts_entry_id: int,
-    reaction_entry: ReactionEntry,
-    scope: TransitionStateScope,
-) -> bool:
-    ts_reaction_entry = session.scalar(
-        select(ReactionEntry)
-        .join(TransitionState, TransitionState.reaction_entry_id == ReactionEntry.id)
-        .join(
-            TransitionStateEntry,
-            TransitionStateEntry.transition_state_id == TransitionState.id,
-        )
-        .where(TransitionStateEntry.id == ts_entry_id)
-    )
-    if ts_reaction_entry is None:
-        return False
-    if scope == "entry":
-        return ts_reaction_entry.id == reaction_entry.id
-    if ts_reaction_entry.reaction_id != reaction_entry.reaction_id:
-        return False
-    # Same graph reaction is not enough: an excited-state or isotopologue entry
-    # of the same reaction has a different TS. Require the same structure
-    # participants ((role, species_entry_id) multiset; species entries are
-    # content-deduplicated, so ids compare soundly), allowing the two sides to
-    # swap for a reverse-direction fit.
-    def structures(entry_id: int) -> Counter:
-        rows = session.execute(
-            select(
-                ReactionEntryStructureParticipant.role,
-                ReactionEntryStructureParticipant.species_entry_id,
-            ).where(ReactionEntryStructureParticipant.reaction_entry_id == entry_id)
-        ).all()
-        return Counter((role.value if hasattr(role, "value") else role, sid) for role, sid in rows)
+    request: KineticsUploadRequest,
+    *,
+    created_by: int | None,
+    determination_anchors: dict[str, int] | None,
+) -> ReactionEntry | None:
+    """The reaction entry a rate must be stored under, when its evidence names one.
 
-    theirs = structures(ts_reaction_entry.id)
-    ours = structures(reaction_entry.id)
-    swapped = Counter(
-        ({"reactant": "product", "product": "reactant"}[role], sid) for role, sid in ours.elements()
-    )
-    return theirs == ours or theirs == swapped
+    Three things anchor a rate to an already-deposited entry: a transition-state ref (see
+    :func:`_resolve_ts_anchored_reaction_entry`), a cited ``determination_ref`` (the rate joins
+    the entry its determination is of), and, inside one bundle import, an earlier upload that
+    stated the same determination content (``determination_anchors``). The submitted reaction
+    content must be exactly the entry's, and two anchors must name the same entry.
+    """
+    ts_entry = _resolve_ts_anchored_reaction_entry(session, request, created_by=created_by)
+    det_entry: ReactionEntry | None = None
+    determination = request.determination
+    if determination is not None and determination.determination_ref is not None:
+        row = session.scalar(
+            select(KineticsDetermination).where(
+                KineticsDetermination.public_ref == determination.determination_ref
+            )
+        )
+        if row is None:
+            raise unknown_reference(
+                code=W_UNKNOWN_KINETICS_DETERMINATION_REF,
+                field="determination.determination_ref",
+                kind="kinetics_determination",
+                ref=determination.determination_ref,
+                remedy=(
+                    "Cite the ref this API returned for the determination, or state its "
+                    "content with key and target."
+                ),
+            )
+        det_entry = session.get(ReactionEntry, row.reaction_entry_id)
+    elif determination_anchors is not None:
+        key = determination_content_key(request)
+        anchored_id = determination_anchors.get(key) if key is not None else None
+        if anchored_id is not None:
+            det_entry = session.get(ReactionEntry, anchored_id)
+    if det_entry is not None:
+        if not _request_matches_entry(session, request, det_entry, created_by=created_by):
+            raise CodedValueError(
+                W_KINETICS_DETERMINATION_MISMATCH,
+                "The submitted reaction content does not match the reaction entry its "
+                "determination is of. A record joins a determination only under that "
+                "determination's own reaction entry.",
+                context={"field": "determination", "reason": "reaction"},
+                message_prefix=False,
+            )
+        if ts_entry is not None and ts_entry.id != det_entry.id:
+            raise CodedValueError(
+                W_KINETICS_DETERMINATION_MISMATCH,
+                "The record's transition state and its determination belong to different "
+                "reaction entries.",
+                context={"field": "determination", "reason": "reaction"},
+                message_prefix=False,
+            )
+    return ts_entry if ts_entry is not None else det_entry
 
 
 def _ts_not_owned_message(what: str, scope: TransitionStateScope) -> str:
@@ -760,6 +848,7 @@ def persist_kinetics_upload(
     created_by: int | None = None,
     review_policy: ReviewPolicy | None = ReviewPolicy(),
     warnings: list[UploadWarning] | None = None,
+    determination_anchors: dict[str, int] | None = None,
 ) -> Kinetics:
     """Persist a complete kinetics upload workflow.
 
@@ -767,16 +856,31 @@ def persist_kinetics_upload(
     :param request: Workflow-facing kinetics upload payload.
     :param created_by: Optional application user id for newly created rows.
     :param warnings: Optional sink for non-blocking upload warnings.
+    :param determination_anchors: Shared by the uploads of one bundle import, so that uploads
+        stating the same determination content land under one reaction entry and share one
+        determination (see :func:`determination_content_key`). ``None`` on the standalone
+        route, where every upload gets its own reaction entry.
     :returns: Newly created ``Kinetics`` row attached to a backend-resolved reaction entry.
     """
     warning_sink = warnings if warnings is not None else []
+    if determination_anchors is None and request.determination is not None and request.determination.group is not None:
+        raise CodedValueError(
+            W_KINETICS_DETERMINATION_INVALID,
+            "determination.group groups the records of one contribution bundle import; this upload is "
+            "not part of one, so it states none.",
+            context={"field": "determination.group"},
+            message_prefix=False,
+        )
 
     # 1. Resolve reaction
     #    Pass the same review_policy so the reaction_entry created en route is
     #    captured in the same review state as the kinetics row this workflow
     #    is producing.
-    reaction_entry = _resolve_ts_anchored_reaction_entry(
-        session, request, created_by=created_by
+    reaction_entry = _resolve_anchored_reaction_entry(
+        session,
+        request,
+        created_by=created_by,
+        determination_anchors=determination_anchors,
     )
     if reaction_entry is not None and request.reaction.reaction_family is not None:
         # The TS-anchored path reuses an already-deposited reaction entry, so
@@ -808,10 +912,13 @@ def persist_kinetics_upload(
                 "recorded for the reaction entry owned by the declared transition state."
             )
     if reaction_entry is None:
+        reversible = request.reaction.reversible
+        if reversible is None:
+            reversible = reversible_or_inherited(session, request.reaction, created_by=created_by)
         reaction_entry = persist_reaction_upload(
             session,
             ReactionUploadRequest(
-                reversible=request.reaction.reversible,
+                reversible=reversible,
                 reaction_family=request.reaction.reaction_family,
                 reaction_family_source_note=request.reaction.reaction_family_source_note,
                 reactants=[
@@ -831,7 +938,13 @@ def persist_kinetics_upload(
             ),
             created_by=created_by,
             review_policy=review_policy,
+            warnings=warning_sink,
         )
+
+    if determination_anchors is not None:
+        content_key = determination_content_key(request)
+        if content_key is not None:
+            determination_anchors.setdefault(content_key, reaction_entry.id)
 
     resolved_interpretations = resolve_interpretation_assignments(
         session,
@@ -858,6 +971,7 @@ def persist_kinetics_upload(
         request,
         reaction_entry_id=reaction_entry.id,
         warnings_out=warning_sink,
+        created_by=created_by,
     )
     kinetics = persist_kinetics(session, kinetics_create, created_by=created_by)
 

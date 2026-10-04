@@ -391,6 +391,9 @@ def _target_snapshot(target: Any, record_type: SubmissionRecordType) -> dict[str
             for name in names:
                 row = getattr(target, name)
                 relationships[name] = None if row is None else _mapped_columns(row)
+    if isinstance(target, Kinetics) and target.determination is not None:
+        # Added only when present: a record with no determination keeps the snapshot it had.
+        relationships["determination"] = _mapped_columns(target.determination)
     if isinstance(target, Statmech):
         relationships["torsions"] = [
             {

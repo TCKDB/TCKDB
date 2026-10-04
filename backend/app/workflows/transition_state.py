@@ -127,6 +127,7 @@ def persist_transition_state_upload(
         ),
         created_by=created_by,
         review_policy=review_policy,
+        warnings=warnings,
     )
 
     # 2. Create TS concept + candidate entry

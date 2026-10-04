@@ -12,6 +12,14 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Iterator
 
+from pydantic import BaseModel, ValidationError
+from tckdb_schemas.kinetics_declarations import (
+    KineticsApplicabilityDeclaration,
+    KineticsDeterminationDeclaration,
+    KineticsProtocolDeclaration,
+    kinetics_declaration_error,
+)
+
 from tckdb_client.builders.validation import (
     TCKDBBuilderValidationError,
     ensure_optional_non_empty_str,
@@ -72,6 +80,38 @@ _SOURCE_ROLE_ALIASES: dict[str, str] = {
 }
 
 _DEGENERACY_CONVENTIONS = {"already_applied", "not_applied", "unknown"}
+
+
+def _declaration_dict(value: Any, model: type[BaseModel], name: str) -> dict[str, Any] | None:
+    """Coerce a declaration to the plain dict the wire carries (a model or a dict is accepted).
+
+    Absent stays absent, and a stated empty ``departures`` list stays ``[]``. A coded refusal
+    (an unsupported version) keeps its code in the message, as every builder refusal of a
+    coded rule does.
+    """
+    if value is None:
+        return None
+    try:
+        validated = value if isinstance(value, model) else model.model_validate(value)
+    except ValidationError as exc:
+        coded = exc.errors()[0].get("ctx", {}).get("error")
+        if coded is not None and hasattr(coded, "code"):
+            raise TCKDBBuilderValidationError(f"{coded.code}: {coded.detail}") from exc
+        raise TCKDBBuilderValidationError(f"Kinetics.{name}: {exc}") from exc
+    return validated.model_dump(mode="json", exclude_none=True, exclude_defaults=True)
+
+
+def _protocol_dict(value: Any) -> dict[str, Any] | None:
+    raw = _declaration_dict(value, KineticsProtocolDeclaration, "protocol")
+    if raw is None:
+        return None
+    if raw.pop("supporting_calculations", None):
+        raise TCKDBBuilderValidationError(
+            "Kinetics.protocol must not carry supporting_calculations; pass "
+            "(purpose, Calculation) pairs as protocol_calculations so the assembler can "
+            "name them by bundle key."
+        )
+    return raw
 
 
 def _resolve_a_units(value: str) -> str:
@@ -243,6 +283,18 @@ class Kinetics:
     #: Reference temperature of ``a``, K: ``k = A (T/T0)^n exp(-Ea/RT)``.
     #: 1 K is the plain ``A T^n`` form and is not sent.
     t0_k: float = 1.0
+    #: ``"forward"`` or ``"net"`` relative to this fit's own reactant/product order
+    #: (a reverse fit swaps the keys). Never inferred; only sent when stated.
+    direction: str | None = None
+    #: What the fit is a representation of (``KineticsDeterminationDeclaration`` or its
+    #: dict). Needs ``direction`` and the upload's literature or workflow tool.
+    determination: Any = None
+    #: What the coefficient is (``KineticsApplicabilityDeclaration`` or its dict).
+    applicability: Any = None
+    #: How the rate was produced (``KineticsProtocolDeclaration`` or its dict, without
+    #: supporting calculations) and the ``(purpose, Calculation)`` pairs it rests on.
+    protocol: Any = None
+    protocol_calculations: list[tuple[str, Any]] = field(default_factory=list)
     # role → Calculation builder. Order-preserving from the user's
     # source_calculations dict; payload emission walks this list to
     # produce ``(calculation_key, role)`` entries.
@@ -250,6 +302,43 @@ class Kinetics:
     _validated: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self) -> None:
+        if self.direction is not None and self.direction not in {"forward", "net"}:
+            raise TCKDBBuilderValidationError(
+                "Kinetics.direction must be 'forward' or 'net' (a bundle fit is stored under "
+                "its own reactant/product order: swap the keys for a reverse fit), got "
+                f"{self.direction!r}."
+            )
+        self.determination = _declaration_dict(
+            self.determination, KineticsDeterminationDeclaration, "determination"
+        )
+        self.applicability = _declaration_dict(
+            self.applicability, KineticsApplicabilityDeclaration, "applicability"
+        )
+        self.protocol = _protocol_dict(self.protocol)
+        if self.protocol_calculations and self.protocol is None:
+            raise TCKDBBuilderValidationError(
+                "Kinetics.protocol_calculations needs a protocol to be part of."
+            )
+        for purpose, _calc in self.protocol_calculations:
+            if not isinstance(purpose, str):
+                raise TCKDBBuilderValidationError(
+                    "Kinetics.protocol_calculations entries are (purpose, Calculation) pairs."
+                )
+        # The shared rule judges everything a builder can know: the upload's source and the
+        # reactant count are the assembler's, so those two rules are left to it and the server.
+        error = kinetics_declaration_error(
+            {
+                "direction": self.direction,
+                "scientific_origin": "computed",
+                "model_kind": self.model_kind,
+                "is_third_body": False,
+                "determination": self.determination,
+                "applicability": self.applicability,
+                "protocol": self.protocol,
+            }
+        )
+        if error is not None:
+            raise TCKDBBuilderValidationError(f"{error[0]}: {error[1]}")
         self._validated = True
 
     # ----- factories ------------------------------------------------
@@ -277,6 +366,11 @@ class Kinetics:
         label: str | None = None,
         note: str | None = None,
         T0: float | None = None,
+        direction: str | None = None,
+        determination: "KineticsDeterminationDeclaration | dict[str, Any] | None" = None,
+        applicability: "KineticsApplicabilityDeclaration | dict[str, Any] | None" = None,
+        protocol: "KineticsProtocolDeclaration | dict[str, Any] | None" = None,
+        protocol_calculations: "list[tuple[str, Calculation]] | None" = None,
     ) -> "Kinetics":
         """Build a modified-Arrhenius kinetics record.
 
@@ -284,6 +378,12 @@ class Kinetics:
         rate is ``A (T/T0)^n exp(-Ea/RT)``. Leave it out for the plain
         ``A T^n`` form (T0 = 1 K). Pass the fit's own T0 rather than folding
         ``A / T0**n`` into ``A``: the server then keeps what was fitted.
+
+        ``direction``, ``determination``, ``applicability`` and ``protocol`` are optional,
+        attributed claims (``tckdb_schemas.kinetics_declarations``), checked here by the same
+        rule the server applies and never inferred or defaulted. A ``protocol``'s supporting
+        calculations are given as ``protocol_calculations``, ``(purpose, Calculation)`` pairs
+        the assembler names by bundle key.
 
         ``A`` must be strictly positive and numeric. ``A_units`` is
         normalised via the SDK's unit alias map (see module docstring).
@@ -399,6 +499,11 @@ class Kinetics:
             note=note_clean,
             label=label_clean,
             t0_k=float(T0) if T0 is not None else 1.0,
+            direction=direction,
+            determination=determination,
+            applicability=applicability,
+            protocol=protocol,
+            protocol_calculations=list(protocol_calculations or []),
             source_calculations=resolved_sources,
         )
 
@@ -445,6 +550,20 @@ class Kinetics:
             out["tunneling_model"] = self.tunneling_model
         if self.note is not None:
             out["note"] = self.note
+        if self.direction is not None:
+            out["direction"] = self.direction
+        if self.determination is not None:
+            out["determination"] = dict(self.determination)
+        if self.applicability is not None:
+            out["applicability"] = dict(self.applicability)
+        if self.protocol is not None:
+            protocol = dict(self.protocol)
+            if self.protocol_calculations:
+                protocol["supporting_calculations"] = [
+                    {"calculation_key": calc_key_lookup(calc), "purpose": purpose}
+                    for purpose, calc in self.protocol_calculations
+                ]
+            out["protocol"] = protocol
         if self.source_calculations:
             out["source_calculations"] = [
                 {

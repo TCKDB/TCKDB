@@ -47,6 +47,18 @@ def _rate(record, order, ct):
     return ct.ArrheniusRate(a_unit_t0 * factor, record.n, record.ea_kj_mol * 1e6), None
 
 
+def _with_determination(row, captured):
+    """Add the determination a record belongs to, only when it belongs to one.
+
+    The determination's content is part of what the record's declared meaning rests on, so a
+    stored finding goes stale if the record is re-linked to a different one. A record with no
+    determination gains no key at all, so no stored finding of a legacy record is restaled.
+    """
+    if row.determination is not None:
+        captured["determination"] = snapshot(row.determination)
+    return captured
+
+
 def compare_kinetics(forward, reverse, thermo_by_entry, *, temperature_grid):
     """Pure comparison. Mapping keys are resolved species-entry ids, never guessed."""
     grid = temperatures(temperature_grid)
@@ -172,10 +184,16 @@ def compare_kinetics(forward, reverse, thermo_by_entry, *, temperature_grid):
             payload["reason"] = error
             findings.append(finding(forward, payload, refs + fit_refs))
     inputs = {
-        "forward": snapshot(forward, ("source_calculations", "falloff", "plog_entries", "chebyshev",
-                                      "third_body_efficiencies", "arrhenius_entries", "literature")),
-        "reverse": snapshot(reverse, ("source_calculations", "falloff", "plog_entries", "chebyshev",
-                                      "third_body_efficiencies", "arrhenius_entries", "literature")),
+        "forward": _with_determination(
+            forward,
+            snapshot(forward, ("source_calculations", "falloff", "plog_entries", "chebyshev",
+                               "third_body_efficiencies", "arrhenius_entries", "literature")),
+        ),
+        "reverse": _with_determination(
+            reverse,
+            snapshot(reverse, ("source_calculations", "falloff", "plog_entries", "chebyshev",
+                               "third_body_efficiencies", "arrhenius_entries", "literature")),
+        ),
         "participants": sorted((snapshot(p, ("species_entry",)) for p in participants), key=encoded),
         "species": sorted((snapshot(e.species) for e in entries.values()), key=encoded),
         "thermo_mapping": [(key, thermo_inputs(t)) for key, t in thermo_items],

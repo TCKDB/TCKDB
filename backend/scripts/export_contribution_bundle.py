@@ -46,6 +46,7 @@ from app.schemas.workflows.contribution_bundle import (
 )
 from app.services.contribution_bundle_export import (
     DEFAULT_INSTANCE_NAME,
+    BundleExportOmission,
     ContributionBundleExportError,
     ThermoBundleExport,
     deposit_rights_for_records,
@@ -167,7 +168,7 @@ def _write_bundle(bundle: ContributionBundleV0, output: Path) -> None:
 
 
 def _export(
-    session: Session, args: argparse.Namespace
+    session: Session, args: argparse.Namespace, kinetics_omissions: list[BundleExportOmission]
 ) -> ThermoBundleExport | ContributionBundleV0:
     exporter_label = _resolve_exporter_label(args.exporter_label)
     if args.kind == "thermo":
@@ -212,6 +213,7 @@ def _export(
         email=args.email,
         exporter_notes=args.exporter_notes,
         rights=rights,
+        omissions=kinetics_omissions,
     )
 
 
@@ -220,10 +222,11 @@ def main(argv: list[str] | None = None) -> int:
     _validate_args(args)
 
     engine = create_engine(settings.database_url)
+    kinetics_omissions: list[BundleExportOmission] = []
     try:
         with Session(engine) as session:
             try:
-                result = _export(session, args)
+                result = _export(session, args, kinetics_omissions)
             except ContributionBundleExportError as exc:
                 print(f"error: {exc}", file=sys.stderr)
                 return 1
@@ -248,6 +251,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         bundle = result.bundle
     else:
+        # What a portable bundle could not carry, named by public ref, so nothing is left out silently.
+        for omission in kinetics_omissions:
+            print(
+                f"note: {omission.action} {omission.ref}: {omission.detail}",
+                file=sys.stderr,
+            )
         bundle = result
 
     _write_bundle(bundle, args.output)

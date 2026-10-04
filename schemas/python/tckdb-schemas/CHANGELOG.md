@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.96.0 - 2026-10-04
+
+Kinetics records can declare their determination, applicability and protocol (`tckdb_schemas.kinetics_declarations`),
+all optional, on `KineticsUploadRequest` and `BundleKineticsIn` (which also gains `direction`). `reaction.reversible`
+on `/uploads/kinetics` is optional: unstated is inherited or refused, never guessed (#598). New `kinetics_*` refusal codes and
+`unknown_kinetics_determination_ref`, `unknown_network_channel`. A determination may carry a bundle-local `group`.
+
 ## 0.95.0 - 2026-10-04
 
 A network state energy can name one source calculation per participant, and is held against their sum
@@ -51,6 +58,7 @@ upload warnings. Existing payloads are accepted as before.
 - Producers: the hydrazine ingester now cites every participant's single point for a multi-species state
   (`source_calculation_keys`) and a single participant's with `source_calculation_key`. A list on a
   one-participant state also fills the older single slot, so `source_calculation_ref` keeps the source.
+
 
 ## 0.94.0 - 2026-10-04
 
