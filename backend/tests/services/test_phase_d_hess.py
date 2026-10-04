@@ -935,3 +935,16 @@ def test_cp_only_points_are_not_an_enthalpy_representation(db_conn):
         # Pinning the Cp-only points is a visible unavailability, not a silent pass.
         pinned = compare(session, **request(kinetics, mapping_for(kinetics, thermo, {"H2O": "point"})))
         assert evaluated(pinned) == [] and reasons(pinned) == ["participant_enthalpy_unavailable"]
+
+
+def test_a_declared_energy_level_does_not_change_the_hess_context_hash(db_conn):
+    """The declaration is not read by any check, so declaring one restales no stored review (as for D1-D5)."""
+    from tests.services.scientific_read._factories import make_lot
+
+    with uploads(db_conn) as session:
+        kinetics, thermo = abstraction(session)
+        arguments = request(kinetics, mapping_for(kinetics, thermo))
+        before = compare(session, **arguments).digest.context_hash
+        kinetics.energy_level_of_theory_id = make_lot(session, method="b3lyp", basis="def2svp").id
+        session.flush()
+        assert compare(session, **arguments).digest.context_hash == before

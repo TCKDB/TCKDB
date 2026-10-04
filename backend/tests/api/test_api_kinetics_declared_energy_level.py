@@ -174,3 +174,104 @@ def test_an_undeclared_record_exports_without_a_level(client, db_session):
     bundle, imported = _round_trip(db_session, [_latest(db_session).id])
     assert bundle.records.kinetics_uploads[0].energy_level_of_theory is None
     assert imported[0].energy_level_of_theory_id is None
+
+
+# ---------------------------------------------------------------------------
+# Bundle import: the declared level is stored; source calculations are linked all-or-none, and it says so
+# ---------------------------------------------------------------------------
+
+
+def _source_links(db_session, kinetics_id: int) -> int:
+    from app.db.models.kinetics import KineticsSourceCalculation
+
+    return len(
+        db_session.scalars(
+            select(KineticsSourceCalculation).where(KineticsSourceCalculation.kinetics_id == kinetics_id)
+        ).all()
+    )
+
+
+def _import_warnings(db_session, kinetics_id: int) -> list:
+    """Re-import one exported kinetics record with the bundle policy, returning (row, warnings)."""
+    from app.services.contribution_bundle_export import export_kinetics_bundle
+    from app.workflows.kinetics import persist_kinetics_upload
+
+    bundle = export_kinetics_bundle(
+        db_session, kinetics_ids=[kinetics_id], title="t", summary="s", exporter_label="t"
+    )
+    warnings: list = []
+    row = persist_kinetics_upload(
+        db_session, bundle.records.kinetics_uploads[0], warnings=warnings, require_energy_sources=False
+    )
+    return row, warnings
+
+
+def test_a_bundle_import_links_every_participant_or_none_and_still_stores_the_level(client, db_session):
+    """Kills: partial linking (the ``links = []`` reset removed). One participant is ambiguous."""
+    for species in (_METHYL, _H_ATOM, _METHANE):
+        _deposit(client, species, primary=_sp_calc(_OTHER))
+    resp = _kinetics(client, energy_level=_OTHER)
+    assert resp.status_code == 201, resp.text[:600]
+    original = _latest(db_session)
+    assert _source_links(db_session, original.id) == 3
+    # A second single point for the LAST participant at the same level makes only it ambiguous, after the
+    # others have resolved: a partial link set would show up here.
+    _deposit(client, _METHANE, primary=_sp_calc(_OTHER))
+
+    _bundle, imported = _round_trip(db_session, [original.id])
+
+    (copy,) = imported
+    assert copy.energy_level_of_theory_id == original.energy_level_of_theory_id is not None
+    assert _source_links(db_session, copy.id) == 0
+
+
+def test_a_bundle_import_that_links_nothing_says_why(client, db_session):
+    """Ambiguous participant, then no calculation at all: each is reported, and neither refuses the import."""
+    for species in (_METHYL, _H_ATOM, _METHANE):
+        _deposit(client, species, primary=_sp_calc(_OTHER))
+    assert _kinetics(client, energy_level=_OTHER).status_code == 201
+    original = _latest(db_session)
+
+    linked_row, linked_warnings = _import_warnings(db_session, original.id)
+    assert _source_links(db_session, linked_row.id) == 3
+    assert "energy_level_stored_without_source_calculations" not in {w.code for w in linked_warnings}
+
+    _deposit(client, _METHYL, primary=_sp_calc(_OTHER))
+    _row, ambiguous = _import_warnings(db_session, original.id)
+    (warning,) = [w for w in ambiguous if w.code == "energy_level_stored_without_source_calculations"]
+    assert "more than one" in warning.message
+
+    resp = client.post(_REACTION, json=_reaction_bundle(kinetics=[_bundle_kinetics(energy_level_of_theory=_LOT_B)]))
+    assert resp.status_code == 201, resp.text[:800]
+    _row, none = _import_warnings(db_session, _latest(db_session).id)
+    (warning,) = [w for w in none if w.code == "energy_level_stored_without_source_calculations"]
+    assert "no single calculation" in warning.message
+
+
+def test_a_contradiction_names_each_calculation_once(client):
+    """H + H links the same hydrogen single point twice; the refusal lists it once."""
+    # No explicit links: the legacy fallback links the hydrogen single point once per reactant key.
+    bundle = _bundle_with_sp(_LOT_B, energy_level_of_theory=_LOT_A)
+    resp = client.post(_REACTION, json=bundle)
+    assert resp.status_code == 422, resp.text[:800]
+    assert resp.json()["code"] == "kinetics_energy_level_contradiction"
+    refs = resp.json()["context"]["energy_calculation_refs"]
+    assert len(refs) == len(set(refs)) == 1
+
+
+def test_only_a_missing_or_ambiguous_lookup_is_forgiven_on_bundle_import(client, db_session, monkeypatch):
+    """Kills: ``except ValueError`` swallowing a coded refusal from the resolution itself."""
+    import pytest
+
+    from app.api.error_contract import CodedValueError
+    from app.workflows import kinetics as workflow
+
+    resp = client.post(_REACTION, json=_reaction_bundle(kinetics=[_bundle_kinetics(energy_level_of_theory=_LOT_B)]))
+    assert resp.status_code == 201, resp.text[:800]
+
+    def refuse(*_args, **_kwargs):
+        raise CodedValueError("unknown_species_entry", "refused", message_prefix=False)
+
+    monkeypatch.setattr(workflow, "_find_energy_calculation_for_species", refuse)
+    with pytest.raises(CodedValueError):
+        _import_warnings(db_session, _latest(db_session).id)

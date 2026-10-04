@@ -91,6 +91,20 @@ from app.services.upload_reference import (
 from app.workflows.reaction import persist_reaction_upload, reversible_or_inherited
 
 
+class EnergySourceLookupError(ValueError):
+    """No single energy calculation at the declared level could be found for a participant.
+
+    Still a ``ValueError`` with the same message, so the standalone route refuses exactly as before; a bundle import
+    catches this one class (and nothing else) to state the level without linking calculations.
+
+    :ivar reason: ``"none"`` (no calculation at that level) or ``"ambiguous"`` (more than one).
+    """
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 def _find_sp_for_species(
     session: Session,
     *,
@@ -113,16 +127,18 @@ def _find_sp_for_species(
     ).all()
 
     if len(results) == 0:
-        raise ValueError(
+        raise EnergySourceLookupError(
             "No SP calculation found for the requested species entry "
             "at the declared energy level of theory. "
-            "Upload the conformer with the SP as an additional calculation first."
+            "Upload the conformer with the SP as an additional calculation first.",
+            reason="none",
         )
     if len(results) > 1:
-        raise ValueError(
+        raise EnergySourceLookupError(
             "Multiple SP calculations found for the requested species entry "
             "at the declared energy level of theory. "
-            "Cannot auto-resolve: multi-conformer disambiguation not yet supported."
+            "Cannot auto-resolve: multi-conformer disambiguation not yet supported.",
+            reason="ambiguous",
         )
     return results[0]
 
@@ -159,10 +175,11 @@ def _find_energy_calculation_for_species(
     if len(composites) == 1:
         return composites[0]
     if len(composites) > 1:
-        raise ValueError(
+        raise EnergySourceLookupError(
             "Multiple composite calculations found for the requested species entry "
             "at the declared energy level of theory. "
-            "Cannot auto-resolve: multi-conformer disambiguation not yet supported."
+            "Cannot auto-resolve: multi-conformer disambiguation not yet supported.",
+            reason="ambiguous",
         )
     return _find_sp_for_species(session, species_entry_id=species_entry_id, lot_id=lot_id)
 
@@ -1099,13 +1116,27 @@ def persist_kinetics_upload(
                         session, species_entry_id=species_entry.id, lot_id=lot.id
                     )
                     links.append((calc.id, role))
-        except ValueError:
+        except EnergySourceLookupError as error:
             # A bundle record is portable and carries no calculations, so a bundle
             # import states the level without being able to name the calculations; it
-            # links all of them or none, never some.
+            # links all of them or none, never some, and says so.
             if require_energy_sources:
                 raise
             links = []
+            warning_sink.append(
+                UploadWarning(
+                    field="energy_level_of_theory",
+                    code="energy_level_stored_without_source_calculations",
+                    message=(
+                        "The declared energy level of theory was stored, but no source calculations were linked: "
+                        + (
+                            "no single calculation at that level exists for a participant on this instance."
+                            if error.reason == "none"
+                            else "more than one calculation at that level exists for a participant, so none was chosen."
+                        )
+                    ),
+                )
+            )
         for calc_id, role in links:
             session.add(
                 KineticsSourceCalculation(

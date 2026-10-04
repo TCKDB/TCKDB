@@ -1061,7 +1061,7 @@ def assert_kinetics_energy_level_consistency(
     if declared is None:
         return
     energies = [link.calculation for link in links if link.role in _KINETICS_ENERGY_ROLES]
-    differing = [c for c in energies if c.lot_id is not None and c.lot_id != declared.id]
+    differing = list({c.id: c for c in energies if c.lot_id is not None and c.lot_id != declared.id}.values())
     if not differing:
         return
     raise CodedValueError(
