@@ -38,7 +38,19 @@ def test_a_missing_manifest_file_is_named_not_swallowed(fresh_rule_cache, tmp_pa
     assert isinstance(caught.value.__cause__, OSError)
 
 
-def test_a_rule_refused_at_construction_stops_the_boot(fresh_rule_cache, monkeypatch):
+def test_a_pin_mismatch_stops_the_boot(fresh_rule_cache, monkeypatch):
     monkeypatch.setattr(selection_rules, "NETWORK_RULE_MANIFEST_SHA256", "0" * 64)
     with pytest.raises(NetworkSelectionRulesError, match="pinned digest"):
         validate_network_selection_rules()
+
+
+def test_a_rule_refused_at_construction_with_a_valid_pin_stops_the_boot(fresh_rule_cache, monkeypatch):
+    """The pin is intact; the rule's own constructor refuses. That is the ValueError branch of the startup check."""
+
+    def refuse(self, candidate, manifest):
+        raise ValueError("a rule was built wrongly")
+
+    monkeypatch.setattr(selection_rules.AuditedNetworkRule, "__init__", refuse)
+    with pytest.raises(NetworkSelectionRulesError, match="a rule was refused: a rule was built wrongly") as caught:
+        validate_network_selection_rules()
+    assert isinstance(caught.value.__cause__, ValueError)

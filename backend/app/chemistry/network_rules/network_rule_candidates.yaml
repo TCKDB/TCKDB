@@ -154,19 +154,20 @@ rules:
   owner_acceptance: null
   citation: Jasper, A. W. and Miller, J. A., J. Phys. Chem. A 115, 6438-6455 (2011), https://pubs.acs.org/doi/abs/10.1021/jp200048n (CH4 collisional energy transfer).
   council_observation: >-
-    The open abstract reports trajectory tests of the energy-transfer treatment against full-dimensional direct
-    dynamics, for eight baths (He, Ne, Ar, Kr, H2, N2, CO, CH4). It reports that an exponential repulsive wall is
+    The open abstract reports that eight baths were studied (He, Ne, Ar, Kr, H2, N2, CO, CH4), with trajectory
+    tests of the energy-transfer treatment against full-dimensional direct dynamics for only He, Ne and H2. It reports that an exponential repulsive wall is
     needed, that the separable pairwise approximation fails for diatomic baths (20-40 % uncertainty), and that
     transfer averages are insensitive to the intramolecular potential. Evidence is abstract-level only; the full text
     was not read. The trajectory comparison is a fidelity-to-a-model objective: only the paper's final CH4 rates
     against experiment are physical accuracy, registered separately as N-JM-CH4-RATE.
   proposed_statement: >-
-    For CH4 in the studied baths and temperature range, a collisional energy-transfer treatment built on one studied
-    interaction potential is preferred over one built on another, on the objective of agreement with the study's
-    full-dimensional direct-dynamics transfer data. No universal whole-rate level-of-theory preference.
+    For CH4 in a bath the study tested against full-dimensional direct dynamics (He, Ne or H2) and in its
+    temperature range, a collisional energy-transfer treatment built on one studied interaction potential is
+    preferred over one built on another, on the objective of agreement with that direct-dynamics transfer data. The
+    other studied baths carry no direct-dynamics reference in the abstract. No universal whole-rate level-of-theory preference.
   required_predicates:
   - The candidates differ only in the energy-transfer treatment (the interaction potential), the rest of the coupled protocol verified equal.
-  - The bath and the temperature range lie inside the studied baths and range.
+  - The bath is one tested against direct dynamics (He, Ne or H2) and the temperature range lies inside the studied range.
   - The reference direct-dynamics transfer data and their uncertainty are pinned.
   exceptions:
   - A claim that a better intramolecular electronic treatment improves energy transfer (the abstract reports transfer averages are insensitive to it).

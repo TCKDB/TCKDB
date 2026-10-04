@@ -14,7 +14,7 @@ and reviewed, rule by rule; neither exists. The registry is built when the API s
 | --- | --- | --- | --- | --- |
 | `N-AMEDRO-HE-FC` | solves | representation fidelity (named dataset reproduction) | OH + NO2 in He: the He-specific broadening factor (Fc = 0.32) reproduces the stated dataset better than the N2 value (0.39) | the compared objects are Troe falloff fits, not network fits; Table 1 is located but not extracted; only the two He fits were audited; no verified evidence state exists |
 | `N-JG-REDUCTION-FIDELITY` | solves | model fidelity | one pinned PES, bath, cell set and window: a reduction closer to the energy-grained flux over a less close one (council-reported, unverified) | the open-access article has not been read here; cells, metric and variant definitions unaudited; whether to add `simulation_least_squares` to the reduction vocabulary is open; a transient flux is not a phenomenological coefficient |
-| `N-JM-CH4-TRANSFER` | solves | model fidelity | CH4 baths: one interaction-potential transfer treatment over another against full-dimensional direct dynamics | abstract-level evidence only; `network_solve_energy_transfer.model` is free text, with no typed field for how the parameters were obtained |
+| `N-JM-CH4-TRANSFER` | solves | model fidelity | CH4 in He, Ne or H2: one interaction-potential transfer treatment over another against full-dimensional direct dynamics | abstract-level evidence only; `network_solve_energy_transfer.model` is free text, with no typed field for how the parameters were obtained |
 | `N-JM-CH4-RATE` | solves | physical accuracy | CH4: the solve whose rates agree better with the study's experiments | the experimental comparison is in the paywalled full text; no verification step |
 | `N-ME-CONVERGENCE` | solves | model fidelity | a verified converged solve over a demonstrated inadequate one of the same model | a proposed rule with no source comparison; no verification step; "same model" is not a stated fact |
 | `N-REP-HELDOUT` | fits of one solve | representation fidelity | the fit with the better held-out error under one declared metric | no pinned held-out set; no verification step |
@@ -36,8 +36,8 @@ direct dynamics are a model-fidelity claim, and only its final CH4 rates against
 
 ## What would be needed (for the owner)
 
-- **Amedro:** nothing more is needed from the owner to read it: it is open. Extract Table 1 (about a dozen He points
-  per temperature) with page and table anchors if the rule is to be pursued, and decide whether a Troe-falloff
+- **Amedro:** nothing more is needed from the owner to read it: it is open. Extract Table 1 (14 He points in all: 1 at
+  277 K, 10 at 292 K and 3 at 332 K) with page and table anchors if the rule is to be pursued, and decide whether a Troe-falloff
   comparison belongs to network selection at all.
 - **Johnson and Green:** open access. A browser fetch is needed only if a reduction-fidelity rule is wanted; then the
   reduction definitions, PES variants, cells, metric and results, and a decision on `simulation_least_squares`
