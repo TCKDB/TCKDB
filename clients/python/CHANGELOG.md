@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.127.0 - 2026-10-04
+
+Adds the `RejectionCode.NETWORK_STATE_ENERGY_SUM_MISMATCH` member (`tckdb-schemas` 0.92.0, #678): the
+network-PDep upload now refuses a state energy that contradicts the sum of the energies stored for the
+per-participant source calculations it cites. Nothing in the client's code changes.
+
 ## 0.126.0 - 2026-10-03
 
 Method-aware selection of a species entry's thermo record for the gas-phase formation enthalpy at

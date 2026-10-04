@@ -2882,6 +2882,8 @@ Table network_solve_state_energy {
   correction_convention EnergyCorrectionConvention [not null]
   convention_note text
   source_calculation_id bigint [ref: > calculation.id]
+  source_sum_comparison text
+  source_sum_not_compared_reason text
 
   indexes {
     (solve_id, state_id) [pk]
@@ -2889,9 +2891,25 @@ Table network_solve_state_energy {
 
   checks {
     `(energy_zero_convention <> 'other' AND correction_convention <> 'other') OR convention_note IS NOT NULL` [name: 'ck_network_solve_state_energy_other_note']
+    `source_sum_comparison IS NULL OR source_sum_comparison IN ('agrees', 'not_compared')` [name: 'ck_network_solve_state_energy_sum_comparison']
+    `(source_sum_comparison IS NOT DISTINCT FROM 'not_compared') = (source_sum_not_compared_reason IS NOT NULL)` [name: 'ck_network_solve_state_energy_sum_reason_shape']
+    `source_sum_not_compared_reason IS NULL OR source_sum_not_compared_reason IN ('no_source_stated', 'sources_incomplete', 'convention_not_summable', 'energy_zero_not_comparable', 'stored_energy_not_stated', 'zpe_not_in_source', 'no_second_state_on_the_same_zero')` [name: 'ck_network_solve_state_energy_sum_reason_token']
   }
 
   Note: 'Solve-specific state energy with an explicit zero/correction convention.'
+}
+
+Table network_solve_state_energy_source {
+  solve_id bigint [not null, ref: > network_solve_state_energy.solve_id]
+  state_id bigint [not null, ref: > network_solve_state_energy.state_id]
+  species_entry_id bigint [not null, ref: > network_state_participant.species_entry_id]
+  calculation_id bigint [not null, ref: > calculation.id]
+
+  indexes {
+    (solve_id, species_entry_id, state_id) [pk]
+  }
+
+  Note: 'The calculation one participant of a state contributes to its energy (#678).'
 }
 
 Table network_species {
@@ -4079,6 +4097,10 @@ Table workflow_tool_release {
 Ref fk_cspcv_calc_id_coordinate_index: calc_scan_point_coordinate_value.(calculation_id, coordinate_index) > calc_scan_coordinate.(calculation_id, coordinate_index)
 
 Ref fk_cspcv_calc_id_point_index: calc_scan_point_coordinate_value.(calculation_id, point_index) > calc_scan_point.(calculation_id, point_index)
+
+Ref fk_nsse_source_participant: network_solve_state_energy_source.(state_id, species_entry_id) > network_state_participant.(state_id, species_entry_id)
+
+Ref fk_nsse_source_state_energy: network_solve_state_energy_source.(solve_id, state_id) > network_solve_state_energy.(solve_id, state_id)
 
 Ref fk_reaction_atom_map_pair_atom_map_id_reaction_atom_map: reaction_atom_map_pair.(atom_map_id, transition_state_geometry_id) > reaction_atom_map.(id, transition_state_geometry_id)
 

@@ -212,6 +212,7 @@ class RejectionCode(str, Enum):
     NETWORK_KINETICS_EVALUATE_MODEL_KIND_NOT_SUPPORTED = "network_kinetics_evaluate_model_kind_not_supported"
     NETWORK_KINETICS_RATE_UNITS_MISSING = "network_kinetics_rate_units_missing"
     NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE = "network_solve_reported_requires_literature"
+    NETWORK_STATE_ENERGY_SUM_MISMATCH = "network_state_energy_sum_mismatch"
     NETWORK_STATE_KEY_UNDECLARED = "network_state_key_undeclared"
     NON_FINITE_VALUE = "non_finite_value"
     OBSERVATION_IDENTITY_ALREADY_SET = "observation_identity_already_set"
@@ -461,6 +462,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.NETWORK_KINETICS_EVALUATE_MISSING_TEMPERATURE,
         RejectionCode.NETWORK_KINETICS_EVALUATE_MODEL_KIND_NOT_SUPPORTED,
         RejectionCode.NETWORK_KINETICS_RATE_UNITS_MISSING,
+        RejectionCode.NETWORK_STATE_ENERGY_SUM_MISMATCH,
         RejectionCode.NETWORK_STATE_KEY_UNDECLARED,
         RejectionCode.NON_FINITE_VALUE,
         RejectionCode.OBSERVATION_IDENTITY_ALREADY_SET,
@@ -741,6 +743,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.NETWORK_KINETICS_EVALUATE_MODEL_KIND_NOT_SUPPORTED: frozenset({422}),
     RejectionCode.NETWORK_KINETICS_RATE_UNITS_MISSING: frozenset({422}),
     RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE: frozenset({409}),
+    RejectionCode.NETWORK_STATE_ENERGY_SUM_MISMATCH: frozenset({422}),
     RejectionCode.NETWORK_STATE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.NON_FINITE_VALUE: frozenset({422}),
     RejectionCode.OBSERVATION_IDENTITY_ALREADY_SET: frozenset({422}),

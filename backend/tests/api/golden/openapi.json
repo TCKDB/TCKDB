@@ -30207,7 +30207,7 @@
         "type": "object"
       },
       "NetworkSolveStateEnergyRead": {
-        "description": "One explicit state energy used by a master-equation solve.",
+        "description": "One explicit state energy used by a master-equation solve.\n\n``source_calculation_id`` is the older single slot: on a state with several participants it is\none summand of several. ``sources`` lists one calculation per participant and\n``partial_sources`` is true when they cover some but not all of them.\n``source_sum_comparison`` is null on a row deposited before the sum check existed.",
         "properties": {
           "correction_convention": {
             "title": "Correction Convention",
@@ -30220,6 +30220,11 @@
           "energy_zero_convention": {
             "title": "Energy Zero Convention",
             "type": "string"
+          },
+          "partial_sources": {
+            "default": false,
+            "title": "Partial Sources",
+            "type": "boolean"
           },
           "solve_id": {
             "title": "Solve Id",
@@ -30236,6 +30241,35 @@
             ],
             "title": "Source Calculation Id"
           },
+          "source_sum_comparison": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Sum Comparison"
+          },
+          "source_sum_not_compared_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Sum Not Compared Reason"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkSolveStateEnergySourceRead"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
           "state_id": {
             "title": "State Id",
             "type": "integer"
@@ -30251,8 +30285,80 @@
         "title": "NetworkSolveStateEnergyRead",
         "type": "object"
       },
+      "NetworkSolveStateEnergySourceRead": {
+        "description": "The calculation one participant of a state contributes to its energy.",
+        "properties": {
+          "calculation_id": {
+            "title": "Calculation Id",
+            "type": "integer"
+          },
+          "species_entry_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Id"
+          },
+          "stoichiometry": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stoichiometry"
+          }
+        },
+        "required": [
+          "calculation_id"
+        ],
+        "title": "NetworkSolveStateEnergySourceRead",
+        "type": "object"
+      },
+      "NetworkSolveStateEnergySourceSummary": {
+        "description": "The calculation one participant of a state contributes to its energy.\n\n``species_entry_ref`` is the participant it is the source for; null only for a legacy single\nsource that belongs to no participant of the state (never inferred from another row).\n``stoichiometry`` is that participant's coefficient in the state.",
+        "properties": {
+          "calculation_ref": {
+            "title": "Calculation Ref",
+            "type": "string"
+          },
+          "species_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Ref"
+          },
+          "stoichiometry": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stoichiometry"
+          }
+        },
+        "required": [
+          "calculation_ref"
+        ],
+        "title": "NetworkSolveStateEnergySourceSummary",
+        "type": "object"
+      },
       "NetworkSolveStateEnergySummary": {
-        "description": "A solve-specific state energy and its explicit conventions.",
+        "description": "A solve-specific state energy and its explicit conventions.\n\nA state with several species has an energy that is a sum, so its sources are listed per\nparticipant in ``sources``. ``source_calculation_ref`` is the older single slot: on a state\nwith more than one participant it is one summand of several, never the whole of it. When\n``sources`` name some but not all participants ``partial_sources`` is true; no other\nparticipant's source is borrowed from elsewhere.\n\n``source_sum_comparison`` is what the upload concluded when it held the stated energy against\nthe sum of the stored energies of ``sources``: ``agrees``, or ``not_compared`` with\n``source_sum_not_compared_reason``. Null on a row deposited before the comparison existed\n(not assessed, not a pass). A disagreement is never stored: it refused the upload.",
         "properties": {
           "convention_note": {
             "anyOf": [
@@ -30275,6 +30381,11 @@
           "energy_zero_convention": {
             "$ref": "#/components/schemas/EnergyZeroConvention"
           },
+          "partial_sources": {
+            "default": false,
+            "title": "Partial Sources",
+            "type": "boolean"
+          },
           "source_calculation_ref": {
             "anyOf": [
               {
@@ -30285,6 +30396,39 @@
               }
             ],
             "title": "Source Calculation Ref"
+          },
+          "source_sum_comparison": {
+            "anyOf": [
+              {
+                "enum": [
+                  "agrees",
+                  "not_compared"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Sum Comparison"
+          },
+          "source_sum_not_compared_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Sum Not Compared Reason"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkSolveStateEnergySourceSummary"
+            },
+            "title": "Sources",
+            "type": "array"
           },
           "state_composition_hash": {
             "title": "State Composition Hash",
@@ -42683,7 +42827,7 @@
       },
       "StateEnergyIn": {
         "additionalProperties": false,
-        "description": "One solve-state energy on a declared, reproducible energy zero.",
+        "description": "One solve-state energy on a declared, reproducible energy zero.\n\nName where the energy came from with exactly one of ``source_calculation_keys`` (one\ncalculation per participant) or ``source_calculation_key`` (a single calculation). A state\nwith several species is a sum, so it should use the list; a single source on such a state is\naccepted and read back as partial (``network_state_energy_sources_partial`` warning).",
         "properties": {
           "convention_note": {
             "anyOf": [
@@ -42720,6 +42864,22 @@
             "description": "Local key of the calculation this energy came from. For correction_convention 'electronic_only' it is the calculation the electronic energy came from: an sp, an opt or a composite. For the composed conventions (electronic_plus_zpe, atom_and_bond_corrected, thermal_enthalpy_298k, other) it is the calculation of the energy's electronic part, or a composite that holds the whole E0; the frequency calculation goes in source_calculations with the well_freq or barrier_freq role. A calculation that reports no stationary-point energy (irc, scan, path_search, conf) is refused with network_energy_source_type_mismatch. The calculation must also belong to the subject the energy is stated for: a species of that state (any one of them for a bimolecular state) for a state energy, the transition state itself for a channel barrier; otherwise it is refused with network_energy_source_subject_mismatch.",
             "title": "Source Calculation Key"
           },
+          "source_calculation_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StateEnergySourceIn"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One calculation per participant of the state, as {species_key, calculation_key}. A state energy of several species is the sum of theirs, weighted by each participant's stoichiometry. Each calculation passes the same type rule as source_calculation_key and must belong to exactly the species named beside it (network_energy_source_subject_mismatch otherwise). When the energy is on an absolute zero, or on a zero shared by several state energies of the solve (lowest_state, entrance_channel), and the sources cover every participant, TCKDB compares the stated energy with the sum of the stored energies and refuses a contradiction (network_state_energy_sum_mismatch, within the printed-precision tolerance). A comparison that cannot be made is stored as not compared with its reason and returns a network_state_energy_sum_not_compared warning. Send this or source_calculation_key, never both.",
+            "title": "Source Calculation Keys"
+          },
           "state_key": {
             "minLength": 1,
             "title": "State Key",
@@ -42733,6 +42893,28 @@
           "energy_kj_mol"
         ],
         "title": "StateEnergyIn",
+        "type": "object"
+      },
+      "StateEnergySourceIn": {
+        "additionalProperties": false,
+        "description": "The calculation one participant of a state contributes to the state's energy.\n\n:param species_key: Local key of the participant species. It must be a participant of the\n    state the energy is stated for.\n:param calculation_key: Local key of that species' own calculation (an sp, an opt or a\n    composite for ``electronic_only``). It must belong to exactly that species; a calculation\n    of another species is refused with ``network_energy_source_subject_mismatch``.",
+        "properties": {
+          "calculation_key": {
+            "minLength": 1,
+            "title": "Calculation Key",
+            "type": "string"
+          },
+          "species_key": {
+            "minLength": 1,
+            "title": "Species Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species_key",
+          "calculation_key"
+        ],
+        "title": "StateEnergySourceIn",
         "type": "object"
       },
       "StationaryPointKind": {

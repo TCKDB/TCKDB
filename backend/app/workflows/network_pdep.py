@@ -47,6 +47,7 @@ from app.db.models.network_pdep import (
     NetworkSolveEnergyTransfer,
     NetworkSolveSourceCalculation,
     NetworkSolveStateEnergy,
+    NetworkSolveStateEnergySource,
     NetworkState,
     NetworkStateParticipant,
 )
@@ -92,11 +93,17 @@ from app.services.local_key_resolution import (
     resolve_transition_state_key,
 )
 from app.services.network_energy_sources import (
+    ParticipantSource,
+    StateEnergyToCompare,
     assert_barrier_source_owner,
     assert_network_energy_source_type,
     assert_network_role_source_owner,
     assert_network_source_role_type,
     assert_state_energy_source_owner,
+    assert_state_participant_source_owner,
+    collect_state_energy_source_warnings,
+    compare_state_energy_sums,
+    refuse_source_species_outside_state,
 )
 from app.services.provenance_warnings import (
     collect_network_energy_transfer_warnings,
@@ -1042,46 +1049,147 @@ def persist_network_pdep_upload(
         # catches an undefined key as a side effect. A ``reported`` solve
         # (ADR 0010) is exempt from those rules and so was exempt from the
         # side effect, and reached these subscripts with whatever it wrote.
+        species_key_by_entry_id = {
+            entry.id: key for key, entry in species_key_to_entry.items()  # type: ignore[attr-defined]
+        }
+        sum_inputs: list[StateEnergyToCompare] = []
+        sum_rows: list[NetworkSolveStateEnergy] = []
+        participant_source_rows: list[tuple[int, int, int]] = []
         for energy_index, energy_in in enumerate(solve_in.state_energies):
             energy_state = resolve_network_state_key(
                 energy_in.state_key,
                 state_key_to_row,
                 field=f"solve.state_energies[{energy_index}].state_key",
             )
-            # The state's own species, from the persisted participant rows.
-            energy_state_species = set(
-                session.scalars(
-                    select(NetworkStateParticipant.species_entry_id).where(
-                        NetworkStateParticipant.state_id == energy_state.id
-                    )
+            # The state's own species and coefficients, from the persisted participant rows.
+            participant_rows = session.execute(
+                select(
+                    NetworkStateParticipant.species_entry_id,
+                    NetworkStateParticipant.stoichiometry,
                 )
-            )
-            session.add(NetworkSolveStateEnergy(
+                .where(NetworkStateParticipant.state_id == energy_state.id)
+                .order_by(NetworkStateParticipant.species_entry_id)
+            ).all()
+            energy_state_species = {row.species_entry_id for row in participant_rows}
+            cited: dict[int, Calculation] = {}
+            single_source_id: int | None = None
+            energy_field = f"solve.state_energies[{energy_index}]"
+            if energy_in.source_calculation_key and energy_in.source_calculation_keys:
+                raise ValueError(
+                    f"{energy_field}: send either source_calculation_key or "
+                    "source_calculation_keys, not both."
+                )
+            if energy_in.source_calculation_keys:
+                for source_index, source_in in enumerate(energy_in.source_calculation_keys):
+                    source_field = f"{energy_field}.source_calculation_keys[{source_index}]"
+                    source_species = resolve_species_key(
+                        source_in.species_key,
+                        species_key_to_entry,
+                        field=f"{source_field}.species_key",
+                    ).id  # type: ignore[attr-defined]
+                    source_calculation = _calculation_row(
+                        session,
+                        resolve_calculation_key(
+                            source_in.calculation_key,
+                            calculation_key_to_id,
+                            field=f"{source_field}.calculation_key",
+                        ),
+                    )
+                    assert_network_energy_source_type(
+                        source_calculation,
+                        energy_in.correction_convention,
+                        field=f"{source_field}.calculation_key",
+                    )
+                    if source_species not in energy_state_species:
+                        refuse_source_species_outside_state(
+                            source_calculation,
+                            species_key=source_in.species_key,
+                            state_key=energy_in.state_key,
+                            field=f"{source_field}.species_key",
+                        )
+                    assert_state_participant_source_owner(
+                        source_calculation,
+                        source_species,
+                        species_key=source_in.species_key,
+                        state_key=energy_in.state_key,
+                        field=f"{source_field}.calculation_key",
+                    )
+                    if source_species in cited:
+                        raise ValueError(
+                            f"{source_field}.species_key: the participant "
+                            f"'{source_in.species_key}' is listed more than once."
+                        )
+                    cited[source_species] = source_calculation
+            elif energy_in.source_calculation_key:
+                single_source_id = _resolve_energy_source(
+                    session,
+                    energy_in.source_calculation_key,
+                    calculation_key_to_id,
+                    field=f"{energy_field}.source_calculation_key",
+                    correction_convention=energy_in.correction_convention,
+                    assert_owner=_state_owner_check(
+                        energy_state_species,
+                        state_key=energy_in.state_key,
+                        field=f"{energy_field}.source_calculation_key",
+                    ),
+                )
+                assert single_source_id is not None  # a non-empty key resolved above
+                single_calculation = _calculation_row(session, single_source_id)
+                # Owned by a participant (checked above): that participant is the one it covers.
+                assert single_calculation.species_entry_id is not None
+                cited[single_calculation.species_entry_id] = single_calculation
+            energy_row = NetworkSolveStateEnergy(
                 solve_id=solve.id,
                 state_id=energy_state.id,
                 energy_kj_mol=energy_in.energy_kj_mol,
                 energy_zero_convention=energy_in.energy_zero_convention,
                 correction_convention=energy_in.correction_convention,
                 convention_note=energy_in.convention_note,
-                source_calculation_id=_resolve_energy_source(
-                    session,
-                    energy_in.source_calculation_key,
-                    calculation_key_to_id,
-                    field=(
-                        f"solve.state_energies[{energy_index}]."
-                        f"source_calculation_key"
-                    ),
+                source_calculation_id=single_source_id,
+            )
+            session.add(energy_row)
+            sum_rows.append(energy_row)
+            sum_inputs.append(
+                StateEnergyToCompare(
+                    index=energy_index,
+                    state_key=energy_in.state_key,
+                    energy_kj_mol=energy_in.energy_kj_mol,
+                    energy_zero_convention=energy_in.energy_zero_convention,
                     correction_convention=energy_in.correction_convention,
-                    assert_owner=_state_owner_check(
-                        energy_state_species,
-                        state_key=energy_in.state_key,
-                        field=(
-                            f"solve.state_energies[{energy_index}]."
-                            f"source_calculation_key"
-                        ),
+                    participants=tuple(
+                        ParticipantSource(
+                            species_key=species_key_by_entry_id.get(row.species_entry_id, "?"),
+                            stoichiometry=row.stoichiometry,
+                            calculation=cited.get(row.species_entry_id),
+                        )
+                        for row in participant_rows
                     ),
-                ),
-            ))
+                )
+            )
+            if energy_in.source_calculation_keys:
+                for species_entry_id, source_calculation in cited.items():
+                    participant_source_rows.append(
+                        (energy_state.id, species_entry_id, source_calculation.id)
+                    )
+
+        # The sum check needs every state energy of the solve (a shared zero compares states with
+        # each other), so it runs once, after all are resolved. A contradiction refuses the
+        # upload; every other outcome is stored on the row.
+        sum_comparisons = compare_state_energy_sums(sum_inputs)
+        for energy_row, comparison in zip(sum_rows, sum_comparisons, strict=True):
+            energy_row.source_sum_comparison = comparison.status
+            energy_row.source_sum_not_compared_reason = comparison.reason
+        warning_sink.extend(collect_state_energy_source_warnings(sum_inputs, sum_comparisons))
+        session.flush()
+        for state_id, species_entry_id, calculation_id in participant_source_rows:
+            session.add(
+                NetworkSolveStateEnergySource(
+                    solve_id=solve.id,
+                    state_id=state_id,
+                    species_entry_id=species_entry_id,
+                    calculation_id=calculation_id,
+                )
+            )
 
         for barrier_index, barrier_in in enumerate(solve_in.channel_barriers):
             barrier_ts_entry = resolve_transition_state_key(

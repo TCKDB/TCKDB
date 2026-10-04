@@ -745,10 +745,12 @@ def build_network_pdep_payload(
             if value is not None:
                 sp_energy_hartree[species["key"]] = float(value)
                 break
-    raw_state_energies: list[tuple[dict, float, str]] = []
+    # (state, hartree, [(species_key, single-point key), ...]) -- one source per participant (#678):
+    # a state with several species is a sum, and its energy names every term's calculation.
+    raw_state_energies: list[tuple[dict, float, list[tuple[str, str]]]] = []
     for state in states:
         hartree = 0.0
-        source_key: str | None = None
+        sources: list[tuple[str, str]] = []
         for participant in state["participants"]:
             label = participant["species_key"]
             if label not in sp_energy_hartree or label not in species_sp_key:
@@ -757,15 +759,15 @@ def build_network_pdep_payload(
                     f"missing SP energy for species {label!r}."
                 )
             hartree += participant.get("stoichiometry", 1) * sp_energy_hartree[label]
-            source_key = source_key or species_sp_key[label]
-        assert source_key is not None  # states require at least one participant
-        raw_state_energies.append((state, hartree, source_key))
+            sources.append((label, species_sp_key[label]))
+        assert sources  # states require at least one participant
+        raw_state_energies.append((state, hartree, sources))
 
     # Arkane's parsed payload gives electronic SP energies. Declare the lowest
     # state as the zero and record that these are NOT silently promoted to
     # ZPE/thermal values.
     zero_hartree = (
-        min(value for _state, value, _source in raw_state_energies)
+        min(value for _state, value, _sources in raw_state_energies)
         if raw_state_energies
         else 0.0
     )
@@ -773,15 +775,22 @@ def build_network_pdep_payload(
         "energy_zero_convention": "lowest_state",
         "correction_convention": "electronic_only",
     }
-    state_energies = [
-        {
+    state_energies = []
+    for state, value, sources in raw_state_energies:
+        entry = {
             "state_key": state["key"],
             "energy_kj_mol": (value - zero_hartree) * HARTREE_TO_KJ_MOL,
             **_CONVENTIONS,
-            "source_calculation_key": source_key,
         }
-        for state, value, source_key in raw_state_energies
-    ]
+        if len(sources) == 1:
+            # One participant (a well, or 2 A): the single slot covers the whole sum.
+            entry["source_calculation_key"] = sources[0][1]
+        else:
+            entry["source_calculation_keys"] = [
+                {"species_key": species, "calculation_key": calculation}
+                for species, calculation in sources
+            ]
+        state_energies.append(entry)
     state_energy_kj_mol = {
         entry["state_key"]: entry["energy_kj_mol"] for entry in state_energies
     }

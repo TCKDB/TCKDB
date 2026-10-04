@@ -129,6 +129,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "network_solve_energy_transfer",
         "network_solve_source_calculation",
         "network_solve_state_energy",
+        "network_solve_state_energy_source",
         "network_species",
         "network_state",
         "network_state_participant",

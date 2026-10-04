@@ -125,6 +125,7 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
         ChildTable("network_solve_bath_gas", "solve_id"),
         ChildTable("network_solve_energy_transfer", "solve_id"),
         ChildTable("network_solve_state_energy", "solve_id"),
+        ChildTable("network_solve_state_energy_source", "solve_id"),
         ChildTable("network_solve_channel_barrier", "solve_id"),
         ChildTable("network_solve_source_calculation", "solve_id"),
         ChildTable(

@@ -3472,7 +3472,7 @@
     },
     "StateEnergyIn": {
       "additionalProperties": false,
-      "description": "One solve-state energy on a declared, reproducible energy zero.",
+      "description": "One solve-state energy on a declared, reproducible energy zero.\n\nName where the energy came from with exactly one of ``source_calculation_keys`` (one\ncalculation per participant) or ``source_calculation_key`` (a single calculation). A state\nwith several species is a sum, so it should use the list; a single source on such a state is\naccepted and read back as partial (``network_state_energy_sources_partial`` warning).",
       "properties": {
         "convention_note": {
           "anyOf": [
@@ -3511,6 +3511,23 @@
           "description": "Local key of the calculation this energy came from. For correction_convention 'electronic_only' it is the calculation the electronic energy came from: an sp, an opt or a composite. For the composed conventions (electronic_plus_zpe, atom_and_bond_corrected, thermal_enthalpy_298k, other) it is the calculation of the energy's electronic part, or a composite that holds the whole E0; the frequency calculation goes in source_calculations with the well_freq or barrier_freq role. A calculation that reports no stationary-point energy (irc, scan, path_search, conf) is refused with network_energy_source_type_mismatch. The calculation must also belong to the subject the energy is stated for: a species of that state (any one of them for a bimolecular state) for a state energy, the transition state itself for a channel barrier; otherwise it is refused with network_energy_source_subject_mismatch.",
           "title": "Source Calculation Key"
         },
+        "source_calculation_keys": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/StateEnergySourceIn"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One calculation per participant of the state, as {species_key, calculation_key}. A state energy of several species is the sum of theirs, weighted by each participant's stoichiometry. Each calculation passes the same type rule as source_calculation_key and must belong to exactly the species named beside it (network_energy_source_subject_mismatch otherwise). When the energy is on an absolute zero, or on a zero shared by several state energies of the solve (lowest_state, entrance_channel), and the sources cover every participant, TCKDB compares the stated energy with the sum of the stored energies and refuses a contradiction (network_state_energy_sum_mismatch, within the printed-precision tolerance). A comparison that cannot be made is stored as not compared with its reason and returns a network_state_energy_sum_not_compared warning. Send this or source_calculation_key, never both.",
+          "title": "Source Calculation Keys"
+        },
         "state_key": {
           "minLength": 1,
           "title": "State Key",
@@ -3524,6 +3541,28 @@
         "energy_kj_mol"
       ],
       "title": "StateEnergyIn",
+      "type": "object"
+    },
+    "StateEnergySourceIn": {
+      "additionalProperties": false,
+      "description": "The calculation one participant of a state contributes to the state's energy.\n\n:param species_key: Local key of the participant species. It must be a participant of the\n    state the energy is stated for.\n:param calculation_key: Local key of that species' own calculation (an sp, an opt or a\n    composite for ``electronic_only``). It must belong to exactly that species; a calculation\n    of another species is refused with ``network_energy_source_subject_mismatch``.",
+      "properties": {
+        "calculation_key": {
+          "minLength": 1,
+          "title": "Calculation Key",
+          "type": "string"
+        },
+        "species_key": {
+          "minLength": 1,
+          "title": "Species Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "species_key",
+        "calculation_key"
+      ],
+      "title": "StateEnergySourceIn",
       "type": "object"
     },
     "StationaryPointKind": {

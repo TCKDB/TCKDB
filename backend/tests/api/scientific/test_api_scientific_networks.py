@@ -1374,6 +1374,12 @@ def test_solve_detail_reads_scoped_energy_transfer_and_state_energies(
         "correction_convention": "electronic_plus_zpe",
         "convention_note": None,
         "source_calculation_ref": None,
+        # A row with no source and no recorded outcome (a factory row, as a pre-#678 one):
+        # nothing is listed, nothing is partial, and the comparison reads as never made.
+        "sources": [],
+        "partial_sources": False,
+        "source_sum_comparison": None,
+        "source_sum_not_compared_reason": None,
     }]
 
 

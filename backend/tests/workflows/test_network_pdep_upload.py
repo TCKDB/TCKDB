@@ -2439,11 +2439,17 @@ def test_transition_state_without_irc_evidence_succeeds_with_a_warning(
         # Two absences, both about the same saddle point and both stated:
         # nothing evidences that it connects its declared endpoints, and
         # nothing says which atom of the reactants is which atom of it.
-        assert [w.code for w in warnings] == [
+        about_the_saddle_point = [w for w in warnings if "ts_elim" in w.field]
+        assert [w.code for w in about_the_saddle_point] == [
             "transition_state_missing_irc_evidence",
             "reaction_atom_map_absent",
         ]
-        assert all("ts_elim" in w.field for w in warnings)
+        # The fixture states each bimolecular state's energy from one species' single point and
+        # on a composed convention, so #678 adds its two warnings about the state energies.
+        assert {w.code for w in warnings if w not in about_the_saddle_point} == {
+            "network_state_energy_sources_partial",
+            "network_state_energy_sum_not_compared",
+        }
 
 
 def test_every_pdep_saddle_point_reports_its_missing_atom_map(

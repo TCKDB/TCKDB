@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.92.0 - 2026-10-04
+
+A network state energy can name one source calculation per participant, and is held against their sum
+(#678). One new optional field on `POST /uploads/networks/pdep`, one new block-tier refusal and two new
+upload warnings. Existing payloads are accepted as before.
+
+- **`solve.state_energies[].source_calculation_keys`** (new, optional): a list of
+  `{species_key, calculation_key}`, one per participant of the state. Send it or the older
+  `source_calculation_key`, never both (a plain 422). Each calculation passes the existing
+  `network_energy_source_type_mismatch` type rule and must belong to *exactly* the participant it is
+  listed beside, otherwise `network_energy_source_subject_mismatch`; a `species_key` that is not a
+  participant of the state is refused the same way, at `...source_calculation_keys[j].species_key`.
+  `source_calculation_key` is unchanged and still accepts the calculation of any one participant.
+- **`network_state_energy_sum_mismatch` (422, block).** When every participant of a state has a source,
+  TCKDB compares the stated `energy_kj_mol` with `sum(stoichiometry * stored energy)` and refuses a
+  contradiction, within `max(1e-6, 5e-7 * n)` hartree with `n = 1 + sum(stoichiometry)`. Defined for
+  `correction_convention: electronic_only` (an `sp`, `opt` or `composite` energy) and, only where every
+  source is a `composite` storing an E0, `electronic_plus_zpe`. `energy_zero_convention: absolute` is
+  compared directly. `lowest_state` and `entrance_channel` shift every state of the solve by one
+  constant, so those are compared as *differences* between states against the state with the lowest
+  stated energy (`n = 2 + sum(nu_i) + sum(nu_j)`). `context` names the field, the state and both
+  numbers; no database id.
+- **`network_state_energy_sum_not_compared` (warning).** A sum that cannot be formed is never refused
+  and never guessed: `atom_and_bond_corrected`, `thermal_enthalpy_298k` and `other` corrections
+  (`convention_not_summable`), `electronic_plus_zpe` with an `sp`/`opt`/`freq` source
+  (`zpe_not_in_source`), `separated_reactants` and `other` zeros (`energy_zero_not_comparable`), a
+  source that stores no such energy (`stored_energy_not_stated`), and a state alone on its shared zero
+  (`no_second_state_on_the_same_zero`). The outcome is stored with its reason. A state with no source
+  at all is stored as not compared (`no_source_stated`) without a warning: nothing was claimed.
+- **`network_state_energy_sources_partial` (warning).** A source on some but not all of a state's
+  participants, which includes a single `source_calculation_key` on a multi-species state. It is
+  accepted and read back as partial; no other participant's source is borrowed.
+- **Reads.** `NetworkSolveStateEnergySummary` gains `sources[]` (`species_entry_ref`, `stoichiometry`,
+  `calculation_ref`), `partial_sources`, `source_sum_comparison` (`agrees`, `not_compared` or null for a
+  row deposited before the check) and `source_sum_not_compared_reason`. `source_calculation_ref` is the
+  older single slot, one summand of several on a multi-species state. Stored networks read as they did,
+  with the new fields describing what they hold.
+- Producers: the hydrazine ingester now cites every participant's single point for a multi-species state
+  (`source_calculation_keys`) and a single participant's with `source_calculation_key`.
+
 ## 0.90.0 - 2026-10-03
 
 No wire model changes. Contract notes the read-only thermo select endpoint.

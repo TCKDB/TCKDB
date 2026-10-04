@@ -715,6 +715,21 @@ _ENERGY_SOURCE_DESCRIPTION = (
 )
 
 
+_ENERGY_SOURCES_DESCRIPTION = (
+    "One calculation per participant of the state, as {species_key, calculation_key}. A state "
+    "energy of several species is the sum of theirs, weighted by each participant's "
+    "stoichiometry. Each calculation passes the same type rule as source_calculation_key and "
+    "must belong to exactly the species named beside it (network_energy_source_subject_mismatch "
+    "otherwise). When the energy is on an absolute zero, or on a zero shared by several state "
+    "energies of the solve (lowest_state, entrance_channel), and the sources cover every "
+    "participant, TCKDB compares the stated energy with the sum of the stored energies and "
+    "refuses a contradiction (network_state_energy_sum_mismatch, within the printed-precision "
+    "tolerance). A comparison that cannot be made is stored as not compared with its reason and "
+    "returns a network_state_energy_sum_not_compared warning. Send this or source_calculation_key, "
+    "never both."
+)
+
+
 class ConventionBlock(SchemaBase):
     """Shared declaration of the energy zero and the corrections applied.
 
@@ -744,8 +759,28 @@ class ConventionBlock(SchemaBase):
         return self
 
 
+class StateEnergySourceIn(SchemaBase):
+    """The calculation one participant of a state contributes to the state's energy.
+
+    :param species_key: Local key of the participant species. It must be a participant of the
+        state the energy is stated for.
+    :param calculation_key: Local key of that species' own calculation (an sp, an opt or a
+        composite for ``electronic_only``). It must belong to exactly that species; a calculation
+        of another species is refused with ``network_energy_source_subject_mismatch``.
+    """
+
+    species_key: str = Field(min_length=1)
+    calculation_key: str = Field(min_length=1)
+
+
 class StateEnergyIn(ConventionBlock):
-    """One solve-state energy on a declared, reproducible energy zero."""
+    """One solve-state energy on a declared, reproducible energy zero.
+
+    Name where the energy came from with exactly one of ``source_calculation_keys`` (one
+    calculation per participant) or ``source_calculation_key`` (a single calculation). A state
+    with several species is a sum, so it should use the list; a single source on such a state is
+    accepted and read back as partial (``network_state_energy_sources_partial`` warning).
+    """
 
     state_key: str = Field(min_length=1)
     energy_kj_mol: float
@@ -753,11 +788,31 @@ class StateEnergyIn(ConventionBlock):
         default=None,
         description=_ENERGY_SOURCE_DESCRIPTION,
     )
+    source_calculation_keys: list[StateEnergySourceIn] | None = Field(
+        default=None,
+        min_length=1,
+        description=_ENERGY_SOURCES_DESCRIPTION,
+    )
 
     @model_validator(mode="after")
     def validate_energy_is_finite(self) -> Self:
         if not math.isfinite(self.energy_kj_mol):
             raise ValueError("energy_kj_mol must be finite.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_one_source_form(self) -> Self:
+        if self.source_calculation_key is not None and self.source_calculation_keys is not None:
+            raise ValueError(
+                "state_energies[] takes either source_calculation_key (one calculation) or "
+                "source_calculation_keys (one per participant), not both."
+            )
+        if self.source_calculation_keys is not None:
+            species = [source.species_key for source in self.source_calculation_keys]
+            if len(set(species)) != len(species):
+                raise ValueError(
+                    "source_calculation_keys must name each participant species at most once."
+                )
         return self
 
 
@@ -1791,6 +1846,18 @@ class NetworkPDepUploadRequest(SchemaBase):
             # unvalidated. A reported solve that volunteers a barrier still
             # has to point it at a real path.
             for energy_index, energy in enumerate(self.solve.state_energies):
+                for source_index, source in enumerate(energy.source_calculation_keys or []):
+                    if source.calculation_key not in calc_keys:
+                        raise undeclared_key_error(
+                            W_CALCULATION_KEY_UNDECLARED,
+                            "state_energies references undefined source_calculation_keys.",
+                            field=(
+                                f"solve.state_energies[{energy_index}]."
+                                f"source_calculation_keys[{source_index}].calculation_key"
+                            ),
+                            key=source.calculation_key,
+                            declared=calc_keys,
+                        )
                 if energy.source_calculation_key is not None and energy.source_calculation_key not in calc_keys:
                     raise undeclared_key_error(
                         W_CALCULATION_KEY_UNDECLARED,

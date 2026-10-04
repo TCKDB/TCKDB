@@ -63,6 +63,11 @@ _COMPOSITE_INPUT_REVISION = _VERSIONS / "b4d8e2f6a1c9_composite_inputs_and_depen
 #: calculation (guarded on ``calculation_id``), with the TRUNCATE refusal.
 _COMPOSITE_LOG_CHECK_REVISION = _VERSIONS / "a9c3e7b1d5f2_composite_log_check.py"
 
+#: ``d7a1c4e9b258`` adds ``network_solve_state_energy_source`` (#678), the calculation each
+#: participant of a state contributes to its energy: an ownership child of ``network_solve``
+#: guarded on ``solve_id`` like ``network_solve_state_energy``, with the TRUNCATE refusal.
+_STATE_ENERGY_SOURCE_REVISION = _VERSIONS / "d7a1c4e9b258_network_state_energy_participant_sources.py"
+
 _EXTENSION_REVISIONS = (
     _ATOM_MAP_REVISION,
     _EVIDENCE_REVISION,
@@ -71,6 +76,7 @@ _EXTENSION_REVISIONS = (
     _COMPOSITE_RESULT_REVISION,
     _COMPOSITE_INPUT_REVISION,
     _COMPOSITE_LOG_CHECK_REVISION,
+    _STATE_ENERGY_SOURCE_REVISION,
 )
 
 #: ``d4e9b1c7a253`` narrows the regime instead of extending it: it removes one
