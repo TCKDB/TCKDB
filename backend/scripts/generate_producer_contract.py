@@ -66,7 +66,9 @@ hand. In particular:
 * **Examples** are the ``examples`` each payload model declares in its
   ``json_schema_extra``. They are validated against the model and
   round-tripped here, and a model without one fails generation.
-* **What changed** is ``schemas/python/tckdb-schemas/CHANGELOG.md``.
+* **What changed** is the newest ``RECENT_CHANGES`` entries of
+  ``schemas/python/tckdb-schemas/CHANGELOG.md``; the whole file is copied beside
+  the contract as ``CHANGELOG.md``.
 
 The commit stamp, and why there is none
 ---------------------------------------

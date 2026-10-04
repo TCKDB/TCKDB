@@ -226,6 +226,8 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 The contract's "What changed" prints only the newest entries. Every entry now ships beside it as
 `tckdb_schemas/contract/CHANGELOG.md`, which `--since` and `contract.changes_since` read. No upload model changed.
+`contract.changes_since(version, text=...)`: `text`, when given, is now changelog markdown (`## <version>` headings),
+not contract markdown.
 
 ### 0.97.0 - 2026-10-04
 
