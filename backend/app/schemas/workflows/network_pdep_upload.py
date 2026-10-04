@@ -53,6 +53,7 @@ from app.schemas.reaction_family import find_canonical_reaction_family
 # Re-exported for backwards compatibility — ArtifactIn now lives in
 # app/schemas/fragments/artifact.py.
 __all__ = ("ArtifactIn",)
+from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import CalculationType as PayloadCalculationType
 from tckdb_schemas.fragments.kinetics_evidence import (
     ENERGY_CORRECTION_CONVENTION_DESCRIPTION,
@@ -72,6 +73,15 @@ from tckdb_schemas.local_key_codes import (
     W_SPECIES_KEY_UNDECLARED,
     W_TRANSITION_STATE_KEY_UNDECLARED,
     undeclared_key_error,
+)
+from tckdb_schemas.network_declarations import (
+    W_NETWORK_DECLARATION_INVALID,
+    NetworkDeterminationDeclaration,
+    NetworkProtocolDeclaration,
+    NetworkRepresentationDeclaration,
+    NetworkTargetDeclaration,
+    NetworkValidationDeclaration,
+    network_declaration_error,
 )
 from tckdb_schemas.rights import DepositRights
 from tckdb_schemas.shared.calculation_in import (
@@ -989,6 +999,10 @@ class NetworkKineticsIn(SchemaBase):
     :param temperature_units: Units the fit's temperature axis is expressed in.
     :param stores_log10_k: Whether the coefficients fit ``log10(k)`` (Chebyshev
         convention) rather than ``k`` directly.
+    :param determination: Optional. The determination this fit is one representation of, and its role.
+        Fits stating the same ``key`` share one determination; a fit that states none has none, and
+        reads as unresolved. Send it with ``representation``.
+    :param representation: Optional. This fit's own key within its determination, and where it came from.
     :param note: Optional free-text note.
     """
 
@@ -1010,11 +1024,20 @@ class NetworkKineticsIn(SchemaBase):
     pressure_units: PressureUnit | None = None
     temperature_units: TemperatureUnit | None = None
     stores_log10_k: bool | None = None
+    determination: NetworkDeterminationDeclaration | None = None
+    representation: NetworkRepresentationDeclaration | None = None
     note: str | None = None
 
     @model_validator(mode="after")
     def normalize_text(self) -> Self:
         self.note = normalize_optional_text(self.note)
+        return self
+
+    @model_validator(mode="after")
+    def validate_determination_with_representation(self) -> Self:
+        """``determination`` and ``representation`` are stated together or not at all."""
+        if (self.determination is None) != (self.representation is None):
+            raise ValueError("determination and representation are stated together or not at all.")
         return self
 
     @model_validator(mode="after")
@@ -1138,6 +1161,10 @@ class NetworkSolveIn(SchemaBase):
     :param source_calculations: Calculations used in this solve, by local key and role.
     :param channel_kinetics: Fitted phenomenological k(T,P) for channels, each
         referencing its channel by ``(source_state_key, sink_state_key)``.
+    :param target: Optional. What the solve's outputs are outputs of (partition, boundaries, regime,
+        validity, bath scope, output catalog, product sets).
+    :param protocol: Optional. The coupled recipe the solve used.
+    :param validation: Optional. Evidence the solve cites, stored as declared.
     :param note: Optional free-text note.
     """
 
@@ -1173,6 +1200,9 @@ class NetworkSolveIn(SchemaBase):
     channel_barriers: list[ChannelBarrierIn] = Field(default_factory=list)
     source_calculations: list[SolveSourceCalculationIn] = Field(default_factory=list)
     channel_kinetics: list[NetworkKineticsIn] = Field(default_factory=list)
+    target: NetworkTargetDeclaration | None = None
+    protocol: NetworkProtocolDeclaration | None = None
+    validation: NetworkValidationDeclaration | None = None
     note: str | None = None
 
     @model_validator(mode="after")
@@ -1806,8 +1836,15 @@ class NetworkPDepUploadRequest(SchemaBase):
         """
         if self.solve is None:
             return self
+        # Fits that declare a determination and representation are told apart by those keys, so a
+        # determination may carry several same-kind alternates. Undeclared fits keep the old rule.
         triples = [
-            (nk.channel_key, nk.model_kind)
+            (
+                nk.channel_key,
+                nk.model_kind,
+                nk.determination.key if nk.determination is not None else None,
+                nk.representation.key if nk.representation is not None else None,
+            )
             for nk in self.solve.channel_kinetics
         ]
         if len(set(triples)) != len(triples):
@@ -1815,8 +1852,121 @@ class NetworkPDepUploadRequest(SchemaBase):
                 "channel_kinetics entries must be unique by "
                 "(channel_key, model_kind) within one "
                 "payload; a channel may carry at most one entry per model_kind "
-                "(one chebyshev and/or one plog)."
+                "(one chebyshev and/or one plog), unless each declares its own determination "
+                "and representation key."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_network_declarations(self) -> Self:
+        """The solve's declarations agree with the network, with the solve's own columns and with each other.
+
+        States and channels a declaration names exist; a partition places every state exactly once;
+        a bath scope agrees with the bath gas; an output the catalog calls ``supplied`` has a
+        declared determination; a fit's determination states one channel and one observable however
+        many fits join it, and the observable's order agrees with the channel's source state;
+        a product set names declared determinations and representations; validation evidence names
+        channels the network has. A contradiction is refused, never reconciled.
+        """
+        solve = self.solve
+        if solve is None:
+            return self
+        state_keys = {state.key for state in self.states}
+        channel_keys = {channel.key for channel in self.channels}
+        error = network_declaration_error(
+            solve.target,
+            state_keys=state_keys,
+            channel_keys=channel_keys,
+            bath_species=len(solve.bath_gas) or None,
+        )
+        if error is not None:
+            code, message = error
+            raise CodedValidationError(code, message, context={"field": "solve.target"}, message_prefix=False)
+
+        def refuse(field: str, message: str) -> CodedValidationError:
+            return CodedValidationError(
+                W_NETWORK_DECLARATION_INVALID, message, context={"field": field}, message_prefix=False
+            )
+
+        channel_by_key = {channel.key: channel for channel in self.channels}
+        order_of_state = {
+            state.key: sum(p.stoichiometry for p in state.participants) for state in self.states
+        }
+        determinations: dict[str, tuple[str, str]] = {}
+        representations: dict[str, set[str]] = {}
+        for index, fit in enumerate(solve.channel_kinetics):
+            if fit.determination is None or fit.representation is None:
+                continue
+            field = f"solve.channel_kinetics[{index}].determination"
+            key = fit.determination.key
+            observable = fit.determination.observable.model_dump_json()
+            seen = determinations.setdefault(key, (fit.channel_key or "", observable))
+            if seen != (fit.channel_key or "", observable):
+                raise refuse(
+                    field,
+                    f"determination '{key}' is stated with a different channel or observable by another "
+                    "fit; fits that share a determination state the same channel and observable.",
+                )
+            if fit.representation.key in representations.setdefault(key, set()):
+                raise refuse(
+                    f"solve.channel_kinetics[{index}].representation",
+                    f"determination '{key}' has two fits with representation key '{fit.representation.key}'.",
+                )
+            representations[key].add(fit.representation.key)
+            channel = channel_by_key.get(fit.channel_key or "")
+            if channel is not None:
+                expected = order_of_state.get(channel.source_state_key)
+                if expected is not None and fit.determination.observable.reaction_order != expected:
+                    raise refuse(
+                        field,
+                        f"observable.reaction_order {fit.determination.observable.reaction_order} contradicts "
+                        f"the channel's source state, which has order {expected}.",
+                    )
+        target = solve.target
+        if target is not None:
+            by_channel = {fit_channel for fit_channel, _ in determinations.values()}
+            for index, entry in enumerate(target.outputs):
+                if entry.availability.value == "supplied" and entry.channel_key not in by_channel:
+                    raise refuse(
+                        f"solve.target.outputs[{index}]",
+                        f"output '{entry.channel_key}' is declared supplied but no fit declares a "
+                        "determination of that channel.",
+                    )
+            for set_index, product_set in enumerate(target.product_sets):
+                listed = [m.determination_key for m in product_set.members]
+                if len(set(listed)) != len(listed):
+                    raise refuse(
+                        f"solve.target.product_sets[{set_index}]",
+                        f"product set '{product_set.product_set_key}' lists a determination more than once.",
+                    )
+                for member in product_set.members:
+                    if member.determination_key is None:
+                        raise refuse(
+                            f"solve.target.product_sets[{set_index}]",
+                            "an upload names a product-set member by determination_key; "
+                            "determination_ref is the stored form.",
+                        )
+                    if member.determination_key not in determinations:
+                        raise refuse(
+                            f"solve.target.product_sets[{set_index}]",
+                            f"product set '{product_set.product_set_key}' names determination "
+                            f"'{member.determination_key}', which no fit of this solve declares.",
+                        )
+                    missing = sorted(set(member.representation_keys) - representations[member.determination_key])
+                    if missing:
+                        raise refuse(
+                            f"solve.target.product_sets[{set_index}]",
+                            f"product set '{product_set.product_set_key}' names representation(s) {missing} "
+                            f"that determination '{member.determination_key}' does not have.",
+                        )
+        if solve.validation is not None:
+            for index, entry in enumerate(solve.validation.entries):
+                unknown = sorted(set(entry.channel_keys) - channel_keys)
+                if unknown:
+                    raise refuse(
+                        f"solve.validation.entries[{index}]",
+                        f"validation evidence names channel(s) the network does not have: {unknown}.",
+                    )
         return self
 
     @model_validator(mode="after")

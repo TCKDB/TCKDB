@@ -87,6 +87,9 @@ PREFIXES: dict[str, str] = {
     "Network": "net",
     "NetworkSolve": "nsolve",
     "NetworkKinetics": "nkin",
+    # One complete determination of a channel's coefficient within one solve (network selection).
+    # Opaque, like KineticsDetermination; deduplicated on identity_hash.
+    "NetworkKineticsDetermination": "nkdet",
     "Submission": "sub",
     "RecordReproducibilityAssessment": "rpa",
     # Append-only upload log (see CalculationArtifact docstring). Opaque:

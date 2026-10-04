@@ -114,6 +114,7 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.network_channel_chemistry import (
     build_network_state_composition,
 )
+from app.services.scientific_read.network_declarations import solve_declarations, solve_determinations
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
@@ -1203,6 +1204,8 @@ def build_network_solve_record(
         tmax_k=s.tmax_k,
         pmin_bar=s.pmin_bar,
         pmax_bar=s.pmax_bar,
+        **solve_declarations(s),
+        determinations=solve_determinations(session, s.id),
         note=s.note,
         created_at=s.created_at,
         review=badge,

@@ -128,6 +128,8 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
         ChildTable("network_solve_state_energy_source", "solve_id"),
         ChildTable("network_solve_channel_barrier", "solve_id"),
         ChildTable("network_solve_source_calculation", "solve_id"),
+        # Before ``network_kinetics``: a fit's ``determination_ref`` names a row shipped beside it.
+        ChildTable("network_kinetics_determination", "solve_id"),
         ChildTable(
             "network_kinetics",
             "solve_id",
@@ -163,6 +165,14 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
             children=(ChildTable("reaction_atom_map_pair", "atom_map_id"),),
         ),
     ),
+}
+
+
+#: Columns of a shipped child table that a release must not carry. ``identity_hash`` of a
+#: network determination digests this database's row ids (solve and channel), which a release
+#: must not carry.
+RELEASE_OMITTED_COLUMNS: dict[str, tuple[str, ...]] = {
+    "network_kinetics_determination": ("identity_hash",),
 }
 
 
@@ -221,6 +231,13 @@ RECORD_CHILD_EXCLUSIONS: dict[tuple[str, str], str] = {
     ),
     ("network_channel", "network_kinetics"): (
         "owned by its network_solve parent, and shipped under network_solve"
+    ),
+    ("network_channel", "network_kinetics_determination"): (
+        "owned by its network_solve parent, and shipped under network_solve"
+    ),
+    ("network_kinetics_determination", "network_kinetics"): (
+        "owned by its network_solve parent, and shipped under network_solve; each fit names its determination "
+        "by determination_ref"
     ),
     # A state energy has a composite key (solve, state), so a nested child has no single id
     # to hang on; its per-participant sources ship flat under network_solve, each row carrying
@@ -500,6 +517,8 @@ def _fetch_children(
         rendered: list[dict[str, Any]] = []
         for pk, payload in entries:
             encoded = resolver.encode_row(table, payload)
+            for column in RELEASE_OMITTED_COLUMNS.get(spec.table, ()):
+                encoded.pop(column, None)
             for nested in spec.children:
                 nested_rows = _fetch_children(session, nested, [pk[0]], resolver)
                 encoded[nested.table] = nested_rows.get(pk[0], [])

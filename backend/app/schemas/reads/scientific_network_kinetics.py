@@ -20,11 +20,13 @@ from __future__ import annotations
 from datetime import datetime
 
 from pydantic import BaseModel, Field
+from tckdb_schemas.network_declarations import NetworkRepresentationDeclaration
 
 from app.db.models.common import (
     ArrheniusAUnits,
     NetworkChannelKind,
     NetworkKineticsModelKind,
+    NetworkRepresentationRole,
     NetworkSolveKind,
     PressureUnit,
     TemperatureUnit,
@@ -34,6 +36,7 @@ from app.schemas.reads.scientific_common import (
     ReviewStatusSummary,
 )
 from app.schemas.reads.scientific_network import (
+    NetworkDeterminationRead,
     NetworkReviewEntry,
     NetworkSourceCalculationSummary,
     RequestEcho,
@@ -76,6 +79,15 @@ class NetworkKineticsCoreBlock(BaseModel):
     chebyshev_shape: str | None = None
     plog_entry_count: int | None = None
     point_count: int | None = None
+
+    # The determination this fit is one representation of, its role and its own declared
+    # identity. ``null`` on all three is "never said" (a fit deposited without them), and its
+    # relationship to the channel's other fits is then unresolved, not independent and not
+    # alternate. ``declaration_unreadable`` is true when a stored claim no longer parses.
+    determination: NetworkDeterminationRead | None = None
+    representation_role: NetworkRepresentationRole | None = None
+    representation: NetworkRepresentationDeclaration | None = None
+    declaration_unreadable: bool = False
 
     note: str | None = None
     created_at: datetime

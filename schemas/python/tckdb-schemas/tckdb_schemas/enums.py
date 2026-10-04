@@ -534,6 +534,14 @@ class NetworkKineticsModelKind(str, Enum):
     tabulated = "tabulated"
 
 
+class NetworkRepresentationRole(str, Enum):
+    """What a network kinetics fit is within its determination."""
+
+    complete = "complete"
+    additive_component = "additive_component"
+    overlapping_contribution = "overlapping_contribution"
+
+
 class EnergyCorrectionSchemeKind(str, Enum):
     atom_energy = "atom_energy"
     atom_hf = "atom_hf"
@@ -789,6 +797,7 @@ __all__ = (
     "MoleculeKind",
     "NetworkChannelKind",
     "NetworkKineticsModelKind",
+    "NetworkRepresentationRole",
     "NetworkSolveCalculationRole",
     "PathSearchMethod",
     "PressureUnit",

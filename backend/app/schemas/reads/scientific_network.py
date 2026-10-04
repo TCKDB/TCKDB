@@ -29,6 +29,12 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from tckdb_schemas.network_declarations import (
+    NetworkObservableDeclaration,
+    NetworkProtocolDeclaration,
+    NetworkValidationDeclaration,
+    StoredNetworkTargetDeclaration,
+)
 
 from app.db.models.common import (
     CalculationType,
@@ -423,9 +429,31 @@ class NetworkSolveCoreBlock(BaseModel):
     tmax_k: float | None = None
     pmin_bar: float | None = None
     pmax_bar: float | None = None
+    # Attributed claims, served as stored (``tckdb_schemas.network_declarations``). ``null``
+    # is "not stated", never "valid everywhere". A stored claim that no longer parses is not
+    # served: the field is ``null`` and ``declarations_unreadable`` is true.
+    target: StoredNetworkTargetDeclaration | None = None
+    protocol: NetworkProtocolDeclaration | None = None
+    validation: NetworkValidationDeclaration | None = None
+    declarations_unreadable: bool = False
+    # The solve's declared determinations, in creation order; empty when none was declared.
+    determinations: list["NetworkDeterminationRead"] = Field(default_factory=list)
     note: str | None = None
     created_at: datetime
     review: RecordReviewBadge
+
+
+class NetworkDeterminationRead(BaseModel):
+    """One declared determination of a channel's coefficient within a solve.
+
+    Identity, immutable once created. The fits that share it are alternate representations of
+    one determination, not independent support for one another.
+    """
+
+    determination_ref: str
+    determination_key: str
+    channel_key: str
+    observable: NetworkObservableDeclaration
 
 
 class NetworkContextSummary(BaseModel):

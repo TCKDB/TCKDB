@@ -584,6 +584,9 @@ the gap.
 | `tmax_k` | DOUBLE PRECISION | yes | — | — | — | not documented |
 | `pmin_bar` | DOUBLE PRECISION | yes | — | — | — | not documented |
 | `pmax_bar` | DOUBLE PRECISION | yes | — | — | — | not documented |
+| `target_declaration` | JSONB | yes | — | — | — | not documented |
+| `protocol_declaration` | JSONB | yes | — | — | — | not documented |
+| `validation_declaration` | JSONB | yes | — | — | — | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
@@ -595,10 +598,13 @@ the gap.
 - `ck_network_solve_pmax_bar_gt_0`: `pmax_bar IS NULL OR pmax_bar > 0`
 - `ck_network_solve_pmin_bar_gt_0`: `pmin_bar IS NULL OR pmin_bar > 0`
 - `ck_network_solve_pmin_le_pmax`: `pmin_bar IS NULL OR pmax_bar IS NULL OR pmin_bar <= pmax_bar`
+- `ck_network_solve_protocol_declaration_versioned_object`: `protocol_declaration IS NULL OR (jsonb_typeof(protocol_declaration) = 'object' AND coalesce(jsonb_typeof(protocol_declaration -> 'version'), '') = 'number')`
 - `ck_network_solve_reported_requires_literature`: `kind <> 'reported' OR literature_id IS NOT NULL`
+- `ck_network_solve_target_declaration_versioned_object`: `target_declaration IS NULL OR (jsonb_typeof(target_declaration) = 'object' AND coalesce(jsonb_typeof(target_declaration -> 'version'), '') = 'number')`
 - `ck_network_solve_tmax_k_gt_0`: `tmax_k IS NULL OR tmax_k > 0`
 - `ck_network_solve_tmin_k_gt_0`: `tmin_k IS NULL OR tmin_k > 0`
 - `ck_network_solve_tmin_le_tmax`: `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k`
+- `ck_network_solve_validation_declaration_versioned_object`: `validation_declaration IS NULL OR (jsonb_typeof(validation_declaration) = 'object' AND coalesce(jsonb_typeof(validation_declaration -> 'version'), '') = 'number')`
 
 ### `workflow_tool_release`
 
@@ -2191,15 +2197,21 @@ the gap.
 | `pressure_units` | PressureUnit (enum) | yes | — | — | `bar`, `atm` | not documented |
 | `temperature_units` | TemperatureUnit (enum) | yes | — | — | `kelvin` | not documented |
 | `stores_log10_k` | BOOLEAN | yes | — | — | — | not documented |
+| `determination_id` | BIGINT | yes | — | network_kinetics_determination.id | — | not documented |
+| `representation_role` | NetworkRepresentationRole (enum) | yes | — | — | `complete`, `additive_component`, `overlapping_contribution` | not documented |
+| `representation_declaration` | JSONB | yes | — | — | — | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
 
 **Check constraints:**
 
+- `ck_network_kinetics_determination_iff_representation`: `(determination_id IS NULL) = (representation_declaration IS NULL)`
+- `ck_network_kinetics_determination_iff_role`: `(determination_id IS NULL) = (representation_role IS NULL)`
 - `ck_network_kinetics_pmax_bar_gt_0`: `pmax_bar IS NULL OR pmax_bar > 0`
 - `ck_network_kinetics_pmin_bar_gt_0`: `pmin_bar IS NULL OR pmin_bar > 0`
 - `ck_network_kinetics_pmin_le_pmax`: `pmin_bar IS NULL OR pmax_bar IS NULL OR pmin_bar <= pmax_bar`
+- `ck_network_kinetics_representation_declaration_versioned_object`: `representation_declaration IS NULL OR (jsonb_typeof(representation_declaration) = 'object' AND coalesce(jsonb_typeof(representation_declaration -> 'version'), '') = 'number' AND coalesce(jsonb_typeof(representation_declaration -> 'key'), '') = 'string')`
 - `ck_network_kinetics_tmax_k_gt_0`: `tmax_k IS NULL OR tmax_k > 0`
 - `ck_network_kinetics_tmin_k_gt_0`: `tmin_k IS NULL OR tmin_k > 0`
 - `ck_network_kinetics_tmin_le_tmax`: `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k`
@@ -2221,6 +2233,30 @@ the gap.
 
 - `ck_network_kinetics_chebyshev_n_pressure_ge_1`: `n_pressure >= 1`
 - `ck_network_kinetics_chebyshev_n_temperature_ge_1`: `n_temperature >= 1`
+
+### `network_kinetics_determination`
+
+**Role:** role not stated on the model
+
+**Purpose:** One complete determination of one channel's coefficient within one solve.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `solve_id` | BIGINT | no | — | network_solve.id | — | not documented |
+| `channel_id` | BIGINT | no | — | network_channel.id | — | not documented |
+| `determination_key` | TEXT | no | — | — | — | not documented |
+| `observable_declaration` | JSONB | no | — | — | — | not documented |
+| `identity_hash` | VARCHAR(64) | no | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
+| `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_network_kinetics_determination_identity_hash_sha256_hex`: `identity_hash ~ '^[0-9a-f]{64}$'`
+- `ck_network_kinetics_determination_key_bounded`: `length(btrim(determination_key)) > 0 AND length(determination_key) <= 128`
+- `ck_network_kinetics_determination_observable_versioned_object`: `jsonb_typeof(observable_declaration) = 'object' AND coalesce(jsonb_typeof(observable_declaration -> 'version'), '') = 'number'`
 
 ### `network_kinetics_plog`
 

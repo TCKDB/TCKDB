@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     PrimaryKeyConstraint,
     SmallInteger,
+    String,
     Text,
     UniqueConstraint,
     text,
@@ -30,6 +31,7 @@ from app.db.models.common import (
     NetworkChannelMechanism,
     NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
+    NetworkRepresentationRole,
     NetworkSolveCalculationRole,
     NetworkSolveKind,
     NetworkStateKind,
@@ -394,6 +396,16 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     pmin_bar: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     pmax_bar: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
+    # Versioned declarations (``tckdb_schemas.network_declarations``): what the outputs are
+    # outputs of, the recipe, and the evidence cited. Attributed claims, stored in their
+    # resolved form (states by composition hash, determinations by public ref) and never
+    # inferred: NULL on every solve deposited before the columns or without them, and then
+    # the solve's scientific meaning reads as unresolved. ``none_as_null``: Python ``None`` is
+    # SQL NULL ("not stated"), never the JSON value ``null``.
+    target_declaration: Mapped[Optional[dict]] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    protocol_declaration: Mapped[Optional[dict]] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    validation_declaration: Mapped[Optional[dict]] = mapped_column(JSONB(none_as_null=True), nullable=True)
+
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
@@ -418,6 +430,10 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         cascade="all, delete-orphan",
     )
     kinetics_records: Mapped[list["NetworkKinetics"]] = relationship(
+        back_populates="solve",
+        cascade="all, delete-orphan",
+    )
+    determinations: Mapped[list["NetworkKineticsDetermination"]] = relationship(
         back_populates="solve",
         cascade="all, delete-orphan",
     )
@@ -452,6 +468,23 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         CheckConstraint(
             "grain_count IS NULL OR grain_count >= 1",
             name="grain_count_ge_1",
+        ),
+        # The ``coalesce`` matters: an object with no ``version`` key makes the predicate NULL,
+        # and a CHECK passes on NULL.
+        CheckConstraint(
+            "target_declaration IS NULL OR (jsonb_typeof(target_declaration) = 'object' "
+            "AND coalesce(jsonb_typeof(target_declaration -> 'version'), '') = 'number')",
+            name="target_declaration_versioned_object",
+        ),
+        CheckConstraint(
+            "protocol_declaration IS NULL OR (jsonb_typeof(protocol_declaration) = 'object' "
+            "AND coalesce(jsonb_typeof(protocol_declaration -> 'version'), '') = 'number')",
+            name="protocol_declaration_versioned_object",
+        ),
+        CheckConstraint(
+            "validation_declaration IS NULL OR (jsonb_typeof(validation_declaration) = 'object' "
+            "AND coalesce(jsonb_typeof(validation_declaration -> 'version'), '') = 'number')",
+            name="validation_declaration_versioned_object",
         ),
     )
 
@@ -745,6 +778,65 @@ class NetworkSolveSourceCalculation(Base):
 # ---------------------------------------------------------------------------
 
 
+class NetworkKineticsDetermination(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
+    """One complete determination of one channel's coefficient within one solve.
+
+    What several fits of a channel are fits *of*: alternate representations (a PLOG and a
+    Chebyshev fit of one solve's output) point here and share it, so they are never counted as
+    independent support for one another. Separate solves, or separate channels, are separate
+    determinations.
+
+    **Identity, not provenance.** Its identity is content: the solve, the channel, the
+    solve-scoped ``determination_key`` and the declared observable. ``identity_hash`` is the
+    unique digest of that content, so the same content resolves to one row.
+
+    **Immutable from creation**, including while shared by several fits: a trigger refuses every
+    UPDATE (``trg_network_kinetics_determination_immutable``). It is an ownership child of its
+    solve, so adding one under an accepted solve is refused like any other solve child.
+
+    Nothing here is inferred: a determination exists only because a depositor stated one. Fits
+    deposited without one have none and read as unresolved. That the channel belongs to the
+    solve's network is a cross-table fact no CHECK can state; the write path enforces it
+    (``app.services.network_declaration_resolution``).
+    """
+
+    __tablename__ = "network_kinetics_determination"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    solve_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("network_solve.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+        index=True,
+    )
+    channel_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("network_channel.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    determination_key: Mapped[str] = mapped_column(Text, nullable=False)
+    observable_declaration: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    identity_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+    solve: Mapped["NetworkSolve"] = relationship(back_populates="determinations")
+    channel: Mapped["NetworkChannel"] = relationship()
+    kinetics_records: Mapped[list["NetworkKinetics"]] = relationship(back_populates="determination")
+
+    __table_args__ = (
+        UniqueConstraint("solve_id", "determination_key", name="uq_network_kinetics_determination_key"),
+        CheckConstraint(
+            "length(btrim(determination_key)) > 0 AND length(determination_key) <= 128",
+            name="key_bounded",
+        ),
+        CheckConstraint("identity_hash ~ '^[0-9a-f]{64}$'", name="identity_hash_sha256_hex"),
+        CheckConstraint(
+            "jsonb_typeof(observable_declaration) = 'object' "
+            "AND coalesce(jsonb_typeof(observable_declaration -> 'version'), '') = 'number'",
+            name="observable_versioned_object",
+        ),
+    )
+
+
 class NetworkKinetics(Base, TimestampMixin, PublicRefMixin):
     """One fitted phenomenological k(T,P) for a channel from a specific solve."""
 
@@ -785,9 +877,37 @@ class NetworkKinetics(Base, TimestampMixin, PublicRefMixin):
     )
     stores_log10_k: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
+    # The determination this fit is one representation of, its role there and its own
+    # declared identity (network selection). Attributed claims, never inferred: NULL on every
+    # fit that predates the columns or was deposited without them, and then its relationship to
+    # the channel's other fits reads as unresolved. Set together or not at all
+    # (``ck_network_kinetics_determination_iff_role`` and ``..._iff_representation``). That the
+    # determination is of this fit's channel and solve is enforced where the row is written.
+    determination_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "network_kinetics_determination.id",
+            name="fk_network_kinetics_determination_ref",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=True,
+        index=True,
+    )
+    representation_role: Mapped[Optional[NetworkRepresentationRole]] = mapped_column(
+        SAEnum(NetworkRepresentationRole, name="network_representation_role"),
+        nullable=True,
+    )
+    representation_declaration: Mapped[Optional[dict]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
+
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
+    determination: Mapped[Optional["NetworkKineticsDetermination"]] = relationship(
+        back_populates="kinetics_records"
+    )
     channel: Mapped["NetworkChannel"] = relationship(back_populates="kinetics_records")
     solve: Mapped["NetworkSolve"] = relationship(back_populates="kinetics_records")
     chebyshev: Mapped[Optional["NetworkKineticsChebyshev"]] = relationship(
@@ -816,6 +936,28 @@ class NetworkKinetics(Base, TimestampMixin, PublicRefMixin):
         CheckConstraint(
             "pmin_bar IS NULL OR pmax_bar IS NULL OR pmin_bar <= pmax_bar",
             name="pmin_le_pmax",
+        ),
+        CheckConstraint(
+            "(determination_id IS NULL) = (representation_role IS NULL)",
+            name="determination_iff_role",
+        ),
+        CheckConstraint(
+            "(determination_id IS NULL) = (representation_declaration IS NULL)",
+            name="determination_iff_representation",
+        ),
+        CheckConstraint(
+            "representation_declaration IS NULL OR (jsonb_typeof(representation_declaration) = 'object' "
+            "AND coalesce(jsonb_typeof(representation_declaration -> 'version'), '') = 'number' "
+            "AND coalesce(jsonb_typeof(representation_declaration -> 'key'), '') = 'string')",
+            name="representation_declaration_versioned_object",
+        ),
+        # Alternate fits of one determination are told apart by their declared key.
+        Index(
+            "uq_network_kinetics_representation_key",
+            "determination_id",
+            text("(representation_declaration ->> 'key')"),
+            unique=True,
+            postgresql_where=text("determination_id IS NOT NULL"),
         ),
     )
 

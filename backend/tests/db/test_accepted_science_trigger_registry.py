@@ -68,6 +68,10 @@ _COMPOSITE_LOG_CHECK_REVISION = _VERSIONS / "a9c3e7b1d5f2_composite_log_check.py
 #: guarded on ``solve_id`` like ``network_solve_state_energy``, with the TRUNCATE refusal.
 _STATE_ENERGY_SOURCE_REVISION = _VERSIONS / "d7a1c4e9b258_network_state_energy_participant_sources.py"
 
+#: ``e5b9c2a7d4f1`` adds ``network_kinetics_determination``, the identity a solve's fits share:
+#: an ownership child of ``network_solve`` guarded on ``solve_id``, with the TRUNCATE refusal.
+_NETWORK_DETERMINATION_REVISION = _VERSIONS / "e5b9c2a7d4f1_declare_network_kinetics_determination.py"
+
 _EXTENSION_REVISIONS = (
     _ATOM_MAP_REVISION,
     _EVIDENCE_REVISION,
@@ -77,6 +81,7 @@ _EXTENSION_REVISIONS = (
     _COMPOSITE_INPUT_REVISION,
     _COMPOSITE_LOG_CHECK_REVISION,
     _STATE_ENERGY_SOURCE_REVISION,
+    _NETWORK_DETERMINATION_REVISION,
 )
 
 #: ``d4e9b1c7a253`` narrows the regime instead of extending it: it removes one

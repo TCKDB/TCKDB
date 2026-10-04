@@ -463,6 +463,12 @@ enum NetworkKineticsModelKind {
   tabulated
 }
 
+enum NetworkRepresentationRole {
+  complete
+  additive_component
+  overlapping_contribution
+}
+
 enum NetworkSolveCalculationRole {
   well_energy
   barrier_energy
@@ -2725,18 +2731,26 @@ Table network_kinetics {
   pressure_units PressureUnit
   temperature_units TemperatureUnit
   stores_log10_k boolean
+  determination_id bigint [ref: > network_kinetics_determination.id]
+  representation_role NetworkRepresentationRole
+  representation_declaration jsonb
   note text
   created_at timestamp [not null, default: 'now']
   public_ref string [not null]
 
   indexes {
+    determination_id [name: 'ix_network_kinetics_determination_id']
     public_ref [unique, name: 'ix_network_kinetics_public_ref']
+    determination_id [unique, name: 'uq_network_kinetics_representation_key']
   }
 
   checks {
+    `(determination_id IS NULL) = (representation_declaration IS NULL)` [name: 'ck_network_kinetics_determination_iff_representation']
+    `(determination_id IS NULL) = (representation_role IS NULL)` [name: 'ck_network_kinetics_determination_iff_role']
     `pmax_bar IS NULL OR pmax_bar > 0` [name: 'ck_network_kinetics_pmax_bar_gt_0']
     `pmin_bar IS NULL OR pmin_bar > 0` [name: 'ck_network_kinetics_pmin_bar_gt_0']
     `pmin_bar IS NULL OR pmax_bar IS NULL OR pmin_bar <= pmax_bar` [name: 'ck_network_kinetics_pmin_le_pmax']
+    `representation_declaration IS NULL OR (jsonb_typeof(representation_declaration) = 'object' AND coalesce(jsonb_typeof(representation_declaration -> 'version'), '') = 'number' AND coalesce(jsonb_typeof(representation_declaration -> 'key'), '') = 'string')` [name: 'ck_network_kinetics_representation_declaration_versioned_object']
     `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_network_kinetics_tmax_k_gt_0']
     `tmin_k IS NULL OR tmin_k > 0` [name: 'ck_network_kinetics_tmin_k_gt_0']
     `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k` [name: 'ck_network_kinetics_tmin_le_tmax']
@@ -2757,6 +2771,33 @@ Table network_kinetics_chebyshev {
   }
 
   Note: 'Chebyshev polynomial coefficients for a network kinetics record.'
+}
+
+Table network_kinetics_determination {
+  id bigint [pk, not null]
+  solve_id bigint [not null, ref: > network_solve.id]
+  channel_id bigint [not null, ref: > network_channel.id]
+  determination_key text [not null]
+  observable_declaration jsonb [not null]
+  identity_hash string [not null]
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_network_kinetics_determination_public_ref']
+    solve_id [name: 'ix_network_kinetics_determination_solve_id']
+    identity_hash [unique, name: 'uq_network_kinetics_determination_identity_hash']
+    (solve_id, determination_key) [unique, name: 'uq_network_kinetics_determination_key']
+  }
+
+  checks {
+    `identity_hash ~ '^[0-9a-f]{64}$'` [name: 'ck_network_kinetics_determination_identity_hash_sha256_hex']
+    `length(btrim(determination_key)) > 0 AND length(determination_key) <= 128` [name: 'ck_network_kinetics_determination_key_bounded']
+    `jsonb_typeof(observable_declaration) = 'object' AND coalesce(jsonb_typeof(observable_declaration -> 'version'), '') = 'number'` [name: 'ck_network_kinetics_determination_observable_versioned_object']
+  }
+
+  Note: 'One complete determination of one channel\'s coefficient within one solve.'
 }
 
 Table network_kinetics_plog {
@@ -2825,6 +2866,9 @@ Table network_solve {
   tmax_k double
   pmin_bar double
   pmax_bar double
+  target_declaration jsonb
+  protocol_declaration jsonb
+  validation_declaration jsonb
   note text
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
@@ -2840,10 +2884,13 @@ Table network_solve {
     `pmax_bar IS NULL OR pmax_bar > 0` [name: 'ck_network_solve_pmax_bar_gt_0']
     `pmin_bar IS NULL OR pmin_bar > 0` [name: 'ck_network_solve_pmin_bar_gt_0']
     `pmin_bar IS NULL OR pmax_bar IS NULL OR pmin_bar <= pmax_bar` [name: 'ck_network_solve_pmin_le_pmax']
+    `protocol_declaration IS NULL OR (jsonb_typeof(protocol_declaration) = 'object' AND coalesce(jsonb_typeof(protocol_declaration -> 'version'), '') = 'number')` [name: 'ck_network_solve_protocol_declaration_versioned_object']
     `kind <> 'reported' OR literature_id IS NOT NULL` [name: 'ck_network_solve_reported_requires_literature']
+    `target_declaration IS NULL OR (jsonb_typeof(target_declaration) = 'object' AND coalesce(jsonb_typeof(target_declaration -> 'version'), '') = 'number')` [name: 'ck_network_solve_target_declaration_versioned_object']
     `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_network_solve_tmax_k_gt_0']
     `tmin_k IS NULL OR tmin_k > 0` [name: 'ck_network_solve_tmin_k_gt_0']
     `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k` [name: 'ck_network_solve_tmin_le_tmax']
+    `validation_declaration IS NULL OR (jsonb_typeof(validation_declaration) = 'object' AND coalesce(jsonb_typeof(validation_declaration -> 'version'), '') = 'number')` [name: 'ck_network_solve_validation_declaration_versioned_object']
   }
 
   Note: 'The provenance envelope for one coherent set of k(T,P) on a network.'

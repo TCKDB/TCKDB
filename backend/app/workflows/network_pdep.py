@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -91,6 +92,11 @@ from app.services.local_key_resolution import (
     resolve_network_state_key,
     resolve_species_key,
     resolve_transition_state_key,
+)
+from app.services.network_declaration_resolution import (
+    attach_fit,
+    persist_network_declarations,
+    resolve_determinations,
 )
 from app.services.network_energy_sources import (
     ParticipantSource,
@@ -1298,6 +1304,14 @@ def persist_network_pdep_upload(
         # Fitted phenomenological k(T,P) per channel. Schema validation
         # guarantees exactly one model sub-block matching ``model_kind``
         # (Chebyshev or PLOG); tabulated is rejected upstream.
+        determinations = resolve_determinations(
+            session,
+            solve=solve,
+            fits=list(solve_in.channel_kinetics),
+            channel_key_to_row=channel_key_to_row,
+            created_by=created_by,
+        )
+        fit_rows: list[tuple[Any, NetworkKinetics]] = []
         for nk_index, nk_in in enumerate(solve_in.channel_kinetics):
             channel_row = resolve_network_channel_key(
                 nk_in.channel_key,
@@ -1319,6 +1333,8 @@ def persist_network_pdep_upload(
                 note=nk_in.note,
             )
             session.add(network_kinetics)
+            fit_rows.append((nk_in, network_kinetics))
+            attach_fit(nk_in, network_kinetics, determinations)
             session.flush()
 
             cheb_in = nk_in.chebyshev
@@ -1350,6 +1366,15 @@ def persist_network_pdep_upload(
                         )
                     )
 
+        persist_network_declarations(
+            session,
+            solve=solve,
+            solve_in=solve_in,
+            state_key_to_row=state_key_to_row,
+            channel_key_to_row=channel_key_to_row,
+            fit_rows=fit_rows,
+            determinations=determinations,
+        )
         session.flush()
 
     apply_review_policy(
