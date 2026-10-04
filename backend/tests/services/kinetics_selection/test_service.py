@@ -731,3 +731,19 @@ def test_a_session_already_in_a_weaker_transaction_is_refused_unless_the_caller_
     )
     assert accepted.snapshot_isolation in {"read committed", "repeatable read", "serializable"}
     assert len(accepted.assessments) == 1
+
+
+def test_a_repeatable_read_transaction_that_can_write_is_not_a_read_only_snapshot(db_engine):
+    from sqlalchemy.orm import Session
+
+    from app.services.read_snapshot import SnapshotNotConsistentError, begin_read_snapshot
+
+    with Session(db_engine) as session:
+        session.connection(execution_options={"isolation_level": "REPEATABLE READ"})  # read-write
+        with pytest.raises(SnapshotNotConsistentError, match="not read-only"):
+            begin_read_snapshot(session)
+        assert begin_read_snapshot(session, require=False) == "repeatable read"
+        session.rollback()
+    with Session(db_engine) as session:
+        assert begin_read_snapshot(session) == "repeatable read"  # the one the helper starts itself
+        session.rollback()
