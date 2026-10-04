@@ -204,6 +204,20 @@ def _check_consistency(manifest: dict[str, Any]) -> None:
     observed = sorted({str(s["review_status"]) for s in manifest["solves"]})
     if manifest["visibility"]["review_statuses_observed"] != observed:
         raise ReplayError("the recorded observed review statuses are not the review statuses of the captured solves")
+    # The digest is an unkeyed checksum anyone can re-seal, so the review basis is checked against itself: a document
+    # relabelled to a stricter profile while it still holds a solve that profile would never have shown is refused.
+    effective = {str(v) for v in manifest["request"]["effective_review_statuses"]}
+    outside = sorted(set(observed) - effective)
+    if outside:
+        raise ReplayError(
+            f"a captured solve has a review status ({outside}) outside the recorded effective review statuses"
+        )
+    profile = manifest["visibility"]["read_profile"]
+    if profile == "curated" and effective != {"approved"}:
+        raise ReplayError("a curated manifest's effective review statuses are approved only")
+    stamped = manifest["request"].get("profile")
+    if stamped is not None and stamped != profile:
+        raise ReplayError("the manifest's visibility read profile is not the profile its request was made under")
 
 
 _Verified = tuple[

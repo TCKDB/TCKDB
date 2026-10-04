@@ -89,6 +89,11 @@ assessment, the rules consulted and each comparison, as public refs only, with a
 with no database at two levels: the assessments are recomputed from the captured facts, then the decision from those
 assessments, and both are compared with what the manifest records.
 
+The digest is a checksum, **not a signature**: anyone can recompute it after editing a document. Replay re-derives the
+reasoning from the captured inputs and checks that the document agrees with itself (including that its review basis, read
+profile and captured solves are consistent), but it does not authenticate where those inputs came from. Only the export
+endpoint compares them with what the server holds.
+
 ## From the client and the MCP
 
 `TCKDBClient.select_network_kinetics` and `get_network_kinetics_selection_manifest`, and the MCP tool

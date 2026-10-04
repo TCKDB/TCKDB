@@ -315,6 +315,7 @@ def test_under_a_curated_profile_a_solve_below_the_floor_is_neither_listed_nor_c
     assert hidden.public_ref not in str(curated)
     manifest = post(client, world, profile="curated", manifest=True).json()
     assert manifest["population"]["excluded_by_review"] == [] and manifest["population"]["excluded_count"] == 0
+    assert manifest["population"]["excluded_by_review_withheld"] is True  # the manifest route redacts too
     assert hidden.public_ref not in str(manifest)
     assert replay_network(manifest) == manifest["decision"]  # a redacted manifest still replays
 
@@ -335,3 +336,24 @@ def test_min_review_status_raises_the_floor(client, db_session, world, two):
     assert out["review"]["effective_floor"] == "approved"
     assert out["outcome"] == "sole_eligible_candidate"
     assert out["selection"]["solve_ref"] == b.public_ref
+
+
+def test_under_a_curated_profile_a_hidden_reference_solve_is_absent_from_both_documents(client, db_session, world):
+    """A validation entry may cite a solve the caller cannot see; the response and manifest must not carry its ref."""
+    from tests.services.network_selection._world import validity
+
+    _approve_network(db_session, world)
+    hidden = add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(B_), review=S.not_reviewed)
+    cites = {"version": 1, "entries": [{"kind": "model_fidelity", "domain": validity(), "reference_solve_ref": hidden.public_ref}]}
+    visible = add_solve(
+        db_session, world, fits=[fit_spec("assoc")], protocol=protocol(A_), validation=cites, review=S.approved
+    )
+    manifest = post(client, world, profile="curated", manifest=True).json()
+    entry = next(s for s in manifest["solves"] if s["solve_ref"] == visible.public_ref)["validation"]["entries"][0]
+    assert entry["reference_solve_ref"] is None and entry["reference_withheld"] is True
+    assert hidden.public_ref not in str(manifest)
+    assert hidden.public_ref not in str(post(client, world, profile="curated").json())
+    # Control: under the exploratory profile the same solve is visible, and its ref is served.
+    exploratory = post(client, world, profile="exploratory", manifest=True).json()
+    served = next(s for s in exploratory["solves"] if s["solve_ref"] == visible.public_ref)["validation"]["entries"][0]
+    assert served["reference_solve_ref"] == hidden.public_ref
