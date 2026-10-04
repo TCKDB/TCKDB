@@ -4,7 +4,15 @@ from math import isfinite, log
 
 from app.chemistry.arrhenius import ArrheniusRangeError, a_at_unit_t0
 from app.services.consistency import engine
-from app.services.consistency.core import AdvisoryResult, encoded, finding, snapshot, temperatures, thermo_inputs
+from app.services.consistency.core import (
+    KINETICS_HASH_EXCLUDED_COLUMNS,
+    AdvisoryResult,
+    encoded,
+    finding,
+    snapshot,
+    temperatures,
+    thermo_inputs,
+)
 from app.services.consistency.stoichiometry import element_balance, entry_facts, is_balanced, participant_slots
 from app.services.trust.rubrics import THERMO_KINETICS_CONSISTENCY_V1
 
@@ -187,12 +195,14 @@ def compare_kinetics(forward, reverse, thermo_by_entry, *, temperature_grid):
         "forward": _with_determination(
             forward,
             snapshot(forward, ("source_calculations", "falloff", "plog_entries", "chebyshev",
-                               "third_body_efficiencies", "arrhenius_entries", "literature")),
+                               "third_body_efficiencies", "arrhenius_entries", "literature"),
+                     exclude=KINETICS_HASH_EXCLUDED_COLUMNS),
         ),
         "reverse": _with_determination(
             reverse,
             snapshot(reverse, ("source_calculations", "falloff", "plog_entries", "chebyshev",
-                               "third_body_efficiencies", "arrhenius_entries", "literature")),
+                               "third_body_efficiencies", "arrhenius_entries", "literature"),
+                     exclude=KINETICS_HASH_EXCLUDED_COLUMNS),
         ),
         "participants": sorted((snapshot(p, ("species_entry",)) for p in participants), key=encoded),
         "species": sorted((snapshot(e.species) for e in entries.values()), key=encoded),

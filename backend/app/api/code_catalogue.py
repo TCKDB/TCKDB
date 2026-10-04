@@ -1597,6 +1597,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/kinetics_declaration_resolution.py",
             shape=Shape.relationship,
             note="context.reason names reaction, direction, source, target or role."),
+    ApiCode("kinetics_energy_level_contradiction", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
+            shape=Shape.relationship,
+            note=(
+                "A declared kinetics energy_level_of_theory disagrees with the level of a "
+                "linked reactant, product or transition-state energy calculation. The "
+                "kinetics counterpart of thermo_energy_level_contradiction."
+            )),
     ApiCode("kinetics_interpretation_conformer_selection_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
             shape=Shape.relationship,

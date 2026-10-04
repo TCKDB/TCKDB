@@ -75,6 +75,8 @@ class KineticsBase(BaseModel):
         in its stored form (public refs only); None when none was declared.
     :param protocol_declaration: The depositor's versioned protocol declaration, in its
         stored form; None when none was declared.
+    :param energy_level_of_theory_id: Level of theory the depositor declared for the
+        record's energies, stored as declared; None when none was declared.
     :param literature_id: Optional linked literature row.
     :param workflow_tool_release_id: Optional workflow provenance.
     :param software_release_id: Optional software provenance.
@@ -101,6 +103,8 @@ class KineticsBase(BaseModel):
     representation_role: KineticsRepresentationRole | None = None
     applicability_declaration: StoredKineticsApplicabilityDeclaration | None = None
     protocol_declaration: StoredKineticsProtocolDeclaration | None = None
+
+    energy_level_of_theory_id: int | None = None
 
     literature_id: int | None = None
     workflow_tool_release_id: int | None = None

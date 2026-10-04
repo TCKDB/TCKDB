@@ -86,6 +86,11 @@ THERMO_HASH_EXCLUDED_COLUMNS = frozenset(
 )
 
 
+#: Kinetics columns no consistency check reads, kept out of the context hash for the same
+#: reason: ``energy_level_of_theory_id`` is a depositor's declaration.
+KINETICS_HASH_EXCLUDED_COLUMNS = frozenset({"energy_level_of_theory_id"})
+
+
 def thermo_inputs(thermo):
     return snapshot(thermo, ("nasa", "nasa9_intervals", "points", "wilhoit", "source_calculations",
                             "literature", "software_release", "workflow_tool_release"),

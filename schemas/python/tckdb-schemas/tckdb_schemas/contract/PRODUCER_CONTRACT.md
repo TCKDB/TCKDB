@@ -229,6 +229,11 @@ The contract's "What changed" prints only the newest entries. Every entry now sh
 `contract.changes_since(version, text=...)`: `text`, when given, is now changelog markdown (`## <version>` headings),
 not contract markdown.
 
+### 0.98.0 - 2026-10-04
+
+`BundleKineticsIn` can declare `energy_level_of_theory`, optional and stored as declared (as on `KineticsUploadRequest`). A
+declared level that contradicts a linked energy calculation is refused with `kinetics_energy_level_contradiction`.
+
 ### 0.97.0 - 2026-10-04
 
 New refusal code `kinetics_selection_population_too_large` (a selection request over 500 visible records).
@@ -1708,6 +1713,10 @@ Nested models (86; fields and rules in the [model reference](#model-reference)):
 - [`thermo_declaration_error`](#k-thermo-declaration-error) (marked rule; reached from `POST /api/v1/uploads/computed-reaction`)
 
 ### Refusal codes this surface can return
+
+| Code | Status | Traced via |
+|---|---|---|
+| [`kinetics_energy_level_contradiction`](#c-kinetics-energy-level-contradiction) | 422 | route handler |
 
 - [Code group 1](#cg-1): 3 codes, returned on 16 surfaces
 - [Code group 2](#cg-2): 4 codes, returned on 14 surfaces
@@ -4322,6 +4331,7 @@ Unknown keys are refused.
 | `determination` | [`KineticsDeterminationDeclaration`](#m-kineticsdeterminationdeclaration) \| null | no |  |  |  | Needs ``direction`` and the bundle's literature or workflow tool.
 | `applicability` | [`KineticsApplicabilityDeclaration`](#m-kineticsapplicabilitydeclaration) \| null | no |  |  |  | Optional declaration of what the coefficient is.
 | `protocol` | [`KineticsProtocolDeclaration`](#m-kineticsprotocoldeclaration) \| null | no |  |  |  | Optional declaration of how the rate was produced.
+| `energy_level_of_theory` | [`LevelOfTheoryRef`](#m-leveloftheoryref) \| null | no |  |  |  | Optional level of theory the fit's energies came from, stored as declared. A level the linked calculations contradict is refused.
 | `a` | number \| null | no |  |  |  | Arrhenius pre-exponential factor.
 | `a_units` | `ArrheniusAUnits` \| null | no |  |  | `per_s`, `cm3_mol_s`, `cm3_molecule_s`, `m3_mol_s`, `cm6_mol2_s`, `cm6_molecule2_s`, `m6_mol2_s` | Units for A.
 | `n` | number \| null | no |  |  |  | Temperature exponent.
@@ -9020,6 +9030,15 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "{field} names {what} that does not belong to this record's reaction."
 - Note: context.reason names reaction, direction, source, target or role.
+
+<a id="c-kinetics-energy-level-contradiction"></a>
+
+#### `kinetics_energy_level_contradiction`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/calculation_levels.py`.
+- The body's `context` names the things involved.
+- Message: "kinetics: the declared energy level of theory ({_lot_label(declared)}) does not match the level of the linked energy calculations ({', '.join((c.public_ref for c in differing))} at {', '.join(sorted({_lot_label(c.lot) for c in differing}))}). Declare the level the linked energies ran at, or link energy calculations run at the declared level."
+- Note: A declared kinetics energy_level_of_theory disagrees with the level of a linked reactant, product or transition-state energy calculation.
 
 <a id="c-kinetics-interpretation-conformer-selection-owner-mismatch"></a>
 

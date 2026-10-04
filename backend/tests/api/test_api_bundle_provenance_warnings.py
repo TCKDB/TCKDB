@@ -453,28 +453,25 @@ def test_reaction_bundle_kinetics_without_provenance_is_annotated(client: TestCl
     assert "software_release" not in {field for field, _ in pairs}
 
 
-def test_kinetics_is_never_warned_about_a_level_of_theory_it_cannot_carry(
+def test_a_computed_fit_is_warned_about_a_missing_level_of_theory_per_fit(
     client: TestClient,
 ):
-    """The failure mode this whole task exists to prevent.
+    """``BundleKineticsIn.energy_level_of_theory`` is the fit's own declaration.
 
-    ``collect_kinetics_provenance_warnings`` asks the standalone route for
-    ``energy_level_of_theory``. No bundle model has that field — not
-    ``BundleKineticsIn``, not the bundle root — and it is not a column on
-    ``kinetics`` either; on the standalone route it is a resolution hint
-    used to auto-resolve source SP calculations. Emitting it here would
-    tell a depositor to supply something they cannot supply, which is a
-    worse outcome than the silence it replaced.
+    It is stored on the row, so a computed fit that omits it is warned about under
+    its own path, and a fit that states it is not.
     """
-    bundle = _reaction_bundle(kinetics=[_kinetics()])
+    bundle = _reaction_bundle(
+        kinetics=[_kinetics(), _kinetics(energy_level_of_theory=_LOT)]
+    )
 
     resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
     assert resp.status_code == 201, resp.text[:800]
 
-    codes = {code for _field, code in _pairs(resp)}
-    assert "missing_level_of_theory_provenance" not in codes, (
-        "warned about energy_level_of_theory, which no bundle payload can carry"
-    )
+    level_warnings = {
+        field for field, code in _pairs(resp) if code == "missing_level_of_theory_provenance"
+    }
+    assert level_warnings == {"kinetics[0].energy_level_of_theory"}
 
 
 def test_bundle_kinetics_provenance_is_reported_once_not_once_per_fit(

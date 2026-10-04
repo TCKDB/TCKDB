@@ -22,6 +22,16 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A kinetics record can declare its electronic level of theory (2026-10-04)
+
+- `kinetics.energy_level_of_theory_id` (nullable, indexed; revision `a3e7c1d9b542`, no backfill: existing rows stay NULL).
+  `/uploads/kinetics` stores the `energy_level_of_theory` it already accepted (it was only used to find source single
+  points); a bundle's kinetics (`BundleKineticsIn`, tckdb-schemas 0.98.0) can state it too. A declared level that
+  contradicts a linked energy calculation is refused (`kinetics_energy_level_contradiction`, the same tier as
+  thermo's). A kinetics bundle import stores the declared level without requiring the exporter's calculations.
+- The scientific kinetics read reports it as `levels.declared_energy`, separate from the derived level and never filled
+  from a linked calculation. A kinetics bundle export carries it. tckdb-client 0.130.0 (regenerated rejection codes only).
+
 ## Kinetics applicability assessment and the shared selection kernel (2026-10-04)
 
 **Change 2 of 4 of kinetics method-aware selection: a service that assesses which stored rates answer a

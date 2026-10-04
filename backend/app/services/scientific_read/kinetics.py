@@ -121,6 +121,7 @@ from app.services.scientific_read.composite_annotations import (
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
 )
+from app.services.scientific_read.declared_levels import load_declared_energy_summaries
 from app.services.scientific_read.handles import (
     NO_MATCH,
     reconcile_level_of_theory_pair,
@@ -539,6 +540,12 @@ def get_reaction_kinetics(
         },
     )
 
+    # The depositor's declared energy level, bulk-loaded for the page. Only the record's
+    # own stored declaration: never filled from a linked calculation or a sibling record.
+    declared_energy_summaries = load_declared_energy_summaries(
+        session, [k.energy_level_of_theory_id for k in kinetics_rows]
+    )
+
     # Pass 1: build every record's provenance eagerly. This is needed
     # before ``levels`` can be computed for *any* record: no legal upload
     # can cite an opt-typed calculation as a kinetics source (see
@@ -684,7 +691,7 @@ def get_reaction_kinetics(
                 ),
                 temperature_coverage=coverage,
                 evidence_completeness=evidence,
-                levels=levels,
+                levels=_with_declared_energy(levels, k, declared_energy_summaries),
                 provenance=provenance,
                 trust=(
                     build_kinetics_trust_fragment(
@@ -1785,6 +1792,19 @@ def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None
         solvent_model=meta.lot_solvent_model,
         spin_treatment=meta.lot_spin_treatment,
         composite_scheme=meta.composite_scheme,
+    )
+
+
+def _with_declared_energy(
+    levels: ScientificLevelsSummary,
+    kinetics: Kinetics,
+    summaries: Mapping[int, LevelOfTheorySummary],
+) -> ScientificLevelsSummary:
+    """Report the record's own stored declaration as ``declared_energy``, else leave it null."""
+    if kinetics.energy_level_of_theory_id is None:
+        return levels
+    return levels.model_copy(
+        update={"declared_energy": summaries.get(kinetics.energy_level_of_theory_id)}
     )
 
 

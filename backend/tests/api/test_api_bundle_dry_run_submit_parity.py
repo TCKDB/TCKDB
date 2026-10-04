@@ -164,8 +164,6 @@ def _wigner(ts_ref: str) -> dict:
     }
 
 
-_LOT = {"method": "ccsd(t)", "basis": "cc-pvtz"}
-
 #: Bundles submit refuses. Each is ``(bundle builder, submit's status,
 #: submit's code)``; a builder receives the test session so it can seed the
 #: rows a reference needs. Every one of them passed ``/bundles/dry-run``
@@ -272,14 +270,6 @@ REFUSED: dict[str, tuple[Callable[[Session], dict], int, str]] = {
         ),
         422,
         "reaction_mass_balance_failed",
-    ),
-    # app/workflows/kinetics.py _find_sp_for_species: an energy level
-    # whose single points were never deposited. A bare ValueError, so
-    # submit answers with the generic code -- and the dry run must too.
-    "kinetics_energy_level_without_sp": (
-        lambda _s: _kinetics(energy_level_of_theory=_LOT),
-        422,
-        "validation_error",
     ),
     # The preview's own refusal. Submit's gate turns it into a
     # ``domain_error``; the dry run used to show the item error but never

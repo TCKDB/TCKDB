@@ -490,6 +490,10 @@ class KineticsRecord(BaseModel):
     #: with no TS chain at all (experimental, estimated, imported, fitted,
     #: network-derived, or literature-derived kinetics).
     #:
+    #: ``declared_energy`` is the one stored member: the level the depositor declared for
+    #: this record's energies, ``null`` when none was declared and never filled from a linked
+    #: calculation or another record.
+    #:
     #: See :func:`app.services.scientific_read.kinetics._build_kinetics_levels`
     #: and :func:`app.services.scientific_read.kinetics._resolve_ts_opt_via_dependency`
     #: for the full mechanism and the pinned tests.

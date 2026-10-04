@@ -303,6 +303,7 @@ def _import_kinetics_bundle(
             review_policy=review_policy,
             warnings=warnings,
             determination_anchors=determination_anchors,
+            require_energy_sources=False,
         )
         messages_out.extend(
             _import_warning_messages(

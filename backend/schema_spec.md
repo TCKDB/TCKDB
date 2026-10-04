@@ -1445,6 +1445,7 @@ Fields:
 - `tunneling_model`
 - `determination_id`, `representation_role` (see "Kinetics determination, applicability and protocol declarations")
 - `applicability_declaration`, `protocol_declaration` (JSONB, versioned)
+- `energy_level_of_theory_id` (the level the depositor declared for the record's energies; NULL when none was declared, never back-filled)
 - `note`
 - `created_at`
 - `created_by`

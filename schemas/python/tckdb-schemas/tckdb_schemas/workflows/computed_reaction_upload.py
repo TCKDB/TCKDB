@@ -1277,6 +1277,8 @@ class BundleKineticsIn(SchemaBase):
     :param determination: Needs ``direction`` and the bundle's literature or workflow tool.
     :param applicability: Optional declaration of what the coefficient is.
     :param protocol: Optional declaration of how the rate was produced.
+    :param energy_level_of_theory: Optional level of theory the fit's energies came from,
+        stored as declared. A level the linked calculations contradict is refused.
 
     This model and ``KineticsUploadRequest`` share their kinetics-evidence
     models and their cross-field checks (``kinetics_evidence``), so the two
@@ -1296,6 +1298,7 @@ class BundleKineticsIn(SchemaBase):
     determination: KineticsDeterminationDeclaration | None = None
     applicability: KineticsApplicabilityDeclaration | None = None
     protocol: KineticsProtocolDeclaration | None = None
+    energy_level_of_theory: LevelOfTheoryRef | None = None
 
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
