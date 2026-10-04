@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.133.0 - 2026-10-04
+## 0.131.0 - 2026-10-04
 
 Method-aware selection among a reaction entry's stored rate coefficients, for one stated gas-phase question
 (`tckdb-schemas` is unchanged; the producer contract is unchanged). Read-only; browsing (`get_reaction_kinetics`) is
