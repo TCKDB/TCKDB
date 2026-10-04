@@ -1007,6 +1007,10 @@ def test_network_structure_rows_name_their_channel_and_state(
     kinetics_row = payload["network_kinetics"][0]
     assert kinetics_row["channel_key"] == channel.channel_key
     assert "channel_id" not in kinetics_row
+    # The column's own reference wins over the composite determination-scope key it also sits in: a fit's
+    # ``solve_ref`` is its solve, never a determination.
+    assert kinetics_row["solve_ref"] == solve.public_ref
+    assert "solve_id" not in kinetics_row
 
     energy = payload["network_solve_state_energy"][0]
     assert energy["state_composition_hash"] == state_a.composition_hash
