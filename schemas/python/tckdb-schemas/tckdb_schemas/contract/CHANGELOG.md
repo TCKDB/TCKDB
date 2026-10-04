@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.99.0 - 2026-10-04
+
+`BundleKineticsIn` can declare `energy_level_of_theory`, optional and stored as declared (as on `KineticsUploadRequest`). A
+declared level that contradicts a linked energy calculation is refused with `kinetics_energy_level_contradiction`.
+
 ## 0.98.0 - 2026-10-04
 
 The contract's "What changed" prints only the newest entries. Every entry now ships beside it as

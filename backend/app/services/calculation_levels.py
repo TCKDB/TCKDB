@@ -161,6 +161,10 @@ W_THERMO_ENERGY_LEVEL_REQUIRES_SP = "thermo_energy_level_requires_sp"
 #: 'composite') set's own (shared) level of theory.
 W_STATMECH_ENERGY_LEVEL_CONTRADICTION = "statmech_energy_level_contradiction"
 W_THERMO_ENERGY_LEVEL_CONTRADICTION = "thermo_energy_level_contradiction"
+#: The kinetics counterpart, at the same tier (a 422 coded refusal): a declared
+#: ``energy_level_of_theory`` disagrees with the level of a linked reactant, product or
+#: transition-state energy calculation.
+W_KINETICS_ENERGY_LEVEL_CONTRADICTION = "kinetics_energy_level_contradiction"
 
 #: Two or more linked 'sp's (or 'composite's) disagree on level of theory, so
 #: "the energy level" has no single answer (R2').
@@ -1038,9 +1042,46 @@ def assert_role_consistency(
             )
 
 
+_KINETICS_ENERGY_ROLES = frozenset({"reactant_energy", "product_energy", "ts_energy"})
+
+
+def assert_kinetics_energy_level_consistency(
+    links: list[RoleLink], declared: LevelOfTheory | None
+) -> None:
+    """A declared kinetics energy level must match every linked energy calculation's level.
+
+    The kinetics counterpart of the R4' check at the end of :func:`assert_role_consistency`
+    and refused the same way (a coded 422). Only the ``reactant_energy``, ``product_energy``
+    and ``ts_energy`` links are energies; a calculation with no level of theory of its own is
+    not compared (absence is not a contradiction), and no declaration, or no energy link, is
+    nothing to check. Nothing is inferred in either direction.
+
+    :raises CodedValueError: ``kinetics_energy_level_contradiction``.
+    """
+    if declared is None:
+        return
+    energies = [link.calculation for link in links if link.role in _KINETICS_ENERGY_ROLES]
+    differing = list({c.id: c for c in energies if c.lot_id is not None and c.lot_id != declared.id}.values())
+    if not differing:
+        return
+    raise CodedValueError(
+        W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
+        f"kinetics: the declared energy level of theory ({_lot_label(declared)}) does not match "
+        f"the level of the linked energy calculations ({', '.join(c.public_ref for c in differing)} "
+        f"at {', '.join(sorted({_lot_label(c.lot) for c in differing}))}). Declare the level the "
+        "linked energies ran at, or link energy calculations run at the declared level.",
+        context={
+            "declared_level_of_theory_ref": declared.public_ref,
+            "energy_calculation_refs": [c.public_ref for c in differing],
+        },
+        message_prefix=False,
+    )
+
+
 __all__ = [
     "W_COMPOSITE_FREQUENCY_LEVEL_DIFFERS",
     "W_COMPOSITE_ROLE_ON_NON_COMPOSITE",
+    "W_KINETICS_ENERGY_LEVEL_CONTRADICTION",
     "W_STATMECH_ENERGY_LEVEL_AMBIGUOUS",
     "W_STATMECH_ENERGY_LEVEL_CONTRADICTION",
     "W_STATMECH_ENERGY_LEVEL_REQUIRES_SP",
@@ -1059,6 +1100,7 @@ __all__ = [
     "GeometrySource",
     "RoleCalcInfo",
     "RoleLink",
+    "assert_kinetics_energy_level_consistency",
     "assert_role_consistency",
     "collect_composite_link_warnings",
     "derive_levels",

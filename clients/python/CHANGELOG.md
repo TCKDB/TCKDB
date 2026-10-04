@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.130.0 - 2026-10-04
+
+`RejectionCode` gains `kinetics_energy_level_contradiction`, regenerated from the server's catalogue; nothing else changes.
+
 ## 0.129.0 - 2026-10-04
 
 `RejectionCode` gains `kinetics_selection_population_too_large`, regenerated from the server's catalogue; nothing

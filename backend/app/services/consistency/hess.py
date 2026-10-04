@@ -63,7 +63,14 @@ from math import isfinite
 from tckdb_schemas.enthalpy_reference import shared_enthalpy_reference
 
 from app.services.consistency import engine
-from app.services.consistency.core import AdvisoryResult, encoded, finding, snapshot, thermo_inputs
+from app.services.consistency.core import (
+    KINETICS_HASH_EXCLUDED_COLUMNS,
+    AdvisoryResult,
+    encoded,
+    finding,
+    snapshot,
+    thermo_inputs,
+)
 from app.services.consistency.stoichiometry import (
     element_balance,
     entry_facts,
@@ -331,7 +338,7 @@ def compare_hess(kinetics, thermo_by_entry, *, representations=None):
         findings.extend(_bounded_findings(kinetics, payload, refs + fit_refs, combination=index, base=base))
 
     inputs = {
-        "kinetics": snapshot(kinetics),
+        "kinetics": snapshot(kinetics, exclude=KINETICS_HASH_EXCLUDED_COLUMNS),
         "tunneling": snapshot(tunneling),
         "transition_state_entry": (snapshot(tunneling.transition_state_entry, ("transition_state",))
                                    if tunneling is not None else None),

@@ -51,6 +51,12 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     ("kinetics", "representation_role"): None,
     ("kinetics", "applicability_declaration"): None,
     ("kinetics", "protocol_declaration"): None,
+    # kinetics.energy_level_of_theory_id: a kinetics row stored before the column existed
+    # declared no energy level, which is NULL. A record that declares one includes the
+    # column in the reproducibility snapshot (it is part of what the row claims); the
+    # consistency hash leaves it out (``KINETICS_HASH_EXCLUDED_COLUMNS``). Adding the
+    # column restales no stored review or assessment of any existing row.
+    ("kinetics", "energy_level_of_theory_id"): None,
 }
 
 

@@ -212,11 +212,9 @@ class _NotApplicable:
     rather than about the deposit, and warning about it would tell a
     depositor to do something they cannot do.
 
-    The concrete case is ``energy_level_of_theory`` on a bundle. On the
-    standalone kinetics route it is a real anchor: ``app.workflows.
-    kinetics`` uses it to auto-resolve source SP calculations. A bundle
-    names its source calculations by key instead and has no field for
-    it, so it is NOT_APPLICABLE there.
+    The concrete case is ``freq_scale_factor`` on a kinetics record, or the
+    software release a bundle's kinetics take from the bundle root: a payload
+    that has no field of its own to supply them through.
     """
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid

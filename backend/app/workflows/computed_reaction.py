@@ -61,6 +61,7 @@ from app.services.calculation_levels import (
     W_THERMO_ROLE_DUPLICATE,
     W_THERMO_SP_GEOMETRY_MISMATCH,
     RoleLink,
+    assert_kinetics_energy_level_consistency,
     assert_role_consistency,
 )
 from app.services.calculation_ownership import (
@@ -390,16 +391,11 @@ def _collect_bundle_provenance_warnings(
     workflow persists the fallback. Warning on the raw per-species field
     would name provenance that was in fact recorded.
 
-    **Kinetics' level of theory is not applicable here.**
-    ``collect_kinetics_provenance_warnings`` asks the standalone route
-    for ``energy_level_of_theory``, and ``BundleKineticsIn`` has no such
-    field — nor does the bundle root, nor is it a column on ``kinetics``.
-    On the standalone route it is a resolution hint that
-    ``app.workflows.kinetics`` uses to auto-resolve source SP
-    calculations; a bundle names its source calculations by key and has
-    no use for it. Warning about it would be exactly the un-actionable
-    warning this wiring exists to avoid, so it is passed as
-    ``NOT_APPLICABLE`` rather than as ``None``.
+    **Kinetics' level of theory is the fit's own declaration.**
+    ``BundleKineticsIn.energy_level_of_theory`` is stored on the row as
+    declared, so a computed fit that omits it is warned about, per fit
+    (``kinetics[i].energy_level_of_theory``), by the same collector the
+    standalone route uses.
     """
     warnings: list[UploadWarning] = []
 
@@ -540,6 +536,18 @@ def _collect_bundle_provenance_warnings(
             if (warning.field, warning.code) not in seen:
                 seen.add((warning.field, warning.code))
                 warnings.append(warning)
+    # The level of theory is the fit's own declaration, so it is named per fit.
+    for kin_index, kin in enumerate(request.kinetics):
+        warnings.extend(
+            collect_provenance_warnings(
+                scientific_origin=kin.scientific_origin,
+                software_release=NOT_APPLICABLE,
+                workflow_tool_release=NOT_APPLICABLE,
+                literature=NOT_APPLICABLE,
+                energy_level_of_theory=kin.energy_level_of_theory,
+                field_prefix=f"kinetics[{kin_index}].",
+            )
+        )
 
     return warnings
 
@@ -1871,6 +1879,13 @@ def persist_computed_reaction_upload(
             ts_scope="reaction",
         )
 
+        kin_declared_energy_lot = (
+            resolve_level_of_theory_ref(session, kin.energy_level_of_theory)
+            if kin.energy_level_of_theory is not None
+            else None
+        )
+        kin_energy_links: list[RoleLink] = []
+
         kinetics = Kinetics(
             reaction_entry_id=kin_entry.id,
             scientific_origin=kin.scientific_origin,
@@ -1881,6 +1896,10 @@ def persist_computed_reaction_upload(
             representation_role=declarations.representation_role,
             applicability_declaration=declared_applicability,
             protocol_declaration=declared_protocol,
+            # Stored as declared, after the consistency check below.
+            energy_level_of_theory_id=(
+                kin_declared_energy_lot.id if kin_declared_energy_lot is not None else None
+            ),
             literature_id=literature.id if literature else None,
             software_release_id=(
                 bundle_analysis_software_release.id
@@ -1956,6 +1975,7 @@ def persist_computed_reaction_upload(
                         role=entry.role,
                     )
                 )
+                kin_energy_links.append(RoleLink(entry.role.value, source_calc))
         else:
             # Legacy fallback: auto-link the first species-owned SP calc
             # found for each reactant/product as reactant_energy /
@@ -1984,6 +2004,13 @@ def persist_computed_reaction_upload(
                             role=role,
                         )
                     )
+                    kin_energy_links.append(
+                        RoleLink(role.value, session.get(Calculation, sp_calc_ids[0]))
+                    )
+
+        # A declared level must not contradict the energies this record links (the
+        # same check thermo and statmech apply; nothing is inferred when none is linked).
+        assert_kinetics_energy_level_consistency(kin_energy_links, kin_declared_energy_lot)
 
     session.flush()
 

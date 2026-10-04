@@ -37,12 +37,14 @@ from tckdb_schemas.rights import DepositRights
 
 from app.db.models.common import (
     ActivationEnergyUnits,
+    CompositeSchemeKind,
     ReactionRole,
     SubmissionRecordType,
     ThermoModelKind,
     ThermoTargetKind,
 )
 from app.db.models.kinetics import Kinetics
+from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.reaction import (
     ChemReaction,
     ReactionEntryStructureParticipant,
@@ -72,6 +74,8 @@ from app.schemas.workflows.contribution_bundle import (
 )
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.release.record_rights import linked_rights
+from app.services.scientific_read.composite_binding import composite_scheme_summaries
+from app.services.scientific_read.handles import canonical_level_of_theory_id
 
 # Schema version of the local DB at the time of writing. The local export
 # stamps this into the bundle so a future hosted importer can refuse
@@ -912,6 +916,7 @@ def _kinetics_to_upload(
         payload["workflow_tool_release"] = workflow_tool
 
     notes = _add_kinetics_declarations(payload, kinetics)
+    notes.extend(_add_declared_energy_level(payload, kinetics))
     if notes and omissions is not None:
         omissions.append(
             BundleExportOmission(
@@ -920,6 +925,44 @@ def _kinetics_to_upload(
         )
 
     return payload
+
+
+def _add_declared_energy_level(payload: dict[str, Any], kinetics: Kinetics) -> list[str]:
+    """Write the record's declared energy level of theory into ``payload``, as stated.
+
+    Only what the depositor declared is exported (never a level derived from linked
+    calculations, which a kinetics bundle does not carry). A level bound to a recipe of its
+    own (anything but a program's named method) cannot be stated without its recipe, so it is
+    left out and reported, absent and never replaced by a plain method of the same name.
+
+    :returns: Sentences for the omission detail; empty when nothing was left out.
+    """
+    if kinetics.energy_level_of_theory_id is None:
+        return []
+    session = object_session(kinetics)
+    if session is None:  # pragma: no cover - an exported row is always attached
+        return []
+    lot_id = canonical_level_of_theory_id(session, kinetics.energy_level_of_theory_id)
+    lot = session.get(LevelOfTheory, lot_id)
+    scheme = composite_scheme_summaries(session, [lot_id]).get(lot_id)
+    if lot is None:  # pragma: no cover - the foreign key guarantees it
+        return []
+    if scheme is not None and scheme.kind != CompositeSchemeKind.named_method:
+        return [
+            "Its declared energy level of theory is a composite recipe of its own, which a "
+            "portable bundle cannot carry, so it was left out."
+        ]
+    declared: dict[str, Any] = {"method": lot.method}
+    for name in ("basis", "aux_basis", "cabs_basis", "dispersion", "solvent", "solvent_model", "keywords"):
+        value = getattr(lot, name)
+        if value is not None:
+            declared[name] = value
+    if lot.spin_treatment is not None:
+        declared["spin_treatment"] = lot.spin_treatment.value
+    if lot.core_treatment is not None:
+        declared["core_treatment"] = lot.core_treatment.value
+    payload["energy_level_of_theory"] = declared
+    return []
 
 
 def _group_determinations(rows: Sequence[Kinetics], uploads: Sequence[dict[str, Any]]) -> None:

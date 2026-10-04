@@ -12,7 +12,10 @@ from app.db.models.reaction import ReactionEntry
 from app.schemas.entities.kinetics import KineticsCreate
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
-from app.services.calculation_resolution import resolve_workflow_tool_release_ref
+from app.services.calculation_resolution import (
+    resolve_level_of_theory_ref,
+    resolve_workflow_tool_release_ref,
+)
 from app.services.kinetics_declaration_resolution import (
     assert_kinetics_declaration_columns,
     resolve_kinetics_declarations,
@@ -281,6 +284,11 @@ def resolve_kinetics_upload(
         representation_role=declarations.representation_role,
         applicability_declaration=declarations.applicability_declaration,
         protocol_declaration=declarations.protocol_declaration,
+        energy_level_of_theory_id=(
+            resolve_level_of_theory_ref(session, request.energy_level_of_theory).id
+            if request.energy_level_of_theory is not None
+            else None
+        ),
         literature_id=literature.id if literature is not None else None,
         software_release_id=(
             software_release.id if software_release is not None else None
@@ -365,6 +373,7 @@ def persist_kinetics(
         representation_role=kinetics_create.representation_role,
         applicability_declaration=applicability,
         protocol_declaration=protocol,
+        energy_level_of_theory_id=kinetics_create.energy_level_of_theory_id,
         literature_id=kinetics_create.literature_id,
         workflow_tool_release_id=kinetics_create.workflow_tool_release_id,
         software_release_id=kinetics_create.software_release_id,

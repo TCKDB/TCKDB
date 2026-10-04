@@ -91,6 +91,20 @@ from app.services.upload_reference import (
 from app.workflows.reaction import persist_reaction_upload, reversible_or_inherited
 
 
+class EnergySourceLookupError(ValueError):
+    """No single energy calculation at the declared level could be found for a participant.
+
+    Still a ``ValueError`` with the same message, so the standalone route refuses exactly as before; a bundle import
+    catches this one class (and nothing else) to state the level without linking calculations.
+
+    :ivar reason: ``"none"`` (no calculation at that level) or ``"ambiguous"`` (more than one).
+    """
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 def _find_sp_for_species(
     session: Session,
     *,
@@ -113,16 +127,18 @@ def _find_sp_for_species(
     ).all()
 
     if len(results) == 0:
-        raise ValueError(
+        raise EnergySourceLookupError(
             "No SP calculation found for the requested species entry "
             "at the declared energy level of theory. "
-            "Upload the conformer with the SP as an additional calculation first."
+            "Upload the conformer with the SP as an additional calculation first.",
+            reason="none",
         )
     if len(results) > 1:
-        raise ValueError(
+        raise EnergySourceLookupError(
             "Multiple SP calculations found for the requested species entry "
             "at the declared energy level of theory. "
-            "Cannot auto-resolve: multi-conformer disambiguation not yet supported."
+            "Cannot auto-resolve: multi-conformer disambiguation not yet supported.",
+            reason="ambiguous",
         )
     return results[0]
 
@@ -159,10 +175,11 @@ def _find_energy_calculation_for_species(
     if len(composites) == 1:
         return composites[0]
     if len(composites) > 1:
-        raise ValueError(
+        raise EnergySourceLookupError(
             "Multiple composite calculations found for the requested species entry "
             "at the declared energy level of theory. "
-            "Cannot auto-resolve: multi-conformer disambiguation not yet supported."
+            "Cannot auto-resolve: multi-conformer disambiguation not yet supported.",
+            reason="ambiguous",
         )
     return _find_sp_for_species(session, species_entry_id=species_entry_id, lot_id=lot_id)
 
@@ -849,6 +866,7 @@ def persist_kinetics_upload(
     review_policy: ReviewPolicy | None = ReviewPolicy(),
     warnings: list[UploadWarning] | None = None,
     determination_anchors: dict[str, int] | None = None,
+    require_energy_sources: bool = True,
 ) -> Kinetics:
     """Persist a complete kinetics upload workflow.
 
@@ -860,6 +878,11 @@ def persist_kinetics_upload(
         stating the same determination content land under one reaction entry and share one
         determination (see :func:`determination_content_key`). ``None`` on the standalone
         route, where every upload gets its own reaction entry.
+    :param require_energy_sources: When a level of theory is declared, refuse the upload if
+        its source calculations cannot be found (the standalone route). A bundle import
+        passes ``False``: it stores the declared level and links the calculations only when
+        every participant's resolves to exactly one, so a bundle exported from another
+        instance can be imported where those calculations were never deposited.
     :returns: Newly created ``Kinetics`` row attached to a backend-resolved reaction entry.
     """
     warning_sink = warnings if warnings is not None else []
@@ -1074,42 +1097,52 @@ def persist_kinetics_upload(
 
     # 3. Auto-resolve source calculations from energy_level_of_theory
     #    For each reaction participant, find the energy calculation at that LOT
-    #    (a composite if there is one, else the SP) and link it.
+    #    (a composite if there is one, else the SP) and link it. The level is
+    #    stored on the row either way (``resolve_kinetics_upload``); this step
+    #    only finds the calculations it names.
     if request.energy_level_of_theory is not None:
         lot = resolve_level_of_theory_ref(session, request.energy_level_of_theory)
-
-        # Reactant SPs
-        for participant in request.reaction.reactants:
-            species_entry = resolve_species_entry(
-                session, participant.species_entry, created_by=created_by
-            )
-            calc = _find_energy_calculation_for_species(
-                session, species_entry_id=species_entry.id, lot_id=lot.id
-            )
-            session.add(
-                KineticsSourceCalculation(
-                    kinetics_id=kinetics.id,
-                    calculation_id=calc.id,
-                    role=KineticsCalculationRole.reactant_energy,
+        links: list[tuple[int, KineticsCalculationRole]] = []
+        try:
+            for participants, role in (
+                (request.reaction.reactants, KineticsCalculationRole.reactant_energy),
+                (request.reaction.products, KineticsCalculationRole.product_energy),
+            ):
+                for participant in participants:
+                    species_entry = resolve_species_entry(
+                        session, participant.species_entry, created_by=created_by
+                    )
+                    calc = _find_energy_calculation_for_species(
+                        session, species_entry_id=species_entry.id, lot_id=lot.id
+                    )
+                    links.append((calc.id, role))
+        except EnergySourceLookupError as error:
+            # A bundle record is portable and carries no calculations, so a bundle
+            # import states the level without being able to name the calculations; it
+            # links all of them or none, never some, and says so.
+            if require_energy_sources:
+                raise
+            links = []
+            warning_sink.append(
+                UploadWarning(
+                    field="energy_level_of_theory",
+                    code="energy_level_stored_without_source_calculations",
+                    message=(
+                        "The declared energy level of theory was stored, but no source calculations were linked: "
+                        + (
+                            "no single calculation at that level exists for a participant on this instance."
+                            if error.reason == "none"
+                            else "more than one calculation at that level exists for a participant, so none was chosen."
+                        )
+                    ),
                 )
             )
-
-        # Product SPs
-        for participant in request.reaction.products:
-            species_entry = resolve_species_entry(
-                session, participant.species_entry, created_by=created_by
-            )
-            calc = _find_energy_calculation_for_species(
-                session, species_entry_id=species_entry.id, lot_id=lot.id
-            )
+        for calc_id, role in links:
             session.add(
                 KineticsSourceCalculation(
-                    kinetics_id=kinetics.id,
-                    calculation_id=calc.id,
-                    role=KineticsCalculationRole.product_energy,
+                    kinetics_id=kinetics.id, calculation_id=calc_id, role=role
                 )
             )
-
         session.flush()
 
     apply_review_policy(

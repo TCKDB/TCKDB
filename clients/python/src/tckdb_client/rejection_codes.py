@@ -183,6 +183,7 @@ class RejectionCode(str, Enum):
     KINETICS_DECLARATION_VERSION_UNSUPPORTED = "kinetics_declaration_version_unsupported"
     KINETICS_DETERMINATION_INVALID = "kinetics_determination_invalid"
     KINETICS_DETERMINATION_MISMATCH = "kinetics_determination_mismatch"
+    KINETICS_ENERGY_LEVEL_CONTRADICTION = "kinetics_energy_level_contradiction"
     KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH = "kinetics_interpretation_conformer_selection_owner_mismatch"
     KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH = "kinetics_interpretation_statmech_owner_mismatch"
     KINETICS_PROTOCOL_CALCULATION_OWNER_MISMATCH = "kinetics_protocol_calculation_owner_mismatch"
@@ -447,6 +448,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.KINETICS_DECLARATION_VERSION_UNSUPPORTED,
         RejectionCode.KINETICS_DETERMINATION_INVALID,
         RejectionCode.KINETICS_DETERMINATION_MISMATCH,
+        RejectionCode.KINETICS_ENERGY_LEVEL_CONTRADICTION,
         RejectionCode.KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
         RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
         RejectionCode.KINETICS_PROTOCOL_CALCULATION_OWNER_MISMATCH,
@@ -732,6 +734,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.KINETICS_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.KINETICS_DETERMINATION_INVALID: frozenset({422}),
     RejectionCode.KINETICS_DETERMINATION_MISMATCH: frozenset({422}),
+    RejectionCode.KINETICS_ENERGY_LEVEL_CONTRADICTION: frozenset({422}),
     RejectionCode.KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.KINETICS_PROTOCOL_CALCULATION_OWNER_MISMATCH: frozenset({422}),

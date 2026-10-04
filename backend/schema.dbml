@@ -2221,6 +2221,7 @@ Table kinetics {
   representation_role KineticsRepresentationRole
   applicability_declaration jsonb
   protocol_declaration jsonb
+  energy_level_of_theory_id bigint [ref: > level_of_theory.id]
   literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   software_release_id bigint [ref: > software_release.id]
@@ -2248,6 +2249,7 @@ Table kinetics {
 
   indexes {
     determination_id [name: 'ix_kinetics_determination_id']
+    energy_level_of_theory_id [name: 'ix_kinetics_energy_level_of_theory_id']
     literature_id [name: 'ix_kinetics_literature_id']
     network_kinetics_id [name: 'ix_kinetics_network_kinetics_id']
     public_ref [unique, name: 'ix_kinetics_public_ref']

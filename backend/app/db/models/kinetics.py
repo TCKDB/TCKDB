@@ -231,6 +231,21 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         JSONB(none_as_null=True), nullable=True
     )
 
+    # The level of theory the depositor declared for this record's energies
+    # (``energy_level_of_theory`` on the upload). Stored as declared, after the
+    # upload's consistency check: it is the depositor's claim, separate from
+    # the level the read layer derives from the linked calculations. NULL means
+    # nothing was declared (every row that predates the column, and any upload
+    # that omitted it); it is never back-filled from the linked calculations.
+    # Follows ``level_of_theory_merge`` at read time. Same shape as
+    # ``thermo.energy_level_of_theory_id``.
+    energy_level_of_theory_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("level_of_theory.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+        index=True,
+    )
+
     literature_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("literature.id", deferrable=True, initially="IMMEDIATE"),
