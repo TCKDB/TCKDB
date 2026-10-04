@@ -342,7 +342,9 @@ class XYG3B3LYPBarrierRule(KineticsRule):
                 continue
             if method != wanted[0]:
                 refuted.append(f"linked_energy_level_names_another_method:{level['method']}")
-            elif basis is not None and basis != wanted[1]:
+            elif basis is None:
+                continue  # the link cannot establish the basis, so it cannot verify (and does not contradict)
+            elif basis != wanted[1]:
                 refuted.append(f"linked_energy_level_basis_differs:{level['basis']}")
             else:
                 corroborating += 1

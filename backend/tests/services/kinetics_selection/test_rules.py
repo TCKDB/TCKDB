@@ -247,6 +247,16 @@ def test_a_declaration_a_linked_calculation_contradicts_matches_no_method_rule(c
     assert reason in RULE.preferred_side(record).reasons
 
 
+def test_a_link_that_cannot_establish_the_basis_does_not_verify_the_declaration():
+    """Same method, basis unrecorded: stays ``declared`` (as a basis-less supporting calculation does), and is not a
+    contradiction; a link in a DIFFERENT basis still contradicts (see the parametrized test above)."""
+    for source in ("source_link", "protocol_declared"):
+        record = rec("XYG3", levels=[level("XYG3", "6-311+G(3df,2p)"), level("XYG3", None, source=source, ref="calc_2")])
+        verdict = RULE.preferred_side(record)
+        assert verdict.state is Tri.true, source
+        assert "energy_level_declared" in verdict.reasons and "energy_level_verified" not in verdict.reasons, source
+
+
 def test_a_record_that_declares_the_yielding_level_and_links_the_same_one_is_the_yielding_side():
     record = rec("B3LYP", levels=[level("B3LYP", "6-311+G(3df,2p)"),
                                   level("B3LYP", "6-311+G(3df,2p)", source="source_link", ref="calc_2")])
