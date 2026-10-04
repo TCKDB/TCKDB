@@ -43,6 +43,7 @@ from app.services.kinetics_selection.models import (
     SpeciesFact,
 )
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
 
 CODE_POPULATION_TOO_LARGE = "kinetics_selection_population_too_large"
@@ -233,6 +234,34 @@ def _declared_levels(session: Session, protocols: dict[str, dict | None]) -> dic
     return levels
 
 
+def _record_declared_levels(session: Session, rows: list[Kinetics]) -> dict[str, dict]:
+    """The level of theory each record itself declared for its energies (``kinetics.energy_level_of_theory_id``).
+
+    The depositor's claim about the whole record, stated without any calculation being uploaded. A level merged
+    into another is read as the row it was merged into, as every other level-of-theory read does. A record that
+    declared none is absent from the result; nothing is taken from a calculation or a sibling.
+    """
+    stored = {k.public_ref: k.energy_level_of_theory_id for k in rows if k.energy_level_of_theory_id is not None}
+    if not stored:
+        return {}
+    canonical = {lot_id: canonical_level_of_theory_id(session, lot_id) for lot_id in set(stored.values())}
+    lots = {
+        lot.id: lot
+        for lot in session.scalars(select(LevelOfTheory).where(LevelOfTheory.id.in_(set(canonical.values()))))
+    }
+    return {
+        ref: {
+            "source": "record_declared",
+            "role": "electronic_energy",
+            "level_of_theory_ref": lots[canonical[lot_id]].public_ref,
+            "method": lots[canonical[lot_id]].method,
+            "basis": lots[canonical[lot_id]].basis,
+        }
+        for ref, lot_id in stored.items()
+        if canonical[lot_id] in lots
+    }
+
+
 def _declaration(model, raw) -> tuple[str, dict | None]:
     if raw is None:
         return "absent", None
@@ -324,6 +353,7 @@ def normalize_rows(
     for k in rows:
         protocols[k.public_ref] = _declaration(StoredKineticsProtocolDeclaration, k.protocol_declaration)[1]
     declared_levels = _declared_levels(session, protocols)
+    record_levels = _record_declared_levels(session, rows)
     candidates: dict[int, NormalizedKinetics] = {}
     for rank, k in enumerate(rows, start=1):
         linked_levels = [
@@ -408,6 +438,10 @@ def normalize_rows(
                 if k.falloff is not None
                 else None
             ),
-            energy_levels=(*declared_levels.get(k.public_ref, []), *linked_levels),
+            energy_levels=(
+                *([record_levels[k.public_ref]] if k.public_ref in record_levels else []),
+                *declared_levels.get(k.public_ref, []),
+                *linked_levels,
+            ),
         )
     return candidates

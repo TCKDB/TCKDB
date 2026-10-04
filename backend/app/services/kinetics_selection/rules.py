@@ -26,6 +26,7 @@ from typing import Any
 
 from app.chemistry.kinetics_rules.xyg3_barrier_manifest import (
     BarrierMember,
+    ManifestError,
     XYG3BarrierManifest,
     load_xyg3_barrier_manifest,
 )
@@ -39,10 +40,10 @@ RULE_REVOKED = "revoked"
 #: What an edge from a benchmark rule is, in the manifest and everywhere it is shown.
 EDGE_LABEL = "expected-performance inference"
 
-#: SHA-256 of ``xyg3_b3lyp_barrier_manifest.yaml`` as shipped (manifest 0.1.0). The rule refuses to load over any
+#: SHA-256 of ``xyg3_b3lyp_barrier_manifest.yaml`` as shipped (manifest 0.2.0). The rule refuses to load over any
 #: other bytes; a change to a member, a barrier height or a blocker is a new manifest version, a new pin and a new
 #: rule version.
-XYG3_MANIFEST_SHA256 = "f2a2d671248281dfd32f5e5b96d9c53b32dcd894ff51d14d3761851e9c04bb18"
+XYG3_MANIFEST_SHA256 = "da0da1f678af5e9f55228ac5cc4e59e097143987d5f559af03270a1abfcc60d7"
 
 #: The protocol components, other than the one a rule compares, that must be stated and equal on both sides for the
 #: rule's evidence to speak about the whole rate.
@@ -153,10 +154,13 @@ class XYG3B3LYPBarrierRule(KineticsRule):
     * a computed origin and a saddle-point TST method;
     * a stated, classical-electronic barrier basis (a zero-point-corrected barrier is another quantity);
     * a stated geometry relation;
-    * the electronic method and basis, from the record's own protocol-declared energy calculations: stated and
-      equal is true, stated and different is false, unstated is unknown. A source-calculation link alone does not
-      establish that its energy was used, so it can contradict (false) or corroborate but never supply the
-      method by itself;
+    * the electronic method and basis the record **declared for its energies** (``kinetics.energy_level_of_theory_id``):
+      stated and equal is true, stated and different is false, unstated is unknown. The declaration covers the whole
+      barrier, so it is the only thing that can supply the method. The record's own protocol-declared electronic-energy
+      calculations and source-calculation links can corroborate it (the side then reads ``verified``) or contradict
+      it (false: the record matches no method rule), but never supply it alone: neither carries a role saying which
+      side of the barrier (transition state, reactants, products) it covers, so one calculation cannot show the whole
+      barrier was evaluated at its level;
 
     and, of the *pair*, every other component of the protocol (zero-point treatment, geometry relation, rotor,
     conformer and path treatment, departures such as tunneling) stated and equal on both sides.
@@ -166,7 +170,7 @@ class XYG3B3LYPBarrierRule(KineticsRule):
     """
 
     rule_id = "K-XYG3-B3LYP-BARRIER"
-    version = "0.1.0"
+    version = "0.2.0"
     objective = (
         "expected accuracy of the classical electronic barrier of a computed rate, for the audited HTBH38/04 and "
         "NHTBH38/04 benchmark reactions"
@@ -181,7 +185,16 @@ class XYG3B3LYPBarrierRule(KineticsRule):
     )
 
     def __init__(self, manifest: XYG3BarrierManifest | None = None) -> None:
-        self._manifest = manifest or load_xyg3_barrier_manifest(expected_sha256=XYG3_MANIFEST_SHA256)
+        if manifest is None:
+            manifest = load_xyg3_barrier_manifest(expected_sha256=XYG3_MANIFEST_SHA256)
+        elif manifest.sha256 != XYG3_MANIFEST_SHA256:
+            # A manifest passed in is held to the same pin as the shipped one: a rule never runs over bytes the
+            # audit did not pin, so an approval cannot be supplied by constructing an edited copy.
+            raise ManifestError(
+                "XYG3 barrier manifest content does not match its pinned digest "
+                f"(expected {XYG3_MANIFEST_SHA256}, got {manifest.sha256})"
+            )
+        self._manifest = manifest
         facts = self._manifest.protocol_facts
         self._preferred = ("xyg3", _norm(facts["xyg3"]["basis"]))
         self._yielding = ("b3lyp", _norm(facts["b3lyp"]["basis_as_footnoted_by_zhang"].split(" (")[0]))
@@ -235,6 +248,8 @@ class XYG3B3LYPBarrierRule(KineticsRule):
     def scope(self, subject: KineticsSubject, request: KineticsRequest) -> RuleMatch:
         if any(s.isotope_key is not None for s in (*subject.reactants, *subject.products)):
             return RuleMatch(Tri.false, ("isotopologue_is_not_a_manifest_member",))
+        if any(s.electronic_state_kind != "ground" for s in (*subject.reactants, *subject.products)):
+            return RuleMatch(Tri.false, ("excited_state_is_not_a_manifest_member",))
         for member in self._manifest.members:
             how = self._match(member, subject)
             if how is not None:
@@ -290,22 +305,50 @@ class XYG3B3LYPBarrierRule(KineticsRule):
         unknown: list[str],
         satisfied: list[str],
     ) -> None:
-        declared = [level for level in candidate.energy_levels if level["source"] == "protocol_declared"]
-        linked = [level for level in candidate.energy_levels if level["source"] == "source_link"]
-        if not declared:
-            unknown.append("electronic_energy_calculation_not_declared")
-        for level in declared:
-            method, basis = _norm(level["method"]), _norm(level["basis"])
+        """The record's declared level is the evidence; its calculations can only corroborate or contradict it.
+
+        Everything is compared with the level this side wants, so a calculation that disagrees with a declaration that
+        matches the side is a contradiction (false), and a declaration that does not match the side is false already.
+        """
+        record = [lv for lv in candidate.energy_levels if lv["source"] == "record_declared"]
+        calcs = [lv for lv in candidate.energy_levels if lv["source"] == "protocol_declared"]
+        linked = [lv for lv in candidate.energy_levels if lv["source"] == "source_link"]
+        before = len(refuted)
+
+        declared = False
+        if not record:
+            unknown.append("electronic_energy_level_not_declared_on_the_record")
+        else:
+            method, basis = _norm(record[0]["method"]), _norm(record[0]["basis"])
             if method is None or basis is None:
                 unknown.append("declared_energy_level_incomplete")
             elif (method, basis) != wanted:
-                refuted.append(f"declared_energy_level:{level['method']}/{level['basis']}")
+                refuted.append(f"declared_energy_level:{record[0]['method']}/{record[0]['basis']}")
+            else:
+                declared = True
+
+        corroborating = 0
+        for level in calcs:
+            method, basis = _norm(level["method"]), _norm(level["basis"])
+            if method is None or basis is None:
+                continue  # a calculation with no recorded level says nothing either way
+            if (method, basis) != wanted:
+                refuted.append(f"supporting_energy_calculation_level:{level['method']}/{level['basis']}")
+            else:
+                corroborating += 1
         for level in linked:
-            method = _norm(level["method"])
-            if method is not None and method != wanted[0]:
+            method, basis = _norm(level["method"]), _norm(level["basis"])
+            if method is None:
+                continue
+            if method != wanted[0]:
                 refuted.append(f"linked_energy_level_names_another_method:{level['method']}")
-        if declared and not any(item.startswith(("declared_energy_level", "linked_energy_level")) for item in refuted):
-            satisfied.append("energy_level_declared" + ("_and_corroborated_by_a_link" if linked else "_only"))
+            elif basis is not None and basis != wanted[1]:
+                refuted.append(f"linked_energy_level_basis_differs:{level['basis']}")
+            else:
+                corroborating += 1
+
+        if declared and len(refuted) == before:
+            satisfied.append("energy_level_verified" if corroborating else "energy_level_declared")
 
     # -- the pair ------------------------------------------------------------------------------
 

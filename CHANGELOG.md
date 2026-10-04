@@ -22,6 +22,17 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The XYG3 barrier rule reads a record's declared level (2026-10-04)
+
+- The rule `K-XYG3-B3LYP-BARRIER` (still inactive and unsigned; rule 0.2.0, manifest 0.2.0) takes its method evidence
+  from `kinetics.energy_level_of_theory_id`, the record's own declaration. A declaration alone reads `declared`; one
+  that a linked or supporting electronic-energy calculation agrees with reads `verified`; one a calculation contradicts
+  matches neither side. Calculations without a declaration are not method evidence: they carry no role saying which
+  side of the barrier they cover. Nothing is read from a sibling record or inferred from links.
+- Excited-state species are no longer put in scope; a manifest passed to the rule is held to the sha256 pin; the
+  manifest's `degenerate_identity_reaction` flag is now checked against the species (NHT08 and NHT10 corrected to
+  `true`; no number changed).
+
 ## A kinetics record can declare its electronic level of theory (2026-10-04)
 
 - `kinetics.energy_level_of_theory_id` (nullable, indexed; revision `a3e7c1d9b542`, no backfill: existing rows stay NULL).

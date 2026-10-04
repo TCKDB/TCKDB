@@ -310,9 +310,11 @@ class NormalizedKinetics:
     product_stoichiometries: tuple[int, ...] = ()
     #: The reference temperature the stored expression is written against; disclosed, never used to change it.
     t0_k: float | None = None
-    #: The levels of theory of the calculations the record itself names, as ``{"source", "role", "calculation_ref",
-    #: "method", "basis"}``: ``protocol_declared`` (the protocol's own supporting calculations, the depositor's claim of
-    #: which jobs gave the energy) and ``source_link`` (the record's own source-calculation links, which do not
+    #: The levels of theory the record itself names, as ``{"source", "role", "method", "basis", ...}``:
+    #: ``record_declared`` (the level the depositor declared for the whole record's energies,
+    #: ``kinetics.energy_level_of_theory_id``; the claim a method rule reads), ``protocol_declared`` (the protocol's
+    #: own supporting calculations, which can corroborate or refute the claim but have no role that says which side
+    #: of the barrier they cover) and ``source_link`` (the record's own source-calculation links, which do not
     #: establish that an energy was used). Nothing is read from a sibling record.
     energy_levels: tuple[dict[str, Any], ...] = ()
 

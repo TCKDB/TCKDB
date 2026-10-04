@@ -24,7 +24,7 @@ from app.services.kinetics_selection.rules import (
     default_rules,
 )
 from app.services.selection_kernel import Tri
-from tests.services.kinetics_selection._support import norm, request
+from tests.services.kinetics_selection._support import norm, pinned_rule, request
 
 RAW = yaml.safe_load(MANIFEST_PATH.read_bytes())
 H_KEY, H2_KEY = "YZCKVEUIGOORGS-UHFFFAOYSA-N", "UFHFLCQGNIYNRP-UHFFFAOYSA-N"
@@ -41,12 +41,12 @@ def h_plus_hcl() -> KineticsSubject:
     return KineticsSubject("rxe_x", (fact(H_KEY, 2), fact(HCL_KEY)), (fact(H2_KEY), fact(CL_KEY, 2)))
 
 
-def hypothetically_active() -> XYG3B3LYPBarrierRule:
+def hypothetically_active(monkeypatch) -> XYG3B3LYPBarrierRule:
     raw = copy.deepcopy(RAW)
     raw["status"].update(
         activation_approved=True, activation_blockers=[], curator_acceptance={"accepted_by": "owner", "date": "2026-10-05"}
     )
-    return XYG3B3LYPBarrierRule(parse_xyg3_barrier_manifest(raw))
+    return pinned_rule(raw, monkeypatch)
 
 
 RULE = XYG3B3LYPBarrierRule()
@@ -77,8 +77,8 @@ def test_the_inactive_council_examples_make_no_scope_and_no_side():
         assert rule.preferred_side(norm()).state is Tri.unknown and rule.yielding_side(norm()).state is Tri.unknown
 
 
-def test_the_active_rules_filter_follows_the_statuses_given():
-    chosen = active_rules((RULE, hypothetically_active()))
+def test_the_active_rules_filter_follows_the_statuses_given(monkeypatch):
+    chosen = active_rules((RULE, hypothetically_active(monkeypatch)))
     assert [r.status for r in chosen] == [RULE_ACTIVE] and chosen[0].manifest.activatable
     assert active_rules((RULE,)) == ()
 
@@ -123,8 +123,9 @@ def test_anything_that_is_not_exactly_a_member_is_out_of_scope(subject, reason):
 # -- the sides: unstated is unknown, stated and different is false ------------------------------------------
 
 
-def level(method, basis, *, source="protocol_declared", ref="calc_1"):
-    return {"source": source, "role": "electronic_energy" if source == "protocol_declared" else "ts_energy",
+def level(method, basis, *, source="record_declared", ref="calc_1"):
+    """``record_declared`` is the record's own claim (``kinetics.energy_level_of_theory_id``); the others are calculations."""
+    return {"source": source, "role": "ts_energy" if source == "source_link" else "electronic_energy",
             "calculation_ref": ref, "method": method, "basis": basis}
 
 
@@ -166,11 +167,11 @@ def test_labels_are_compared_without_case_spaces_or_the_old_star_notation():
         ({"scientific_origin": "experimental"}, Tri.false, "origin_not_computed:experimental"),
         ({"protocol": None}, Tri.unknown, "protocol_not_declared"),
         ({"protocol_state": "unreadable", "protocol": None}, Tri.unknown, "protocol_declaration_unreadable"),
-        ({"levels": []}, Tri.unknown, "electronic_energy_calculation_not_declared"),
+        ({"levels": []}, Tri.unknown, "electronic_energy_level_not_declared_on_the_record"),
         ({"basis": "def2-TZVP"}, Tri.false, "declared_energy_level:XYG3/def2-TZVP"),
         ({"method": "B3LYP"}, Tri.false, "declared_energy_level:B3LYP/6-311+G(3df,2p)"),
         ({"levels": [level("XYG3", None)]}, Tri.unknown, "declared_energy_level_incomplete"),
-        ({"levels": [level("XYG3", "6-311+G(3df,2p)"), level("XYG3", "6-31G*", ref="calc_2")]}, Tri.false, "declared_energy_level:XYG3/6-31G*"),
+        ({"levels": [level("XYG3", "6-311+G(3df,2p)"), level("XYG3", "6-31G*", source="protocol_declared", ref="calc_2")]}, Tri.false, "supporting_energy_calculation_level:XYG3/6-31G*"),
         ({"levels": [level("XYG3", "6-311+G(3df,2p)"), level("CCSD(T)", "cc-pVTZ", source="source_link")]}, Tri.false, "linked_energy_level_names_another_method:CCSD(T)"),
     ],
     ids=["experimental", "no_protocol", "unreadable_protocol", "no_energy_level", "other_basis", "other_method",
@@ -208,14 +209,49 @@ def test_a_stated_different_component_is_false_for_both_sides(changes, reason):
     assert RULE.yielding_side(rec("B3LYP", protocol=protocol)).state is Tri.false
 
 
-def test_a_source_link_alone_never_supplies_the_method_but_a_matching_one_corroborates():
-    only_link = rec("XYG3", levels=[level("XYG3", "6-311+G(3df,2p)", source="source_link")])
-    assert RULE.preferred_side(only_link).state is Tri.unknown  # no declared electronic-energy calculation
-    both = rec("XYG3", levels=[level("XYG3", "6-311+G(3df,2p)"), level("XYG3", "6-311+G(3df,2p)", source="source_link", ref="calc_2")])
-    verdict = RULE.preferred_side(both)
-    assert verdict.state is Tri.true and "energy_level_declared_and_corroborated_by_a_link" in verdict.reasons
+def test_a_calculation_alone_never_supplies_the_method_but_a_matching_one_verifies_the_declaration():
+    """Neither a source link nor a supporting calculation says which side of the barrier it covers, so only the
+    record's own declaration can supply the method; they can verify it or contradict it."""
+    for source in ("source_link", "protocol_declared"):
+        alone = rec("XYG3", levels=[level("XYG3", "6-311+G(3df,2p)", source=source)])
+        verdict = RULE.preferred_side(alone)
+        assert verdict.state is Tri.unknown, source
+        assert "electronic_energy_level_not_declared_on_the_record" in verdict.reasons
+    for source in ("source_link", "protocol_declared"):
+        both = rec("XYG3", levels=[level("XYG3", "6-311+G(3df,2p)"),
+                                   level("XYG3", "6-311+G(3df,2p)", source=source, ref="calc_2")])
+        verdict = RULE.preferred_side(both)
+        assert verdict.state is Tri.true and "energy_level_verified" in verdict.reasons, source
     declared_only = RULE.preferred_side(rec("XYG3"))
-    assert "energy_level_declared_only" in declared_only.reasons
+    assert declared_only.state is Tri.true and "energy_level_declared" in declared_only.reasons
+    assert "energy_level_verified" not in declared_only.reasons
+
+
+@pytest.mark.parametrize(
+    "calculation,reason",
+    [
+        (level("B3LYP", "6-311+G(3df,2p)", source="protocol_declared", ref="calc_2"),
+         "supporting_energy_calculation_level:B3LYP/6-311+G(3df,2p)"),
+        (level("XYG3", "6-31G*", source="protocol_declared", ref="calc_2"), "supporting_energy_calculation_level:XYG3/6-31G*"),
+        (level("B3LYP", "6-31G*", source="source_link", ref="calc_2"), "linked_energy_level_names_another_method:B3LYP"),
+        (level("XYG3", "6-31G*", source="source_link", ref="calc_2"), "linked_energy_level_basis_differs:6-31G*"),
+    ],
+    ids=["supporting_other_method", "supporting_other_basis", "link_other_method", "link_other_basis"],
+)
+def test_a_declaration_a_linked_calculation_contradicts_matches_no_method_rule(calculation, reason):
+    """The declared level is XYG3 (the preferred side), the record's own calculation says otherwise: false on
+    the side it claims, and false on the side its calculation names too (a contradicted claim supports neither)."""
+    record = rec("XYG3", levels=[level("XYG3", "6-311+G(3df,2p)"), calculation])
+    for verdict in (RULE.preferred_side(record), RULE.yielding_side(record)):
+        assert verdict.state is Tri.false
+    assert reason in RULE.preferred_side(record).reasons
+
+
+def test_a_record_that_declares_the_yielding_level_and_links_the_same_one_is_the_yielding_side():
+    record = rec("B3LYP", levels=[level("B3LYP", "6-311+G(3df,2p)"),
+                                  level("B3LYP", "6-311+G(3df,2p)", source="source_link", ref="calc_2")])
+    assert RULE.yielding_side(record).state is Tri.true and "energy_level_verified" in RULE.yielding_side(record).reasons
+    assert RULE.preferred_side(record).state is Tri.false
 
 
 # -- the pair: everything the rule does not compare must be verified equal -------------------------------
@@ -253,6 +289,12 @@ def test_departures_are_compared_as_sets_and_a_tunneling_departure_on_one_side_b
     assert differ.state is Tri.false and "departures_differ" in differ.reasons
 
 
+def test_departures_are_compared_by_content_not_by_how_many_there_are():
+    one_each = RULE.compatible(rec("XYG3", protocol={**FULL_PROTOCOL, "departures": ["tunneling"]}),
+                               rec("B3LYP", protocol={**FULL_PROTOCOL, "departures": ["geometry"]}))
+    assert one_each.state is Tri.false and "departures_differ" in one_each.reasons
+
+
 def test_a_pair_with_an_undeclared_protocol_is_unknown():
     assert RULE.compatible(rec("XYG3", protocol=None), rec("B3LYP")).state is Tri.unknown
     assert RULE.compatible(rec("XYG3"), rec("B3LYP", protocol=None)).state is Tri.unknown
@@ -274,3 +316,61 @@ def test_the_rule_refuses_to_load_over_a_manifest_that_is_not_the_pinned_one(mon
     monkeypatch.setattr(rules, "XYG3_MANIFEST_SHA256", "0" * 64)
     with pytest.raises(ManifestError, match="pinned digest"):
         XYG3B3LYPBarrierRule()
+
+
+def test_a_manifest_passed_to_the_rule_is_held_to_the_pin_too(monkeypatch):
+    from app.chemistry.kinetics_rules.xyg3_barrier_manifest import ManifestError
+
+    # The shipped manifest object is the pinned one and is accepted.
+    assert XYG3B3LYPBarrierRule(RULE.manifest).manifest is RULE.manifest
+    # An approved copy built from a parsed document carries no digest at all, and is refused.
+    raw = copy.deepcopy(RAW)
+    raw["status"].update(activation_approved=True, activation_blockers=[],
+                         curator_acceptance={"accepted_by": "owner", "date": "2026-10-05"})
+    with pytest.raises(ManifestError, match="pinned digest"):
+        XYG3B3LYPBarrierRule(parse_xyg3_barrier_manifest(raw))
+    # So is one parsed from edited bytes: the digest is its own, not the pinned one.
+    import yaml
+
+    from app.chemistry.kinetics_rules.xyg3_barrier_manifest import parse_xyg3_barrier_manifest_bytes
+
+    edited = parse_xyg3_barrier_manifest_bytes(yaml.safe_dump(raw, sort_keys=False).encode(), expected_sha256=None)
+    with pytest.raises(ManifestError, match="pinned digest"):
+        XYG3B3LYPBarrierRule(edited)
+
+
+# -- excited states and complexes are not the benchmark's species ----------------------------------------------
+
+
+def test_an_excited_state_entry_is_not_a_manifest_species():
+    excited_h = fact(H_KEY, 2, state="excited")
+    subject = KineticsSubject("rxe_x", (excited_h, fact(HCL_KEY)), (fact(H2_KEY), fact(CL_KEY, 2)))
+    verdict = RULE.scope(subject, request())
+    assert verdict.state is Tri.false and "excited_state_is_not_a_manifest_member" in verdict.reasons
+    # The ground-state neighbour of the same subject is in scope: only the state differs.
+    assert RULE.scope(h_plus_hcl(), request()).state is Tri.true
+    # And it is the state, not the isotope, that is refused: an excited product is refused the same way.
+    product = KineticsSubject("rxe_x", h_plus_hcl().reactants, (fact(H2_KEY, state="excited"), fact(CL_KEY, 2)))
+    assert RULE.scope(product, request()).state is Tri.false
+
+
+def _member_subject(member_id, entry_kind):
+    member = next(m for m in RULE.manifest.members if m.member_id == member_id)
+    def facts(side):
+        return tuple(fact(s.inchikey, s.multiplicity, charge=s.charge, entry_kind=entry_kind(s.kind)) for s in side)
+    return KineticsSubject("rxe_x", facts(member.reactants), facts(member.products))
+
+
+@pytest.mark.parametrize("member_id", ["NHT08", "NHT10"])
+def test_a_complex_member_needs_complex_entries_and_a_plain_minimum_does_not_match_it(member_id):
+    right = _member_subject(member_id, lambda kind: "vdw_complex" if kind == "complex" else "minimum")
+    assert RULE.scope(right, request()).state is Tri.true
+    plain = _member_subject(member_id, lambda kind: "minimum")
+    verdict = RULE.scope(plain, request())
+    assert verdict.state is Tri.false and "reaction_not_in_manifest" in verdict.reasons
+
+
+def test_a_non_complex_member_does_not_match_a_complex_entry():
+    wrong = _member_subject("HT01", lambda kind: "vdw_complex")
+    assert RULE.scope(wrong, request()).state is Tri.false
+
