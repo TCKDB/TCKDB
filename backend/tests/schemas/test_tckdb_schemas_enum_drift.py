@@ -65,6 +65,7 @@ ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.MoleculeKind, wire_enums.MoleculeKind),
     (db_enums.NetworkChannelKind, wire_enums.NetworkChannelKind),
     (db_enums.NetworkKineticsModelKind, wire_enums.NetworkKineticsModelKind),
+    (db_enums.NetworkRepresentationRole, wire_enums.NetworkRepresentationRole),
     (db_enums.NetworkSolveCalculationRole, wire_enums.NetworkSolveCalculationRole),
     (db_enums.PathSearchMethod, wire_enums.PathSearchMethod),
     (db_enums.PressureContext, wire_enums.PressureContext),

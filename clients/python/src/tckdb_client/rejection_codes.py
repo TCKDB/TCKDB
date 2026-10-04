@@ -210,6 +210,8 @@ class RejectionCode(str, Enum):
     MULTIPLE_STRUCTURE_QUERIES = "multiple_structure_queries"
     N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
     NETWORK_CHANNEL_KEY_UNDECLARED = "network_channel_key_undeclared"
+    NETWORK_DECLARATION_INVALID = "network_declaration_invalid"
+    NETWORK_DECLARATION_VERSION_UNSUPPORTED = "network_declaration_version_unsupported"
     NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH = "network_energy_source_subject_mismatch"
     NETWORK_ENERGY_SOURCE_TYPE_MISMATCH = "network_energy_source_type_mismatch"
     NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE = "network_kinetics_batch_evaluate_grid_too_large"
@@ -341,6 +343,7 @@ class RejectionCode(str, Enum):
     UNKNOWN_KINETICS_DETERMINATION_REF = "unknown_kinetics_determination_ref"
     UNKNOWN_NETWORK_CHANNEL = "unknown_network_channel"
     UNKNOWN_NETWORK_KINETICS_REF = "unknown_network_kinetics_ref"
+    UNKNOWN_NETWORK_SOLVE_REF = "unknown_network_solve_ref"
     UNKNOWN_RECORD = "unknown_record"
     UNKNOWN_RECORD_TYPE = "unknown_record_type"
     UNKNOWN_RELEASE = "unknown_release"
@@ -472,6 +475,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.MULTIPLE_STRUCTURE_QUERIES,
         RejectionCode.N_IMAG_CONTRADICTS_MINIMUM,
         RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED,
+        RejectionCode.NETWORK_DECLARATION_INVALID,
+        RejectionCode.NETWORK_DECLARATION_VERSION_UNSUPPORTED,
         RejectionCode.NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH,
         RejectionCode.NETWORK_ENERGY_SOURCE_TYPE_MISMATCH,
         RejectionCode.NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE,
@@ -761,6 +766,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.MULTIPLE_STRUCTURE_QUERIES: frozenset({422}),
     RejectionCode.N_IMAG_CONTRADICTS_MINIMUM: frozenset({422}),
     RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED: frozenset({422}),
+    RejectionCode.NETWORK_DECLARATION_INVALID: frozenset({422}),
+    RejectionCode.NETWORK_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH: frozenset({422}),
     RejectionCode.NETWORK_ENERGY_SOURCE_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE: frozenset({422}),
@@ -892,6 +899,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNKNOWN_KINETICS_DETERMINATION_REF: frozenset({404}),
     RejectionCode.UNKNOWN_NETWORK_CHANNEL: frozenset({404}),
     RejectionCode.UNKNOWN_NETWORK_KINETICS_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_NETWORK_SOLVE_REF: frozenset({404}),
     RejectionCode.UNKNOWN_RECORD: frozenset({404}),
     RejectionCode.UNKNOWN_RECORD_TYPE: frozenset({422}),
     RejectionCode.UNKNOWN_RELEASE: frozenset({404}),

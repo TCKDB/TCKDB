@@ -1782,6 +1782,12 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship),
     ApiCode("network_channel_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
+    ApiCode("network_declaration_invalid", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/network_declarations.py",
+            shape=Shape.relationship,
+            note="context.field names the declaration (solve.target, determination, ...)."),
+    ApiCode("network_declaration_version_unsupported", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/network_declarations.py"),
     ApiCode("network_energy_source_type_mismatch", 422, Surface.coded_exception,
             "backend/app/services/network_energy_sources.py",
             shape=Shape.relationship),
@@ -2706,6 +2712,12 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("unknown_network_channel", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py",
             note="Named by (network ref, channel key); context carries both halves."),
+    ApiCode("unknown_network_solve_ref", 404, Surface.coded_exception,
+            "backend/app/services/upload_reference.py",
+            note=(
+                "A validation entry's reference_solve_ref names no network solve the caller may see: the same "
+                "response for a ref that names nothing and one that names a solve the read profile hides."
+            )),
     ApiCode("unknown_network_kinetics_ref", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py"),
     ApiCode("unknown_record", 404, Surface.message_prefix,

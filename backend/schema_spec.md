@@ -1632,6 +1632,47 @@ Notes:
 - PLOG pressure must be positive and `entry_index >= 1`
 - tabulated points require positive `temperature_k` and `pressure_bar`
 
+### 9.4 Network solve declarations and fit determinations (2026-10-04)
+
+One new identity table and six nullable columns let a depositor state what a network solve's
+outputs are outputs *of*, and which fits are alternate representations of one determination. All
+are **attributed claims**: stored as made, never inferred, never defaulted, never backfilled.
+Every solve and fit deposited before the revision reads `NULL` for all of them, and `NULL` means
+"not stated": not "valid everywhere", not "independent". A selector built on these reads absence
+as *unresolved*.
+
+- `network_solve.target_declaration`, `protocol_declaration`, `validation_declaration` (JSONB).
+  The database checks only that each is an object with a numeric `version`
+  (`ck_network_solve_*_declaration_versioned_object`); their shape is owned by
+  `tckdb_schemas.network_declarations` (`extra="forbid"`, only version `1`). Stored in resolved
+  form: states by composition hash (a content locator within the network, backed by the
+  network's own state rows), determinations by public ref, product sets pinned with a
+  `membership_version` and `content_hash`. A `validation` entry is stored as *declared*, never as
+  verified.
+- `network_kinetics.determination_id`, `representation_role` (`network_representation_role`:
+  `complete` | `additive_component` | `overlapping_contribution`) and `representation_declaration`
+  (JSONB, versioned, with the fit's own `key`), set together or not at all
+  (`ck_network_kinetics_determination_iff_role`, `..._iff_representation`). The declared key is
+  unique within a determination (`uq_network_kinetics_representation_key`), which is what lets a
+  determination carry several same-kind alternates.
+- `network_kinetics_determination` (public ref prefix `nkdet`): identity of one channel's coefficient
+  within one solve, unique on `(solve_id, determination_key)` and on `identity_hash`. Carries the
+  declared observable (`observable_declaration`). **Immutable from creation**
+  (`trg_network_kinetics_determination_immutable`) and an ownership child of `network_solve`
+  guarded on `solve_id`, so nothing can be added under an accepted solve.
+- A fit's determination is of the fit's own solve and channel: the composite foreign key
+  `fk_network_kinetics_determination_scope` `(determination_id, solve_id, channel_id)` makes that a database fact
+  (not applied while `determination_id` is NULL).
+- Not enforced by the database (a CHECK cannot state them): the determination's channel belongs to
+  the solve's network; a target names the network's own states and channels. The write path
+  (`app.services.network_declaration_resolution`) refuses them as `network_declaration_invalid`.
+  Only the determination row is immutable in the database; a fit's grouping and a solve's product sets are
+  protected by the upload path and, once the solve is accepted, by the ordinary accepted-science guards.
+- Product sets record membership (determinations and the fits they hold), pinned by content hash; the
+  required output identities live in the solve's output catalog (`outputs[].required`), not in the set.
+- Existing columns stay authoritative: the bath gas, state energies, grain settings and rate units
+  already say things about a solve, and a declaration that contradicts one is refused.
+
 ## 10. Energy-Correction Layer
 
 ### 10.1 Frequency Scale Factor

@@ -1326,6 +1326,21 @@ class NetworkKineticsModelKind(str, Enum):
     tabulated = "tabulated"
 
 
+class NetworkRepresentationRole(str, Enum):
+    """What a network kinetics fit is within its determination.
+
+    ``complete``: a whole representation of the determination, a total-rate candidate on its
+    own (a PLOG parent is one however many rows it has). ``additive_component``: one term of a
+    determination that is a sum of fits. ``overlapping_contribution``: contains part of what
+    another fit of the channel contains, so the two are never summed. NULL (with no
+    determination) means the record never said; it is not a fourth role.
+    """
+
+    complete = "complete"
+    additive_component = "additive_component"
+    overlapping_contribution = "overlapping_contribution"
+
+
 class NetworkSolveCalculationRole(str, Enum):
     well_energy = "well_energy"
     barrier_energy = "barrier_energy"

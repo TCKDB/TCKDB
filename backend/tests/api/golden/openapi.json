@@ -27598,6 +27598,36 @@
         "title": "MultiArrheniusTerm",
         "type": "object"
       },
+      "NetworkBarrierBasis": {
+        "description": "Whether the stated energies are electronic only or include zero-point energy.",
+        "enum": [
+          "classical_electronic",
+          "zpe_corrected"
+        ],
+        "title": "NetworkBarrierBasis",
+        "type": "string"
+      },
+      "NetworkBathScope": {
+        "description": "``specified_collider``: one bath species. ``fixed_mixture``: the solve's bath mixture.\n``composition_dependent``: a protocol that evaluates other compositions (unsupported by selection).",
+        "enum": [
+          "specified_collider",
+          "fixed_mixture",
+          "composition_dependent"
+        ],
+        "title": "NetworkBathScope",
+        "type": "string"
+      },
+      "NetworkBoundaryKind": {
+        "description": "The boundary a state is in the solve: ``reversible``, ``absorbing`` (flux that reaches it\nis lost), ``open`` or ``driven``.",
+        "enum": [
+          "reversible",
+          "absorbing",
+          "open",
+          "driven"
+        ],
+        "title": "NetworkBoundaryKind",
+        "type": "string"
+      },
       "NetworkChannelIn": {
         "additionalProperties": false,
         "description": "A directed phenomenological channel between two network states.\n\n:param source_state_key: Local key of the source state.\n:param sink_state_key: Local key of the sink state.\n:param kind: Macroscopic channel classification (association, ...).\n:param mechanism: Mechanistic attribution. Defaults to ``elementary``, so\n    an existing payload that names its ``microreaction_paths`` is\n    unaffected.\n:param microreaction_paths: The elementary step(s) this channel is\n    attributed to.\n\nThe two classification axes are orthogonal. ``kind`` says what the channel\ndoes macroscopically; ``mechanism`` says what evidence stands behind it:\n\n- ``elementary`` (the default) requires at least one ``microreaction_path``.\n  Omitting the paths is an incomplete deposit, not a declaration, and is\n  rejected.\n- ``well_skipping`` declares a chemically-activated channel whose flux\n  passes *through* one or more energized wells before the products separate\n  — ``NH2 + NH2 → H + N2H3`` proceeding via energized ``N2H4*`` is the\n  canonical case. There is no single elementary step or saddle point to\n  name, so ``microreaction_paths`` must be empty; the channel's backing is\n  the network topology plus the master-equation solve. Declaring it is not\n  taken on trust: ``NetworkPDepUploadRequest`` checks that the endpoints are\n  *not* joined by a single elementary step and *are* joined by a chain of\n  elementary steps whose intermediates are all wells.",
@@ -27856,6 +27886,43 @@
         ],
         "title": "NetworkChannelSummary",
         "type": "object"
+      },
+      "NetworkClaimOrigin": {
+        "description": "Whose claim a declaration is: the source's own statement, or the depositor's reading.",
+        "enum": [
+          "source_publication",
+          "depositor_interpretation"
+        ],
+        "title": "NetworkClaimOrigin",
+        "type": "string"
+      },
+      "NetworkCoefficientBasis": {
+        "description": "``kernel`` is the coefficient still to be multiplied by a collider concentration;\n``composition_effective`` is already evaluated for the solve's declared bath.",
+        "enum": [
+          "kernel",
+          "composition_effective"
+        ],
+        "title": "NetworkCoefficientBasis",
+        "type": "string"
+      },
+      "NetworkCollisionFrequencyModel": {
+        "description": "How the collision frequency was obtained.",
+        "enum": [
+          "lennard_jones",
+          "other"
+        ],
+        "title": "NetworkCollisionFrequencyModel",
+        "type": "string"
+      },
+      "NetworkConformerTreatment": {
+        "description": "How the conformers of a well or saddle point enter the solve.",
+        "enum": [
+          "single_conformer",
+          "boltzmann_ensemble",
+          "interconversion_resolved"
+        ],
+        "title": "NetworkConformerTreatment",
+        "type": "string"
       },
       "NetworkContextSummary": {
         "description": "Lightweight parent-network pointer for a solve record.\n\nThe full network detail remains at\n``GET /scientific/networks/{network_ref}``.",
@@ -28156,6 +28223,59 @@
         "title": "NetworkDetailRead",
         "type": "object"
       },
+      "NetworkDeterminationDeclaration": {
+        "additionalProperties": false,
+        "description": "The determination a fit belongs to, and its role there.\n\nOne determination is one complete determination of one channel's coefficient within one solve;\nalternate fits of it share it and are not independent support for each other. Fits that state\nthe same ``key`` join it and must state the same channel and ``observable``.\n\n:param key: Solve-scoped key.\n:param observable: What the coefficient is.",
+        "properties": {
+          "key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "observable": {
+            "$ref": "#/components/schemas/NetworkObservableDeclaration"
+          },
+          "representation_role": {
+            "$ref": "#/components/schemas/NetworkRepresentationRole-Input"
+          }
+        },
+        "required": [
+          "key",
+          "observable",
+          "representation_role"
+        ],
+        "title": "NetworkDeterminationDeclaration",
+        "type": "object"
+      },
+      "NetworkDeterminationRead": {
+        "description": "One declared determination of a channel's coefficient within a solve.\n\nIdentity, immutable once created. The fits that share it are alternate representations of\none determination, not independent support for one another.",
+        "properties": {
+          "channel_key": {
+            "title": "Channel Key",
+            "type": "string"
+          },
+          "determination_key": {
+            "title": "Determination Key",
+            "type": "string"
+          },
+          "determination_ref": {
+            "title": "Determination Ref",
+            "type": "string"
+          },
+          "observable": {
+            "$ref": "#/components/schemas/NetworkObservableDeclaration"
+          }
+        },
+        "required": [
+          "determination_ref",
+          "determination_key",
+          "channel_key",
+          "observable"
+        ],
+        "title": "NetworkDeterminationRead",
+        "type": "object"
+      },
       "NetworkEnergyTransferScope": {
         "description": "What a collisional energy-transfer declaration was specified *over*.\n\n⟨ΔE⟩down is physically a property of a (well, collider) pair, but master-\nequation inputs do not always resolve it that far. Arkane, RMG and MESS\nruns routinely declare one single-exponential-down model for the whole\nnetwork. Recording which of the two happened is the difference between\nN independently determined values and one value copied N times; without\nthis axis the database cannot tell them apart. See ADR 0009.\n\n``per_well``\n    The declaration names one network state and one collider species, and\n    applies only to that pair. This is the preferred, more informative\n    form: it is what the physics is a property of.\n\n``network_wide``\n    A single declaration the producer applied to every collisionally\n    stabilised well and to the bath gas as a whole. It names no state and\n    no collider *by declaration* — not by omission — and the well-resolved\n    values it stands in for were never determined.",
         "enum": [
@@ -28223,6 +28343,16 @@
         ],
         "title": "NetworkEvidenceSummary",
         "type": "object"
+      },
+      "NetworkFitOrigin": {
+        "description": "``solver_output``: the coefficients are the solver's own. ``refit``: refitted from tabulated\nsolver output. ``transcribed``: copied from a publication.",
+        "enum": [
+          "solver_output",
+          "refit",
+          "transcribed"
+        ],
+        "title": "NetworkFitOrigin",
+        "type": "string"
       },
       "NetworkKineticsBatchEvaluateRequest": {
         "description": "Request body for ``POST /scientific/networks/{ref}/kinetics/evaluate``.\n\nBoth axes are required. Non-emptiness is enforced service-side, not\nhere with a Pydantic ``min_length`` — deliberately, so an empty list\nis still a *valid* body that reaches\n:func:`app.services.scientific_read.network_kinetics_batch_evaluate.evaluate_network_kinetics_batch`\nand is refused there with the same coded 422s the per-record endpoint\nuses for the identical check\n(``network_kinetics_evaluate_missing_temperature`` /\n``..._missing_pressure``), rather than with FastAPI's generic\n``request_validation_error``. A caller who wants a result must supply\nboth non-empty; this one shared grid is evaluated against *every* fit\nstored for the network — there is no per-fit or per-channel override,\nsince the whole point of the batch endpoint is one grid, one request,\nevery fit.",
@@ -28534,6 +28664,21 @@
             "title": "Created At",
             "type": "string"
           },
+          "declaration_unreadable": {
+            "default": false,
+            "title": "Declaration Unreadable",
+            "type": "boolean"
+          },
+          "determination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkDeterminationRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "model_kind": {
             "$ref": "#/components/schemas/NetworkKineticsModelKind"
           },
@@ -28622,6 +28767,26 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ArrheniusAUnits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "representation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkRepresentationDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "representation_role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkRepresentationRole-Output"
               },
               {
                 "type": "null"
@@ -28832,7 +28997,7 @@
       },
       "NetworkKineticsIn": {
         "additionalProperties": false,
-        "description": "Fitted phenomenological k(T,P) for one channel under this solve.\n\nSupports Chebyshev and PLOG fits. The channel is referenced by its\n``(source_state_key, sink_state_key)`` state-key pair (channels carry no\nlocal key of their own).\n\n:param source_state_key: Local key of the referenced channel's source state.\n:param sink_state_key: Local key of the referenced channel's sink state.\n:param model_kind: Parameterization kind (``chebyshev`` or ``plog``).\n:param chebyshev: Chebyshev coefficients (required when\n    ``model_kind == chebyshev``).\n:param plog: PLOG entries (required when ``model_kind == plog``).\n:param tmin_k: Minimum temperature of validity in K.\n:param tmax_k: Maximum temperature of validity in K.\n:param pmin_bar: Minimum pressure of validity in bar.\n:param pmax_bar: Maximum pressure of validity in bar.\n:param rate_units: Units of the fitted rate coefficient.\n:param pressure_units: Units the fit's pressure axis is expressed in.\n:param temperature_units: Units the fit's temperature axis is expressed in.\n:param stores_log10_k: Whether the coefficients fit ``log10(k)`` (Chebyshev\n    convention) rather than ``k`` directly.\n:param note: Optional free-text note.",
+        "description": "Fitted phenomenological k(T,P) for one channel under this solve.\n\nSupports Chebyshev and PLOG fits. The channel is referenced by its\n``(source_state_key, sink_state_key)`` state-key pair (channels carry no\nlocal key of their own).\n\n:param source_state_key: Local key of the referenced channel's source state.\n:param sink_state_key: Local key of the referenced channel's sink state.\n:param model_kind: Parameterization kind (``chebyshev`` or ``plog``).\n:param chebyshev: Chebyshev coefficients (required when\n    ``model_kind == chebyshev``).\n:param plog: PLOG entries (required when ``model_kind == plog``).\n:param tmin_k: Minimum temperature of validity in K.\n:param tmax_k: Maximum temperature of validity in K.\n:param pmin_bar: Minimum pressure of validity in bar.\n:param pmax_bar: Maximum pressure of validity in bar.\n:param rate_units: Units of the fitted rate coefficient.\n:param pressure_units: Units the fit's pressure axis is expressed in.\n:param temperature_units: Units the fit's temperature axis is expressed in.\n:param stores_log10_k: Whether the coefficients fit ``log10(k)`` (Chebyshev\n    convention) rather than ``k`` directly.\n:param determination: Optional. The determination this fit is one representation of, and its role.\n    Fits stating the same ``key`` share one determination; a fit that states none has none, and\n    reads as unresolved. Send it with ``representation``.\n:param representation: Optional. This fit's own key within its determination, and where it came from.\n:param note: Optional free-text note.",
         "properties": {
           "channel_key": {
             "anyOf": [
@@ -28850,6 +29015,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ChebyshevKineticsIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "determination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkDeterminationDeclaration"
               },
               {
                 "type": "null"
@@ -28918,6 +29093,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ArrheniusAUnits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "representation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkRepresentationDeclaration"
               },
               {
                 "type": "null"
@@ -29987,6 +30172,27 @@
         "title": "NetworkListItemRead",
         "type": "object"
       },
+      "NetworkLump": {
+        "additionalProperties": false,
+        "description": "States treated as one in the solve; at least two.",
+        "properties": {
+          "members": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 2,
+            "title": "Members",
+            "type": "array"
+          }
+        },
+        "required": [
+          "members"
+        ],
+        "title": "NetworkLump",
+        "type": "object"
+      },
       "NetworkMicroReactionIn": {
         "additionalProperties": false,
         "description": "An elementary reaction step in the network (ME input).\n\n:param key: Local key for this micro reaction.\n:param reversible: Whether this elementary step is reversible.\n:param reaction_family: Optional reaction-family label.\n:param reaction_family_source_note: Required when ``reaction_family`` is non-canonical.\n:param reactants: Ordered reactant participants.\n:param products: Ordered product participants.\n:param label: Optional human-readable label.",
@@ -30057,6 +30263,117 @@
           "products"
         ],
         "title": "NetworkMicroReactionIn",
+        "type": "object"
+      },
+      "NetworkMicrocanonicalTreatment": {
+        "description": "How the microcanonical rates entering the solve were obtained.",
+        "enum": [
+          "rrkm",
+          "variational_rrkm",
+          "capture_theory",
+          "phase_space_theory",
+          "other"
+        ],
+        "title": "NetworkMicrocanonicalTreatment",
+        "type": "string"
+      },
+      "NetworkObservable": {
+        "description": "The coefficient a determination reports for its directed channel.\n\n``product_resolved_coefficient``: flux into this channel's sink. ``total_loss_coefficient``:\nloss of the source summed over every product; it says nothing about branching.",
+        "enum": [
+          "product_resolved_coefficient",
+          "total_loss_coefficient"
+        ],
+        "title": "NetworkObservable",
+        "type": "string"
+      },
+      "NetworkObservableDeclaration": {
+        "additionalProperties": false,
+        "description": "What a determination's coefficient is. Version 1. Immutable once the determination exists.\n\n:param version: Only the integer ``1``.\n:param reaction_order: Molecularity of the source state (1 to 3); the fit's own units must agree.\n:param degeneracy_applied: Whether reaction-path degeneracy is already in the coefficient.",
+        "properties": {
+          "coefficient_basis": {
+            "$ref": "#/components/schemas/NetworkCoefficientBasis"
+          },
+          "degeneracy_applied": {
+            "title": "Degeneracy Applied",
+            "type": "boolean"
+          },
+          "observable": {
+            "$ref": "#/components/schemas/NetworkObservable"
+          },
+          "reaction_order": {
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Reaction Order",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "observable",
+          "coefficient_basis",
+          "reaction_order",
+          "degeneracy_applied"
+        ],
+        "title": "NetworkObservableDeclaration",
+        "type": "object"
+      },
+      "NetworkOutputAvailability": {
+        "description": "``supplied``: a determination of this solve gives it. ``declared_zero``: the producer states it is\nzero (needs ``zero_basis``). ``unavailable``: the solve does not give it; that is never zero.",
+        "enum": [
+          "supplied",
+          "declared_zero",
+          "unavailable"
+        ],
+        "title": "NetworkOutputAvailability",
+        "type": "string"
+      },
+      "NetworkOutputEntry": {
+        "additionalProperties": false,
+        "description": "One output of the solve's catalog: a directed channel and whether the solve gives it.\n\n:param required: Whether the observable is incomplete without it (a sink, a reverse channel, a loss).\n:param validity: Narrower than the solve's declared domain, when it is.",
+        "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/NetworkOutputAvailability"
+          },
+          "channel_key": {
+            "minLength": 1,
+            "title": "Channel Key",
+            "type": "string"
+          },
+          "required": {
+            "default": true,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "validity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkValidityDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "zero_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkZeroBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "channel_key",
+          "availability"
+        ],
+        "title": "NetworkOutputEntry",
         "type": "object"
       },
       "NetworkPDepUploadRequest": {
@@ -30264,6 +30581,192 @@
         "title": "NetworkPDepUploadResult",
         "type": "object"
       },
+      "NetworkPartition": {
+        "additionalProperties": false,
+        "description": "How the network's states were treated: each is retained, eliminated or in one lump.\n\n:param retained: States kept as individual species.\n:param eliminated: States removed from the reduced description.\n:param lumps: Groups of states treated as one retained aggregate.",
+        "properties": {
+          "eliminated": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Eliminated",
+            "type": "array"
+          },
+          "lumps": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkLump"
+            },
+            "title": "Lumps",
+            "type": "array"
+          },
+          "retained": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Retained",
+            "type": "array"
+          }
+        },
+        "title": "NetworkPartition",
+        "type": "object"
+      },
+      "NetworkProductSet": {
+        "additionalProperties": false,
+        "description": "A declared complete product set: the determinations that together answer a bundle of outputs.\n\nImmutable once stored. Several declared sets are distinct competitors, never combined.",
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkProductSetMember"
+            },
+            "minItems": 1,
+            "title": "Members",
+            "type": "array"
+          },
+          "product_set_key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Product Set Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_set_key",
+          "members"
+        ],
+        "title": "NetworkProductSet",
+        "type": "object"
+      },
+      "NetworkProductSetMember": {
+        "additionalProperties": false,
+        "description": "One determination of a product set, and which of its fits the set contains.\n\nName the determination by ``determination_key`` (an upload) or ``determination_ref`` (stored), one of them.\n\n:param representation_keys: The fits of the determination the set contains; empty: all of them.",
+        "properties": {
+          "determination_key": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Determination Key"
+          },
+          "determination_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Determination Ref"
+          },
+          "representation_keys": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Representation Keys",
+            "type": "array"
+          }
+        },
+        "title": "NetworkProductSetMember",
+        "type": "object"
+      },
+      "NetworkProtocolDeclaration": {
+        "additionalProperties": false,
+        "description": "The coupled recipe a solve used. Version 1.\n\nAn attributed claim, not checked against the linked calculations. Every statement is optional;\nat least one is required. Grain, energy-ceiling, bath and transfer values are the solve's own\ncolumns and rows and are not repeated here.\n\n:param version: Only the integer ``1``.",
+        "properties": {
+          "barrier_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkBarrierBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collision_frequency_model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkCollisionFrequencyModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conformer_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkConformerTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "microcanonical_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkMicrocanonicalTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reduction_method": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkReductionMethod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rotor_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkRotorTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tunneling_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkTunnelingTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "NetworkProtocolDeclaration",
+        "type": "object"
+      },
       "NetworkReactionLinkRead": {
         "description": "A reaction link on a network, with the linked reaction entry embedded.",
         "properties": {
@@ -30347,6 +30850,96 @@
         "title": "NetworkReactionSummary",
         "type": "object"
       },
+      "NetworkReductionMethod": {
+        "description": "How the master equation was reduced to phenomenological coefficients.",
+        "enum": [
+          "chemically_significant_eigenvalues",
+          "reservoir_state",
+          "modified_strong_collision",
+          "inverse_laplace",
+          "other"
+        ],
+        "title": "NetworkReductionMethod",
+        "type": "string"
+      },
+      "NetworkRegime": {
+        "additionalProperties": false,
+        "description": "The time regime the coefficients answer.\n\n:param initial_state_keys: Required for ``initial_population_restricted``; refused otherwise.",
+        "properties": {
+          "initial_state_keys": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Initial State Keys",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NetworkRegimeKind"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "NetworkRegime",
+        "type": "object"
+      },
+      "NetworkRegimeKind": {
+        "description": "``time_independent``: a phenomenological coefficient valid for any initialization.\n``initial_population_restricted``: valid only for the stated initial population.",
+        "enum": [
+          "time_independent",
+          "initial_population_restricted"
+        ],
+        "title": "NetworkRegimeKind",
+        "type": "string"
+      },
+      "NetworkRepresentationDeclaration": {
+        "additionalProperties": false,
+        "description": "The fit's own identity within its determination. Version 1.\n\n:param version: Only the integer ``1``.\n:param key: Unique among the fits of one determination; what a product set names.\n:param fit_origin: Where the coefficients came from.",
+        "properties": {
+          "fit_origin": {
+            "$ref": "#/components/schemas/NetworkFitOrigin"
+          },
+          "key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "key",
+          "fit_origin"
+        ],
+        "title": "NetworkRepresentationDeclaration",
+        "type": "object"
+      },
+      "NetworkRepresentationRole-Input": {
+        "description": "What a network kinetics fit is within its determination.",
+        "enum": [
+          "complete",
+          "additive_component",
+          "overlapping_contribution"
+        ],
+        "title": "NetworkRepresentationRole",
+        "type": "string"
+      },
+      "NetworkRepresentationRole-Output": {
+        "description": "What a network kinetics fit is within its determination.\n\n``complete``: a whole representation of the determination, a total-rate candidate on its\nown (a PLOG parent is one however many rows it has). ``additive_component``: one term of a\ndetermination that is a sum of fits. ``overlapping_contribution``: contains part of what\nanother fit of the channel contains, so the two are never summed. NULL (with no\ndetermination) means the record never said; it is not a fourth role.",
+        "enum": [
+          "complete",
+          "additive_component",
+          "overlapping_contribution"
+        ],
+        "title": "NetworkRepresentationRole",
+        "type": "string"
+      },
       "NetworkReviewEntry": {
         "description": "One ``record_review`` row projected for ``include=review``.",
         "properties": {
@@ -30395,6 +30988,16 @@
         ],
         "title": "NetworkReviewEntry",
         "type": "object"
+      },
+      "NetworkRotorTreatment": {
+        "description": "How internal rotation and vibration enter the densities of states.",
+        "enum": [
+          "rigid_rotor_harmonic_oscillator",
+          "hindered_rotor",
+          "anharmonic"
+        ],
+        "title": "NetworkRotorTreatment",
+        "type": "string"
       },
       "NetworkSearchRequest": {
         "description": "Service-layer request for /scientific/networks/search.\n\nFilters AND-combine. At least one meaningful filter is required.\nBool fields default to ``None``; explicit ``False`` is meaningful.",
@@ -30875,6 +31478,18 @@
             "title": "Created At",
             "type": "string"
           },
+          "declarations_unreadable": {
+            "default": false,
+            "title": "Declarations Unreadable",
+            "type": "boolean"
+          },
+          "determinations": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkDeterminationRead"
+            },
+            "title": "Determinations",
+            "type": "array"
+          },
           "emax_kj_mol": {
             "anyOf": [
               {
@@ -30982,8 +31597,28 @@
             ],
             "title": "Pmin Bar"
           },
+          "protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkProtocolDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "review": {
             "$ref": "#/components/schemas/RecordReviewBadge"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoredNetworkTargetDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "tmax_k": {
             "anyOf": [
@@ -31006,6 +31641,16 @@
               }
             ],
             "title": "Tmin K"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkValidationRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -31526,7 +32171,7 @@
       },
       "NetworkSolveIn": {
         "additionalProperties": false,
-        "description": "Master-equation solve configuration and provenance.\n\n:param me_method: ME solution method.\n:param interpolation_model: Interpolation model for the ME solution.\n:param tmin_k: Minimum temperature in K for the ME solve.\n:param tmax_k: Maximum temperature in K for the ME solve.\n:param pmin_bar: Minimum pressure in bar for the ME solve.\n:param pmax_bar: Maximum pressure in bar for the ME solve.\n:param grain_size_cm_inv: Energy grain size in cm⁻¹.\n:param grain_count: Number of energy grains.\n:param emax_kj_mol: Maximum energy in kJ/mol for the ME solve.\n:param kind: Whether the master equation was solved here (``computed``,\n    the default and preferred form) or the k(T,P) were transcribed from a\n    publication (``reported``). A ``reported`` solve is not held to the\n    state-energy, channel-barrier or energy-transfer coverage rules — it\n    holds none of those inputs — and must supply ``literature`` instead.\n    See ADR 0010.\n:param literature: Optional literature submission payload. Required when\n    ``kind='reported'``.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param bath_gas: Bath gas composition.\n:param energy_transfer: Energy transfer model parameters — either one\n    ``per_well`` entry per (well, bath collider) pair, or a single\n    ``network_wide`` entry.\n:param source_calculations: Calculations used in this solve, by local key and role.\n:param channel_kinetics: Fitted phenomenological k(T,P) for channels, each\n    referencing its channel by ``(source_state_key, sink_state_key)``.\n:param note: Optional free-text note.",
+        "description": "Master-equation solve configuration and provenance.\n\n:param me_method: ME solution method.\n:param interpolation_model: Interpolation model for the ME solution.\n:param tmin_k: Minimum temperature in K for the ME solve.\n:param tmax_k: Maximum temperature in K for the ME solve.\n:param pmin_bar: Minimum pressure in bar for the ME solve.\n:param pmax_bar: Maximum pressure in bar for the ME solve.\n:param grain_size_cm_inv: Energy grain size in cm⁻¹.\n:param grain_count: Number of energy grains.\n:param emax_kj_mol: Maximum energy in kJ/mol for the ME solve.\n:param kind: Whether the master equation was solved here (``computed``,\n    the default and preferred form) or the k(T,P) were transcribed from a\n    publication (``reported``). A ``reported`` solve is not held to the\n    state-energy, channel-barrier or energy-transfer coverage rules — it\n    holds none of those inputs — and must supply ``literature`` instead.\n    See ADR 0010.\n:param literature: Optional literature submission payload. Required when\n    ``kind='reported'``.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param bath_gas: Bath gas composition.\n:param energy_transfer: Energy transfer model parameters — either one\n    ``per_well`` entry per (well, bath collider) pair, or a single\n    ``network_wide`` entry.\n:param source_calculations: Calculations used in this solve, by local key and role.\n:param channel_kinetics: Fitted phenomenological k(T,P) for channels, each\n    referencing its channel by ``(source_state_key, sink_state_key)``.\n:param target: Optional. What the solve's outputs are outputs of (partition, boundaries, regime,\n    validity, bath scope, output catalog, product sets).\n:param protocol: Optional. The coupled recipe the solve used.\n:param validation: Optional. Evidence the solve cites, stored as declared.\n:param note: Optional free-text note.",
         "properties": {
           "bath_gas": {
             "items": {
@@ -31647,6 +32292,16 @@
             "title": "Pmin Bar",
             "type": "number"
           },
+          "protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkProtocolDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "software_release": {
             "anyOf": [
               {
@@ -31671,6 +32326,16 @@
             "title": "State Energies",
             "type": "array"
           },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkTargetDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "tmax_k": {
             "exclusiveMinimum": 0.0,
             "title": "Tmax K",
@@ -31680,6 +32345,16 @@
             "exclusiveMinimum": 0.0,
             "title": "Tmin K",
             "type": "number"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkValidationDeclaration"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "workflow_tool_release": {
             "anyOf": [
@@ -32954,6 +33629,27 @@
         "title": "NetworkSpeciesSummary",
         "type": "object"
       },
+      "NetworkStateBoundary": {
+        "additionalProperties": false,
+        "description": "One state's boundary. A state not listed has no stated boundary.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/NetworkBoundaryKind"
+          },
+          "state_key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "State Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state_key",
+          "kind"
+        ],
+        "title": "NetworkStateBoundary",
+        "type": "object"
+      },
       "NetworkStateComposition": {
         "description": "Bounded, deterministically ordered composition of a network state.\n\n``participant_count_total`` describes the complete normalized state;\n``participants`` is its deterministic, capped public prefix.\n\n``state_label`` is that prefix rendered as one string — ``\"N=N (E) +\n[H][H]\"`` — and is the spelling every consumer should use, so that a\nstate reads the same way in a plot title, a table and a paper. It carries\neach participant's ``species_entry_label`` for the reason given on the\nparticipant, and ends in ``\" + ...\"`` when ``participants_truncated`` is\nset, because a label that silently dropped a participant would assert a\nstate that is not the one stored. Empty for a state with no participants\nat all.\n\nIt is **not** ``network_state.label``, which is free text the depositor\nmay or may not have supplied and which the Arkane ingester never sets.\nThis one is derived, always present, and says what the state is made of.",
         "properties": {
@@ -33231,6 +33927,97 @@
         "title": "NetworkStateSummary",
         "type": "object"
       },
+      "NetworkTargetDeclaration": {
+        "additionalProperties": false,
+        "description": "What the solve's outputs are outputs of. Version 1.\n\nAn attributed claim, stored as made; every statement is optional and an omitted one is unknown.\nStates and channels are named by local key; each state takes exactly one place in the partition\nwhen a partition is stated, and ``bath_scope`` must agree with the solve's bath gas. ``claim_origin``\nis required.\n\n:param version: Only the integer ``1``.\n:param boundaries: Boundary semantics, per state.\n:param validity: Physical validity domain of the solve's outputs.\n:param outputs: The output catalog, one entry per directed channel; a channel is listed once.\n:param product_sets: Declared complete product sets.",
+        "properties": {
+          "bath_scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkBathScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "boundaries": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkStateBoundary"
+            },
+            "title": "Boundaries",
+            "type": "array"
+          },
+          "claim_origin": {
+            "$ref": "#/components/schemas/NetworkClaimOrigin"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkOutputEntry"
+            },
+            "title": "Outputs",
+            "type": "array"
+          },
+          "partition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkPartition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "product_sets": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkProductSet"
+            },
+            "title": "Product Sets",
+            "type": "array"
+          },
+          "regime": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkRegime"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "validity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkValidityDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "claim_origin"
+        ],
+        "title": "NetworkTargetDeclaration",
+        "type": "object"
+      },
+      "NetworkTunnelingTreatment": {
+        "description": "The tunneling correction applied to saddle-point rates.",
+        "enum": [
+          "none",
+          "wigner",
+          "eckart",
+          "other"
+        ],
+        "title": "NetworkTunnelingTreatment",
+        "type": "string"
+      },
       "NetworkUploadReactionPayload": {
         "additionalProperties": false,
         "description": "Workflow-facing network reaction link.\n\n:param reaction: Reaction content to resolve or create as a reaction entry.",
@@ -33399,6 +34186,350 @@
         ],
         "title": "NetworkUploadSpeciesLinkPayload",
         "type": "object"
+      },
+      "NetworkValidationDeclaration": {
+        "additionalProperties": false,
+        "description": "The evidence a solve cites. Version 1. Declared, never verified at upload.\n\n:param version: Only the integer ``1``.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkValidationEntry"
+            },
+            "minItems": 1,
+            "title": "Entries",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "entries"
+        ],
+        "title": "NetworkValidationDeclaration",
+        "type": "object"
+      },
+      "NetworkValidationEntry": {
+        "additionalProperties": false,
+        "description": "One piece of cited evidence, stored as *declared* (never as verified).\n\n:param channel_keys: Outputs it covers; empty: the whole solve.\n:param reference_solve_ref: Public ref (``nsolve_...``) of the pinned model a ``model_fidelity`` entry is against.\n:param reference_dataset: The named dataset a ``representation_validation`` or ``physical_validation`` is against.\n:param initialization: Initialization and source conditions the metric was taken under.\n:param window: Observation window.",
+        "properties": {
+          "channel_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Channel Keys",
+            "type": "array"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkValidityDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "initialization": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initialization"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NetworkValidationKind"
+          },
+          "limitations": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limitations"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkValidationMetric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference_dataset": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Dataset"
+          },
+          "reference_solve_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Solve Ref"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "NetworkValidationEntry",
+        "type": "object"
+      },
+      "NetworkValidationEntryRead": {
+        "description": "One cited piece of evidence as served: the stored entry, with a reference the caller may not see withheld.\n\n``reference_solve_ref`` is served only when the solve it names is visible to the caller. A reference to a\nsolve the read profile hides is withheld (``null``) and ``reference_withheld`` is true; nothing says whether\nthat solve exists, so the entry cannot be used to learn it does.",
+        "properties": {
+          "channel_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Channel Keys",
+            "type": "array"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "initialization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initialization"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "limitations": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limitations"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
+          },
+          "reference_dataset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Dataset"
+          },
+          "reference_solve_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Solve Ref"
+          },
+          "reference_withheld": {
+            "default": false,
+            "title": "Reference Withheld",
+            "type": "boolean"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "NetworkValidationEntryRead",
+        "type": "object"
+      },
+      "NetworkValidationKind": {
+        "description": "The evidence a solve cites. Each of the first four is evidence for one comparison objective\n(:func:`validation_objective`); ``uncertainty`` and ``dependence`` are for none.",
+        "enum": [
+          "convergence",
+          "model_fidelity",
+          "physical_validation",
+          "representation_validation",
+          "uncertainty",
+          "dependence"
+        ],
+        "title": "NetworkValidationKind",
+        "type": "string"
+      },
+      "NetworkValidationMetric": {
+        "description": "How the agreement is measured over the domain.",
+        "enum": [
+          "max_relative_error",
+          "rms_log10_error",
+          "max_log10_error"
+        ],
+        "title": "NetworkValidationMetric",
+        "type": "string"
+      },
+      "NetworkValidationRead": {
+        "description": "The validation declaration as served (``version``, and its entries with hidden references withheld).",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkValidationEntryRead"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "entries"
+        ],
+        "title": "NetworkValidationRead",
+        "type": "object"
+      },
+      "NetworkValidityDomain": {
+        "additionalProperties": false,
+        "description": "A temperature and pressure domain the producer states the output is physically valid over.",
+        "properties": {
+          "pressure_max_bar": {
+            "exclusiveMinimum": 0.0,
+            "title": "Pressure Max Bar",
+            "type": "number"
+          },
+          "pressure_min_bar": {
+            "exclusiveMinimum": 0.0,
+            "title": "Pressure Min Bar",
+            "type": "number"
+          },
+          "temperature_max_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "Temperature Max K",
+            "type": "number"
+          },
+          "temperature_min_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "Temperature Min K",
+            "type": "number"
+          }
+        },
+        "required": [
+          "temperature_min_k",
+          "temperature_max_k",
+          "pressure_min_bar",
+          "pressure_max_bar"
+        ],
+        "title": "NetworkValidityDomain",
+        "type": "object"
+      },
+      "NetworkZeroBasis": {
+        "description": "What supports a zero claim: the ``source_statement`` or the ``solve_computed`` result.",
+        "enum": [
+          "source_statement",
+          "solve_computed"
+        ],
+        "title": "NetworkZeroBasis",
+        "type": "string"
       },
       "ObservationExternalSource": {
         "description": "Where this observation's bytes came from.\n\nTwo provenance shapes coexist on the underlying table (see\n``app/db/models/molecular_property_observation.py`` and\n``app/db/models/external_source.py``): legacy CCCBDB rows carry\nflattened ``external_source_*`` columns with no schema identifier /\n``mapping_version``; new rows (Phase C-E1 onward) cite an\n``external_source_record`` custody row that carries those two plus a\ncontent digest. This fragment is the union of both — whichever fields\nthe row's provenance shape actually has are populated, the rest are\n``null``.\n\n``schema_label`` mirrors the ORM column ``external_source_record.\nschema_id`` under a different wire name on purpose: the column holds a\nfree-text schema identifier (e.g. ``\"thermoml.v1\"``), not a database\nprimary key, but any field ending in ``_id``/``_ids`` is stripped from\nevery public response by the Phase D internal-ID policy\n(``app/services/scientific_read/internal_ids.py::is_internal_id_key``).\nNaming it ``schema_id`` on the wire would silently vanish it from every\nunauthenticated response.",
@@ -48008,6 +49139,124 @@
           "version"
         ],
         "title": "StoredKineticsProtocolDeclaration",
+        "type": "object"
+      },
+      "StoredNetworkProductSet": {
+        "additionalProperties": false,
+        "description": "The stored form: members by public ref, with the pinned normalized membership.\n\n:param membership_version: Version of the normalization that produced ``content_hash``.\n:param content_hash: Digest of the normalized membership.",
+        "properties": {
+          "content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkProductSetMember"
+            },
+            "minItems": 1,
+            "title": "Members",
+            "type": "array"
+          },
+          "membership_version": {
+            "minimum": 1.0,
+            "title": "Membership Version",
+            "type": "integer"
+          },
+          "product_set_key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Product Set Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_set_key",
+          "members",
+          "membership_version",
+          "content_hash"
+        ],
+        "title": "StoredNetworkProductSet",
+        "type": "object"
+      },
+      "StoredNetworkTargetDeclaration": {
+        "additionalProperties": false,
+        "description": "The stored (and served) form: states by composition hash, product sets by public ref and pinned.",
+        "properties": {
+          "bath_scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkBathScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "boundaries": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkStateBoundary"
+            },
+            "title": "Boundaries",
+            "type": "array"
+          },
+          "claim_origin": {
+            "$ref": "#/components/schemas/NetworkClaimOrigin"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkOutputEntry"
+            },
+            "title": "Outputs",
+            "type": "array"
+          },
+          "partition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkPartition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "product_sets": {
+            "items": {
+              "$ref": "#/components/schemas/StoredNetworkProductSet"
+            },
+            "title": "Product Sets",
+            "type": "array"
+          },
+          "regime": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkRegime"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "validity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkValidityDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "claim_origin"
+        ],
+        "title": "StoredNetworkTargetDeclaration",
         "type": "object"
       },
       "StoredThermoProtocolCalculationRef": {

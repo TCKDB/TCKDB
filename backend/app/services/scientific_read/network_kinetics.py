@@ -92,6 +92,7 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.network_channel_chemistry import (
     build_network_state_composition,
 )
+from app.services.scientific_read.network_declarations import fit_declarations
 from app.services.scientific_read.networks import (
     _build_solve_review_history,
     _build_source_calculations,
@@ -612,6 +613,7 @@ def _build_network_kinetics_record(
         chebyshev_shape=cheb_shape,
         plog_entry_count=plog_count or None,
         point_count=point_count or None,
+        **fit_declarations(session, nk),
         note=nk.note,
         created_at=nk.created_at,
         review=badge,

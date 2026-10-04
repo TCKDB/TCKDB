@@ -123,6 +123,9 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "network_channel_microreaction",
         "network_kinetics",
         "network_kinetics_chebyshev",
+        # Identity shared by a solve's fits: a restore that dropped it would hand back fits whose
+        # determination_id points at nothing.
+        "network_kinetics_determination",
         "network_kinetics_plog",
         "network_kinetics_point",
         "network_reaction",

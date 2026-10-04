@@ -394,6 +394,23 @@ def _target_snapshot(target: Any, record_type: SubmissionRecordType) -> dict[str
     if isinstance(target, Kinetics) and target.determination is not None:
         # Added only when present: a record with no determination keeps the snapshot it had.
         relationships["determination"] = _mapped_columns(target.determination)
+    if isinstance(target, NetworkSolve) and target.determinations:
+        # Added only when the solve has determinations: a legacy solve keeps the snapshot it had.
+        # The grouping of fits is part of what the declarations claim, so it is part of the digest.
+        relationships["determinations"] = [
+            {
+                "columns": _mapped_columns(determination),
+                "fits": [
+                    {
+                        "reference": fit.public_ref,
+                        "representation_role": fit.representation_role.value if fit.representation_role else None,
+                        "representation_declaration": fit.representation_declaration,
+                    }
+                    for fit in sorted(determination.kinetics_records, key=lambda row: row.id)
+                ],
+            }
+            for determination in sorted(target.determinations, key=lambda row: row.id)
+        ]
     if isinstance(target, Statmech):
         relationships["torsions"] = [
             {

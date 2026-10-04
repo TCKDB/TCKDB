@@ -22,6 +22,25 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Network solve declarations and fit determinations (2026-10-04)
+
+**Chunk 1 of 6 of pressure-dependent network selection: a solve can state what its outputs are outputs of, and a
+fit which determination it represents.** There is no selection, endpoint, SDK or MCP tool yet, and no rule.
+
+- Additive revision `e5b9c2a7d4f1`: `network_kinetics_determination` (public ref prefix `nkdet`, immutable from
+  creation, an ownership child of its solve), three nullable declaration columns on `network_solve` (`target`,
+  `protocol`, `validation`) and three nullable grouping columns on `network_kinetics`. No backfill: every earlier
+  row reads `NULL`, which means "not stated".
+- `POST /uploads/networks/pdep` accepts the optional `solve.target`, `solve.protocol`, `solve.validation` and, per
+  fit, `determination` and `representation`; alternate same-kind fits are allowed only when each declares its own
+  keys. New codes `network_declaration_invalid` and `network_declaration_version_unsupported`.
+- The solve and fit detail reads serve the declarations as stored (`null` is "not stated"; an unparseable stored
+  claim reads `null` with `declarations_unreadable`). A release ships the determinations without their identity
+  digest. A solve's reproducibility digest changes only when it has declarations.
+- The contribution-bundle v0 format does not carry network solves, so there is no bundle path to extend.
+- Impact analysis: `NetworkSolve` CRITICAL (274 dependents, additive nullable columns only; the index was 18
+  commits behind), `NetworkKineticsIn` MEDIUM.
+
 ## TCKDB is the Theoretical Chemical Kinetics Database (2026-10-04)
 
 - `CITATION.cff`, the API description, the documentation site description and the README now spell TCKDB out as

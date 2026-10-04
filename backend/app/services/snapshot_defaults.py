@@ -57,6 +57,18 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     # consistency hash leaves it out (``KINETICS_HASH_EXCLUDED_COLUMNS``). Adding the
     # column restales no stored review or assessment of any existing row.
     ("kinetics", "energy_level_of_theory_id"): None,
+    # network_solve.target_declaration / protocol_declaration / validation_declaration and
+    # network_kinetics.determination_id / representation_role / representation_declaration:
+    # a solve or fit stored before the columns existed declared nothing, which is NULL. One that
+    # states a declaration includes the column, so its digest differs, as its meaning does. The
+    # solve's determinations (and which fits belong to them) are added to the reproducibility
+    # snapshot only when it has some (``reproducibility_rubric``), so a legacy solve gains no key.
+    ("network_solve", "target_declaration"): None,
+    ("network_solve", "protocol_declaration"): None,
+    ("network_solve", "validation_declaration"): None,
+    ("network_kinetics", "determination_id"): None,
+    ("network_kinetics", "representation_role"): None,
+    ("network_kinetics", "representation_declaration"): None,
 }
 
 

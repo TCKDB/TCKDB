@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.100.0 - 2026-10-04
+## 0.101.0 - 2026-10-04
+
+A network solve can declare its target, protocol and validation, and a fit its determination and representation
+(`tckdb_schemas.network_declarations`), all optional, on `NetworkPDepUploadRequest`. New codes `network_declaration_invalid`,
+`network_declaration_version_unsupported` and `unknown_network_solve_ref`. A declaration that contradicts the solve's own
+bath, range, correction convention or units, or a fit's declared determination, is refused; alternates of one channel and
+model kind must all declare their keys.
 
 No wire model changes. Contract notes the read-only kinetics select endpoints.
 
