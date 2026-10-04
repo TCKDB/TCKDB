@@ -369,7 +369,7 @@ def test_the_decision_manifest_replays_without_the_database(db_session, methane)
 def test_the_manifest_records_inputs_rules_comparisons_and_order_with_public_refs_only(db_session, methane):
     result = _scenario(db_session, methane)
     m = result.manifest
-    assert m["policy"] == {"name": "h298_method_preferred", "version": "1"}
+    assert m["policy"] == {"name": "h298_method_preferred", "version": "2"}
     assert m["request"]["administrative_policy"] == "latest" and m["request"]["quantity"] == "formation_enthalpy_298k"
     assert m["decision"]["rules"][0]["rule_id"] == "E1" and m["decision"]["rules"][0]["version"] == "1.0.0"
     assert m["decision"]["rules"][0]["manifest"]["manifest_version"] == "1.0.0"

@@ -10,11 +10,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
 from typing import Any
 
 from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import SelectionPolicy
+from app.services.selection_kernel import (  # noqa: F401  (re-exported: the vocabulary moved to the kernel)
+    Applicability,
+    Edge,
+    Outcome,
+    RuleMatch,
+    Tri,
+)
 
 #: The one quantity this selector answers.
 QUANTITY = "formation_enthalpy_298k"
@@ -27,56 +33,11 @@ MAX_CANDIDATES = 500
 #: Version of the selection semantics (outcomes, front construction, eligibility). A change to any of
 #: them is a new version, and a decision manifest records the version it was made under.
 POLICY_NAME = "h298_method_preferred"
-POLICY_VERSION = "1"
+#: 2: a superseded rule is removed before conflicts are judged (the shared kernel's fix; it cannot change an answer
+#: while the registry holds one rule, but a manifest made under version 1 was decided under the old semantics and
+#: is refused by ``replay_decision`` rather than silently re-answered).
+POLICY_VERSION = "2"
 MANIFEST_FORMAT_VERSION = 1
-
-
-class Applicability(str, Enum):
-    """Whether one record can supply the requested quantity.
-
-    ``applicable``   every requirement is established.
-    ``incompatible`` something is known to be wrong for this request (another phase, another
-                     target, no H298 content, a domain that excludes 298.15 K, a defective fit).
-    ``unsupported``  the record may hold the answer but in a form this release does not
-                     evaluate (a Wilhoit fit alone).
-    ``unresolved``   a required fact was never recorded (the enthalpy reference, the target,
-                     the phase). Never guessed.
-    Precedence when several apply: incompatible, unsupported, unresolved.
-    """
-
-    applicable = "applicable"
-    incompatible = "incompatible"
-    unsupported = "unsupported"
-    unresolved = "unresolved"
-
-
-class Outcome(str, Enum):
-    policy_preferred = "policy_preferred"
-    incomparable_alternatives = "incomparable_alternatives"
-    sole_eligible_candidate = "sole_eligible_candidate"
-    no_applicable_candidate = "no_applicable_candidate"
-    policy_conflict = "policy_conflict"
-    #: The visible population exceeded the cap, so nothing was assessed and nothing is selected.
-    bounded_search_exceeded = "bounded_search_exceeded"
-
-
-class Tri(str, Enum):
-    """A rule prerequisite: established, refuted, or not knowable from what the record links."""
-
-    true = "true"
-    false = "false"
-    unknown = "unknown"
-
-
-@dataclass(frozen=True)
-class RuleMatch:
-    """One side of a rule evaluated on one candidate, with the reasons for the verdict."""
-
-    state: Tri
-    reasons: tuple[str, ...] = ()
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"state": self.state.value, "reasons": list(self.reasons)}
 
 
 @dataclass(frozen=True)
@@ -237,24 +198,6 @@ class CandidateAssessment:
             "blocking": list(self.blocking),
             "advisory": list(self.advisory),
             "physically_eligible": self.physically_eligible,
-        }
-
-
-@dataclass(frozen=True)
-class Edge:
-    """A preference: ``preferred`` precedes ``dispreferred`` under one rule version."""
-
-    preferred: str
-    dispreferred: str
-    rule_id: str
-    rule_version: str
-
-    def to_dict(self) -> dict[str, str]:
-        return {
-            "preferred": self.preferred,
-            "dispreferred": self.dispreferred,
-            "rule_id": self.rule_id,
-            "rule_version": self.rule_version,
         }
 
 

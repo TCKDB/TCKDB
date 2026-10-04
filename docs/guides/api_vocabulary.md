@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 39 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 273 | `backend/app/api/code_catalogue.py` |
-| **total** | **575** | |
+| Refusal codes a caller can receive | 274 | `backend/app/api/code_catalogue.py` |
+| **total** | **576** | |
 
 ## How a record is named
 
@@ -750,7 +750,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (218 codes)
+### HTTP 422 (219 codes)
 
 | Code | Names |
 | --- | --- |
@@ -842,6 +842,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `kinetics_interpretation_conformer_selection_owner_mismatch` | a relationship — read `context` |
 | `kinetics_interpretation_statmech_owner_mismatch` | a relationship — read `context` |
 | `kinetics_protocol_calculation_owner_mismatch` | a relationship — read `context` |
+| `kinetics_selection_population_too_large` | a thing |
 | `level_of_theory_handle_conflict` | a relationship — read `context` |
 | `level_of_theory_method_is_compound` | a thing |
 | `level_of_theory_method_with_composite_scheme` | a relationship — read `context` |

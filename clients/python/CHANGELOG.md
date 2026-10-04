@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.129.0 - 2026-10-04
+
+`RejectionCode` gains `kinetics_selection_population_too_large`, regenerated from the server's catalogue; nothing
+else changes. The server-side selection service it belongs to is not routed yet.
+
 ## 0.128.0 - 2026-10-04
 
 `Kinetics.modified_arrhenius` can state a fit's `direction`, `determination`, `applicability` and `protocol`
