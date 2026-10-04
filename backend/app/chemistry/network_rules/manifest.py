@@ -29,6 +29,10 @@ from tckdb_schemas.network_declarations import NetworkComparisonObjective
 
 MANIFEST_PATH = Path(__file__).with_name("network_rule_candidates.yaml")
 
+LEVEL_CANDIDATE = "candidate"
+LEVEL_REPRESENTATION = "representation"
+_LEVELS = (LEVEL_CANDIDATE, LEVEL_REPRESENTATION)
+
 
 class ManifestError(ValueError):
     """The network rule manifest is not usable as shipped."""
@@ -52,11 +56,22 @@ class RuleCandidate:
     evidence_needed: tuple[dict[str, str], ...]
     activation_approved: bool
     owner_acceptance: dict[str, Any] | None
+    #: ``candidate`` ranks solves or their members; ``representation`` ranks only alternate fits of one solve.
+    level: str = "candidate"
+    source_ids: tuple[str, ...] = ()
+    open_access: bool | None = None
+    anchors: tuple[dict[str, str], ...] = ()
 
     @property
     def activatable(self) -> bool:
-        """Approved by the owner with nothing left standing in the way."""
-        return self.activation_approved and not self.activation_blockers
+        """Approved by the owner, with a dated acceptance and nothing left standing in the way.
+
+        Each condition is checked here independently of the parser, so a hand-built entry cannot be activatable
+        by leaving blockers listed or by carrying an acceptance with no date.
+        """
+        acceptance = self.owner_acceptance
+        accepted = isinstance(acceptance, dict) and bool(acceptance.get("accepted_by")) and bool(acceptance.get("date"))
+        return self.activation_approved and accepted and not self.activation_blockers
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -69,6 +84,10 @@ class RuleCandidate:
             "activation_blockers": [dict(b) for b in self.activation_blockers],
             "evidence_needed": [dict(e) for e in self.evidence_needed],
             "owner_acceptance": dict(self.owner_acceptance) if self.owner_acceptance else None,
+            "level": self.level,
+            "source_ids": list(self.source_ids),
+            "open_access": self.open_access,
+            "anchors": [dict(a) for a in self.anchors],
         }
 
 
@@ -78,6 +97,8 @@ class NetworkRuleManifest:
 
     version: str
     candidates: tuple[RuleCandidate, ...]
+    #: Pinned sources (id, citation, sha256 of the bytes read, what each was used for).
+    sources: tuple[dict[str, Any], ...] = ()
     #: SHA-256 of the bytes this manifest was parsed from; ``None`` when built from a parsed document alone.
     sha256: str | None = None
 
@@ -100,6 +121,13 @@ def _candidate(raw: dict[str, Any]) -> RuleCandidate:
         objective = NetworkComparisonObjective(raw["objective"])
     except ValueError as exc:
         raise ManifestError(f"{rule_id}: unknown objective {raw['objective']!r}") from exc
+    level = raw.get("level", LEVEL_CANDIDATE)
+    _require(level in _LEVELS, f"{rule_id}: unknown level {level!r}")
+    if level == LEVEL_REPRESENTATION:
+        _require(
+            objective is NetworkComparisonObjective.representation_fidelity,
+            f"{rule_id}: a representation-level rule must have the representation_fidelity objective",
+        )
     approved = raw.get("activation_approved")
     _require(isinstance(approved, bool), f"{rule_id}: activation_approved must be true or false")
     blockers = tuple(dict(b) for b in raw.get("activation_blockers") or ())
@@ -115,6 +143,7 @@ def _candidate(raw: dict[str, Any]) -> RuleCandidate:
         )
         _require(not blockers, f"{rule_id}: approved for activation while blockers are still listed")
     else:
+        _require(not acceptance, f"{rule_id}: carries an owner acceptance but is not approved for activation")
         _require(bool(blockers), f"{rule_id}: not approved for activation and lists no reason")
         _require(bool(needed), f"{rule_id}: not approved for activation and lists nothing that would be needed")
     return RuleCandidate(
@@ -132,19 +161,35 @@ def _candidate(raw: dict[str, Any]) -> RuleCandidate:
         evidence_needed=needed,
         activation_approved=bool(approved),
         owner_acceptance=dict(acceptance) if acceptance else None,
+        level=level,
+        source_ids=tuple(raw.get("source_ids") or ()),
+        open_access=raw.get("open_access"),
+        anchors=tuple(dict(a) for a in raw.get("anchors") or ()),
     )
 
 
 def parse_network_rule_manifest(raw: dict[str, Any]) -> NetworkRuleManifest:
     """Validate a parsed manifest document and return it typed.
 
-    :raises ManifestError: on an empty objective key, an unknown objective, a duplicate rule id, an approved entry
-        with no owner acceptance or with blockers, or an unapproved entry that lists no reason or no need.
+    :raises ManifestError: on an empty objective key, an unknown objective or level, a duplicate rule id, an approved
+        entry with no dated owner acceptance or with blockers, an unapproved entry that carries an acceptance or lists
+        no reason or no need, or a rule citing a source the manifest does not pin.
     """
     candidates = tuple(_candidate(r) for r in raw["rules"])
     _require(bool(candidates), "the manifest lists no candidate")
     _require(len({c.rule_id for c in candidates}) == len(candidates), "rule ids repeat")
-    return NetworkRuleManifest(version=str(raw["manifest_version"]), candidates=candidates)
+    sources = tuple(dict(x) for x in raw.get("sources") or ())
+    for source in sources:
+        _require(
+            all(bool(source.get(k)) for k in ("id", "citation", "sha256", "used_for")),
+            f"source {source.get('id')!r} lacks an id, citation, sha256 or used_for line",
+        )
+    source_ids = {x["id"] for x in sources}
+    _require(len(source_ids) == len(sources), "source ids repeat")
+    for candidate in candidates:
+        unknown = set(candidate.source_ids) - source_ids
+        _require(not unknown, f"{candidate.rule_id}: cites sources the manifest does not pin: {sorted(unknown)}")
+    return NetworkRuleManifest(version=str(raw["manifest_version"]), candidates=candidates, sources=sources)
 
 
 def parse_network_rule_manifest_bytes(data: bytes, *, expected_sha256: str | None) -> NetworkRuleManifest:

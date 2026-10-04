@@ -24,12 +24,15 @@ dataset must never require a code release.
 
 ## Network rule audit: the council examples, registered inactive (2026-10-04)
 
-**Chunk 4 of 6 of pressure-dependent network selection.** Five candidate rules (the Amedro, Johnson/Green and
-Jasper/Miller examples, a same-model convergence rule and a held-out representation rule) are registered **inactive**
-in `app/chemistry/network_rules/network_rule_candidates.yaml`, loaded only against its pinned SHA-256, each with its
-specific blockers and exactly which papers, tables and data would have to be supplied. No paywalled paper was
-downloaded, and nothing was activated: activation needs the owner's signed acceptance in that file and the rule's
-predicates, which do not exist. A decision records the rules it consulted and why none applied. See
+**Chunk 4 of 6 of pressure-dependent network selection.** Six candidate rules (the Amedro, Johnson/Green and
+Jasper/Miller examples, the last split into a model-fidelity and a physical-accuracy rule, a same-model convergence
+rule and a held-out representation rule) are registered **inactive** in
+`app/chemistry/network_rules/network_rule_candidates.yaml`, loaded only against its pinned SHA-256, each with its
+specific blockers and exactly which papers, tables and data would have to be supplied. The Amedro entry is anchored to
+the open-access article and supplement, pinned by SHA-256. No paywalled paper was downloaded, and nothing was
+activated: activation needs the owner's dated acceptance in that file and the rule's predicates, which do not exist
+and are enabled rule by rule. The held-out rule is registered at the representation level, so it can never rank
+solves. The API now builds the registry at startup, so a bad pin fails the deploy. See
 `docs/guides/network_selection_rules.md`.
 
 ## Network preference engine and two-level replay (2026-10-04)

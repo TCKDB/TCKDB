@@ -40,7 +40,8 @@ from tests.services.network_selection._world import add_solve, fit_spec
 COUNCIL_EXAMPLES = {
     "N-AMEDRO-HE-FC": ("representation_fidelity", "Amedro"),
     "N-JG-REDUCTION-FIDELITY": ("model_fidelity", "Johnson"),
-    "N-JM-CH4-TRANSFER": ("physical_accuracy", "Jasper"),
+    "N-JM-CH4-TRANSFER": ("model_fidelity", "Jasper"),
+    "N-JM-CH4-RATE": ("physical_accuracy", "Jasper"),
 }
 
 
@@ -96,7 +97,7 @@ def test_the_council_examples_are_registered_inactive_with_specific_missing_prer
 
 def test_every_shipped_rule_is_inactive_unapproved_and_unactivatable():
     rules = default_rules()
-    assert len(rules) >= 5
+    assert len(rules) == 6
     validate_rules(rules)  # distinct ids, no empty objective key, a named objective
     for rule in rules:
         assert rule.status != RULE_ACTIVE
@@ -108,9 +109,11 @@ def test_every_shipped_rule_is_inactive_unapproved_and_unactivatable():
 
 def test_the_specific_blockers_are_named_not_generic():
     by_id = {r.rule_id: {b["id"] for b in r.describe()["activation_blockers"]} for r in default_rules()}
-    assert "compared_objects_are_falloff_fits" in by_id["N-AMEDRO-HE-FC"]  # Troe fits are not network fits
-    assert {"article_inaccessible_to_the_auditor", "reduction_vocabulary_unmapped"} <= by_id["N-JG-REDUCTION-FIDELITY"]
-    assert {"abstract_level_evidence_only", "transfer_treatment_not_a_typed_field"} <= by_id["N-JM-CH4-TRANSFER"]
+    assert {"compared_objects_are_falloff_fits", "fit_audit_is_partial"} <= by_id["N-AMEDRO-HE-FC"]
+    assert "fit_parameters_not_audited" not in by_id["N-AMEDRO-HE-FC"]  # the abstract never carried Fc
+    assert {"article_not_read", "reduction_vocabulary_one_open_name"} <= by_id["N-JG-REDUCTION-FIDELITY"]
+    assert {"abstract_level_evidence_only", "transfer_treatment_not_typed"} <= by_id["N-JM-CH4-TRANSFER"]
+    assert {"experimental_reference_not_read"} <= by_id["N-JM-CH4-RATE"]
     assert {"no_verification_step"} <= by_id["N-ME-CONVERGENCE"] and {"no_pinned_heldout_set"} <= by_id["N-REP-HELDOUT"]
 
 
@@ -122,8 +125,11 @@ def test_inactive_rules_appear_in_a_decision_with_their_reasons_and_make_no_edge
     ids = {m["rule_id"] for m in result.decision.rule_matches}
     assert set(COUNCIL_EXAMPLES) <= ids
     for match in result.decision.rule_matches:
-        assert match["applied"] is False and match["why"] == "rule_status_inactive"
-        assert match["reasons"], match["rule_id"]
+        assert match["applied"] is False
+        if match["level"] == "representation":  # judged on fits only, and only for a representation request
+            assert match["why"] == "request_is_not_representation_fidelity"
+        else:
+            assert match["why"] == "rule_status_inactive" and match["reasons"], match["rule_id"]
     assert {r["rule_id"] for r in result.decision.rules} == ids
     assert "no registered rule compares" in result.decision.basis
 
@@ -222,3 +228,116 @@ def _pins(rule, world) -> dict:
     if rule.objective.value == "representation_fidelity":
         return {"reference_outputs": "a named dataset"}
     return {}
+
+
+# -- the review fixes: dated acceptance, independent activatable, per-rule predicates, representation level ---------
+
+
+def _signed() -> dict:
+    return {"accepted_by": "owner", "date": "2026-10-04"}
+
+
+def test_an_acceptance_without_a_date_or_name_is_refused():
+    raw = raw_manifest()
+    for acceptance in ({"accepted_by": "owner"}, {"date": "2026-10-04"}, {"accepted_by": "owner", "date": ""}):
+        with pytest.raises(ManifestError, match="no owner acceptance"):
+            parse_network_rule_manifest(
+                entry(raw, activation_approved=True, activation_blockers=[], owner_acceptance=acceptance)
+            )
+
+
+def test_an_unapproved_entry_may_not_carry_an_acceptance():
+    with pytest.raises(ManifestError, match="carries an owner acceptance but is not approved"):
+        parse_network_rule_manifest(entry(raw_manifest(), owner_acceptance=_signed()))
+
+
+def test_activatable_checks_blockers_and_the_dated_acceptance_itself():
+    """A hand-built entry cannot be activatable by leaving blockers listed or an acceptance undated."""
+    shipped = manifest_module.load_network_rule_manifest(expected_sha256=NETWORK_RULE_MANIFEST_SHA256)
+    base = shipped.candidates[0]
+    assert base.activation_blockers
+    ok = dataclasses.replace(base, activation_approved=True, activation_blockers=(), owner_acceptance=_signed())
+    assert ok.activatable is True
+    assert dataclasses.replace(ok, activation_blockers=base.activation_blockers).activatable is False
+    assert dataclasses.replace(ok, owner_acceptance=None).activatable is False
+    assert dataclasses.replace(ok, owner_acceptance={"accepted_by": "owner"}).activatable is False
+    assert dataclasses.replace(ok, activation_approved=False).activatable is False
+
+
+def test_the_predicates_flag_is_per_rule_and_approving_one_rule_activates_no_other(monkeypatch):
+    raw = raw_manifest()
+    for rule in raw["rules"]:
+        rule.update(activation_approved=True, activation_blockers=[], owner_acceptance=_signed())
+    data = yaml.safe_dump(raw).encode()
+    pinned = hashlib.sha256(data).hexdigest()
+    monkeypatch.setattr(rules_module, "NETWORK_RULE_MANIFEST_SHA256", pinned)
+    manifest = parse_network_rule_manifest_bytes(data, expected_sha256=pinned)
+    assert all(c.activatable for c in manifest.candidates)
+
+    def built():
+        out = {}
+        for c in manifest.candidates:
+            cls = rules_module.AuditedNetworkRepresentationRule if c.level == "representation" else AuditedNetworkRule
+            out[c.rule_id] = cls(c, manifest)
+        return out
+
+    assert {r.status for r in built().values()} == {RULE_INACTIVE}  # approved everywhere, implemented nowhere
+    monkeypatch.setattr(rules_module, "RULES_WITH_IMPLEMENTED_PREDICATES", frozenset({"N-ME-CONVERGENCE"}))
+    status = {rule_id: rule.status for rule_id, rule in built().items()}
+    assert status.pop("N-ME-CONVERGENCE") == RULE_ACTIVE
+    assert set(status.values()) == {RULE_INACTIVE} and len(status) == len(manifest.candidates) - 1
+
+
+def test_the_heldout_rule_is_registered_at_the_representation_level_and_can_never_rank_solves():
+    rules = {r.rule_id: r for r in default_rules()}
+    heldout = rules["N-REP-HELDOUT"]
+    assert heldout.level == "representation" and isinstance(heldout, rules_module.NetworkRepresentationRule)
+    assert heldout.objective.value == "representation_fidelity"
+    assert [r.rule_id for r in rules.values() if r.level == "representation"] == ["N-REP-HELDOUT"]
+    with pytest.raises(NotImplementedError):
+        heldout.preferred_side(None, None)  # type: ignore[arg-type]
+    with pytest.raises(NotImplementedError):
+        heldout.yielding_side(None, None)  # type: ignore[arg-type]
+
+
+def test_a_representation_level_entry_must_state_the_representation_objective_and_match_its_class():
+    with pytest.raises(ManifestError, match="representation-level rule must have"):
+        parse_network_rule_manifest(entry(raw_manifest(), level="representation", objective="model_fidelity"))
+    with pytest.raises(ManifestError, match="unknown level"):
+        parse_network_rule_manifest(entry(raw_manifest(), level="solve"))
+    shipped = manifest_module.load_network_rule_manifest(expected_sha256=NETWORK_RULE_MANIFEST_SHA256)
+    with pytest.raises(ValueError, match="cannot be built as a candidate-level rule"):
+        AuditedNetworkRule(shipped.candidate("N-REP-HELDOUT"), shipped)
+    with pytest.raises(ValueError, match="cannot be built as a representation-level rule"):
+        rules_module.AuditedNetworkRepresentationRule(shipped.candidate("N-ME-CONVERGENCE"), shipped)
+
+
+def test_the_amedro_entry_is_anchored_to_two_pinned_open_sources():
+    manifest = manifest_module.load_network_rule_manifest(expected_sha256=NETWORK_RULE_MANIFEST_SHA256)
+    sources = {s["id"]: s for s in manifest.sources}
+    assert sources["AMEDRO_2020"]["sha256"] == "8c4e305bddfe5631c54d1c3685dc2ee3351b0e68677abd70be5e0c08dd45288f"
+    assert sources["AMEDRO_2020_SUPPLEMENT"]["sha256"] == (
+        "05a0e9b72254aabab8867e2defca6b1873d17ab38ce47f3c60631e33b18be37b"
+    )
+    assert all(s["used_for"] and s["open_access"] is True for s in sources.values())
+    amedro = manifest.candidate("N-AMEDRO-HE-FC")
+    assert set(amedro.source_ids) == set(sources) and amedro.open_access is True
+    where = " ".join(a["where"] for a in amedro.anchors)
+    assert "p. 3095" in where and "Fig. S2" in where and "Table 1" in where
+    assert manifest.candidate("N-JG-REDUCTION-FIDELITY").open_access is True
+    assert manifest.candidate("N-JM-CH4-TRANSFER").open_access is False
+
+
+def test_a_rule_citing_an_unpinned_source_or_a_source_without_a_digest_is_refused():
+    raw = raw_manifest()
+    raw["rules"][0]["source_ids"] = ["NOT_PINNED"]
+    with pytest.raises(ManifestError, match="does not pin"):
+        parse_network_rule_manifest(raw)
+    raw = raw_manifest()
+    del raw["sources"][0]["sha256"]
+    with pytest.raises(ManifestError, match="lacks an id, citation, sha256 or used_for"):
+        parse_network_rule_manifest(raw)
+    raw = raw_manifest()
+    raw["sources"].append(copy.deepcopy(raw["sources"][0]))
+    with pytest.raises(ManifestError, match="source ids repeat"):
+        parse_network_rule_manifest(raw)

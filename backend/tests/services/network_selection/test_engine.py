@@ -48,7 +48,10 @@ def test_the_shipped_registry_applies_no_rule_so_eligible_alternatives_stay_unra
     s, t = solve_with(db_session, world, A_), solve_with(db_session, world, B_)
     result = select_network(db_session, request=channel_request(world), require_snapshot=False)
     assert result.outcome is Outcome.incomparable_alternatives and result.selected_ref is None
-    assert result.decision.edges == () and {m["why"] for m in result.decision.rule_matches} == {"rule_status_inactive"}
+    assert result.decision.edges == () and {m["why"] for m in result.decision.rule_matches} == {
+        "rule_status_inactive",
+        "request_is_not_representation_fidelity",  # the one representation-level rule, judged on fits only
+    }
     assert [set(front) for front in result.decision.fronts] == [{ref(s), ref(t)}]
     assert "no registered rule compares" in result.decision.basis
 
