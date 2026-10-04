@@ -22,6 +22,24 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Network preference engine and two-level replay (2026-10-04)
+
+**Chunk 3 of 6 of pressure-dependent network selection: the engine that turns eligible candidates into an honest
+outcome, and a manifest that replays at two levels.** No endpoint, SDK or MCP tool yet, and **no rule is active**: the
+shipped registry is empty, so a decision states which candidates are eligible and why none is ranked.
+
+- `app/services/network_selection/{rules,engine,manifest,selection}.py`, on the existing `selection_kernel`
+  (unchanged; the H298 golden and the elementary-kinetics tests pass untouched). Rules are judged on every member of a
+  candidate, only for a request that states their objective (physical accuracy, model fidelity or representation
+  fidelity), and edges compose only under one objective key. Opposite advantages on different channels, unknown
+  prerequisites, nodes answering different outputs and nodes with nothing to judge make no edge. Alternate fits get
+  nested fronts that rank no solve and are never independent confirmation.
+- `replay_network_assessment` recomputes every verdict from the captured inputs; `replay_network_decision` recomputes
+  edges, conflicts, fronts and the selection from those recomputed verdicts, never from recorded eligibility flags;
+  `replay_network` does both and compares the recorded outcome as well as the decision. A policy, assessment, bounds,
+  declaration or rule version, status or audited manifest that the running code does not carry refuses the replay.
+  Replay reproduces reasoning; it does not authenticate the inputs, and the manifest says so.
+
 ## Network selection snapshot and assessment (2026-10-04)
 
 **Chunk 2 of 6 of pressure-dependent network selection: a bounded, consistent snapshot of one network's authorized population, and a deterministic applicability assessment of its determinations (one channel) or declared product sets (a requested bundle).** There is no ranking, rule, endpoint, SDK or MCP tool yet, and nothing is written.
