@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.97.0 - 2026-10-04
+
+New refusal code `kinetics_selection_population_too_large` (a selection request over 500 visible records).
+
 ## 0.96.0 - 2026-10-04
 
 Kinetics records can declare their determination, applicability and protocol (`tckdb_schemas.kinetics_declarations`),

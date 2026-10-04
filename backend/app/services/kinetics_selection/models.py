@@ -266,6 +266,15 @@ class NormalizedKinetics:
     network_channel_ref: str | None = None
     network_solve_ref: str | None = None
     reactant_stoichiometries: tuple[int, ...] = ()
+    #: Every term's and entry's own units, so a representation is judged on all of its content, not on a parent
+    #: row: one per multi-Arrhenius term and one per PLOG entry (both ``None`` when not recorded).
+    arrhenius_units: tuple[str | None, ...] = ()
+    plog_units: tuple[str | None, ...] = ()
+    #: The falloff block's own content (``low_a_units`` and the Troe and SRI parameters), ``None`` without one.
+    falloff: dict[str, Any] | None = None
+    product_stoichiometries: tuple[int, ...] = ()
+    #: The reference temperature the stored expression is written against; disclosed, never used to change it.
+    t0_k: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -299,6 +308,11 @@ class NormalizedKinetics:
             "network_channel_ref": self.network_channel_ref,
             "network_solve_ref": self.network_solve_ref,
             "reactant_stoichiometries": list(self.reactant_stoichiometries),
+            "arrhenius_units": list(self.arrhenius_units),
+            "plog_units": list(self.plog_units),
+            "falloff": dict(self.falloff) if self.falloff is not None else None,
+            "product_stoichiometries": list(self.product_stoichiometries),
+            "t0_k": self.t0_k,
         }
 
     @classmethod
@@ -313,6 +327,10 @@ class NormalizedKinetics:
                 "plog_pressures_bar": tuple(raw["plog_pressures_bar"]),
                 "efficiencies": dict(raw["efficiencies"]),
                 "reactant_stoichiometries": tuple(raw["reactant_stoichiometries"]),
+                "arrhenius_units": tuple(raw["arrhenius_units"]),
+                "plog_units": tuple(raw["plog_units"]),
+                "falloff": dict(raw["falloff"]) if raw["falloff"] is not None else None,
+                "product_stoichiometries": tuple(raw["product_stoichiometries"]),
             }
         )
 
@@ -396,6 +414,8 @@ class KineticsAssessmentResult:
     total_rows: int
     visible_candidates: int
     excluded_by_review: tuple[dict[str, str], ...]
+    excluded_count: int
+    snapshot_isolation: str
     candidates: tuple[NormalizedKinetics, ...]
     assessments: tuple[KineticsAssessment, ...]
     groups: tuple[DeterminationGroup, ...]

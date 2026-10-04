@@ -38,6 +38,9 @@ from app.services.scientific_read.common import fetch_review_badges, visible_sta
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
 
 CODE_POPULATION_TOO_LARGE = "kinetics_selection_population_too_large"
+#: The exclusion listing is bounded: under a strict floor nearly every row of a large population can be excluded,
+#: and naming them all would make the response as big as the population. The total is always reported.
+MAX_EXCLUDED_LISTED = 100
 REASON_TERMINAL = "terminal_review_status"
 REASON_BELOW_FLOOR = "below_review_floor"
 
@@ -73,6 +76,10 @@ class LoadedPopulation:
     entry: ReactionEntry
     rows: list[Kinetics]
     candidates: dict[int, NormalizedKinetics] = field(default_factory=dict)
+
+    @property
+    def candidates_by_ref(self) -> dict[str, NormalizedKinetics]:
+        return {c.kinetics_ref: c for c in self.candidates.values()}
 
 
 def scan_population(session: Session, *, reaction_entry_id: int, request: KineticsRequest) -> PopulationScan:
@@ -220,16 +227,19 @@ def normalize_rows(
             select(Species.id, Species.public_ref).where(Species.id.in_(collider_ids))
         ):
             collider_refs[species_id] = ref
-    reactant_stoichiometries = tuple(
-        sorted(
-            session.scalars(
-                select(ReactionParticipant.stoichiometry).where(
-                    ReactionParticipant.reaction_id == entry.reaction_id,
-                    ReactionParticipant.role == ReactionRole.reactant,
+    def stoichiometries(role: ReactionRole) -> tuple[int, ...]:
+        return tuple(
+            sorted(
+                session.scalars(
+                    select(ReactionParticipant.stoichiometry).where(
+                        ReactionParticipant.reaction_id == entry.reaction_id, ReactionParticipant.role == role
+                    )
                 )
             )
         )
-    )
+
+    reactant_stoichiometries = stoichiometries(ReactionRole.reactant)
+    product_stoichiometries = stoichiometries(ReactionRole.product)
     candidates: dict[int, NormalizedKinetics] = {}
     for rank, k in enumerate(rows, start=1):
         applicability_state, applicability = _declaration(
@@ -276,5 +286,32 @@ def normalize_rows(
             network_channel_ref=net_ref,
             network_solve_ref=solve_ref,
             reactant_stoichiometries=reactant_stoichiometries,
+            product_stoichiometries=product_stoichiometries,
+            t0_k=k.t0_k,
+            arrhenius_units=tuple(
+                (e.a_units.value if e.a_units is not None else None)
+                for e in sorted(k.arrhenius_entries, key=lambda e: e.entry_index)
+            ),
+            plog_units=tuple(
+                (e.a_units.value if e.a_units is not None else None)
+                for e in sorted(k.plog_entries, key=lambda e: (e.pressure_bar, e.entry_index))
+            ),
+            falloff=(
+                {
+                    "low_a_units": k.falloff.low_a_units.value if k.falloff.low_a_units is not None else None,
+                    "low_a": k.falloff.low_a,
+                    "troe_alpha": k.falloff.troe_alpha,
+                    "troe_t3": k.falloff.troe_t3,
+                    "troe_t1": k.falloff.troe_t1,
+                    "troe_t2": k.falloff.troe_t2,
+                    "sri_a": k.falloff.sri_a,
+                    "sri_b": k.falloff.sri_b,
+                    "sri_c": k.falloff.sri_c,
+                    "sri_d": k.falloff.sri_d,
+                    "sri_e": k.falloff.sri_e,
+                }
+                if k.falloff is not None
+                else None
+            ),
         )
     return candidates

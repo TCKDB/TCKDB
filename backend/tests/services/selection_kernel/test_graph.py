@@ -93,6 +93,35 @@ def test_an_opposing_pair_is_a_conflict_unless_one_rule_supersedes_the_other():
     assert mutual.outcome is Outcome.policy_conflict
 
 
+def test_a_superseded_rule_is_gone_before_conflicts_are_judged():
+    # R1 a -> b; R2 b -> a, superseding R1; R4 b -> a, superseding nothing. R1 is removed, so R2 and R4 agree.
+    edges = [edge("a", "b", "R1"), edge("b", "a", "R2"), edge("b", "a", "R4")]
+    verdict = decide(ABC[:2], edges, supersedes={"R2": ("R1",)})
+    assert verdict.outcome is Outcome.policy_preferred and verdict.selected_ref == "b"
+    assert verdict.opposing_pairs == () and verdict.cycles == ()
+    assert [e.rule_id for e in verdict.edges] == ["R2", "R4"]
+    assert [(o["rule_id"], o["overridden_by_rule_id"]) for o in verdict.overridden_edges] == [("R1", "R2")]
+    # The order the rules are listed in, and which one comes first in the edge list, change nothing.
+    reordered = decide(ABC[:2], list(reversed(edges)), supersedes={"R2": ("R1",)})
+    assert reordered == verdict
+
+
+def test_a_superseded_rule_is_removed_even_when_the_superseding_rule_is_itself_opposed_by_a_third():
+    # R2 supersedes R1 but R5 (a -> b) opposes R2's edge and supersedes nothing: R1 is out, R2 and R5 still conflict.
+    edges = [edge("a", "b", "R1"), edge("b", "a", "R2"), edge("a", "b", "R5")]
+    verdict = decide(ABC[:2], edges, supersedes={"R2": ("R1",)})
+    assert verdict.outcome is Outcome.policy_conflict
+    assert verdict.opposing_pairs == ({"between": ["a", "b"], "rules": ["R2@1", "R5@1"]},)
+    assert [o["rule_id"] for o in verdict.overridden_edges] == ["R1"]
+
+
+def test_a_rule_overridden_by_two_winners_is_reported_once_per_winner():
+    edges = [edge("a", "b", "R1"), edge("b", "a", "R2"), edge("b", "a", "R3")]
+    verdict = decide(ABC[:2], edges, supersedes={"R2": ("R1",), "R3": ("R1",)})
+    assert verdict.outcome is Outcome.policy_preferred
+    assert sorted(o["overridden_by_rule_id"] for o in verdict.overridden_edges) == ["R2", "R3"]
+
+
 def test_a_later_version_is_not_supersession():
     edges = [edge("a", "b", "R1", "1"), edge("b", "a", "R2", "9")]
     assert decide(ABC[:2], edges).outcome is Outcome.policy_conflict

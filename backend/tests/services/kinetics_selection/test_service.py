@@ -121,7 +121,9 @@ def declared(session, world, det, *, status=RecordReviewStatus.approved, block=N
 
 
 def run(session, entry, request=REQUEST):
-    return assess_reaction_entry_kinetics(session, reaction_entry_id=entry.id, request=request)
+    # The fixture session is one outer transaction that has already run statements, so it cannot become a
+    # snapshot; the snapshot tests below use their own session.
+    return assess_reaction_entry_kinetics(session, reaction_entry_id=entry.id, request=request, require_snapshot=False)
 
 
 def by_ref(result):
@@ -364,7 +366,7 @@ def _strings(value) -> set:
 
 def test_an_unknown_reaction_entry_is_not_found(db_session):
     with pytest.raises(NotFoundError):
-        assess_reaction_entry_kinetics(db_session, reaction_entry_id=2**40, request=REQUEST)
+        assess_reaction_entry_kinetics(db_session, reaction_entry_id=2**40, request=REQUEST, require_snapshot=False)
 
 
 # -- no internal ids and no writes ---------------------------------------------------------------
@@ -374,6 +376,7 @@ ALLOWED_INTEGER_PATHS = {
     "id_rank",
     "arrhenius_terms",
     "reactant_stoichiometries[]",
+    "product_stoichiometries[]",
     "chebyshev.n_temperature",
     "chebyshev.n_pressure",
     "applicability.version",
@@ -537,3 +540,194 @@ def test_reactant_stoichiometry_is_read_from_the_reactants_not_the_products(db_s
     scan = scan_population(db_session, reaction_entry_id=entry.id, request=REQUEST)
     (candidate,) = load_population(db_session, scan).candidates.values()
     assert candidate.reactant_stoichiometries == (2,)
+
+
+# -- alternates, negative terms, solves, the exclusion bound, the snapshot ----------------------------
+
+
+def _pressure_request():
+    from app.services.kinetics_selection import ColliderRequest
+
+    return _with(
+        REQUEST, pressure=PressureRequest(PressureKind.finite, 1.0, 1.0), collider=ColliderRequest(("sp_n2",))
+    )
+
+
+SURFACE = {"pressure_dependence": "pressure_dependent", "collider_kind": "not_dependent",
+           "pressure_domain_min_bar": 0.01, "pressure_domain_max_bar": 100.0}
+
+
+def test_a_troe_fit_and_a_plog_fit_of_one_determination_stay_one_candidate(db_session, world):
+    from tests.services.scientific_read._factories import attach_kinetics_falloff
+
+    det = determination(db_session, world, "one-master-equation-result")
+
+    def falloff(k):
+        attach_kinetics_falloff(db_session, kinetics=k, low_a=1.0e-30, troe_alpha=0.6, troe_t3=100.0, troe_t1=2000.0)
+
+    def plog(k):
+        for i, p in enumerate((0.1, 1.0, 10.0), start=1):
+            attach_kinetics_plog_entry(db_session, kinetics=k, entry_index=i, pressure_bar=p, a=1.0e-12)
+
+    troe = declared(db_session, world, det, model_kind=_model("troe"), block=applicability(**SURFACE), children=falloff,
+                    pressure_context=_pressure_context("pressure_dependent"))
+    surface = declared(db_session, world, det, model_kind=_model("plog"), a=None, a_units=None, n=None, ea_kj_mol=None,
+                       block=applicability(**{**SURFACE, "pressure_domain_min_bar": None, "pressure_domain_max_bar": None}),
+                       children=plog)
+    result = run(db_session, world.entry, _pressure_request())
+    assert all(x.physically_eligible for x in result.assessments), [(a.kinetics_ref, a.reasons) for a in result.assessments]
+    (group,) = result.groups
+    assert set(group.representation_refs) == {troe.public_ref, surface.public_ref}
+
+
+def _pressure_context(value):
+    from app.db.models.common import PressureContext
+
+    return PressureContext(value)
+
+
+def test_a_plog_term_with_a_negative_a_is_not_a_defect(db_session, world):
+    det = determination(db_session, world, "d")
+
+    def plog(k):
+        attach_kinetics_plog_entry(db_session, kinetics=k, entry_index=1, pressure_bar=0.1, a=1.0e-12)
+        attach_kinetics_plog_entry(db_session, kinetics=k, entry_index=2, pressure_bar=1.0, a=-3.0e-13)
+        attach_kinetics_plog_entry(db_session, kinetics=k, entry_index=3, pressure_bar=10.0, a=2.0e-12)
+
+    k = declared(db_session, world, det, model_kind=_model("plog"), a=None, a_units=None, n=None, ea_kj_mol=None,
+                 block=applicability(**{**SURFACE, "pressure_domain_min_bar": None, "pressure_domain_max_bar": None}),
+                 children=plog)
+    result = run(db_session, world.entry, _pressure_request())
+    assert by_ref(result)[k.public_ref].physically_eligible
+
+
+def test_every_plog_entrys_units_are_read_from_its_own_row(db_session, world):
+    from app.db.models.common import ArrheniusAUnits
+
+    det = determination(db_session, world, "d")
+
+    def plog(k):
+        attach_kinetics_plog_entry(db_session, kinetics=k, entry_index=1, pressure_bar=0.1, a=1.0e-12)
+        attach_kinetics_plog_entry(db_session, kinetics=k, entry_index=2, pressure_bar=1.0, a=1.0e-12,
+                                   a_units=ArrheniusAUnits.per_s)
+
+    k = declared(db_session, world, det, model_kind=_model("plog"), a=None, a_units=None, n=None, ea_kj_mol=None,
+                 block=applicability(**{**SURFACE, "pressure_domain_min_bar": None, "pressure_domain_max_bar": None}),
+                 children=plog)
+    verdict = by_ref(run(db_session, world.entry, _pressure_request()))[k.public_ref]
+    assert verdict.applicability is A.incompatible and "units_orders_inconsistent" in codes(verdict)
+
+
+def test_a_normalised_record_carries_the_reference_temperature_and_both_sides_stoichiometry(db_session, world):
+    det = determination(db_session, world, "d")
+    declared(db_session, world, det, t0_k=298.0)
+    (candidate,) = run(db_session, world.entry).candidates
+    assert candidate.t0_k == 298.0 and candidate.to_dict()["t0_k"] == 298.0
+    assert candidate.reactant_stoichiometries == (1, 1) and candidate.product_stoichiometries == (1, 1)
+
+
+def _network_fit(db_session, world, det, solve, channel, name):
+    from app.db.models.common import ArrheniusAUnits, PressureUnit, TemperatureUnit
+    from app.db.models.network_pdep import NetworkKinetics
+
+    nk = NetworkKinetics(
+        channel_id=channel.id, solve_id=solve.id, model_kind=NetworkKineticsModelKind.chebyshev,
+        tmin_k=300.0, tmax_k=2000.0, pmin_bar=0.01, pmax_bar=100.0, rate_units=ArrheniusAUnits.cm3_mol_s,
+        pressure_units=PressureUnit.bar, temperature_units=TemperatureUnit.kelvin,
+    )
+    db_session.add(nk)
+    db_session.flush()
+
+    def plog(k):
+        attach_kinetics_plog_entry(db_session, kinetics=k, entry_index=1, pressure_bar=0.1, a=1.0e-12)
+        attach_kinetics_plog_entry(db_session, kinetics=k, entry_index=2, pressure_bar=10.0, a=1.0e-12)
+
+    return declared(db_session, world, det, block=applicability(scope="resolved_channel", **SURFACE),
+                    network_kinetics_id=nk.id, model_kind=_model("plog"), a=None, a_units=None, n=None, ea_kj_mol=None,
+                    children=plog)
+
+
+def _network_world(db_session, world, key):
+    network = make_network(db_session)
+    source = make_network_state(db_session, network=network, kind=NetworkStateKind.well, composition_hash="a" * 64)
+    sink = make_network_state(db_session, network=network, kind=NetworkStateKind.well, composition_hash="b" * 64)
+    channel = make_network_channel(db_session, network=network, source_state=source, sink_state=sink,
+                                   kind=NetworkChannelKind.isomerization, channel_key="k1")
+    det = determination(db_session, world, key, target_kind=KineticsDeterminationTargetKind.resolved_channel,
+                        target_network_channel_id=channel.id)
+    return network, channel, det
+
+
+def test_network_fits_of_one_determination_from_different_solves_are_not_alternates(db_session, world):
+    network, channel, det = _network_world(db_session, world, "mixed-solves")
+    first = _network_fit(db_session, world, det, make_network_solve(db_session, network=network), channel, "a")
+    second = _network_fit(db_session, world, det, make_network_solve(db_session, network=network), channel, "b")
+    request = _with(
+        _pressure_request(),
+        target=TargetRequest(KineticsDeterminationTargetKind.resolved_channel, network_ref=network.public_ref, channel_key="k1"),
+    )
+    result = run(db_session, world.entry, request)
+    verdicts = by_ref(result)
+    for k in (first, second):
+        assert verdicts[k.public_ref].applicability is A.incompatible
+        assert "determination_spans_network_solves" in codes(verdicts[k.public_ref])
+    assert result.groups == ()
+
+
+def test_network_fits_of_one_determination_from_one_solve_are_alternates(db_session, world):
+    network, channel, det = _network_world(db_session, world, "one-solve")
+    solve = make_network_solve(db_session, network=network)
+    first = _network_fit(db_session, world, det, solve, channel, "a")
+    second = _network_fit(db_session, world, det, solve, channel, "b")
+    request = _with(
+        _pressure_request(),
+        target=TargetRequest(KineticsDeterminationTargetKind.resolved_channel, network_ref=network.public_ref, channel_key="k1"),
+    )
+    (group,) = run(db_session, world.entry, request).groups
+    assert set(group.representation_refs) == {first.public_ref, second.public_ref}
+
+
+def test_the_exclusion_listing_is_bounded_and_the_total_is_always_reported(db_session, world):
+    from app.services.kinetics_selection.loader import MAX_EXCLUDED_LISTED
+
+    det = determination(db_session, world, "d")
+    declared(db_session, world, det)
+    for _ in range(MAX_EXCLUDED_LISTED + 5):
+        declared(db_session, world, det, status=RecordReviewStatus.rejected)
+    result = run(db_session, world.entry)
+    assert result.excluded_count == MAX_EXCLUDED_LISTED + 5
+    assert len(result.excluded_by_review) == MAX_EXCLUDED_LISTED
+    assert result.visible_candidates == 1
+
+
+def test_the_read_runs_in_one_read_only_repeatable_read_snapshot(db_engine, monkeypatch):
+    from sqlalchemy import text
+    from sqlalchemy.orm import Session
+
+    seen = {}
+    real = service_module.scan_population
+
+    def spy(session, **kwargs):
+        seen["isolation"] = session.scalar(text("SELECT current_setting('transaction_isolation')"))
+        seen["read_only"] = session.scalar(text("SELECT current_setting('transaction_read_only')"))
+        return real(session, **kwargs)
+
+    monkeypatch.setattr(service_module, "scan_population", spy)
+    with Session(db_engine) as session:
+        with pytest.raises(NotFoundError):
+            assess_reaction_entry_kinetics(session, reaction_entry_id=2**40, request=REQUEST)
+        session.rollback()
+    assert seen == {"isolation": "repeatable read", "read_only": "on"}
+
+
+def test_a_session_already_in_a_weaker_transaction_is_refused_unless_the_caller_accepts_it(db_session, world):
+    from app.services.read_snapshot import SnapshotNotConsistentError
+
+    declared(db_session, world, determination(db_session, world, "d"))
+    with pytest.raises(SnapshotNotConsistentError, match="REPEATABLE READ"):
+        assess_reaction_entry_kinetics(db_session, reaction_entry_id=world.entry.id, request=REQUEST)
+    accepted = assess_reaction_entry_kinetics(
+        db_session, reaction_entry_id=world.entry.id, request=REQUEST, require_snapshot=False
+    )
+    assert accepted.snapshot_isolation in {"read committed", "repeatable read", "serializable"}
+    assert len(accepted.assessments) == 1

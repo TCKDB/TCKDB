@@ -119,6 +119,51 @@ def _check_representation(c: NormalizedKinetics, f: _Findings) -> None:
         f.incompatible("representation_content_missing")
     elif kind in _FALLOFF_MODELS and not (c.has_falloff and c.a is not None):
         f.incompatible("representation_content_missing")
+    elif kind in _FALLOFF_MODELS and c.falloff is not None and not _falloff_complete(kind, c.falloff):
+        f.incompatible("representation_content_missing")
+
+
+#: The falloff parameters each model needs besides the high-pressure Arrhenius line (Troe's T2 and SRI's d and e
+#: are optional in the model).
+_FALLOFF_REQUIRED = {
+    "lindemann": ("low_a",),
+    "troe": ("low_a", "troe_alpha", "troe_t3", "troe_t1"),
+    "sri": ("low_a", "sri_a", "sri_b", "sri_c"),
+}
+
+
+def _falloff_complete(kind: str, falloff: dict[str, Any]) -> bool:
+    return all(falloff.get(name) is not None for name in _FALLOFF_REQUIRED[kind])
+
+
+def _check_units(c: NormalizedKinetics, declared_order: int | None, f: _Findings) -> None:
+    """Every term, entry and block of the representation has its units; the orders agree with each other and with
+    the declared order. Missing units are ``unresolved``; mixed orders, or an order other than the declared one,
+    are ``incompatible``. A falloff's low-pressure units are one order higher than its high-pressure line."""
+    kind = c.model_kind
+    if kind == "multi_arrhenius":
+        units = list(c.arrhenius_units)
+    elif kind == "plog":
+        units = list(c.plog_units)
+    else:
+        units = [c.a_units]
+    if not units or any(u is None for u in units):
+        if units or kind in _ARRHENIUS_LIKE or kind in _FALLOFF_MODELS or kind == "chebyshev":
+            f.unresolved("a_units_not_recorded")
+        return
+    orders = {_ORDER_BY_UNITS[u] for u in units if u is not None}
+    if len(orders) > 1:
+        f.incompatible("units_orders_inconsistent")
+        return
+    (order,) = orders
+    if declared_order is not None and order != declared_order:
+        f.incompatible("reaction_order_units_mismatch")
+    if kind in _FALLOFF_MODELS and c.falloff is not None:
+        low = c.falloff.get("low_a_units")
+        if low is None:
+            f.unresolved("low_pressure_units_not_recorded")
+        elif _ORDER_BY_UNITS[low] != order + 1:
+            f.incompatible("falloff_low_pressure_order_inconsistent")
 
 
 def _check_identity(c: NormalizedKinetics, request: KineticsRequest, f: _Findings) -> None:
@@ -183,15 +228,20 @@ def _check_applicability_block(
     elif c.is_third_body != (basis == KineticsCoefficientBasis.third_body_kernel.value):
         f.incompatible("third_body_form_contradicts_basis")
     order = block.get("reaction_order")
-    if c.model_kind in _ARRHENIUS_LIKE | _FALLOFF_MODELS:
-        if c.a_units is None:
-            f.unresolved("a_units_not_recorded")
-        elif order is not None and _ORDER_BY_UNITS[c.a_units] != order:
-            f.incompatible("reaction_order_units_mismatch")
+    _check_units(c, order, f)
     if order is None:
         advisory.append("reaction_order_not_declared")
-    if any(s > 1 for s in c.reactant_stoichiometries) and block.get("rate_progress_convention") is None:
-        f.unresolved("rate_progress_convention_not_declared")
+    # The coefficient is a rate *of* the side its direction names: a forward coefficient normalises on the
+    # reactants, a reverse one on the products. Only the canonical convention (rate of reaction progress) is
+    # assessed; another (a reactant-loss rate) is a different coefficient for a species counted twice, and v1
+    # converts nothing.
+    side = c.reactant_stoichiometries if request.direction.value == "forward" else c.product_stoichiometries
+    if any(s > 1 for s in side):
+        convention = block.get("rate_progress_convention")
+        if convention is None:
+            f.unresolved("rate_progress_convention_not_declared")
+        elif convention != "reaction_progress":
+            f.unsupported(f"rate_progress_convention_unsupported:{convention}")
     return block
 
 
@@ -213,7 +263,11 @@ def _check_temperature(c: NormalizedKinetics, request: KineticsRequest, f: _Find
 
 def _pressure_support(c: NormalizedKinetics, block: dict[str, Any] | None, f: _Findings) -> tuple[float, float] | None:
     """The pressure window a pressure-dependent record supports: its own table or bounds, intersected with
-    any declared validity domain. ``None`` (with an ``unresolved`` finding) when it cannot be established."""
+    any declared validity domain. ``None`` (with an ``unresolved`` finding) when it cannot be established.
+
+    A PLOG fit with no declared validity domain covers exactly its anchor range (its lowest to its highest
+    stored pressure), and a Chebyshev fit its recorded bounds; a declared domain can only narrow that, never
+    widen it. A falloff fit has no table bounding it, so only a declared domain gives it a window."""
     declared = None
     if block is not None and block.get("pressure_domain_min_bar") is not None:
         declared = (block["pressure_domain_min_bar"], block["pressure_domain_max_bar"])
@@ -253,7 +307,10 @@ def _check_pressure(
     if kind is PressureKind.high_pressure_limit:
         if claimed is None:
             f.unresolved("pressure_dependence_not_declared")
-        elif claimed != KineticsPressureDependence.high_pressure_limit.value:
+        elif claimed not in (
+            KineticsPressureDependence.high_pressure_limit.value,
+            KineticsPressureDependence.independent.value,
+        ):
             f.incompatible("pressure_dependence_mismatch")
         return
     pmin, pmax = request.pressure.min_bar, request.pressure.max_bar
@@ -261,6 +318,8 @@ def _check_pressure(
     if claimed is None:
         f.unresolved("pressure_dependence_not_declared")
         return
+    if claimed == KineticsPressureDependence.independent.value:
+        return  # established pressure independence answers a finite pressure as it answers every other
     if claimed == KineticsPressureDependence.fixed_pressure.value:
         if c.pressure_bar is None:
             f.unresolved("fixed_pressure_not_recorded")
@@ -277,17 +336,27 @@ def _check_pressure(
         advisory.append(f"network_solve:{c.network_solve_ref}")
 
 
-def _check_collider(c: NormalizedKinetics, request: KineticsRequest, block: dict[str, Any] | None, f: _Findings) -> None:
+def _check_collider(
+    c: NormalizedKinetics, request: KineticsRequest, block: dict[str, Any] | None, f: _Findings, claimed: str | None
+) -> None:
     if not request.collider_is_material:
         return
     asked = request.collider
     assert asked is not None
     kind = block.get("collider_kind") if block is not None else None
+    composition_effective = request.coefficient_basis is KineticsCoefficientBasis.composition_effective_coefficient
+    if (
+        claimed == KineticsPressureDependence.independent.value
+        and not composition_effective
+        and kind not in (KineticsColliderKind.specified_collider.value, KineticsColliderKind.fixed_mixture.value)
+    ):
+        # A pressure-independent coefficient does not depend on the bath gas, so it needs no collider statement;
+        # only a collider it names (a specified one, or a fixed mixture) has to be the one asked for.
+        return
     if kind is None:
         f.unresolved("collider_not_declared")
         return
     assert block is not None  # a kind is only ever read from a block
-    composition_effective = request.coefficient_basis is KineticsCoefficientBasis.composition_effective_coefficient
     declared = block.get("colliders") or []
     refs = tuple(d["species_ref"] for d in declared)
     if kind == KineticsColliderKind.not_dependent.value:
@@ -341,7 +410,9 @@ def assess_candidate(
     _check_representation(c, f)
     _check_temperature(c, request, f)
     _check_pressure(c, request, block, f, advisory)
-    _check_collider(c, request, block, f)
+    _check_collider(
+        c, request, block, f, _claimed_pressure_dependence(c, block.get("pressure_dependence") if block else None)
+    )
     _check_degeneracy(c, f, advisory)
 
     blocking: list[str] = []

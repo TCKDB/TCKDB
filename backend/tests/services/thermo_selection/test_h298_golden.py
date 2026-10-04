@@ -74,6 +74,23 @@ def _scenarios():
     yield "unknown_scope", _abc()[:2], (LabelRule("R1", {"a"}, {"b"}, scope_state=Tri.unknown),)
     yield "outside_scope", _abc()[:2], (LabelRule("R1", {"a"}, {"b"}, scope_state=Tri.false),)
     yield "single", _abc()[:1], (e1,)
+    # An INTENTIONAL change from the first generation of this golden (the kernel fix of #696 review): a superseded
+    # rule is removed before conflicts are judged. Before, R1 (a>b) still "opposed" R4 (b>a) although R2 (b>a,
+    # superseding R1) had already removed it, and the answer was policy_conflict; now R2 and R4 agree and b is
+    # preferred. It cannot arise in live H298, which has a single rule; the scenarios above are byte-identical.
+    yield "superseded_rule_removed_before_conflict", _abc()[:2], (
+        LabelRule("R1", {"a"}, {"b"}), LabelRule("R2", {"b"}, {"a"}, supersedes=("R1",)), LabelRule("R4", {"b"}, {"a"}))
+    # Policy coverage: the administrative policy orders candidates inside a front, and these are the populations
+    # where "default", "latest" and "most_reviewed" are told apart (review status first, or recency alone).
+    mixed = [
+        labelled("p", "p", status=S.not_reviewed, age_days=0, id_rank=1),
+        labelled("q", "q", status=S.approved, age_days=400, id_rank=2),
+        labelled("r", "r", status=S.approved, age_days=30, id_rank=3),
+        labelled("s", "s", status=S.not_reviewed, age_days=900, id_rank=4),
+    ]
+    yield "policy_matters_no_rules", mixed, ()
+    yield "policy_matters_inside_a_front", mixed, (LabelRule("R1", {"p", "q", "r"}, {"s"}),)
+    yield "policy_matters_with_a_single_winner_chain", mixed, (LabelRule("R1", {"q"}, {"p", "r", "s"}),)
     yield "empty", [], (e1,)
     yield "no_rules_incomparable", _abc(), ()
     yield "two_fronts_admin_order", [*_abc(), labelled("d", "d", age_days=0, id_rank=0)], (LabelRule("R1", {"a", "b"}, {"c"}),)
