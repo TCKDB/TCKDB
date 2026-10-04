@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.93.0 - 2026-10-04
+
+The same molecule with its atoms listed in another order is no longer a way round the no-optimisation
+duplicate rule (#679, follow-up to #667). No field is added, removed or renamed; one payload that was
+accepted is now refused, under the code the rule already used.
+
+- **Two single points (or two composites) on one polyatomic structure are one duplicate whatever order
+  the atoms are listed in (shared rule, so `/uploads/thermo`, `/uploads/statmech` and both bundle routes
+  change).** With no `opt` linked, two `sp` (or two `composite`) links whose geometries are one structure
+  moved rigidly are refused with `thermo_role_duplicate` / `statmech_role_duplicate` even when one lists
+  its atoms in a different order, for example water with its hydrogens first, or the hydrogens of a CH3
+  exchanged. The rule searches for a relabelling that lays one geometry on the other, using the
+  geometries alone, and then applies the 0.80.0 comparison unchanged (Kabsch-aligned RMSD, tolerance from
+  the precision of the coordinates). Only atoms of the same element and the same stated isotope are
+  exchanged (`D`/`T` count as 2H/3H), and an enantiomer stays a different structure in any order.
+- **The search is bounded, and past a bound a pair is treated as different** (the behaviour before this
+  change): geometries over 200 atoms, a pair needing more than 256 trial alignments or examining more
+  than 50,000 candidate placements, and a record's work beyond 4,096 alignments or 50 million work units
+  are not decided. A duplicate energy on a reordered copy of such a structure is therefore still
+  accepted. Ordinary molecules need one alignment.
+- The same-order comparison of 0.80.0 and the one-atom rule of 0.74.0 are unchanged.
+
 ## 0.90.0 - 2026-10-03
 
 No wire model changes. Contract notes the read-only thermo select endpoint.

@@ -4,7 +4,7 @@ With no ``opt`` linked, two ``sp`` links on one structure are refused (#610).
 For one atom every position is one structure (#623); a polyatomic geometry was
 still compared by stored row, so a water geometry translated by 1 Angstrom (a
 different row) walked past the rule. It is now the same structure when the two
-are one shape moved rigidly: same atoms in the same order, Kabsch-aligned RMSD
+are one shape moved rigidly: same atoms (in any order since #679), Kabsch-aligned RMSD
 within the rounding of the coordinates as deposited.
 
 ``geom_hash`` is not that comparison and is not changed: it is invariant only
@@ -187,16 +187,15 @@ def test_a_change_inside_the_rounding_is_still_a_duplicate(client, product):
 
 
 @PRODUCTS
-def test_the_same_atoms_in_another_order_are_not_recognised(client, product):
-    """Deferred: a bare geometry has no canonical atom order, so a permutation is a different geometry.
+def test_the_same_atoms_in_another_order_are_one_structure(client, product):
+    """#679: water listed hydrogen first is the same molecule at the same shape, so it is refused as a duplicate.
 
-    Water listed hydrogen first is the same molecule at the same shape; it is
-    accepted as a second structure. This pins the behaviour so a later change
-    to it is deliberate.
+    #667 pinned the opposite (atoms are compared in the order given). The
+    relabelling search lives in ``permuted_rigid_match`` and its API-level
+    behaviour is exercised in ``test_api_permuted_duplicate_sp``.
     """
     reordered = _xyz([_WATER[1], _WATER[0], _WATER[2]])
-    resp = _two_sps(client, product, _BASE, reordered)
-    assert resp.status_code == 201, resp.text[:800]
+    _assert_duplicate(_two_sps(client, product, _BASE, reordered), product)
 
 
 @PRODUCTS
@@ -281,13 +280,12 @@ def _butane_post(client, product, first, second):
 
 
 @PRODUCTS
-def test_a_butane_with_two_hydrogens_listed_in_another_order_is_not_recognised(client, product):
-    """The same deferral on a species with interchangeable atoms of one element."""
+def test_a_butane_with_two_hydrogens_listed_in_another_order_is_one_structure(client, product):
+    """#679: the same species with interchangeable atoms of one element swapped in the listing is a duplicate."""
     atoms = _butane(180.0)
     swapped = list(atoms)
     swapped[4], swapped[10] = swapped[10], swapped[4]
-    resp = _butane_post(client, product, _xyz(atoms), _xyz(swapped))
-    assert resp.status_code == 201, resp.text[:800]
+    _assert_duplicate(_butane_post(client, product, _xyz(atoms), _xyz(swapped)), product)
 
 
 @PRODUCTS
