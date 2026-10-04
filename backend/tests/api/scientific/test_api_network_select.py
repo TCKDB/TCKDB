@@ -357,3 +357,22 @@ def test_under_a_curated_profile_a_hidden_reference_solve_is_absent_from_both_do
     exploratory = post(client, world, profile="exploratory", manifest=True).json()
     served = next(s for s in exploratory["solves"] if s["solve_ref"] == visible.public_ref)["validation"]["entries"][0]
     assert served["reference_solve_ref"] == hidden.public_ref
+
+
+def test_both_network_routes_get_their_session_from_the_snapshot_dependency_and_not_from_get_db():
+    from fastapi.routing import APIRoute
+
+    from app.api.app import create_app
+    from app.api.deps import get_db, get_snapshot_db
+
+    routes = [
+        r for r in create_app().routes
+        if isinstance(r, APIRoute)
+        and r.path.startswith("/api/v1/scientific/networks/")
+        and r.path.endswith(("/kinetics/select", "/kinetics/select/manifest"))
+    ]
+    assert len(routes) == 2
+    for route in routes:
+        direct = [dep.call for dep in route.dependant.dependencies]
+        assert get_snapshot_db in direct and get_db not in direct, route.path
+        assert next(p for p in route.dependant.dependencies if p.call is get_snapshot_db).name == "session"

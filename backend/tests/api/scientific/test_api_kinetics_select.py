@@ -516,7 +516,9 @@ def test_both_routes_get_their_session_from_the_snapshot_dependency_and_not_from
     app = create_app()
     routes = [
         r for r in app.routes
-        if isinstance(r, APIRoute) and r.path.endswith(("/kinetics/select", "/kinetics/select/manifest"))
+        if isinstance(r, APIRoute)
+        and r.path.startswith("/api/v1/scientific/reaction-entries/")
+        and r.path.endswith(("/kinetics/select", "/kinetics/select/manifest"))
     ]
     assert len(routes) == 2
 
