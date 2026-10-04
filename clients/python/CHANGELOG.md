@@ -1,10 +1,12 @@
 # Changelog
 
+## 0.133.0 - 2026-10-04
+
+`RejectionCode` gains `network_selection_population_too_large` and `network_selection_snapshot_too_large`, regenerated from the server's catalogue; nothing else changes. The selection service they belong to is not routed yet.
+
 ## 0.132.0 - 2026-10-04
 
-`RejectionCode` gains `network_declaration_invalid`, `network_declaration_version_unsupported` and `unknown_network_solve_ref`, regenerated from
-the server's catalogue; nothing else changes. The server accepts optional network solve declarations and fit
-determinations on `POST /uploads/networks/pdep` (`tckdb-schemas` 0.101.0); the client has no network upload builder.
+`RejectionCode` gains `network_declaration_invalid`, `network_declaration_version_unsupported` and `unknown_network_solve_ref`, regenerated from the server's catalogue; nothing else changes. The server accepts optional network solve declarations and fit determinations on `POST /uploads/networks/pdep` (`tckdb-schemas` 0.101.0); the client has no network upload builder.
 
 Method-aware selection among a reaction entry's stored rate coefficients, for one stated gas-phase question
 (`tckdb-schemas` is unchanged; the producer contract is unchanged). Read-only; browsing (`get_reaction_kinetics`) is

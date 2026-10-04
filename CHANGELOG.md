@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Network selection snapshot and assessment (2026-10-04)
+
+**Chunk 2 of 6 of pressure-dependent network selection: a bounded, consistent snapshot of one network's authorized population, and a deterministic applicability assessment of its determinations (one channel) or declared product sets (a requested bundle).** There is no ranking, rule, endpoint, SDK or MCP tool yet, and nothing is written.
+
+- `app/services/network_selection/`: versioned engineering bounds (200 solves, 2,000 fits, 500 channel nodes, 500 bundle nodes, 1,000 states, 2,000 channels, 200 required outputs, 10,000 evidence entries, 100,000 numeric cells, 8 MiB snapshot) counted over the complete authorized population before any applicability filtering; over any bound the decision is refused (`network_selection_population_too_large`, `network_selection_snapshot_too_large`), never made on a prefix, and a refusal never counts or names what the read profile hides.
+- The snapshot opens before the network ref is resolved. Review qualification is the solve's and is never relaxed.
+- Assessment follows the plan's order and returns every reason: identity and direction, observable and basis, partition, boundary and regime, units and order, determination and representation roles, whole-request coverage as the intersection of solve scope, representation support and declared physical validity, bath, and integrity. Unknown is never a default; tabulated intervals, additive components and composition-dependent baths are unsupported; unknown protocol evidence is disclosed and does not exclude.
+
 ## Network solve declarations and fit determinations (2026-10-04)
 
 **Chunk 1 of 6 of pressure-dependent network selection: a solve can state what its outputs are outputs of, and a
