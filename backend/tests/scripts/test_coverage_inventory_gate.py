@@ -24,6 +24,7 @@ BACKEND = Path(__file__).resolve().parents[2]
 SCRIPTS = {
     "kinetics": (BACKEND / "scripts/ops/kinetics_selection_coverage_inventory.py", "kinetics_records"),
     "thermo": (BACKEND / "scripts/ops/thermo_h298_coverage_inventory.py", "thermo_records"),
+    "network": (BACKEND / "scripts/ops/network_selection_coverage_inventory.py", "network_solves"),
 }
 #: Nothing listens here, so a script that tried to connect would fail with a connection error, not a usage error.
 UNREACHABLE = {"DB_HOST": "127.0.0.1", "DB_PORT": "1", "DB_USER": "nobody", "DB_PASSWORD": "x", "DB_NAME": "none"}
@@ -126,3 +127,37 @@ def test_the_helper_refuses_an_empty_url_too():
         with pytest.raises(SystemExit) as caught:
             choose_database_url(["--database-url", value], prog="p", description="d")
         assert caught.value.code == 2
+
+
+#: ``(script, name of the inventory function the script imports)``.
+INVENTORY_FUNCTIONS = {
+    "kinetics": "kinetics_coverage_inventory",
+    "thermo": "h298_coverage_inventory",
+    "network": "network_coverage_inventory",
+}
+
+
+@pytest.mark.parametrize("which", sorted(INVENTORY_FUNCTIONS))
+def test_each_script_runs_its_report_inside_a_read_only_repeatable_read_transaction(which, db_engine, capsys, monkeypatch):
+    """A script that opened its own transaction instead of the shared helper would not be read-only; this notices.
+
+    The script's inventory function is replaced by a probe that reports the transaction it was given, and the
+    script's ``main`` is run in-process against the named database.
+    """
+    import importlib.util
+
+    script, _ = SCRIPTS[which]
+    spec = importlib.util.spec_from_file_location(f"inventory_script_{which}", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    def probe(session):
+        return {
+            "isolation": str(session.scalar(text("SELECT current_setting('transaction_isolation')"))),
+            "read_only": str(session.scalar(text("SELECT current_setting('transaction_read_only')"))),
+        }
+
+    monkeypatch.setattr(module, INVENTORY_FUNCTIONS[which], probe)
+    module.main(["--database-url", db_engine.url.render_as_string(hide_password=False)])
+    assert json.loads(capsys.readouterr().out) == {"isolation": "repeatable read", "read_only": "on"}

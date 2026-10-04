@@ -22,6 +22,19 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Network coverage inventory (2026-10-04)
+
+**The read-only coverage inventory of the network-selection plan, as a script.**
+`backend/scripts/ops/network_selection_coverage_inventory.py` prints, from a database the operator names
+(`--database-url`, or on purpose `--use-configured-database`; with neither it prints usage and exits 2 without
+connecting), inside one read-only REPEATABLE READ snapshot, how many stored solves, fits and determinations state or
+leave unstated their target, grouping, domain and protocol, how many solves are bundle or full-network ready, and the
+facts an assessment would find missing. Every known category is reported, with zero when nothing was found. It writes
+nothing and infers nothing; an unreadable stored claim is counted as unreadable, a determination with no fit has its
+own category, and the per-determination fit counts sum to the total. It is tested on synthetic data only and is not
+run against any deployed database by this repository. The selection-aware export endpoint is not part of this change
+(it needs the public selection endpoints).
+
 ## Network rule audit: the council examples, registered inactive (2026-10-04)
 
 **Chunk 4 of 6 of pressure-dependent network selection.** Six candidate rules (the Amedro, Johnson/Green and
