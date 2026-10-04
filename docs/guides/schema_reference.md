@@ -2187,7 +2187,7 @@ the gap.
 |---|---|---|---|---|---|---|
 | `id` | BIGINT | no | — | — | — | not documented |
 | `channel_id` | BIGINT | no | — | network_channel.id | — | not documented |
-| `solve_id` | BIGINT | no | — | network_solve.id | — | not documented |
+| `solve_id` | BIGINT | no | — | network_kinetics_determination.solve_id | — | not documented |
 | `model_kind` | NetworkKineticsModelKind (enum) | no | — | — | `chebyshev`, `plog`, `tabulated` | not documented |
 | `tmin_k` | DOUBLE PRECISION | yes | — | — | — | not documented |
 | `tmax_k` | DOUBLE PRECISION | yes | — | — | — | not documented |

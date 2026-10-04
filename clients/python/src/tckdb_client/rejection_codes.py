@@ -343,6 +343,7 @@ class RejectionCode(str, Enum):
     UNKNOWN_KINETICS_DETERMINATION_REF = "unknown_kinetics_determination_ref"
     UNKNOWN_NETWORK_CHANNEL = "unknown_network_channel"
     UNKNOWN_NETWORK_KINETICS_REF = "unknown_network_kinetics_ref"
+    UNKNOWN_NETWORK_SOLVE_REF = "unknown_network_solve_ref"
     UNKNOWN_RECORD = "unknown_record"
     UNKNOWN_RECORD_TYPE = "unknown_record_type"
     UNKNOWN_RELEASE = "unknown_release"
@@ -898,6 +899,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNKNOWN_KINETICS_DETERMINATION_REF: frozenset({404}),
     RejectionCode.UNKNOWN_NETWORK_CHANNEL: frozenset({404}),
     RejectionCode.UNKNOWN_NETWORK_KINETICS_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_NETWORK_SOLVE_REF: frozenset({404}),
     RejectionCode.UNKNOWN_RECORD: frozenset({404}),
     RejectionCode.UNKNOWN_RECORD_TYPE: frozenset({422}),
     RejectionCode.UNKNOWN_RELEASE: frozenset({404}),

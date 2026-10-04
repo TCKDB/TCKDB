@@ -76,6 +76,7 @@ from tckdb_schemas.local_key_codes import (
 )
 from tckdb_schemas.network_declarations import (
     W_NETWORK_DECLARATION_INVALID,
+    NetworkBarrierBasis,
     NetworkDeterminationDeclaration,
     NetworkProtocolDeclaration,
     NetworkRepresentationDeclaration,
@@ -105,6 +106,26 @@ from tckdb_schemas.workflows.computed_species_upload import (
 from app.schemas.utils import normalize_optional_text, normalize_required_text
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.schemas.workflows.transport_upload import TransportUploadPayload
+
+#: The order of a rate coefficient, from its units (molecularity of the source state).
+_ORDER_BY_UNITS = {
+    "per_s": 1,
+    "cm3_mol_s": 2,
+    "cm3_molecule_s": 2,
+    "m3_mol_s": 2,
+    "cm6_mol2_s": 3,
+    "cm6_molecule2_s": 3,
+    "m6_mol2_s": 3,
+}
+#: Correction conventions that already include the zero-point energy: a classical electronic barrier basis
+#: contradicts them.
+_ZPE_INCLUDING_CONVENTIONS = frozenset(
+    {
+        EnergyCorrectionConvention.electronic_plus_zpe,
+        EnergyCorrectionConvention.atom_and_bond_corrected,
+        EnergyCorrectionConvention.thermal_enthalpy_298k,
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Species
@@ -1038,6 +1059,11 @@ class NetworkKineticsIn(SchemaBase):
         """``determination`` and ``representation`` are stated together or not at all."""
         if (self.determination is None) != (self.representation is None):
             raise ValueError("determination and representation are stated together or not at all.")
+        if self.determination is not None and self.channel_key is None:
+            raise ValueError(
+                "a fit that declares a determination is addressed by channel_key; a fit addressed only by "
+                "source_state_key and sink_state_key cannot declare one."
+            )
         return self
 
     @model_validator(mode="after")
@@ -1836,24 +1862,30 @@ class NetworkPDepUploadRequest(SchemaBase):
         """
         if self.solve is None:
             return self
-        # Fits that declare a determination and representation are told apart by those keys, so a
-        # determination may carry several same-kind alternates. Undeclared fits keep the old rule.
+        # Where a (channel, model kind) pair occurs more than once, EVERY fit of the group must declare both its
+        # determination and its representation key: alternates are told apart by declared keys, never by one fit
+        # saying nothing. Otherwise the legacy refusal stands.
+        groups: dict[tuple[str | None, str], list[NetworkKineticsIn]] = {}
+        for nk in self.solve.channel_kinetics:
+            groups.setdefault((nk.channel_key, nk.model_kind), []).append(nk)
+        for fits in groups.values():
+            if len(fits) > 1 and any(nk.determination is None or nk.representation is None for nk in fits):
+                raise ValueError(
+                    "channel_kinetics entries must be unique by "
+                    "(channel_key, model_kind) within one "
+                    "payload; a channel may carry at most one entry per model_kind "
+                    "(one chebyshev and/or one plog), unless every entry of the group declares its own determination "
+                    "and representation key."
+                )
         triples = [
-            (
-                nk.channel_key,
-                nk.model_kind,
-                nk.determination.key if nk.determination is not None else None,
-                nk.representation.key if nk.representation is not None else None,
-            )
+            (nk.channel_key, nk.model_kind, nk.determination.key, nk.representation.key)
             for nk in self.solve.channel_kinetics
+            if nk.determination is not None and nk.representation is not None
         ]
         if len(set(triples)) != len(triples):
             raise ValueError(
-                "channel_kinetics entries must be unique by "
-                "(channel_key, model_kind) within one "
-                "payload; a channel may carry at most one entry per model_kind "
-                "(one chebyshev and/or one plog), unless each declares its own determination "
-                "and representation key."
+                "channel_kinetics entries must be unique by (channel_key, model_kind, determination key, "
+                "representation key) within one payload."
             )
         return self
 
@@ -1861,12 +1893,15 @@ class NetworkPDepUploadRequest(SchemaBase):
     def validate_network_declarations(self) -> Self:
         """The solve's declarations agree with the network, with the solve's own columns and with each other.
 
-        States and channels a declaration names exist; a partition places every state exactly once;
-        a bath scope agrees with the bath gas; an output the catalog calls ``supplied`` has a
-        declared determination; a fit's determination states one channel and one observable however
-        many fits join it, and the observable's order agrees with the channel's source state;
-        a product set names declared determinations and representations; validation evidence names
-        channels the network has. A contradiction is refused, never reconciled.
+        States and channels a declaration names exist; a partition places every state exactly once; a bath scope
+        agrees with the bath gas; a declared validity lies inside the solve's own temperature and pressure range;
+        a protocol's barrier basis does not contradict the correction convention the stored state energies and
+        channel barriers state; an output the catalog calls ``supplied`` has a declared determination, and one it
+        calls ``unavailable`` or ``declared_zero`` has none; a fit's determination states one channel and one
+        observable however many fits join it, and the observable's order agrees with the channel's source state and
+        with the fit's own units; a product set names declared determinations and representations; validation
+        evidence names channels the network has. The existing columns stay authoritative: a contradiction is
+        refused, never reconciled.
         """
         solve = self.solve
         if solve is None:
@@ -1913,24 +1948,55 @@ class NetworkPDepUploadRequest(SchemaBase):
                     f"determination '{key}' has two fits with representation key '{fit.representation.key}'.",
                 )
             representations[key].add(fit.representation.key)
+            declared_order = fit.determination.observable.reaction_order
             channel = channel_by_key.get(fit.channel_key or "")
             if channel is not None:
                 expected = order_of_state.get(channel.source_state_key)
-                if expected is not None and fit.determination.observable.reaction_order != expected:
+                if expected is not None and declared_order != expected:
                     raise refuse(
                         field,
-                        f"observable.reaction_order {fit.determination.observable.reaction_order} contradicts "
+                        f"observable.reaction_order {declared_order} contradicts "
                         f"the channel's source state, which has order {expected}.",
                     )
+            units = [fit.rate_units, *(e.a_units for e in (fit.plog.entries if fit.plog else ()))]
+            orders = {_ORDER_BY_UNITS[u.value] for u in units if u is not None}
+            if orders and orders != {declared_order}:
+                raise refuse(
+                    field,
+                    f"observable.reaction_order {declared_order} contradicts the fit's own rate units "
+                    f"({', '.join(sorted({u.value for u in units if u is not None}))}).",
+                )
         target = solve.target
         if target is not None:
             by_channel = {fit_channel for fit_channel, _ in determinations.values()}
-            for index, entry in enumerate(target.outputs):
-                if entry.availability.value == "supplied" and entry.channel_key not in by_channel:
+            for index, output in enumerate(target.outputs):
+                declared = output.channel_key in by_channel
+                if output.availability.value == "supplied" and not declared:
                     raise refuse(
                         f"solve.target.outputs[{index}]",
-                        f"output '{entry.channel_key}' is declared supplied but no fit declares a "
+                        f"output '{output.channel_key}' is declared supplied but no fit declares a "
                         "determination of that channel.",
+                    )
+                if output.availability.value != "supplied" and declared:
+                    raise refuse(
+                        f"solve.target.outputs[{index}]",
+                        f"output '{output.channel_key}' is declared {output.availability.value} but a fit of this "
+                        "solve declares a determination of that channel.",
+                    )
+            if target.validity is not None:
+                outside = [
+                    name
+                    for name, low, high, want_low, want_high in (
+                        ("temperature", solve.tmin_k, solve.tmax_k, target.validity.temperature_min_k, target.validity.temperature_max_k),
+                        ("pressure", solve.pmin_bar, solve.pmax_bar, target.validity.pressure_min_bar, target.validity.pressure_max_bar),
+                    )
+                    if want_low < low or want_high > high
+                ]
+                if outside:
+                    raise refuse(
+                        "solve.target.validity",
+                        f"the declared physical validity extends beyond the solve's own {' and '.join(outside)} "
+                        "range; a validity cannot exceed what the solve covers.",
                     )
             for set_index, product_set in enumerate(target.product_sets):
                 listed = [m.determination_key for m in product_set.members]
@@ -1959,9 +2025,24 @@ class NetworkPDepUploadRequest(SchemaBase):
                             f"product set '{product_set.product_set_key}' names representation(s) {missing} "
                             f"that determination '{member.determination_key}' does not have.",
                         )
+        if solve.protocol is not None and solve.protocol.barrier_basis is not None:
+            conventions = {e.correction_convention for e in solve.state_energies} | {
+                b.correction_convention for b in solve.channel_barriers
+            }
+            if solve.protocol.barrier_basis is NetworkBarrierBasis.classical_electronic:
+                contradicted = conventions & _ZPE_INCLUDING_CONVENTIONS
+            else:
+                contradicted = conventions & {EnergyCorrectionConvention.electronic_only}
+            if contradicted:
+                raise refuse(
+                    "solve.protocol",
+                    f"protocol.barrier_basis {solve.protocol.barrier_basis.value} contradicts the stored "
+                    f"correction convention ({', '.join(sorted(c.value for c in contradicted))}) of this solve's "
+                    "state energies or channel barriers.",
+                )
         if solve.validation is not None:
-            for index, entry in enumerate(solve.validation.entries):
-                unknown = sorted(set(entry.channel_keys) - channel_keys)
+            for index, evidence in enumerate(solve.validation.entries):
+                unknown = sorted(set(evidence.channel_keys) - channel_keys)
                 if unknown:
                     raise refuse(
                         f"solve.validation.entries[{index}]",

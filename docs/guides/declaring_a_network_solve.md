@@ -30,8 +30,12 @@ are two representations of one determination, and they are not independent evide
 
 - Send `determination` and `representation` together. Fits that state the same `key` share the determination and
   must state the same channel and observable. Each fit has its own `representation.key`.
-- `reaction_order` must equal the number of species of the channel's source state.
-- A fit that states neither keeps the old rule: one entry per channel and model kind.
+- `reaction_order` must equal the number of species of the channel's source state, and the fit's own rate units
+  (`rate_units`, and each PLOG entry's `a_units`) must be of that order: a unimolecular channel is `per_s`.
+- A determination is addressed by `channel_key`; a fit named only by `source_state_key` and `sink_state_key` cannot
+  declare one.
+- A fit that states neither keeps the old rule: one entry per channel and model kind. Where a channel and model
+  kind occur more than once, *every* entry of that group must declare its determination and representation key.
 - `representation_role`: `complete` (a whole representation), `additive_component` (one term of a sum) or
   `overlapping_contribution` (contains part of what another fit contains, never summed).
 
@@ -42,6 +46,17 @@ every state of the network exactly once (retained, eliminated, or in one lump). 
 solve's bath gas. `outputs` lists directed channels: `supplied` needs a determination of that channel, `unavailable`
 says the solve does not give it (never zero), and `declared_zero` needs a `zero_basis`. `product_sets` name declared
 complete sets of determinations; each is pinned when stored and several sets are separate competitors.
+
+## What a declaration cannot contradict
+
+The solve's own columns and rows stay authoritative, and a declaration that disagrees with one is refused, never
+reconciled: `bath_scope` against the bath gas; a declared `validity` against the solve's temperature and pressure
+range (it cannot exceed them); `protocol.barrier_basis` against the correction convention the stated state energies
+and channel barriers carry (a classical electronic basis against one that includes zero-point energy, and the
+converse; rows that state no convention contradict nothing); an output the catalog calls `unavailable` or
+`declared_zero` against a fit that declares a determination of that channel. A validation entry's
+`reference_solve_ref` must name a solve you may see; one that does not exist and one you may not see get the same
+`unknown_network_solve_ref` (404).
 
 ## Refusals
 

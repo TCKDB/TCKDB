@@ -38,14 +38,19 @@ from tests.workflows.test_network_pdep_upload import _full_payload
 _BOUNDS = {"tmin_k": 300.0, "tmax_k": 2000.0, "pmin_bar": 0.01, "pmax_bar": 100.0}
 
 
+def _units(order: int) -> str:
+    """The rate units of a coefficient of this order (the unimolecular ones have no concentration)."""
+    return "per_s" if order == 1 else "cm3_mol_s"
+
+
 def _plog(channel: str, *, det: str | None, rep: str | None, order: int, role: str = "complete") -> dict:
     fit = {
         "channel_key": channel,
         "model_kind": "plog",
         "plog": {
             "entries": [
-                {"pressure_bar": 1.0, "a": 1.0e13, "a_units": "cm3_mol_s", "n": 0.0, "ea_kj_mol": 40.0},
-                {"pressure_bar": 10.0, "a": 2.0e13, "a_units": "cm3_mol_s", "n": 0.1, "ea_kj_mol": 42.0},
+                {"pressure_bar": 1.0, "a": 1.0e13, "a_units": _units(order), "n": 0.0, "ea_kj_mol": 40.0},
+                {"pressure_bar": 10.0, "a": 2.0e13, "a_units": _units(order), "n": 0.1, "ea_kj_mol": 42.0},
             ]
         },
     }
@@ -92,7 +97,7 @@ def _target() -> dict:
         "bath_scope": "specified_collider",
         "outputs": [
             {"channel_key": "association_path", "availability": "supplied"},
-            {"channel_key": "dissociation_path", "availability": "unavailable"},
+            {"channel_key": "dissociation_path", "availability": "supplied"},
             {"channel_key": "elimination_path", "availability": "declared_zero", "zero_basis": "source_statement"},
         ],
         "product_sets": [
@@ -404,7 +409,7 @@ def test_declarations_are_stored_in_their_resolved_form(db_conn) -> None:
         assert product_set["membership_version"] == 1
         assert {o["channel_key"]: o["availability"] for o in target["outputs"]} == {
             "association_path": "supplied",
-            "dissociation_path": "unavailable",
+            "dissociation_path": "supplied",
             "elimination_path": "declared_zero",
         }
         assert solve.protocol_declaration["tunneling_treatment"] == "eckart"

@@ -157,6 +157,26 @@ def test_the_stored_form_carries_hashes_and_refs_only() -> None:
         )
 
 
+@pytest.mark.parametrize("version", [0, 2, 99])
+def test_a_stored_product_set_pinned_under_an_unknown_membership_version_is_refused(version) -> None:
+    stored = {
+        "version": 1,
+        "claim_origin": "source_publication",
+        "product_sets": [
+            {
+                "product_set_key": "p",
+                "members": [{"determination_ref": "nkdet_x"}],
+                "membership_version": version,
+                "content_hash": _HASH,
+            }
+        ],
+    }
+    with pytest.raises(ValidationError):
+        StoredNetworkTargetDeclaration.model_validate(stored)
+    stored["product_sets"][0]["membership_version"] = 1
+    assert StoredNetworkTargetDeclaration.model_validate(stored).product_sets[0].membership_version == 1
+
+
 def test_the_membership_hash_pins_members_and_their_representations() -> None:
     one = network_product_set_content_hash([("nkdet_a", ["x"])])
     assert len(one) == 64

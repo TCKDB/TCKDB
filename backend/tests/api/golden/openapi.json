@@ -31645,7 +31645,7 @@
           "validation": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/NetworkValidationDeclaration-Output"
+                "$ref": "#/components/schemas/NetworkValidationRead"
               },
               {
                 "type": "null"
@@ -32349,7 +32349,7 @@
           "validation": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/NetworkValidationDeclaration-Input"
+                "$ref": "#/components/schemas/NetworkValidationDeclaration"
               },
               {
                 "type": "null"
@@ -34187,31 +34187,7 @@
         "title": "NetworkUploadSpeciesLinkPayload",
         "type": "object"
       },
-      "NetworkValidationDeclaration-Input": {
-        "additionalProperties": false,
-        "description": "The evidence a solve cites. Version 1. Declared, never verified at upload.\n\n:param version: Only the integer ``1``.",
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/NetworkValidationEntry"
-            },
-            "minItems": 1,
-            "title": "Entries",
-            "type": "array"
-          },
-          "version": {
-            "title": "Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "version",
-          "entries"
-        ],
-        "title": "NetworkValidationDeclaration",
-        "type": "object"
-      },
-      "NetworkValidationDeclaration-Output": {
+      "NetworkValidationDeclaration": {
         "additionalProperties": false,
         "description": "The evidence a solve cites. Version 1. Declared, never verified at upload.\n\n:param version: Only the integer ``1``.",
         "properties": {
@@ -34352,6 +34328,121 @@
         "title": "NetworkValidationEntry",
         "type": "object"
       },
+      "NetworkValidationEntryRead": {
+        "description": "One cited piece of evidence as served: the stored entry, with a reference the caller may not see withheld.\n\n``reference_solve_ref`` is served only when the solve it names is visible to the caller. A reference to a\nsolve the read profile hides is withheld (``null``) and ``reference_withheld`` is true; nothing says whether\nthat solve exists, so the entry cannot be used to learn it does.",
+        "properties": {
+          "channel_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Channel Keys",
+            "type": "array"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "initialization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initialization"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "limitations": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limitations"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
+          },
+          "reference_dataset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Dataset"
+          },
+          "reference_solve_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Solve Ref"
+          },
+          "reference_withheld": {
+            "default": false,
+            "title": "Reference Withheld",
+            "type": "boolean"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "NetworkValidationEntryRead",
+        "type": "object"
+      },
       "NetworkValidationKind": {
         "description": "The evidence a solve cites. Each of the first four is evidence for one comparison objective\n(:func:`validation_objective`); ``uncertainty`` and ``dependence`` are for none.",
         "enum": [
@@ -34374,6 +34465,28 @@
         ],
         "title": "NetworkValidationMetric",
         "type": "string"
+      },
+      "NetworkValidationRead": {
+        "description": "The validation declaration as served (``version``, and its entries with hidden references withheld).",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkValidationEntryRead"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "entries"
+        ],
+        "title": "NetworkValidationRead",
+        "type": "object"
       },
       "NetworkValidityDomain": {
         "additionalProperties": false,

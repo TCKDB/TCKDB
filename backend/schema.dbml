@@ -2721,7 +2721,7 @@ Table network_channel_microreaction {
 Table network_kinetics {
   id bigint [pk, not null]
   channel_id bigint [not null, ref: > network_channel.id]
-  solve_id bigint [not null, ref: > network_solve.id]
+  solve_id bigint [not null, ref: > network_kinetics_determination.solve_id]
   model_kind NetworkKineticsModelKind [not null]
   tmin_k double
   tmax_k double
@@ -2789,6 +2789,7 @@ Table network_kinetics_determination {
     solve_id [name: 'ix_network_kinetics_determination_solve_id']
     identity_hash [unique, name: 'uq_network_kinetics_determination_identity_hash']
     (solve_id, determination_key) [unique, name: 'uq_network_kinetics_determination_key']
+    (id, solve_id, channel_id) [unique, name: 'uq_network_kinetics_determination_scope']
   }
 
   checks {
@@ -4197,6 +4198,8 @@ Table workflow_tool_release {
 Ref fk_cspcv_calc_id_coordinate_index: calc_scan_point_coordinate_value.(calculation_id, coordinate_index) > calc_scan_coordinate.(calculation_id, coordinate_index)
 
 Ref fk_cspcv_calc_id_point_index: calc_scan_point_coordinate_value.(calculation_id, point_index) > calc_scan_point.(calculation_id, point_index)
+
+Ref fk_network_kinetics_determination_scope: network_kinetics.(determination_id, solve_id, channel_id) > network_kinetics_determination.(id, solve_id, channel_id)
 
 Ref fk_nsse_source_participant: network_solve_state_energy_source.(state_id, species_entry_id) > network_state_participant.(state_id, species_entry_id)
 

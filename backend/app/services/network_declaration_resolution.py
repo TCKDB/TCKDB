@@ -40,6 +40,8 @@ from app.db.models.network_pdep import (
     NetworkSolve,
     NetworkState,
 )
+from app.services.scientific_read.network_declarations import solve_ref_is_visible
+from app.services.upload_reference import W_UNKNOWN_NETWORK_SOLVE_REF, unknown_reference
 
 __all__ = [
     "IDENTITY_VERSION",
@@ -143,7 +145,13 @@ def resolve_determinations(
                 f"determination '{key}' is stated with a different channel or observable by another fit.",
             )
         if key not in out:
-            channel = channel_key_to_row.get(fit.channel_key or "")
+            if fit.channel_key is None:
+                raise _invalid(
+                    f"solve.channel_kinetics[{index}].channel_key",
+                    f"determination '{key}' needs the fit to be addressed by channel_key; a fit addressed only by "
+                    "source_state_key and sink_state_key cannot declare a determination.",
+                )
+            channel = channel_key_to_row.get(fit.channel_key)
             if channel is None:
                 raise _invalid(
                     f"solve.channel_kinetics[{index}].channel_key",
@@ -275,11 +283,11 @@ def _check_validation_references(
                 f"validation evidence names channel(s) the network does not have: {unknown}.",
             )
         if entry.reference_solve_ref is not None:
-            found = session.scalar(
-                select(NetworkSolve.id).where(NetworkSolve.public_ref == entry.reference_solve_ref)
-            )
-            if found is None:
-                raise _invalid(
-                    f"solve.validation.entries[{index}].reference_solve_ref",
-                    "reference_solve_ref names no network solve.",
+            if not solve_ref_is_visible(session, entry.reference_solve_ref):
+                raise unknown_reference(
+                    code=W_UNKNOWN_NETWORK_SOLVE_REF,
+                    field=f"solve.validation.entries[{index}].reference_solve_ref",
+                    kind="network solve",
+                    ref=entry.reference_solve_ref,
+                    remedy="Cite a solve this deposit may see, or deposit it first.",
                 )

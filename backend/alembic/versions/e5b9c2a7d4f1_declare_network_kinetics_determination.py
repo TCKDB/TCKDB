@@ -17,7 +17,9 @@ Additive, with no data step. One new identity table, one new enum and eight null
 numeric ``version`` (the ``coalesce`` matters: an object with no ``version`` key would otherwise
 make the predicate NULL, and a CHECK passes on NULL).
 
-``network_kinetics`` gains, all nullable: ``determination_id`` (FK, indexed),
+``network_kinetics`` gains, all nullable (and a composite foreign key
+``(determination_id, solve_id, channel_id) -> network_kinetics_determination(id, solve_id, channel_id)``, so a fit
+can only point at a determination of its own solve and channel): ``determination_id`` (FK, indexed),
 ``representation_role`` (enum ``network_representation_role``: ``complete`` | ``additive_component``
 | ``overlapping_contribution``) and ``representation_declaration`` (JSONB, a versioned object with a
 string ``key``). The three are set together or not at all
@@ -47,7 +49,7 @@ table and the enum. It forgets every determination and declaration made after th
 prints how many it is forgetting first.
 
 Revision ID: e5b9c2a7d4f1
-Revises: c7a2e5d9b148
+Revises: a3e7c1d9b542
 Create Date: 2026-10-04
 """
 
@@ -61,7 +63,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "e5b9c2a7d4f1"
-down_revision: Union[str, Sequence[str], None] = "c7a2e5d9b148"
+down_revision: Union[str, Sequence[str], None] = "a3e7c1d9b542"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -92,6 +94,9 @@ def _child_groups() -> list[tuple[str, str, tuple[str, ...]]]:
         grouped.setdefault((table, record_type), []).append(column)
     return [(table, record_type, tuple(columns)) for (table, record_type), columns in grouped.items()]
 _FK = "fk_network_kinetics_determination_ref"
+#: A fit's determination must be of the fit's own solve and channel: enforced by the database, not by the writer.
+_SCOPE_FK = "fk_network_kinetics_determination_scope"
+_SCOPE_UNIQUE = "uq_network_kinetics_determination_scope"
 _INDEX = "ix_network_kinetics_determination_id"
 _REPRESENTATION_INDEX = "uq_network_kinetics_representation_key"
 
@@ -186,6 +191,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f(f"pk_{_TABLE}")),
         sa.UniqueConstraint("identity_hash", name=op.f(f"uq_{_TABLE}_identity_hash")),
         sa.UniqueConstraint("solve_id", "determination_key", name="uq_network_kinetics_determination_key"),
+        sa.UniqueConstraint("id", "solve_id", "channel_id", name=_SCOPE_UNIQUE),
     )
     op.create_index(op.f(f"ix_{_TABLE}_public_ref"), _TABLE, ["public_ref"], unique=True)
     op.create_index(op.f(f"ix_{_TABLE}_solve_id"), _TABLE, ["solve_id"], unique=False)
@@ -246,6 +252,17 @@ def upgrade() -> None:
         initially="IMMEDIATE",
         deferrable=True,
     )
+    # The composite key makes "this fit's determination is of this fit's solve and channel" a database fact. With a
+    # NULL ``determination_id`` (an undeclared fit) the constraint is not applied (MATCH SIMPLE), which is intended.
+    op.create_foreign_key(
+        _SCOPE_FK,
+        "network_kinetics",
+        _TABLE,
+        ["determination_id", "solve_id", "channel_id"],
+        ["id", "solve_id", "channel_id"],
+        initially="IMMEDIATE",
+        deferrable=True,
+    )
     op.create_check_constraint(
         op.f(_KINETICS_CHECKS[0]), "network_kinetics", "(determination_id IS NULL) = (representation_role IS NULL)"
     )
@@ -285,6 +302,7 @@ def downgrade() -> None:
     op.execute(f"DROP INDEX IF EXISTS public.{_REPRESENTATION_INDEX}")
     for name in reversed(_KINETICS_CHECKS):
         op.drop_constraint(op.f(name), "network_kinetics", type_="check")
+    op.drop_constraint(_SCOPE_FK, "network_kinetics", type_="foreignkey")
     op.drop_constraint(op.f(_FK), "network_kinetics", type_="foreignkey")
     op.drop_index(op.f(_INDEX), table_name="network_kinetics")
     op.drop_column("network_kinetics", "representation_declaration")

@@ -61,10 +61,10 @@ Three things are deliberately absent:
 | Kind of token | Count | Read from |
 | --- | --- | --- |
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
-| Identifier prefixes | 39 | `backend/app/services/public_refs.py` |
+| Identifier prefixes | 40 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 275 | `backend/app/api/code_catalogue.py` |
-| **total** | **577** | |
+| Refusal codes a caller can receive | 278 | `backend/app/api/code_catalogue.py` |
+| **total** | **581** | |
 
 ## How a record is named
 
@@ -95,7 +95,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `wfr_` | workflow tool release | yes |
 | `wft_` | workflow tool | yes |
 
-### Opaque prefixes (26)
+### Opaque prefixes (27)
 
 | Prefix | Names a | Same on every instance? |
 | --- | --- | --- |
@@ -110,6 +110,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `kin_` | kinetics | no — one row, one database |
 | `mpo_` | molecular property observation | no — one row, one database |
 | `net_` | network | no — one row, one database |
+| `nkdet_` | network kinetics determination | no — one row, one database |
 | `nkin_` | network kinetics | no — one row, one database |
 | `nsolve_` | network solve | no — one row, one database |
 | `rel_` | dataset release | no — one row, one database |
@@ -688,7 +689,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `rights_attestation_requires_curator` | a thing |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (22 codes)
+### HTTP 404 (23 codes)
 
 | Code | Names |
 | --- | --- |
@@ -708,6 +709,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_kinetics_determination_ref` | a thing |
 | `unknown_network_channel` | a thing |
 | `unknown_network_kinetics_ref` | a thing |
+| `unknown_network_solve_ref` | a thing |
 | `unknown_record` | a thing |
 | `unknown_release` | a thing |
 | `unknown_release_artifact` | a thing |
@@ -750,7 +752,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (220 codes)
+### HTTP 422 (222 codes)
 
 | Code | Names |
 | --- | --- |
@@ -863,6 +865,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `multiple_structure_queries` | a relationship — read `context` |
 | `n_imag_contradicts_minimum` | a relationship — read `context` |
 | `network_channel_key_undeclared` | a thing |
+| `network_declaration_invalid` | a relationship — read `context` |
+| `network_declaration_version_unsupported` | a thing |
 | `network_energy_source_subject_mismatch` | a relationship — read `context` |
 | `network_energy_source_type_mismatch` | a relationship — read `context` |
 | `network_kinetics_batch_evaluate_grid_too_large` | a relationship — read `context` |

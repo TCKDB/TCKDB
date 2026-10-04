@@ -106,6 +106,13 @@ def _seed(conn, tag: str) -> dict[str, int]:
         ),
         {"n": network_id, "a": states[0], "b": states[1]},
     )
+    reverse_channel_id = conn.scalar(
+        text(
+            "INSERT INTO network_channel (network_id, source_state_id, sink_state_id, kind, channel_key) "
+            "VALUES (:n, :b, :a, 'isomerization', 'w1=>w0') RETURNING id"
+        ),
+        {"n": network_id, "a": states[0], "b": states[1]},
+    )
     fit_id = conn.scalar(
         text(
             "INSERT INTO network_kinetics (channel_id, solve_id, model_kind, public_ref) "
@@ -113,7 +120,7 @@ def _seed(conn, tag: str) -> dict[str, int]:
         ),
         {"c": channel_id, "s": solve_id, "r": f"nkin_decmig{tag}"},
     )
-    return {"solve_id": solve_id, "channel_id": channel_id, "fit_id": fit_id}
+    return {"solve_id": solve_id, "channel_id": channel_id, "reverse_channel_id": reverse_channel_id, "fit_id": fit_id}
 
 
 def _refused(conn, sql: str, params: dict) -> None:
@@ -125,7 +132,7 @@ def _refused(conn, sql: str, params: dict) -> None:
 _OBSERVABLE = '{"version": 1, "observable": "product_resolved_coefficient"}'
 
 
-def _determination(conn, seeded: dict[str, int], key: str, digest: str) -> int:
+def _determination(conn, seeded: dict[str, int], key: str, digest: str, channel: str = "channel_id") -> int:
     return conn.scalar(
         text(
             f"INSERT INTO {_TABLE} (solve_id, channel_id, determination_key, observable_declaration, "
@@ -133,7 +140,7 @@ def _determination(conn, seeded: dict[str, int], key: str, digest: str) -> int:
         ),
         {
             "s": seeded["solve_id"],
-            "c": seeded["channel_id"],
+            "c": seeded[channel],
             "k": key,
             "o": _OBSERVABLE,
             "h": digest * 64,
@@ -229,6 +236,9 @@ def test_upgrade_leaves_legacy_rows_undeclared_and_enforces_the_shape(harness) -
             "UPDATE network_kinetics SET representation_role = 'complete' WHERE id = :f",
             {"f": seeded["fit_id"]},
         )  # a role without a determination
+        # A fit's determination is of the fit's own channel (and solve): the database's own foreign key says so.
+        elsewhere = _determination(conn, seeded, "d_other_channel", "9", channel="reverse_channel_id")
+        _refused(conn, fit_update, {**ok, "d": elsewhere})
         with conn.begin_nested():
             conn.execute(text(fit_update), ok)
         # A second fit of one determination cannot reuse the key.

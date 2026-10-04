@@ -820,10 +820,13 @@ class NetworkKineticsDetermination(Base, TimestampMixin, CreatedByMixin, PublicR
 
     solve: Mapped["NetworkSolve"] = relationship(back_populates="determinations")
     channel: Mapped["NetworkChannel"] = relationship()
-    kinetics_records: Mapped[list["NetworkKinetics"]] = relationship(back_populates="determination")
+    kinetics_records: Mapped[list["NetworkKinetics"]] = relationship(
+        back_populates="determination", foreign_keys="NetworkKinetics.determination_id"
+    )
 
     __table_args__ = (
         UniqueConstraint("solve_id", "determination_key", name="uq_network_kinetics_determination_key"),
+        UniqueConstraint("id", "solve_id", "channel_id", name="uq_network_kinetics_determination_scope"),
         CheckConstraint(
             "length(btrim(determination_key)) > 0 AND length(determination_key) <= 128",
             name="key_bounded",
@@ -906,7 +909,7 @@ class NetworkKinetics(Base, TimestampMixin, PublicRefMixin):
 
     # Relationships
     determination: Mapped[Optional["NetworkKineticsDetermination"]] = relationship(
-        back_populates="kinetics_records"
+        back_populates="kinetics_records", foreign_keys=[determination_id]
     )
     channel: Mapped["NetworkChannel"] = relationship(back_populates="kinetics_records")
     solve: Mapped["NetworkSolve"] = relationship(back_populates="kinetics_records")
@@ -936,6 +939,19 @@ class NetworkKinetics(Base, TimestampMixin, PublicRefMixin):
         CheckConstraint(
             "pmin_bar IS NULL OR pmax_bar IS NULL OR pmin_bar <= pmax_bar",
             name="pmin_le_pmax",
+        ),
+        # A fit's determination is of the fit's own solve and channel (MATCH SIMPLE: not applied while
+        # ``determination_id`` is NULL).
+        ForeignKeyConstraint(
+            ["determination_id", "solve_id", "channel_id"],
+            [
+                "network_kinetics_determination.id",
+                "network_kinetics_determination.solve_id",
+                "network_kinetics_determination.channel_id",
+            ],
+            name="fk_network_kinetics_determination_scope",
+            deferrable=True,
+            initially="IMMEDIATE",
         ),
         CheckConstraint(
             "(determination_id IS NULL) = (representation_role IS NULL)",

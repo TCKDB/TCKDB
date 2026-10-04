@@ -15,6 +15,10 @@ from tests.workflows.test_network_declarations import _declared_payload, _persis
 from tests.workflows.test_network_pdep_upload import _full_payload
 
 
+def set_review(session, solve: NetworkSolve) -> None:
+    _approve(session, solve, "reads-curator")
+
+
 def _approve(session, solve: NetworkSolve, username: str) -> None:
     from app.db.models.app_user import AppUser
 
@@ -43,7 +47,7 @@ def test_the_solve_and_fit_reads_serve_the_declarations_as_stored(db_conn) -> No
         assert core.target.claim_origin.value == "source_publication"
         assert core.target.product_sets[0].members[0].determination_ref.startswith("nkdet_")
         assert core.protocol.tunneling_treatment.value == "eckart"
-        assert core.validation.entries[0].kind.value == "convergence"
+        assert core.validation.entries[0].kind == "convergence"
         assert [(d.determination_key, d.channel_key) for d in core.determinations] == [
             ("d_assoc", "association_path"),
             ("d_diss", "dissociation_path"),
@@ -141,5 +145,56 @@ def test_a_legacy_solve_keeps_its_snapshot_and_a_declared_one_changes_it(db_conn
         fit.representation_declaration = {"version": 1, "key": "cheb_renamed", "fit_origin": "solver_output"}
         session.flush()
         assert _target_snapshot(solve, SubmissionRecordType.network_solve) != before
+    finally:
+        session.rollback()
+
+
+def test_a_reference_to_a_hidden_solve_is_withheld_from_the_served_declaration(db_conn) -> None:
+    """The served validation cannot be used to learn that a solve the read profile hides exists."""
+    from copy import deepcopy
+
+    from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
+    from app.services.scientific_read.networks import get_network_solve
+    from app.services.scientific_read.profile import (
+        ProfileRecommendation,
+        ReadProfile,
+        ResolvedReadProfile,
+        reset_current_read_profile,
+        set_current_read_profile,
+    )
+    from app.workflows.network_pdep import persist_network_pdep_upload
+    from tests.workflows.test_network_declarations import _target
+
+    session, first = _persist(db_conn, _declared_payload())
+    try:
+        cited = session.scalars(select(NetworkSolve).where(NetworkSolve.network_id == first.id)).one()
+        payload = deepcopy(_declared_payload())
+        payload["solve"]["validation"] = {
+            "version": 1,
+            "entries": [
+                {"kind": "model_fidelity", "domain": _target()["validity"], "reference_solve_ref": cited.public_ref},
+                {"kind": "representation_validation", "domain": _target()["validity"], "reference_dataset": "a table"},
+            ],
+        }
+        second = persist_network_pdep_upload(session, NetworkPDepUploadRequest(**payload))
+        session.flush()
+        citing = session.scalars(select(NetworkSolve).where(NetworkSolve.network_id == second.id)).one()
+
+        open_ = get_network_solve(session, network_solve_handle=citing.public_ref).record.network_solve
+        assert open_.validation.entries[0].reference_solve_ref == cited.public_ref  # visible: served
+        assert open_.validation.entries[0].reference_withheld is False
+
+        token = set_current_read_profile(
+            ResolvedReadProfile(profile=ReadProfile.curated, recommendation=ProfileRecommendation.approved_floor_only)
+        )
+        try:
+            set_review(session, citing)
+            served = get_network_solve(session, network_solve_handle=citing.public_ref).record.network_solve
+        finally:
+            reset_current_read_profile(token)
+        entry = served.validation.entries[0]
+        assert entry.reference_solve_ref is None and entry.reference_withheld is True
+        assert cited.public_ref not in served.model_dump_json()  # nowhere in the served record
+        assert served.validation.entries[1].reference_withheld is False  # an entry with no reference is untouched
     finally:
         session.rollback()

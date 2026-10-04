@@ -1660,9 +1660,16 @@ as *unresolved*.
   declared observable (`observable_declaration`). **Immutable from creation**
   (`trg_network_kinetics_determination_immutable`) and an ownership child of `network_solve`
   guarded on `solve_id`, so nothing can be added under an accepted solve.
+- A fit's determination is of the fit's own solve and channel: the composite foreign key
+  `fk_network_kinetics_determination_scope` `(determination_id, solve_id, channel_id)` makes that a database fact
+  (not applied while `determination_id` is NULL).
 - Not enforced by the database (a CHECK cannot state them): the determination's channel belongs to
   the solve's network; a target names the network's own states and channels. The write path
   (`app.services.network_declaration_resolution`) refuses them as `network_declaration_invalid`.
+  Only the determination row is immutable in the database; a fit's grouping and a solve's product sets are
+  protected by the upload path and, once the solve is accepted, by the ordinary accepted-science guards.
+- Product sets record membership (determinations and the fits they hold), pinned by content hash; the
+  required output identities live in the solve's output catalog (`outputs[].required`), not in the set.
 - Existing columns stay authoritative: the bath gas, state energies, grain settings and rate units
   already say things about a solve, and a declaration that contradicts one is refused.
 

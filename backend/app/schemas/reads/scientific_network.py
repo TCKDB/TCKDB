@@ -32,7 +32,6 @@ from pydantic import BaseModel, Field
 from tckdb_schemas.network_declarations import (
     NetworkObservableDeclaration,
     NetworkProtocolDeclaration,
-    NetworkValidationDeclaration,
     StoredNetworkTargetDeclaration,
 )
 
@@ -434,13 +433,41 @@ class NetworkSolveCoreBlock(BaseModel):
     # served: the field is ``null`` and ``declarations_unreadable`` is true.
     target: StoredNetworkTargetDeclaration | None = None
     protocol: NetworkProtocolDeclaration | None = None
-    validation: NetworkValidationDeclaration | None = None
+    validation: NetworkValidationRead | None = None
     declarations_unreadable: bool = False
     # The solve's declared determinations, in creation order; empty when none was declared.
     determinations: list["NetworkDeterminationRead"] = Field(default_factory=list)
     note: str | None = None
     created_at: datetime
     review: RecordReviewBadge
+
+
+class NetworkValidationEntryRead(BaseModel):
+    """One cited piece of evidence as served: the stored entry, with a reference the caller may not see withheld.
+
+    ``reference_solve_ref`` is served only when the solve it names is visible to the caller. A reference to a
+    solve the read profile hides is withheld (``null``) and ``reference_withheld`` is true; nothing says whether
+    that solve exists, so the entry cannot be used to learn it does.
+    """
+
+    kind: str
+    metric: str | None = None
+    value: float | None = None
+    domain: dict | None = None
+    channel_keys: list[str] = Field(default_factory=list)
+    reference_solve_ref: str | None = None
+    reference_withheld: bool = False
+    reference_dataset: str | None = None
+    initialization: str | None = None
+    window: str | None = None
+    limitations: str | None = None
+
+
+class NetworkValidationRead(BaseModel):
+    """The validation declaration as served (``version``, and its entries with hidden references withheld)."""
+
+    version: int
+    entries: list[NetworkValidationEntryRead]
 
 
 class NetworkDeterminationRead(BaseModel):

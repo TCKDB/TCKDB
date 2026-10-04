@@ -39,6 +39,7 @@ from tckdb_schemas.enums import NetworkRepresentationRole
 __all__ = [
     "NETWORK_DECLARATION_VERSIONS",
     "NETWORK_PRODUCT_SET_MEMBERSHIP_VERSION",
+    "NETWORK_PRODUCT_SET_MEMBERSHIP_VERSIONS",
     "W_NETWORK_DECLARATION_INVALID",
     "W_NETWORK_DECLARATION_VERSION_UNSUPPORTED",
     "NetworkBarrierBasis",
@@ -98,6 +99,8 @@ _HASH = "^[0-9a-f]{64}$"
 
 #: Version of the normalization behind a stored product set's ``content_hash``.
 NETWORK_PRODUCT_SET_MEMBERSHIP_VERSION = 1
+#: The membership normalizations this server can recompute; a stored set pinned under another is unreadable.
+NETWORK_PRODUCT_SET_MEMBERSHIP_VERSIONS: frozenset[int] = frozenset({NETWORK_PRODUCT_SET_MEMBERSHIP_VERSION})
 
 
 def network_product_set_content_hash(members: list[tuple[str, list[str]]]) -> str:
@@ -419,6 +422,17 @@ class StoredNetworkProductSet(NetworkProductSet):
 
     membership_version: int = Field(ge=1, strict=True)
     content_hash: str = Field(pattern=_HASH)
+
+    @field_validator("membership_version")
+    @classmethod
+    def validate_membership_version(cls, value: int) -> int:
+        """Only a membership version this server can recompute is accepted."""
+        if value not in NETWORK_PRODUCT_SET_MEMBERSHIP_VERSIONS:
+            raise ValueError(
+                f"membership_version {value} is not one this server recomputes "
+                f"({sorted(NETWORK_PRODUCT_SET_MEMBERSHIP_VERSIONS)})."
+            )
+        return value
 
 
 class NetworkTargetDeclaration(SchemaBase):

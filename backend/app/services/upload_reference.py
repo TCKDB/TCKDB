@@ -124,6 +124,11 @@ W_UNKNOWN_KINETICS_DETERMINATION_REF = "unknown_kinetics_determination_ref"
 #: both halves so the caller can tell which.
 W_UNKNOWN_NETWORK_CHANNEL = "unknown_network_channel"
 
+#: A validation entry's ``reference_solve_ref`` names no network solve the caller may see. One code, one response,
+#: for a ref that names nothing and for one that names a solve the read profile hides: the refusal must not tell a
+#: caller whether a solve it cannot see exists.
+W_UNKNOWN_NETWORK_SOLVE_REF = "unknown_network_solve_ref"
+
 #: A ``conformer_selection.conformer_group_ref`` names no conformer group.
 #: Its own code rather than
 #: :data:`app.services.conformer_selection_locator.W_UNKNOWN_CONFORMER_SELECTION`,
@@ -212,6 +217,7 @@ __all__ = [
     "W_UNKNOWN_KINETICS_DETERMINATION_REF",
     "W_UNKNOWN_NETWORK_CHANNEL",
     "W_UNKNOWN_NETWORK_KINETICS_REF",
+    "W_UNKNOWN_NETWORK_SOLVE_REF",
     "W_UNKNOWN_STATMECH_REF",
     "W_UNKNOWN_TRANSITION_STATE_ENTRY_REF",
     "unknown_reference",

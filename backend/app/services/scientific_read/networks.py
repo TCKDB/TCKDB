@@ -1204,7 +1204,7 @@ def build_network_solve_record(
         tmax_k=s.tmax_k,
         pmin_bar=s.pmin_bar,
         pmax_bar=s.pmax_bar,
-        **solve_declarations(s),
+        **solve_declarations(session, s),
         determinations=solve_determinations(session, s.id),
         note=s.note,
         created_at=s.created_at,
