@@ -2171,3 +2171,16 @@ workflow, which build the `kinetics` row.
   supporting calculations. Left out means absent, never replaced.
 - **Release and archive.** A released kinetics record ships its determination embedded (without the
   identity hash, which digests this database's ids); the archive carries the table.
+
+### `reaction.reversible` on the kinetics route (#598)
+
+`chem_reaction.reversible` is part of a graph reaction's identity (the stoichiometry hash), and that is
+unchanged. On `/uploads/kinetics` the field is optional, because a rate does not need it: an omitted value is
+*not stated*. A rate that does not state it joins the one stored reaction with its participants; when none is
+stored it is stored as reversible, the default the transition-state and computed-reaction routes already apply
+(an elementary step is reversible by microscopic reversibility), and the response carries a
+`reaction_reversible_defaulted` warning so the value is never read as a claim. When both twins are stored it
+takes the same default. A transition-state-anchored rate that omits it simply inherits the anchored reaction's
+value; one that states the opposite is still refused. Separately, every reaction-resolving route that returns
+warnings reports `reaction_reversible_twin` when the reaction it attached to has a twin (same participants,
+opposite `reversible`), naming the twin by public ref.

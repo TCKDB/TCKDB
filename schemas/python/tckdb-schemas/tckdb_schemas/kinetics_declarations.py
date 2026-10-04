@@ -176,11 +176,11 @@ class KineticsDeterminationDeclaration(SchemaBase):
     ``transition_state_entry_ref``, or ``network_ref`` with ``channel_key``.
 
     :param determination_ref: Public ref (``kdet_...``) of an existing determination.
-    :param key: Source-scoped key (a data set or run label).
-    :param target_kind: Required with ``key``; refused with a ref.
-    :param transition_state_entry_ref: Public ref (``tse_...``) of the saddle point.
-    :param network_ref: Public ref (``net_...``) of the network.
-    :param channel_key: Key of the channel in that network.
+    :param key: Source-scoped key.
+    :param target_kind: Required with ``key``.
+    :param transition_state_entry_ref: Public ref (``tse_...``).
+    :param network_ref: Public ref (``net_...``).
+    :param channel_key: Channel key in that network.
     """
 
     determination_ref: str | None = Field(default=None, min_length=1)
@@ -425,9 +425,9 @@ class KineticsApplicabilityDeclaration(SchemaBase):
     absolute 1e-9 (never renormalised), none repeated; the other kinds list none.
 
     :param version: Only the integer ``1``.
-    :param scope: Agrees with the determination target.
-    :param pressure_domain_min_bar: Stated validity domain (with the maximum), if pressure dependent.
-    :param default_third_body_efficiency: For ``composition_dependent``: the efficiency of an unlisted collider.
+    :param scope: Agrees with the determination.
+    :param pressure_domain_min_bar: Validity domain, with the maximum.
+    :param default_third_body_efficiency: For ``composition_dependent``.
 
     """
 
@@ -632,7 +632,7 @@ class KineticsProtocolDeclaration(SchemaBase):
 
     :param version: Only the integer ``1``.
     :param method_other_name: Required for ``other``; refused otherwise.
-    :param departures: Omitted: not stated. Empty: none. Else the parts changed.
+    :param departures: Omitted: not stated. Empty: none.
     """
 
     version: StrictInt

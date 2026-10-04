@@ -63,10 +63,18 @@ def world(db_session):
     ts_entry = make_transition_state_entry(
         db_session, transition_state=make_transition_state(db_session, reaction_entry=entry), multiplicity=2
     )
+    foreign_reaction = make_chem_reaction(db_session, reactants=[h2.species], products=[h.species, h.species], reversible=False)
+    foreign_entry = make_reaction_entry(
+        db_session, reaction=foreign_reaction, reactant_entries=[h2], product_entries=[h, h]
+    )
+    foreign_ts = make_transition_state_entry(
+        db_session, transition_state=make_transition_state(db_session, reaction_entry=foreign_entry), multiplicity=2
+    )
     return SimpleNamespace(
         entry=entry,
         other=other,
         ts_entry=ts_entry,
+        foreign_ts=foreign_ts,
         literature=make_literature(db_session),
         other_literature=make_literature(db_session),
         tool=make_workflow_tool_release(db_session),
@@ -812,3 +820,28 @@ def test_the_archive_and_release_registries_account_for_the_determination_table(
     assert "kinetics_determination" in Base.metadata.tables
     assert "kinetics_determination" in INCLUDED_TABLES
     assert ("transition_state_entry", "kinetics_determination") in RECORD_CHILD_EXCLUSIONS
+
+
+def test_a_channel_target_must_be_a_transition_state_of_the_records_reaction_in_the_service(db_session, world):
+    """The route anchors the entry first, so only a bundle or a direct caller reaches this check."""
+    own = _determination(target_kind="resolved_channel", transition_state_entry_ref=world.ts_entry.public_ref)
+    resolved = _resolve(db_session, world, _payload(determination=own))
+    assert db_session.get(KineticsDetermination, resolved.determination_id).target_transition_state_entry_id == (
+        world.ts_entry.id
+    )
+    foreign = _determination(target_kind="resolved_channel", transition_state_entry_ref=world.foreign_ts.public_ref)
+    with pytest.raises(CodedValueError) as exc:
+        _resolve(db_session, world, _payload(determination=foreign))
+    assert (exc.value.code, exc.value.context["reason"]) == ("kinetics_determination_mismatch", "target")
+    assert exc.value.context["field"] == "determination.transition_state_entry_ref"
+    # Under the reaction scope a bundle uses, the same transition state of the same reaction is accepted
+    # for another entry of that reaction, and the foreign one is still refused.
+    assert resolve_kinetics_declarations(
+        db_session, _payload(determination=own), reaction_entry=world.other,
+        literature_id=world.literature.id, workflow_tool_release_id=None, ts_scope="reaction",
+    ).determination_id
+    with pytest.raises(CodedValueError):
+        resolve_kinetics_declarations(
+            db_session, _payload(determination=foreign), reaction_entry=world.other,
+            literature_id=world.literature.id, workflow_tool_release_id=None, ts_scope="reaction",
+        )

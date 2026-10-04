@@ -730,6 +730,7 @@ def persist_computed_reaction_upload(
 
     chem_reaction = resolve_chem_reaction(
         session,
+        warnings_out=sp_energy_warnings,
         reversible=request.reversible,
         reaction_family=request.reaction_family,
         reaction_family_source_note=request.reaction_family_source_note,
@@ -1718,6 +1719,7 @@ def persist_computed_reaction_upload(
 
             kin_chem_rxn = resolve_chem_reaction(
                 session,
+                warnings_out=sp_energy_warnings,
                 reversible=request.reversible,
                 reaction_family=request.reaction_family,
                 reaction_family_source_note=request.reaction_family_source_note,

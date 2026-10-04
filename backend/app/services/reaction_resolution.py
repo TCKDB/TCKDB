@@ -987,7 +987,7 @@ def resolve_reaction_family(
     )
 
 
-def resolve_chem_reaction(
+def _resolve_chem_reaction(
     session: Session,
     *,
     reversible: bool,
@@ -1101,4 +1101,120 @@ def resolve_chem_reaction(
             select(ChemReaction).where(ChemReaction.stoichiometry_hash == stoichiometry_hash)
         )
 
+    return chem_reaction
+
+
+#: The code of the warning a deposit gets when a graph reaction with the same participants and the
+#: opposite ``reversible`` value already exists.
+W_REACTION_REVERSIBLE_TWIN = "reaction_reversible_twin"
+#: The code of the warning a deposit gets when it did not state ``reversible`` and none could be inherited.
+W_REACTION_REVERSIBLE_DEFAULTED = "reaction_reversible_defaulted"
+
+
+def _reaction_with_hash(session: Session, *, reversible: bool, reactants: Mapping[int, int], products: Mapping[int, int]):
+    return session.scalar(
+        select(ChemReaction).where(
+            ChemReaction.stoichiometry_hash
+            == reaction_stoichiometry_hash(reversible=reversible, reactants=reactants, products=products)
+        )
+    )
+
+
+def reversible_twin(
+    session: Session,
+    *,
+    reversible: bool,
+    reactant_stoichiometry: Mapping[int, int],
+    product_stoichiometry: Mapping[int, int],
+) -> ChemReaction | None:
+    """The stored graph reaction with these participants and the *opposite* ``reversible`` value, if any.
+
+    ``reversible`` is part of a graph reaction's identity (the stoichiometry hash), so one set of
+    participants stored as reversible and as irreversible is two rows. This finds the other row.
+    """
+    return _reaction_with_hash(
+        session,
+        reversible=not reversible,
+        reactants=reactant_stoichiometry,
+        products=product_stoichiometry,
+    )
+
+
+def resolve_unstated_reversible(
+    session: Session,
+    *,
+    reactant_stoichiometry: Mapping[int, int],
+    product_stoichiometry: Mapping[int, int],
+) -> tuple[bool, str]:
+    """The ``reversible`` value to store for a deposit that did not state one, and how it was found.
+
+    A deposit that does not say whether its reaction is reversible has not made a claim, so it
+    must not create a new reaction merely to carry a guess. When exactly one graph reaction with
+    these participants is already stored, the deposit joins it (``"inherited"``). When none is,
+    the value is the one the transition-state and computed-reaction routes already default to
+    (reversible: an elementary step is reversible by microscopic reversibility) and the deposit is
+    told so (``"defaulted"``). When both twins exist the deposit cannot be placed by inheritance and
+    takes the same default (``"defaulted"``).
+    """
+    reversible_row = _reaction_with_hash(
+        session, reversible=True, reactants=reactant_stoichiometry, products=product_stoichiometry
+    )
+    irreversible_row = _reaction_with_hash(
+        session, reversible=False, reactants=reactant_stoichiometry, products=product_stoichiometry
+    )
+    if reversible_row is not None and irreversible_row is None:
+        return True, "inherited"
+    if irreversible_row is not None and reversible_row is None:
+        return False, "inherited"
+    return True, "defaulted"
+
+
+def resolve_chem_reaction(
+    session: Session,
+    *,
+    reversible: bool,
+    reaction_family: str | None = None,
+    reaction_family_source_note: str | None = None,
+    reactant_stoichiometry: Mapping[int, int],
+    product_stoichiometry: Mapping[int, int],
+    warnings_out: list | None = None,
+) -> ChemReaction:
+    """Resolve or create the graph-identity reaction layer for an upload.
+
+    :param warnings_out: Optional sink. When a graph reaction with the same participants and the
+        opposite ``reversible`` value is stored, a ``reaction_reversible_twin`` warning is appended
+        (ADR 0008 warn tier): the deposit is accepted and attached to the reaction it named, and the
+        depositor is told the other one exists. Identity is unchanged.
+    :returns: Existing or newly created ``ChemReaction`` row.
+    """
+    chem_reaction = _resolve_chem_reaction(
+        session,
+        reversible=reversible,
+        reaction_family=reaction_family,
+        reaction_family_source_note=reaction_family_source_note,
+        reactant_stoichiometry=reactant_stoichiometry,
+        product_stoichiometry=product_stoichiometry,
+    )
+    if warnings_out is not None:
+        twin = reversible_twin(
+            session,
+            reversible=reversible,
+            reactant_stoichiometry=reactant_stoichiometry,
+            product_stoichiometry=product_stoichiometry,
+        )
+        if twin is not None:
+            from tckdb_schemas.upload_warning import UploadWarning
+
+            warnings_out.append(
+                UploadWarning(
+                    field="reaction.reversible",
+                    code=W_REACTION_REVERSIBLE_TWIN,
+                    message=(
+                        f"This reaction is stored as {'reversible' if reversible else 'irreversible'}, and the same "
+                        f"participants are also stored as {'irreversible' if reversible else 'reversible'} "
+                        f"({twin.public_ref}). They are two reactions in TCKDB because reversibility is part of a "
+                        "reaction's identity; rates deposited against one are not found under the other."
+                    ),
+                )
+            )
     return chem_reaction

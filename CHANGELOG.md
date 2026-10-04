@@ -42,6 +42,12 @@ declarations on kinetics, with upload and read round trips.** Selection, assessm
   the rest as `declaration_pruned`.
 - Replacing an accepted kinetics record also checks that both records declare the same target when both declare
   one.
+- Fixes #598. `reaction.reversible` is optional on `/uploads/kinetics`: omitted means not stated, so the rate joins
+  the one stored reaction with those participants instead of minting a new one, and only when there is none is it
+  stored as reversible (the transition-state and computed-reaction default), with a `reaction_reversible_defaulted`
+  warning. A deposit that makes or hits a graph reaction whose twin (same participants, opposite `reversible`) is
+  stored now gets a `reaction_reversible_twin` warning on every reaction-resolving route that returns warnings.
+  Reaction identity is unchanged.
 - Deploy: apply the migration first, then the backend, then clients. Environment variables: none.
 
 ## Hessian and scan-point geometries are now checked (2026-10-04)

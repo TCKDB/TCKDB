@@ -3427,7 +3427,7 @@
     },
     "KineticsApplicabilityDeclaration": {
       "additionalProperties": false,
-      "description": "What the stored coefficient is a coefficient *of*. Version 1.\n\nAn attributed claim, stored as made. Every statement is optional: an omitted one is unknown,\nnever \"universally valid\". ``claim_origin`` is required.\n\n``collider_kind`` ``specified_collider`` lists one collider and no mole fraction;\n``fixed_mixture`` lists at least two, each with a mole fraction, summing to one within an\nabsolute 1e-9 (never renormalised), none repeated; the other kinds list none.\n\n:param version: Only the integer ``1``.\n:param scope: Agrees with the determination target.\n:param pressure_domain_min_bar: Stated validity domain (with the maximum), if pressure dependent.\n:param default_third_body_efficiency: For ``composition_dependent``: the efficiency of an unlisted collider.",
+      "description": "What the stored coefficient is a coefficient *of*. Version 1.\n\nAn attributed claim, stored as made. Every statement is optional: an omitted one is unknown,\nnever \"universally valid\". ``claim_origin`` is required.\n\n``collider_kind`` ``specified_collider`` lists one collider and no mole fraction;\n``fixed_mixture`` lists at least two, each with a mole fraction, summing to one within an\nabsolute 1e-9 (never renormalised), none repeated; the other kinds list none.\n\n:param version: Only the integer ``1``.\n:param scope: Agrees with the determination.\n:param pressure_domain_min_bar: Validity domain, with the maximum.\n:param default_third_body_efficiency: For ``composition_dependent``.",
       "properties": {
         "claim_origin": {
           "$ref": "#/$defs/KineticsClaimOrigin"
@@ -3707,7 +3707,7 @@
     },
     "KineticsDeterminationDeclaration": {
       "additionalProperties": false,
-      "description": "The determination a record belongs to, and the record's role in it.\n\nA determination is one complete determination of a rate, such as a measurement set or one\ncomputed rate. Several fitted representations of it share it and do not count as independent\nsupport for each other; separate calculations or measurements are separate determinations.\n\nGive exactly one locator. ``key`` with ``target_kind`` states the content (the backend finds\nor creates the determination from the record's reaction entry, direction, target, source and\nthis key); ``determination_ref`` joins one already deposited, and anchors the record to that\ndetermination's reaction entry. A ``resolved_channel`` target names its channel exactly once:\n``transition_state_entry_ref``, or ``network_ref`` with ``channel_key``.\n\n:param determination_ref: Public ref (``kdet_...``) of an existing determination.\n:param key: Source-scoped key (a data set or run label).\n:param target_kind: Required with ``key``; refused with a ref.\n:param transition_state_entry_ref: Public ref (``tse_...``) of the saddle point.\n:param network_ref: Public ref (``net_...``) of the network.\n:param channel_key: Key of the channel in that network.",
+      "description": "The determination a record belongs to, and the record's role in it.\n\nA determination is one complete determination of a rate, such as a measurement set or one\ncomputed rate. Several fitted representations of it share it and do not count as independent\nsupport for each other; separate calculations or measurements are separate determinations.\n\nGive exactly one locator. ``key`` with ``target_kind`` states the content (the backend finds\nor creates the determination from the record's reaction entry, direction, target, source and\nthis key); ``determination_ref`` joins one already deposited, and anchors the record to that\ndetermination's reaction entry. A ``resolved_channel`` target names its channel exactly once:\n``transition_state_entry_ref``, or ``network_ref`` with ``channel_key``.\n\n:param determination_ref: Public ref (``kdet_...``) of an existing determination.\n:param key: Source-scoped key.\n:param target_kind: Required with ``key``.\n:param transition_state_entry_ref: Public ref (``tse_...``).\n:param network_ref: Public ref (``net_...``).\n:param channel_key: Channel key in that network.",
       "properties": {
         "channel_key": {
           "anyOf": [
@@ -4029,7 +4029,7 @@
     },
     "KineticsProtocolDeclaration": {
       "additionalProperties": false,
-      "description": "The protocol a rate was produced with. Version 1.\n\nAn attributed claim, stored as made and not checked against the linked calculations (a later\nselection step reads what the links show and reports a claim as declared, verified or\ncontradicted). Every statement is optional; at least one is required.\n\n:param version: Only the integer ``1``.\n:param method_other_name: Required for ``other``; refused otherwise.\n:param departures: Omitted: not stated. Empty: none. Else the parts changed.",
+      "description": "The protocol a rate was produced with. Version 1.\n\nAn attributed claim, stored as made and not checked against the linked calculations (a later\nselection step reads what the links show and reports a claim as declared, verified or\ncontradicted). Every statement is optional; at least one is required.\n\n:param version: Only the integer ``1``.\n:param method_other_name: Required for ``other``; refused otherwise.\n:param departures: Omitted: not stated. Empty: none.",
       "properties": {
         "barrier_basis": {
           "anyOf": [
@@ -4192,7 +4192,7 @@
     },
     "KineticsReactionUpload": {
       "additionalProperties": false,
-      "description": "Workflow-facing reaction content embedded in a kinetics upload.\n\n:param reversible: Whether the uploaded reaction is reversible.\n:param reaction_family: Optional reaction-family label.\n:param reaction_family_source_note: Required when ``reaction_family`` is not a supported canonical family.\n:param reactants: Ordered structured participants on the reactant side.\n:param products: Ordered structured participants on the product side.",
+      "description": "Workflow-facing reaction content embedded in a kinetics upload.\n\n:param reversible: Omitted: the rate joins the one stored reaction with these participants, else is stored reversible, with a warning.\n:param reaction_family: Optional reaction-family label.\n:param reaction_family_source_note: Required when ``reaction_family`` is not a supported canonical family.\n:param reactants: Ordered structured participants on the reactant side.\n:param products: Ordered structured participants on the product side.",
       "properties": {
         "products": {
           "items": {
@@ -4235,12 +4235,19 @@
           "title": "Reaction Family Source Note"
         },
         "reversible": {
-          "title": "Reversible",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reversible"
         }
       },
       "required": [
-        "reversible",
         "reactants",
         "products"
       ],

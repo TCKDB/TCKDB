@@ -80,6 +80,7 @@ TSE = "tse_" + "a" * 26
     [
         {"representation_role": "complete"},
         {"determination_ref": REF, "key": "k", "target_kind": "whole_reaction", "representation_role": "complete"},
+        {"determination_ref": REF, "key": "k", "representation_role": "complete"},
         {"determination_ref": REF, "target_kind": "whole_reaction", "representation_role": "complete"},
         {"determination_ref": REF, "transition_state_entry_ref": TSE, "representation_role": "complete"},
         {"key": "k", "representation_role": "complete"},
@@ -98,7 +99,7 @@ TSE = "tse_" + "a" * 26
         {"key": "k", "target_kind": "resolved_channel", "channel_key": "c", "representation_role": "complete"},
     ],
     ids=[
-        "neither", "ref_and_key", "ref_with_kind", "ref_with_locator", "key_without_kind",
+        "neither", "ref_and_key_and_kind", "ref_and_key", "ref_with_kind", "ref_with_locator", "key_without_kind",
         "whole_names_ts", "whole_names_channel", "channel_names_nothing", "channel_names_both",
         "half_a_channel", "other_half",
     ],

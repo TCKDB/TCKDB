@@ -324,6 +324,7 @@ def test_alternate_representations_join_a_determination_by_citing_its_ref(client
     assert a.reaction_entry_id == b.reaction_entry_id
     assert a.determination_id == b.determination_id == det.id
     assert _count(db_session, KineticsDetermination) == 1, "alternate fits are not independent determinations"
+    assert _read(client, b)["determination"]["representation_role"] == "complete"
     assert _read(client, a)["determination"]["determination_ref"] == _read(client, b)["determination"]["determination_ref"]
 
 
@@ -909,6 +910,11 @@ def test_an_exported_bundle_carries_the_portable_declarations_and_reimports_into
     ).status_code == 201
     rows = db_session.scalars(select(Kinetics).order_by(Kinetics.id)).all()
     assert rows[0].determination_id == rows[1].determination_id == det.id
+    # The role is the record's own, not the determination's: one read, two roles.
+    assert [_read(client, row)["determination"]["representation_role"] for row in rows] == [
+        "complete",
+        "additive_component",
+    ]
 
     omissions: list[BundleExportOmission] = []
     bundle = export_kinetics_bundle(

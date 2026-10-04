@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.common import ReactionRole, SubmissionRecordType
 from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticipant
@@ -49,12 +50,15 @@ def persist_reaction_upload(
     *,
     created_by: int | None = None,
     review_policy: ReviewPolicy | None = ReviewPolicy(),
+    warnings: list[UploadWarning] | None = None,
 ) -> ReactionEntry:
     """Persist a complete reaction upload workflow.
 
     :param session: Active SQLAlchemy session.
     :param request: Workflow-facing reaction upload payload.
     :param created_by: Optional application user id for newly created rows.
+    :param warnings: Optional sink for non-blocking warnings (a reaction stored under both
+        ``reversible`` values reports ``reaction_reversible_twin``).
     :returns: Newly created ``ReactionEntry`` row linked to a resolved graph reaction.
     :raises ValueError: If any participant reference cannot be resolved.
     """
@@ -70,6 +74,7 @@ def persist_reaction_upload(
 
     chem_reaction = resolve_chem_reaction(
         session,
+        warnings_out=warnings,
         reversible=request.reversible,
         reaction_family=request.reaction_family,
         reaction_family_source_note=request.reaction_family_source_note,

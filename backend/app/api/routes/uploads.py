@@ -374,7 +374,7 @@ def upload_reaction(
         rights=request.rights,
     )
     reaction_entry = persist_reaction_upload(
-        session, request, created_by=current_user.id, review_policy=sub.policy
+        session, request, created_by=current_user.id, review_policy=sub.policy, warnings=warnings
     )
     result = ReactionUploadResult(
         id=reaction_entry.id,

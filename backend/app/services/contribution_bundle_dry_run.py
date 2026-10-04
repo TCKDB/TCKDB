@@ -268,7 +268,8 @@ def _dry_run_kinetics_upload(
     items.append(
         _preview_chem_reaction(
             session,
-            reversible=upload.reaction.reversible,
+            # An unstated value is previewed as the route's default; the submit rehearsal decides.
+            reversible=True if upload.reaction.reversible is None else upload.reaction.reversible,
             reactant_species=reactant_species,
             product_species=product_species,
             local_ref=f"{base_ref}.reaction",
