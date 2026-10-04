@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from app.db.models.reaction import ChemReaction, ReactionEntry
 from app.services.reaction_resolution import W_REACTION_REVERSIBLE_DEFAULTED, W_REACTION_REVERSIBLE_TWIN
-from tests.api.test_api_kinetics_declarations import BUNDLE, KINETICS, REACTION, _bundle, _standalone
+from tests.api.test_api_kinetics_declarations import BUNDLE, KINETICS, _bundle, _standalone
 
 REACTION_ROUTE = "/api/v1/uploads/reactions"
 

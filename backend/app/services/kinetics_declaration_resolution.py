@@ -619,7 +619,7 @@ def _resolve_protocol(
             calc = found if isinstance(found, Calculation) else session.get(Calculation, found)
             context = f"{where}.calculation_key='{supporting.calculation_key}'"
         else:
-            calc = _calculation_by_ref(session, supporting.calculation_ref, field=f"{where}.calculation_ref")
+            calc = _calculation_by_ref(session, supporting.calculation_ref or "", field=f"{where}.calculation_ref")
             context = f"{where}.calculation_ref"
         if calc is None:  # pragma: no cover - a key map never holds a row that is not there
             raise CodedValueError(

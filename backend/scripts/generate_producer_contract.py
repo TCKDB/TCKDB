@@ -839,30 +839,27 @@ def render_field_table(model: type[BaseModel], names: ModelNames) -> list[str]:
     }.get(str(extra), "Unknown keys are silently ignored.")
     if model.model_config.get("allow_inf_nan") is False:
         unknown += " Non-finite numbers (NaN, Infinity) are refused."
-    lines = [
-        unknown,
-        "",
-        "| Field | Type | Req | Default | Unit | Values / constraints | Description |",
-        "|---|---|---|---|---|---|---|",
-    ]
+    # The Unit column is left off a table in which no field has a unit.
+    with_unit = any(row.unit for row in rows)
+    header = ["Field", "Type", "Req", "Default"] + (["Unit"] if with_unit else []) + ["Values / constraints", "Description"]
+    lines = [unknown, "", "| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     for row in rows:
-        lines.append(
-            "| "
-            + " | ".join(
-                [
-                    f"`{row.wire_name}`",
-                    _cell(row.type_text),
-                    "yes" if row.required else "no",
-                    _cell(f"`{row.default}`" if row.default else ""),
-                    _cell(row.unit),
-                    _cell(row.values),
-                    _cell(row.description),
-                ]
-            )
-            + " |"
-        )
+        cells = [
+            f"`{row.wire_name}`",
+            _cell(row.type_text),
+            "yes" if row.required else "no",
+            _cell(f"`{row.default}`" if row.default and row.default != "null" else ""),
+        ]
+        if with_unit:
+            cells.append(_cell(row.unit))
+        cells += [_cell(row.values), _cell(row.description)]
+        # Trailing empty cells are left off (a Markdown table may end a row early); only the
+        # always-present first three are kept.
+        while len(cells) > 3 and not cells[-1]:
+            cells.pop()
+        lines.append("| " + " | ".join(cells) + " |")
     if not rows:
-        lines.append("| (no fields) | | | | | | |")
+        lines.append("| (no fields) |")
     return lines
 
 
@@ -1285,8 +1282,8 @@ in a column that says so: `h298_kj_mol` is kJ/mol, `s298_j_mol_k` is
 J/(mol*K), `temperature_k` is K, `electronic_energy_hartree` is hartree,
 `reference_pressure_bar` is bar. Convert before you send; TCKDB never
 converts a bare number. Where the unit genuinely varies (an Arrhenius `a`),
-a sibling enum field (`a_units`) names it. The Unit column below is read
-from those suffixes.
+a sibling enum field (`a_units`) names it. A Unit column, shown in a table where
+a field has one, is read from those suffixes.
 
 **The enthalpy reference.** Every enthalpy on a thermo record is a standard
 enthalpy of formation: formed from the elements in their reference states,
@@ -2416,7 +2413,7 @@ class ContractBuilder:
             "Every model a producer payload can contain, alphabetically. A payload's root model is"
             " specified in its surface section. Field descriptions come from the field's"
             " `description=` or the model's `:param name:` docstring entry; a blank description"
-            " means the source has neither.",
+            " means the source has neither. A blank Default is `null` for an optional field.",
             "",
         ]
         for model in self.models:
