@@ -8,12 +8,9 @@ deployed database by anything in this repository.
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
-from pathlib import Path
 
 import pytest
-from sqlalchemy import event, func, select
+from sqlalchemy import event, func, select, text
 
 from app.db.models.common import NetworkSolveKind
 from app.db.models.network_pdep import NetworkKinetics, NetworkKineticsDetermination, NetworkSolve
@@ -193,15 +190,22 @@ def test_the_inventory_issues_only_reads_and_changes_nothing(db_session, seeded)
     assert not db_session.dirty and not db_session.new and not db_session.deleted
 
 
-def test_the_script_is_a_thin_read_only_wrapper_over_the_inventory():
-    source = (Path(__file__).parents[3] / "scripts" / "inventory_network_coverage.py").read_text()
-    assert "SET TRANSACTION READ ONLY" in source and "REPEATABLE READ" in source
-    assert "network_coverage_inventory(session)" in source and "current_database()" in source
-    for forbidden in (".add(", ".commit(", ".flush(", "INSERT", "UPDATE", "DELETE"):
-        assert forbidden not in source, forbidden
-    # The script imports and exposes main; it is not run here (that would touch whatever database is configured).
-    compiled = subprocess.run([sys.executable, "-m", "py_compile", str(Path(__file__).parents[3] / "scripts" / "inventory_network_coverage.py")], capture_output=True)
-    assert compiled.returncode == 0, compiled.stderr
+def test_the_inventory_report_runs_read_only_and_a_write_in_it_is_refused_by_the_database(db_engine, capsys):
+    """Behavioural, through the shared report helper the script uses: the database itself refuses a write."""
+    from sqlalchemy.exc import DBAPIError
+
+    from app.services.read_only_report import print_read_only_report
+
+    url = db_engine.url.render_as_string(hide_password=False)
+    print_read_only_report(url, network_coverage_inventory)
+    assert json.loads(capsys.readouterr().out)["bounds_version"] == "1"
+
+    def write(session):
+        session.execute(text("UPDATE network_solve SET note = note WHERE false"))
+        return {}
+
+    with pytest.raises(DBAPIError, match="read-only"):
+        print_read_only_report(url, write)
 
 
 # -- the review fixes: declarations, orphan determinations, gaps, batching and zeros ---------------------------

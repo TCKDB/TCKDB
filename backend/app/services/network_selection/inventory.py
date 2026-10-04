@@ -32,7 +32,12 @@ from tckdb_schemas.network_declarations import (
     StoredNetworkTargetDeclaration,
 )
 
-from app.db.models.common import NetworkKineticsModelKind, NetworkRepresentationRole, RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import (
+    NetworkKineticsModelKind,
+    NetworkRepresentationRole,
+    RecordReviewStatus,
+    SubmissionRecordType,
+)
 from app.db.models.network_pdep import (
     NetworkKinetics,
     NetworkKineticsChebyshev,
@@ -84,7 +89,7 @@ BUNDLE_READINESS = ("declares_a_product_set", "declares_catalog_and_boundaries",
 
 
 def _zeros(keys) -> Counter[str]:
-    return Counter({key: 0 for key in keys})
+    return Counter(dict.fromkeys(keys, 0))
 
 
 def _batches(session: Session, size: int) -> Iterator[list[int]]:

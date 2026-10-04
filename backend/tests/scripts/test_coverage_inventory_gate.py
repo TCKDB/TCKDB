@@ -24,6 +24,7 @@ BACKEND = Path(__file__).resolve().parents[2]
 SCRIPTS = {
     "kinetics": (BACKEND / "scripts/ops/kinetics_selection_coverage_inventory.py", "kinetics_records"),
     "thermo": (BACKEND / "scripts/ops/thermo_h298_coverage_inventory.py", "thermo_records"),
+    "network": (BACKEND / "scripts/ops/network_selection_coverage_inventory.py", "network_solves"),
 }
 #: Nothing listens here, so a script that tried to connect would fail with a connection error, not a usage error.
 UNREACHABLE = {"DB_HOST": "127.0.0.1", "DB_PORT": "1", "DB_USER": "nobody", "DB_PASSWORD": "x", "DB_NAME": "none"}
