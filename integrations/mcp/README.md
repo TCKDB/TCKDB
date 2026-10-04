@@ -485,6 +485,7 @@ after both prefix and path-safety validation.
 
 ```text
 reaction_entry_ref: string         # REQUIRED, must start with "rxe_"
+quantity?: "rate_coefficient"      # must be this if given (server refuses otherwise)
 temperature_min?: number
 temperature_max?: number
 pressure?: number

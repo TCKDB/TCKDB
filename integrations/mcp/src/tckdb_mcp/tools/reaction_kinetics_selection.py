@@ -59,6 +59,7 @@ PROFILES = ("exploratory", "curated")
 _ACCEPTED_FIELDS: frozenset[str] = frozenset(
     {
         "reaction_entry_ref",
+        "quantity",
         "direction",
         "target",
         "coefficient_basis",
@@ -97,6 +98,11 @@ INPUT_SCHEMA: dict[str, Any] = {
             "pattern": "^rxe_[A-Za-z0-9_-]+$",
             "minLength": 5,
             "maxLength": PUBLIC_REF_MAX_LENGTH,
+        },
+        "quantity": {
+            "type": "string",
+            "enum": ["rate_coefficient"],
+            "description": "Must be 'rate_coefficient' if given; this endpoint answers nothing else.",
         },
         "direction": {
             "type": "string",
@@ -203,7 +209,9 @@ def run(
     arguments: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Validate inputs, POST the selection request, return the server response unchanged."""
-    args = dict(arguments or {})
+    # An argument sent as null is an argument not given: it is dropped here, never forwarded as JSON null (which the
+    # server would refuse for an enum field such as ``mode`` or ``policy``).
+    args = {k: v for k, v in (arguments or {}).items() if v is not None}
 
     rejected_int = sorted(_REJECTED_INTEGER_FIELDS & args.keys())
     if rejected_int:
@@ -242,6 +250,10 @@ def run(
         if not isinstance(args["min_review_status"], str):
             raise invalid_input(f"min_review_status must be a string; got {args['min_review_status']!r}")
         body["min_review_status"] = args["min_review_status"]
+    if args.get("quantity") is not None:
+        if args["quantity"] != "rate_coefficient":
+            raise invalid_input(f"quantity must be 'rate_coefficient' if given; got {args['quantity']!r}")
+        body["quantity"] = args["quantity"]
     if args.get("phase") is not None:
         if not isinstance(args["phase"], str):
             raise invalid_input(f"phase must be a string; got {args['phase']!r}")

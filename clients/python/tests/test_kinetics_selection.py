@@ -125,3 +125,28 @@ def test_the_response_type_names_the_outcome_vocabulary():
         "policy_preferred", "incomparable_alternatives", "sole_eligible_candidate",
         "no_applicable_candidate", "policy_conflict",
     }
+
+
+def test_the_manifest_method_forwards_phase_so_a_conflicting_one_reaches_the_server():
+    seen, handler = _recorder({"manifest_format_version": 1})
+    with _client(handler) as client:
+        client.get_reaction_kinetics_selection_manifest(ENTRY, **QUESTION, phase="liquid")
+    assert json.loads(seen[0].content) == {**QUESTION, "phase": "liquid"}
+
+
+def test_both_methods_take_the_same_question_parameters():
+    import inspect
+
+    select = set(inspect.signature(TCKDBClient.select_reaction_kinetics).parameters)
+    manifest = set(inspect.signature(TCKDBClient.get_reaction_kinetics_selection_manifest).parameters)
+    assert select == manifest
+
+
+def test_the_path_ref_is_url_quoted_like_the_mcp_does_it():
+    seen, handler = _recorder()
+    with _client(handler) as client:
+        client.select_reaction_kinetics("rxe_a/b?c", **QUESTION)
+        client.get_reaction_kinetics_selection_manifest("rxe_a/b?c", **QUESTION)
+    paths = [str(r.url).split("?")[0] for r in seen]
+    assert all("rxe_a%2Fb%3Fc" in p for p in paths), paths
+    assert paths[1].endswith("/kinetics/select/manifest")

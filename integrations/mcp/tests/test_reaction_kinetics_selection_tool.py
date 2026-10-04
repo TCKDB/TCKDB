@@ -178,3 +178,34 @@ def test_the_tool_never_pages_or_truncates_a_large_population():
     seen, handler = _recording(answer)
     out = _call(_client(handler), _args())
     assert len(out["candidates"]) == 500 and len(seen) == 1
+
+
+def test_arguments_sent_as_null_are_omitted_not_forwarded():
+    seen, handler = _recording()
+    _call(_client(handler), _args(
+        mode=None, policy=None, collider=None, min_review_status=None, phase=None, profile=None, quantity=None,
+    ))
+    assert json.loads(seen[0].content) == QUESTION
+    assert dict(seen[0].url.params) == {}
+
+
+def test_a_null_required_argument_is_still_a_missing_one():
+    seen, handler = _recording()
+    with pytest.raises(MCPToolError) as caught:
+        _call(_client(handler), _args(direction=None))
+    assert caught.value.to_payload()["code"] == "invalid_input" and seen == []
+
+
+def test_quantity_is_accepted_and_forwarded_when_it_is_the_one_quantity():
+    seen, handler = _recording()
+    _call(_client(handler), _args(quantity="rate_coefficient"))
+    assert json.loads(seen[0].content) == {**QUESTION, "quantity": "rate_coefficient"}
+    (entry,) = [t for t in list_tools_payload() if t["name"] == TOOL_NAME]
+    assert entry["inputSchema"]["properties"]["quantity"]["enum"] == ["rate_coefficient"]
+
+
+def test_another_quantity_is_refused_before_any_request():
+    seen, handler = _recording()
+    with pytest.raises(MCPToolError) as caught:
+        _call(_client(handler), _args(quantity="rate_of_progress"))
+    assert caught.value.to_payload()["code"] == "invalid_input" and seen == []

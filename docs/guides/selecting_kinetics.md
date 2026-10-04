@@ -134,7 +134,8 @@ State what the record answers: its determination (direction and target), its app
 basis, phase, observable, pressure dependence and domain, collider), and, for a method comparison, its protocol and
 the calculations that gave its energies. A record that says nothing is read as unresolved; it is never assumed to be a
 standard elementary forward rate. See the depositing guide for the declaration fields. The coverage inventory
-(`backend/scripts/ops/kinetics_selection_coverage_inventory.py`) reports, read-only, how many stored records qualify,
+(`backend/scripts/ops/kinetics_selection_coverage_inventory.py`, which needs `--database-url` or, on purpose,
+`--use-configured-database`, and never defaults to the configured database) reports, read-only, how many stored records qualify,
 remain unresolved or are unsupported, and why.
 
 ## Clients

@@ -20,6 +20,7 @@ from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Mapping
+from urllib.parse import quote
 
 import httpx
 
@@ -163,7 +164,7 @@ def _kinetics_selection_path(reaction_entry_ref: str) -> str:
             "reaction_entry_ref must be a public reaction-entry ref starting with 'rxe_'; "
             f"got {reaction_entry_ref!r}."
         )
-    return f"/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select"
+    return f"/scientific/reaction-entries/{quote(reaction_entry_ref, safe='')}/kinetics/select"
 
 
 def _kinetics_selection_body(
@@ -1861,6 +1862,7 @@ class TCKDBClient:
         policy: str | None = None,
         mode: str | None = None,
         min_review_status: str | None = None,
+        phase: str | None = None,
         profile: str | None = None,
     ) -> JSONDict:
         """``POST /scientific/reaction-entries/{ref}/kinetics/select/manifest``.
@@ -1872,7 +1874,7 @@ class TCKDBClient:
         body = _kinetics_selection_body(
             direction=direction, target=target, coefficient_basis=coefficient_basis,
             temperature_min_k=temperature_min_k, temperature_max_k=temperature_max_k, pressure=pressure,
-            collider=collider, policy=policy, mode=mode, min_review_status=min_review_status, phase=None,
+            collider=collider, policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
         )
         return self.request_json(
             "POST", _kinetics_selection_path(reaction_entry_ref) + "/manifest", json=body,

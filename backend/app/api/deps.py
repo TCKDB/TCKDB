@@ -236,8 +236,8 @@ def get_snapshot_db() -> Iterator[Session]:
     For a read that must decide over one consistent state (a replayable selection). The isolation level can only be
     chosen before a transaction's first statement, so this is its own session, not :func:`get_db`'s: that session
     is shared with every other dependency of the request (authentication runs a statement on it) and would already
-    be READ COMMITTED by the time the route body ran. The session carries ``info["tckdb_read_snapshot"]`` so the
-    service insists on the guarantee it was given.
+    be READ COMMITTED by the time the route body ran. The selection service insists on the snapshot by default, so
+    a route wired to ``get_db`` by mistake fails loudly instead of answering under READ COMMITTED.
 
     Does not commit; closes the session when done.
     """
@@ -246,7 +246,6 @@ def get_snapshot_db() -> Iterator[Session]:
     session = SessionLocal()
     try:
         begin_read_snapshot(session, require=True)
-        session.info["tckdb_read_snapshot"] = True
         yield session
     finally:
         session.close()

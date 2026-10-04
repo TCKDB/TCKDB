@@ -132,7 +132,9 @@ declarations on kinetics, with upload and read round trips.** Selection, assessm
   unchanged. Fourth of four changes toward method-aware kinetics selection. No schema change, no new environment
   variable, no new refusal code. OpenAPI: the shared `KineticsDeterminationTargetKind` enum is now one component
   (previously `KineticsDeterminationTargetKind-Input`). A read-only coverage inventory
-  (`backend/scripts/ops/kinetics_selection_coverage_inventory.py`) counts how many stored records qualify. See
+  (`backend/scripts/ops/kinetics_selection_coverage_inventory.py`; it and the H298 inventory now refuse to run
+  unless told which database to read, `--database-url` or `--use-configured-database`) counts how many stored
+  records qualify. See
   `docs/guides/selecting_kinetics.md`.
 
 ## Method-aware H298 selection endpoint (2026-10-03)

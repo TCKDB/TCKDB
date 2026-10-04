@@ -1759,9 +1759,14 @@ def client(db_engine, _api_test_user) -> Iterator[TestClient]:
     app.dependency_overrides[get_db] = lambda: session
     app.dependency_overrides[get_write_db] = lambda: session
     # The kinetics selection routes ask for a read-only REPEATABLE READ session of their own; the harness holds one
-    # outer transaction (and writes into it), so it gives them the harness session. The dependency itself is
-    # tested in tests/api/test_snapshot_db_dependency.py.
-    app.dependency_overrides[get_snapshot_db] = lambda: session
+    # outer transaction (and writes into it), which cannot become a snapshot, so it gives them the harness session
+    # and says, explicitly, that the selection may read it as it is. The real dependency is tested in
+    # tests/api/test_snapshot_db_dependency.py, with a real engine and no override.
+    def _harness_snapshot_db():
+        session.info["tckdb_read_snapshot_opt_out"] = True
+        return session
+
+    app.dependency_overrides[get_snapshot_db] = _harness_snapshot_db
 
     # Override auth to return the pre-seeded test user
     test_user = session.get(AppUser, _api_test_user)

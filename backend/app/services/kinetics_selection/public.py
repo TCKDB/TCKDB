@@ -140,21 +140,22 @@ def run_selection(session: Session, *, reaction_entry_id: int, body: KineticsSel
     browse endpoints do, and say so. The population cap is the service's fixed 500 (a coded 422 raised before
     anything is assessed); it counts only records visible to the caller.
 
-    The session must be one opened as a read-only snapshot (see ``get_snapshot_db``); a session that says it is
-    not, because the dependency was replaced, is read as it is and the isolation actually in force is reported in
-    the manifest.
+    The session must be a read-only snapshot (see ``get_snapshot_db``), and this insists on it: a session that is
+    not one (``get_db``'s, say, if a route were wired to it by mistake) raises ``SnapshotNotConsistentError`` instead
+    of quietly answering under READ COMMITTED. Only a session that carries ``SNAPSHOT_OPT_OUT`` in its ``info`` is
+    read as it is, with the isolation actually in force reported in the manifest; that exists for the test harness,
+    which holds one outer transaction that cannot become a snapshot, and nothing in the application sets it.
     """
-    required = bool(session.info.get(SNAPSHOT_FLAG, False))
     return select_reaction_entry_kinetics(
         session,
         reaction_entry_id=reaction_entry_id,
         request=to_service_request(body),
-        require_snapshot=required,
+        require_snapshot=not session.info.get(SNAPSHOT_OPT_OUT, False),
     )
 
 
-#: ``Session.info`` key a snapshot session carries, set by ``get_snapshot_db``.
-SNAPSHOT_FLAG = "tckdb_read_snapshot"
+#: ``Session.info`` key a TEST harness sets, explicitly, to be read under whatever isolation it already has.
+SNAPSHOT_OPT_OUT = "tckdb_read_snapshot_opt_out"
 
 
 def profile_has_floor() -> bool:
@@ -319,7 +320,7 @@ def build_response(
 
 
 __all__ = [
-    "SNAPSHOT_FLAG",
+    "SNAPSHOT_OPT_OUT",
     "build_response",
     "check_request_refs",
     "profile_has_floor",
