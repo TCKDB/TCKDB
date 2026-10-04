@@ -129,6 +129,11 @@ def test_mode_first_names_an_administrative_first_and_says_it_is_not_a_method_cl
     assert out["selection"]["basis"] == "administrative_first" and out["selection"]["administrative"] is True
     assert out["selection"]["node_ref"] == b._dets["d_assoc"].public_ref  # approved before not_reviewed
     assert post(client, world).json()["selection"] is None
+    # The mode reaches the engine, not only the response builder: the request echo and the recorded decision say so.
+    assert out["request"]["result_mode"] == "first"
+    manifest = post(client, world, question(world, mode="first"), manifest=True).json()
+    assert manifest["decision"]["selection_basis"] == "administrative_first"
+    assert post(client, world, manifest=True).json()["decision"]["selection_basis"] is None
 
 
 @pytest.mark.parametrize("policy", ["default", "most_reviewed", "latest"])

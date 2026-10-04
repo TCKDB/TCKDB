@@ -22,6 +22,26 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Network selection endpoints, client method and MCP tool (2026-10-04)
+
+**Chunk 5 of 6 of pressure-dependent network selection: the public face.** `POST
+/api/v1/scientific/networks/{network_ref}/kinetics/select` and `.../select/manifest` answer one stated gas-phase
+rate-coefficient question about a network (state partition, boundaries, regime, bath, temperature and pressure
+windows, coefficient basis, channel or bundle of outputs, comparison objective) from its stored pressure-dependent
+solves, and say why. Read-only; the network browse and evaluation endpoints are unchanged.
+
+- The path takes a public `net_` ref only (an integer id is refused); `channel_key` is a body field, never a path
+  segment. The read runs in a read-only REPEATABLE READ snapshot opened before the ref is resolved, and the service
+  insists on it. Bounds are the server's: over one the answer is the 422 `network_selection_population_too_large` or
+  `network_selection_snapshot_too_large` (for example more than 200 required outputs), and nothing is assessed.
+- `method_preferred` applies the registry, in which no rule is active, so it ranks nothing and says so; the other
+  policies apply no rule. The route, not the engine, sets `apply_rules` from the policy.
+- The manifest replays at two levels with no database and carries a digest that is re-sealed after any redaction. Under
+  the `curated` profile solves below the floor are neither listed nor counted.
+- `tckdb-client` 0.134.0 adds `select_network_kinetics` and `get_network_kinetics_selection_manifest`; `tckdb-mcp`
+  0.5.0 adds `tckdb_select_network_kinetics`. `tckdb-schemas` 0.103.0 only lists the two new read-only routes in the producer contract. See
+  `docs/guides/selecting_network_kinetics.md`.
+
 ## Network coverage inventory (2026-10-04)
 
 **The read-only coverage inventory of the network-selection plan, as a script.**

@@ -74,6 +74,8 @@ from tckdb_client.scientific_types import (
     NetworkKineticsSearchResponse,
     NetworkRecord,
     NetworkSearchResponse,
+    NetworkSelectionRequest,
+    NetworkSelectionResponse,
     NetworkSolveRecord,
     NetworkSolveSearchResponse,
     ReactionKineticsResponse,
@@ -154,6 +156,51 @@ def _selection_body(
     ):
         if value is not None:
             body[key] = value
+    return body  # type: ignore[return-value]
+
+
+def _network_selection_path(network_ref: str) -> str:
+    """Path of the network-selection endpoint for a public ``net_`` ref (integer ids are refused)."""
+    if not isinstance(network_ref, str) or not network_ref.startswith("net_"):
+        raise ValueError(
+            f"network_ref must be a public network ref starting with 'net_'; got {network_ref!r}."
+        )
+    return f"/scientific/networks/{quote(network_ref, safe='')}/kinetics/select"
+
+
+def _network_selection_body(
+    *,
+    coefficient_basis: str,
+    temperature_min_k: float,
+    temperature_max_k: float,
+    pressure_min_bar: float,
+    pressure_max_bar: float,
+    bath: Mapping[str, Any],
+    partition: Mapping[str, Any],
+    **optional: Any,
+) -> NetworkSelectionRequest:
+    """The request body: the question as stated plus whichever optional fields were supplied.
+
+    Optional fields that are ``None`` are dropped, never sent as JSON null, and the client invents no default of
+    the question.
+    """
+    body: dict[str, Any] = {
+        "coefficient_basis": coefficient_basis,
+        "temperature_min_k": temperature_min_k,
+        "temperature_max_k": temperature_max_k,
+        "pressure_min_bar": pressure_min_bar,
+        "pressure_max_bar": pressure_max_bar,
+        "bath": dict(bath),
+        "partition": dict(partition),
+    }
+    for key, value in optional.items():
+        if value is None:
+            continue
+        if key == "regime":
+            value = dict(value)
+        elif key in ("outputs", "boundaries"):
+            value = [dict(item) for item in value]
+        body[key] = value
     return body  # type: ignore[return-value]
 
 
@@ -1878,6 +1925,121 @@ class TCKDBClient:
         )
         return self.request_json(
             "POST", _kinetics_selection_path(reaction_entry_ref) + "/manifest", json=body,
+            params={"profile": profile}, authenticated=False,
+        ).data
+
+    def select_network_kinetics(
+        self,
+        network_ref: str,
+        *,
+        coefficient_basis: str,
+        temperature_min_k: float,
+        temperature_max_k: float,
+        pressure_min_bar: float,
+        pressure_max_bar: float,
+        bath: Mapping[str, Any],
+        partition: Mapping[str, Any],
+        scope: str | None = None,
+        channel_key: str | None = None,
+        observable: str | None = None,
+        outputs: list[Mapping[str, Any]] | None = None,
+        degeneracy_applied: bool | None = None,
+        boundaries: list[Mapping[str, Any]] | None = None,
+        regime: Mapping[str, Any] | None = None,
+        source_composition_hash: str | None = None,
+        sink_composition_hash: str | None = None,
+        objective: str | None = None,
+        reference_model_ref: str | None = None,
+        reference_outputs: str | None = None,
+        policy: str | None = None,
+        mode: str | None = None,
+        min_review_status: str | None = None,
+        phase: str | None = None,
+        profile: str | None = None,
+    ) -> NetworkSelectionResponse:
+        """``POST /scientific/networks/{ref}/kinetics/select``.
+
+        Method-aware selection among one network's stored pressure-dependent solves, for one stated gas-phase
+        rate-coefficient question. Read-only; the ordinary network reads are unchanged.
+
+        ``network_ref`` must be a public ``net_...`` ref; an integer id is refused here and by the server, and
+        ``channel_key`` is a body field, never part of the path. The question is required and never defaulted:
+        ``coefficient_basis`` (``kernel`` or ``composition_effective``), the temperature and pressure windows (bar),
+        ``bath`` (``{"components": [{"species_ref": "spe_..."}]}``, with ``mole_fraction`` on each of two or more
+        for a mixture) and ``partition`` (``{"retained": [<composition hash>, ...], "eliminated": [...],
+        "lumps": [[...]]}``). A single-channel question (``scope`` omitted or ``single_channel``) names
+        ``channel_key`` and ``observable``; ``projected_bundle`` and ``full_network`` list ``outputs``
+        (``[{"channel_key": ..., "observable": ...}]``) instead. ``objective`` defaults to
+        ``physical_accuracy``; ``model_fidelity`` needs ``reference_model_ref`` (``nsolve_...``) and
+        ``representation_fidelity`` needs ``reference_outputs``. ``policy`` is ``method_preferred`` (the server
+        default), ``default``, ``most_reviewed`` or ``latest``; ``mode`` is ``all`` (default) or ``first``.
+        ``phase`` exists only so a conflicting value is refused by the server.
+
+        The result's ``outcome`` and ``basis`` are the server's explanation: report them verbatim. ``selection``
+        names a determination, or a declared product set of one solve, only when the outcome supports one, and says
+        so when the choice was administrative. A population over a server bound (including the number of required
+        outputs) is a 422 (``network_selection_population_too_large``); this client never caps or pages it itself.
+        """
+        path = _network_selection_path(network_ref)
+        body = _network_selection_body(
+            coefficient_basis=coefficient_basis, temperature_min_k=temperature_min_k,
+            temperature_max_k=temperature_max_k, pressure_min_bar=pressure_min_bar, pressure_max_bar=pressure_max_bar,
+            bath=bath, partition=partition, scope=scope, channel_key=channel_key, observable=observable,
+            outputs=outputs, degeneracy_applied=degeneracy_applied, boundaries=boundaries, regime=regime,
+            source_composition_hash=source_composition_hash, sink_composition_hash=sink_composition_hash,
+            objective=objective, reference_model_ref=reference_model_ref, reference_outputs=reference_outputs,
+            policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
+        )
+        return self.request_json(
+            "POST", path, json=body, params={"profile": profile}, authenticated=False
+        ).data
+
+    def get_network_kinetics_selection_manifest(
+        self,
+        network_ref: str,
+        *,
+        coefficient_basis: str,
+        temperature_min_k: float,
+        temperature_max_k: float,
+        pressure_min_bar: float,
+        pressure_max_bar: float,
+        bath: Mapping[str, Any],
+        partition: Mapping[str, Any],
+        scope: str | None = None,
+        channel_key: str | None = None,
+        observable: str | None = None,
+        outputs: list[Mapping[str, Any]] | None = None,
+        degeneracy_applied: bool | None = None,
+        boundaries: list[Mapping[str, Any]] | None = None,
+        regime: Mapping[str, Any] | None = None,
+        source_composition_hash: str | None = None,
+        sink_composition_hash: str | None = None,
+        objective: str | None = None,
+        reference_model_ref: str | None = None,
+        reference_outputs: str | None = None,
+        policy: str | None = None,
+        mode: str | None = None,
+        min_review_status: str | None = None,
+        phase: str | None = None,
+        profile: str | None = None,
+    ) -> JSONDict:
+        """``POST /scientific/networks/{ref}/kinetics/select/manifest``.
+
+        The replayable decision manifest for the same request as :meth:`select_network_kinetics`: public refs only,
+        enough to recompute the decision, and check the recorded assessments, with no database. It is a new snapshot
+        of the current data, not a retrieval of an earlier selection.
+        """
+        body = _network_selection_body(
+            coefficient_basis=coefficient_basis, temperature_min_k=temperature_min_k,
+            temperature_max_k=temperature_max_k, pressure_min_bar=pressure_min_bar, pressure_max_bar=pressure_max_bar,
+            bath=bath, partition=partition, scope=scope, channel_key=channel_key, observable=observable,
+            outputs=outputs, degeneracy_applied=degeneracy_applied, boundaries=boundaries, regime=regime,
+            source_composition_hash=source_composition_hash, sink_composition_hash=sink_composition_hash,
+            objective=objective, reference_model_ref=reference_model_ref, reference_outputs=reference_outputs,
+            policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
+        )
+        return self.request_json(
+            "POST", _network_selection_path(network_ref) + "/manifest", json=body,
             params={"profile": profile}, authenticated=False,
         ).data
 

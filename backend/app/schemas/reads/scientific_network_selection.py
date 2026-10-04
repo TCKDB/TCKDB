@@ -6,7 +6,7 @@ under which state partition, boundaries and regime, with which coefficient meani
 objective. A read: nothing is stored, no curator endorsement is created or changed, and the ordinary network
 browse and evaluation endpoints are untouched. See ``docs/guides/selecting_network_kinetics.md``.
 
-No field here carries a database id. References are public refs (``spc_``, ``nks_``) and composition hashes (the
+No field here carries a database id. References are public refs (``spe_``, ``nsolve_``) and composition hashes (the
 content locators of a network's states); the network itself is named by the path, and ``channel_key`` is a body
 field, never a path segment. Every violation of the request's own rules is an ordinary 422 naming the field.
 """
@@ -171,7 +171,7 @@ class NetworkSelectionRequest(BaseModel):
     sink_composition_hash: str | None = Field(default=None, max_length=128)
     objective: NetworkComparisonObjective = NetworkComparisonObjective.physical_accuracy
     reference_model_ref: str | None = Field(
-        default=None, max_length=64, description="Public network-solve ref. Required for, and only for, model_fidelity."
+        default=None, max_length=64, description="Public network-solve ref (nsolve_...). Required for, and only for, model_fidelity."
     )
     reference_outputs: str | None = Field(
         default=None,

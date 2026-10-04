@@ -27914,6 +27914,16 @@
         "title": "NetworkCollisionFrequencyModel",
         "type": "string"
       },
+      "NetworkComparisonObjective": {
+        "description": "What a comparison between two products is a comparison *of*; agreement on one is not on another.",
+        "enum": [
+          "physical_accuracy",
+          "model_fidelity",
+          "representation_fidelity"
+        ],
+        "title": "NetworkComparisonObjective",
+        "type": "string"
+      },
       "NetworkConformerTreatment": {
         "description": "How the conformers of a well or saddle point enter the solve.",
         "enum": [
@@ -31328,6 +31338,994 @@
         },
         "title": "NetworkSearchRequest",
         "type": "object"
+      },
+      "NetworkSelectionBathComponent": {
+        "additionalProperties": false,
+        "properties": {
+          "mole_fraction": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mole Fraction"
+          },
+          "species_ref": {
+            "description": "Public species-entry ref.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Species Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species_ref"
+        ],
+        "title": "NetworkSelectionBathComponent",
+        "type": "object"
+      },
+      "NetworkSelectionBathIn": {
+        "additionalProperties": false,
+        "description": "A specified collider (one component, no fraction) or an explicit mixture (two or more, each with a mole\nfraction, summing to one; never renormalised).",
+        "properties": {
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkSelectionBathComponent"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Components",
+            "type": "array"
+          }
+        },
+        "required": [
+          "components"
+        ],
+        "title": "NetworkSelectionBathIn",
+        "type": "object"
+      },
+      "NetworkSelectionBoundaryIn": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "description": "Boundary kind, e.g. absorbing.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Kind",
+            "type": "string"
+          },
+          "state": {
+            "description": "Composition hash of the state.",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "kind"
+        ],
+        "title": "NetworkSelectionBoundaryIn",
+        "type": "object"
+      },
+      "NetworkSelectionDisclosures": {
+        "description": "What the result does not cover. A withheld list says so.",
+        "properties": {
+          "excluded_by_review": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Excluded By Review",
+            "type": "array"
+          },
+          "excluded_by_review_withheld": {
+            "description": "True whenever the read profile has a review floor of its own (curated): records outside the effective floor are then never listed or counted, so the field cannot reveal that they exist.",
+            "title": "Excluded By Review Withheld",
+            "type": "boolean"
+          },
+          "excluded_count": {
+            "title": "Excluded Count",
+            "type": "integer"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "population": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Counts of the assessed population.",
+            "title": "Population",
+            "type": "object"
+          },
+          "ungrouped_fit_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ungrouped Fit Refs",
+            "type": "array"
+          },
+          "unresolved_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Refs",
+            "type": "array"
+          },
+          "unsupported_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "excluded_count",
+          "excluded_by_review_withheld"
+        ],
+        "title": "NetworkSelectionDisclosures",
+        "type": "object"
+      },
+      "NetworkSelectionManifest": {
+        "additionalProperties": true,
+        "description": "The replayable decision manifest of ``POST .../kinetics/select/manifest``.\n\nPublic refs only: the normalised request, the snapshot isolation, every captured solve with its normalised facts,\nevery assessment, the rules consulted, each comparison and the administrative order. Enough to recompute the\ndecision at both levels with no database.",
+        "properties": {
+          "assessments": {
+            "additionalProperties": true,
+            "title": "Assessments",
+            "type": "object"
+          },
+          "decision": {
+            "additionalProperties": true,
+            "title": "Decision",
+            "type": "object"
+          },
+          "declaration_versions": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Declaration Versions",
+            "type": "array"
+          },
+          "digest": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Digest",
+            "type": "object"
+          },
+          "disclosures": {
+            "additionalProperties": true,
+            "title": "Disclosures",
+            "type": "object"
+          },
+          "manifest_format_version": {
+            "title": "Manifest Format Version",
+            "type": "integer"
+          },
+          "network": {
+            "additionalProperties": true,
+            "title": "Network",
+            "type": "object"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/NetworkSelectionOutcome"
+          },
+          "policy": {
+            "additionalProperties": true,
+            "title": "Policy",
+            "type": "object"
+          },
+          "population": {
+            "additionalProperties": true,
+            "title": "Population",
+            "type": "object"
+          },
+          "replay_boundary": {
+            "title": "Replay Boundary",
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/NetworkSelectionRequestEcho"
+          },
+          "snapshot_isolation": {
+            "title": "Snapshot Isolation",
+            "type": "string"
+          },
+          "solves": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Solves",
+            "type": "array"
+          },
+          "visibility": {
+            "additionalProperties": true,
+            "title": "Visibility",
+            "type": "object"
+          }
+        },
+        "required": [
+          "manifest_format_version",
+          "policy",
+          "request",
+          "visibility",
+          "snapshot_isolation",
+          "network",
+          "population",
+          "solves",
+          "assessments",
+          "decision",
+          "outcome",
+          "replay_boundary",
+          "digest"
+        ],
+        "title": "NetworkSelectionManifest",
+        "type": "object"
+      },
+      "NetworkSelectionMember": {
+        "properties": {
+          "channel_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Key"
+          },
+          "determination_ref": {
+            "title": "Determination Ref",
+            "type": "string"
+          },
+          "kinetics_refs": {
+            "description": "Every eligible fitted representation of the determination, in administrative order. Alternate fits of one determination are not independent confirmation.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Kinetics Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "determination_ref",
+          "kinetics_refs"
+        ],
+        "title": "NetworkSelectionMember",
+        "type": "object"
+      },
+      "NetworkSelectionMode": {
+        "enum": [
+          "all",
+          "first"
+        ],
+        "title": "NetworkSelectionMode",
+        "type": "string"
+      },
+      "NetworkSelectionOutcome": {
+        "enum": [
+          "policy_preferred",
+          "incomparable_alternatives",
+          "sole_eligible_candidate",
+          "no_applicable_candidate",
+          "policy_conflict"
+        ],
+        "title": "NetworkSelectionOutcome",
+        "type": "string"
+      },
+      "NetworkSelectionOutputIn": {
+        "additionalProperties": false,
+        "properties": {
+          "channel_key": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Channel Key",
+            "type": "string"
+          },
+          "observable": {
+            "$ref": "#/components/schemas/NetworkObservable"
+          }
+        },
+        "required": [
+          "channel_key",
+          "observable"
+        ],
+        "title": "NetworkSelectionOutputIn",
+        "type": "object"
+      },
+      "NetworkSelectionPartitionIn": {
+        "additionalProperties": false,
+        "description": "How the requested observable treats the network's states, by composition hash.",
+        "properties": {
+          "eliminated": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "title": "Eliminated",
+            "type": "array"
+          },
+          "lumps": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "maxItems": 1000,
+            "title": "Lumps",
+            "type": "array"
+          },
+          "retained": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "title": "Retained",
+            "type": "array"
+          }
+        },
+        "title": "NetworkSelectionPartitionIn",
+        "type": "object"
+      },
+      "NetworkSelectionPick": {
+        "description": "The node this response names: a determination of one channel, or a declared product set of one solve.",
+        "properties": {
+          "administrative": {
+            "description": "True when chosen by review/recency order among unranked alternatives: not a method claim.",
+            "title": "Administrative",
+            "type": "boolean"
+          },
+          "basis": {
+            "enum": [
+              "policy_preferred",
+              "sole_eligible_candidate",
+              "administrative_first"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkSelectionMember"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "node_ref": {
+            "description": "A determination ref, or '<solve ref>/<product set key>' for a bundle.",
+            "title": "Node Ref",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/NetworkSelectionScope"
+          },
+          "solve_ref": {
+            "title": "Solve Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_ref",
+          "scope",
+          "solve_ref",
+          "members",
+          "basis",
+          "administrative",
+          "explanation"
+        ],
+        "title": "NetworkSelectionPick",
+        "type": "object"
+      },
+      "NetworkSelectionPolicy": {
+        "description": "``method_preferred`` applies the registered, audited network rules (none is active in this release, so it\nranks nothing and says so); the others are the administrative order only, exactly as on the browse endpoints.",
+        "enum": [
+          "method_preferred",
+          "default",
+          "most_reviewed",
+          "latest"
+        ],
+        "title": "NetworkSelectionPolicy",
+        "type": "string"
+      },
+      "NetworkSelectionPolicyInfo": {
+        "properties": {
+          "bounds_version": {
+            "title": "Bounds Version",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "description": "Registry entries consulted: rule id, version, status (every rule shipped is inactive), objective, and why an inactive rule is inactive.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "rules_applied": {
+            "description": "False under an administrative policy: no rule was consulted, only the administrative order.",
+            "title": "Rules Applied",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "bounds_version",
+          "rules_applied"
+        ],
+        "title": "NetworkSelectionPolicyInfo",
+        "type": "object"
+      },
+      "NetworkSelectionRegimeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "initial_state_hashes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "title": "Initial State Hashes",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NetworkRegimeKind",
+            "default": "time_independent"
+          }
+        },
+        "title": "NetworkSelectionRegimeIn",
+        "type": "object"
+      },
+      "NetworkSelectionRelations": {
+        "properties": {
+          "cycles": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Cycles",
+            "type": "array"
+          },
+          "edges": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "opposing_pairs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Opposing Pairs",
+            "type": "array"
+          },
+          "overridden_edges": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Overridden Edges",
+            "type": "array"
+          },
+          "unused_edges": {
+            "description": "Edges under more than one objective key are not composed; listed here.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Unused Edges",
+            "type": "array"
+          }
+        },
+        "title": "NetworkSelectionRelations",
+        "type": "object"
+      },
+      "NetworkSelectionRequest": {
+        "additionalProperties": false,
+        "description": "Request body. ``quantity`` and ``phase`` may be omitted; if given they must agree with the endpoint.\n\nThe network is named by the path. A single-channel request names ``channel_key`` and ``observable``; a bundle or\nfull-network request lists ``outputs`` instead. The number of outputs is bounded by the server (a coded 422),\nnot by this schema.",
+        "properties": {
+          "bath": {
+            "$ref": "#/components/schemas/NetworkSelectionBathIn"
+          },
+          "boundaries": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkSelectionBoundaryIn"
+            },
+            "maxItems": 1000,
+            "title": "Boundaries",
+            "type": "array"
+          },
+          "channel_key": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Key"
+          },
+          "coefficient_basis": {
+            "enum": [
+              "kernel",
+              "composition_effective"
+            ],
+            "title": "Coefficient Basis",
+            "type": "string"
+          },
+          "degeneracy_applied": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Degeneracy Applied"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional floor, applied on top of the read profile's floor (the stricter wins)."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/NetworkSelectionMode",
+            "default": "all"
+          },
+          "objective": {
+            "$ref": "#/components/schemas/NetworkComparisonObjective",
+            "default": "physical_accuracy"
+          },
+          "observable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkObservable"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkSelectionOutputIn"
+            },
+            "maxItems": 100000,
+            "title": "Outputs",
+            "type": "array"
+          },
+          "partition": {
+            "$ref": "#/components/schemas/NetworkSelectionPartitionIn"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Normalised to gas. Any other phase is refused."
+          },
+          "policy": {
+            "$ref": "#/components/schemas/NetworkSelectionPolicy",
+            "default": "method_preferred"
+          },
+          "pressure_max_bar": {
+            "exclusiveMinimum": 0.0,
+            "title": "Pressure Max Bar",
+            "type": "number"
+          },
+          "pressure_min_bar": {
+            "exclusiveMinimum": 0.0,
+            "title": "Pressure Min Bar",
+            "type": "number"
+          },
+          "quantity": {
+            "const": "rate_coefficient",
+            "default": "rate_coefficient",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "reference_model_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public network-solve ref (nsolve_...). Required for, and only for, model_fidelity.",
+            "title": "Reference Model Ref"
+          },
+          "reference_outputs": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Names the reference output set. Required for, and only for, representation_fidelity.",
+            "title": "Reference Outputs"
+          },
+          "regime": {
+            "$ref": "#/components/schemas/NetworkSelectionRegimeIn"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/NetworkSelectionScope",
+            "default": "single_channel"
+          },
+          "sink_composition_hash": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sink Composition Hash"
+          },
+          "source_composition_hash": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Composition Hash"
+          },
+          "temperature_max_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "Temperature Max K",
+            "type": "number"
+          },
+          "temperature_min_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "Temperature Min K",
+            "type": "number"
+          }
+        },
+        "required": [
+          "coefficient_basis",
+          "temperature_min_k",
+          "temperature_max_k",
+          "pressure_min_bar",
+          "pressure_max_bar",
+          "bath",
+          "partition"
+        ],
+        "title": "NetworkSelectionRequest",
+        "type": "object"
+      },
+      "NetworkSelectionRequestEcho": {
+        "additionalProperties": true,
+        "description": "The normalised request, as the server understood it (further keys the decision recorded are kept).",
+        "properties": {
+          "administrative_policy": {
+            "title": "Administrative Policy",
+            "type": "string"
+          },
+          "channel_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Key"
+          },
+          "coefficient_basis": {
+            "title": "Coefficient Basis",
+            "type": "string"
+          },
+          "effective_review_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Effective Review Statuses",
+            "type": "array"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "network_ref": {
+            "title": "Network Ref",
+            "type": "string"
+          },
+          "objective": {
+            "$ref": "#/components/schemas/NetworkComparisonObjective"
+          },
+          "observable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observable"
+          },
+          "outputs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Outputs",
+            "type": "array"
+          },
+          "phase": {
+            "const": "gas",
+            "default": "gas",
+            "title": "Phase",
+            "type": "string"
+          },
+          "pressure_max_bar": {
+            "title": "Pressure Max Bar",
+            "type": "number"
+          },
+          "pressure_min_bar": {
+            "title": "Pressure Min Bar",
+            "type": "number"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "quantity": {
+            "const": "rate_coefficient",
+            "default": "rate_coefficient",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "result_mode": {
+            "title": "Result Mode",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/NetworkSelectionScope"
+          },
+          "temperature_max_k": {
+            "title": "Temperature Max K",
+            "type": "number"
+          },
+          "temperature_min_k": {
+            "title": "Temperature Min K",
+            "type": "number"
+          }
+        },
+        "required": [
+          "network_ref",
+          "scope",
+          "coefficient_basis",
+          "temperature_min_k",
+          "temperature_max_k",
+          "pressure_min_bar",
+          "pressure_max_bar",
+          "objective",
+          "administrative_policy",
+          "result_mode"
+        ],
+        "title": "NetworkSelectionRequestEcho",
+        "type": "object"
+      },
+      "NetworkSelectionResponse": {
+        "description": "The decision, its basis and everything it rests on, as public refs only.",
+        "properties": {
+          "administrative_order": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Administrative Order",
+            "type": "array"
+          },
+          "basis": {
+            "description": "One sentence saying why this outcome, in plain terms.",
+            "title": "Basis",
+            "type": "string"
+          },
+          "bundles": {
+            "description": "The assessment of every declared product set (bundle and full-network).",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Bundles",
+            "type": "array"
+          },
+          "determinations": {
+            "description": "The assessment of every determination, with every finding behind it.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Determinations",
+            "type": "array"
+          },
+          "disclosures": {
+            "$ref": "#/components/schemas/NetworkSelectionDisclosures"
+          },
+          "fronts": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Fronts",
+            "type": "array"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/NetworkSelectionOutcome"
+          },
+          "pair_checks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Pair Checks",
+            "type": "array"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/NetworkSelectionPolicyInfo"
+          },
+          "relations": {
+            "$ref": "#/components/schemas/NetworkSelectionRelations"
+          },
+          "representations": {
+            "description": "Nested fronts of the alternate fits inside each eligible node. They rank no solve and add no independent confirmation.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Representations",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/NetworkSelectionRequestEcho"
+          },
+          "review": {
+            "$ref": "#/components/schemas/NetworkSelectionReview"
+          },
+          "rule_matches": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rule Matches",
+            "type": "array"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkSelectionPick"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "request",
+          "review",
+          "policy",
+          "outcome",
+          "basis",
+          "disclosures"
+        ],
+        "title": "NetworkSelectionResponse",
+        "type": "object"
+      },
+      "NetworkSelectionReview": {
+        "properties": {
+          "effective_floor": {
+            "$ref": "#/components/schemas/RecordReviewStatus",
+            "description": "The weakest review status a candidate may have. Rejected and deprecated never compete."
+          },
+          "effective_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Effective Statuses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "effective_floor",
+          "effective_statuses"
+        ],
+        "title": "NetworkSelectionReview",
+        "type": "object"
+      },
+      "NetworkSelectionScope": {
+        "enum": [
+          "single_channel",
+          "projected_bundle",
+          "full_network"
+        ],
+        "title": "NetworkSelectionScope",
+        "type": "string"
       },
       "NetworkSolveBathGasRead": {
         "description": "Bath gas entry for one solve, with the linked species entry embedded.",
@@ -84621,6 +85619,174 @@
           }
         },
         "summary": "Scientific Network Kinetics Batch Evaluate",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/networks/{network_ref}/kinetics/select": {
+      "post": {
+        "description": "Assess every visible solve of the network against the question and say which node, if any, to use.\n\nThe competition unit is one determination (single channel) or one declared product set of one solve (bundle,\nfull network). A solve answers only if its stored declarations say so (state partition, boundaries, regime,\nvalidity, bath scope, output catalog, observable, coefficient basis, units, temperature and pressure support); a\nmissing fact makes it ``unresolved`` and a form this selector does not evaluate makes it ``unsupported``, never\napplicable by default. Nothing is derived, re-anchored, evaluated, spliced across solves or averaged.\n\n``outcome`` is the selection basis: ``policy_preferred``, ``incomparable_alternatives``,\n``sole_eligible_candidate``, ``no_applicable_candidate`` or ``policy_conflict``. Every rule shipped in this\nrelease is inactive, so ``method_preferred`` ranks nothing today and says so. A population over a server bound\n(solves, kinetics parents, channel or bundle nodes, states, channels, required outputs, evidence entries, numeric\ncells, snapshot size) is refused with 422 ``network_selection_population_too_large`` or\n``network_selection_snapshot_too_large``: nothing is assessed, because a winner picked from part of the\npopulation would say nothing about the rest.\n\n``mode=first`` may name a node among unranked first-front alternatives; the ``selection`` then says\n``administrative_first`` and that this is not a method claim.",
+        "operationId": "select_network_kinetics_api_v1_scientific_networks__network_ref__kinetics_select_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "network_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Network Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NetworkSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkSelectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select network kinetics for a stated gas-phase rate-coefficient question",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/networks/{network_ref}/kinetics/select/manifest": {
+      "post": {
+        "description": "The same request as ``/kinetics/select``, answered with the decision manifest as a download.\n\nThe manifest holds the normalised request, the snapshot isolation it was read under, every captured solve with\nits normalised facts, every assessment, the rules consulted, each comparison and the administrative order, as\npublic refs only. It is enough to recompute the decision, and check the recorded assessments and outcome, with no\ndatabase. It is a new snapshot of the current data, not a retrieval of an earlier selection.",
+        "operationId": "select_network_kinetics_manifest_api_v1_scientific_networks__network_ref__kinetics_select_manifest_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "network_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Network Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NetworkSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkSelectionManifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download the replayable decision manifest for a network selection",
         "tags": [
           "scientific"
         ]

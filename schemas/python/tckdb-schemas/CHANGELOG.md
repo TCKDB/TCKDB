@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.103.0 - 2026-10-04
+
+The producer contract's list of read-only POST routes gains the two network selection routes
+(`POST /api/v1/scientific/networks/{network_ref}/kinetics/select` and `.../select/manifest`). No upload model changed.
+
 ## 0.102.0 - 2026-10-04
 
 New refusal codes `network_selection_population_too_large` and `network_selection_snapshot_too_large` (a network selection over a bound of the versioned engineering limits). No upload model changed.
