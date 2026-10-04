@@ -237,20 +237,22 @@ class AuditedNetworkRule(NetworkRule):
         return self.rule_id in RULES_WITH_IMPLEMENTED_PREDICATES
 
     def __init__(self, candidate: RuleCandidate, manifest: NetworkRuleManifest) -> None:
+        name = candidate.rule_id  # a rule's name, not a database key
         if candidate.level != self.level:
             raise ValueError(
-                f"rule {candidate.rule_id} is {candidate.level}-level in the manifest and cannot be built as a "
+                f"rule {name} is {candidate.level}-level in the manifest and cannot be built as a "
                 f"{self.level}-level rule"
             )
         if manifest.sha256 != NETWORK_RULE_MANIFEST_SHA256:
             raise ValueError(
-                f"the manifest handed to rule {candidate.rule_id} is not the pinned one "
+                f"the manifest handed to rule {name} is not the pinned one "
                 f"(expected {NETWORK_RULE_MANIFEST_SHA256}, got {manifest.sha256})"
             )
         if candidate not in manifest.candidates:
-            raise ValueError(f"rule {candidate.rule_id} is not an entry of the manifest it was built with")
+            raise ValueError(f"rule {name} is not an entry of the manifest it was built with")
         self._candidate = candidate
         self._manifest = manifest
+        self.manifest_sha256 = manifest.sha256
         self.rule_id = candidate.rule_id
         self.version = candidate.version
         self.objective = candidate.objective

@@ -285,6 +285,7 @@ def test_the_predicates_flag_is_per_rule_and_approving_one_rule_activates_no_oth
     monkeypatch.setattr(rules_module, "RULES_WITH_IMPLEMENTED_PREDICATES", frozenset({"N-ME-CONVERGENCE"}))
     status = {rule_id: rule.status for rule_id, rule in built().items()}
     assert status.pop("N-ME-CONVERGENCE") == RULE_ACTIVE
+    assert [r.rule_id for r in rules_module.active_rules(tuple(built().values()))] == ["N-ME-CONVERGENCE"]  # pinned, so valid
     assert set(status.values()) == {RULE_INACTIVE} and len(status) == len(manifest.candidates) - 1
 
 
