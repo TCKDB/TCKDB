@@ -1879,6 +1879,16 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "that never recorded it is refused rather than served with "
                 "an unlabeled k, per the unit policy (docs/unit_policy.md)."
             )),
+    ApiCode("network_selection_population_too_large", 422, Surface.coded_exception,
+            "backend/app/services/network_selection/bounds.py",
+            shape=Shape.relationship,
+            note=(
+                "context.bound names which versioned limit was exceeded, with the visible count and the limit; "
+                "a count of solves or fits the read profile hides is never reported."
+            )),
+    ApiCode("network_selection_snapshot_too_large", 422, Surface.coded_exception,
+            "backend/app/services/network_selection/bounds.py",
+            shape=Shape.relationship),
     ApiCode("network_solve_reported_requires_literature", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py"),
     ApiCode("network_state_key_undeclared", 422, Surface.coded_exception,
