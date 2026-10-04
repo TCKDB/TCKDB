@@ -76,6 +76,7 @@ nav:
       - Network Selection Rules: guides/network_selection_rules.md
       - Selecting Thermo for H298: guides/selecting_thermo_for_h298.md
       - Selecting Kinetics: guides/selecting_kinetics.md
+      - Selecting Network Kinetics: guides/selecting_network_kinetics.md
       - Query Cookbook: guides/scientific_query_cookbook.md
       - Schema Reference: guides/schema_reference.md
       - Public Hosted Querying: guides/public_hosted_querying.md

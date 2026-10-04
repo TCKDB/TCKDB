@@ -357,3 +357,44 @@ def test_the_same_bundle_in_another_order_is_the_same_request_with_the_same_dige
     assert forward.manifest["request"]["outputs"] == backward.manifest["request"]["outputs"]
     assert forward.manifest["digest"] == backward.manifest["digest"]
     assert [o["channel_key"] for o in forward.manifest["request"]["outputs"]] == sorted(channels)
+
+
+def _with_unreviewed_solve(db_session, world):
+    add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(A_), review=RecordReviewStatus.approved)
+    add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(B_), review=RecordReviewStatus.not_reviewed)
+    return wire(select(db_session, channel_request(world)).manifest)
+
+
+def test_a_relabelled_effective_review_basis_that_leaves_an_unreviewed_solve_in_does_not_replay(db_session, world):
+    """The digest is an unkeyed checksum, so a forger can re-seal. The document must still agree with itself."""
+    manifest = _with_unreviewed_solve(db_session, world)
+    assert replay_network(manifest) == manifest["decision"]
+    assert {s["review_status"] for s in manifest["solves"]} == {"approved", "not_reviewed"}
+    forged = copy.deepcopy(manifest)
+    forged["request"]["effective_review_statuses"] = ["approved"]  # the not_reviewed solve is still in `solves`
+    reseal(forged)
+    for level in (replay_network_assessment, replay_network_decision, replay_network):
+        with pytest.raises(ReplayError, match="outside the recorded effective review statuses"):
+            level(forged)
+
+
+def test_a_curated_manifest_may_only_have_approved_effective_statuses(db_session, world):
+    manifest = _with_unreviewed_solve(db_session, world)
+    forged = copy.deepcopy(manifest)
+    forged["visibility"]["read_profile"] = "curated"  # effective statuses still include not_reviewed
+    reseal(forged)
+    with pytest.raises(ReplayError, match="curated manifest's effective review statuses are approved only"):
+        replay_network(forged)
+
+
+def test_the_visibility_profile_must_be_the_profile_the_request_was_made_under(db_session, world):
+    manifest = _with_unreviewed_solve(db_session, world)
+    forged = copy.deepcopy(manifest)
+    forged["request"]["profile"] = "curated"  # while visibility says exploratory
+    reseal(forged)
+    with pytest.raises(ReplayError, match="not the profile its request was made under"):
+        replay_network(forged)
+    consistent = copy.deepcopy(manifest)
+    consistent["request"]["profile"] = "exploratory"  # the echo a route adds; agrees, so it replays
+    reseal(consistent)
+    assert replay_network(consistent) == manifest["decision"]

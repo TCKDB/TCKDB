@@ -33,6 +33,7 @@ committed backend OpenAPI golden snapshot at
 | `tckdb_get_species_entry_thermo` | `GET /api/v1/scientific/species-entries/{spe_ref}/thermo` | Entry-scoped thermo |
 | `tckdb_select_species_entry_thermo` | `POST /api/v1/scientific/species-entries/{spe_ref}/thermo/select` | Method-aware 298 K formation-enthalpy selection |
 | `tckdb_select_reaction_entry_kinetics` | `POST /api/v1/scientific/reaction-entries/{rxe_ref}/kinetics/select` | Method-aware gas-phase rate-coefficient selection |
+| `tckdb_select_network_kinetics` | `POST /api/v1/scientific/networks/{net_ref}/kinetics/select` | Method-aware pressure-dependent network selection |
 | `tckdb_get_geometry` | `GET /api/v1/scientific/geometries/{geom_ref}` | Geometry detail |
 | `tckdb_get_reaction_entry_full` | `GET /api/v1/scientific/reaction-entries/{rxe_ref}/full` | Composite reaction record |
 | `tckdb_calculation_search` | `POST /api/v1/scientific/calculations/search` | Calculation search |
@@ -618,6 +619,46 @@ review and recency choice, not a method claim. A selection names a determination
 representation of it, and `disclosures` lists the records that did not compete. Every rule in this release is
 inactive, so `method_preferred` ranks nothing yet. There is no candidate-cap or paging argument: the cap is fixed by
 the server and this tool never pages the population. See `docs/guides/selecting_kinetics.md`.
+
+### `tckdb_select_network_kinetics`
+
+Ask which stored pressure-dependent solve of a network (or which declared product set of one solve) to use for one
+stated gas-phase rate-coefficient question, and why. Read-only; the network browse and evaluation tools are unchanged.
+
+```text
+network_ref: string                # REQUIRED, must start with "net_"; the only thing in the URL path
+coefficient_basis: "kernel" | "composition_effective"   # REQUIRED
+temperature_min_k, temperature_max_k: number            # REQUIRED, positive
+pressure_min_bar, pressure_max_bar: number              # REQUIRED, positive
+bath: object                       # REQUIRED
+  components: [{species_ref: "spe_...", mole_fraction?: number}]
+partition: object                  # REQUIRED, states by composition hash
+  retained?: [string], eliminated?: [string], lumps?: [[string]]
+scope?: "single_channel" | "projected_bundle" | "full_network"   # default single_channel
+channel_key?: string               # single channel; a body field, never a path segment
+observable?: string                # single channel, e.g. "product_resolved_coefficient"
+outputs?: [{channel_key, observable}]   # bundle and full network
+degeneracy_applied?: boolean
+boundaries?: [{state, kind}]
+regime?: {kind?: "time_independent" | "initial_population_restricted", initial_state_hashes?: [string]}
+source_composition_hash?, sink_composition_hash?: string
+objective?: "physical_accuracy" | "model_fidelity" | "representation_fidelity"
+reference_model_ref?: string       # "nsolve_...", model_fidelity only
+reference_outputs?: string         # representation_fidelity only
+policy?: "method_preferred" | "default" | "most_reviewed" | "latest"
+mode?: "all" | "first"             # default "all"
+min_review_status?: string
+phase?: string                     # must be "gas" if given (server refuses otherwise)
+profile?: "exploratory" | "curated"
+```
+
+Output: the server response, unchanged. `outcome` and `basis` are the server's explanation and should be quoted
+verbatim. `incomparable_alternatives` and `policy_conflict` mean nothing was scientifically selected,
+`sole_eligible_candidate` is not a comparative accuracy claim, and a `selection` with `administrative: true` is a
+review and recency choice, not a method claim. Every rule in this release is inactive, so `method_preferred` ranks
+nothing yet. Integer ids, a candidate cap, bounds and paging arguments are refused: the bounds are the server's (a
+422 `network_selection_population_too_large` over one) and this tool never pages the population. See
+`docs/guides/selecting_network_kinetics.md`.
 
 ### `tckdb_get_geometry`
 

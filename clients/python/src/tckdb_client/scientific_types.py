@@ -1339,6 +1339,144 @@ class KineticsSelectionResponse(TypedDict):
     disclosures: KineticsSelectionDisclosures
 
 
+class NetworkSelectionBathComponent(TypedDict, total=False):
+    species_ref: Required[str]
+    mole_fraction: float
+
+
+class NetworkSelectionBathIn(TypedDict):
+    """One component without a fraction is a specified collider; two or more with fractions summing to one is a
+    mixture (never renormalised). Components are public ``spe_...`` species-entry refs."""
+
+    components: list[NetworkSelectionBathComponent]
+
+
+class NetworkSelectionPartitionIn(TypedDict, total=False):
+    """How the observable treats the network's states, by composition hash. At least one retained state or lump."""
+
+    retained: list[str]
+    eliminated: list[str]
+    lumps: list[list[str]]
+
+
+class NetworkSelectionBoundaryIn(TypedDict):
+    state: str
+    kind: str
+
+
+class NetworkSelectionRegimeIn(TypedDict, total=False):
+    kind: Literal["time_independent", "initial_population_restricted"]
+    initial_state_hashes: list[str]
+
+
+class NetworkSelectionOutputIn(TypedDict):
+    channel_key: str
+    observable: str
+
+
+class NetworkSelectionRequest(TypedDict, total=False):
+    """Body of ``POST .../networks/{ref}/kinetics/select``. The network is named by the path, never the body.
+
+    ``coefficient_basis``, the temperature and pressure windows, ``bath`` and ``partition`` are required. A
+    single-channel question names ``channel_key`` and ``observable``; a bundle or full-network question lists
+    ``outputs`` instead. ``objective`` defaults to physical accuracy; ``model_fidelity`` needs
+    ``reference_model_ref`` (an ``nsolve_...`` ref) and ``representation_fidelity`` needs ``reference_outputs``.
+    """
+
+    coefficient_basis: Required[Literal["kernel", "composition_effective"]]
+    temperature_min_k: Required[float]
+    temperature_max_k: Required[float]
+    pressure_min_bar: Required[float]
+    pressure_max_bar: Required[float]
+    bath: Required[NetworkSelectionBathIn]
+    partition: Required[NetworkSelectionPartitionIn]
+    scope: Literal["single_channel", "projected_bundle", "full_network"]
+    channel_key: str
+    observable: str
+    outputs: list[NetworkSelectionOutputIn]
+    degeneracy_applied: bool
+    boundaries: list[NetworkSelectionBoundaryIn]
+    regime: NetworkSelectionRegimeIn
+    source_composition_hash: str
+    sink_composition_hash: str
+    objective: Literal["physical_accuracy", "model_fidelity", "representation_fidelity"]
+    reference_model_ref: str
+    reference_outputs: str
+    quantity: Literal["rate_coefficient"]
+    phase: Literal["gas"]
+    policy: Literal["method_preferred", "default", "most_reviewed", "latest"]
+    mode: Literal["all", "first"]
+    min_review_status: str
+
+
+NetworkSelectionOutcomeToken: TypeAlias = Literal[
+    "policy_preferred",
+    "incomparable_alternatives",
+    "sole_eligible_candidate",
+    "no_applicable_candidate",
+    "policy_conflict",
+]
+
+
+class NetworkSelectionMember(TypedDict):
+    determination_ref: str
+    channel_key: str | None
+    kinetics_refs: list[str]
+
+
+class NetworkSelectionPick(TypedDict):
+    """The node the response names: a determination of one channel, or a declared product set of one solve.
+
+    ``administrative`` is true when it was chosen by review/recency order among alternatives the rules do not rank:
+    that is not a claim it is method-superior. Alternate fits of one determination are not independent confirmation.
+    """
+
+    node_ref: str
+    scope: Literal["single_channel", "projected_bundle", "full_network"]
+    solve_ref: str
+    members: list[NetworkSelectionMember]
+    basis: Literal["policy_preferred", "sole_eligible_candidate", "administrative_first"]
+    administrative: bool
+    explanation: str
+
+
+class NetworkSelectionDisclosures(TypedDict):
+    unresolved_refs: list[str]
+    unsupported_refs: list[str]
+    ungrouped_fit_refs: list[str]
+    population: dict[str, int]
+    excluded_by_review: list[dict[str, str]]
+    excluded_count: int
+    excluded_by_review_withheld: bool
+    notes: list[str]
+
+
+class NetworkSelectionResponse(TypedDict):
+    """The decision, its basis and everything it rests on, as public refs only.
+
+    ``outcome`` is the selection basis. Preserve it and ``basis`` verbatim when reporting a result:
+    ``incomparable_alternatives`` and ``policy_conflict`` mean nothing was scientifically selected, and a
+    ``sole_eligible_candidate`` is not a comparative accuracy claim. A winner is scoped to the eligible population;
+    ``disclosures`` lists what did not compete.
+    """
+
+    request: JSONDict
+    review: JSONDict
+    policy: JSONDict
+    outcome: NetworkSelectionOutcomeToken
+    basis: str
+    selection: NetworkSelectionPick | None
+    fronts: list[list[str]]
+    administrative_order: list[str]
+    determinations: list[JSONDict]
+    bundles: list[JSONDict]
+    relations: JSONDict
+    representations: list[JSONDict]
+    rule_matches: list[JSONDict]
+    pair_checks: list[JSONDict]
+    disclosures: NetworkSelectionDisclosures
+
+
 class ObservationRecord(TypedDict, total=False):
     """One ``molecular_property_observation`` row (Phase C-E5).
 
@@ -1522,6 +1660,18 @@ __all__ = [
     "NetworkKineticsSearchResponse",
     "NetworkRecord",
     "NetworkSearchResponse",
+    "NetworkSelectionBathComponent",
+    "NetworkSelectionBathIn",
+    "NetworkSelectionBoundaryIn",
+    "NetworkSelectionDisclosures",
+    "NetworkSelectionMember",
+    "NetworkSelectionOutcomeToken",
+    "NetworkSelectionOutputIn",
+    "NetworkSelectionPartitionIn",
+    "NetworkSelectionPick",
+    "NetworkSelectionRegimeIn",
+    "NetworkSelectionRequest",
+    "NetworkSelectionResponse",
     "NetworkSolveRecord",
     "NetworkSolveSearchResponse",
     "NetworkStateComposition",

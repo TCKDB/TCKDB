@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.134.0 - 2026-10-04
+
+Method-aware selection among a network's stored pressure-dependent solves, for one stated gas-phase question
+(`tckdb-schemas` 0.103.0 only lists the two new read-only routes in the contract). Read-only; the network reads are unchanged.
+
+- `select_network_kinetics(network_ref, *, coefficient_basis, temperature_min_k, temperature_max_k, pressure_min_bar,
+  pressure_max_bar, bath, partition, scope=None, channel_key=None, observable=None, outputs=None, ...,
+  profile=None)` posts to `/scientific/networks/{ref}/kinetics/select`. It takes a public `net_` ref only (an
+  integer id is refused before any request), and `channel_key` is a body field, never part of the path. The question
+  is required and never defaulted; optional fields that are `None` are dropped, never sent as JSON null.
+- `get_network_kinetics_selection_manifest(...)` returns the replayable decision manifest of the same request
+  (`/kinetics/select/manifest`), a new snapshot of the current data and not a retrieval of an earlier selection.
+- New typed shapes: `NetworkSelectionRequest`, `NetworkSelectionBathIn`, `NetworkSelectionPartitionIn`,
+  `NetworkSelectionBoundaryIn`, `NetworkSelectionRegimeIn`, `NetworkSelectionOutputIn`, `NetworkSelectionResponse`,
+  `NetworkSelectionPick`, `NetworkSelectionMember`, `NetworkSelectionDisclosures` and `NetworkSelectionOutcomeToken`.
+- A population over a server bound, including more than 200 required outputs, is a 422
+  `network_selection_population_too_large`; the client never caps or pages it itself.
+
 ## 0.133.0 - 2026-10-04
 
 `RejectionCode` gains `network_selection_population_too_large` and `network_selection_snapshot_too_large`, regenerated from the server's catalogue; nothing else changes. The selection service they belong to is not routed yet.
