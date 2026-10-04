@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.126.0 - 2026-10-03
+
+Method-aware selection of a species entry's thermo record for the gas-phase formation enthalpy at
+298.15 K (`tckdb-schemas` 0.90.0 carries the matching producer-contract note). Read-only; browsing
+(`get_species_thermo`) is unchanged.
+
+- `select_species_thermo(species_entry_ref, *, target, policy=None, result_mode=None,
+  min_review_status=None, temperature_k=None, phase=None, profile=None)` posts to
+  `/scientific/species-entries/{ref}/thermo/select`. It takes a public `spe_` ref only (an integer id is
+  refused before any request) and sends only the fields you supply.
+- `get_species_thermo_selection_manifest(...)` returns the replayable decision manifest of the same
+  request (`/thermo/select/manifest`).
+- New typed shapes: `ThermoSelectionRequest`, `ThermoSelectionTargetIn`, `ThermoSelectionResponse`,
+  `ThermoSelectionPick`, `ThermoSelectionCandidate`, `ThermoSelectionDisclosures` and the
+  `ThermoSelectionOutcomeToken` vocabulary (`policy_preferred`, `incomparable_alternatives`,
+  `sole_eligible_candidate`, `no_applicable_candidate`, `policy_conflict`). A population over the server's cap of 500 visible records is a 422 (`thermo_selection_population_too_large`).
+- `RejectionCode` gains `thermo_selection_condition_conflict` and `thermo_selection_population_too_large`, regenerated from the server's catalogue.
+
 ## 0.125.0 - 2026-10-03
 
 Adds the `RejectionCode.GEOMETRY_ISOTOPE_SYMBOL_CONFLICT` member (`tckdb-schemas` 0.89.0, #672). A

@@ -93,6 +93,8 @@ from tckdb_client.scientific_types import (
     ThermoAnalyticsResponse,
     ThermoRecord,
     ThermoSearchResponse,
+    ThermoSelectionRequest,
+    ThermoSelectionResponse,
     TransitionStateDetailResponse,
     TransitionStateEntryDetailResponse,
     TransitionStateEntryRecord,
@@ -120,6 +122,36 @@ CLIENT_VERSION_HEADER = "X-TCKDB-Client-Version"
 CLIENT_NAME = "tckdb-client"
 
 _ScientificSearchMethod = Literal["GET", "POST"]
+
+
+def _selection_path(species_entry_ref: str) -> str:
+    """Path of the thermo-selection endpoint for a public ``spe_`` ref (integer ids are refused)."""
+    if not isinstance(species_entry_ref, str) or not species_entry_ref.startswith("spe_"):
+        raise ValueError(
+            "species_entry_ref must be a public species-entry ref starting with 'spe_'; "
+            f"got {species_entry_ref!r}."
+        )
+    return f"/scientific/species-entries/{species_entry_ref}/thermo/select"
+
+
+def _selection_body(
+    *,
+    target: Mapping[str, Any],
+    policy: str | None,
+    result_mode: str | None,
+    min_review_status: str | None,
+    temperature_k: float | None,
+    phase: str | None,
+) -> ThermoSelectionRequest:
+    """The request body: ``target`` plus whichever optional fields were supplied (never defaults of ours)."""
+    body: dict[str, Any] = {"target": dict(target)}
+    for key, value in (
+        ("policy", policy), ("result_mode", result_mode), ("min_review_status", min_review_status),
+        ("temperature_k", temperature_k), ("phase", phase),
+    ):
+        if value is not None:
+            body[key] = value
+    return body  # type: ignore[return-value]
 
 
 def _legacy_detail_code(detail: object) -> str | None:
@@ -1655,6 +1687,71 @@ class TCKDBClient:
         }
         return self.request_json(
             "GET", path, params=params, authenticated=False
+        ).data
+
+    def select_species_thermo(
+        self,
+        species_entry_ref: str,
+        *,
+        target: Mapping[str, Any],
+        policy: str | None = None,
+        result_mode: str | None = None,
+        min_review_status: str | None = None,
+        temperature_k: float | None = None,
+        phase: str | None = None,
+        profile: str | None = None,
+    ) -> ThermoSelectionResponse:
+        """``POST /scientific/species-entries/{ref}/thermo/select``.
+
+        Method-aware selection of one species entry's thermo record for the
+        gas-phase formation enthalpy at 298.15 K. Read-only; the ordinary
+        :meth:`get_species_thermo` browse order is unchanged.
+
+        ``species_entry_ref`` must be a public ``spe_...`` ref; an integer id is
+        refused here and by the server. ``target`` is required:
+        ``{"kind": "equilibrium_ensemble"}`` or ``{"kind": "single_conformer",
+        "conformer_group_ref": "cg_..."}``. ``policy`` is ``method_preferred``
+        (the server default), ``default``, ``most_reviewed`` or ``latest``;
+        ``result_mode`` is ``all`` (default) or ``first``. ``temperature_k`` and
+        ``phase`` exist only so a conflicting value is refused by the server
+        (422 ``thermo_selection_condition_conflict``), never silently changed.
+
+        The result's ``outcome`` and ``basis`` are the server's explanation:
+        report them verbatim. ``selection`` names a record only when the outcome
+        supports one, and says so when the choice was administrative.
+        """
+        path = _selection_path(species_entry_ref)
+        body: ThermoSelectionRequest = _selection_body(
+            target=target, policy=policy, result_mode=result_mode,
+            min_review_status=min_review_status, temperature_k=temperature_k, phase=phase,
+        )
+        return self.request_json(
+            "POST", path, json=body, params={"profile": profile}, authenticated=False
+        ).data
+
+    def get_species_thermo_selection_manifest(
+        self,
+        species_entry_ref: str,
+        *,
+        target: Mapping[str, Any],
+        policy: str | None = None,
+        result_mode: str | None = None,
+        min_review_status: str | None = None,
+        profile: str | None = None,
+    ) -> JSONDict:
+        """``POST /scientific/species-entries/{ref}/thermo/select/manifest``.
+
+        The replayable decision manifest for the same request as
+        :meth:`select_species_thermo`: public refs only, enough to recompute the
+        decision with no database.
+        """
+        body = _selection_body(
+            target=target, policy=policy, result_mode=result_mode,
+            min_review_status=min_review_status, temperature_k=None, phase=None,
+        )
+        return self.request_json(
+            "POST", _selection_path(species_entry_ref) + "/manifest", json=body,
+            params={"profile": profile}, authenticated=False,
         ).data
 
     def get_species_observations(

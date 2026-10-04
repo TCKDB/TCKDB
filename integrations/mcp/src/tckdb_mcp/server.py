@@ -25,6 +25,7 @@ from .tools import reactions as reactions_tool
 from .tools import scientific_reads as scientific_reads_tools
 from .tools import species as species_tool
 from .tools import species_thermo as species_thermo_tool
+from .tools import species_thermo_selection as species_thermo_selection_tool
 from .tools import thermo_search as thermo_search_tool
 
 logger = logging.getLogger("tckdb_mcp")
@@ -57,6 +58,11 @@ def list_tools_payload() -> list[dict[str, Any]]:
             "name": species_thermo_tool.TOOL_NAME,
             "description": species_thermo_tool.TOOL_DESCRIPTION,
             "inputSchema": species_thermo_tool.INPUT_SCHEMA,
+        },
+        {
+            "name": species_thermo_selection_tool.TOOL_NAME,
+            "description": species_thermo_selection_tool.TOOL_DESCRIPTION,
+            "inputSchema": species_thermo_selection_tool.INPUT_SCHEMA,
         },
         {
             "name": geometry_tool.TOOL_NAME,
@@ -104,6 +110,8 @@ def dispatch_tool(
         return reaction_kinetics_tool.run(client, config, arguments)
     if name == species_thermo_tool.TOOL_NAME:
         return species_thermo_tool.run(client, config, arguments)
+    if name == species_thermo_selection_tool.TOOL_NAME:
+        return species_thermo_selection_tool.run(client, config, arguments)
     if name == geometry_tool.TOOL_NAME:
         return geometry_tool.run(client, arguments)
     if name == reaction_full_tool.TOOL_NAME:

@@ -100,6 +100,46 @@ def validate_deployment_safety(settings: Settings) -> None:
         raise UnsafeDeploymentConfigError(mode, violations)
 
 
+class ThermoSelectionRulesError(RuntimeError):
+    """Raised when the shipped thermo-selection rule registry cannot be built.
+
+    The registry pins its audited membership manifest by SHA-256, so an edited,
+    truncated or unapproved manifest refuses to load. Without this check that
+    refusal would first surface as a 500 on the first ``/thermo/select`` request;
+    with it the deploy fails instead, which is where a bad pin should be found.
+    """
+
+
+def validate_thermo_selection_rules() -> None:
+    """Build the selection rule registry now, so a bad manifest pin stops the boot.
+
+    Runs in every deployment mode, ``local`` included: it reads one packaged file and
+    needs no network or database. The result is cached by ``default_rules``, so the
+    first request reuses it.
+
+    :raises ThermoSelectionRulesError: the registry (or a manifest it pins) does not load.
+    """
+    # Imported here: the services package pulls in the ORM and RDKit, which this module
+    # otherwise avoids at import time.
+    from app.chemistry.thermo_rules.e1_manifest import ManifestError
+    from app.services.thermo_selection.rules import default_rules
+
+    # Narrow on purpose: a manifest that fails its pin or its audit (ManifestError), or one that is
+    # missing from the package (OSError). Anything else is a defect and should surface as itself.
+    try:
+        default_rules()
+    except ManifestError as exc:
+        # Carries the real reason: a digest mismatch against the pin, or the audit failing.
+        raise ThermoSelectionRulesError(
+            f"thermo selection rule registry failed to load: the packaged E1 manifest was refused: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise ThermoSelectionRulesError(
+            f"thermo selection rule registry failed to load: the packaged E1 manifest file could not be read "
+            f"({type(exc).__name__}: {exc})"
+        ) from exc
+
+
 #: The only encoding this deployment is designed for. Anything else stores
 #: bytes without validating them (``SQL_ASCII``) or silently transcodes.
 EXPECTED_SERVER_ENCODING = "UTF8"

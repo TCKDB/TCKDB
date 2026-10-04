@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.90.0 - 2026-10-03
+
+No wire model changes. Contract notes the read-only thermo select endpoint.
+
 ## 0.89.0 - 2026-10-03
 
 A `D`/`T` element spelling now means 2H/3H (#672, ADR 0022): **a `D`/`T` geometry on a protium species, previously accepted, is now refused**, `[2H]O[2H]` with it is accepted, and `isotopes` contradicting the spelling is refused as `geometry_isotope_symbol_conflict`.

@@ -22,6 +22,20 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Method-aware H298 selection endpoint (2026-10-03)
+
+- tckdb-backend, tckdb-client 0.126.0, tckdb-schemas 0.90.0 and tckdb-mcp 0.3.0: a read-only
+  `POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select` assesses every visible thermo
+  record of a species entry for the gas-phase formation enthalpy at 298.15 K and returns the outcome
+  (`policy_preferred`, `incomparable_alternatives`, `sole_eligible_candidate`, `no_applicable_candidate`,
+  or `policy_conflict`) with the assessments, preference relations, ordered fronts,
+  rule versions and disclosures. `/thermo/select/manifest` downloads the replayable decision manifest. More than 500 visible records is a 422 (`thermo_selection_population_too_large`). Records below
+  the review floor are listed only when the read profile has no floor of its own. The client gains
+  `select_species_thermo` and the MCP server `tckdb_select_species_entry_thermo`. The application now builds
+  the rule registry at startup, so a bad manifest pin fails the deploy. Browse order is unchanged. Third of
+  three changes toward method-aware H298 selection. No schema change, no new environment variable; new
+  refusal code `thermo_selection_condition_conflict`. See `docs/guides/selecting_thermo_for_h298.md`.
+
 ## H298 candidate assessment and the E1 preference rule (2026-10-03)
 
 - tckdb-backend (service layer only; no route, wire package or client changes): a deterministic H298

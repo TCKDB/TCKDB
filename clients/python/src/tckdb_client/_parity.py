@@ -268,6 +268,14 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "tests/test_scientific.py",
     ),
     (
+        "POST", "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select",
+        "select_species_thermo", None, None, "tests/test_thermo_selection.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select/manifest",
+        "get_species_thermo_selection_manifest", None, None, "tests/test_thermo_selection.py",
+    ),
+    (
         "GET", "/api/v1/scientific/species-entries/{species_entry_id}/observations",
         "get_species_observations", None, None, _NEW_METHOD_TESTS,
     ),

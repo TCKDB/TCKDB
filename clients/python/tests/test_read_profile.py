@@ -95,6 +95,8 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "get_species_thermo": ("spe_1",),
     "get_transition_state": ("ts_1",),
     "get_transition_state_entry": ("tse_1",),
+    "select_species_thermo": ("spe_1",),
+    "get_species_thermo_selection_manifest": ("spe_1",),
 }
 
 #: Methods with required *keyword-only* parameters beyond the handle in
@@ -103,6 +105,8 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
 #: ``evaluate_network_kinetics``'s optional scalar-or-list form) has no
 #: sensible default to fall back on.
 _REQUIRED_KEYWORD_ARGUMENTS: dict[str, dict] = {
+    "select_species_thermo": {"target": {"kind": "equilibrium_ensemble"}},
+    "get_species_thermo_selection_manifest": {"target": {"kind": "equilibrium_ensemble"}},
     "evaluate_network_kinetics_batch": {
         "temperature_k": [1000.0],
         "pressure_bar": [1.0],

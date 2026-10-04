@@ -193,3 +193,16 @@ The per-species read contract now also depends on `?profile=`:
 
 The resolved profile is echoed in every scientific response and every dataset
 manifest.
+
+## Method-aware H298 selection
+
+Browsing is unchanged. A separate, opt-in read, `POST /scientific/species-entries/{ref}/thermo/select`,
+answers one quantity (gas-phase formation enthalpy at 298.15 K) and applies a versioned, typed rule
+registry (rule E1, standard G4 over standard G3 for an audited hydrocarbon manifest) before the review and
+recency order, which then only sorts within a preference front. It returns one of `policy_preferred`,
+`incomparable_alternatives`, `sole_eligible_candidate`, `no_applicable_candidate` or `policy_conflict`,
+with the assessments, relations, fronts, rule versions and disclosures, and a
+replayable decision manifest (`/thermo/select/manifest`). More than 500 visible records is refused
+(422 `thermo_selection_population_too_large`). It persists nothing and creates no endorsement. Records
+outside the effective review floor are listed only when the read profile has no floor of its own. Guide:
+[`docs/guides/selecting_thermo_for_h298.md`](../../../docs/guides/selecting_thermo_for_h298.md).
