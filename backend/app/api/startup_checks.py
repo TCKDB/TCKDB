@@ -175,6 +175,42 @@ def validate_kinetics_selection_rules() -> None:
         ) from exc
 
 
+class NetworkSelectionRulesError(RuntimeError):
+    """Raised when the shipped network-selection rule registry cannot be built.
+
+    The registry pins its audited manifest by SHA-256, so an edited, truncated or malformed manifest refuses to
+    load. Checked at startup so a bad pin fails the deploy rather than the first network selection request.
+    """
+
+
+def validate_network_selection_rules() -> None:
+    """Build the network selection rule registry now, so a bad manifest pin stops the boot.
+
+    :raises NetworkSelectionRulesError: the registry (or the manifest it pins) does not load.
+    """
+    from app.api.error_contract import CodedValueError
+    from app.chemistry.network_rules.manifest import ManifestError
+    from app.services.network_selection.rules import default_rules
+
+    try:
+        default_rules()
+    except ManifestError as exc:
+        raise NetworkSelectionRulesError(
+            f"network selection rule registry failed to load: the packaged manifest was refused: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise NetworkSelectionRulesError(
+            f"network selection rule registry failed to load: the packaged manifest file could not be read "
+            f"({type(exc).__name__}: {exc})"
+        ) from exc
+    except CodedValueError:
+        raise  # a coded refusal keeps its own code; it is not a rule-construction failure
+    except ValueError as exc:
+        raise NetworkSelectionRulesError(
+            f"network selection rule registry failed to load: a rule was refused: {exc}"
+        ) from exc
+
+
 #: The only encoding this deployment is designed for. Anything else stores
 #: bytes without validating them (``SQL_ASCII``) or silently transcodes.
 EXPECTED_SERVER_ENCODING = "UTF8"

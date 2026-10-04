@@ -73,6 +73,7 @@ nav:
       - Depositing a Thermo Record: guides/depositing_a_thermo_record.md
       - Declaring a Kinetics Record: guides/declaring_a_kinetics_record.md
       - Declaring a Network Solve: guides/declaring_a_network_solve.md
+      - Network Selection Rules: guides/network_selection_rules.md
       - Selecting Thermo for H298: guides/selecting_thermo_for_h298.md
       - Selecting Kinetics: guides/selecting_kinetics.md
       - Query Cookbook: guides/scientific_query_cookbook.md

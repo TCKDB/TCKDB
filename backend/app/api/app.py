@@ -21,6 +21,7 @@ from app.api.startup_checks import (
     report_database_encoding_at_startup,
     validate_deployment_safety,
     validate_kinetics_selection_rules,
+    validate_network_selection_rules,
     validate_thermo_selection_rules,
 )
 
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     # A bad pin on the selection rule manifest fails the deploy here, not a request later.
     validate_thermo_selection_rules()
     validate_kinetics_selection_rules()
+    validate_network_selection_rules()
     docs_kwargs = _docs_kwargs(settings)
     app = FastAPI(
         title="TCKDB",

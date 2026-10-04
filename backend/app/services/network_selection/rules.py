@@ -31,10 +31,16 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 
 from tckdb_schemas.network_declarations import NetworkComparisonObjective
 
+from app.chemistry.network_rules.manifest import (
+    NetworkRuleManifest,
+    RuleCandidate,
+    load_network_rule_manifest,
+)
 from app.schemas.reads.scientific_common import SelectionPolicy  # noqa: F401  (re-exported for rule authors)
 from app.services.network_selection.models import FitFacts, NetworkFacts, NetworkRequest, SolveFacts
 from app.services.selection_kernel import AdminNode, RuleMatch, Tri
@@ -205,9 +211,113 @@ def validate_rules(rules: tuple[NetworkRule, ...]) -> None:
             raise ValueError(f"active rule {name!r} rests on no pinned audited manifest (a SHA-256 is required)")
 
 
+#: SHA-256 of ``network_rule_candidates.yaml`` as shipped (manifest 0.1.0). The registry refuses to load over any
+#: other bytes; a change to an entry, a blocker or a source list is a new manifest version, a new pin and a new rule
+#: version. A manifest handed to a rule must be the one this pins.
+NETWORK_RULE_MANIFEST_SHA256 = "ac8519ce69f7631f96195d5ec724622a2e8e52c12f687cd5bacb552529adb76a"
+
+
+#: Ids of audited rules whose predicates have been written and reviewed. None yet: approval in the manifest alone
+#: applies nothing, and approving one rule never enables another.
+RULES_WITH_IMPLEMENTED_PREDICATES: frozenset[str] = frozenset()
+
+
+class AuditedNetworkRule(NetworkRule):
+    """A council example that is registered, audited and **inactive**, with the reasons.
+
+    It exists so that the registry says plainly which examples were considered and what is missing for each,
+    rather than the example being silently absent or half-implemented. It has no predicates: its sides and scope
+    are unknown, so it can never make an edge, and that stays true even if the owner one day approves its manifest
+    entry, until the predicates are written and reviewed (``predicates_implemented``). An agent never activates one.
+    """
+
+    @property
+    def predicates_implemented(self) -> bool:
+        """Per rule: only a rule id listed in :data:`RULES_WITH_IMPLEMENTED_PREDICATES` has its predicates written."""
+        return self.rule_id in RULES_WITH_IMPLEMENTED_PREDICATES
+
+    def __init__(self, candidate: RuleCandidate, manifest: NetworkRuleManifest) -> None:
+        name = candidate.rule_id  # a rule's name, not a database key
+        if candidate.level != self.level:
+            raise ValueError(
+                f"rule {name} is {candidate.level}-level in the manifest and cannot be built as a "
+                f"{self.level}-level rule"
+            )
+        if manifest.sha256 != NETWORK_RULE_MANIFEST_SHA256:
+            raise ValueError(
+                f"the manifest handed to rule {name} is not the pinned one "
+                f"(expected {NETWORK_RULE_MANIFEST_SHA256}, got {manifest.sha256})"
+            )
+        if candidate not in manifest.candidates:
+            raise ValueError(f"rule {name} is not an entry of the manifest it was built with")
+        self._candidate = candidate
+        self._manifest = manifest
+        self.manifest_sha256 = manifest.sha256
+        self.rule_id = candidate.rule_id
+        self.version = candidate.version
+        self.objective = candidate.objective
+        self.objective_key = candidate.objective_key
+        self.observable = candidate.observable
+        self.authority = f"none: not approved (manifest {manifest.version})"
+        self.evidence_type = "audited_candidate_inactive"
+        self.interpretation = (
+            "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist."
+        )
+
+    @property
+    def status(self) -> str:
+        return RULE_ACTIVE if self._candidate.activatable and self.predicates_implemented else RULE_INACTIVE
+
+    @property
+    def inactive_reasons(self) -> tuple[str, ...]:  # type: ignore[override]
+        reasons = [f"{b['id']}: {b['text']}" for b in self._candidate.activation_blockers]
+        if not self._candidate.activation_approved:
+            reasons.append("not approved for activation by the owner")
+        if not self.predicates_implemented:
+            reasons.append("the rule's predicates are not implemented")
+        return tuple(reasons)
+
+    def scope(self, network: NetworkFacts, request: NetworkRequest) -> RuleMatch:
+        return RuleMatch(Tri.unknown, ("rule_inactive",))
+
+    def preferred_side(self, member: MemberFacts, solve: SolveFacts) -> RuleMatch:
+        return RuleMatch(Tri.unknown, ("rule_inactive",))
+
+    def yielding_side(self, member: MemberFacts, solve: SolveFacts) -> RuleMatch:
+        return RuleMatch(Tri.unknown, ("rule_inactive",))
+
+    def describe(self) -> dict[str, Any]:
+        entry = super().describe()
+        entry.update(self._candidate.describe())
+        entry["manifest_version"] = self._manifest.version
+        entry["manifest_sha256"] = self._manifest.sha256
+        return entry
+
+
+class AuditedNetworkRepresentationRule(NetworkRepresentationRule, AuditedNetworkRule):
+    """An audited, inactive rule that compares two alternate fits of one solve and can never rank solves.
+
+    Registered at the representation level, so the engine judges it on fits only and never on candidates or
+    members; its fit predicates, like the candidate rules' sides, are unknown until written and reviewed.
+    """
+
+    def fit_preferred(self, fit: FitFacts, solve: SolveFacts) -> RuleMatch:
+        return RuleMatch(Tri.unknown, ("rule_inactive",))
+
+    def fit_yielding(self, fit: FitFacts, solve: SolveFacts) -> RuleMatch:
+        return RuleMatch(Tri.unknown, ("rule_inactive",))
+
+
+@lru_cache(maxsize=1)
 def default_rules() -> tuple[NetworkRule, ...]:
-    """The rules registered in this release. None is active."""
-    return ()
+    """The rules registered in this release: the audited council examples. **None is active.**"""
+    manifest = load_network_rule_manifest(expected_sha256=NETWORK_RULE_MANIFEST_SHA256)
+    return tuple(
+        (AuditedNetworkRepresentationRule if candidate.level == LEVEL_REPRESENTATION else AuditedNetworkRule)(
+            candidate, manifest
+        )
+        for candidate in manifest.candidates
+    )
 
 
 def active_rules(rules: tuple[NetworkRule, ...] | None = None) -> tuple[NetworkRule, ...]:
