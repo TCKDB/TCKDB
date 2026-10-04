@@ -31499,7 +31499,14 @@
           },
           "energy_units": {
             "default": "cal/mol",
-            "description": "CHEMKIN REACTIONS energy unit: cal/mol|kcal/mol|j/mol|kj/mol|k",
+            "description": "CHEMKIN REACTIONS energy unit. An unknown unit is refused, never replaced.",
+            "enum": [
+              "cal/mol",
+              "kcal/mol",
+              "j/mol",
+              "kj/mol",
+              "k"
+            ],
             "title": "Energy Units",
             "type": "string"
           },
@@ -31511,6 +31518,12 @@
             ],
             "title": "Format",
             "type": "string"
+          },
+          "include_reported": {
+            "default": false,
+            "description": "CHEMKIN only: a solve of kind 'reported' (rates transcribed from a publication) is written into a mechanism only when this is true, and then annotated with its literature (ADR 0010).",
+            "title": "Include Reported",
+            "type": "boolean"
           },
           "manifest": {
             "additionalProperties": true,
@@ -85881,6 +85894,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],

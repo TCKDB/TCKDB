@@ -10,7 +10,7 @@ one snapshot and refuses a stale, forged or incomplete one with a structured 422
 `network_export_manifest_stale`, `network_export_choice_not_allowed`, `network_export_representation_choice_invalid`,
 `network_export_unsupported_form`, now in `RejectionCode`). `allow_administrative_choice` is false on the server unless
 you pass true. It takes a public `net_` ref only (an integer id is refused before any request); `None` options are
-dropped, never sent as null. New typed shapes `NetworkSelectedKineticsExportRequest` and `NetworkSelectedKineticsExport`.
+dropped, never sent as null. `include_reported` (CHEMKIN only) writes a solve of kind `reported` with its literature annotated (ADR 0010). New typed shapes `NetworkSelectedKineticsExportRequest` and `NetworkSelectedKineticsExport`.
 
 ## 0.134.0 - 2026-10-04
 

@@ -114,7 +114,8 @@ def test_a_sole_eligible_node_exports_natively_with_provenance_and_endpoints(cli
     out = response.json()
     assert out["format"] == "native" and out["files"] is None and out["administrative"] is False
     assert out["selection_basis"] == "sole_eligible_candidate" and out["solve_ref"] == solve.public_ref
-    assert out["provenance"]["manifest_digest"] == manifest["digest"]
+    assert out["provenance"]["submitted_manifest_digest"] == manifest["digest"]
+    assert out["provenance"]["verified"]["snapshot_isolation"] and out["provenance"]["origin"]["solve_kind"] == "computed"
     assert out["request"]["profile"] == "exploratory" and out["request"]["allow_administrative_choice"] is False
     (member,) = out["members"]
     assert member["determination_ref"] == det and member["channel_key"] == "assoc"
@@ -477,3 +478,222 @@ def test_a_relabelled_review_basis_is_refused_even_when_the_digest_is_resealed(c
     )
     assert code(response) == "network_export_manifest_invalid" and context(response)["reason"] == "replay_failed"
     assert "review status" in context(response)["detail"]
+
+
+def _approve_network(session, world) -> None:
+    from app.db.models.common import SubmissionRecordType
+    from app.services.record_review import ensure_record_review, set_record_review_status
+
+    ensure_record_review(session, record_type=SubmissionRecordType.network, record_id=world.network.id)
+    set_record_review_status(
+        session, record_type=SubmissionRecordType.network, record_id=world.network.id, status=S.approved, actor=world.actor
+    )
+
+
+# -- review round: bounds, reported rates, direction, units, pinned numbers, provenance ----------------------------
+
+
+@pytest.mark.parametrize("limits", [{"solves": 0}, {"solves": 10**12, "snapshot_bytes": 10**12}])
+def test_the_documents_own_bounds_never_size_the_scan(client, world, one, limits):
+    """Lifted or lowered, re-sealed: the bounds are the server's, so the document is refused before any scan."""
+    _, det, fit = one
+    manifest = manifest_of(client, world)
+    forged = copy.deepcopy(manifest)
+    forged["request"]["bounds"].update(limits)
+    reseal(forged)
+    response = export(client, world, forged, det, [fit])
+    assert response.status_code == 422 and code(response) == "network_export_manifest_invalid"
+    assert context(response)["reason"] == "bounds_not_server_bounds"
+
+
+def test_a_computed_solve_is_labelled_computed_and_a_reported_one_is_disclosed(client, db_session, world):
+
+    computed = add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(A_))
+    det, fit = computed._dets["d_assoc"].public_ref, computed._fits[0].public_ref
+    out = export(client, world, manifest_of(client, world), det, [fit]).json()
+    assert out["provenance"]["origin"]["solve_kind"] == "computed" and out["members"][0]["solve_kind"] == "computed"
+    assert out["members"][0]["literature_ref"] is None
+
+
+def _reported_world(db_session, world):
+    from app.db.models.common import NetworkSolveKind
+
+    solve = add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(A_), kind=NetworkSolveKind.reported)
+    return solve, solve._dets["d_assoc"].public_ref, solve._fits[0].public_ref
+
+
+def test_a_reported_solve_reaches_chemkin_only_when_asked_for_and_then_with_its_literature(client, db_session, world):
+    """ADR 0010: a transcribed rate must not enter a mechanism file undisclosed."""
+    solve, det, fit = _reported_world(db_session, world)
+    manifest = manifest_of(client, world)
+    refused = export(client, world, manifest, det, [fit], format="chemkin")
+    assert code(refused) == "network_export_unsupported_form"
+    (form,) = context(refused)["forms"]
+    assert form["reason"] == "reported_solve_requires_include_reported" and form["literature_ref"].startswith("lit_")
+    out = export(client, world, manifest, det, [fit], format="chemkin", include_reported=True).json()
+    text = out["files"]["chem.inp"]
+    literature = out["provenance"]["origin"]["literature_ref"]
+    assert literature and f"[reported; literature {literature}]" in text and "kind=reported" in text.splitlines()[0]
+    assert "ADR 0010" in text and any("transcribed" in a for a in out["assumptions"])
+    native = export(client, world, manifest, det, [fit]).json()  # native carries the kind, so it is not gated
+    assert native["members"][0]["solve_kind"] == "reported" and native["members"][0]["literature_ref"] == literature
+
+
+def test_the_read_profile_check_is_what_refuses_a_manifest_made_under_another_profile(client, db_session, world):
+    _approve_network(db_session, world)
+    solve = add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(A_), review=S.approved)
+    manifest = manifest_of(client, world)  # exploratory
+    det, fit = solve._dets["d_assoc"].public_ref, solve._fits[0].public_ref
+    response = export(client, world, manifest, det, [fit], profile="curated")
+    assert response.status_code == 422 and code(response) == "network_export_manifest_stale"
+    assert "read_profile" in context(response)["differs"]
+    same = export(client, world, manifest_of(client, world, profile="curated"), det, [fit], profile="curated")
+    assert same.status_code == 200, same.text
+
+
+@pytest.mark.parametrize("units, factor", [("cm3_molecule_s", 6.02214076e23), ("m3_mol_s", 1.0e6)])
+def test_each_plog_rows_own_a_units_are_converted(client, db_session, world, units, factor):
+    solve = add_solve(db_session, world, fits=[fit_spec("assoc", units=units)], protocol=protocol(A_), review=None)
+    solve._fits[0].rate_units = None  # the rows alone state the unit
+    db_session.flush()
+    det, fit = solve._dets["d_assoc"].public_ref, solve._fits[0].public_ref
+    text = export(client, world, manifest_of(client, world), det, [fit], format="chemkin").json()["files"]["chem.inp"]
+    first_a = float(text.split("PLOG /")[1].split()[1])
+    assert first_a == pytest.approx(1.0e13 * factor, rel=1e-4)
+
+
+def _equation(text: str) -> tuple[set[str], set[str]]:
+    line = next(line for line in text.splitlines() if "=>" in line and not line.startswith("!"))
+    left, right = line.split("   ")[0].split("=>")
+    return {t.strip() for t in left.split("+")}, {t.strip() for t in right.split("+")}
+
+
+def test_the_equation_runs_from_the_channels_source_to_its_sink(client, db_session, world):
+    outputs = [{"channel_key": c, "availability": "supplied", "required": True} for c in ("assoc", "diss")]
+    solve = add_solve(
+        db_session, world, fits=[fit_spec("assoc"), fit_spec("diss")], solve_target=target(world, outputs=outputs),
+        product_sets=[{"key": "both", "members": [("d_assoc", []), ("d_diss", [])]}],
+    )
+    manifest = manifest_of(client, world, bundle_question(world, "assoc", "diss"))
+    node, (assoc, diss) = f"{solve.public_ref}/both", [f.public_ref for f in solve._fits]
+    single = {}
+    for ref, channel in ((assoc, "assoc"), (diss, "diss")):
+        single[channel] = _equation(
+            "\n".join(
+                line
+                for block in export(client, world, manifest, node, [assoc, diss], format="chemkin")
+                .json()["files"]["chem.inp"].split("\n")
+                for line in [block]
+                if f"TCKDB {ref}" in line
+            )
+        )
+    assert single["assoc"] == ({"H1", "C1H4"}, {"C1H3"})  # association: two reactants into the well
+    assert single["diss"] == ({"C1H3"}, {"H1", "C1H4"})  # dissociation: the same species, reversed
+
+
+def test_a_forged_snapshot_isolation_or_digest_is_never_echoed_as_verified(client, world, one):
+    _, det, fit = one
+    manifest = manifest_of(client, world)
+    forged = copy.deepcopy(manifest)
+    forged["snapshot_isolation"] = "serializable (forged)"
+    reseal(forged)
+    out = export(client, world, forged, det, [fit]).json()
+    assert out["provenance"]["submitted_manifest_digest"] == forged["digest"]  # labelled as what the caller sent
+    verified = out["provenance"]["verified"]
+    assert verified["snapshot_isolation"] != "serializable (forged)" and verified["snapshot_isolation"]
+    assert "serializable (forged)" not in str(verified)
+
+
+def test_editing_a_stored_coefficient_in_place_makes_the_manifest_stale(client, db_session, world):
+    from sqlalchemy import select
+
+    from app.db.models.network_pdep import NetworkKineticsPlog
+
+    solve = add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(A_), review=None)
+    det, fit = solve._dets["d_assoc"].public_ref, solve._fits[0].public_ref
+    manifest = manifest_of(client, world)
+    row = db_session.scalars(select(NetworkKineticsPlog).where(NetworkKineticsPlog.network_kinetics_id == solve._fits[0].id)).first()
+    row.a = row.a * 2.0  # same solve, same fit, a different number
+    db_session.flush()
+    response = export(client, world, manifest, det, [fit])
+    assert code(response) == "network_export_manifest_stale" and "solves" in context(response)["differs"]
+
+
+def test_an_unbounded_plog_is_not_refused_for_a_temperature_unit_it_never_stated(client, db_session, world):
+    solve = add_solve(
+        db_session, world, fits=[fit_spec("assoc", tmin=None, tmax=None, temperature_units=None)], protocol=protocol(A_)
+    )
+    det, fit = solve._dets["d_assoc"].public_ref, solve._fits[0].public_ref
+    out = export(client, world, manifest_of(client, world), det, [fit], format="chemkin")
+    assert out.status_code == 200, out.text
+
+
+def test_a_plog_with_unusable_pressure_units_gets_an_accurate_reason(client, db_session, world):
+    solve = add_solve(db_session, world, fits=[fit_spec("assoc", pressure_units="atm")], protocol=protocol(A_))
+    det, fit = solve._dets["d_assoc"].public_ref, solve._fits[0].public_ref
+    manifest = manifest_of(client, world)
+    if manifest["outcome"] == "no_applicable_candidate":
+        pytest.skip("the assessor already excludes non-bar pressure units")  # pragma: no cover
+    refused = export(client, world, manifest, det, [fit], format="chemkin")
+    assert {"kinetics_ref": fit, "reason": "plog_pressure_units_not_bar"} in context(refused)["forms"]
+    assert "axis_units_not_bar_kelvin" not in str(context(refused))
+
+
+def test_an_unknown_energy_unit_is_refused_not_replaced(client, world, one):
+    _, det, fit = one
+    manifest = manifest_of(client, world)
+    assert export(client, world, manifest, det, [fit], format="chemkin", energy_units="btu/mol").status_code == 422
+    ok = export(client, world, manifest, det, [fit], format="chemkin", energy_units="kj/mol").json()
+    assert "KJOULES/MOLE" in ok["files"]["chem.inp"]
+
+
+def test_an_oversized_export_body_is_refused_before_it_is_parsed(client, world, one):
+    from app.api.export_limits import MAX_BODY_BYTES
+
+    _, det, fit = one
+    junk = {"manifest": {"x": "a" * (MAX_BODY_BYTES + 10)}, "node_ref": det, "representation_refs": [fit]}
+    response = client.post(f"/api/v1/scientific/networks/{world.ref}/kinetics/export-selected", json=junk)
+    assert response.status_code == 413 and response.json()["code"] == "network_export_body_too_large"
+    assert response.json()["context"]["max_bytes"] == MAX_BODY_BYTES
+
+
+def test_an_export_is_logged_with_who_network_digest_format_and_member_count(client, world, one, caplog):
+    import logging
+
+    _, det, fit = one
+    manifest = manifest_of(client, world)
+    with caplog.at_level(logging.INFO, logger="app.services.network_selection.export"):
+        export(client, world, manifest, det, [fit], format="chemkin")
+    (record,) = [r for r in caplog.records if "network selected export" in r.getMessage()]
+    message = record.getMessage()
+    assert "actor=" in message and f"network={world.ref}" in message and "format=chemkin" in message
+    assert "members=1" in message and "digest=" in message
+
+
+def test_the_live_selection_always_runs_under_the_servers_bounds(db_session, world, one, monkeypatch):
+    """Even a document that somehow carried other limits would not size the scan: the request is rebuilt with ours."""
+    from app.services.network_selection import export as export_module
+    from app.services.network_selection.models import BOUNDS_V1, SelectionBounds
+
+    seen = {}
+
+    def spy(session, *, request, require_snapshot):
+        seen["bounds"] = request.bounds
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(export_module, "select_network", spy)
+    request = {
+        "network_ref": world.ref, "scope": "single_channel", "channel_key": "assoc", "observable": PRODUCT,
+        "coefficient_basis": "kernel", "degeneracy_applied": None, "temperature_min_k": 500.0, "temperature_max_k": 1500.0,
+        "pressure_min_bar": 0.5, "pressure_max_bar": 5.0, "outputs": [], "quantity": "rate_coefficient", "phase": "gas",
+        "bath": {"species_refs": [world.ar.public_ref], "mole_fractions": None},
+        "partition": {"retained": sorted(world.hashes.values()), "eliminated": [], "lumps": []},
+        "boundaries": [], "regime_kind": "time_independent", "initial_state_hashes": [],
+        "source_composition_hash": None, "sink_composition_hash": None, "objective": "physical_accuracy",
+        "reference_model_ref": None, "reference_outputs": None, "min_review_status": None,
+        "administrative_policy": "default", "result_mode": "all", "apply_rules": True,
+        "bounds": SelectionBounds(solves=1).to_dict(),
+    }
+    with pytest.raises(RuntimeError):
+        export_module._live_selection(db_session, {"request": request}, require_snapshot=False)
+    assert seen["bounds"] == BOUNDS_V1

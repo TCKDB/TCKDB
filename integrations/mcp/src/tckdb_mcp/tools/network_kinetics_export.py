@@ -43,13 +43,14 @@ TOOL_DESCRIPTION = (
 )
 
 FORMATS = ("native", "chemkin")
+ENERGY_UNITS = ("cal/mol", "kcal/mol", "j/mol", "kj/mol", "k")
 NAMING_POLICIES = ("formula", "public_ref")
 PROFILES = ("exploratory", "curated")
 
 _ACCEPTED_FIELDS: frozenset[str] = frozenset(
     {
         "network_ref", "manifest", "node_ref", "representation_refs", "format", "allow_administrative_choice",
-        "energy_units", "naming_policy", "profile",
+        "energy_units", "naming_policy", "include_reported", "profile",
     }
 )
 _REJECTED_INTEGER_FIELDS: frozenset[str] = frozenset(
@@ -94,7 +95,15 @@ INPUT_SCHEMA: dict[str, Any] = {
                 "incomplete membership or an unsupported serialisation."
             ),
         },
-        "energy_units": {"type": "string", "description": "CHEMKIN only: cal/mol, kcal/mol, j/mol, kj/mol or k."},
+        "energy_units": {"type": "string", "enum": list(ENERGY_UNITS), "default": "cal/mol", "description": "CHEMKIN only."},
+        "include_reported": {
+            "type": "boolean",
+            "default": False,
+            "description": (
+                "CHEMKIN only: a solve of kind 'reported' (rates transcribed from a publication) is written only when "
+                "true, and then annotated with its literature (ADR 0010)."
+            ),
+        },
         "naming_policy": {"type": "string", "enum": list(NAMING_POLICIES), "default": "formula"},
         "profile": {"type": "string", "enum": list(PROFILES), "default": "exploratory"},
     },
@@ -147,9 +156,13 @@ def run(client: TCKDBHttpClient, config: Config, arguments: dict[str, Any] | Non
             )
         body["allow_administrative_choice"] = args["allow_administrative_choice"]
     if "energy_units" in args:
-        if not isinstance(args["energy_units"], str):
-            raise invalid_input(f"energy_units must be a string; got {args['energy_units']!r}")
+        if args["energy_units"] not in ENERGY_UNITS:
+            raise invalid_input(f"energy_units must be one of {list(ENERGY_UNITS)!r}; got {args['energy_units']!r}")
         body["energy_units"] = args["energy_units"]
+    if "include_reported" in args:
+        if not isinstance(args["include_reported"], bool):
+            raise invalid_input(f"include_reported must be a boolean; got {args['include_reported']!r}")
+        body["include_reported"] = args["include_reported"]
     if "naming_policy" in args:
         if args["naming_policy"] not in NAMING_POLICIES:
             raise invalid_input(f"naming_policy must be one of {list(NAMING_POLICIES)!r}; got {args['naming_policy']!r}")

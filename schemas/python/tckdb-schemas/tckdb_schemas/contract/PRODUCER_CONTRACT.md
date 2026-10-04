@@ -280,6 +280,7 @@ Codes any request can receive, traced from the application's exception handlers 
 - [`idempotency_in_progress`](#c-idempotency-in-progress) (409): see the code reference
 - [`integrity_conflict`](#c-integrity-conflict) (409): see the code reference
 - [`invalid_idempotency_key`](#c-invalid-idempotency-key) (400): see the code reference
+- [`network_export_body_too_large`](#c-network-export-body-too-large) (413): see the code reference
 - [`query_timeout`](#c-query-timeout) (503): see the code reference
 - [`rate_limit_exceeded`](#c-rate-limit-exceeded) (429): see the code reference
 - [`request_validation_error`](#c-request-validation-error) (422): see the code reference
@@ -9402,6 +9403,16 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/network_energy_sources.py`.
 - The body's `context` names the things involved.
 - Message: "{field}: a '{calculation.type.value}' calculation cannot be the source of an energy stated as {stated}='{stated_value}'. Cite a {' or '.join((repr(value) for value in accepted_values))} calculation."
+
+<a id="c-network-export-body-too-large"></a>
+
+#### `network_export_body_too_large`
+
+- Status: 413; client-facing; arrives as: response_literal; defined in `backend/app/api/export_limits.py`.
+- Any request can receive it.
+- The body's `context` names the things involved.
+- Message: not found by the static search.
+- Note: POST /scientific/networks/{ref}/kinetics/export-selected.
 
 <a id="c-network-solve-reported-requires-literature"></a>
 

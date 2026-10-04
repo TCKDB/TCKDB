@@ -40,7 +40,14 @@ class NetworkSelectedKineticsExportRequest(BaseModel):
         description="Accept exporting one of several unranked leading alternatives. It never bypasses a conflict, "
         "an incomplete membership or an unsupported serialisation.",
     )
-    energy_units: str = Field(default="cal/mol", description="CHEMKIN REACTIONS energy unit: cal/mol|kcal/mol|j/mol|kj/mol|k")
+    energy_units: Literal["cal/mol", "kcal/mol", "j/mol", "kj/mol", "k"] = Field(
+        default="cal/mol", description="CHEMKIN REACTIONS energy unit. An unknown unit is refused, never replaced."
+    )
+    include_reported: bool = Field(
+        default=False,
+        description="CHEMKIN only: a solve of kind 'reported' (rates transcribed from a publication) is written into a "
+        "mechanism only when this is true, and then annotated with its literature (ADR 0010).",
+    )
     naming_policy: Literal["formula", "public_ref"] = "formula"
 
     @field_validator("representation_refs")

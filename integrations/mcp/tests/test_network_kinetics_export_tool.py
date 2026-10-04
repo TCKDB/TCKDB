@@ -117,6 +117,8 @@ def test_the_servers_answer_and_refusal_are_returned_verbatim():
         _args(allow_administrative_choice="yes"),
         _args(naming_policy="smiles"),
         _args(energy_units=5),
+        _args(energy_units="btu/mol"),
+        _args(include_reported="yes"),
         _args(profile="official"),
         _args(network_id=3),
         _args(solve_id=3),
@@ -146,3 +148,10 @@ def test_a_null_required_argument_is_still_a_missing_one():
     with pytest.raises(MCPToolError):
         _call(_client(handler), _args(node_ref=None))
     assert seen == []
+
+
+def test_include_reported_and_a_supported_energy_unit_are_forwarded():
+    seen, handler = _recording()
+    _call(_client(handler), _args(format="chemkin", include_reported=True, energy_units="kcal/mol"))
+    body = json.loads(seen[0].content)
+    assert body["include_reported"] is True and body["energy_units"] == "kcal/mol"

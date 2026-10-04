@@ -133,3 +133,12 @@ def test_the_signature_names_the_choice_and_no_rule_or_id_parameter():
     assert {"manifest", "node_ref", "representation_refs", "allow_administrative_choice"} <= params
     assert not [p for p in params if p.endswith("_id") or "rule" in p]
     assert "format" in NetworkSelectedKineticsExport.__annotations__
+
+
+def test_include_reported_is_forwarded_only_when_given():
+    seen, handler = _recorder()
+    with _client(handler) as client:
+        client.export_selected_network_kinetics(NETWORK, **CHOICE, format="chemkin", include_reported=True)
+        client.export_selected_network_kinetics(NETWORK, **CHOICE, include_reported=None)
+    assert json.loads(seen[0].content)["include_reported"] is True
+    assert "include_reported" not in json.loads(seen[1].content)

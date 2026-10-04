@@ -1490,8 +1490,9 @@ class NetworkSelectedKineticsExportRequest(TypedDict, total=False):
     representation_refs: Required[list[str]]
     format: Literal["native", "chemkin"]
     allow_administrative_choice: bool
-    energy_units: str
+    energy_units: Literal["cal/mol", "kcal/mol", "j/mol", "kj/mol", "k"]
     naming_policy: Literal["formula", "public_ref"]
+    include_reported: bool
 
 
 class NetworkSelectedKineticsExport(TypedDict):

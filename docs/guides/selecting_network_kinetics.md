@@ -117,6 +117,21 @@ snapshot and requires everything scientific to match. Each refusal is a 422, not
 `administrative: true`: a review and recency choice, not a method claim. It never bypasses a conflict, an empty
 selection, an incomplete membership or an unsupported form.
 
+**Literature-reported rates (ADR 0010).** A solve of kind `reported` holds rates transcribed from a publication, and a
+mechanism file has no field for provenance (comments are routinely stripped). So a `reported` solve is written into CHEMKIN
+only when you pass `include_reported: true`; otherwise it is an `network_export_unsupported_form` refusal naming the
+literature. When included, the file opens with a note and every reaction carries `[reported; literature ...]`. The ADR left the
+mechanism open (annotate, exclude by default, or gate behind an include token); this implements the last two together, and
+annotation as well. Native output always carries `solve_kind` and `literature_ref`, so it is not gated.
+
+**What is pinned, and what is echoed.** Each captured fit carries a digest of its stored numbers (coefficients, units,
+domain), so editing a coefficient in place makes a saved manifest `network_export_manifest_stale`. The bounds are the
+server's: a manifest whose request names other limits is refused (`bounds_not_server_bounds`) and the live selection always
+runs under the server's own. The response reports `provenance.submitted_manifest_digest` (what you sent, labelled) apart from
+`provenance.verified` (the digest, isolation and policy the server derived itself). A request body over the snapshot bound plus
+a small allowance is refused with 413 `network_export_body_too_large` before it is parsed, and every export is logged with the
+actor, network, digest, format and member count.
+
 Native output keeps every form with its solve, determination and representation refs, the channel's directed endpoints
 (with species), units and the stored numbers. CHEMKIN output is **forward-only** (`=>`): no reverse coefficient is
 derived from reversibility, and no thermodynamics are written, so there is no reverse or equilibrium assumption; both are

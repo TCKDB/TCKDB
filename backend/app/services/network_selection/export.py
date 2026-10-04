@@ -27,7 +27,9 @@ thermodynamics are written, so there is no reverse or thermo assumption to make.
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import logging
 import math
 from collections import Counter
 from dataclasses import dataclass
@@ -37,6 +39,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError
+from app.db.models.literature import Literature
 from app.db.models.network import Network
 from app.db.models.network_pdep import (
     NetworkKinetics,
@@ -61,6 +64,8 @@ from app.services.scientific_read.chemkin_serialize import (
 )
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel import Outcome
+
+logger = logging.getLogger(__name__)
 
 CODE_MANIFEST_INVALID = "network_export_manifest_invalid"
 CODE_MANIFEST_STALE = "network_export_manifest_stale"
@@ -93,6 +98,7 @@ class ExportChoice:
     allow_administrative_choice: bool = False
     energy_units: str = "cal/mol"
     naming_policy: str = "formula"
+    include_reported: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +120,13 @@ def _check_complete(manifest: dict[str, Any], network_ref: str) -> None:
             reason="too_large", limit_bytes=BOUNDS_V1.snapshot_bytes,
         )
     request = manifest["request"]
+    if isinstance(request, dict) and request.get("bounds") != BOUNDS_V1.to_dict():
+        # The document's own limits would otherwise size the live scan: a caller could lift every bound (or lower one to
+        # force a refusal) and re-seal. The bounds are the server's, never the document's.
+        raise _refuse(
+            CODE_MANIFEST_INVALID, "the submitted manifest was not made under the server's selection bounds.",
+            reason="bounds_not_server_bounds", bounds_version=BOUNDS_V1.version,
+        )
     if not isinstance(request, dict) or request.get("network_ref") != network_ref:
         raise _refuse(
             CODE_MANIFEST_INVALID, "the submitted manifest is for another network; nothing was exported.",
@@ -136,11 +149,15 @@ def _live_selection(session: Session, manifest: dict[str, Any], *, require_snaps
     request = NetworkRequest.from_dict(
         {k: v for k, v in manifest["request"].items() if k != "effective_review_statuses"}
     )
+    request = dataclasses.replace(request, bounds=BOUNDS_V1)  # never the document's own limits
     return select_network(session, request=request, require_snapshot=require_snapshot).manifest
 
 
-def _verify_against_server(session: Session, manifest: dict[str, Any], *, require_snapshot: bool) -> None:
-    """The submitted manifest must say what the server, reading now, says. Raises ``..._stale`` otherwise."""
+def _verify_against_server(session: Session, manifest: dict[str, Any], *, require_snapshot: bool) -> dict[str, Any]:
+    """The submitted manifest must say what the server, reading now, says. Raises ``..._stale`` otherwise.
+
+    :returns: the server's own manifest of the same request, the source of everything the export reports as verified.
+    """
     try:
         live = _live_selection(session, manifest, require_snapshot=require_snapshot)
     except (KeyError, TypeError) as exc:
@@ -167,6 +184,7 @@ def _verify_against_server(session: Session, manifest: dict[str, Any], *, requir
             "read profile changed, or the document was edited); run a fresh selection. Nothing was exported.",
             differs=sorted(set(differs)), unknown_request_keys=unknown,
         )
+    return live
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +354,17 @@ def _species_content(session: Session, refs: set[str]) -> dict[str, dict[str, An
     return {entry_ref: {"smiles": smiles, "species_ref": species_ref} for entry_ref, smiles, species_ref in rows}
 
 
+def _solve_origin(session: Session, manifest: dict[str, Any], solve_ref: str) -> dict[str, Any]:
+    """The solve's kind (from the verified manifest) and the literature a reported solve was transcribed from."""
+    kind = next(s["kind"] for s in manifest["solves"] if s["solve_ref"] == solve_ref)
+    literature_ref = session.scalar(
+        select(Literature.public_ref)
+        .join(NetworkSolve, NetworkSolve.literature_id == Literature.id)
+        .where(NetworkSolve.public_ref == solve_ref)
+    )
+    return {"solve_ref": solve_ref, "solve_kind": kind, "literature_ref": literature_ref}
+
+
 def _endpoints(manifest: dict[str, Any], channel_key: str) -> dict[str, Any]:
     network = manifest["network"]
     channel = next(c for c in network["channels"] if c["channel_key"] == channel_key)
@@ -394,9 +423,10 @@ def _chemkin_problems(fit: dict[str, Any]) -> list[str]:
     if kind not in ("plog", "chebyshev"):
         return [f"model_kind_{kind}_has_no_chemkin_form"]
     problems: list[str] = []
-    if fit["pressure_units"] != "bar" or fit["temperature_units"] != "kelvin":
-        problems.append("axis_units_not_bar_kelvin")
+    has_t_range = fit["temperature_min_k"] is not None and fit["temperature_max_k"] is not None
     if kind == "chebyshev":
+        if fit["pressure_units"] != "bar" or fit["temperature_units"] != "kelvin":
+            problems.append("axis_units_not_bar_kelvin")
         if fit["stores_log10_k"] is not True:
             problems.append("chebyshev_does_not_store_log10_k")
         if None in (fit["temperature_min_k"], fit["temperature_max_k"], fit["pressure_min_bar"], fit["pressure_max_bar"]):
@@ -406,6 +436,12 @@ def _chemkin_problems(fit: dict[str, Any]) -> list[str]:
         elif fit["rate_units"] is None:
             problems.append("rate_units_not_stated")
     else:
+        # A PLOG's pressures are always written, so their unit must be bar; its temperature unit matters only when the
+        # fit states a temperature range at all (an unbounded PLOG has no temperature unit to get wrong).
+        if fit["pressure_units"] != "bar":
+            problems.append("plog_pressure_units_not_bar")
+        if has_t_range and fit["temperature_units"] != "kelvin":
+            problems.append("plog_temperature_units_not_kelvin")
         if not fit["plog"]:
             problems.append("plog_entries_missing")
         if any(u is None for u in fit["_plog_units"]) and fit["rate_units"] is None:
@@ -414,9 +450,12 @@ def _chemkin_problems(fit: dict[str, Any]) -> list[str]:
 
 
 def _reaction_block(
-    equation: str, fit: dict[str, Any], energy_units: str
+    equation: str, fit: dict[str, Any], energy_units: str, origin_note: str = ""
 ) -> list[str]:
-    lines = [f"{equation}   1.0000E+00 0.000 0.0000   ! TCKDB {fit['kinetics_ref']} (k(T,P) is in the {fit['model_kind'].upper()} block)"]
+    lines = [
+        f"{equation}   1.0000E+00 0.000 0.0000   ! TCKDB {fit['kinetics_ref']}{origin_note} "
+        f"(k(T,P) is in the {fit['model_kind'].upper()} block)"
+    ]
     if fit["model_kind"] == "plog":
         for row, units in zip(fit["plog"], fit["_plog_units"], strict=True):
             a = _a_to_mol_cm_s(row["a"], units or _units_of(fit))
@@ -447,13 +486,21 @@ def _units_of(fit: dict[str, Any]) -> Any:
 
 def _chemkin_files(
     members: list[dict[str, Any]], fits: dict[str, dict[str, Any]], manifest: dict[str, Any],
-    species: dict[str, dict[str, Any]], choice: ExportChoice,
+    species: dict[str, dict[str, Any]], choice: ExportChoice, origin: dict[str, Any],
 ) -> tuple[dict[str, str], list[dict[str, Any]]]:
     """``(files, equation collisions)``; raises the structured refusal for anything unsupported."""
     names, compositions, problems = _plan_names(species, choice.naming_policy)
     forms: list[dict[str, Any]] = [
         {"reason": p["reason"], "species_ref": p["species_ref"]} for p in problems
     ]
+    reported = origin["solve_kind"] == "reported"
+    if reported and not choice.include_reported:
+        # ADR 0010 (mechanism export): a transcribed rate must not enter a mechanism file undisclosed, and comments are
+        # routinely stripped by the simulators that read it. Emitting one is therefore a named, deliberate act.
+        forms.append(
+            {"reason": "reported_solve_requires_include_reported", "solve_kind": "reported",
+             "literature_ref": origin["literature_ref"]}
+        )
     equations: dict[str, list[str]] = {}
     blocks: list[tuple[str, dict[str, Any]]] = []
     for member in members:
@@ -479,18 +526,28 @@ def _chemkin_files(
             format="chemkin", forms=forms,
         )
     elements = _elements({i: compositions[ref] for i, ref in enumerate(sorted(compositions))})
-    lines = ["ELEMENTS", " ".join(elements) or " ", "END", "", "SPECIES"]
+    lines = []
+    origin_note = ""
+    if reported:
+        origin_note = f" [reported; literature {origin['literature_ref']}]"
+        lines += [
+            f"! TCKDB: solve {origin['solve_ref']} is kind=reported. Its rates were transcribed from the literature "
+            f"({origin['literature_ref']}), not derived by TCKDB (ADR 0010).",
+            "! Requested explicitly with include_reported; every reaction below carries the same note.",
+        ]
+    lines += ["ELEMENTS", " ".join(elements) or " ", "END", "", "SPECIES"]
     for ref in sorted(names):
         lines.append(f"{names[ref]}   ! SMILES={species[ref]['smiles']} ref={species[ref]['species_ref']}")
     lines += ["END", "", f"REACTIONS {_EA_UNIT_HEADERS.get(choice.energy_units.lower(), 'CAL/MOLE')} MOLES"]
     for equation, fit in blocks:
-        lines.extend(_reaction_block(equation, fit, choice.energy_units))
+        lines.extend(_reaction_block(equation, fit, choice.energy_units, origin_note))
     lines += ["END", ""]
     return {"chem.inp": "\n".join(lines)}, collisions
 
 
 def _native_members(
-    members: list[dict[str, Any]], fits: dict[str, dict[str, Any]], species: dict[str, dict[str, Any]]
+    members: list[dict[str, Any]], fits: dict[str, dict[str, Any]], species: dict[str, dict[str, Any]],
+    origin: dict[str, Any],
 ) -> list[dict[str, Any]]:
     out = []
     for member in members:
@@ -500,6 +557,8 @@ def _native_members(
             {
                 "determination_ref": member["determination_ref"],
                 "channel_key": member["channel_key"],
+                "solve_kind": origin["solve_kind"],
+                "literature_ref": origin["literature_ref"],
                 "channel": {
                     "kind": ends["kind"],
                     "mechanism": ends["mechanism"],
@@ -538,7 +597,8 @@ def _native_collisions(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def export_selected(
-    session: Session, *, network_ref: str, manifest: dict[str, Any], choice: ExportChoice, require_snapshot: bool = True
+    session: Session, *, network_ref: str, manifest: dict[str, Any], choice: ExportChoice,
+    require_snapshot: bool = True, actor: str = "anonymous",
 ) -> dict[str, Any]:
     """Verify the manifest and the choice, then serialise. Read-only; see the module docstring.
 
@@ -553,7 +613,7 @@ def export_selected(
         raise _refuse(CODE_MANIFEST_INVALID, "the submitted manifest is not a document.", reason="not_a_document")
     _check_complete(manifest, network_ref)
     _replay(manifest)
-    _verify_against_server(session, manifest, require_snapshot=require_snapshot)
+    live = _verify_against_server(session, manifest, require_snapshot=require_snapshot)
     administrative = _check_choice(manifest, choice)
     solve_ref, members = _members(manifest, choice.node_ref)
     if not members:
@@ -568,6 +628,7 @@ def export_selected(
         member["channel"] = _endpoints(manifest, member["channel_key"])
     refs = {ref for member in members for end in ("source", "sink") for ref, _ in member["channel"][end]["participants"]}
     species = _species_content(session, refs)
+    origin = _solve_origin(session, manifest, solve_ref)
     assumptions = [
         "Forward direction only: the channel is directed, and no reverse coefficient is derived from reversibility.",
         "No thermodynamics are written, so no reverse or equilibrium assumption is made.",
@@ -581,24 +642,38 @@ def export_selected(
         "selection_basis": "administrative_choice" if administrative else manifest["decision"]["outcome"],
         "administrative": administrative,
         "provenance": {
-            "manifest_digest": manifest["digest"],
-            "policy": manifest["policy"],
+            "origin": origin,
+            # What the caller sent, labelled as such: the document's own claims are never echoed as verified.
+            "submitted_manifest_digest": manifest["digest"],
+            # What the server derived itself, reading now under its own snapshot.
+            "verified": {
+                "manifest_digest": live["digest"],
+                "snapshot_isolation": live["snapshot_isolation"],
+                "policy": live["policy"],
+            },
             "request": {k: manifest["request"][k] for k in ("scope", "coefficient_basis", "temperature_min_k",
                                                               "temperature_max_k", "pressure_min_bar", "pressure_max_bar")},
-            "snapshot_isolation": manifest["snapshot_isolation"] if "snapshot_isolation" in manifest else None,
         },
         "assumptions": assumptions,
-        "members": _native_members(members, fits, species),
+        "members": _native_members(members, fits, species, origin),
         "files": None,
         "equation_collisions": [],
     }
     if choice.format == "chemkin":
-        files, collisions = _chemkin_files(members, fits, manifest, species, choice)
+        files, collisions = _chemkin_files(members, fits, manifest, species, choice, origin)
         result["files"] = files
         result["equation_collisions"] = collisions
         result["assumptions"].append("Pressure is written in atm (CHEMKIN) from the stored bar; energies in " + choice.energy_units + ".")
     else:
         result["equation_collisions"] = _native_collisions(members)
+    if origin["solve_kind"] == "reported":
+        result["assumptions"].append(
+            "The solve is kind=reported: its rates were transcribed from the cited literature, not derived by TCKDB."
+        )
+    logger.info(
+        "network selected export: actor=%s network=%s digest=%s format=%s members=%d administrative=%s",
+        actor, network_ref, live["digest"]["value"], choice.format, len(members), administrative,
+    )
     return result
 
 

@@ -160,6 +160,7 @@ def test_export_selected_answers_200_over_committed_rows_from_a_downloaded_manif
         json={
             "manifest": manifest, "node_ref": committed.determination,
             "representation_refs": [committed.fit], "format": fmt,
+            "include_reported": True,  # the committed solve is a reported one (ADR 0010)
         },
     )
     assert response.status_code == 200, response.text
@@ -167,7 +168,7 @@ def test_export_selected_answers_200_over_committed_rows_from_a_downloaded_manif
     assert body["solve_ref"] == committed.solve and body["selection_basis"] == "sole_eligible_candidate"
     assert body["members"][0]["representation"]["kinetics_ref"] == committed.fit
     if fmt == "chemkin":
-        assert "=>" in body["files"]["chem.inp"]
+        assert "=>" in body["files"]["chem.inp"] and "[reported; literature" in body["files"]["chem.inp"]
 
 
 def test_export_selected_refuses_a_forged_manifest_through_the_real_dependency_too(real_app_client, committed):

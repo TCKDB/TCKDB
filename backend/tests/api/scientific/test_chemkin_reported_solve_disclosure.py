@@ -11,10 +11,13 @@ this export, a reported solve's PLOG or Chebyshev block would enter a mechanism
 file indistinguishable from one TCKDB derived itself, and would then propagate
 into every simulation built on that file.
 
-**There is no live gap today**: ``chemkin_serialize`` touches only the classic
-``kinetics`` table. This test exists so that when someone adds network kinetics
-to the export, the decision is *forced* rather than skipped. It is a tripwire,
-not a check on behaviour that exists.
+**There is no live gap in the legacy serializer**: ``chemkin_serialize`` touches
+only the classic ``kinetics`` table, and this test is a tripwire so that adding
+network kinetics there forces the decision. The selected network export
+(``network_selection/export.py``) does write network kinetics and implements the
+disclosure (a ``reported`` solve reaches CHEMKIN only with ``include_reported``,
+annotated with its literature; behaviour is tested in ``test_api_network_export.py``).
+The same guard watches both files.
 """
 
 from __future__ import annotations
@@ -22,8 +25,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-_SERIALIZER = (
-    Path(__file__).parents[3] / "app" / "services" / "scientific_read" / "chemkin_serialize.py"
+import pytest
+
+_SERIALIZERS = (
+    Path(__file__).parents[3] / "app" / "services" / "scientific_read" / "chemkin_serialize.py",
+    # The selected network export writes network kinetics into CHEMKIN, so it must disclose a reported solve (ADR 0010).
+    Path(__file__).parents[3] / "app" / "services" / "network_selection" / "export.py",
 )
 
 # Any of these appearing in the serializer means network kinetics have started
@@ -50,7 +57,8 @@ _ORIGIN_MARKERS = (
 )
 
 
-def test_chemkin_export_discloses_transcribed_rates_if_it_emits_them() -> None:
+@pytest.mark.parametrize("serializer", _SERIALIZERS, ids=lambda p: p.name)
+def test_chemkin_export_discloses_transcribed_rates_if_it_emits_them(serializer: Path) -> None:
     """Adding network kinetics to CHEMKIN export requires deciding on disclosure.
 
     The three defensible answers, none of which this test picks:
@@ -67,7 +75,7 @@ def test_chemkin_export_discloses_transcribed_rates_if_it_emits_them() -> None:
     What is *not* defensible is emitting them with no disclosure at all, which
     is what happens by default if nobody thinks about it.
     """
-    source = _SERIALIZER.read_text()
+    source = serializer.read_text()
 
     # Comments and docstrings mention these words legitimately; only look at code.
     code = "\n".join(
@@ -80,7 +88,7 @@ def test_chemkin_export_discloses_transcribed_rates_if_it_emits_them() -> None:
         return  # No live gap: the export still covers only the classic table.
 
     assert any(marker in code for marker in _ORIGIN_MARKERS), (
-        "chemkin_serialize.py now reads network kinetics but never reads the "
+        f"{serializer.name} now reads network kinetics but never reads the "
         "solve's origin kind, so a `reported` solve's rates would enter a "
         "mechanism file indistinguishable from rates this database derived "
         "(ADR 0010). Decide explicitly: annotate with a `!` comment beside the "

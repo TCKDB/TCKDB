@@ -2062,6 +2062,7 @@ class TCKDBClient:
         allow_administrative_choice: bool | None = None,
         energy_units: str | None = None,
         naming_policy: str | None = None,
+        include_reported: bool | None = None,
         profile: str | None = None,
     ) -> NetworkSelectedKineticsExport:
         """``POST /scientific/networks/{ref}/kinetics/export-selected``.
@@ -2074,7 +2075,8 @@ class TCKDBClient:
         ``network_ref`` must be a public ``net_...`` ref. ``format`` is ``native`` (the server default) or
         ``chemkin`` (forward-only, no thermodynamics). ``allow_administrative_choice`` is false on the server unless
         you pass true, and then permits only an unranked leading-front choice. Optional fields that are ``None`` are
-        dropped, never sent as JSON null.
+        dropped, never sent as JSON null. A solve of kind ``reported`` (rates transcribed from a publication) is written
+        into CHEMKIN only with ``include_reported=True``, and then annotated with its literature (ADR 0010).
         """
         path = _network_export_path(network_ref)
         body: dict[str, Any] = {
@@ -2084,7 +2086,7 @@ class TCKDBClient:
         }
         for key, value in (
             ("format", format), ("allow_administrative_choice", allow_administrative_choice),
-            ("energy_units", energy_units), ("naming_policy", naming_policy),
+            ("energy_units", energy_units), ("naming_policy", naming_policy), ("include_reported", include_reported),
         ):
             if value is not None:
                 body[key] = value

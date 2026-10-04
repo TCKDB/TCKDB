@@ -17,8 +17,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_snapshot_db
+from app.api.deps import get_optional_current_user, get_snapshot_db
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.db.models.app_user import AppUser
 from app.schemas.reads.scientific_network_export import (
     NetworkSelectedKineticsExport,
     NetworkSelectedKineticsExportRequest,
@@ -42,6 +43,7 @@ def export_selected_network_kinetics(
     body: NetworkSelectedKineticsExportRequest,
     network_ref: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_snapshot_db),
+    user: AppUser | None = Depends(get_optional_current_user),
 ) -> NetworkSelectedKineticsExport:
     """Serialise the chosen node of a saved selection manifest, after verifying it against the server.
 
@@ -75,8 +77,10 @@ def export_selected_network_kinetics(
             allow_administrative_choice=body.allow_administrative_choice,
             energy_units=body.energy_units,
             naming_policy=body.naming_policy,
+            include_reported=body.include_reported,
         ),
         require_snapshot=not session.info.get(SNAPSHOT_OPT_OUT, False),
+        actor=user.username if user is not None else "anonymous",
     )
     payload = NetworkSelectedKineticsExport(
         request={

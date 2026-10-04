@@ -43,6 +43,13 @@ the stored numbers) or a forward-only CHEMKIN `chem.inp`. Read-only.
   made; the output records both. Forms with no CHEMKIN serialisation (a tabulated fit, a Chebyshev not stored as log10 k,
   a missing mapping domain, a species without a composition) and two chosen channels sharing one equation are a structured
   `network_export_unsupported_form` naming each; a native export keeps every form and reports equation collisions.
+- **Reported rates are disclosed (ADR 0010).** A `reported` solve reaches CHEMKIN only with `include_reported`, annotated
+  with its literature; native output carries `solve_kind` and `literature_ref`.
+- **Numbers are pinned and the server's bounds are used.** Selection manifests are now format 2: each captured fit carries a
+  digest of its stored numbers, so an in-place coefficient edit makes a saved manifest stale (a format-1 manifest is refused as
+  invalid). A manifest naming other bounds is refused and the live selection always uses the server's. The response labels the
+  caller's digest apart from the server-derived one, the request body is capped before parsing (413
+  `network_export_body_too_large`), exports are logged, and `energy_units` is a closed set.
 - `tckdb-client` 0.135.0 adds `export_selected_network_kinetics`, `tckdb-mcp` 0.6.0 adds
   `tckdb_export_selected_network_kinetics`, and `tckdb-schemas` 0.104.0 adds the five refusal codes and the contract route
   row. See `docs/guides/selecting_network_kinetics.md`.

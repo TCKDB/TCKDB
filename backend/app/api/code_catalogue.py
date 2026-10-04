@@ -1879,6 +1879,15 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "that never recorded it is refused rather than served with "
                 "an unlabeled k, per the unit policy (docs/unit_policy.md)."
             )),
+    ApiCode("network_export_body_too_large", 413, Surface.response_literal,
+            "backend/app/api/export_limits.py",
+            shape=Shape.relationship,
+            note=(
+                "POST /scientific/networks/{ref}/kinetics/export-selected. Written by NetworkExportBodyLimitMiddleware, "
+                "an ASGI middleware, because the cap has to hold before the manifest is parsed. context carries "
+                "max_bytes (the selection snapshot bound plus a fixed allowance) and, when the request declared a "
+                "Content-Length, given_bytes."
+            )),
     ApiCode("network_export_choice_not_allowed", 422, Surface.coded_exception,
             "backend/app/services/network_selection/export.py",
             shape=Shape.relationship,
