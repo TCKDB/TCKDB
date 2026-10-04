@@ -97,6 +97,8 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "get_transition_state_entry": ("tse_1",),
     "select_species_thermo": ("spe_1",),
     "get_species_thermo_selection_manifest": ("spe_1",),
+    "select_reaction_kinetics": ("rxe_1",),
+    "get_reaction_kinetics_selection_manifest": ("rxe_1",),
 }
 
 #: Methods with required *keyword-only* parameters beyond the handle in
@@ -107,6 +109,8 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
 _REQUIRED_KEYWORD_ARGUMENTS: dict[str, dict] = {
     "select_species_thermo": {"target": {"kind": "equilibrium_ensemble"}},
     "get_species_thermo_selection_manifest": {"target": {"kind": "equilibrium_ensemble"}},
+    "select_reaction_kinetics": {"direction": "forward", "target": {"kind": "whole_reaction"}, "coefficient_basis": "elementary_coefficient", "temperature_min_k": 500.0, "temperature_max_k": 1500.0, "pressure": {"kind": "independent"}},
+    "get_reaction_kinetics_selection_manifest": {"direction": "forward", "target": {"kind": "whole_reaction"}, "coefficient_basis": "elementary_coefficient", "temperature_min_k": 500.0, "temperature_max_k": 1500.0, "pressure": {"kind": "independent"}},
     "evaluate_network_kinetics_batch": {
         "temperature_k": [1000.0],
         "pressure_bar": [1.0],

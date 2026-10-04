@@ -133,7 +133,11 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule]
 
 
 def replay_matches(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule] | None = None) -> bool:
-    """True when replaying the manifest reproduces the decision it records."""
+    """True when replaying the manifest reproduces the decision it records and the outcome it states.
+
+    The top-level ``outcome`` is compared too: it is a summary a reader trusts, so an edit of it that the decision
+    does not support must not "match".
+    """
     replayed = replay_decision(manifest, rules=rules)
     recorded = manifest["decision"] if manifest["decision"] is not None else {"outcome": manifest["outcome"]}
-    return replayed == recorded
+    return replayed == recorded and replayed["outcome"] == manifest["outcome"]

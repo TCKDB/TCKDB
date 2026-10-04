@@ -235,7 +235,7 @@ class KineticsRequest:
             ),
             min_review_status=RecordReviewStatus(raw["min_review_status"]) if raw["min_review_status"] else None,
             admin_policy=SelectionPolicy(raw["administrative_policy"]),
-            max_candidates=raw["max_candidates"],
+            max_candidates=raw.get("max_candidates", MAX_CANDIDATES),
             apply_rules=raw["apply_rules"],
         )
 

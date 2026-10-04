@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.133.0 - 2026-10-04
+
+Method-aware selection among a reaction entry's stored rate coefficients, for one stated gas-phase question
+(`tckdb-schemas` is unchanged; the producer contract is unchanged). Read-only; browsing (`get_reaction_kinetics`) is
+unchanged.
+
+- `select_reaction_kinetics(reaction_entry_ref, *, direction, target, coefficient_basis, temperature_min_k,
+  temperature_max_k, pressure, collider=None, policy=None, mode=None, min_review_status=None, phase=None,
+  profile=None)` posts to `/scientific/reaction-entries/{ref}/kinetics/select`. It takes a public `rxe_` ref only
+  (an integer id is refused before any request). The question is required and never defaulted; the optional fields
+  are sent only when you supply them.
+- `get_reaction_kinetics_selection_manifest(...)` returns the replayable decision manifest of the same request
+  (`/kinetics/select/manifest`), a new snapshot of the current data and not a retrieval of an earlier selection.
+- New typed shapes: `KineticsSelectionRequest`, `KineticsSelectionTargetIn`, `KineticsSelectionPressureIn`,
+  `KineticsSelectionColliderIn`, `KineticsSelectionResponse`, `KineticsSelectionPick`, `KineticsSelectionCandidate`,
+  `KineticsSelectionDisclosures` and the `KineticsSelectionOutcomeToken` vocabulary (`policy_preferred`,
+  `incomparable_alternatives`, `sole_eligible_candidate`, `no_applicable_candidate`, `policy_conflict`). A
+  population over the server's cap of 500 visible records is a 422 (`kinetics_selection_population_too_large`); the
+  client never caps or pages it itself.
+- Every rule in this server release is inactive, so `method_preferred` ranks nothing yet: expect
+  `incomparable_alternatives` or `sole_eligible_candidate`, with the administrative order and the reasons.
+
 ## 0.130.0 - 2026-10-04
 
 `RejectionCode` gains `kinetics_energy_level_contradiction`, regenerated from the server's catalogue; nothing else changes.

@@ -114,6 +114,27 @@ declarations on kinetics, with upload and read round trips.** Selection, assessm
   on `species.smiles` and no `isotope_key` are now read through that SMILES, and so does the Hessian reanalysis protium check, as the consistency checks
   already did. Existing stored data is unaffected; only uploads are judged.
 
+## Method-aware kinetics selection endpoint (2026-10-04)
+
+- tckdb-backend, tckdb-client 0.130.0, tckdb-schemas 0.98.0 and tckdb-mcp 0.4.0: a read-only
+  `POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select` assesses every visible kinetics
+  record of a reaction entry against one stated gas-phase rate-coefficient question (direction, target, coefficient
+  basis, temperature window, pressure, collider) and returns the outcome (`policy_preferred`,
+  `incomparable_alternatives`, `sole_eligible_candidate`, `no_applicable_candidate`, or `policy_conflict`) with the
+  assessments, determinations, preference relations, ordered fronts, rule versions and disclosures.
+  `/kinetics/select/manifest` downloads the replayable decision manifest. The read runs in a read-only REPEATABLE READ
+  snapshot opened before the route body (`get_snapshot_db`). More than 500 visible records is a 422
+  (`kinetics_selection_population_too_large`). Records below the review floor are listed only when the read profile
+  has no floor of its own. The client gains `select_reaction_kinetics` and the MCP server
+  `tckdb_select_reaction_entry_kinetics`. The application now also builds the kinetics rule registry at startup, so a
+  bad manifest pin fails the deploy. **Every rule in this release is inactive** (the XYG3 versus B3LYP barrier rule is
+  audited and shipped inactive with its blockers recorded), so `method_preferred` ranks nothing yet. Browse order is
+  unchanged. Fourth of four changes toward method-aware kinetics selection. No schema change, no new environment
+  variable, no new refusal code. OpenAPI: the shared `KineticsDeterminationTargetKind` enum is now one component
+  (previously `KineticsDeterminationTargetKind-Input`). A read-only coverage inventory
+  (`backend/scripts/ops/kinetics_selection_coverage_inventory.py`) counts how many stored records qualify. See
+  `docs/guides/selecting_kinetics.md`.
+
 ## Method-aware H298 selection endpoint (2026-10-03)
 
 - tckdb-backend, tckdb-client 0.126.0, tckdb-schemas 0.90.0 and tckdb-mcp 0.3.0: a read-only

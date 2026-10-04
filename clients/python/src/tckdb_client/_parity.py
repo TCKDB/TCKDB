@@ -261,6 +261,14 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "get_reaction_kinetics", None, "examples/scientific_reads.py",
         "tests/test_scientific.py",
     ),
+    (
+        "POST", "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select",
+        "select_reaction_kinetics", None, None, "tests/test_kinetics_selection.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest",
+        "get_reaction_kinetics_selection_manifest", None, None, "tests/test_kinetics_selection.py",
+    ),
     # --- Species-entry subresources ---------------------------------
     (
         "GET", "/api/v1/scientific/species-entries/{species_entry_id}/thermo",

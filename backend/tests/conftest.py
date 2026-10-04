@@ -21,7 +21,7 @@ from sqlalchemy.pool import NullPool
 from app.api import deps as api_deps
 from app.api.app import create_app
 from app.api.config import settings
-from app.api.deps import get_current_user, get_db, get_write_db
+from app.api.deps import get_current_user, get_db, get_snapshot_db, get_write_db
 from app.api.rate_limit import reset_rate_limit_store
 from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
@@ -1758,6 +1758,10 @@ def client(db_engine, _api_test_user) -> Iterator[TestClient]:
     # Override both DB dependencies to use our transactional session
     app.dependency_overrides[get_db] = lambda: session
     app.dependency_overrides[get_write_db] = lambda: session
+    # The kinetics selection routes ask for a read-only REPEATABLE READ session of their own; the harness holds one
+    # outer transaction (and writes into it), so it gives them the harness session. The dependency itself is
+    # tested in tests/api/test_snapshot_db_dependency.py.
+    app.dependency_overrides[get_snapshot_db] = lambda: session
 
     # Override auth to return the pre-seeded test user
     test_user = session.get(AppUser, _api_test_user)

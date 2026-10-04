@@ -59,6 +59,8 @@ from tckdb_client.scientific_types import (
     KineticsAnalyticsResponse,
     KineticsRecord,
     KineticsSearchResponse,
+    KineticsSelectionRequest,
+    KineticsSelectionResponse,
     LevelOfTheoryDetailResponse,
     LevelOfTheoryRecord,
     LevelOfTheorySearchResponse,
@@ -148,6 +150,48 @@ def _selection_body(
     for key, value in (
         ("policy", policy), ("result_mode", result_mode), ("min_review_status", min_review_status),
         ("temperature_k", temperature_k), ("phase", phase),
+    ):
+        if value is not None:
+            body[key] = value
+    return body  # type: ignore[return-value]
+
+
+def _kinetics_selection_path(reaction_entry_ref: str) -> str:
+    """Path of the kinetics-selection endpoint for a public ``rxe_`` ref (integer ids are refused)."""
+    if not isinstance(reaction_entry_ref, str) or not reaction_entry_ref.startswith("rxe_"):
+        raise ValueError(
+            "reaction_entry_ref must be a public reaction-entry ref starting with 'rxe_'; "
+            f"got {reaction_entry_ref!r}."
+        )
+    return f"/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select"
+
+
+def _kinetics_selection_body(
+    *,
+    direction: str,
+    target: Mapping[str, Any],
+    coefficient_basis: str,
+    temperature_min_k: float,
+    temperature_max_k: float,
+    pressure: Mapping[str, Any],
+    collider: Mapping[str, Any] | None,
+    policy: str | None,
+    mode: str | None,
+    min_review_status: str | None,
+    phase: str | None,
+) -> KineticsSelectionRequest:
+    """The request body: the question as stated plus whichever optional fields were supplied (no defaults of ours)."""
+    body: dict[str, Any] = {
+        "direction": direction,
+        "target": dict(target),
+        "coefficient_basis": coefficient_basis,
+        "temperature_min_k": temperature_min_k,
+        "temperature_max_k": temperature_max_k,
+        "pressure": dict(pressure),
+    }
+    for key, value in (
+        ("collider", dict(collider) if collider is not None else None),
+        ("policy", policy), ("mode", mode), ("min_review_status", min_review_status), ("phase", phase),
     ):
         if value is not None:
             body[key] = value
@@ -1751,6 +1795,87 @@ class TCKDBClient:
         )
         return self.request_json(
             "POST", _selection_path(species_entry_ref) + "/manifest", json=body,
+            params={"profile": profile}, authenticated=False,
+        ).data
+
+    def select_reaction_kinetics(
+        self,
+        reaction_entry_ref: str,
+        *,
+        direction: str,
+        target: Mapping[str, Any],
+        coefficient_basis: str,
+        temperature_min_k: float,
+        temperature_max_k: float,
+        pressure: Mapping[str, Any],
+        collider: Mapping[str, Any] | None = None,
+        policy: str | None = None,
+        mode: str | None = None,
+        min_review_status: str | None = None,
+        phase: str | None = None,
+        profile: str | None = None,
+    ) -> KineticsSelectionResponse:
+        """``POST /scientific/reaction-entries/{ref}/kinetics/select``.
+
+        Method-aware selection among one reaction entry's stored rate coefficients, for one stated gas-phase
+        question. Read-only; the ordinary :meth:`get_reaction_kinetics` browse order is unchanged.
+
+        ``reaction_entry_ref`` must be a public ``rxe_...`` ref; an integer id is refused here and by the server.
+        The question is required and is never defaulted: ``direction`` (``forward`` or ``reverse``, relative to the
+        stored orientation), ``target`` (``{"kind": "whole_reaction"}``, or ``resolved_channel`` with
+        ``transition_state_entry_ref`` or ``network_ref`` and ``channel_key``), ``coefficient_basis``
+        (``elementary_coefficient``, ``third_body_kernel`` or ``composition_effective_coefficient``), the
+        temperature window and ``pressure`` (``{"kind": "independent"}``, ``{"kind": "high_pressure_limit"}`` or
+        ``{"kind": "finite", "min_bar": ..., "max_bar": ...}``). A ``collider``
+        (``{"components": [{"species_ref": "spc_..."}]}``, with ``mole_fraction`` on each of two or more for a
+        mixture) is required for a finite pressure and for a composition-effective coefficient. ``policy`` is
+        ``method_preferred`` (the server default), ``default``, ``most_reviewed`` or ``latest``; ``mode`` is ``all``
+        (default) or ``first``. ``phase`` exists only so a conflicting value is refused by the server.
+
+        The result's ``outcome`` and ``basis`` are the server's explanation: report them verbatim. ``selection``
+        names a determination (with every eligible fitted representation of it) only when the outcome supports one,
+        and says so when the choice was administrative. A population over the server's cap of 500 visible records
+        is a 422 (``kinetics_selection_population_too_large``); this client never caps or pages it itself.
+        """
+        path = _kinetics_selection_path(reaction_entry_ref)
+        body = _kinetics_selection_body(
+            direction=direction, target=target, coefficient_basis=coefficient_basis,
+            temperature_min_k=temperature_min_k, temperature_max_k=temperature_max_k, pressure=pressure,
+            collider=collider, policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
+        )
+        return self.request_json(
+            "POST", path, json=body, params={"profile": profile}, authenticated=False
+        ).data
+
+    def get_reaction_kinetics_selection_manifest(
+        self,
+        reaction_entry_ref: str,
+        *,
+        direction: str,
+        target: Mapping[str, Any],
+        coefficient_basis: str,
+        temperature_min_k: float,
+        temperature_max_k: float,
+        pressure: Mapping[str, Any],
+        collider: Mapping[str, Any] | None = None,
+        policy: str | None = None,
+        mode: str | None = None,
+        min_review_status: str | None = None,
+        profile: str | None = None,
+    ) -> JSONDict:
+        """``POST /scientific/reaction-entries/{ref}/kinetics/select/manifest``.
+
+        The replayable decision manifest for the same request as :meth:`select_reaction_kinetics`: public refs
+        only, enough to recompute the decision with no database. It is a new snapshot of the current data, not a
+        retrieval of an earlier selection.
+        """
+        body = _kinetics_selection_body(
+            direction=direction, target=target, coefficient_basis=coefficient_basis,
+            temperature_min_k=temperature_min_k, temperature_max_k=temperature_max_k, pressure=pressure,
+            collider=collider, policy=policy, mode=mode, min_review_status=min_review_status, phase=None,
+        )
+        return self.request_json(
+            "POST", _kinetics_selection_path(reaction_entry_ref) + "/manifest", json=body,
             params={"profile": profile}, authenticated=False,
         ).data
 

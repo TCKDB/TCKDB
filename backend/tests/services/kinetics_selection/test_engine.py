@@ -301,3 +301,35 @@ def test_a_refuted_representation_makes_the_side_false_even_beside_an_unknown_on
     decision = run(cands(*records), (LabelRule("R1", {"a"}, {"b"}),))
     (verdicts,) = [m["determinations"] for m in decision.rule_matches]
     assert next(v for v in verdicts if v["determination_ref"] == "kdet_a")["preferred"]["state"] == "false"
+
+
+def test_a_rule_without_an_objective_is_refused_so_two_unnamed_rules_never_compose():
+    rules = (LabelRule("R1", {"a"}, {"b"}, objective_key=""), LabelRule("R2", {"b"}, {"c"}, objective_key=""))
+    records = (rec("k_a", "kdet_a", "a", 1), rec("k_b", "kdet_b", "b", 2), rec("k_c", "kdet_c", "c", 3))
+    with pytest.raises(ValueError, match="names the objective") as caught:
+        run(cands(*records), rules)
+    assert "R1" in str(caught.value) and "R2" in str(caught.value)
+
+
+def test_every_shipped_rule_names_its_objective():
+    from app.services.kinetics_selection.rules import default_rules
+
+    assert all(rule.objective_key for rule in default_rules())
+
+
+def test_a_rule_with_a_different_objective_never_supersedes_another_so_both_sets_of_edges_are_unused():
+    # R2 prefers b over a and supersedes R1, but it compares another objective: policy is that nothing composes.
+    rules = (
+        LabelRule("R1", {"a"}, {"b"}, objective_key="barrier"),
+        LabelRule("R2", {"b"}, {"a"}, objective_key="tunneling", supersedes=("R1",)),
+    )
+    decision = run(cands(*AB), rules)
+    assert decision.edges == () and decision.overridden_edges == ()
+    assert {e["rule_id"] for e in decision.unused_edges} == {"R1", "R2"}
+    assert decision.outcome is Outcome.incomparable_alternatives and decision.basis == BASIS_OBJECTIVES_NOT_COMPOSED
+    # Within one objective the same pair of rules does honour the supersession.
+    same = (
+        LabelRule("R1", {"a"}, {"b"}, objective_key="barrier"),
+        LabelRule("R2", {"b"}, {"a"}, objective_key="barrier", supersedes=("R1",)),
+    )
+    assert run(cands(*AB), same).selected_determination_ref == "kdet_b"
