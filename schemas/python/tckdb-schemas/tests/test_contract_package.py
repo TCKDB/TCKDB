@@ -90,21 +90,34 @@ def test_an_unknown_schema_name_is_refused() -> None:
 
 def test_changes_since_returns_only_newer_entries() -> None:
     text = (
-        "# x\n\n## What changed\n\n### 0.52.0 - 2026-09-29\n\nnew\n\n"
-        "### 0.51.0 - 2026-09-27\n\nolder\n\n### 0.50.0 - 2026-09-27\n\noldest\n\n## Next section\n"
+        "# Changelog\n\n## 0.52.0 - 2026-09-29\n\nnew\n\n"
+        "## 0.51.0 - 2026-09-27\n\nolder\n\n## 0.50.0 - 2026-09-27\n\noldest\n"
     )
     changes = contract.changes_since("0.50.0", text)
     assert "### 0.52.0" in changes and "### 0.51.0" in changes
-    assert "0.50.0" not in changes
-    assert "Next section" not in changes
+    assert "new" in changes and "older" in changes
+    assert "0.50.0" not in changes and "oldest" not in changes
     assert contract.changes_since("0.52.0", text) == ""
 
 
-def test_changes_since_reads_the_shipped_contract() -> None:
+def test_changes_since_reads_the_shipped_changelog() -> None:
     changes = contract.changes_since("0.47.0")
-    assert f"### {_pyproject_version()}" in changes or _pyproject_version() not in contract.markdown()
+    assert f"### {_pyproject_version()}" in changes
     assert "### 0.51.0" in changes
     assert "### 0.47.0" not in changes
+
+
+def test_the_contract_prints_only_the_newest_entries_and_the_changelog_keeps_every_one() -> None:
+    """The point of shipping the changelog: an entry the contract no longer prints is still reachable."""
+    markdown = contract.markdown()
+    section = markdown[markdown.index("\n## What changed\n") :]
+    section = section[: section.index("\n## ", len("\n## What changed"))]
+    printed = [line for line in section.splitlines() if line.startswith("### ")]
+    assert 0 < len(printed) < 10
+    assert printed[0].startswith(f"### {_pyproject_version()} ")
+    assert "\n### 0.51.0 " not in section
+    assert "### 0.51.0 " in contract.changes_since("0.50.0")
+    assert contract.changelog_path().read_text(encoding="utf-8").startswith("# Changelog\n")
 
 
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
@@ -174,6 +187,7 @@ def test_the_wheel_ships_the_contract(tmp_path: pathlib.Path) -> None:
     assert "tckdb_schemas/contract/__init__.py" in names
     assert "tckdb_schemas/contract/__main__.py" in names
     assert "tckdb_schemas/contract/PRODUCER_CONTRACT.md" in names
+    assert "tckdb_schemas/contract/CHANGELOG.md" in names
     shipped_schemas = {name for name in names if name.startswith("tckdb_schemas/contract/schemas/")}
     expected = {f"tckdb_schemas/contract/schemas/{name}.schema.json" for name in contract.schema_names()}
     assert shipped_schemas == expected

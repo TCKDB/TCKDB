@@ -27,7 +27,9 @@ from pathlib import Path
 from typing import Any
 
 __all__ = [
+    "CHANGELOG_FILENAME",
     "CONTRACT_FILENAME",
+    "changelog_path",
     "changes_since",
     "json_schema",
     "markdown",
@@ -38,6 +40,8 @@ __all__ = [
 
 #: The markdown contract's file name inside this package.
 CONTRACT_FILENAME = "PRODUCER_CONTRACT.md"
+#: The full package changelog, shipped beside the contract.
+CHANGELOG_FILENAME = "CHANGELOG.md"
 _SCHEMA_DIR = "schemas"
 _SCHEMA_SUFFIX = ".schema.json"
 
@@ -91,22 +95,22 @@ def _version_key(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in parts)
 
 
-def changes_since(version: str, text: str | None = None) -> str:
-    """The contract's "What changed" entries strictly newer than ``version``.
+def changelog_path() -> Path:
+    """Filesystem path of the package changelog shipped beside the contract (every entry)."""
+    return _root() / CHANGELOG_FILENAME
 
-    Read from the contract itself, which carries every entry of the package
-    changelog, so this works from an installed wheel with no source tree.
+
+def changes_since(version: str, text: str | None = None) -> str:
+    """The changelog entries strictly newer than ``version``, newest first.
+
+    Read from the changelog shipped in the package (the contract itself prints only the newest
+    entries), so this works from an installed wheel with no source tree. ``text`` is changelog
+    markdown: one ``## <version> - <date>`` heading per entry.
     """
-    text = markdown() if text is None else text
-    start = text.find("\n## What changed\n")
-    if start == -1:
-        raise ValueError("the contract has no 'What changed' section")
-    section = text[start + 1 :]
-    end = section.find("\n## ", len("## What changed"))
-    section = section[:end] if end != -1 else section
+    text = changelog_path().read_text(encoding="utf-8") if text is None else text
     floor = _version_key(version)
     kept: list[str] = []
-    for block in re.split(r"(?m)^### ", section)[1:]:
+    for block in re.split(r"(?m)^## ", text)[1:]:
         heading = block.split("\n", 1)[0].strip()
         if _version_key(heading.split()[0]) > floor:
             kept.append("### " + block.rstrip() + "\n")
