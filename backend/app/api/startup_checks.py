@@ -188,6 +188,7 @@ def validate_network_selection_rules() -> None:
 
     :raises NetworkSelectionRulesError: the registry (or the manifest it pins) does not load.
     """
+    from app.api.error_contract import CodedValueError
     from app.chemistry.network_rules.manifest import ManifestError
     from app.services.network_selection.rules import default_rules
 
@@ -202,6 +203,8 @@ def validate_network_selection_rules() -> None:
             f"network selection rule registry failed to load: the packaged manifest file could not be read "
             f"({type(exc).__name__}: {exc})"
         ) from exc
+    except CodedValueError:
+        raise  # a coded refusal keeps its own code; it is not a rule-construction failure
     except ValueError as exc:
         raise NetworkSelectionRulesError(
             f"network selection rule registry failed to load: a rule was refused: {exc}"
