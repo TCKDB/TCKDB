@@ -1115,6 +1115,25 @@ def _persist_irc_result(
         if point.geometry is not None:
             geometry_id = resolve_geometry_payload(session, point.geometry).id
 
+        # Every point geometry is judged, whatever its direction: the checks
+        # used to sit inside the forward/reverse link branch below, so the
+        # TS-marker point (direction None) and ``both`` were stored on
+        # ``calc_irc_point.geometry_id`` unchecked (#680). A geometry already
+        # linked as an output geometry was checked when it was linked.
+        if geometry_id is not None and geometry_id not in linked_geometry_ids:
+            assert_calculation_geometry_composition(
+                session,
+                calc=calculation,
+                geometry_id=geometry_id,
+                field=f"irc_result.points[{point.point_index}].geometry",
+            )
+            assert_isotopes(
+                session,
+                calc=calculation,
+                geometry_id=geometry_id,
+                field=f"irc_result.points[{point.point_index}].geometry",
+            )
+
         session.add(
             CalculationIRCPoint(
                 calculation_id=calculation.id,
@@ -1137,18 +1156,6 @@ def _persist_irc_result(
             and role is not None
             and geometry_id not in linked_geometry_ids
         ):
-            assert_calculation_geometry_composition(
-                session,
-                calc=calculation,
-                geometry_id=geometry_id,
-                field=f"irc_result.points[{point.point_index}].geometry",
-            )
-            assert_isotopes(
-                session,
-                calc=calculation,
-                geometry_id=geometry_id,
-                field=f"irc_result.points[{point.point_index}].geometry",
-            )
             session.add(
                 CalculationOutputGeometry(
                     calculation_id=calculation.id,
@@ -1201,6 +1208,20 @@ def _persist_path_search_result(
         if point.geometry is not None:
             geometry_id = resolve_geometry_payload(session, point.geometry).id
 
+        if geometry_id is not None and geometry_id not in linked_geometry_ids:
+            assert_calculation_geometry_composition(
+                session,
+                calc=calculation,
+                geometry_id=geometry_id,
+                field=f"path_search_result.points[{point.point_index}].geometry",
+            )
+            assert_isotopes(
+                session,
+                calc=calculation,
+                geometry_id=geometry_id,
+                field=f"path_search_result.points[{point.point_index}].geometry",
+            )
+
         session.add(
             CalculationPathSearchPoint(
                 calculation_id=calculation.id,
@@ -1220,18 +1241,6 @@ def _persist_path_search_result(
         )
 
         if geometry_id is not None and geometry_id not in linked_geometry_ids:
-            assert_calculation_geometry_composition(
-                session,
-                calc=calculation,
-                geometry_id=geometry_id,
-                field=f"path_search_result.points[{point.point_index}].geometry",
-            )
-            assert_isotopes(
-                session,
-                calc=calculation,
-                geometry_id=geometry_id,
-                field=f"path_search_result.points[{point.point_index}].geometry",
-            )
             session.add(
                 CalculationOutputGeometry(
                     calculation_id=calculation.id,
@@ -1474,6 +1483,21 @@ def persist_calculation_result(
         # content-addressed geometry seam dedupes by XYZ hash, so this
         # normally resolves to the same row as the calc's input geometry.
         hess_geom = resolve_geometry_payload(session, hess.geometry)
+        # A Hessian is read back with masses taken from this geometry
+        # (``hessian_reanalysis``), so a wrong element or isotope here would
+        # yield wrong frequencies with no refusal (#680).
+        assert_calculation_geometry_composition(
+            session,
+            calc=calculation,
+            geometry_id=hess_geom.id,
+            field="hessian.geometry",
+        )
+        assert_isotopes(
+            session,
+            calc=calculation,
+            geometry_id=hess_geom.id,
+            field="hessian.geometry",
+        )
         session.add(
             CalculationHessian(
                 calculation_id=calculation.id,

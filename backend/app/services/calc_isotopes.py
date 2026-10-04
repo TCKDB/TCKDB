@@ -41,26 +41,47 @@ _ISOTOPE_CACHE_KEY = "_calculation_geometry_isotope_reference_cache"
 IsotopeCounts = dict[tuple[str, int], int]
 
 
-def _entry_isotope_counts(entry: SpeciesEntry) -> IsotopeCounts | None:
+def entry_isotope_counts(entry: SpeciesEntry, species: Species) -> IsotopeCounts | None:
     """Return the ``(element, mass_number)`` counts a species entry declares.
 
     The entry's isotopes live on ``species_entry.isotope_key`` -- the canonical
-    isotope-labelled SMILES -- and **not** on ``species.smiles``, which is
-    isotope-blind by design (species identity is shared by every isotopologue).
-    ``NULL`` is the all-standard entry, i.e. an empty mapping. An unparseable
-    key is an absence, not a refusal.
+    isotope-labelled SMILES -- and, on every row written since #66, **not** on
+    ``species.smiles``, which is stripped of labels (species identity is shared
+    by every isotopologue). ``NULL`` is the all-standard entry, i.e. an empty
+    mapping.
+
+    **Legacy fallback (#680).** A species stored before #66 (2026-07-31) kept
+    its isotope labels in ``species.smiles`` and has no ``isotope_key``; the
+    migration that added the column deliberately did not backfill it (the
+    label was free text, deriving a key would be a guess). So when
+    ``isotope_key`` is ``NULL`` the species SMILES is read for labels, as
+    :func:`app.services.consistency.stoichiometry.entry_facts` reads both
+    sources. The two differ in one way: ``entry_facts`` ORs the key and the
+    label (it only asks "are there isotopes at all"), whereas here the key wins
+    when present and the SMILES is consulted only when the key is ``NULL``,
+    because a count needs one source, not two. For a row written after #66 the
+    SMILES carries no label, so the fallback yields the same empty mapping and
+    changes nothing.
+
+    Shared with :mod:`app.services.hessian_reanalysis`, so the upload check and
+    the read-time check cannot disagree about what an entry declares.
+
+    An unparseable key or SMILES is an absence, not a refusal.
     """
 
-    if entry.isotope_key is None:
-        return {}
+    if entry.isotope_key is not None:
+        source, text = "isotope_key", entry.isotope_key
+    else:
+        source, text = "species.smiles", species.smiles
     try:
-        return isotope_substitutions(entry.isotope_key)
+        return isotope_substitutions(text)
     except ValueError:
         logger.warning(
-            "Unparseable isotope_key on species entry id=%s: %r; calculation "
+            "Unparseable %s on species entry id=%s: %r; calculation "
             "geometry isotopes not judged.",
+            source,
             entry.id,
-            entry.isotope_key,
+            text,
         )
         return None
 
@@ -76,7 +97,7 @@ def _species_entry_isotope_reference(
         return None
     if species.kind == MoleculeKind.electron:
         return {}
-    return _entry_isotope_counts(entry)
+    return entry_isotope_counts(entry, species)
 
 
 def _transition_state_entry_isotope_reference(
@@ -96,7 +117,7 @@ def _transition_state_entry_isotope_reference(
     for species, entry in rows:
         if species.kind == MoleculeKind.electron:
             continue
-        counts = _entry_isotope_counts(entry)
+        counts = entry_isotope_counts(entry, species)
         if counts is None:
             return None
         for key, n in counts.items():

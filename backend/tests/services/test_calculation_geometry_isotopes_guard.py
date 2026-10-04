@@ -9,7 +9,9 @@ check and not the other fails here even if no behavioural test reaches it.
 Two directions, because either alone can pass vacuously:
 
 * every function that calls the composition check calls the isotope check;
-* every function that constructs a geometry-link row calls the isotope check.
+* every construction of a geometry-bearing row is preceded by the isotope check
+  on the same geometry (per construction, so a check on one branch cannot cover
+  a write on another).
 """
 
 from __future__ import annotations
@@ -17,12 +19,15 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from tests.services._geometry_link_guard import (
+    construction_sites,
+    unchecked_constructions,
+)
+
 _APP = Path(__file__).resolve().parents[2] / "app"
 
 _COMPOSITION = "assert_calculation_geometry_composition"
 _ISOTOPES = "assert_isotopes"
-_LINK_CLASSES = {"CalculationInputGeometry", "CalculationOutputGeometry"}
-
 #: ``module::function`` for every function that calls the composition check, as
 #: of #666. Listed so a *removed* site is as visible as an unchecked one.
 _EXPECTED_SITES = {
@@ -30,6 +35,9 @@ _EXPECTED_SITES = {
     "services/calculation_resolution.py::_persist_path_search_result",
     "services/calculation_resolution.py::attach_calculation_input_geometries",
     "services/calculation_resolution.py::attach_calculation_output_geometries",
+    "services/calculation_resolution.py::persist_calculation_result",
+    "services/calculation_scan_resolution.py::persist_calculation_scan",
+    "services/hessian_extraction.py::_insert",
     "services/input_geometry_extraction.py::_mint_and_link_extracted_geometry",
     "services/transition_state_resolution.py::persist_ts_calculations",
     "workflows/network_pdep.py::_persist_calculation",
@@ -70,15 +78,15 @@ def test_every_composition_site_also_checks_isotopes() -> None:
     )
 
 
-def test_every_geometry_link_site_checks_isotopes() -> None:
-    sites = {
-        k: n
-        for k, n in _functions().items()
-        if any(_calls(n, cls) for cls in _LINK_CLASSES)
-    }
-    assert sites, "found no geometry-link write sites at all -- the AST walk broke"
-    missing = sorted(k for k, n in sites.items() if not _calls(n, _ISOTOPES))
-    assert not missing, f"Geometry-link sites without {_ISOTOPES}: {missing}"
+def test_every_geometry_link_construction_is_preceded_by_the_isotope_check() -> None:
+    """Per construction, not per function (#680): see ``_geometry_link_guard``."""
+
+    assert construction_sites(), "found no geometry-link write sites at all -- the AST walk broke"
+    missing = unchecked_constructions(_ISOTOPES)
+    assert not missing, (
+        f"Geometry-link constructions with no preceding {_ISOTOPES} on the same "
+        f"geometry_id: {missing}"
+    )
 
 
 def test_the_known_sites_have_not_silently_disappeared() -> None:

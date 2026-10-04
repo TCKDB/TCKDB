@@ -11,6 +11,10 @@ from app.db.models.calculation import (
     CalculationScanResult,
 )
 from app.schemas.entities.calculation import CalculationScanResultCreate
+from app.services.calc_isotopes import assert_isotopes
+from app.services.calculation_geometry_composition import (
+    assert_calculation_geometry_composition,
+)
 from app.services.geometry_resolution import resolve_geometry_payload
 
 
@@ -26,6 +30,8 @@ def persist_calculation_scan(
     :param payload: Resource-shaped scan payload including coordinates, constraints, and points.
     :returns: Newly created ``CalculationScanResult`` row.
     :raises ValueError: If the calculation does not exist or already has a scan result.
+    :raises CodedValueError: If a scan point's geometry disagrees with the calculation's
+        subject in composition or isotopes (#680).
     """
 
     calculation = session.get(Calculation, calculation_id)
@@ -82,6 +88,24 @@ def persist_calculation_scan(
             geometry_id = resolve_geometry_payload(session, point.geometry).id
         else:
             geometry_id = point.geometry_id
+
+        if geometry_id is not None:
+            # Inline and by-id points alike: a scan point's geometry is a
+            # structure of the calculation's subject, not free-floating data
+            # (#680).
+            field = f"scan_result.points[{point.point_index}].geometry"
+            assert_calculation_geometry_composition(
+                session,
+                calc=calculation,
+                geometry_id=geometry_id,
+                field=field,
+            )
+            assert_isotopes(
+                session,
+                calc=calculation,
+                geometry_id=geometry_id,
+                field=field,
+            )
 
         session.add(
             CalculationScanPoint(
