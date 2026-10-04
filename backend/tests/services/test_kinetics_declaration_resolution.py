@@ -871,6 +871,25 @@ def test_the_same_key_on_one_entry_with_a_different_target_is_a_different_determ
     assert again.determination_id == whole.determination_id
 
 
+def test_the_same_key_on_one_entry_with_two_different_transition_states_is_two_determinations(db_session, world):
+    other_ts = make_transition_state_entry(db_session, transition_state=world.ts_entry.transition_state, multiplicity=2)
+
+    def channel(ts):
+        return _resolve(
+            db_session,
+            world,
+            _payload(
+                determination=_determination(
+                    key="same", target_kind="resolved_channel", transition_state_entry_ref=ts.public_ref
+                )
+            ),
+        )
+
+    first, second = channel(world.ts_entry), channel(other_ts)
+    assert first.determination_id != second.determination_id
+    assert channel(world.ts_entry).determination_id == first.determination_id, "restating one joins it"
+
+
 def _record_of(db_session, world, resolved, role):
     row = Kinetics(
         reaction_entry_id=world.entry.id,

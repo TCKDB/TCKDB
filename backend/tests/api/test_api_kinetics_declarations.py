@@ -1064,14 +1064,14 @@ def test_two_determinations_with_one_key_source_and_reaction_stay_two_after_an_e
 
 
 def test_a_suffixed_key_never_collides_with_a_key_the_export_already_carries(client, db_session):
-    # Determinations "set-A", "set-A" (a second one) and a third literally called "set-A~2".
-    for key in ("set-A", "set-A", "set-A~2"):
+    # Three determinations all called "set-A" and a fourth literally called "set-A~2".
+    for key in ("set-A", "set-A", "set-A", "set-A~2"):
         assert client.post(KINETICS, json=_standalone(determination=_determination(key))).status_code == 201
     rows = db_session.scalars(select(Kinetics).order_by(Kinetics.id)).all()
     bundle, imported = _round_trip(db_session, [r.id for r in rows])
     keys = [u.determination.key for u in bundle.records.kinetics_uploads]
-    assert len(set(keys)) == 3 and keys[0] == "set-A"
-    assert len({k.determination_id for k in imported}) == 3
+    assert len(set(keys)) == 4 and keys[0] == "set-A" and keys[1:3] == ["set-A~2", "set-A~3"]
+    assert len({k.determination_id for k in imported}) == 4
 
 
 def test_records_of_one_determination_keep_one_key_and_report_no_omission(client, db_session):
