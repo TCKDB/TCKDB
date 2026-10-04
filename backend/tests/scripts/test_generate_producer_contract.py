@@ -775,7 +775,8 @@ def test_making_the_helper_raise_changes_the_label(monkeypatch) -> None:
 def test_a_function_that_enforces_several_checks_keeps_every_one(builder, committed_markdown) -> None:
     """The TS evidence seam enforces four register checks; a single-valued map kept only the last."""
     key = "app.services.transition_state_validation:persist_transition_state_validation_evidence"
-    codes = {check.code for check in builder.check_by_func[key]}
+    checks = builder.check_by_func[key]
+    codes = {code for check in checks for code in check.codes}
     assert {
         "transition_state_missing_irc_evidence",
         "transition_state_energy_ordering_mixed_levels",
@@ -783,6 +784,6 @@ def test_a_function_that_enforces_several_checks_keeps_every_one(builder, commit
         "transition_state_energy_ordering_not_compared",
     } <= codes
     section = committed_markdown.split("### `persist_transition_state_validation_evidence`", 1)[1].split("\n### ", 1)[0]
-    assert f"enforces {len(codes)} checks" in section
+    assert f"enforces {len(checks)} checks" in section
     for code in codes:
         assert f"(#{generator._anchor('c', code)})" in section, code

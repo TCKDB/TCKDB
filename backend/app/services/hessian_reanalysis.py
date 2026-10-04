@@ -191,6 +191,7 @@ from app.chemistry.normal_modes import (
 from app.db.models.calculation import Calculation, CalculationFreqMode, CalculationHessian
 from app.db.models.common import HessianSource
 from app.db.models.geometry import GeometryAtom
+from app.services.calc_isotopes import entry_isotope_counts
 from app.services.scientific_read.imaginary_mode_projection import (
     ProjectionStatus,
     build_imaginary_mode_projection,
@@ -604,7 +605,9 @@ def _declares_isotope_under_protium(calc: Calculation, atoms: Sequence[GeometryA
     or -- for a row deposited before ``docs/adr/0022``, which holds ``D``/``T``
     with a NULL mass number and cannot be rewritten -- the mass number its own
     symbol names. Nothing is borrowed from a sibling record. The entry denies
-    it when its ``isotope_key`` is NULL, TCKDB's all-standard key.
+    it when it declares no isotopes: a NULL ``isotope_key`` (TCKDB's
+    all-standard key) and no label on its own species' SMILES, which a species
+    stored before #66 can still carry.
 
     A calculation with no species-entry owner (a transition state's) is not
     judged: its identity is the reaction's reactants taken together, which this
@@ -612,7 +615,14 @@ def _declares_isotope_under_protium(calc: Calculation, atoms: Sequence[GeometryA
     """
 
     entry = calc.species_entry
-    if entry is None or entry.isotope_key is not None:
+    if entry is None:
+        return False
+    # The entry's declared isotopes, read through the one helper the upload
+    # check uses (``isotope_key``, else the labels on a pre-#66 species SMILES),
+    # so a legacy ``[2H][2H]`` entry with a NULL key is not judged protium here
+    # after the upload accepted a deuterated Hessian under it (#680).
+    declared = entry_isotope_counts(entry, entry.species)
+    if declared is None or declared:
         return False
     for atom in atoms:
         mass_number = atom.isotope_mass_number

@@ -132,8 +132,10 @@ def test_a_two_species_state_with_both_sources_and_the_summed_energy_is_accepted
     assert {(r.source_sum_comparison, r.source_sum_not_compared_reason) for r in energy_rows} == {
         ("agrees", None)
     }
-    # No state used the single slot, and no computed total is stored.
-    assert {r.source_calculation_id for r in energy_rows} == {None}
+    # Only the one-participant states (the wells) also fill the older single slot, with the
+    # source that covers their whole sum; a two-species state leaves it empty. No computed total
+    # is stored.
+    assert sorted(r.source_calculation_id is None for r in energy_rows) == [False, False, True, True]
     sources = db_session.scalars(select(NetworkSolveStateEnergySource)).all()
     assert len(sources) == 6  # 2 + 1 + 2 + 1 participants, one row each
     assert {s.solve_id for s in sources} == {solve.id}
@@ -178,17 +180,103 @@ def test_an_energy_one_term_too_many_is_refused(client) -> None:
     _refused(_post(client, payload), _MISMATCH)
 
 
-def test_the_tolerance_is_the_printed_precision_one(client) -> None:
-    """n = 1 + 1 + 1 = 3 rounded quantities: 1.5e-6 Eh. 1.2e-6 passes, 2.5e-6 does not."""
+def test_the_tolerance_is_the_printed_precision_one(client, db_session) -> None:
+    """n = 1 + 1 + 1 = 3 rounded quantities: 1.5e-6 Eh. 1.2e-6 agrees."""
     payload = _payload()
     payload["solve"]["state_energies"][0]["energy_kj_mol"] += 1.2e-6 * H
-    assert _post(client, payload).status_code == 201
+    resp = _post(client, payload)
+    assert resp.status_code == 201, resp.text
+    row = _row_for(db_session, _payload()["solve"]["state_energies"][0]["energy_kj_mol"] + 1.2e-6 * H)
+    assert (row.source_sum_comparison, row.source_sum_not_compared_reason) == ("agrees", None)
 
 
-def test_just_outside_the_tolerance_is_refused(client) -> None:
+def test_just_outside_the_tolerance_is_not_compared_not_refused(client, db_session) -> None:
+    """2.5e-6 Eh is beyond n = 3 printed precision but far inside honest rounding of a kJ/mol."""
+    stated = _payload()["solve"]["state_energies"][0]["energy_kj_mol"] + 2.5e-6 * H
     payload = _payload()
-    payload["solve"]["state_energies"][0]["energy_kj_mol"] += 2.5e-6 * H
-    _refused(_post(client, payload), _MISMATCH)
+    payload["solve"]["state_energies"][0]["energy_kj_mol"] = stated
+    resp = _post(client, payload)
+    assert resp.status_code == 201, resp.text
+    row = _row_for(db_session, stated)
+    assert (row.source_sum_comparison, row.source_sum_not_compared_reason) == (
+        "not_compared",
+        "stated_precision_unknown",
+    )
+    (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _NOT_COMPARED]
+    assert "stated_precision_unknown" in warning["message"] and "energy_precision_kj_mol" in warning["message"]
+
+
+def _entrance_kj() -> float:
+    return _payload()["solve"]["state_energies"][0]["energy_kj_mol"]
+
+
+_ROUNDED_OR_CONVERTED = {
+    "kj_to_one_decimal": lambda x: round(x, 1),
+    "kj_to_whole_units": lambda x: float(round(x)),
+    "kcal_to_two_decimals": lambda x: round(x / 4.184, 2) * 4.184,
+    "hartree_times_2625_5": lambda x: (x / H) * 2625.5,
+    "hartree_times_627_509_4_184": lambda x: (x / H) * 627.509 * 4.184,
+}
+
+
+@pytest.mark.parametrize("name", sorted(_ROUNDED_OR_CONVERTED))
+def test_a_correctly_rounded_or_converted_energy_is_not_refused(client, db_session, name: str) -> None:
+    """The reviewer's five: each is a right number written with less precision than the sum."""
+    stated = _ROUNDED_OR_CONVERTED[name](_entrance_kj())
+    payload = _payload()
+    payload["solve"]["state_energies"][0]["energy_kj_mol"] = stated
+    resp = _post(client, payload)
+    assert resp.status_code == 201, resp.text
+    row = _row_for(db_session, stated)
+    assert (row.source_sum_comparison, row.source_sum_not_compared_reason) == (
+        "not_compared",
+        "stated_precision_unknown",
+    )
+    assert _NOT_COMPARED in _codes(resp)
+
+
+def test_a_stated_precision_makes_a_rounded_energy_agree(client, db_session) -> None:
+    stated = round(_entrance_kj(), 1)
+    payload = _payload()
+    entry = payload["solve"]["state_energies"][0]
+    entry["energy_kj_mol"] = stated
+    entry["energy_precision_kj_mol"] = 0.1
+    resp = _post(client, payload)
+    assert resp.status_code == 201, resp.text
+    row = _row_for(db_session, stated)
+    assert (row.source_sum_comparison, row.source_sum_not_compared_reason) == ("agrees", None)
+    assert row.energy_precision_kj_mol == 0.1
+    assert _NOT_COMPARED not in _codes(resp)
+
+
+def test_a_stated_precision_tightens_the_bound(client) -> None:
+    """1.5 kJ/mol off: inside the default 1 kcal/mol allowance, outside half of a stated 0.1 kJ/mol."""
+    without = _payload()
+    without["solve"]["state_energies"][0]["energy_kj_mol"] += 1.5
+    assert _post(client, without).status_code == 201
+
+    stated = _payload()
+    entry = stated["solve"]["state_energies"][0]
+    entry["energy_kj_mol"] += 1.5
+    entry["energy_precision_kj_mol"] = 0.1
+    context = _refused(_post(client, stated), _MISMATCH)
+    assert context["field"] == "solve.state_energies[0].energy_kj_mol"
+    assert context["allowance_kj_mol"] < 1.5
+
+
+def test_beyond_honest_rounding_is_refused(client) -> None:
+    """5 kJ/mol off is more than a kcal/mol of rounding and a conversion constant can explain."""
+    payload = _payload()
+    payload["solve"]["state_energies"][0]["energy_kj_mol"] += 5.0
+    context = _refused(_post(client, payload), _MISMATCH)
+    assert context["allowance_kj_mol"] < 5.0
+
+
+def test_a_non_positive_or_non_finite_precision_is_a_wire_error(client) -> None:
+    for bad in (0, -0.1):
+        payload = _payload()
+        payload["solve"]["state_energies"][0]["energy_precision_kj_mol"] = bad
+        assert _post(client, payload).status_code == 422
 
 
 @pytest.mark.parametrize("zero", ["lowest_state", "entrance_channel"])
@@ -202,7 +290,18 @@ def test_a_shared_zero_compares_states_with_each_other(client, zero: str) -> Non
     context = _refused(_post(client, payload), _MISMATCH)
     assert context["field"] == "solve.state_energies[2].energy_kj_mol"
     assert context["energy_zero_convention"] == zero
-    assert context["compared_with_state_key"] == "entrance"  # the state with the lowest stated energy
+    assert context["compared_with_state_key"] in {"entrance", "well_RO2", "well_iso"}
+    assert context["compared_with_field"].endswith(".energy_kj_mol")
+    assert set(context["inconsistent_state_keys"]) == {"entrance", "well_RO2", "well_iso"}
+
+
+def test_the_lowest_state_can_be_the_one_that_is_wrong(client) -> None:
+    """The outlier is named by majority, not by which state happens to be lowest."""
+    payload = _payload(zero="lowest_state")
+    payload["solve"]["state_energies"][0]["energy_kj_mol"] -= 50.0  # entrance, already the lowest
+    context = _refused(_post(client, payload), _MISMATCH)
+    assert context["field"] == "solve.state_energies[0].energy_kj_mol"
+    assert context["state_key"] == "entrance"
 
 
 def test_a_shared_zero_with_one_comparable_state_is_not_compared(client, db_session) -> None:
@@ -318,15 +417,104 @@ def test_a_state_with_coefficient_two_summed_once_is_refused(client) -> None:
     assert context["stored_sum_kj_mol"] == pytest.approx(_TWO_ETHYL_PLUS_O2)
 
 
-def test_the_tolerance_counts_the_coefficient_as_weight(client) -> None:
-    """2 ethyl + O2: n = 1 + 2 + 1 = 4 -> 2e-6 Eh. Counting summands (n = 3) would refuse 1.8e-6."""
-    payload = _with_dimer_state(_payload(), _TWO_ETHYL_PLUS_O2 + 1.8e-6 * H)
-    assert _post(client, payload).status_code == 201
+def test_the_tolerance_counts_the_coefficient_as_weight(client, db_session) -> None:
+    """2 ethyl + O2: n = 1 + 2 + 1 = 4 -> 2e-6 Eh. Counting summands (n = 3) would not agree at 1.8e-6."""
+    stated = _TWO_ETHYL_PLUS_O2 + 1.8e-6 * H
+    resp = _post(client, _with_dimer_state(_payload(), stated))
+    assert resp.status_code == 201, resp.text
+    row = _row_for(db_session, stated)
+    assert (row.source_sum_comparison, row.source_sum_not_compared_reason) == ("agrees", None)
 
 
-def test_a_coefficient_two_state_past_its_weighted_tolerance_is_refused(client) -> None:
-    payload = _with_dimer_state(_payload(), _TWO_ETHYL_PLUS_O2 + 2.5e-6 * H)
-    _refused(_post(client, payload), _MISMATCH)
+def test_a_coefficient_two_state_past_its_weighted_tolerance_is_not_compared(client, db_session) -> None:
+    stated = _TWO_ETHYL_PLUS_O2 + 2.5e-6 * H
+    resp = _post(client, _with_dimer_state(_payload(), stated))
+    assert resp.status_code == 201, resp.text
+    row = _row_for(db_session, stated)
+    assert row.source_sum_not_compared_reason == "stated_precision_unknown"
+
+
+# ---------------------------------------------------------------------------
+# The shared-zero difference branch (the one the production ingester uses)
+# ---------------------------------------------------------------------------
+
+
+def _relative_payload(*, two_ethyl: bool = False, sourced: tuple[str, ...] = tuple(_ORDER)) -> dict:
+    """``lowest_state`` energies, correct, for the fixture network.
+
+    ``two_ethyl`` turns ``entrance`` into 2 ethyl + O2. States not in ``sourced`` cite nothing, so
+    they take no part in the comparison.
+    """
+    payload = deepcopy(_parallel_path_payload())
+    sums = {state: _sum_hartree(state) for state in _ORDER}
+    if two_ethyl:
+        entrance = next(state for state in payload["states"] if state["key"] == "entrance")
+        entrance["participants"] = [{"species_key": "ethyl", "stoichiometry": 2}, {"species_key": "O2"}]
+        sums["entrance"] = 2 * _E["ethyl"] + _E["O2"]
+    lowest = min(sums.values())
+    entries = []
+    for state in _ORDER:
+        entry = _entry(state, (sums[state] - lowest) * H, zero="lowest_state")
+        if state not in sourced:
+            entry.pop("source_calculation_keys")
+        entries.append(entry)
+    payload["solve"]["state_energies"] = entries
+    return payload
+
+
+def test_a_coefficient_two_entrance_on_a_shared_zero_summed_correctly_is_accepted(client, db_session) -> None:
+    resp = _post(client, _relative_payload(two_ethyl=True))
+    assert resp.status_code == 201, resp.text
+    rows = db_session.scalars(select(NetworkSolveStateEnergy)).all()
+    assert {(r.source_sum_comparison, r.source_sum_not_compared_reason) for r in rows} == {("agrees", None)}
+
+
+def test_a_coefficient_two_entrance_on_a_shared_zero_summed_once_is_refused(client) -> None:
+    payload = _relative_payload(two_ethyl=True)
+    # The entrance energy as if it were ethyl + O2 (one ethyl term short of 2 ethyl + O2), on the
+    # zero set by the 2 ethyl + O2 sum: the other three are unchanged.
+    once = -_E["ethyl"] * H
+    payload["solve"]["state_energies"][0]["energy_kj_mol"] = once
+    context = _refused(_post(client, payload), _MISMATCH)
+    assert context["state_key"] == "entrance"
+
+
+def _shift(payload: dict, index: int, hartree: float) -> float:
+    entry = payload["solve"]["state_energies"][index]
+    entry["energy_kj_mol"] += hartree * H
+    return entry["energy_kj_mol"]
+
+
+@pytest.mark.parametrize(
+    ("gap_hartree", "band"),
+    [(1.9e-6, ("agrees", None)), (2.4e-6, ("not_compared", "stated_precision_unknown"))],
+)
+def test_the_difference_tolerance_of_two_single_participant_states(
+    client, db_session, gap_hartree: float, band: tuple
+) -> None:
+    """Two one-species states on a shared zero: n = 2 + 1 + 1 = 4 -> 2e-6 Eh between them."""
+    payload = _relative_payload(sourced=("well_RO2", "well_iso"))
+    stated = _shift(payload, 3, gap_hartree)
+    resp = _post(client, payload)
+    assert resp.status_code == 201, resp.text
+    row = _row_for(db_session, stated)
+    assert (row.source_sum_comparison, row.source_sum_not_compared_reason) == band
+
+
+@pytest.mark.parametrize(
+    ("gap_hartree", "band"),
+    [(2.8e-6, ("agrees", None)), (3.3e-6, ("not_compared", "stated_precision_unknown"))],
+)
+def test_the_difference_tolerance_weighs_a_coefficient_two_state(
+    client, db_session, gap_hartree: float, band: tuple
+) -> None:
+    """2 ethyl + O2 against one species: n = 2 + 3 + 1 = 6 -> 3e-6 Eh. Ignoring the coefficient gives 2.5e-6."""
+    payload = _relative_payload(two_ethyl=True, sourced=("entrance", "well_RO2"))
+    stated = _shift(payload, 1, gap_hartree)
+    resp = _post(client, payload)
+    assert resp.status_code == 201, resp.text
+    row = _row_for(db_session, stated)
+    assert (row.source_sum_comparison, row.source_sum_not_compared_reason) == band
 
 
 # ---------------------------------------------------------------------------

@@ -1042,10 +1042,10 @@ def test_the_hydrazine_state_energies_agree_with_the_sum_of_their_stored_sources
 
 
 def test_a_hydrazine_state_energy_that_is_off_its_sources_is_refused(db_engine) -> None:
-    """The same payload with the bimolecular energy moved by 1 kJ/mol."""
+    """The same payload with the bimolecular energy moved by 50 kJ/mol (1 kJ/mol would be rounding)."""
     payload, _gap = build_network_pdep_payload(FIXTURE_DIR)
     bimolecular = next(e for e in payload["solve"]["state_energies"] if e["state_key"] == "st_H2_H2NN")
-    bimolecular["energy_kj_mol"] += 1.0
+    bimolecular["energy_kj_mol"] += 50.0
     request = NetworkPDepUploadRequest(**payload)
     with _rolled_back_session(db_engine) as session:
         with pytest.raises(CodedValueError) as raised:

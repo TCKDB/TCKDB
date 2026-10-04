@@ -1,10 +1,10 @@
 """Disposable-database contract for ``d7a1c4e9b258`` (#678).
 
 The revision adds ``network_solve_state_energy_source`` (one calculation per participant of a state
-energy) and two nullable columns on ``network_solve_state_energy`` recording whether the stated
+energy) and three nullable columns on ``network_solve_state_energy`` recording whether the stated
 energy was held against the sum of its sources.
 
-* upgrade writes nothing: a state energy deposited before keeps both columns NULL ("the comparison
+* upgrade writes nothing: a state energy deposited before keeps all three columns NULL ("the comparison
   did not exist", never a pass) and has no participant-source rows;
 * the shape is enforced by the database: a status outside the two values, a ``not_compared`` with no
   reason, a reason on any other status and a reason outside the fixed tokens are refused; a source
@@ -29,7 +29,7 @@ from tests.db.test_ts_evidence_kinds_migration import _Harness
 _MIGRATION = revision_under_test("d7a1c4e9b258")
 _TABLE = "network_solve_state_energy_source"
 _ENERGY = "network_solve_state_energy"
-_COLUMNS = {"source_sum_comparison", "source_sum_not_compared_reason"}
+_COLUMNS = {"source_sum_comparison", "source_sum_not_compared_reason", "energy_precision_kj_mol"}
 
 
 @pytest.fixture
@@ -179,6 +179,16 @@ def test_upgrade_leaves_earlier_energies_unrecorded_and_enforces_the_shape(harne
         _refused(conn, update, {**base, "s": "not_compared", "r": "because"})
         with conn.begin_nested():
             conn.execute(text(update), {**base, "s": "not_compared", "r": "no_second_state_on_the_same_zero"})
+        with conn.begin_nested():
+            conn.execute(text(update), {**base, "s": "not_compared", "r": "stated_precision_unknown"})
+
+        # The stated rounding unit is positive and finite; NULL is "not stated".
+        precision = f"UPDATE {_ENERGY} SET energy_precision_kj_mol = :p WHERE state_id = :st"
+        with conn.begin_nested():
+            conn.execute(text(precision), {"st": seeded["other_state_id"], "p": 0.1})
+        _refused(conn, precision, {"st": seeded["other_state_id"], "p": 0.0})
+        _refused(conn, precision, {"st": seeded["other_state_id"], "p": -1.0})
+        _refused(conn, precision, {"st": seeded["other_state_id"], "p": float("inf")})
 
         insert = (
             f"INSERT INTO {_TABLE} (solve_id, state_id, species_entry_id, calculation_id) VALUES (:s, :st, :e, :c)"

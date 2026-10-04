@@ -593,6 +593,9 @@ class NetworkSolveStateEnergy(Base):
     #: Why the comparison could not be made. Present exactly when
     #: ``source_sum_comparison`` is ``not_compared``.
     source_sum_not_compared_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    #: The rounding unit of ``energy_kj_mol`` the producer stated, when it stated one. NULL is
+    #: "not stated" (never inferred from the digits of the number).
+    energy_precision_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
     solve: Mapped["NetworkSolve"] = relationship(back_populates="state_energies")
     state: Mapped["NetworkState"] = relationship()
@@ -623,8 +626,13 @@ class NetworkSolveStateEnergy(Base):
             "source_sum_not_compared_reason IS NULL OR source_sum_not_compared_reason IN ("
             "'no_source_stated', 'sources_incomplete', 'convention_not_summable', "
             "'energy_zero_not_comparable', 'stored_energy_not_stated', 'zpe_not_in_source', "
-            "'no_second_state_on_the_same_zero')",
+            "'no_second_state_on_the_same_zero', 'stated_precision_unknown')",
             name="sum_reason_token",
+        ),
+        CheckConstraint(
+            "energy_precision_kj_mol IS NULL OR "
+            "(energy_precision_kj_mol > 0 AND energy_precision_kj_mol < 'Infinity'::float8)",
+            name="energy_precision_positive",
         ),
     )
 

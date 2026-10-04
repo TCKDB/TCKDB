@@ -506,6 +506,7 @@ class NetworkSolveStateEnergySummary(BaseModel):
     partial_sources: bool = False
     source_sum_comparison: Literal["agrees", "not_compared"] | None = None
     source_sum_not_compared_reason: str | None = None
+    energy_precision_kj_mol: float | None = None
 
 
 class NetworkSolveChannelBarrierSummary(BaseModel):

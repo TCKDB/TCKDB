@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.92.0 - 2026-10-04
+## 0.95.0 - 2026-10-04
 
 A network state energy can name one source calculation per participant, and is held against their sum
 (#678). One new optional field on `POST /uploads/networks/pdep`, one new block-tier refusal and two new
@@ -13,32 +13,84 @@ upload warnings. Existing payloads are accepted as before.
   listed beside, otherwise `network_energy_source_subject_mismatch`; a `species_key` that is not a
   participant of the state is refused the same way, at `...source_calculation_keys[j].species_key`.
   `source_calculation_key` is unchanged and still accepts the calculation of any one participant.
+- **`energy_precision_kj_mol`** (new, optional, positive): the rounding unit of `energy_kj_mol`. State
+  unrounded kJ/mol derived from hartree with 2625.499639, or state this field; precision is never
+  inferred from the digits of the number. It is stored and read back.
 - **`network_state_energy_sum_mismatch` (422, block).** When every participant of a state has a source,
-  TCKDB compares the stated `energy_kj_mol` with `sum(stoichiometry * stored energy)` and refuses a
-  contradiction, within `max(1e-6, 5e-7 * n)` hartree with `n = 1 + sum(stoichiometry)`. Defined for
-  `correction_convention: electronic_only` (an `sp`, `opt` or `composite` energy) and, only where every
-  source is a `composite` storing an E0, `electronic_plus_zpe`. `energy_zero_convention: absolute` is
-  compared directly. `lowest_state` and `entrance_channel` shift every state of the solve by one
-  constant, so those are compared as *differences* between states against the state with the lowest
-  stated energy (`n = 2 + sum(nu_i) + sum(nu_j)`). `context` names the field, the state and both
+  TCKDB compares the stated `energy_kj_mol` with `sum(stoichiometry * stored energy)` in three bands.
+  Within the printed-precision tolerance `max(1e-6, 5e-7 * n)` hartree, `n = 1 + sum(stoichiometry)`, the
+  energy **agrees**. Beyond it but within an honest-rounding allowance (half `energy_precision_kj_mol`,
+  or half of 1 kcal/mol = 2.09 kJ/mol when not stated, per stated energy, plus `1e-6 * |energy|` on an
+  absolute energy for the spread of hartree-to-kJ/mol constants) it is stored **not compared**
+  (`stated_precision_unknown`) with a warning, so a value rounded to 0.1 kJ/mol, converted from kcal/mol
+  to two decimals, or converted with 2625.5 or 627.509 x 4.184 is never refused; if you state
+  `energy_precision_kj_mol` the rounding is accounted for and it agrees. Only beyond the allowance is it
+  refused. Defined for `correction_convention: electronic_only` (an `sp`, `opt` or `composite`
+  energy) and, only where every source is a `composite` storing an E0, `electronic_plus_zpe`.
+  `energy_zero_convention: absolute` is compared directly. `lowest_state` and `entrance_channel` shift
+  every state of the solve by one constant, so those are compared as *differences* between states
+  (`n = 2 + sum(nu_i) + sum(nu_j)`); the state blamed is the outlier inconsistent with a majority of the
+  others, and with two states `context` names both. `context` names the field, the state and both
   numbers; no database id.
 - **`network_state_energy_sum_not_compared` (warning).** A sum that cannot be formed is never refused
   and never guessed: `atom_and_bond_corrected`, `thermal_enthalpy_298k` and `other` corrections
   (`convention_not_summable`), `electronic_plus_zpe` with an `sp`/`opt`/`freq` source
   (`zpe_not_in_source`), `separated_reactants` and `other` zeros (`energy_zero_not_comparable`), a
-  source that stores no such energy (`stored_energy_not_stated`), and a state alone on its shared zero
-  (`no_second_state_on_the_same_zero`). The outcome is stored with its reason. A state with no source
+  source that stores no such energy (`stored_energy_not_stated`), a state alone on its shared zero
+  (`no_second_state_on_the_same_zero`), and a stated number beyond printed precision but inside honest
+  rounding (`stated_precision_unknown`). The outcome is stored with its reason. A state with no source
   at all is stored as not compared (`no_source_stated`) without a warning: nothing was claimed.
 - **`network_state_energy_sources_partial` (warning).** A source on some but not all of a state's
   participants, which includes a single `source_calculation_key` on a multi-species state. It is
   accepted and read back as partial; no other participant's source is borrowed.
 - **Reads.** `NetworkSolveStateEnergySummary` gains `sources[]` (`species_entry_ref`, `stoichiometry`,
   `calculation_ref`), `partial_sources`, `source_sum_comparison` (`agrees`, `not_compared` or null for a
-  row deposited before the check) and `source_sum_not_compared_reason`. `source_calculation_ref` is the
+  row deposited before the check), `source_sum_not_compared_reason` and `energy_precision_kj_mol`. `source_calculation_ref` is the
   older single slot, one summand of several on a multi-species state. Stored networks read as they did,
   with the new fields describing what they hold.
 - Producers: the hydrazine ingester now cites every participant's single point for a multi-species state
-  (`source_calculation_keys`) and a single participant's with `source_calculation_key`.
+  (`source_calculation_keys`) and a single participant's with `source_calculation_key`. A list on a
+  one-participant state also fills the older single slot, so `source_calculation_ref` keeps the source.
+
+## 0.94.0 - 2026-10-04
+
+A Hessian's geometry, every scan point's geometry and every IRC point's geometry are now checked against the
+subject their calculation is filed under (#680). No payload field is added, removed or changed.
+
+- **Payloads that were accepted are now refused.** A wrong-element or wrong-isotope geometry at
+  `hessian.geometry`, at `scan_result.points[N].geometry` or at `irc_result.points[N].geometry` (any point
+  direction, including the TS-marker point and `both`) is refused with the existing codes
+  `calculation_geometry_composition_mismatch` (422) and `calculation_geometry_isotope_mismatch` (422), the
+  same ones already raised for input and output geometries; `context.field` names the path. Before, such a
+  geometry was stored: a deuterated Hessian geometry under a protium species gave deuterium frequencies on
+  reanalysis. The contract's per-route refusal lists are unchanged (the codes were already listed for these
+  routes).
+- A Hessian recovered from an uploaded artifact is checked too; there a mismatch never fails the upload, the
+  Hessian is simply not stored.
+- A species stored before the label-stripping change with isotope labels on its SMILES and no isotope key is
+  read through that SMILES when its isotope content is compared.
+
+## 0.93.0 - 2026-10-04
+
+The same molecule with its atoms listed in another order is no longer a way round the no-optimisation
+duplicate rule (#679, follow-up to #667). No field is added, removed or renamed; one payload that was
+accepted is now refused, under the code the rule already used.
+
+- **Two single points (or two composites) on one polyatomic structure are one duplicate whatever order
+  the atoms are listed in (shared rule, so `/uploads/thermo`, `/uploads/statmech` and both bundle routes
+  change).** With no `opt` linked, two `sp` (or two `composite`) links whose geometries are one structure
+  moved rigidly are refused with `thermo_role_duplicate` / `statmech_role_duplicate` even when one lists
+  its atoms in a different order, for example water with its hydrogens first, or the hydrogens of a CH3
+  exchanged. The rule searches for a relabelling that lays one geometry on the other, using the
+  geometries alone, and then applies the 0.80.0 comparison unchanged (Kabsch-aligned RMSD, tolerance from
+  the precision of the coordinates). Only atoms of the same element and the same stated isotope are
+  exchanged (`D`/`T` count as 2H/3H), and an enantiomer stays a different structure in any order.
+- **The search is bounded, and past a bound a pair is treated as different** (the behaviour before this
+  change): geometries over 200 atoms, a pair needing more than 256 trial alignments or examining more
+  than 50,000 candidate placements, and a record's work beyond 4,096 alignments or 50 million work units
+  are not decided. A duplicate energy on a reordered copy of such a structure is therefore still
+  accepted. Ordinary molecules need one alignment.
+- The same-order comparison of 0.80.0 and the one-atom rule of 0.74.0 are unchanged.
 
 ## 0.90.0 - 2026-10-03
 

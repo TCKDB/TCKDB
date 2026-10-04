@@ -117,6 +117,16 @@ absolute energy (``2A + B`` has n = 1 + 2 + 1 = 4) and ``n = 2 + sum(nu_i) + sum
 difference of two states. The stated energy is in kJ/mol and is converted to hartree first.
 No total is ever stored: the outcome (``agrees`` or ``not_compared`` plus the reason) is.
 
+Three bands, because a stated kJ/mol is rarely the unrounded hartree conversion. Within the
+printed-precision tolerance the energies agree. Beyond it but within an honest-rounding allowance
+(half a rounding unit per stated energy, ``energy_precision_kj_mol`` when stated and 1 kcal/mol
+otherwise, plus 1e-6 of the value on an absolute energy for the spread of conversion constants) the
+stated number may be a correctly rounded or converted one, which cannot be told from a wrong one:
+it is stored as not compared, ``stated_precision_unknown``, with a warning, unless the producer
+stated the unit, in which case the rounding is accounted for and it agrees. Only beyond the
+allowance is the number contradicted and the upload refused. Precision is never inferred from the
+digits of the number.
+
 Tier (ADR 0008)
 ---------------
 ``block``, the tier #637 used for the same mismatch: a type that cannot carry
@@ -131,6 +141,7 @@ the id goes to the log.
 
 from __future__ import annotations
 
+import functools
 import logging
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
@@ -181,6 +192,17 @@ NOT_COMPARED_ENERGY_ZERO_NOT_COMPARABLE = "energy_zero_not_comparable"
 NOT_COMPARED_STORED_ENERGY_NOT_STATED = "stored_energy_not_stated"
 NOT_COMPARED_ZPE_NOT_IN_SOURCE = "zpe_not_in_source"
 NOT_COMPARED_NO_SECOND_STATE = "no_second_state_on_the_same_zero"
+NOT_COMPARED_STATED_PRECISION_UNKNOWN = "stated_precision_unknown"
+
+#: The rounding unit assumed for a stated energy whose producer states none: 1 kcal/mol, the
+#: coarsest unit energies are routinely reported in. Half of it (about 2.09 kJ/mol) is the
+#: honest-rounding allowance per stated energy. Precision is never inferred from the digits of the
+#: JSON number.
+DEFAULT_ENERGY_PRECISION_KJ_MOL = 4.184
+
+#: Relative spread of the hartree-to-kJ/mol constants in use (2625.4996, 2625.5, 627.509 x 4.184):
+#: an absolute energy converted with another constant is off by this fraction of itself.
+CONVERSION_CONSTANT_SPREAD = 1e-6
 
 #: Slack for float noise in ``|stated - stored| <= tolerance``; the value
 #: ``tckdb_schemas.composite_total`` and the transition-state comparison use.
@@ -559,6 +581,7 @@ class StateEnergyToCompare:
     energy_zero_convention: EnergyZeroConvention
     correction_convention: EnergyCorrectionConvention
     participants: tuple[ParticipantSource, ...]
+    energy_precision_kj_mol: float | None = None
 
     @property
     def field(self) -> str:
@@ -640,15 +663,49 @@ def _prepare(energy: StateEnergyToCompare) -> SumComparison | _Prepared:
     return _Prepared(energy, energy.energy_kj_mol / HARTREE_TO_KJ_MOL, total, weight)
 
 
+def _allowance_kj_mol(precision_kj_mol: float | None) -> tuple[float, bool]:
+    """Half a rounding unit of one stated energy, and whether that unit was stated.
+
+    The unit is the producer's ``energy_precision_kj_mol`` when it states one, otherwise the
+    coarse default of 1 kcal/mol (4.184 kJ/mol), so half of it is about 2.09 kJ/mol. Precision is
+    never inferred from the digits of the JSON number.
+    """
+    if precision_kj_mol is None:
+        return DEFAULT_ENERGY_PRECISION_KJ_MOL / 2.0, False
+    return precision_kj_mol / 2.0, True
+
+
+def _classify(gap_hartree: float, tolerance_hartree: float, allowance_kj_mol: float, *, all_stated: bool) -> str:
+    """``agrees``, ``imprecise`` or ``bad`` for one comparison gap, in hartree.
+
+    Three bands (the pattern of #677's scaled-ZPE energies): within the printed-precision
+    tolerance the energies agree; beyond it but within the honest-rounding allowance the stated
+    value may be a correctly rounded or unit-converted one, which cannot be told from a wrong one,
+    so it is ``imprecise`` (stored as not compared) unless the producer stated its precision, in
+    which case the rounding is accounted for and it agrees; only beyond the allowance is it
+    contradicted.
+    """
+    gap = abs(gap_hartree)
+    if gap <= tolerance_hartree + _TOLERANCE_FLOAT_SLACK:
+        return "agrees"
+    if gap <= tolerance_hartree + allowance_kj_mol / HARTREE_TO_KJ_MOL + _TOLERANCE_FLOAT_SLACK:
+        return "agrees" if all_stated else "imprecise"
+    return "bad"
+
+
 def _sum_mismatch(
     prepared: _Prepared,
     *,
     difference_hartree: float,
     tolerance_hartree: float,
+    allowance_kj_mol: float,
     against: _Prepared | None,
+    inconsistent_with: Sequence[_Prepared] = (),
 ) -> CodedValueError:
     energy = prepared.energy
     zero = EnergyZeroConvention(energy.energy_zero_convention).value
+    gap = abs(difference_hartree) * HARTREE_TO_KJ_MOL
+    bound = tolerance_hartree * HARTREE_TO_KJ_MOL + allowance_kj_mol
     context: dict[str, object] = {
         "field": energy.field,
         "state_key": energy.state_key,
@@ -658,30 +715,41 @@ def _sum_mismatch(
         "stored_sum_kj_mol": prepared.stored_hartree * HARTREE_TO_KJ_MOL,
         "difference_kj_mol": difference_hartree * HARTREE_TO_KJ_MOL,
         "tolerance_kj_mol": tolerance_hartree * HARTREE_TO_KJ_MOL,
+        "allowance_kj_mol": allowance_kj_mol,
     }
-    gap = abs(difference_hartree) * HARTREE_TO_KJ_MOL
-    tol = tolerance_hartree * HARTREE_TO_KJ_MOL
     if against is None:
         message = (
             f"{energy.field} states {energy.energy_kj_mol!r} kJ/mol for the state "
             f"'{energy.state_key}', but the energies stored for the calculations it cites, summed "
             f"over the state's species by stoichiometry, give "
-            f"{prepared.stored_hartree * HARTREE_TO_KJ_MOL!r} kJ/mol (difference {gap:.3e}, "
-            f"tolerance {tol:.2e}). State the sum of the cited energies, or cite the right "
-            "calculations."
+            f"{prepared.stored_hartree * HARTREE_TO_KJ_MOL!r} kJ/mol (difference {gap:.3e}, beyond "
+            f"the {bound:.3e} that printed-precision and rounding of the stated number explain). "
+            "State the sum of the cited energies, or cite the right calculations."
         )
     else:
         context["compared_with_state_key"] = against.energy.state_key
+        context["compared_with_field"] = against.energy.field
+        context["inconsistent_state_keys"] = [p.energy.state_key for p in inconsistent_with]
         stated_gap = (prepared.stated_hartree - against.stated_hartree) * HARTREE_TO_KJ_MOL
         stored_gap = (prepared.stored_hartree - against.stored_hartree) * HARTREE_TO_KJ_MOL
         message = (
             f"{energy.field}: on the shared '{zero}' zero, the stated energies of the states "
             f"'{energy.state_key}' and '{against.energy.state_key}' differ by {stated_gap!r} "
             f"kJ/mol, but the sums of the energies stored for the calculations they cite differ "
-            f"by {stored_gap!r} kJ/mol (disagreement {gap:.3e}, tolerance {tol:.2e}). One of the "
-            "two states' energies or sources is wrong."
+            f"by {stored_gap!r} kJ/mol (disagreement {gap:.3e}, beyond the {bound:.3e} that "
+            "printed-precision and rounding explain). One of the two states' energies or sources "
+            "is wrong."
         )
     return CodedValueError(E_NETWORK_STATE_ENERGY_SUM_MISMATCH, message, context=context)
+
+
+_IMPRECISE = SumComparison(COMPARISON_NOT_COMPARED, NOT_COMPARED_STATED_PRECISION_UNKNOWN)
+
+
+def _pair_of(
+    pairs: dict[tuple[int, int], tuple[str, float, float, float]], a: int, b: int
+) -> tuple[str, float, float, float]:
+    return pairs[(min(a, b), max(a, b))]
 
 
 def compare_state_energy_sums(energies: Sequence[StateEnergyToCompare]) -> list[SumComparison]:
@@ -690,7 +758,13 @@ def compare_state_energy_sums(energies: Sequence[StateEnergyToCompare]) -> list[
     Reads the stored energies off the persisted calculation rows, never the payload. Returns one
     :class:`SumComparison` per input, in order: ``agrees``, or ``not_compared`` with a reason
     (see the module docstring for which conventions have a defined sum). A stated energy that
-    contradicts its sum raises.
+    contradicts its sum beyond printed precision *and* beyond the honest-rounding allowance
+    raises. Between the two the energy is ``not_compared`` / ``stated_precision_unknown``, unless
+    the producer stated ``energy_precision_kj_mol`` for it.
+
+    Several states on a shared zero are compared pairwise. The one blamed is the outlier: a state
+    inconsistent with a strict majority of the others. With two states neither can be called the
+    outlier, so both are named in the refusal.
 
     :raises CodedValueError: ``network_state_energy_sum_mismatch``.
     """
@@ -707,14 +781,23 @@ def compare_state_energy_sums(energies: Sequence[StateEnergyToCompare]) -> list[
     for position, prepared in comparable:
         zero = EnergyZeroConvention(prepared.energy.energy_zero_convention)
         if zero == EnergyZeroConvention.absolute:
-            # One stated energy and one weighted sum: n = 1 + sum(nu_i).
+            # One stated energy and one weighted sum: n = 1 + sum(nu_i). The allowance is half a
+            # rounding unit of the stated energy plus the spread of hartree-to-kJ/mol constants
+            # in use (about 1e-6 relative) on an energy this large.
+            half_unit, stated = _allowance_kj_mol(prepared.energy.energy_precision_kj_mol)
+            allowance = half_unit + CONVERSION_CONSTANT_SPREAD * abs(prepared.energy.energy_kj_mol)
             tolerance = composite_arithmetic_tolerance_hartree(1 + prepared.weight)
             difference = prepared.stated_hartree - prepared.stored_hartree
-            if abs(difference) > tolerance + _TOLERANCE_FLOAT_SLACK:
+            band = _classify(difference, tolerance, allowance, all_stated=stated)
+            if band == "bad":
                 raise _sum_mismatch(
-                    prepared, difference_hartree=difference, tolerance_hartree=tolerance, against=None
+                    prepared,
+                    difference_hartree=difference,
+                    tolerance_hartree=tolerance,
+                    allowance_kj_mol=allowance,
+                    against=None,
                 )
-            results[position] = _AGREES
+            results[position] = _AGREES if band == "agrees" else _IMPRECISE
         else:
             key = (zero, EnergyCorrectionConvention(prepared.energy.correction_convention))
             shared.setdefault(key, []).append((position, prepared))
@@ -723,23 +806,46 @@ def compare_state_energy_sums(energies: Sequence[StateEnergyToCompare]) -> list[
         if len(group) < 2:
             results[group[0][0]] = SumComparison(COMPARISON_NOT_COMPARED, NOT_COMPARED_NO_SECOND_STATE)
             continue
-        # The state with the lowest stated energy is the zero for ``lowest_state``; for any shared
-        # offset it is as good a reference as another, and the choice is deterministic.
-        reference_position, reference = min(group, key=lambda item: (item[1].stated_hartree, item[0]))
-        results[reference_position] = _AGREES
-        for position, prepared in group:
-            if position == reference_position:
-                continue
-            # Two stated energies and the two weighted sums: n = 2 + sum(nu_i) + sum(nu_j).
-            tolerance = composite_arithmetic_tolerance_hartree(2 + prepared.weight + reference.weight)
-            difference = (prepared.stated_hartree - reference.stated_hartree) - (
-                prepared.stored_hartree - reference.stored_hartree
-            )
-            if abs(difference) > tolerance + _TOLERANCE_FLOAT_SLACK:
-                raise _sum_mismatch(
-                    prepared, difference_hartree=difference, tolerance_hartree=tolerance, against=reference
+        # pair (a, b) -> (band, tolerance, allowance, gap). Two stated energies and the two
+        # weighted sums: n = 2 + sum(nu_a) + sum(nu_b).
+        pairs: dict[tuple[int, int], tuple[str, float, float, float]] = {}
+        for a in range(len(group)):
+            for b in range(a + 1, len(group)):
+                prepared_a, prepared_b = group[a][1], group[b][1]
+                unit_a, stated_a = _allowance_kj_mol(prepared_a.energy.energy_precision_kj_mol)
+                unit_b, stated_b = _allowance_kj_mol(prepared_b.energy.energy_precision_kj_mol)
+                tolerance = composite_arithmetic_tolerance_hartree(2 + prepared_a.weight + prepared_b.weight)
+                difference = (prepared_a.stated_hartree - prepared_b.stated_hartree) - (
+                    prepared_a.stored_hartree - prepared_b.stored_hartree
                 )
-            results[position] = _AGREES
+                allowance = unit_a + unit_b
+                band = _classify(difference, tolerance, allowance, all_stated=stated_a and stated_b)
+                pairs[(a, b)] = (band, tolerance, allowance, difference)
+
+        _pair = functools.partial(_pair_of, pairs)
+
+        count = len(group)
+        inconsistent = {
+            a: [b for b in range(count) if b != a and _pair(a, b)[0] == "bad"] for a in range(count)
+        }
+        # Blame the outliers: states inconsistent with a strict majority of the others.
+        blamed = [a for a in range(count) if 2 * len(inconsistent[a]) > count - 1]
+        if blamed:
+            a = blamed[0]
+            partners = sorted(inconsistent[a], key=lambda b: group[b][0])
+            b = partners[0]
+            _band, tolerance, allowance, difference = _pair(a, b)
+            raise _sum_mismatch(
+                group[a][1],
+                difference_hartree=difference,
+                tolerance_hartree=tolerance,
+                allowance_kj_mol=allowance,
+                against=group[b][1],
+                inconsistent_with=[group[p][1] for p in partners],
+            )
+        for a in range(count):
+            bands = [_pair(a, b)[0] for b in range(count) if b != a]
+            results[group[a][0]] = _IMPRECISE if "imprecise" in bands else _AGREES
 
     return [result for result in results if result is not None]
 
@@ -776,6 +882,14 @@ def collect_state_energy_source_warnings(
         elif comparison.status == COMPARISON_NOT_COMPARED and comparison.reason != NOT_COMPARED_NO_SOURCE_STATED:
             skipped.append(f"'{energy.state_key}' ({comparison.reason})")
     if skipped:
+        precision_hint = (
+            " A 'stated_precision_unknown' energy differs from the stored sum by more than "
+            "printed precision but by no more than honest rounding of the stated number could "
+            "explain: state energy_precision_kj_mol (the rounding unit) for it, or state "
+            "unrounded kJ/mol derived from hartree with 2625.499639, and it is compared."
+            if any("stated_precision_unknown" in item for item in skipped)
+            else ""
+        )
         warnings.append(
             UploadWarning(
                 field="solve.state_energies",
@@ -784,6 +898,7 @@ def collect_state_energy_source_warnings(
                     "State energies that could not be held against the sum of the energies stored "
                     f"for the calculations they cite: {'; '.join(skipped)}. They are stored as not "
                     "compared with their reason, and each rests on the stated number alone."
+                    f"{precision_hint}"
                 ),
             )
         )

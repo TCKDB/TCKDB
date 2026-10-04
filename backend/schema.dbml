@@ -2884,16 +2884,18 @@ Table network_solve_state_energy {
   source_calculation_id bigint [ref: > calculation.id]
   source_sum_comparison text
   source_sum_not_compared_reason text
+  energy_precision_kj_mol double
 
   indexes {
     (solve_id, state_id) [pk]
   }
 
   checks {
+    `energy_precision_kj_mol IS NULL OR (energy_precision_kj_mol > 0 AND energy_precision_kj_mol < 'Infinity'::float8)` [name: 'ck_network_solve_state_energy_energy_precision_positive']
     `(energy_zero_convention <> 'other' AND correction_convention <> 'other') OR convention_note IS NOT NULL` [name: 'ck_network_solve_state_energy_other_note']
     `source_sum_comparison IS NULL OR source_sum_comparison IN ('agrees', 'not_compared')` [name: 'ck_network_solve_state_energy_sum_comparison']
     `(source_sum_comparison IS NOT DISTINCT FROM 'not_compared') = (source_sum_not_compared_reason IS NOT NULL)` [name: 'ck_network_solve_state_energy_sum_reason_shape']
-    `source_sum_not_compared_reason IS NULL OR source_sum_not_compared_reason IN ('no_source_stated', 'sources_incomplete', 'convention_not_summable', 'energy_zero_not_comparable', 'stored_energy_not_stated', 'zpe_not_in_source', 'no_second_state_on_the_same_zero')` [name: 'ck_network_solve_state_energy_sum_reason_token']
+    `source_sum_not_compared_reason IS NULL OR source_sum_not_compared_reason IN ('no_source_stated', 'sources_incomplete', 'convention_not_summable', 'energy_zero_not_comparable', 'stored_energy_not_stated', 'zpe_not_in_source', 'no_second_state_on_the_same_zero', 'stated_precision_unknown')` [name: 'ck_network_solve_state_energy_sum_reason_token']
   }
 
   Note: 'Solve-specific state energy with an explicit zero/correction convention.'

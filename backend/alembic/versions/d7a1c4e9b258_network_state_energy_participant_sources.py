@@ -17,8 +17,10 @@ Schema
   (the upload service checks type and owner).
 * Three nullable columns on ``network_solve_state_energy``:
   ``source_sum_comparison`` (``agrees`` or ``not_compared``; a disagreement is never stored, it refuses
-  the deposit) and ``source_sum_not_compared_reason`` (a fixed set of tokens, present exactly when the
-  status is ``not_compared``). No computed total is stored anywhere.
+  the deposit), ``source_sum_not_compared_reason`` (a fixed set of tokens, present exactly when the
+  status is ``not_compared``) and ``energy_precision_kj_mol`` (the rounding unit the producer stated
+  for the stated energy, positive and finite; NULL is "not stated"). No computed total is stored
+  anywhere.
 * ``source_calculation_id`` stays, for back-compat and for the single-source form.
 
 Accepted-science immutability
@@ -37,7 +39,8 @@ the rows are frozen under accepted solves.
 Downgrade
 ---------
 Refuses, with the counts, while any participant-source row exists or any state energy recorded a
-comparison outcome: dropping them would discard the only statement of where a summed energy came from.
+comparison outcome or a stated precision (rows under an accepted, frozen solve cannot be deleted, so
+for those the refusal is permanent): dropping them would discard the only statement of where a summed energy came from.
 It deletes nothing. Otherwise it drops the triggers, the table, the constraints and the columns.
 
 Revision ID: d7a1c4e9b258
@@ -63,6 +66,7 @@ _ENERGY = "network_solve_state_energy"
 _STATUS_CHECK = "ck_network_solve_state_energy_sum_comparison"
 _SHAPE_CHECK = "ck_network_solve_state_energy_sum_reason_shape"
 _TOKEN_CHECK = "ck_network_solve_state_energy_sum_reason_token"
+_PRECISION_CHECK = "ck_network_solve_state_energy_energy_precision_positive"
 
 #: ``(table, record_type, column)`` -- guarded by ``tckdb_guard_accepted_child`` against the accepted
 #: root named directly on the row. Read by ``tests/db/test_accepted_science_trigger_registry.py``.
@@ -91,6 +95,7 @@ def _child_groups() -> list[tuple[str, str, tuple[str, ...]]]:
 def upgrade() -> None:
     op.add_column(_ENERGY, sa.Column("source_sum_comparison", sa.Text(), nullable=True))
     op.add_column(_ENERGY, sa.Column("source_sum_not_compared_reason", sa.Text(), nullable=True))
+    op.add_column(_ENERGY, sa.Column("energy_precision_kj_mol", sa.Double(), nullable=True))
     op.execute(
         f"ALTER TABLE public.{_ENERGY} ADD CONSTRAINT {_STATUS_CHECK} "
         "CHECK (source_sum_comparison IS NULL OR source_sum_comparison IN ('agrees', 'not_compared'))"
@@ -105,7 +110,12 @@ def upgrade() -> None:
         "CHECK (source_sum_not_compared_reason IS NULL OR source_sum_not_compared_reason IN ("
         "'no_source_stated', 'sources_incomplete', 'convention_not_summable', "
         "'energy_zero_not_comparable', 'stored_energy_not_stated', 'zpe_not_in_source', "
-        "'no_second_state_on_the_same_zero'))"
+        "'no_second_state_on_the_same_zero', 'stated_precision_unknown'))"
+    )
+    op.execute(
+        f"ALTER TABLE public.{_ENERGY} ADD CONSTRAINT {_PRECISION_CHECK} "
+        "CHECK (energy_precision_kj_mol IS NULL OR "
+        "(energy_precision_kj_mol > 0 AND energy_precision_kj_mol < 'Infinity'::float8))"
     )
 
     op.create_table(
@@ -178,21 +188,26 @@ def downgrade() -> None:
     bind = op.get_bind()
     sources = bind.execute(sa.text(f"SELECT count(*) FROM {_TABLE}")).scalar_one()
     compared = bind.execute(
-        sa.text(f"SELECT count(*) FROM {_ENERGY} WHERE source_sum_comparison IS NOT NULL")
+        sa.text(
+            f"SELECT count(*) FROM {_ENERGY} "
+            "WHERE source_sum_comparison IS NOT NULL OR energy_precision_kj_mol IS NOT NULL"
+        )
     ).scalar_one()
     if sources or compared:
         raise RuntimeError(
             f"Cannot downgrade: {sources} {_TABLE} row(s) and {compared} {_ENERGY} row(s) that recorded "
             "the outcome of comparing a stated state energy with the sum of its sources. Dropping them "
             "would discard the only statement of where a summed energy came from, or that it was "
-            "checked. Nothing is deleted; resolve those rows first."
+            "checked. Nothing is deleted; resolve those rows first. Rows under an accepted (frozen) "
+            "solve cannot be deleted or edited, so for them this refusal is permanent."
         )
     for table in _TRUNCATE_TABLES:
         op.execute(f"DROP TRIGGER IF EXISTS {_trigger_name('as_truncate', table)} ON public.{table}")
     for table, _, _ in _child_groups():
         op.execute(f"DROP TRIGGER IF EXISTS {_trigger_name('as_child', table)} ON public.{table}")
     op.drop_table(_TABLE)
-    for name in (_TOKEN_CHECK, _SHAPE_CHECK, _STATUS_CHECK):
+    for name in (_PRECISION_CHECK, _TOKEN_CHECK, _SHAPE_CHECK, _STATUS_CHECK):
         op.execute(f"ALTER TABLE public.{_ENERGY} DROP CONSTRAINT {name}")
+    op.drop_column(_ENERGY, "energy_precision_kj_mol")
     op.drop_column(_ENERGY, "source_sum_not_compared_reason")
     op.drop_column(_ENERGY, "source_sum_comparison")

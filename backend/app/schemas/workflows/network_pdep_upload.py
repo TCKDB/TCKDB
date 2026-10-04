@@ -722,11 +722,13 @@ _ENERGY_SOURCES_DESCRIPTION = (
     "must belong to exactly the species named beside it (network_energy_source_subject_mismatch "
     "otherwise). When the energy is on an absolute zero, or on a zero shared by several state "
     "energies of the solve (lowest_state, entrance_channel), and the sources cover every "
-    "participant, TCKDB compares the stated energy with the sum of the stored energies and "
-    "refuses a contradiction (network_state_energy_sum_mismatch, within the printed-precision "
-    "tolerance). A comparison that cannot be made is stored as not compared with its reason and "
-    "returns a network_state_energy_sum_not_compared warning. Send this or source_calculation_key, "
-    "never both."
+    "participant, TCKDB compares the stated energy with the sum of the stored energies: within "
+    "printed precision it agrees; beyond that but within honest rounding of the stated kJ/mol "
+    "(half of energy_precision_kj_mol, or of 1 kcal/mol when not stated) it is stored as not "
+    "compared (stated_precision_unknown); only beyond that is it refused "
+    "(network_state_energy_sum_mismatch). A comparison that cannot be made is stored as not "
+    "compared with its reason and returns a network_state_energy_sum_not_compared warning. Send "
+    "this or source_calculation_key, never both."
 )
 
 
@@ -757,6 +759,19 @@ class ConventionBlock(SchemaBase):
                 "convention_note is required when an energy convention is 'other'."
             )
         return self
+
+
+_ENERGY_PRECISION_DESCRIPTION = (
+    "The rounding unit of energy_kj_mol, in kJ/mol (0.1 for a value rounded to 0.1 kJ/mol, 4.184 "
+    "for kcal/mol rounded to whole units). Used only when source calculations are cited: a stated "
+    "energy that differs from the sum of their stored energies by more than hartree printed "
+    "precision is compared with half this unit added, so a correctly rounded value is accepted "
+    "and a wrong one is not. Without it TCKDB assumes 1 kcal/mol (2.09 kJ/mol of allowance) and "
+    "stores a value beyond printed precision but within that allowance as not compared "
+    "(stated_precision_unknown) with a network_state_energy_sum_not_compared warning. To be "
+    "compared exactly, state unrounded kJ/mol derived from hartree with 2625.499639, or state "
+    "this field. Never inferred from the digits of the number."
+)
 
 
 class StateEnergySourceIn(SchemaBase):
@@ -792,6 +807,12 @@ class StateEnergyIn(ConventionBlock):
         default=None,
         min_length=1,
         description=_ENERGY_SOURCES_DESCRIPTION,
+    )
+    energy_precision_kj_mol: float | None = Field(
+        default=None,
+        gt=0,
+        allow_inf_nan=False,
+        description=_ENERGY_PRECISION_DESCRIPTION,
     )
 
     @model_validator(mode="after")

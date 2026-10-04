@@ -3494,6 +3494,20 @@
           "title": "Energy Kj Mol",
           "type": "number"
         },
+        "energy_precision_kj_mol": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The rounding unit of energy_kj_mol, in kJ/mol (0.1 for a value rounded to 0.1 kJ/mol, 4.184 for kcal/mol rounded to whole units). Used only when source calculations are cited: a stated energy that differs from the sum of their stored energies by more than hartree printed precision is compared with half this unit added, so a correctly rounded value is accepted and a wrong one is not. Without it TCKDB assumes 1 kcal/mol (2.09 kJ/mol of allowance) and stores a value beyond printed precision but within that allowance as not compared (stated_precision_unknown) with a network_state_energy_sum_not_compared warning. To be compared exactly, state unrounded kJ/mol derived from hartree with 2625.499639, or state this field. Never inferred from the digits of the number.",
+          "title": "Energy Precision Kj Mol"
+        },
         "energy_zero_convention": {
           "$ref": "#/$defs/EnergyZeroConvention",
           "description": "Where the zero of the energy scale sits. lowest_state: the lowest-energy state of the network. entrance_channel: the declared entrance (reactant) channel. separated_reactants: the infinitely separated reactants of the elementary step in question (not necessarily a network state). absolute: absolute (unshifted) electronic energies. other: anything else; requires convention_note."
@@ -3525,7 +3539,7 @@
             }
           ],
           "default": null,
-          "description": "One calculation per participant of the state, as {species_key, calculation_key}. A state energy of several species is the sum of theirs, weighted by each participant's stoichiometry. Each calculation passes the same type rule as source_calculation_key and must belong to exactly the species named beside it (network_energy_source_subject_mismatch otherwise). When the energy is on an absolute zero, or on a zero shared by several state energies of the solve (lowest_state, entrance_channel), and the sources cover every participant, TCKDB compares the stated energy with the sum of the stored energies and refuses a contradiction (network_state_energy_sum_mismatch, within the printed-precision tolerance). A comparison that cannot be made is stored as not compared with its reason and returns a network_state_energy_sum_not_compared warning. Send this or source_calculation_key, never both.",
+          "description": "One calculation per participant of the state, as {species_key, calculation_key}. A state energy of several species is the sum of theirs, weighted by each participant's stoichiometry. Each calculation passes the same type rule as source_calculation_key and must belong to exactly the species named beside it (network_energy_source_subject_mismatch otherwise). When the energy is on an absolute zero, or on a zero shared by several state energies of the solve (lowest_state, entrance_channel), and the sources cover every participant, TCKDB compares the stated energy with the sum of the stored energies: within printed precision it agrees; beyond that but within honest rounding of the stated kJ/mol (half of energy_precision_kj_mol, or of 1 kcal/mol when not stated) it is stored as not compared (stated_precision_unknown); only beyond that is it refused (network_state_energy_sum_mismatch). A comparison that cannot be made is stored as not compared with its reason and returns a network_state_energy_sum_not_compared warning. Send this or source_calculation_key, never both.",
           "title": "Source Calculation Keys"
         },
         "state_key": {

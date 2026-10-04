@@ -49,8 +49,9 @@ def _freq():
     return SimpleNamespace(type=CalculationType.freq)
 
 
-def _state(index, key, kj, participants, *, zero=_ABS, correction=_ELEC) -> StateEnergyToCompare:
+def _state(index, key, kj, participants, *, zero=_ABS, correction=_ELEC, precision=None) -> StateEnergyToCompare:
     return StateEnergyToCompare(
+        energy_precision_kj_mol=precision,
         index=index,
         state_key=key,
         energy_kj_mol=kj,
@@ -144,17 +145,84 @@ def test_an_unvalidated_string_convention_is_normalised() -> None:
     assert compare_state_energy_sums([state])[0].status == "agrees"
 
 
-def test_a_shared_zero_blames_the_state_off_the_reference_at_its_own_index() -> None:
+def _three_on_a_lowest_state_zero(offsets_kj=(0.0, 0.0, 0.0)):
+    zero = EnergyZeroConvention.lowest_state
+    return [
+        _state(0, "low", 0.0 + offsets_kj[0], [("a", 1, _sp(-10.0))], zero=zero),
+        _state(1, "ok", (-9.0 - -10.0) * H + offsets_kj[1], [("b", 1, _sp(-9.0))], zero=zero),
+        _state(2, "off", (-8.0 - -10.0) * H + offsets_kj[2], [("c", 1, _sp(-8.0))], zero=zero),
+    ]
+
+
+def test_a_shared_zero_blames_the_outlier_at_its_own_index() -> None:
+    with pytest.raises(CodedValueError) as raised:
+        compare_state_energy_sums(_three_on_a_lowest_state_zero((0.0, 0.0, 50.0)))
+    context = raised.value.context
+    assert context["field"] == "solve.state_energies[2].energy_kj_mol"
+    assert context["compared_with_field"].endswith(".energy_kj_mol")
+    assert context["inconsistent_state_keys"] == ["low", "ok"]
+
+
+def test_the_outlier_may_be_the_lowest_state() -> None:
+    with pytest.raises(CodedValueError) as raised:
+        compare_state_energy_sums(_three_on_a_lowest_state_zero((-50.0, 0.0, 0.0)))
+    assert raised.value.context["state_key"] == "low"
+
+
+def test_two_states_that_disagree_are_both_named() -> None:
     zero = EnergyZeroConvention.lowest_state
     states = [
-        _state(0, "low", 0.0, [("a", 1, _sp(-10.0))], zero=zero),
-        _state(1, "ok", (-9.0 - -10.0) * H, [("b", 1, _sp(-9.0))], zero=zero),
-        _state(2, "off", (-8.0 - -10.0) * H + 1.0, [("c", 1, _sp(-8.0))], zero=zero),
+        _state(0, "a", 0.0, [("a", 1, _sp(-10.0))], zero=zero),
+        _state(1, "b", (-9.0 - -10.0) * H + 50.0, [("b", 1, _sp(-9.0))], zero=zero),
     ]
     with pytest.raises(CodedValueError) as raised:
         compare_state_energy_sums(states)
-    assert raised.value.context["field"] == "solve.state_energies[2].energy_kj_mol"
-    assert raised.value.context["compared_with_state_key"] == "low"
+    context = raised.value.context
+    assert {context["state_key"], context["compared_with_state_key"]} == {"a", "b"}
+    assert sorted(context["inconsistent_state_keys"]) in (["a"], ["b"])
+
+
+# --- the three bands, on an absolute energy of one single point -----------------------------------
+
+_SP = -10.0
+# One single point: n = 1 + 1 = 2 rounded quantities -> max(1e-6, 1e-6) = 1e-6 Eh.
+
+
+def _abs_state(gap_hartree, *, precision=None, stated_kj=None):
+    kj = (_SP + gap_hartree) * H if stated_kj is None else stated_kj
+    return _state(0, "s", kj, [("a", 1, _sp(_SP))], precision=precision)
+
+
+def test_within_printed_precision_agrees() -> None:
+    assert compare_state_energy_sums([_abs_state(0.9e-6)])[0].status == "agrees"
+
+
+def test_beyond_printed_precision_but_within_rounding_is_not_compared() -> None:
+    (result,) = compare_state_energy_sums([_abs_state(1.1e-6)])
+    assert (result.status, result.reason) == ("not_compared", "stated_precision_unknown")
+
+
+def test_beyond_the_rounding_allowance_is_refused() -> None:
+    # default allowance 2.092 kJ/mol + 1e-6 relative on ~26254 kJ/mol (0.026) + tolerance
+    with pytest.raises(CodedValueError):
+        compare_state_energy_sums([_abs_state(None, stated_kj=_SP * H + 2.2)])
+    assert compare_state_energy_sums([_abs_state(None, stated_kj=_SP * H + 2.0)])[0].reason == "stated_precision_unknown"
+
+
+def test_a_stated_precision_turns_the_rounding_band_into_agreement_and_tightens_the_bound() -> None:
+    wrong_by_rounding = _SP * H + 0.04
+    assert compare_state_energy_sums([_abs_state(None, precision=0.1, stated_kj=wrong_by_rounding)])[0].status == "agrees"
+    with pytest.raises(CodedValueError):  # 1.0 kJ/mol off exceeds half of 0.1 kJ/mol
+        compare_state_energy_sums([_abs_state(None, precision=0.1, stated_kj=_SP * H + 1.0)])
+
+
+def test_the_conversion_constant_spread_scales_with_the_value() -> None:
+    """The same 0.9 kJ/mol error is conversion spread on a 1e6 kJ/mol energy and a wrong number on 1e3."""
+    big = _state(0, "s", -1.0e6 + 0.9, [("a", 1, _sp(-1.0e6 / H))], precision=0.001)
+    assert compare_state_energy_sums([big])[0].status == "agrees"
+    small = _state(0, "s", -1.0e3 + 0.9, [("a", 1, _sp(-1.0e3 / H))], precision=0.001)
+    with pytest.raises(CodedValueError):
+        compare_state_energy_sums([small])
 
 
 def test_a_shared_zero_with_a_non_summable_state_still_compares_the_others() -> None:

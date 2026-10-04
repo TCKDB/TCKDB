@@ -181,19 +181,35 @@ including the standalone `/uploads/thermo` and `/uploads/statmech` routes with a
 polyatomic species whose only linked calculations are `sp`s.
 
 - **Polyatomic species.** "One structure" means the same atoms (same
-  elements and stated isotopes, in the same order) at the same shape, wherever
-  they sit. Two `sp` links on the same geometry are refused, and so is one on a
-  copy of it that was translated or rotated (a water geometry shifted by 1
-  Angstrom is the same water). The comparison is a rigid-motion RMSD
-  (Kabsch alignment) with a tolerance taken from the precision the coordinates
-  were written to (1.7e-6 Angstrom for six decimals), so a geometry that
-  really differs (another conformer, a bond length changed by more than
-  rounding) is a different structure and is not refused. An enantiomer is a
-  different structure; a mirror image counts as the same only when a rotation
-  superposes it atom for atom. The same atoms listed in a different order are
-  *not* recognised as one structure; list them in one order. A moved copy
-  written to three or fewer decimals may not be recognised (such coordinates
-  are held to the four-decimal tolerance).
+  elements and stated isotopes) at the same shape, wherever they sit and in
+  whatever order they are listed. Two `sp` links on the same geometry are
+  refused, and so is one on a copy of it that was translated, rotated or had its
+  atoms listed in another order (a water geometry shifted by 1 Angstrom, or
+  with its hydrogens listed first, is the same water). The comparison is a
+  rigid-motion RMSD (Kabsch alignment) with a tolerance taken from the
+  precision the coordinates were written to (1.7e-6 Angstrom for six
+  decimals), so a geometry that really differs (another conformer, a bond
+  length changed by more than rounding) is a different structure and is not
+  refused. An enantiomer is a different structure; a mirror image counts as
+  the same only when a rotation superposes it atom for atom, in whatever order
+  its atoms are listed.
+  - *Reordered atoms.* The check looks for a relabelling of one geometry's atoms
+    that lays it on the other, using the geometries alone (the rule has no
+    species graph). Only atoms of one element and one isotope are exchanged, so
+    an atom stated as 2H is never taken for a 1H, and `D` and `T` count as 2H and
+    3H. Interchangeable atoms (the three H of a CH3) are handled: any one
+    relabelling that superposes is enough.
+  - *Limits.* The search is bounded, and past any bound a pair is left
+    undecided and counted as **different**: geometries over 200 atoms are not
+    searched; a pair needing more than 256 trial alignments or examining more
+    than 50,000 candidate placements (for example a very large, highly
+    symmetric, chiral cluster) is undecided; and a record has a fixed budget of
+    4,096 alignments and 50 million work units over all its pairs (a pair of
+    different shapes costs about n^2/2 units and is dismissed at once). In those
+    cases a duplicate energy on a reordered copy is not caught; ordinary
+    molecules need one alignment and a few milliseconds.
+  - A moved copy written to three or fewer decimals may not be recognised (such
+    coordinates are held to the four-decimal tolerance).
 - **A single atom.** An atom has no geometry to differ in, so "one
   structure" means the same element and the same stated isotope mass number (`D` and
   `T` count as hydrogen, as they do everywhere else elements are compared). A second `sp` on a shifted copy of the

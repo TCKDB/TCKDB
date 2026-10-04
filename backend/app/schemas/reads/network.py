@@ -165,6 +165,7 @@ class NetworkSolveStateEnergyRead(ORMBaseSchema):
     partial_sources: bool = False
     source_sum_comparison: str | None = None
     source_sum_not_compared_reason: str | None = None
+    energy_precision_kj_mol: float | None = None
 
 
 class NetworkSolveSourceCalculationRead(ORMBaseSchema):

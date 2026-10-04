@@ -1138,6 +1138,10 @@ def persist_network_pdep_upload(
                 # Owned by a participant (checked above): that participant is the one it covers.
                 assert single_calculation.species_entry_id is not None
                 cited[single_calculation.species_entry_id] = single_calculation
+            if energy_in.source_calculation_keys and len(participant_rows) == 1 and len(cited) == 1:
+                # A one-participant state: the list covers the whole sum, so the older single slot
+                # carries it too, and a reader of ``source_calculation_ref`` keeps the source.
+                single_source_id = next(iter(cited.values())).id
             energy_row = NetworkSolveStateEnergy(
                 solve_id=solve.id,
                 state_id=energy_state.id,
@@ -1146,6 +1150,7 @@ def persist_network_pdep_upload(
                 correction_convention=energy_in.correction_convention,
                 convention_note=energy_in.convention_note,
                 source_calculation_id=single_source_id,
+                energy_precision_kj_mol=energy_in.energy_precision_kj_mol,
             )
             session.add(energy_row)
             sum_rows.append(energy_row)
@@ -1156,6 +1161,7 @@ def persist_network_pdep_upload(
                     energy_kj_mol=energy_in.energy_kj_mol,
                     energy_zero_convention=energy_in.energy_zero_convention,
                     correction_convention=energy_in.correction_convention,
+                    energy_precision_kj_mol=energy_in.energy_precision_kj_mol,
                     participants=tuple(
                         ParticipantSource(
                             species_key=species_key_by_entry_id.get(row.species_entry_id, "?"),

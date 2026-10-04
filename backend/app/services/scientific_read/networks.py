@@ -1446,6 +1446,7 @@ def _build_state_energies_for_solve(
                 partial_sources=bool(sources) and len(covered) < len(participants),
                 source_sum_comparison=energy.source_sum_comparison,
                 source_sum_not_compared_reason=energy.source_sum_not_compared_reason,
+                energy_precision_kj_mol=energy.energy_precision_kj_mol,
             )
         )
     return summaries
