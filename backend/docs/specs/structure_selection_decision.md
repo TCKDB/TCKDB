@@ -70,7 +70,21 @@ Candidates are whole protocols (cohorts) that cover every requested target; no m
 basin's available method. Edges come only from audited rules through the shared graph kernel
 (`app.services.selection_kernel`), a rule applies only under its own objective and reference model, an unknown
 prerequisite makes no edge, and sole eligibility is `sole_eligible_candidate`, not superiority. A rule is active only if
-it names its objective and pins the digest of its audited manifest. This release registers none.
+it names its objective and pins the digest of its audited manifest. This release registers three audited candidates, all inactive (next section).
+
+## The rule registry and what was audited
+
+`app/chemistry/structure_rules/structure_rule_candidates.yaml` is the audit record, loaded only against its pinned SHA-256 (`STRUCTURE_RULE_MANIFEST_SHA256`) by `app/services/structure_selection/rules.py`, which registers each entry inactive with its blockers as the reasons. An entry that claims approval must carry the owner's dated acceptance and no blockers; one that does not must list a blocker and what would be needed. Even an approved entry applies no edge until its predicates are written and reviewed (`RULES_WITH_IMPLEMENTED_PREDICATES`, empty). A model-fidelity rule additionally needs a pinned reference model to be active. An agent never activates a rule.
+
+Registered (all inactive, manifest 0.1.0):
+
+| Rule | Rests on | Why it is inactive (headline) |
+| --- | --- | --- |
+| `S-ACONFL-LNO-LARGE-BASIS` | Santra and Martin, J. Phys. Chem. A 126, 9375 (2022), Tables 4 and 5 | The ACONF16 and ACONF20 reference is MP2-F12/CBS plus the LNO-CCSD(T)/vTight/AV{Q,5}Z correction (HLC14), the protocol the rule prefers, so only the 12 ACONF12 conformers are an independent comparison; no numeric reference uncertainty (the revision moved energies by up to +0.60/-0.67 kcal/mol, MAD 0.31 between old and new references); the figures are set MADs, not per-conformer errors; core treatment, corrections and the geometry level are not stated; a relative conformer energy against a named reference conformer has no intent in structure selection yet |
+| `S-ACONFL-DLPNO-F12-VERYTIGHT` | the same article, Table 6 | The same reference and uncertainty limits; the reference is not canonical beyond n-dodecane; VeryTightPNO is a program-specific ORCA setting the declaration vocabulary does not type; its larger-basis variants exist for ACONF12 only |
+| `S-FIXED-MODEL-CONVERGENCE` | none (the council's proposed form) | No source, no scope, no pinned reference and no recorded reference comparison to rest on; a tighter keyword is not evidence of accuracy |
+
+The council's thermochemistry-decomposition, GOAT-ensemble and TS mode/IRC examples support distinctions the assessment already makes and are recorded in the manifest as considered and deliberately not preference rules. What was read of the Santra and Martin article, from which version, is pinned by SHA-256 with a `used_for` line per source; the published PDF could not be downloaded (PMC and the publisher serve it behind a bot challenge), so the published text was read from Europe PMC's open-access full text, the page anchors are those of the arXiv v2 PDF, and the Supporting Information PDF was read for Table S1 only. The per-conformer data in the Supporting Information archive were located and not extracted.
 
 ## Manifest and replay
 

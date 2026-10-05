@@ -22,6 +22,30 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Structure rule audit: the ACONFL example registered inactive (2026-10-05)
+
+**Chunk 4 of 6 of calculation, conformer and transition-state energy selection: rule audit.** The structure rule registry now
+carries three audited candidates, loaded only against the pinned SHA-256 of `structure_rule_candidates.yaml` and registered
+**inactive**: two derived from the council's relative-conformer-energy example (Santra and Martin, J. Phys. Chem. A 126, 9375
+(2022), open access) and the one proposed form with no source (controlled convergence on one fixed model). No rule is active, no
+decision changes, and the contract is unchanged. Migration: none.
+
+- **What the audit found.** The ACONF16 and ACONF20 reference is MP2-F12/CBS plus the LNO-CCSD(T)/vTight/AV{Q,5}Z correction, the
+  protocol one rule prefers, so only the 12 ACONF12 conformers are an independent comparison; the article states no numeric
+  reference uncertainty (the revision moved energies by up to +0.60/-0.67 kcal/mol; MAD 0.31 between old and new references);
+  every figure is a set MAD, not a per-conformer error; core treatment, included corrections and the geometry level are not
+  stated; and a relative conformer energy against a named reference conformer (all-trans for two sets, the hairpin for the third)
+  has no intent in structure selection yet. Each blocker is named in the manifest with the paper, table or data that would be
+  needed.
+- **Provenance.** Sources are pinned by SHA-256 with a `used_for` line and page, table or figure anchors for every number. The
+  published PDF could not be downloaded (bot challenge); the published text was read from Europe PMC's open-access full text, page
+  anchors are those of arXiv v2, and the Supporting Information PDF was read for Table S1 only. The per-conformer spreadsheets in the
+  Supporting Information were located, not extracted.
+- **Not rules.** The thermochemistry-decomposition, GOAT-ensemble and TS mode/IRC examples are recorded as considered and
+  deliberately not preference rules.
+- Approval in the manifest alone applies no edge until the predicates are written (`RULES_WITH_IMPLEMENTED_PREDICATES`, empty);
+  a model-fidelity rule needs a pinned reference model to be active.
+
 ## Structure decision and replay: cohorts, numerical order, protocol preference (2026-10-05)
 
 **Chunk 3 of 6 of calculation, conformer and transition-state energy selection: decision and replay.** On top of the assessment, a
