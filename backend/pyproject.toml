@@ -368,6 +368,7 @@ files = [
     "app/schemas",
     "app/chemistry",
     "app/services/network_selection",
+    "app/services/structure_selection",
     "../schemas/python/tckdb-schemas/tckdb_schemas",
 ]
 mypy_path = "../schemas/python/tckdb-schemas"
