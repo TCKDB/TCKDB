@@ -58,9 +58,31 @@ Magnitude does not turn an expectation into a definition. It decides whether cla
 | an extra imaginary mode at or above τ, with a declared disposition | **warn**, plus a structural flag |
 | a single imaginary mode below 100 cm⁻¹ | **warn** — unchanged, suspiciously soft |
 
-**τ = 100 cm⁻¹, one constant, for every protocol.**
+~~**τ = 100 cm⁻¹, one constant, for every protocol.**~~
 
-> **Amended 2026-08-15.** τ was originally a five-row table keyed on the
+> **Superseded 2026-10-05: the per-method table is in force.** The 2026-08-15
+> amendment below withdrew the table in favour of one constant, but the code
+> applies the table, and the owner's 2026-09-04 decision ([§"Amendment 2026-09-04"](#amendment-2026-09-04-an-assumed-default-when-the-method-is-not-recorded))
+> is built on the table: an assumed Hessian method takes "the same τ as its
+> recorded counterpart". The owner confirmed on 2026-10-05 that the table is
+> right. τ is resolved per record by `tckdb_schemas.stationary_point.resolve_tau`
+> and stored with its basis:
+>
+> | Hessian method (recorded or assumed) | τ |
+> |---|---|
+> | analytic, tight grid and optimisation | 15 cm⁻¹ |
+> | analytic, default settings | 30 cm⁻¹ |
+> | finite difference of analytic gradients | 50 cm⁻¹ |
+> | finite difference of energies | 80 cm⁻¹ |
+> | not recorded and not assumable | 50 cm⁻¹ |
+>
+> The 2026-08-15 text is kept below as the record of why a single constant
+> was proposed; its observation that τ never decides between blocking and
+> warning still holds, and is what makes the table's lack of calibration
+> tolerable. The 100 cm⁻¹ anchors it cites remain the TS soft-mode warning
+> line (`TS_IMAGINARY_FREQUENCY_MIN_CM1`), not τ.
+
+> **Amended 2026-08-15 (superseded 2026-10-05, above).** τ was originally a five-row table keyed on the
 > Hessian algorithm, integration grid and optimisation tightness. The table
 > is withdrawn. Three findings retired it, in increasing order of weight.
 >
