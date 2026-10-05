@@ -2991,6 +2991,29 @@ def _check_ts_reaction_coordinate_designated(
     return _bool_outcome(freq.reaction_coordinate_mode_index is not None)
 
 
+def _check_ts_no_frequency_result_lacks_an_imaginary_mode(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return warning when any attached frequency result records no imaginary mode at all.
+
+    The badge makes no stationary-point verdict (no hard fail, no certificate): it cannot pin the target a saddle claim is
+    about. What it can do is keep a contradiction visible instead of letting the representative result's
+    ``imaginary_frequency_count_recorded: passed`` stand for the whole entry. Every source result with a *recorded* count is
+    read (a result whose count is null is unknown, never a contradiction, and neither rescues nor condemns); a recorded
+    count of zero is a warning whether it stands alone, disagrees with another result or sits beside a newer one. ``passed``
+    means only that no recorded result lacks an imaginary mode, not that the saddle is certified; the scoped judgement is
+    ``POST /scientific/transition-state-entries/{ref}/evidence/select``.
+    """
+    counts = [
+        calc.freq_result.n_imag
+        for calc in _ts_source_calculations(ts_entry)
+        if calc.freq_result is not None and calc.freq_result.n_imag is not None
+    ]
+    if not counts:
+        return EvidenceOutcome.not_applicable
+    return EvidenceOutcome.warning if any(n == 0 for n in counts) else EvidenceOutcome.passed
+
+
 def _check_ts_extra_imaginary_modes_not_flagged(
     ts_entry: TransitionStateEntry,
 ) -> EvidenceOutcome:
@@ -3220,6 +3243,15 @@ COMPUTED_TRANSITION_STATE_V3: EvidenceRubric = EvidenceRubric(
                 "than one does (ADR 0012)."
             ),
             runner=_check_ts_reaction_coordinate_designated,
+        ),
+        EvidenceCheckSpec(
+            name="no_frequency_result_lacks_an_imaginary_mode",
+            kind=EvidenceCheckKind.warning,
+            explain=(
+                "No attached frequency result with a recorded count reports zero imaginary modes (advisory; the "
+                "badge does not certify the saddle)."
+            ),
+            runner=_check_ts_no_frequency_result_lacks_an_imaginary_mode,
         ),
         EvidenceCheckSpec(
             name="extra_imaginary_modes_not_flagged",

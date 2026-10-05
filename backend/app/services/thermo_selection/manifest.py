@@ -21,14 +21,22 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
+from app.services.selection_kernel.assessment_semantics import (
+    UnsupportedAssessmentSemantics,
+    check_supported,
+    describe_replay,
+    semantics_block,
+)
 from app.services.thermo_selection.engine import decide
 from app.services.thermo_selection.models import (
+    ASSESSMENT_SEMANTICS_VERSION,
     MANIFEST_FORMAT_VERSION,
     PHASE,
     POLICY_NAME,
     POLICY_VERSION,
     QUANTITY,
     REFERENCE_TEMPERATURE_K,
+    SUPPORTED_ASSESSMENT_SEMANTICS,
     CandidateAssessment,
     Decision,
     H298Request,
@@ -37,6 +45,7 @@ from app.services.thermo_selection.models import (
     Subject,
 )
 from app.services.thermo_selection.rules import PreferenceRule, default_rules
+from app.services.trust.rubrics import COMPUTED_THERMO_V2
 
 
 class ReplayError(ValueError):
@@ -62,6 +71,9 @@ def build_manifest(
     return {
         "manifest_format_version": MANIFEST_FORMAT_VERSION,
         "policy": {"name": POLICY_NAME, "version": POLICY_VERSION},
+        "assessment_semantics": semantics_block(
+            version=ASSESSMENT_SEMANTICS_VERSION, evidence_rubric=f"{COMPUTED_THERMO_V2.name}@{COMPUTED_THERMO_V2.version}"
+        ),
         "request": {
             "quantity": QUANTITY,
             "temperature_k": REFERENCE_TEMPERATURE_K,
@@ -106,6 +118,10 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule]
         raise ReplayError(f"unknown manifest format {manifest.get('manifest_format_version')!r}")
     if manifest["policy"] != {"name": POLICY_NAME, "version": POLICY_VERSION}:
         raise ReplayError(f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} v{POLICY_VERSION}")
+    try:
+        check_supported(manifest, supported=SUPPORTED_ASSESSMENT_SEMANTICS)
+    except UnsupportedAssessmentSemantics as exc:
+        raise ReplayError(str(exc)) from exc
     if manifest["decision"] is None:
         return {"outcome": manifest["outcome"]}
     registry = tuple(default_rules() if rules is None else rules)
@@ -141,3 +157,16 @@ def replay_matches(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule] 
     replayed = replay_decision(manifest, rules=rules)
     recorded = manifest["decision"] if manifest["decision"] is not None else {"outcome": manifest["outcome"]}
     return replayed == recorded and replayed["outcome"] == manifest["outcome"]
+
+
+def replay_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Label a replay as historical or current: the assessment semantics the manifest was made under versus today's.
+
+    :raises ReplayError: when the manifest records assessment semantics this release does not carry.
+    """
+    try:
+        return describe_replay(
+            manifest, current=ASSESSMENT_SEMANTICS_VERSION, supported=SUPPORTED_ASSESSMENT_SEMANTICS
+        )
+    except UnsupportedAssessmentSemantics as exc:
+        raise ReplayError(str(exc)) from exc

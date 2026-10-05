@@ -31,23 +31,48 @@ an honest judgement?
   failure stays visible: the geometry checks report `warning` (zero weight) for `fail` as well as for `warning`. Rejected
   calculation quality and a recorded artifact-integrity break still hard-fail exactly as before. A *confirmed* identity failure is
   a structure-determination finding judged by structure selection in its own role, not by this badge.
-- **A transition state's frequency contradiction is judged over every source frequency result, not the "representative" one.**
-  The representative result (latest by creation time) still feeds the graded checks, but it no longer hard-fails a record alone:
-  a newest bad rerun beside an older valid frequency job no longer condemns the entry. The record is hard-failed only when no
-  stored frequency result supports a validated saddle.
+- **The transition state badge issues no frequency verdict.** It used to hard-fail on the representative (latest) result, and a first
+  correction judged every attached result. Neither is sufficient: a saddle claim is about a *declared target* (the geometry it
+  evaluates, the role bundle supporting it, a usable source, the owner's persisted treatment of extra modes), and the badge has none of
+  those. "Latest decides" lets a bad rerun on another geometry condemn a coherent older bundle; "every result must contradict" lets a
+  rejected or unrelated older one-mode result rescue a disproved bundle and ignores curvature stored on optimisation and composite jobs.
+  So the badge no longer produces `frequency_source_has_zero_imaginary_modes_for_validated_ts` or
+  `frequency_source_reaction_coordinate_not_designated_for_validated_ts` (the members stay so stored results parse). It also certifies
+  nothing. What it adds is visibility: the warning `no_frequency_result_lacks_an_imaginary_mode` fires when any attached result with a
+  recorded count reports zero imaginary modes (alone, older, newer or in disagreement; a null count is unknown and neither rescues nor
+  condemns), and `reaction_coordinate_designated_for_ts` is `missing` for several modes without a designation. The scoped judgement is
+  the structure assessment (`POST /scientific/transition-state-entries/{ref}/evidence/select`): it pins the geometry, ignores
+  unusable and other-geometry results, reads opt/composite characterisation on its output geometry, leaves a same-target
+  disagreement unresolved (`curvature_witnesses_disagree`), reports zero modes on the evaluated geometry as
+  `curvature_contradicts_claim`, reports an undesignated extra mode as `reaction_coordinate_not_established`, and applies authorized
+  adjudications. Reason mapping for the retired hard fails: zero modes becomes the warning above plus `curvature_contradicts_claim`;
+  undesignated extra modes becomes the missing designation check plus `reaction_coordinate_not_established`.
+  The trust projection of a TS entry does not yet consume that assessment; it is a disclosed limitation, not a claim.
+- **A confirmed finding is applied where it is consumed.** The badge stays narrow (rejected quality, artifact custody). H298 and
+  kinetics selection read live, supported `StructureEvidenceFinding` rows for the record's own source calculations in the roles it
+  uses them for (`structure_selection.source_findings`): calculation-scope findings, geometry-scope findings on the geometry the role
+  reads, and determination-scope findings only through a source role the product uses on the geometry that determination evaluates. A
+  `role_invalidation` bites only its role; a curvature contradiction bites the frequency role and never a separately valid recorded
+  energy; only an authorized same-subject adjudication settles a finding (history is kept); unresolved is unresolved, not blocked;
+  an unreadable kind or version is disclosed, not promoted to a failure. A heuristic geometry `fail` is not read here at all.
 
 **Versioning.** `computed_calculation`, `computed_kinetics`, `computed_thermo`, `computed_statmech` and `computed_transport`
 are now version 2 and `computed_transition_state` is version 3. The reviewer-family machine-review recipe stamps the rubric
-version, so a review made under the previous version compares **stale** (`rubric_versions_mismatch`) and a re-review is planned;
+version, so a review made under the previous version compares **stale** and a re-review is planned. `rubric_versions_mismatch` is
+always among the reasons; on real data `context_hash_mismatch` usually accompanies it, because the machine-review context carries the
+check sets and the hard-fail reason, which these changes alter even for clean records;
 the stored review row is never rewritten and keeps its own recipe and verdict as history. The scientific-check families and the
 external-Cp runner keep their own keys and are not restaled. The context-hash schema version is unchanged (the shape did not change).
 The `HardFailReason` members are kept so stored version-1 results and reviews still parse; they are simply no longer produced for
 these two causes.
 
 **Live consumers.** H298 and kinetics selection block on `evidence.hard_fail_reason`, so a record whose only flaw was an automated
-geometry fail is now eligible, and fresh answers can differ from earlier ones. Each assessment now carries
-`evidence_rubric:<rubric>@<version>` in its advisory list so a manifest records which semantics produced its verdict. Historic
-manifests replay unchanged (replay reads the recorded assessments, not the current rubric). See
+geometry fail is now eligible, and fresh answers can differ from earlier ones. Each assessment carries
+`evidence_rubric:<rubric>@<version>` in its advisory list, and each manifest records a structured `assessment_semantics` block
+(`version`, `evidence_rubric`, `source_findings`). The selection `policy` version covers only the decision procedure; assessment
+semantics are versioned separately (`ASSESSMENT_SEMANTICS_VERSION`, `2`). A manifest made before the block existed is read as
+`pre_v2_assessment`; replay reads the recorded eligibility and re-runs the ordering, labels itself historical or current
+(`replay_provenance`), never reassesses, and refuses semantics it does not carry. See
 `tests/services/thermo_selection/test_trust_correction_h298.py` for the exact probes.
 
 ## 1. Why this exists

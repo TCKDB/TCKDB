@@ -1,0 +1,584 @@
+{
+ "candidates": [
+  {
+   "a": 1.2e-12,
+   "a_units": "cm3_molecule_s",
+   "applicability": {
+    "claim_origin": "source_publication",
+    "coefficient_basis": "elementary_coefficient",
+    "collider_kind": null,
+    "colliders": [],
+    "default_third_body_efficiency": null,
+    "observable": "rate_coefficient",
+    "phase": "gas",
+    "pressure_dependence": "independent",
+    "pressure_domain_max_bar": null,
+    "pressure_domain_min_bar": null,
+    "rate_progress_convention": null,
+    "reaction_order": 2,
+    "scope": "whole_reaction",
+    "version": 1
+   },
+   "applicability_state": "valid",
+   "arrhenius_terms": 0,
+   "arrhenius_units": [],
+   "assessment": {
+    "advisory": [
+     "evidence_label:sparse",
+     "evidence_check_missing:source_calculations_present",
+     "evidence_check_missing:ts_energy_source_present",
+     "evidence_check_missing:reactant_energy_sources_present",
+     "evidence_check_missing:product_energy_sources_present",
+     "evidence_check_missing:frequency_source_present",
+     "evidence_check_missing:source_calculation_lot_present",
+     "evidence_check_missing:source_calculation_software_present",
+     "evidence_check_missing:workflow_tool_release_present",
+     "evidence_check_missing:source_calculation_artifacts_present",
+     "evidence_check_missing:source_calculation_result_blocks_present",
+     "evidence_check_missing:irc_evidence_present",
+     "evidence_check_missing:path_search_evidence_present",
+     "evidence_check_missing:uncertainty_present"
+    ],
+    "applicability": "applicable",
+    "blocking": [],
+    "kinetics_ref": "kin_gov76dlhqe2n7pbiag4qvkt5km",
+    "physically_eligible": true,
+    "reasons": []
+   },
+   "chebyshev": null,
+   "created_at": "2026-10-05T19:00:46.170278",
+   "degeneracy": null,
+   "degeneracy_convention": "unknown",
+   "determination": {
+    "channel_key": null,
+    "determination_ref": "kdet_nczb3sgtjjabxhqeq3dg5ulvri",
+    "direction": "forward",
+    "network_ref": null,
+    "target_kind": "whole_reaction",
+    "transition_state_entry_ref": null
+   },
+   "direction": "forward",
+   "efficiencies": {},
+   "eligible": true,
+   "energy_levels": [],
+   "falloff": null,
+   "has_falloff": false,
+   "id_rank": 1,
+   "is_third_body": false,
+   "kinetics_ref": "kin_gov76dlhqe2n7pbiag4qvkt5km",
+   "model_kind": "modified_arrhenius",
+   "network_channel_ref": null,
+   "network_solve_ref": null,
+   "plog_pressures_bar": [],
+   "plog_units": [],
+   "pressure_bar": null,
+   "pressure_context": null,
+   "product_stoichiometries": [
+    1,
+    1
+   ],
+   "protocol": {
+    "barrier_basis": null,
+    "conformer_treatment": null,
+    "departures": null,
+    "geometry_relation": null,
+    "method_kind": "saddle_point_tst",
+    "method_other_name": null,
+    "path_treatment": null,
+    "rotor_treatment": null,
+    "supporting_calculations": [],
+    "version": 1,
+    "zero_point_treatment": null
+   },
+   "protocol_state": "valid",
+   "reactant_stoichiometries": [
+    1,
+    1
+   ],
+   "representation_role": "complete",
+   "review_status": "not_reviewed",
+   "scientific_origin": "computed",
+   "t0_k": 1.0,
+   "tmax_k": 2000.0,
+   "tmin_k": 300.0
+  },
+  {
+   "a": 1.2e-12,
+   "a_units": "cm3_molecule_s",
+   "applicability": {
+    "claim_origin": "source_publication",
+    "coefficient_basis": "elementary_coefficient",
+    "collider_kind": null,
+    "colliders": [],
+    "default_third_body_efficiency": null,
+    "observable": "rate_coefficient",
+    "phase": "gas",
+    "pressure_dependence": "independent",
+    "pressure_domain_max_bar": null,
+    "pressure_domain_min_bar": null,
+    "rate_progress_convention": null,
+    "reaction_order": 2,
+    "scope": "whole_reaction",
+    "version": 1
+   },
+   "applicability_state": "valid",
+   "arrhenius_terms": 0,
+   "arrhenius_units": [],
+   "assessment": {
+    "advisory": [
+     "evidence_label:sparse",
+     "evidence_check_missing:source_calculations_present",
+     "evidence_check_missing:ts_energy_source_present",
+     "evidence_check_missing:reactant_energy_sources_present",
+     "evidence_check_missing:product_energy_sources_present",
+     "evidence_check_missing:frequency_source_present",
+     "evidence_check_missing:source_calculation_lot_present",
+     "evidence_check_missing:source_calculation_software_present",
+     "evidence_check_missing:workflow_tool_release_present",
+     "evidence_check_missing:source_calculation_artifacts_present",
+     "evidence_check_missing:source_calculation_result_blocks_present",
+     "evidence_check_missing:irc_evidence_present",
+     "evidence_check_missing:path_search_evidence_present",
+     "evidence_check_missing:uncertainty_present"
+    ],
+    "applicability": "applicable",
+    "blocking": [],
+    "kinetics_ref": "kin_tdhlpeysndrmfdzw77d4bix37q",
+    "physically_eligible": true,
+    "reasons": []
+   },
+   "chebyshev": null,
+   "created_at": "2026-10-05T19:00:46.170278",
+   "degeneracy": null,
+   "degeneracy_convention": "unknown",
+   "determination": {
+    "channel_key": null,
+    "determination_ref": "kdet_7numzmql2o3slc25unzbx7srhi",
+    "direction": "forward",
+    "network_ref": null,
+    "target_kind": "whole_reaction",
+    "transition_state_entry_ref": null
+   },
+   "direction": "forward",
+   "efficiencies": {},
+   "eligible": true,
+   "energy_levels": [],
+   "falloff": null,
+   "has_falloff": false,
+   "id_rank": 2,
+   "is_third_body": false,
+   "kinetics_ref": "kin_tdhlpeysndrmfdzw77d4bix37q",
+   "model_kind": "modified_arrhenius",
+   "network_channel_ref": null,
+   "network_solve_ref": null,
+   "plog_pressures_bar": [],
+   "plog_units": [],
+   "pressure_bar": null,
+   "pressure_context": null,
+   "product_stoichiometries": [
+    1,
+    1
+   ],
+   "protocol": {
+    "barrier_basis": null,
+    "conformer_treatment": null,
+    "departures": null,
+    "geometry_relation": null,
+    "method_kind": "variational_tst",
+    "method_other_name": null,
+    "path_treatment": null,
+    "rotor_treatment": null,
+    "supporting_calculations": [],
+    "version": 1,
+    "zero_point_treatment": null
+   },
+   "protocol_state": "valid",
+   "reactant_stoichiometries": [
+    1,
+    1
+   ],
+   "representation_role": "complete",
+   "review_status": "approved",
+   "scientific_origin": "computed",
+   "t0_k": 1.0,
+   "tmax_k": 2000.0,
+   "tmin_k": 300.0
+  }
+ ],
+ "decision": {
+  "administrative_first": {
+   "basis": "administrative order among unresolved first-front alternatives; not a claim that the record is method-superior",
+   "determination_ref": "kdet_7numzmql2o3slc25unzbx7srhi"
+  },
+  "administrative_order": [
+   "kdet_7numzmql2o3slc25unzbx7srhi",
+   "kdet_nczb3sgtjjabxhqeq3dg5ulvri"
+  ],
+  "basis": "no registered rule compares these eligible candidates; they are unranked, not equally accurate",
+  "cycles": [],
+  "edges": [],
+  "fronts": [
+   [
+    "kdet_7numzmql2o3slc25unzbx7srhi",
+    "kdet_nczb3sgtjjabxhqeq3dg5ulvri"
+   ]
+  ],
+  "opposing_pairs": [],
+  "outcome": "incomparable_alternatives",
+  "overridden_edges": [],
+  "pair_checks": [],
+  "representation_refs": [],
+  "rule_matches": [
+   {
+    "applied": false,
+    "reasons": [
+     "comparator_protocol_unverified: Zhang 2009 Table 2 marks B3LYP (4.28 / 4.23 / 8.49 / 3.25 / 2.02) as the authors' own 6-311+G(3df,2p) calculation, but all five numbers are identical to the B3LYP/MG3S values Zhao-Gonzalez-Garcia-Truhlar printed in 2005 (jp045141s Tables 4 and 5, including the uncorrected 4.28 total). A recomputation in another basis would not reproduce five columns to 0.01 kcal/mol. The paper therefore does not establish an XYG3 versus B3LYP comparison in one basis set.",
+     "only_aggregate_evidence: Zhang 2009 and its SI give subset mean unsigned errors only. The SI holds heats of formation (Table S1) and no per-reaction XYG3 barrier heights, so no member-by-member advantage can be checked; the rule would extend subset-level evidence to each listed member.",
+     "reference_geometry_not_expressible: Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry.",
+     "declared_energy_level_not_verifiable_from_calculations: A kinetics record can declare the electronic method and basis of its energies (kinetics.energy_level_of_theory_id) and the rule reads it. A declaration cannot be verified from the record's calculations, because supporting calculations and source links carry no role saying which side of the barrier (transition state, reactants, products) they cover, so they can only corroborate or contradict it.",
+     "correction_changes_a_cited_total: The 2006 correction (jp061040d) changes the printed totals: B3LYP non-HT(38) 4.34 -> 4.58 and all(76) 4.28 -> 4.40. Zhang 2009 prints the uncorrected 4.28, so the paper's all-76 gap to B3LYP is 3.26 as printed and 3.38 corrected. Subset columns are unaffected.",
+     "not approved for activation by an owner or curator"
+    ],
+    "rule_id": "K-XYG3-B3LYP-BARRIER",
+    "rule_version": "0.2.0",
+    "why": "rule_status_inactive"
+   },
+   {
+    "applied": false,
+    "reasons": [
+     "abstract-level evidence only: the exact channels, temperatures and controlled comparisons were not extracted, and the paper was not supplied for audit",
+     "not activated: an example is never activated from an abstract"
+    ],
+    "rule_id": "K-HO2-TBA-MULTIPATH",
+    "rule_version": "0.0.0",
+    "why": "rule_status_inactive"
+   },
+   {
+    "applied": false,
+    "reasons": [
+     "abstract-level evidence only: the exact channels, temperatures and controlled comparisons were not extracted, and the paper was not supplied for audit",
+     "not activated: an example is never activated from an abstract"
+    ],
+    "rule_id": "K-MBH-TUNNELING",
+    "rule_version": "0.0.0",
+    "why": "rule_status_inactive"
+   },
+   {
+    "applied": false,
+    "reasons": [
+     "a proposed evidence rule with no source comparison",
+     "needs controlled-convergence evidence and compatible fit and non-energy contributions"
+    ],
+    "rule_id": "K-ME-CONVERGENCE",
+    "rule_version": "0.0.0",
+    "why": "rule_status_inactive"
+   }
+  ],
+  "rules": [
+   {
+    "authority": "none: the rule is not approved (manifest 0.1.0)",
+    "compatibility_fields": [
+     "zero_point_treatment",
+     "geometry_relation",
+     "rotor_treatment",
+     "conformer_treatment",
+     "path_treatment",
+     "departures"
+    ],
+    "edge_label": "expected-performance inference",
+    "evidence_limits": [
+     {
+      "id": "aggregate_not_per_member",
+      "text": "Mean unsigned errors over a subset do not say XYG3 beats B3LYP for any particular reaction."
+     },
+     {
+      "id": "single_geometry",
+      "text": "All energies are single points at QCISD/MG3 geometries; performance with other geometries is not tested."
+     },
+     {
+      "id": "classical_barrier_only",
+      "text": "The evidence concerns classical electronic barriers; it does not cover zero-point-corrected barriers, tunneling, partition functions, anharmonicity or fit quality."
+     },
+     {
+      "id": "complex_identity",
+      "text": "Four nucleophilic-substitution members (eight barrier heights) are between ion-molecule complexes. A complex is matched by the InChIKey of its disconnected structure and a vdw_complex entry kind; that key does not say which fragment carries the ion (F-...CH3F and FCH3...F- share one), so those members match by identity only."
+     },
+     {
+      "id": "main_group_only",
+      "text": "Main-group, closed- and open-shell species of the listed reactions only; the paper notes XYG3 can break the variational principle with near-degeneracy, for example transition metals."
+     },
+     {
+      "id": "not_a_rate_accuracy",
+      "text": "A better classical barrier is not a better rate; the rule is an expected-performance inference."
+     }
+    ],
+    "evidence_type": "domain_benchmark_preference_out_of_sample_aggregate",
+    "exceptions": [],
+    "exclusions": [
+     "a reaction not in the manifest (no 'similar reaction' predicate)",
+     "a zero-point-corrected barrier"
+    ],
+    "inactive_reasons": [
+     "comparator_protocol_unverified: Zhang 2009 Table 2 marks B3LYP (4.28 / 4.23 / 8.49 / 3.25 / 2.02) as the authors' own 6-311+G(3df,2p) calculation, but all five numbers are identical to the B3LYP/MG3S values Zhao-Gonzalez-Garcia-Truhlar printed in 2005 (jp045141s Tables 4 and 5, including the uncorrected 4.28 total). A recomputation in another basis would not reproduce five columns to 0.01 kcal/mol. The paper therefore does not establish an XYG3 versus B3LYP comparison in one basis set.",
+     "only_aggregate_evidence: Zhang 2009 and its SI give subset mean unsigned errors only. The SI holds heats of formation (Table S1) and no per-reaction XYG3 barrier heights, so no member-by-member advantage can be checked; the rule would extend subset-level evidence to each listed member.",
+     "reference_geometry_not_expressible: Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry.",
+     "declared_energy_level_not_verifiable_from_calculations: A kinetics record can declare the electronic method and basis of its energies (kinetics.energy_level_of_theory_id) and the rule reads it. A declaration cannot be verified from the record's calculations, because supporting calculations and source links carry no role saying which side of the barrier (transition state, reactants, products) they cover, so they can only corroborate or contradict it.",
+     "correction_changes_a_cited_total: The 2006 correction (jp061040d) changes the printed totals: B3LYP non-HT(38) 4.34 -> 4.58 and all(76) 4.28 -> 4.40. Zhang 2009 prints the uncorrected 4.28, so the paper's all-76 gap to B3LYP is 3.26 as printed and 3.38 corrected. Subset columns are unaffected.",
+     "not approved for activation by an owner or curator"
+    ],
+    "interpretation": "A subset mean-error comparison supports an expected-performance judgment about the classical barrier within the audited reaction set. It is not a per-reaction guarantee, a per-record uncertainty, a statement about the rate's other contributions, or a curator recommendation.",
+    "manifest": {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "comparator_protocol_unverified",
+       "text": "Zhang 2009 Table 2 marks B3LYP (4.28 / 4.23 / 8.49 / 3.25 / 2.02) as the authors' own 6-311+G(3df,2p) calculation, but all five numbers are identical to the B3LYP/MG3S values Zhao-Gonzalez-Garcia-Truhlar printed in 2005 (jp045141s Tables 4 and 5, including the uncorrected 4.28 total). A recomputation in another basis would not reproduce five columns to 0.01 kcal/mol. The paper therefore does not establish an XYG3 versus B3LYP comparison in one basis set."
+      },
+      {
+       "id": "only_aggregate_evidence",
+       "text": "Zhang 2009 and its SI give subset mean unsigned errors only. The SI holds heats of formation (Table S1) and no per-reaction XYG3 barrier heights, so no member-by-member advantage can be checked; the rule would extend subset-level evidence to each listed member."
+      },
+      {
+       "id": "reference_geometry_not_expressible",
+       "text": "Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry."
+      },
+      {
+       "id": "declared_energy_level_not_verifiable_from_calculations",
+       "text": "A kinetics record can declare the electronic method and basis of its energies (kinetics.energy_level_of_theory_id) and the rule reads it. A declaration cannot be verified from the record's calculations, because supporting calculations and source links carry no role saying which side of the barrier (transition state, reactants, products) they cover, so they can only corroborate or contradict it."
+      },
+      {
+       "id": "correction_changes_a_cited_total",
+       "text": "The 2006 correction (jp061040d) changes the printed totals: B3LYP non-HT(38) 4.34 -> 4.58 and all(76) 4.28 -> 4.40. Zhang 2009 prints the uncorrected 4.28, so the paper's all-76 gap to B3LYP is 3.26 as printed and 3.38 corrected. Subset columns are unaffected."
+      }
+     ],
+     "barrier_height_count": 76,
+     "corrections_applied": [
+      "ZHAO_2005_CORRECTION: ZHAO_2005 Table 4, total (38)",
+      "ZHAO_2005_CORRECTION: ZHAO_2005 Table 5, non-HT (38) and total (76) columns, and footnote a"
+     ],
+     "curator_acceptance": null,
+     "evidence_limits": [
+      {
+       "id": "aggregate_not_per_member",
+       "text": "Mean unsigned errors over a subset do not say XYG3 beats B3LYP for any particular reaction."
+      },
+      {
+       "id": "single_geometry",
+       "text": "All energies are single points at QCISD/MG3 geometries; performance with other geometries is not tested."
+      },
+      {
+       "id": "classical_barrier_only",
+       "text": "The evidence concerns classical electronic barriers; it does not cover zero-point-corrected barriers, tunneling, partition functions, anharmonicity or fit quality."
+      },
+      {
+       "id": "complex_identity",
+       "text": "Four nucleophilic-substitution members (eight barrier heights) are between ion-molecule complexes. A complex is matched by the InChIKey of its disconnected structure and a vdw_complex entry kind; that key does not say which fragment carries the ion (F-...CH3F and FCH3...F- share one), so those members match by identity only."
+      },
+      {
+       "id": "main_group_only",
+       "text": "Main-group, closed- and open-shell species of the listed reactions only; the paper notes XYG3 can break the variational principle with near-degeneracy, for example transition metals."
+      },
+      {
+       "id": "not_a_rate_accuracy",
+       "text": "A better classical barrier is not a better rate; the rule is an expected-performance inference."
+      }
+     ],
+     "manifest_version": "0.3.0",
+     "member_count": 38,
+     "sha256": "1ce59bde6133851d0b92324e6a563f9d7b43c5e2813226fdc91dfcfef1aedd96",
+     "sources": [
+      "ZHANG_2009",
+      "ZHANG_2009_SI",
+      "ZHAO_2005",
+      "ZHAO_2005_SI",
+      "ZHAO_2005_CORRECTION"
+     ]
+    },
+    "manifest_sha256": "1ce59bde6133851d0b92324e6a563f9d7b43c5e2813226fdc91dfcfef1aedd96",
+    "objective": "expected accuracy of the classical electronic barrier of a computed rate, for the audited HTBH38/04 and NHTBH38/04 benchmark reactions",
+    "objective_key": "classical_electronic_barrier",
+    "observable": "rate_coefficient",
+    "rule_id": "K-XYG3-B3LYP-BARRIER",
+    "statement": "For a computed rate coefficient whose classical electronic barrier is evaluated with XYG3, an expected-performance preference over the same barrier evaluated with B3LYP, restricted to the 38 reactions (76 barrier heights) of the HTBH38/04 and NHTBH38/04 benchmark sets, and only where the remaining treatment of the two rates is verified compatible. An expected-performance inference, not a validated accuracy of any individual rate.",
+    "status": "inactive",
+    "supersedes": [],
+    "version": "0.2.0"
+   },
+   {
+    "authority": "none",
+    "citation": "Bao, Sripa, Truhlar, Phys. Chem. Chem. Phys. 2016 (HO2 + tert-butanol), doi 10.1039/C5CP05780A",
+    "edge_label": "expected-performance inference",
+    "evidence_limits": [],
+    "evidence_type": "citation_only",
+    "exceptions": [],
+    "exclusions": [],
+    "inactive_reasons": [
+     "abstract-level evidence only: the exact channels, temperatures and controlled comparisons were not extracted, and the paper was not supplied for audit",
+     "not activated: an example is never activated from an abstract"
+    ],
+    "interpretation": "Not audited: no comparison is applied.",
+    "objective": "a full multipath treatment precedes a demonstrated inadequate path truncation of the same model",
+    "objective_key": "path_treatment",
+    "observable": "rate_coefficient",
+    "rule_id": "K-HO2-TBA-MULTIPATH",
+    "status": "inactive",
+    "supersedes": [],
+    "version": "0.0.0"
+   },
+   {
+    "authority": "none",
+    "citation": "Li et al., Phys. Chem. Chem. Phys. 2017 (methyl butenoate + H), doi 10.1039/C7CP01686G",
+    "edge_label": "expected-performance inference",
+    "evidence_limits": [],
+    "evidence_type": "citation_only",
+    "exceptions": [],
+    "exclusions": [],
+    "inactive_reasons": [
+     "abstract-level evidence only: the exact channels, temperatures and controlled comparisons were not extracted, and the paper was not supplied for audit",
+     "not activated: an example is never activated from an abstract"
+    ],
+    "interpretation": "Not audited: no comparison is applied.",
+    "objective": "a scoped tunneling treatment preference for a multistructural CVT protocol",
+    "objective_key": "tunneling_treatment",
+    "observable": "rate_coefficient",
+    "rule_id": "K-MBH-TUNNELING",
+    "status": "inactive",
+    "supersedes": [],
+    "version": "0.0.0"
+   },
+   {
+    "authority": "none",
+    "citation": "proposed evidence rule; RMG master-equation theory documentation is background, not a comparison",
+    "edge_label": "expected-performance inference",
+    "evidence_limits": [],
+    "evidence_type": "citation_only",
+    "exceptions": [],
+    "exclusions": [],
+    "inactive_reasons": [
+     "a proposed evidence rule with no source comparison",
+     "needs controlled-convergence evidence and compatible fit and non-energy contributions"
+    ],
+    "interpretation": "Not audited: no comparison is applied.",
+    "objective": "a converged master-equation solve precedes a demonstrated unconverged one for the same observable",
+    "objective_key": "solve_convergence",
+    "observable": "rate_coefficient",
+    "rule_id": "K-ME-CONVERGENCE",
+    "status": "inactive",
+    "supersedes": [],
+    "version": "0.0.0"
+   }
+  ],
+  "rules_applied": true,
+  "selected_determination_ref": null,
+  "unused_edges": []
+ },
+ "determinations": [
+  {
+   "determination_ref": "kdet_7numzmql2o3slc25unzbx7srhi",
+   "representation_count": 1,
+   "representation_refs": [
+    "kin_tdhlpeysndrmfdzw77d4bix37q"
+   ],
+   "representative_ref": "kin_tdhlpeysndrmfdzw77d4bix37q"
+  },
+  {
+   "determination_ref": "kdet_nczb3sgtjjabxhqeq3dg5ulvri",
+   "representation_count": 1,
+   "representation_refs": [
+    "kin_gov76dlhqe2n7pbiag4qvkt5km"
+   ],
+   "representative_ref": "kin_gov76dlhqe2n7pbiag4qvkt5km"
+  }
+ ],
+ "disclosures": {
+  "notes": [],
+  "unresolved_refs": [],
+  "unsupported_refs": []
+ },
+ "manifest_format_version": 1,
+ "outcome": "incomparable_alternatives",
+ "policy": {
+  "name": "kinetics_method_preferred",
+  "version": "1"
+ },
+ "population": {
+  "assessed": 2,
+  "excluded_by_review": [],
+  "excluded_count": 0,
+  "kinetics_rows_for_entry": 2,
+  "visible_candidates": 2
+ },
+ "request": {
+  "administrative_policy": "default",
+  "apply_rules": true,
+  "coefficient_basis": "elementary_coefficient",
+  "collider": null,
+  "direction": "forward",
+  "effective_review_statuses": [
+   "approved",
+   "not_reviewed",
+   "under_review"
+  ],
+  "max_candidates": 500,
+  "min_review_status": null,
+  "phase": "gas",
+  "pressure": {
+   "kind": "independent",
+   "max_bar": null,
+   "min_bar": null
+  },
+  "quantity": "rate_coefficient",
+  "target": {
+   "channel_key": null,
+   "kind": "whole_reaction",
+   "network_ref": null,
+   "transition_state_entry_ref": null
+  },
+  "temperature_max_k": 1500.0,
+  "temperature_min_k": 500.0
+ },
+ "snapshot_isolation": "read committed",
+ "subject": {
+  "products": [
+   {
+    "charge": 0,
+    "electronic_state_kind": "ground",
+    "entry_kind": "minimum",
+    "inchi_key": "KSC000000000000000000003   ",
+    "isotope_key": null,
+    "multiplicity": 1,
+    "species_entry_ref": "spe_mlb6gell6csel7htdpgcfdpjla"
+   },
+   {
+    "charge": 0,
+    "electronic_state_kind": "ground",
+    "entry_kind": "minimum",
+    "inchi_key": "KSD000000000000000000004   ",
+    "isotope_key": null,
+    "multiplicity": 2,
+    "species_entry_ref": "spe_2ueoiae6kpbicn2ehvzhudlxei"
+   }
+  ],
+  "reactants": [
+   {
+    "charge": 0,
+    "electronic_state_kind": "ground",
+    "entry_kind": "minimum",
+    "inchi_key": "KSA000000000000000000001   ",
+    "isotope_key": null,
+    "multiplicity": 2,
+    "species_entry_ref": "spe_vxavxegzef6ifssniw25e33bku"
+   },
+   {
+    "charge": 0,
+    "electronic_state_kind": "ground",
+    "entry_kind": "minimum",
+    "inchi_key": "KSB000000000000000000002   ",
+    "isotope_key": null,
+    "multiplicity": 1,
+    "species_entry_ref": "spe_6jo22wh3nrsz63sz54hxqbciyi"
+   }
+  ],
+  "reaction_entry_ref": "rxe_y7azsdspn3t4ofkbmzixo3tdgi"
+ }
+}

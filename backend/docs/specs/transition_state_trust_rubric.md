@@ -1,8 +1,9 @@
 # Transition-State Trust Rubric — `computed_transition_state_v2`
 
 > **Superseded in part by `computed_transition_state_v3` (2026-10).** An automated geometry-validation `fail` on a source
-> calculation is a warning, no longer the hard fail `geometry_validation_failed_for_source_calculation`, and a frequency
-> contradiction hard-fails only when every source frequency result contradicts the saddle (not just the latest). See
+> calculation is a warning, no longer the hard fail `geometry_validation_failed_for_source_calculation`, and the badge issues no
+> frequency verdict at all (the scoped judgement is the structure assessment's; the badge only warns, via
+> `no_frequency_result_lacks_an_imaginary_mode`). See
 > [automated_trust_layer.md](automated_trust_layer.md), "Trust contract version 2". The text below describes version 2.
 
 **Status:** implemented — `computed_transition_state_v2` ships in

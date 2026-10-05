@@ -32,7 +32,6 @@ from app.db.models.calculation import (
 )
 from app.db.models.common import (
     CalculationQuality,
-    CalculationType,
     KineticsCalculationRole,
     ReactionRole,
     StatmechCalculationRole,
@@ -633,52 +632,22 @@ def _detect_transition_state_entry_hard_fail(
     ):
         return HardFailReason.all_source_calculations_hard_failed
 
-    # Frequency contradictions for status-validated TS entries are hard
-    # fails per spec §8.2, as narrowed by ADR 0012.
+    # The badge issues NO stationary-point verdict from rubric v3 on (it no longer hard-fails on a frequency result, and it
+    # certifies nothing either). A saddle claim is about a *declared target*: the geometry it evaluates, the role bundle
+    # that supports it, the surface, a usable source and the owner's persisted treatment of extra modes (ADR 0012). The
+    # badge has none of those, only "some frequency result is attached", and both ways of reading that were wrong:
     #
-    # Zero imaginary modes still hard-fails: that is definitional and the
-    # blocking tier refuses it too, so the two agree. What is *not*
-    # re-derived here any more is the old ``n_imag > 1`` gate. ADR 0012
-    # accepts a higher-order saddle whose reaction coordinate is
-    # designated and whose other imaginary modes are declared, so
-    # counting again at read time would hard-fail a record the upload
-    # tier deliberately accepted — the exact contradiction ADR 0008 §9
-    # warned about.
+    # * "the representative (latest) result decides" lets a bad rerun on another geometry condemn a coherent older
+    #   bundle, and lets an unusable newer result hide a genuine disproof;
+    # * "every attached result must contradict" lets a rejected or unrelated older one-mode result rescue a record whose
+    #   own bundle is disproved, and ignores curvature stored on optimisation and composite jobs.
     #
-    # The read layer therefore asks a question about persisted state
-    # rather than about physics: does this record carry the reaction
-    # coordinate the blocking tier required of it? Anything that passed
-    # upload validation does. Only a record written around the upload
-    # path can fail here, and for that record the judgement is genuinely
-    # absent rather than negative.
-    if ts_entry.status in {
-        TransitionStateEntryStatus.optimized,
-        TransitionStateEntryStatus.validated,
-    }:
-        # Judged over EVERY source frequency result that records ``n_imag``, not over the one the rubric happens to
-        # call representative (the latest by creation time). The representative is an arbitrary, order-dependent pick
-        # that exists to give the graded checks one value to read; letting it alone hard-fail a record would condemn a
-        # transition state because its newest frequency job was a bad rerun while an older, valid one is stored beside
-        # it. The record is hard-failed only when no stored frequency result supports a validated saddle.
-        results = [
-            calc.freq_result
-            for calc in source
-            if calc.type is CalculationType.freq
-            and calc.freq_result is not None
-            and calc.freq_result.n_imag is not None
-        ]
-        if results:
-            if all(r.n_imag == 0 for r in results):
-                return (
-                    HardFailReason.frequency_source_has_zero_imaginary_modes_for_validated_ts
-                )
-            if all(
-                r.n_imag == 0 or (r.n_imag > 1 and r.reaction_coordinate_mode_index is None)
-                for r in results
-            ) and any(r.n_imag > 1 for r in results):
-                return (
-                    HardFailReason.frequency_source_reaction_coordinate_not_designated_for_validated_ts
-                )
+    # The scoped judgement is the task-aware structure assessment (``structure_selection.assessment``), which pins the
+    # geometry, ignores unusable and other-geometry results, reads opt/composite characterisation on its output
+    # geometry, keeps a same-target disagreement unresolved and applies authorized adjudications. It answers at
+    # ``POST /scientific/transition-state-entries/{ref}/evidence/select``. The graded checks below still report what was
+    # recorded (count, designation, structural flag), which is presence, not certification. The two HardFailReason
+    # members for the old rule remain so stored version-2 results parse; they are no longer produced.
 
     return None
 

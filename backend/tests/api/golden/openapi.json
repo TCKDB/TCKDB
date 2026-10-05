@@ -24067,6 +24067,18 @@
       "KineticsSelectionManifest": {
         "description": "The replayable decision manifest of ``POST .../kinetics/select/manifest``.\n\nPublic refs only. Holds the normalised request, the snapshot isolation it was read under, every assessed\ncandidate with its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the\ndeterminations the eligible ones form, the rules consulted with each rule's verdict per determination, the\npair checks, the preference edges, the fronts and the administrative order: enough to recompute the decision\nwith no database.",
         "properties": {
+          "assessment_semantics": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Semantics"
+          },
           "candidates": {
             "items": {
               "additionalProperties": true,
@@ -56806,6 +56818,18 @@
       "ThermoSelectionManifest": {
         "description": "The replayable decision manifest of ``POST .../thermo/select/manifest``.\n\nPublic refs only. Holds the normalised request, the effective review floor, every assessed candidate\nwith its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the rules\napplied with each rule's verdict per candidate, the preference edges, the fronts and the administrative\norder: enough to recompute the decision with no database.",
         "properties": {
+          "assessment_semantics": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Semantics"
+          },
           "candidates": {
             "items": {
               "additionalProperties": true,

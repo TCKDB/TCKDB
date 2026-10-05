@@ -30,13 +30,21 @@ REFERENCE_TEMPERATURE_K = 298.15
 PHASE = "gas"
 #: Candidate populations larger than this are not assessed; the search is refused instead.
 MAX_CANDIDATES = 500
-#: Version of the selection semantics (outcomes, front construction, eligibility). A change to any of
-#: them is a new version, and a decision manifest records the version it was made under.
+#: Version of the DECISION PROCEDURE only: outcomes, front construction and ordering, which is what
+#: ``replay_decision`` re-runs. How a candidate's eligibility is *assessed* (the evidence rubric version, the
+#: source-finding gate) is a separate contract, ``ASSESSMENT_SEMANTICS_VERSION`` below, recorded in its own
+#: structured manifest block; replay reads the recorded ``eligible`` flags and never reruns the assessment.
+#: A decision manifest records both versions.
 POLICY_NAME = "h298_method_preferred"
 #: 2: a superseded rule is removed before conflicts are judged (the shared kernel's fix; it cannot change an answer
 #: while the registry holds one rule, but a manifest made under version 1 was decided under the old semantics and
 #: is refused by ``replay_decision`` rather than silently re-answered).
 POLICY_VERSION = "2"
+#: Version of how eligibility is assessed. 2: an automated geometry-validation fail is advisory (computed rubrics
+#: at version 2 / transition state 3) and a live confirmed finding about a source calculation excludes the record
+#: (``structure_selection.source_findings``). A manifest with no block was made under ``pre_v2_assessment``.
+ASSESSMENT_SEMANTICS_VERSION = "2"
+SUPPORTED_ASSESSMENT_SEMANTICS = frozenset({"pre_v2_assessment", ASSESSMENT_SEMANTICS_VERSION})
 MANIFEST_FORMAT_VERSION = 1
 
 

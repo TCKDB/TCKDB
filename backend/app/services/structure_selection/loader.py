@@ -979,3 +979,8 @@ def _geometry_ref_of(session: Session, geometry_id: int | None) -> str | None:
     if geometry_id is None:
         return None
     return session.scalar(select(Geometry.public_ref).where(Geometry.id == geometry_id))
+
+
+#: Public names for the two finding loaders, for consumers outside this package (``source_findings``).
+findings_by_subject = _finding_facts
+to_finding_facts = _to_finding_facts

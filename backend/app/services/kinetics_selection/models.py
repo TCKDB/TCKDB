@@ -38,10 +38,18 @@ QUANTITY = "rate_coefficient"
 PHASE = "gas"
 #: A visible population larger than this is refused (HTTP 422), never truncated.
 MAX_CANDIDATES = 500
-#: Version of the selection semantics (eligibility, grouping). A change to any of them is a new
-#: version, and a decision manifest records the version it was made under.
+#: Version of the DECISION PROCEDURE only: grouping into determinations, the rules, outcomes and ordering, which is
+#: what ``replay_decision`` re-runs. How a record's eligibility is *assessed* (the evidence rubric version, the
+#: source-finding gate) is a separate contract, ``ASSESSMENT_SEMANTICS_VERSION`` below, recorded in its own
+#: structured manifest block; replay reads the recorded ``eligible`` flags and never reruns the assessment.
+#: A decision manifest records both versions.
 POLICY_NAME = "kinetics_method_preferred"
 POLICY_VERSION = "1"
+#: Version of how eligibility is assessed. 2: an automated geometry-validation fail is advisory (computed rubrics
+#: at version 2) and a live confirmed finding about a source calculation excludes the record
+#: (``structure_selection.source_findings``). A manifest with no block was made under ``pre_v2_assessment``.
+ASSESSMENT_SEMANTICS_VERSION = "2"
+SUPPORTED_ASSESSMENT_SEMANTICS = frozenset({"pre_v2_assessment", ASSESSMENT_SEMANTICS_VERSION})
 
 #: A point pressure matches a record's own pressure within this (the existing browse tolerances).
 PRESSURE_REL_TOL = 1.0e-9

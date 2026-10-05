@@ -2023,6 +2023,12 @@ class TestComputedThermoEvaluator:
         result = evaluate_computed_thermo(db_session, thermo.id)
         assert result.label is not EvidenceBadge.hard_failed
         assert result.hard_fail_reason is None
+        # The automated mismatch stays visible on the geometry check itself, as a warning (never passed, never
+        # not_applicable): the demotion must not erase it.
+        assert (
+            result.checks["geometry_validation_not_failed_for_source_calculations"]
+            is EvidenceOutcome.warning
+        )
         assert (
             result.checks["source_calculation_has_non_hard_failed_evidence"]
             is EvidenceOutcome.passed
@@ -2446,6 +2452,12 @@ class TestComputedStatmechEvaluator:
         result = evaluate_computed_statmech(db_session, statmech.id)
         assert result.label is not EvidenceBadge.hard_failed
         assert result.hard_fail_reason is None
+        # The automated mismatch stays visible on the geometry check itself, as a warning (never passed, never
+        # not_applicable): the demotion must not erase it.
+        assert (
+            result.checks["geometry_validation_not_failed_for_source_calculations"]
+            is EvidenceOutcome.warning
+        )
         assert (
             result.checks["source_calculation_has_non_hard_failed_evidence"]
             is EvidenceOutcome.passed
@@ -2702,6 +2714,12 @@ class TestComputedTransportEvaluator:
         result = evaluate_computed_transport(db_session, transport.id)
         assert result.label is not EvidenceBadge.hard_failed
         assert result.hard_fail_reason is None
+        # The automated mismatch stays visible on the geometry check itself, as a warning (never passed, never
+        # not_applicable): the demotion must not erase it.
+        assert (
+            result.checks["geometry_validation_not_failed_for_source_calculations"]
+            is EvidenceOutcome.warning
+        )
         assert (
             result.checks["source_calculation_has_non_hard_failed_evidence"]
             is EvidenceOutcome.passed

@@ -1998,7 +1998,7 @@ def test_tse_detail_trust_validated_n_imag_one_passes_freq_check(
     )
 
 
-def test_tse_detail_trust_optimized_n_imag_zero_hard_fails(client, db_session):
+def test_tse_detail_trust_optimized_n_imag_zero_warns_visibly_and_is_not_a_hard_fail(client, db_session):
     _, _, _, entries = _make_reaction_with_ts(
         db_session, statuses=[TransitionStateEntryStatus.optimized]
     )
@@ -2009,10 +2009,11 @@ def test_tse_detail_trust_optimized_n_imag_zero_hard_fails(client, db_session):
     trust = client.get(
         _tse_detail_url(entries[0].public_ref, include="trust")
     ).json()["record"]["trust"]
-    assert trust["trust_status"] == "hard_failed"
+    assert trust["trust_status"] != "hard_failed"  # rubric v3: the badge issues no frequency verdict
+    assert trust["evidence"]["checks"]["no_frequency_result_lacks_an_imaginary_mode"] == "warning"
 
 
-def test_tse_detail_trust_optimized_n_imag_multiple_hard_fails(
+def test_tse_detail_trust_optimized_n_imag_multiple_is_a_missing_designation_not_a_hard_fail(
     client, db_session
 ):
     _, _, _, entries = _make_reaction_with_ts(
@@ -2029,7 +2030,8 @@ def test_tse_detail_trust_optimized_n_imag_multiple_hard_fails(
     trust = client.get(
         _tse_detail_url(entries[0].public_ref, include="trust")
     ).json()["record"]["trust"]
-    assert trust["trust_status"] == "hard_failed"
+    assert trust["trust_status"] != "hard_failed"
+    assert trust["evidence"]["checks"]["reaction_coordinate_designated_for_ts"] == "missing"
 
 
 def test_tse_detail_trust_guess_n_imag_not_one_warns_not_hard_fail(

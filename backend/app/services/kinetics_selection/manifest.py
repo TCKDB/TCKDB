@@ -22,14 +22,23 @@ from typing import Any
 
 from app.services.kinetics_selection.engine import KineticsDecision, build_candidates, decide
 from app.services.kinetics_selection.models import (
+    ASSESSMENT_SEMANTICS_VERSION,
     POLICY_NAME,
     POLICY_VERSION,
+    SUPPORTED_ASSESSMENT_SEMANTICS,
     KineticsAssessmentResult,
     KineticsRequest,
     KineticsSubject,
     NormalizedKinetics,
 )
 from app.services.kinetics_selection.rules import KineticsRule, default_rules
+from app.services.selection_kernel.assessment_semantics import (
+    UnsupportedAssessmentSemantics,
+    check_supported,
+    describe_replay,
+    semantics_block,
+)
+from app.services.trust.rubrics import COMPUTED_KINETICS_V2
 
 MANIFEST_FORMAT_VERSION = 1
 
@@ -45,6 +54,10 @@ def build_manifest(result: KineticsAssessmentResult, decision: KineticsDecision)
     return {
         "manifest_format_version": MANIFEST_FORMAT_VERSION,
         "policy": {"name": POLICY_NAME, "version": POLICY_VERSION},
+        "assessment_semantics": semantics_block(
+            version=ASSESSMENT_SEMANTICS_VERSION,
+            evidence_rubric=f"{COMPUTED_KINETICS_V2.name}@{COMPUTED_KINETICS_V2.version}",
+        ),
         "request": {
             **result.request.to_dict(),
             "effective_review_statuses": [s.value for s in result.effective_statuses],
@@ -114,6 +127,10 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] |
         raise ReplayError(
             f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} v{POLICY_VERSION}"
         )
+    try:
+        check_supported(manifest, supported=SUPPORTED_ASSESSMENT_SEMANTICS)
+    except UnsupportedAssessmentSemantics as exc:
+        raise ReplayError(str(exc)) from exc
     used = _rules_for(manifest, rules)
     for c in manifest["candidates"]:
         if c["eligible"] != c["assessment"]["physically_eligible"]:
@@ -160,3 +177,16 @@ def replay_matches(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] | 
     """
     replayed = replay_decision(manifest, rules=rules)
     return replayed == manifest["decision"] and replayed["outcome"] == manifest["outcome"]
+
+
+def replay_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Label a replay as historical or current: the assessment semantics the manifest was made under versus today's.
+
+    :raises ReplayError: when the manifest records assessment semantics this release does not carry.
+    """
+    try:
+        return describe_replay(
+            manifest, current=ASSESSMENT_SEMANTICS_VERSION, supported=SUPPORTED_ASSESSMENT_SEMANTICS
+        )
+    except UnsupportedAssessmentSemantics as exc:
+        raise ReplayError(str(exc)) from exc

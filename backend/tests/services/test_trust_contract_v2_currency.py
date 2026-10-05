@@ -5,9 +5,10 @@ state rubric to version 3 (an automated geometry-validation fail is advisory; th
 judged over every source result). A machine review stamped with the old rubric version is therefore genuinely stale:
 it was made under rules the record is no longer read by. This pins three things:
 
-* each of those six reviewer-family recipes now compares stale against a review stored with the previous version, with
-  the one stale reason ``rubric_versions_mismatch`` (so the mechanism is the existing versioned-recipe currency, not a
-  new flag);
+* each of those six reviewer-family recipes now compares stale against a review stored with the previous version, and
+  ``rubric_versions_mismatch`` is always among the reasons (the mechanism is the existing versioned-recipe currency, not a
+  new flag). On a real record the machine-review context hash usually differs as well, because the context carries the
+  check sets and the hard-fail reason, so ``context_hash_mismatch`` commonly accompanies it; both are asserted below;
 * nothing else restales: every scientific-check family and the external-Cp runner keeps its key, so a review stored
   under it still compares current;
 * a stored review row is never rewritten: planning a re-review of a record whose review is stale leaves the stored
@@ -84,6 +85,25 @@ def test_a_review_stored_under_the_previous_rubric_version_is_stale_for_that_rea
     assert (result.state, result.stale_reasons) == (
         MachineReviewCurrencyState.stale, (MachineReviewStaleReason.rubric_versions_mismatch,)
     )
+
+
+@pytest.mark.parametrize("record_type", sorted(_NOW))
+def test_on_a_real_record_the_context_hash_usually_differs_too_so_both_reasons_are_reported(record_type):
+    changed_context = MachineReviewContextDigest(context_hash="d" * 64, context_schema_version="v1")
+    stored = StoredMachineReviewProjection(
+        record_type=record_type, record_id=1, reviewed_at=datetime(2026, 9, 1),
+        context_schema_version=_DIGEST.context_schema_version, context_hash=_DIGEST.context_hash,
+        prompt_version=_PROMPT, rubric_versions=_PREVIOUS[record_type],
+    )
+    result = classify_machine_review_currency(
+        [stored], current_context=changed_context, active_prompt_version=_PROMPT,
+        active_rubric_versions=active_rubric_versions_for_record_type(record_type),
+    )
+    assert result.state is MachineReviewCurrencyState.stale
+    assert set(result.stale_reasons) == {
+        MachineReviewStaleReason.rubric_versions_mismatch,
+        MachineReviewStaleReason.context_hash_mismatch,
+    }
 
 
 @pytest.mark.parametrize("record_type", sorted(_NOW))

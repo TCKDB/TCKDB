@@ -62,9 +62,9 @@ Three things are deliberately absent:
 | --- | --- | --- |
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 42 | `backend/app/services/public_refs.py` |
-| Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
+| Trust check names | 146 | `backend/app/services/trust/rubrics.py` |
 | Refusal codes a caller can receive | 296 | `backend/app/api/code_catalogue.py` |
-| **total** | **601** | |
+| **total** | **602** | |
 
 ## How a record is named
 
@@ -211,8 +211,8 @@ Why a record was hard-failed. Each names one discrete, evidenced structural fail
 | `multiplicity_invalid` | The spin multiplicity is below 1. A backstop — the upload path refuses this. |
 | `all_source_calculations_hard_failed` | Every calculation supporting this transition-state entry is itself hard-failed, so nothing is left to support it. |
 | `geometry_validation_failed_for_source_calculation` | Historic: stored version 2 transition-state trust results carried this when a supporting calculation failed the automated geometry comparison. Version 3 no longer hard-fails on it; it is a warning. |
-| `frequency_source_has_zero_imaginary_modes_for_validated_ts` | A transition-state entry whose status is `optimized` or `validated`, whose frequency evidence reports no imaginary mode. The record says saddle point and the numbers say minimum. |
-| `frequency_source_reaction_coordinate_not_designated_for_validated_ts` | The record reports more than one imaginary mode and does not say which one is the reaction coordinate. More than one imaginary mode is acceptable — this fires only on the missing designation, which is why it is a question about what was recorded and not about physics. |
+| `frequency_source_has_zero_imaginary_modes_for_validated_ts` | Historic: stored version 2 transition-state trust results carried this when the latest frequency result reported no imaginary mode. Version 3 issues no frequency verdict; the same fact is the warning `no_frequency_result_lacks_an_imaginary_mode`, and the scoped judgement (does a usable result on the evaluated geometry contradict the saddle claim) is the structure assessment's. |
+| `frequency_source_reaction_coordinate_not_designated_for_validated_ts` | Historic: stored version 2 transition-state trust results carried this when the latest frequency result reported several imaginary modes without a designated reaction coordinate. Version 3 issues no frequency verdict; the missing designation is the missing check `reaction_coordinate_designated_for_ts`, and the structure assessment reports it as the unresolved `reaction_coordinate_not_established`. |
 
 ### Reproducibility grade
 
@@ -301,6 +301,7 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `multiplicity_present` | `computed_transition_state` | required | 1 | transition_state_entry.multiplicity must be set. |
 | `multiplicity_valid` | `computed_transition_state` | required | 1 | transition_state_entry.multiplicity must be >= 1. |
 | `nasa_coefficients_present` | `computed_thermo` | optional | 1 | NASA thermo should include a complete coefficient block. |
+| `no_frequency_result_lacks_an_imaginary_mode` | `computed_transition_state` | warning | 1 | No attached frequency result with a recorded count reports zero imaginary modes (advisory; the badge does not certify the saddle). |
 | `opt_source_present` | `computed_statmech` | optional | 1 | Computed statmech should link an optimization source calculation when available. |
 | `opt_source_present` | `computed_thermo` | optional | 1 | Computed thermo should link an optimization source calculation when available. |
 | `output_geometry_present` | `computed_calculation` | optional | 1 | Geometry-producing calculation types should record an output geometry. |

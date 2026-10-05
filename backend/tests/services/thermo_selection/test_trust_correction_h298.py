@@ -113,3 +113,21 @@ def test_p6_the_geometry_fail_stays_visible_as_advisory_evidence(db_session, met
     assert any(item.startswith("evidence_check_warning:") and "geometry_validation" in item for item in advisory), advisory
     # ...and the assessment names the trust-contract version that produced its verdict.
     assert "evidence_rubric:computed_thermo@2" in advisory, advisory
+
+
+def test_p7_two_g4_records_one_with_a_geometry_fail_now_compete_and_say_why_there_are_two(db_session, methane):
+    """Reviewer case X2. Main: the newer G4's geometry fail excluded it, so the older clean G4 was ``sole_eligible_candidate``
+    (a live answer). Now both are eligible and nothing ranks one over the other: ``incomparable_alternatives``, nothing
+    selected. A changed answer, kept honest: the flagged member's advisory shows the geometry warning, so a reader can see
+    why the second record is there, and nothing is selected that no rule supports."""
+    older_clean = make_thermo(db_session, methane, proto=protocol("g4"), age_days=300)
+    newer_flagged = make_thermo(db_session, methane, proto=protocol("g4"), age_days=1)
+    _source(db_session, methane, older_clean, geometry=ValidationStatus.passed)
+    _source(db_session, methane, newer_flagged, geometry=ValidationStatus.fail)
+    result = _run(db_session, methane)
+    assert result.outcome is Outcome.incomparable_alternatives and result.selected_ref is None
+    advisory = {a.thermo_ref: a.advisory for a in result.assessments}
+    assert any("geometry_validation_not_failed_for_source_calculations" in item for item in advisory[newer_flagged.public_ref])
+    assert not any("geometry_validation" in item for item in advisory[older_clean.public_ref])
+    manifest = {c["thermo_ref"]: c["assessment"]["advisory"] for c in result.manifest["candidates"]}
+    assert manifest[newer_flagged.public_ref] == list(advisory[newer_flagged.public_ref])  # disclosed in the manifest too
