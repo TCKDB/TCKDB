@@ -1,4 +1,4 @@
-# XYG3 vs B3LYP classical-barrier audit manifest, version 0.2.0 (2026-10-04). NOT approved for activation:
+# XYG3 vs B3LYP classical-barrier audit manifest, version 0.3.0 (2026-10-05). NOT approved for activation:
 # status.activation_approved is false and status.activation_blockers says why. Compiled from the five
 # owner-supplied papers listed under sources (SHA-256 pinned there) and copied here unchanged except for this
 # header. Loaded by app.chemistry.kinetics_rules.xyg3_barrier_manifest. A change to a member, a barrier
@@ -8,8 +8,8 @@ rule_statement: For a computed rate coefficient whose classical electronic barri
   preference over the same barrier evaluated with B3LYP, restricted to the 38 reactions (76 barrier heights) of the HTBH38/04
   and NHTBH38/04 benchmark sets, and only where the remaining treatment of the two rates is verified compatible. An expected-performance
   inference, not a validated accuracy of any individual rate.
-manifest_version: 0.2.0
-manifest_date: '2026-10-04'
+manifest_version: 0.3.0
+manifest_date: '2026-10-05'
 manifest_history:
 - version: 0.1.0
   date: '2026-10-04'
@@ -18,6 +18,11 @@ manifest_history:
   date: '2026-10-04'
   note: NHT08 and NHT10 degenerate_identity_reaction corrected from false to true (their reactant and product species are
     identical, the same as NHT09's); no number, member or blocker changed. Rule NOT activated.
+- version: 0.3.0
+  date: '2026-10-05'
+  note: Blocker electronic_method_not_a_protocol_field replaced by no_record_declares_the_energy_level. A kinetics
+    record can declare its energy-level method and basis (kinetics.energy_level_of_theory_id, PRs 699 and 700) and the
+    rule reads it; the old text said it could not. No number, member or other blocker changed. Rule NOT activated.
 status:
   membership_listed_complete: true
   membership_listing_sources:
@@ -53,9 +58,12 @@ status:
   - id: reference_geometry_not_expressible
     text: Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration
       can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry.
-  - id: electronic_method_not_a_protocol_field
-    text: The protocol declaration has no electronic method or basis. XYG3 and B3LYP could only be read from linked or supporting
-      calculations, and a source-calculation link does not establish that its energy was used.
+  - id: no_record_declares_the_energy_level
+    text: A kinetics record can declare the electronic method and basis of its energies (kinetics.energy_level_of_theory_id) and
+      the rule reads it, but the live coverage inventory reviewed for this change found no deposited record that declares it,
+      so no record can yet show XYG3 or B3LYP. A declaration cannot be verified from the record's calculations either, because
+      supporting calculations and source links carry no role saying which side of the barrier they cover, so they can only
+      corroborate or contradict it.
   - id: correction_changes_a_cited_total
     text: 'The 2006 correction (jp061040d) changes the printed totals: B3LYP non-HT(38) 4.34 -> 4.58 and all(76) 4.28 -> 4.40.
       Zhang 2009 prints the uncorrected 4.28, so the paper''s all-76 gap to B3LYP is 3.26 as printed and 3.38 corrected. Subset

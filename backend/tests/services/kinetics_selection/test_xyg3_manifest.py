@@ -112,7 +112,7 @@ def test_it_loads_but_is_not_activatable_and_names_every_blocker():
         "comparator_protocol_unverified",
         "only_aggregate_evidence",
         "reference_geometry_not_expressible",
-        "electronic_method_not_a_protocol_field",
+        "no_record_declares_the_energy_level",
         "correction_changes_a_cited_total",
     }
     assert XYG3B3LYPBarrierRule(manifest).status == "inactive"
@@ -174,7 +174,8 @@ def test_the_degenerate_flag_follows_the_species_and_the_identity_exchanges_say_
     assert flagged == same_species
     # The two complex-to-complex exchanges were once recorded as not degenerate while their species were identical.
     assert {"NHT08", "NHT10"} <= flagged
-    assert manifest.version == "0.2.0" and [h["version"] for h in RAW["manifest_history"]] == ["0.1.0", "0.2.0"]
+    assert manifest.version == "0.3.0"
+    assert [h["version"] for h in RAW["manifest_history"]] == ["0.1.0", "0.2.0", "0.3.0"]
 
 
 @pytest.mark.parametrize("member_id,flag", [("NHT08", False), ("HT01", True)])
@@ -183,3 +184,15 @@ def test_a_flag_that_disagrees_with_the_species_does_not_load(member_id, flag):
     next(m for m in raw["members"] if m["member_id"] == member_id)["degenerate_identity_reaction"] = flag
     with pytest.raises(ManifestError, match="degenerate_identity_reaction"):
         parse_xyg3_barrier_manifest(raw)
+
+
+def test_the_energy_level_blocker_describes_the_field_that_exists_and_no_text_is_html_escaped():
+    manifest = load_xyg3_barrier_manifest(expected_sha256=XYG3_MANIFEST_SHA256)
+    texts = {b["id"]: b["text"] for b in manifest.activation_blockers}
+    assert "electronic_method_not_a_protocol_field" not in texts
+    text = " ".join(texts["no_record_declares_the_energy_level"].split())
+    assert "energy_level_of_theory_id" in text and "has no electronic method" not in text
+    # The source and the rule's own output carry the plain characters; an entity can only come from a later display.
+    reasons = " ".join(XYG3B3LYPBarrierRule(manifest).inactive_reasons)
+    assert "4.34 -> 4.58" in reasons
+    assert not re.search(r"&(gt|lt|amp|quot|#\d+);", reasons)
