@@ -14,6 +14,7 @@ from collections.abc import Mapping
 
 from sqlalchemy import exists, false, func, select
 from sqlalchemy.orm import Session, selectinload
+from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
 from app.api.errors import NotFoundError, not_found
 from app.chemistry.units import convert_energy_to_hartree
@@ -240,6 +241,17 @@ _TRUST_EAGER_LOADS = (
 # ``_LEGAL_INCLUDE_TOKENS - _INTERNAL_INCLUDE_TOKENS``). The deletion
 # kept the existing positive ``include=all`` tests passing without any
 # special-case service code.
+
+
+
+def _read_actual_protocol_declaration(raw: dict | None) -> tuple[str, ActualProtocolDeclaration | None]:
+    """``(state, declaration)`` for a stored actual-protocol declaration: absent, valid, or unreadable (withheld)."""
+    if raw is None:
+        return "absent", None
+    try:
+        return "valid", ActualProtocolDeclaration.model_validate(raw)
+    except ValueError:
+        return "unreadable", None
 
 
 def get_calculation(
@@ -1112,7 +1124,10 @@ def _build_provenance_and_sections(
     irc_applicable = calc.type is CalculationType.irc
     path_search_applicable = calc.type is CalculationType.path_search
 
+    protocol_state, protocol = _read_actual_protocol_declaration(calc.actual_protocol_declaration)
     provenance = CalculationEvidenceProvenanceSummary(
+        actual_protocol_declaration_state=protocol_state,
+        actual_protocol_declaration=protocol,
         has_result=has_results,
         result_applicable=result_applicable,
         converged=converged,

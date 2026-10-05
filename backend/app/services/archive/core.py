@@ -942,7 +942,15 @@ def restore_archive(
                 continue
             if table.name == "calculation_artifact":
                 rows = [{**row, "uri": artifact_uris[row["sha256"]]} for row in rows]
+            if table.name == "structure_determination_source":
+                # A source is pinned when its determination is created; the restore creates the determinations (an
+                # earlier table in this loop) and their sources in this one transaction, so it says so for exactly
+                # the determinations it carries. Nothing else is opened by it.
+                restoring = ",".join(str(i) for i in sorted({row["determination_id"] for row in rows}))
+                session.execute(text("SELECT set_config('tckdb.structure_determination_writing', :ids, true)"), {"ids": restoring})
             session.execute(table.insert(), rows)
+            if table.name == "structure_determination_source":
+                session.execute(text("SELECT set_config('tckdb.structure_determination_writing', '', true)"))
         _repair_sequences(session, tables)
 
     return ArchiveRestoreReport(

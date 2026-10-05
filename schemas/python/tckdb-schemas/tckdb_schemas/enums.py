@@ -382,6 +382,32 @@ class KineticsRepresentationRole(str, Enum):
     additive_component = "additive_component"
 
 
+class StructureDeterminationTargetKind(str, Enum):
+    """What a structure determination is a claim about (API energy ordering)."""
+
+    geometry = "geometry"
+    conformer_basin = "conformer_basin"
+    saddle_point = "saddle_point"
+
+
+class StructureDeterminationQuantity(str, Enum):
+    """The energy a structure determination supplies."""
+
+    electronic_energy = "electronic_energy"
+    zero_kelvin_energy = "zero_kelvin_energy"
+
+
+class StructureSourceRole(str, Enum):
+    """The role one pinned calculation plays in a structure determination."""
+
+    energy = "energy"
+    geometry_optimization = "geometry_optimization"
+    curvature = "curvature"
+    correction = "correction"
+    connectivity = "connectivity"
+    alternative_characterization = "alternative_characterization"
+
+
 class KineticsDeterminationTargetKind(str, Enum):
     """The rate a kinetics determination is declared to describe."""
 
@@ -811,6 +837,9 @@ __all__ = (
     "StatmechTreatmentKind",
     "StationaryPointKind",
     "StereoKind",
+    "StructureDeterminationQuantity",
+    "StructureDeterminationTargetKind",
+    "StructureSourceRole",
     "TemperatureUnit",
     "ThermoCalculationRole",
     "TorsionTreatmentKind",

@@ -10,6 +10,172 @@
       "title": "ActivationEnergyUnits",
       "type": "string"
     },
+    "ActualProtocolDeclaration": {
+      "additionalProperties": false,
+      "description": "The recipe a calculation actually ran. Version 1.\n\nComplements the level-of-theory reference (method, basis, auxiliary basis, dispersion, solvent) with the\nfacts the label cannot carry. A declaration that restates a level-of-theory field is *compared* with it\nwhen a selection reads the record, and a disagreement is a finding; neither side wins by upload order.\n\nEvery statement is optional; at least one is required. A fact left out is not stated. Operational\nsettings that do not change the number (threads, memory, scratch) have no place here.\n\n:param version: Only the integer ``1``.\n:param source: Who made the claim.\n:param numerical_approximations: Omitted: not stated. Empty: none.\n:param included_corrections: Corrections the stored number already includes. Omitted: not stated. Empty: none.\n:param supporting_dois: Literature that documents the recipe (DOIs). Omitted: not stated. Empty: none.",
+      "properties": {
+        "auxiliary_basis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "constraints": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConstraintFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "core_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreTreatmentFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "dispersion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "effective_core_potential": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "electronic_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElectronicStateFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "included_corrections": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/IncludedCorrection"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Included Corrections"
+        },
+        "numerical_approximations": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/NumericalApproximation"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Numerical Approximations"
+        },
+        "relativistic_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelativisticFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "solvation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SolvationFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "$ref": "#/$defs/DeclarationSource"
+        },
+        "spin_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpinFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "supporting_dois": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 200,
+                "pattern": "^10\\.\\d{4,9}/\\S+$",
+                "type": "string"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supporting Dois"
+        },
+        "version": {
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "source"
+      ],
+      "title": "ActualProtocolDeclaration",
+      "type": "object"
+    },
     "AppliedCorrectionComponentKind": {
       "enum": [
         "atom",
@@ -1308,6 +1474,15 @@
           ],
           "default": null
         },
+        "structure_determinations": {
+          "description": "Source-attributed claims about this saddle point's geometry, each pinning calculations of this bundle (by their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves.",
+          "items": {
+            "$ref": "#/$defs/StructureDeterminationDeclaration"
+          },
+          "maxItems": 16,
+          "title": "Structure Determinations",
+          "type": "array"
+        },
         "unmapped_smiles": {
           "anyOf": [
             {
@@ -2348,6 +2523,17 @@
       "additionalProperties": false,
       "description": "Bundle-local calculation block for the computed-reaction endpoint.\n\nExtends the shared ``CalculationIn`` with three producer-controlled\nprovenance fields:\n\n* ``input_geometries`` — geometries this calculation actually ran on.\n* ``output_geometries`` — geometries this calculation produced or\n  reported, each tagged with its scientific role.\n* ``depends_on`` — explicit local-key dependency edges (in addition\n  to the workflow's auto-edges from additional calcs to their primary\n  opt).\n\nThe fields are not part of the shared ``CalculationIn`` because the\nnetwork-PDep workflow does not currently honor them; accepting them\nthere would silently drop producer-declared data. Lift into the\nshared shape only after network-PDep persists them too.",
       "properties": {
+        "actual_protocol_declaration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActualProtocolDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "artifacts": {
           "items": {
             "$ref": "#/$defs/ArtifactIn"
@@ -2816,6 +3002,15 @@
         "scientific_origin": {
           "$ref": "#/$defs/ScientificOriginKind",
           "default": "computed"
+        },
+        "structure_determinations": {
+          "description": "Source-attributed claims about this conformer's geometry or basin, each pinning calculations of this bundle (by their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves.",
+          "items": {
+            "$ref": "#/$defs/StructureDeterminationDeclaration"
+          },
+          "maxItems": 16,
+          "title": "Structure Determinations",
+          "type": "array"
         }
       },
       "required": [
@@ -2872,6 +3067,31 @@
       "title": "ConformerSelectionContentRef",
       "type": "object"
     },
+    "ConstraintFact": {
+      "additionalProperties": false,
+      "description": "Whether the geometry search was constrained.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/FactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConstraintTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "ConstraintFact",
+      "type": "object"
+    },
     "ConstraintKind": {
       "enum": [
         "cartesian_atom",
@@ -2881,6 +3101,15 @@
         "improper"
       ],
       "title": "ConstraintKind",
+      "type": "string"
+    },
+    "ConstraintTreatment": {
+      "description": "Whether the geometry search ran under constraints.",
+      "enum": [
+        "unconstrained",
+        "constrained"
+      ],
+      "title": "ConstraintTreatment",
       "type": "string"
     },
     "ContainerRuntime": {
@@ -2943,6 +3172,99 @@
       ],
       "title": "CoreTreatment",
       "type": "string"
+    },
+    "CoreTreatmentFact": {
+      "additionalProperties": false,
+      "description": "Which electrons the post-SCF method correlated.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/FactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "CoreTreatmentFact",
+      "type": "object"
+    },
+    "DeclarationOrigin": {
+      "description": "Who produced the declaration: the depositor, or a parser reading the program output.",
+      "enum": [
+        "producer_declared",
+        "parser_derived"
+      ],
+      "title": "DeclarationOrigin",
+      "type": "string"
+    },
+    "DeclarationSource": {
+      "additionalProperties": false,
+      "description": "Where the declaration came from: who made the claim and with which tool and version.\n\n:param origin: ``producer_declared`` or ``parser_derived``.\n:param producer: The producing tool or person-facing label (at most 64 characters).\n:param producer_version: Its version.\n:param parser_version: The output parser's version, for a ``parser_derived`` declaration.",
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/DeclarationOrigin"
+        },
+        "parser_version": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parser Version"
+        },
+        "producer": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Producer"
+        },
+        "producer_version": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Producer Version"
+        }
+      },
+      "required": [
+        "origin"
+      ],
+      "title": "DeclarationSource",
+      "type": "object"
     },
     "DepositRights": {
       "additionalProperties": false,
@@ -3036,6 +3358,34 @@
         "degeneracy"
       ],
       "title": "ElectronicLevelIn",
+      "type": "object"
+    },
+    "ElectronicStateFact": {
+      "additionalProperties": false,
+      "description": "The electronic state: ``root`` 0 is the ground-state root of the stated spin and symmetry.",
+      "properties": {
+        "root": {
+          "anyOf": [
+            {
+              "maximum": 999,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root"
+        },
+        "state": {
+          "$ref": "#/$defs/FactState"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "ElectronicStateFact",
       "type": "object"
     },
     "EnergyComponentKind": {
@@ -3398,6 +3748,16 @@
       "title": "ExecutionEnvironmentManifestPayload",
       "type": "object"
     },
+    "FactState": {
+      "description": "Whether one fact of a recipe is stated: ``known`` (with a value), ``unknown`` or ``not_applicable``.",
+      "enum": [
+        "known",
+        "unknown",
+        "not_applicable"
+      ],
+      "title": "FactState",
+      "type": "string"
+    },
     "FreqScaleFactorRef": {
       "additionalProperties": false,
       "description": "Content-keyed reference to a frequency scale factor.\n\nThe service layer finds or creates the immutable\n``frequency_scale_factor`` registry row whose identity matches the\nsupplied fields. Identity is the full tuple\n``(level_of_theory, software_release, scale_kind, value,\nsource_literature, workflow_tool_release)`` and matches the DB unique\nindex on ``frequency_scale_factor``. ``note`` is descriptive only and\nnever participates in identity/dedupe.\n\nSource handling:\n\n* If structured literature is available, pass ``source_literature``;\n  it is resolved/created via the standard literature pipeline.\n* If only a citation string is available, pass it in ``note`` and\n  leave ``source_literature`` null. Do not synthesize placeholder\n  literature rows from raw citation strings.\n* If a workflow tool's curated data file is the proximate source,\n  pass ``workflow_tool_release`` and put any descriptive file/source\n  reference in ``note``.\n\nNull ``frequency_scale_factor_id`` on a statmech row means\n\"unknown/not recorded\". Pass ``value=1.0`` with no source to represent\nexplicitly unscaled (a real registry row exists, just with value 1.0).\n\n:param level_of_theory: Level of theory this factor applies to.\n:param scale_kind: Type of scaling (fundamental, ZPE, enthalpy, etc.).\n:param value: The scale factor value.\n:param software: The ESS program *release* the factor was fit against\n    (e.g. Gaussian 16, Revision C.02). A harmonic frequency scale\n    factor is fit against a program's own build-level vibrational\n    frequencies, which change between releases of the same program\n    (correction-scheme-provenance plan v2 §6, mirroring\n    ``EnergyCorrectionSchemeRef.software``'s reasoning) -- so the\n    factor is release-specific, not merely program-specific. Only\n    ``name`` is required; a depositor who knows only the program\n    resolves to the version-less release row for it. Null means\n    software-agnostic or unknown.\n:param source_literature: Structured literature provenance, when\n    available. Mutually informative with ``workflow_tool_release``;\n    either, both, or neither may be supplied.\n:param workflow_tool_release: Workflow tool (e.g. ARC) whose data\n    file was the proximate source, when the factor was looked up\n    from a tool table rather than directly from a paper.\n:param note: Optional descriptive note. Never used for dedupe.",
@@ -3545,6 +3905,15 @@
       ],
       "title": "GeometryPayload",
       "type": "object"
+    },
+    "GeometrySide": {
+      "description": "Which geometry of a calculation a pin names: its ``output`` geometry or its ``input`` geometry.",
+      "enum": [
+        "output",
+        "input"
+      ],
+      "title": "GeometrySide",
+      "type": "string"
     },
     "HPCModuleRuntime": {
       "additionalProperties": false,
@@ -3878,6 +4247,22 @@
         "unassigned"
       ],
       "title": "ImaginaryModeDisposition",
+      "type": "string"
+    },
+    "IncludedCorrection": {
+      "description": "A correction the stored number already includes.",
+      "enum": [
+        "zero_point_energy",
+        "thermal_energy",
+        "core_valence",
+        "scalar_relativistic",
+        "diagonal_born_oppenheimer",
+        "higher_order_correlation",
+        "basis_set_extrapolation",
+        "dispersion",
+        "counterpoise"
+      ],
+      "title": "IncludedCorrection",
       "type": "string"
     },
     "KineticsApplicabilityDeclaration": {
@@ -5263,6 +5648,50 @@
       "title": "MoleculeKind",
       "type": "string"
     },
+    "NumericalApproximation": {
+      "additionalProperties": false,
+      "description": "One material numerical approximation, with its setting when the producer states one.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/NumericalApproximationKind"
+        },
+        "setting": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Setting"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "NumericalApproximation",
+      "type": "object"
+    },
+    "NumericalApproximationKind": {
+      "description": "A numerical approximation that can change a number by more than rounding.",
+      "enum": [
+        "density_fitting",
+        "resolution_of_identity",
+        "chain_of_spheres",
+        "local_correlation",
+        "pair_natural_orbital",
+        "integral_screening",
+        "integration_grid",
+        "scf_convergence_threshold"
+      ],
+      "title": "NumericalApproximationKind",
+      "type": "string"
+    },
     "OutputGeometryEntry": {
       "additionalProperties": false,
       "description": "One declared output geometry on a calculation upload payload.\n\nEach entry carries a geometry payload and the role this geometry plays\nas a calculation output. The list position determines the\n``output_order`` written to ``calculation_output_geometry`` (1-indexed).\nProducers must declare ``role`` explicitly; defaulting to ``final``\nwould silently mis-classify scan iterations, IRC path points, and NEB\nimages.",
@@ -5678,6 +6107,42 @@
       "title": "ReactionRole",
       "type": "string"
     },
+    "RelativisticFact": {
+      "additionalProperties": false,
+      "description": "The scalar-relativistic treatment.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/FactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelativisticTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "RelativisticFact",
+      "type": "object"
+    },
+    "RelativisticTreatment": {
+      "description": "The scalar-relativistic Hamiltonian: none (non-relativistic), Douglas-Kroll-Hess, X2C or ZORA.",
+      "enum": [
+        "none",
+        "dkh",
+        "x2c",
+        "zora"
+      ],
+      "title": "RelativisticTreatment",
+      "type": "string"
+    },
     "RigidRotorKind": {
       "enum": [
         "atom",
@@ -6013,6 +6478,56 @@
       "title": "SoftwareReleaseRef",
       "type": "object"
     },
+    "SolvationFact": {
+      "additionalProperties": false,
+      "description": "The environment. ``detail`` names the solvent and model of an implicit or explicit environment.\n\n``detail`` is optional on a known environment; a comparison reads an unstated detail as unknown.",
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SolvationKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "state": {
+          "$ref": "#/$defs/FactState"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "SolvationFact",
+      "type": "object"
+    },
+    "SolvationKind": {
+      "description": "The environment the energy refers to. ``gas_phase`` is a claim, never the reading of an absent field.",
+      "enum": [
+        "gas_phase",
+        "implicit_solvent",
+        "explicit_solvent"
+      ],
+      "title": "SolvationKind",
+      "type": "string"
+    },
     "SpeciesEntryIdentityPayload": {
       "additionalProperties": false,
       "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo label such as ``R`` or ``E``.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
@@ -6181,6 +6696,41 @@
       ],
       "title": "SpinDiagnosticPayload",
       "type": "object"
+    },
+    "SpinFact": {
+      "additionalProperties": false,
+      "description": "The reference spin treatment.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/FactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpinKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "SpinFact",
+      "type": "object"
+    },
+    "SpinKind": {
+      "description": "The spin treatment of the reference wavefunction (restricted, unrestricted, restricted open-shell).",
+      "enum": [
+        "restricted",
+        "unrestricted",
+        "restricted_open"
+      ],
+      "title": "SpinKind",
+      "type": "string"
     },
     "SpinTreatment": {
       "description": "Spin treatment of the electronic-structure method (DR-0034).",
@@ -6606,6 +7156,235 @@
         "ez_isomer"
       ],
       "title": "StereoKind",
+      "type": "string"
+    },
+    "StructureDeterminationDeclaration": {
+      "additionalProperties": false,
+      "description": "One source-attributed claim about a geometry, basin or saddle, and the calculations behind it.\n\nThe owner is the upload's own: a conformer upload's species entry (and, for ``conformer_basin``, the\nobservation it creates), a transition-state upload's transition state entry. The backend finds or\ncreates the determination from the owner, the source attribution and ``key``; stating the same key again\njoins it and must restate the same content.\n\n:param key: Source-scoped key (at most 128 characters).\n:param target_kind: ``geometry``, ``conformer_basin`` (conformer uploads) or ``saddle_point``\n    (transition-state uploads).\n:param quantity: The energy this determination supplies; omitted for an evidence-only determination.\n:param energy_convention: Required with ``zero_kelvin_energy``; refused otherwise.\n:param actual_recipe: The composite recipe actually used, when it differs from or adds to any one\n    calculation's own declaration.\n:param evaluated_geometry: The geometry the claim is about.\n:param sources: The calculations and the role each plays.\n:param literature: Source attribution (a paper), or\n:param workflow_tool_release: source attribution (a workflow tool release). At least one is required,\n    because a key is scoped to a source.",
+      "properties": {
+        "actual_recipe": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActualProtocolDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "energy_convention": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StructureEnergyConvention"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "evaluated_geometry": {
+          "$ref": "#/$defs/StructureEvaluatedGeometry"
+        },
+        "key": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StructureDeterminationQuantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/StructureSourceDeclaration"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Sources",
+          "type": "array"
+        },
+        "target_kind": {
+          "$ref": "#/$defs/StructureDeterminationTargetKind"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "key",
+        "target_kind",
+        "evaluated_geometry",
+        "sources"
+      ],
+      "title": "StructureDeterminationDeclaration",
+      "type": "object"
+    },
+    "StructureDeterminationQuantity": {
+      "description": "The energy a structure determination supplies.",
+      "enum": [
+        "electronic_energy",
+        "zero_kelvin_energy"
+      ],
+      "title": "StructureDeterminationQuantity",
+      "type": "string"
+    },
+    "StructureDeterminationTargetKind": {
+      "description": "What a structure determination is a claim about (API energy ordering).",
+      "enum": [
+        "geometry",
+        "conformer_basin",
+        "saddle_point"
+      ],
+      "title": "StructureDeterminationTargetKind",
+      "type": "string"
+    },
+    "StructureEnergyConvention": {
+      "additionalProperties": false,
+      "description": "What a supplied E0 includes. Required with ``zero_kelvin_energy``; refused otherwise.\n\n:param zero_point_treatment: How the zero-point energy inside the number was obtained.\n:param included_corrections: Corrections the number includes. Omitted: not stated. Empty: none.",
+      "properties": {
+        "included_corrections": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/IncludedCorrection"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Included Corrections"
+        },
+        "zero_point_treatment": {
+          "$ref": "#/$defs/ZeroPointTreatment"
+        }
+      },
+      "required": [
+        "zero_point_treatment"
+      ],
+      "title": "StructureEnergyConvention",
+      "type": "object"
+    },
+    "StructureEvaluatedGeometry": {
+      "additionalProperties": false,
+      "description": "The geometry the determination is evaluated at: the named calculation's ``output`` or ``input`` geometry.\n\nA calculation with several geometries on that side does not pin one; the declaration is refused as\nambiguous when it is resolved.",
+      "properties": {
+        "calculation_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Key"
+        },
+        "calculation_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Ref"
+        },
+        "side": {
+          "$ref": "#/$defs/GeometrySide",
+          "default": "output"
+        }
+      },
+      "title": "StructureEvaluatedGeometry",
+      "type": "object"
+    },
+    "StructureSourceDeclaration": {
+      "additionalProperties": false,
+      "description": "One calculation and the role it plays in the determination (one calculation can play several).",
+      "properties": {
+        "calculation_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Key"
+        },
+        "calculation_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Ref"
+        },
+        "role": {
+          "$ref": "#/$defs/StructureSourceRole"
+        }
+      },
+      "required": [
+        "role"
+      ],
+      "title": "StructureSourceDeclaration",
+      "type": "object"
+    },
+    "StructureSourceRole": {
+      "description": "The role one pinned calculation plays in a structure determination.",
+      "enum": [
+        "energy",
+        "geometry_optimization",
+        "curvature",
+        "correction",
+        "connectivity",
+        "alternative_characterization"
+      ],
+      "title": "StructureSourceRole",
       "type": "string"
     },
     "ThermoCalculationRole": {
@@ -7151,6 +7930,35 @@
       "title": "ThermoThermalApproximation",
       "type": "object"
     },
+    "TokenFact": {
+      "additionalProperties": false,
+      "description": "A named fact (an effective core potential, an auxiliary basis, a dispersion correction).\n\n``not_applicable`` means the recipe used none.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/FactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "TokenFact",
+      "type": "object"
+    },
     "TorsionTreatmentKind": {
       "enum": [
         "hindered_rotor",
@@ -7693,6 +8501,17 @@
       ],
       "title": "WorkflowToolReleaseRef",
       "type": "object"
+    },
+    "ZeroPointTreatment": {
+      "description": "How the zero-point energy inside a supplied E0 was obtained.",
+      "enum": [
+        "unscaled_harmonic",
+        "scaled_harmonic",
+        "anharmonic",
+        "composite_recipe"
+      ],
+      "title": "ZeroPointTreatment",
+      "type": "string"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

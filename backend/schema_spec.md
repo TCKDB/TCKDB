@@ -2240,3 +2240,93 @@ opposite `reversible`), naming the twin by public ref.
   a forward coefficient, the product count for a reverse one (plus one for a simple third-body reaction). A net
   rate, or one whose direction is not stated, is not checked. The separate `a_units` molecularity check on the
   standalone route still reads the reactant count only, whatever the direction (pre-existing, unchanged).
+
+## Actual protocols and structure determinations (2026-10-05)
+
+Revision `d3a8f6c1b952`. These are the claims a task-aware energy selection (lowest recorded energy, validated
+minimum or saddle, protocol preference) needs and the upload contract could not state. They are declarations only:
+this revision selects nothing and changes no ordering. Every one is an attributed claim, stored as made, never
+inferred and never backfilled; a record deposited without one reads "not stated".
+
+### `calculation.actual_protocol_declaration` (version 1)
+
+Nullable JSONB, a versioned object whose shape `tckdb_schemas.structure_declarations.ActualProtocolDeclaration`
+owns (the database checks only that it is an object with a numeric `version`). It carries the facts a level-of-theory
+label cannot: electronic state and root, reference spin treatment, relativistic treatment, effective core potential,
+core correlation, auxiliary basis, dispersion, solvation, constraints, material numerical approximations and the
+corrections the stored number includes, with the declaration's source (producer, producer and parser versions).
+
+- Each single fact is `known` (with a value), `unknown` or `not_applicable`. A fact left out is *not stated*. A list
+  fact is omitted (not stated) or a list, where an empty list is the claim "none".
+- A declaration that restates a level-of-theory field is *compared* with it when a selection reads the record; a
+  disagreement is a finding, and neither side wins by upload order.
+- Frozen with the rest of the row when the calculation is accepted (`ADD COLUMN` fires no UPDATE trigger, so the
+  upgrade touches no approved row). The column stays out of the consistency and reproducibility digests while it is
+  NULL (`snapshot_defaults`), so no stored review or assessment of an existing calculation goes stale.
+
+### `structure_determination` (public ref prefix `sdet`)
+
+One source-attributed claim about a defined geometry, conformer basin or saddle, and the quantity it supplies.
+
+- **Owner:** exactly one of `species_entry_id` or `transition_state_entry_id` (`ck_..._one_owner`). A
+  `conformer_basin` names a species entry and its `conformer_observation_id`; a `saddle_point` names a transition
+  state entry and no observation; a `geometry` names no observation (`ck_..._target_matches_owner`).
+- **Quantity:** `electronic_energy`, `zero_kelvin_energy` (a supplied E0) or NULL (evidence only). The
+  `energy_convention` (how the zero-point energy inside an E0 was obtained, which corrections it includes) is stated
+  exactly when the quantity is `zero_kelvin_energy` (`ck_..._convention_iff_zero_kelvin`). Neither energy is ever
+  derived from the other.
+- **Identity:** the owner, the observation (for a basin only), the source attribution (`literature_id` or
+  `workflow_tool_release_id`, one required) and the source-scoped `determination_key` are the identifier, unique
+  (`uq_structure_determination_key`, NULLS NOT DISTINCT; `identity_hash` is its digest). Stating the key again with the
+  same content resolves to the existing row, with or without an Idempotency-Key, so a repeat is never an additional
+  determination. `content_hash` digests everything else (target kind, quantity, convention, recipe, evaluated geometry,
+  pinned calculations); stating the key with different content is refused (`structure_determination_mismatch`,
+  `context.reason` `content`), never merged. A basin is per observation and each conformer upload creates a new
+  observation, so a basin claim cannot be restated across uploads; a geometry or saddle claim can be, over calculations
+  already deposited.
+- **Immutable from creation:** `trg_structure_determination_immutable` refuses every UPDATE.
+
+### `structure_determination_source`
+
+One calculation pinned to one role (`energy`, `geometry_optimization`, `curvature`, `correction`, `connectivity`,
+`alternative_characterization`) of a determination; one calculation can fill several roles, each its own row, and
+alternative bundles are separate determinations (no Cartesian combination of an owner's attachments is ever built).
+The owner columns repeat the determination's, and six composite foreign keys make "this source is a calculation of
+the determination's own owner, and for a basin of its observation" a database fact (whichever owner column is set, its
+keys are checked; the three `uq_calculation_scope_*` constraints on `calculation` exist only as their targets). A source
+is pinned in the transaction that creates its determination and never added or removed afterwards: the database refuses
+an INSERT that is not under the creation marker (`tckdb.structure_determination_writing`, a transaction-local setting the
+write path sets; a tripwire against accidental or scripted edits, not access control) and every DELETE. The determination
+is immutable and, with its sources, frozen under an accepted owner: the shared accepted-science guards
+(`tckdb_guard_accepted_child`, `tckdb_guard_accepted_via_child`) cover the transition state entry and the conformer
+observation, and TRUNCATE is refused on all three tables. These owner columns are nullable by design (one of two owners),
+so this revision registers them in its own tuples and `tests/db/test_structure_determination_migration.py` checks them
+against the model and `pg_trigger`; the shared registry's NOT NULL rule does not apply. `geometry_id` is the one geometry
+the role's result describes, recorded only where the calculation's type makes it unambiguous (an optimization's one
+output geometry, a single point's or frequency job's one input geometry) and NULL otherwise.
+
+### `structure_evidence_finding` (public ref prefix `sfnd`)
+
+Append-only events (`trg_..._append_only` refuses UPDATE and DELETE): a confirmed identity, state or path
+incompatibility, a role-specific invalidation, a contradictory characterization, or an adjudication. A finding is
+pinned to the geometry, calculation or determination its `scope` names (`ck_..._subject_matches_scope`), with its
+author, `authority` (a producer's own assertion is distinct from an authorized adjudication), verdict, rationale,
+semantic version and any finding it supersedes. An adjudication supersedes an earlier finding and needs
+`authorized_adjudication` authority. The heuristic geometry-validation rows stay what they were (observations); this
+table is where a confirmed interpretation is recorded without rewriting them. Nothing writes a finding yet.
+
+### Where each rule is enforced
+
+A basin's observation belongs to the determination's species entry (a trigger on INSERT), and every source of a basin is
+anchored to that observation (composite keys). That the evaluated geometry is one of a source calculation's own
+geometries (the geometry is shared, content-addressed content, so the database cannot check its owner), that the
+evaluating calculation is one of the pinned sources and that the pinned calculations exist are cross-table facts the write
+path enforces (`app.services.structure_determination_resolution`; codes `structure_determination_mismatch`,
+`calculation_key_undeclared`, `unknown_calculation_ref`, `structure_determination_invalid`).
+
+### Lifecycle
+
+Released transition-state entries ship their determinations, sources and the findings pinned to them
+(`RECORD_VALUE_TABLES`; the two digests are omitted because they are over this database's row ids). The three tables
+are in the archive registry. Not yet released as selectable types: standalone calculations and conformer groups
+(unchanged). Downgrade drops the tables, the constraints, the column and the enums, and prints what it forgets.

@@ -44,6 +44,7 @@ from tckdb_schemas.fragments.refs import (
 )
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.literature import LiteratureUploadRequest
+from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
@@ -128,6 +129,10 @@ class CalculationIn(SchemaBase):
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     literature: LiteratureUploadRequest | None = None
     execution_environment: ExecutionEnvironmentManifestPayload | None = None
+    #: The recipe this calculation actually ran (facts the level-of-theory label cannot carry), as the
+    #: depositor declares it. Omitted: not stated. See
+    #: :class:`tckdb_schemas.structure_declarations.ActualProtocolDeclaration`.
+    actual_protocol_declaration: ActualProtocolDeclaration | None = None
 
     # Optional inline results (avoids separate result upload)
     sp_electronic_energy_hartree: float | None = None
@@ -392,6 +397,7 @@ def calculation_in_to_with_results_payload(
         level_of_theory=calc_in.level_of_theory,
         literature=calc_in.literature,
         execution_environment=calc_in.execution_environment,
+        actual_protocol_declaration=calc_in.actual_protocol_declaration,
         opt_result=opt_result,
         freq_result=freq_result,
         sp_result=sp_result,

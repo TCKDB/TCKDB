@@ -155,6 +155,7 @@ from app.services.statmech_resolution import (
     assert_statmech_role_compatible,
     collect_frequency_scale_factor_software_mismatch_warnings,
 )
+from app.services.structure_determination_resolution import DeterminationOwner, persist_structure_determinations
 from app.services.thermo_declaration_resolution import (
     assert_thermo_declaration,
     assert_thermo_declaration_columns,
@@ -184,6 +185,11 @@ _BUNDLE_CALCULATION_KEY_REMEDY = (
     "spans every species and the transition state, so a key that "
     "resolves may still be refused for ownership."
 )
+
+
+def _calculation_rows(session: Session, calculation_key_to_id: dict[str, int]) -> dict[str, Calculation]:
+    """The bundle's calculations by local key, as rows (a determination reads their geometry links)."""
+    return {key: session.get(Calculation, calc_id) for key, calc_id in calculation_key_to_id.items()}  # type: ignore[misc]
 
 
 def _persist_calculation(
@@ -691,6 +697,24 @@ def persist_computed_reaction_upload(
 
     session.flush()
 
+    # Structure determinations of the species conformers. Every species calculation exists, its geometries are
+    # linked and the species-level ones are anchored to their observation, so a basin claim is checked against it.
+    for sp in request.species:
+        for conf in sp.conformers:
+            if conf.structure_determinations:
+                persist_structure_determinations(
+                    session,
+                    list(conf.structure_determinations),
+                    owner=DeterminationOwner(
+                        species_entry_id=resolve_species_key(
+                            sp.key, species_key_to_entry, field=f"species['{sp.key}']"
+                        ).id,  # type: ignore[attr-defined]
+                        conformer_observation_id=observation_id_by_conformer_key[sp.key][conf.key],
+                    ),
+                    calculations_by_key=_calculation_rows(session, calculation_key_to_id),
+                    created_by=created_by,
+                )
+
     # Phase-1 geometry-identity validation for species-side opt calcs.
     # Best-effort: opt only, no-ops on missing data, never aborts the
     # upload, and a failed result is persisted as evidence rather than
@@ -926,6 +950,16 @@ def persist_computed_reaction_upload(
             created_by=created_by,
             warnings=sp_energy_warnings,
         )
+
+        # Structure determinations of the saddle point, pinned to this bundle's own calculations by key.
+        if ts_in.structure_determinations:
+            persist_structure_determinations(
+                session,
+                list(ts_in.structure_determinations),
+                owner=DeterminationOwner(transition_state_entry_id=ts_entry.id),
+                calculations_by_key=_calculation_rows(session, calculation_key_to_id),
+                created_by=created_by,
+            )
 
     session.flush()
 

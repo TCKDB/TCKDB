@@ -38,6 +38,7 @@ from tckdb_schemas.stationary_point import (
     evaluate_transition_state_frequency,
     resolve_tau_from_parameters,
 )
+from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
 if TYPE_CHECKING:
     from tckdb_schemas.fragments.scan import CalculationScanResultCreate
@@ -135,6 +136,15 @@ class CalculationPayload(SchemaBase):
     #: routes that reach the shared payload directly — conformers,
     #: transition-states, statmech, thermo and transport.
     literature: LiteratureUploadRequest | None = None
+
+    #: The recipe this calculation actually ran, where the level-of-theory label
+    #: cannot say it: electronic state and root, reference spin treatment,
+    #: relativistic treatment, effective core potential, core correlation,
+    #: material numerical approximations and the corrections the number includes.
+    #: An attributed claim, stored as made. Omitted: not stated (never read as a
+    #: standard recipe or as gas phase). See
+    #: :class:`tckdb_schemas.structure_declarations.ActualProtocolDeclaration`.
+    actual_protocol_declaration: ActualProtocolDeclaration | None = None
 
     @model_validator(mode="after")
     def validate_software_and_composite_shape(self) -> Self:

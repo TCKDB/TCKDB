@@ -84,6 +84,8 @@ class CalculationCreateResolved(CalculationOwnerRequiredMixin, SchemaBase):
 
     literature_id: int | None = None
     execution_environment_manifest_id: int | None = None
+    #: Stored form of the declared actual protocol (``None`` is SQL NULL: not stated).
+    actual_protocol_declaration: dict | None = None
 
 
 class CalculationUpdate(SchemaBase):

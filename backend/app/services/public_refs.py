@@ -90,6 +90,12 @@ PREFIXES: dict[str, str] = {
     # One complete determination of a channel's coefficient within one solve (network selection).
     # Opaque, like KineticsDetermination; deduplicated on identity_hash.
     "NetworkKineticsDetermination": "nkdet",
+    # One source-attributed claim about a geometry, basin or saddle (structure selection). Opaque, like
+    # KineticsDetermination: its identity names this instance's owner rows. Deduplicated on identity_hash.
+    "StructureDetermination": "sdet",
+    # An appended, scoped finding about a geometry, calculation or determination. Opaque: a finding is an
+    # event by an author, and a correction is a new finding that supersedes it.
+    "StructureEvidenceFinding": "sfnd",
     "Submission": "sub",
     "RecordReproducibilityAssessment": "rpa",
     # Append-only upload log (see CalculationArtifact docstring). Opaque:

@@ -301,6 +301,10 @@ class RejectionCode(str, Enum):
     STATMECH_SUBJECT_NOT_EXACTLY_ONE = "statmech_subject_not_exactly_one"
     STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = "statmech_torsion_scan_calculation_owner_mismatch"
     STORED_SPECIES_SMILES_UNPARSEABLE = "stored_species_smiles_unparseable"
+    STRUCTURE_DECLARATION_INVALID = "structure_declaration_invalid"
+    STRUCTURE_DECLARATION_VERSION_UNSUPPORTED = "structure_declaration_version_unsupported"
+    STRUCTURE_DETERMINATION_INVALID = "structure_determination_invalid"
+    STRUCTURE_DETERMINATION_MISMATCH = "structure_determination_mismatch"
     SUBJECT_TYPE_MISMATCH = "subject_type_mismatch"
     SUBMISSION_SUPERSEDE_NOT_OWNER = "submission_supersede_not_owner"
     SUPERSEDES_SAME_RECORD = "supersedes_same_record"
@@ -558,6 +562,10 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STATMECH_SP_GEOMETRY_MISMATCH,
         RejectionCode.STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH,
         RejectionCode.STORED_SPECIES_SMILES_UNPARSEABLE,
+        RejectionCode.STRUCTURE_DECLARATION_INVALID,
+        RejectionCode.STRUCTURE_DECLARATION_VERSION_UNSUPPORTED,
+        RejectionCode.STRUCTURE_DETERMINATION_INVALID,
+        RejectionCode.STRUCTURE_DETERMINATION_MISMATCH,
         RejectionCode.SUBJECT_TYPE_MISMATCH,
         RejectionCode.SUPERSEDES_SAME_RECORD,
         RejectionCode.THERMO_DECLARATION_INVALID,
@@ -872,6 +880,10 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STATMECH_SUBJECT_NOT_EXACTLY_ONE: frozenset({409}),
     RejectionCode.STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.STORED_SPECIES_SMILES_UNPARSEABLE: frozenset({422}),
+    RejectionCode.STRUCTURE_DECLARATION_INVALID: frozenset({422}),
+    RejectionCode.STRUCTURE_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
+    RejectionCode.STRUCTURE_DETERMINATION_INVALID: frozenset({422}),
+    RejectionCode.STRUCTURE_DETERMINATION_MISMATCH: frozenset({422}),
     RejectionCode.SUBJECT_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.SUBMISSION_SUPERSEDE_NOT_OWNER: frozenset({403}),
     RejectionCode.SUPERSEDES_SAME_RECORD: frozenset({422}),

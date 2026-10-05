@@ -37,6 +37,10 @@ from tckdb_schemas.stationary_point import (
     evaluate_species_entry_frequency,
     raise_for_blocking_findings,
 )
+from tckdb_schemas.structure_declarations import (
+    StructureDeterminationDeclaration,
+    assert_structure_pin_keys_declared,
+)
 from tckdb_schemas.utils import normalize_optional_text
 from tckdb_schemas.workflows.transport_upload import TransportUploadPayload
 
@@ -276,6 +280,21 @@ class ConformerUploadRequest(SchemaBase):
     applied_energy_corrections: list[AppliedEnergyCorrectionUploadPayload] = Field(
         default_factory=list
     )
+    structure_determinations: list[StructureDeterminationDeclaration] = Field(
+        default_factory=list,
+        max_length=16,
+        description=(
+            "Source-attributed claims about this conformer's geometry or basin, each pinning the calculations "
+            "of this upload (by their 'key') that play its roles. Optional; a conformer deposited without one "
+            "reads as 'not stated'. Nothing is inferred from the calculations themselves."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_structure_determination_keys_resolve(self) -> Self:
+        """Every calculation a determination pins by key is declared on this request."""
+        assert_structure_pin_keys_declared(self.structure_determinations, set(self.declared_calculation_keys()))
+        return self
 
     @model_validator(mode="after")
     def validate_primary_is_not_an_assembled_composite(self) -> Self:

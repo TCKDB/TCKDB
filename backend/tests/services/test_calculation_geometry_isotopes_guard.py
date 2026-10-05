@@ -39,6 +39,7 @@ _EXPECTED_SITES = {
     "services/calculation_scan_resolution.py::persist_calculation_scan",
     "services/hessian_extraction.py::_insert",
     "services/input_geometry_extraction.py::_mint_and_link_extracted_geometry",
+    "services/structure_determination_resolution.py::persist_structure_determinations",
     "services/transition_state_resolution.py::persist_ts_calculations",
     "workflows/network_pdep.py::_persist_calculation",
 }

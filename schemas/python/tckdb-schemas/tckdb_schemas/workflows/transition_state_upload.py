@@ -9,7 +9,7 @@ The backend resolves the reaction identity, creates the TS concept and entry,
 resolves the geometry, and persists calculations.
 """
 
-from typing import Self
+from typing import Any, Self
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -34,6 +34,10 @@ from tckdb_schemas.shared.calculation_in import GeometryIn
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     raise_for_blocking_findings,
+)
+from tckdb_schemas.structure_declarations import (
+    StructureDeterminationDeclaration,
+    assert_structure_pin_keys_declared,
 )
 from tckdb_schemas.utils import normalize_optional_text
 
@@ -137,6 +141,20 @@ _ALLOWED_ADDITIONAL_TYPES = frozenset(
         CalculationType.scan,
     }
 )
+
+
+class TransitionStateCalculationIn(CalculationWithResultsPayload):
+    """A transition-state-upload calculation that a structure determination can name by a local key.
+
+    The key exists only so a ``structure_determinations`` entry can say "the energy is *that* single point"
+    using a name the depositor chose, rather than a calculation row id (DR-0029 Requirement 1). Optional: a
+    payload with no determination never needs one. It is not a namespace for evidence, corrections or
+    anything else on this route.
+
+    :param key: Optional local name for this calculation, unique within the request.
+    """
+
+    key: str | None = Field(default=None, min_length=1)
 
 
 class TransitionStateUploadRequest(SchemaBase):
@@ -250,9 +268,18 @@ class TransitionStateUploadRequest(SchemaBase):
     rights: DepositRights | None = None
 
     geometry: GeometryPayload
-    primary_opt: CalculationWithResultsPayload
-    additional_calculations: list[CalculationWithResultsPayload] = Field(
+    primary_opt: TransitionStateCalculationIn
+    additional_calculations: list[TransitionStateCalculationIn] = Field(
         default_factory=list
+    )
+    structure_determinations: list[StructureDeterminationDeclaration] = Field(
+        default_factory=list,
+        max_length=16,
+        description=(
+            "Source-attributed claims about this saddle point's geometry, each pinning the calculations of "
+            "this upload (by their 'key') that play its roles. Optional; a transition state deposited "
+            "without one reads as 'not stated'. Nothing is inferred from the calculations themselves."
+        ),
     )
     validation_evidence: list[TransitionStateValidationEvidenceIn] = Field(
         default_factory=list,
@@ -296,6 +323,38 @@ class TransitionStateUploadRequest(SchemaBase):
         self.label = normalize_optional_text(self.label)
         self.note = normalize_optional_text(self.note)
         self.unmapped_smiles = normalize_optional_text(self.unmapped_smiles)
+        return self
+
+    def declared_calculation_keys(self) -> list[str]:
+        """Local keys this request put on its own calculations, in order."""
+        return [
+            calc.key for calc in [self.primary_opt, *self.additional_calculations] if calc.key is not None
+        ]
+
+    @field_validator("primary_opt", "additional_calculations", mode="before")
+    @classmethod
+    def accept_plain_calculation_payloads(cls, value: Any) -> Any:
+        """A ``CalculationWithResultsPayload`` built in Python is accepted as it always was.
+
+        The two fields are typed :class:`TransitionStateCalculationIn` so a determination can name a calculation by
+        key; a producer that builds the request from the shared payload (without a key) must not be refused for
+        that, so a plain payload is lifted to the keyed type here, field for field, with no key.
+        """
+
+        def lift(item: Any) -> Any:
+            if isinstance(item, CalculationWithResultsPayload) and not isinstance(item, TransitionStateCalculationIn):
+                return TransitionStateCalculationIn.model_validate(item, from_attributes=True)
+            return item
+
+        return [lift(item) for item in value] if isinstance(value, list) else lift(value)
+
+    @model_validator(mode="after")
+    def validate_calculation_keys(self) -> Self:
+        """Calculation keys are unique, and every one a determination pins is declared here."""
+        keys = self.declared_calculation_keys()
+        if len(set(keys)) != len(keys):
+            raise ValueError("Transition-state upload calculation keys must be unique within the request.")
+        assert_structure_pin_keys_declared(self.structure_determinations, set(keys))
         return self
 
     @model_validator(mode="after")

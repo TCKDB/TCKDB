@@ -39,6 +39,7 @@ LINK_CLASSES = {
     "CalculationScanPoint",
     "CalculationIRCPoint",
     "CalculationPathSearchPoint",
+    "StructureDeterminationSource",
 }
 
 

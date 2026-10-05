@@ -69,6 +69,10 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     ("network_kinetics", "determination_id"): None,
     ("network_kinetics", "representation_role"): None,
     ("network_kinetics", "representation_declaration"): None,
+    # calculation.actual_protocol_declaration: a calculation stored before the column existed declared no
+    # actual protocol, which is NULL. One that declares a protocol includes the column, so its digest differs,
+    # as what it claims does. Adding the column restales no stored review or assessment of any existing row.
+    ("calculation", "actual_protocol_declaration"): None,
 }
 
 

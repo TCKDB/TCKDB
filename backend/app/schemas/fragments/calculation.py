@@ -27,6 +27,7 @@ from tckdb_schemas.fragments.calculation import (
     SPResultPayload,
     WavefunctionDiagnosticPayload,
 )
+from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
 from app.db.models.common import (
     CalculationQuality,
@@ -93,6 +94,8 @@ class CalculationCreateRequest(CalculationOwnerRequiredMixin, SchemaBase):
 
     literature_id: int | None = None
     execution_environment: ExecutionEnvironmentManifestPayload | None = None
+    #: The recipe the calculation actually ran, as the depositor declared it; stored as made.
+    actual_protocol_declaration: ActualProtocolDeclaration | None = None
 
     @model_validator(mode="after")
     def validate_software_present_unless_optional(self) -> Self:

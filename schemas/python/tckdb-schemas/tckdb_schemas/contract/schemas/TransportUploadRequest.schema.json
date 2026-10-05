@@ -1,5 +1,171 @@
 {
   "$defs": {
+    "ActualProtocolDeclaration": {
+      "additionalProperties": false,
+      "description": "The recipe a calculation actually ran. Version 1.\n\nComplements the level-of-theory reference (method, basis, auxiliary basis, dispersion, solvent) with the\nfacts the label cannot carry. A declaration that restates a level-of-theory field is *compared* with it\nwhen a selection reads the record, and a disagreement is a finding; neither side wins by upload order.\n\nEvery statement is optional; at least one is required. A fact left out is not stated. Operational\nsettings that do not change the number (threads, memory, scratch) have no place here.\n\n:param version: Only the integer ``1``.\n:param source: Who made the claim.\n:param numerical_approximations: Omitted: not stated. Empty: none.\n:param included_corrections: Corrections the stored number already includes. Omitted: not stated. Empty: none.\n:param supporting_dois: Literature that documents the recipe (DOIs). Omitted: not stated. Empty: none.",
+      "properties": {
+        "auxiliary_basis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "constraints": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConstraintFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "core_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreTreatmentFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "dispersion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "effective_core_potential": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "electronic_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElectronicStateFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "included_corrections": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/IncludedCorrection"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Included Corrections"
+        },
+        "numerical_approximations": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/NumericalApproximation"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Numerical Approximations"
+        },
+        "relativistic_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelativisticFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "solvation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SolvationFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "$ref": "#/$defs/DeclarationSource"
+        },
+        "spin_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpinFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "supporting_dois": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 200,
+                "pattern": "^10\\.\\d{4,9}/\\S+$",
+                "type": "string"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supporting Dois"
+        },
+        "version": {
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "source"
+      ],
+      "title": "ActualProtocolDeclaration",
+      "type": "object"
+    },
     "CalculationConstraintCreate": {
       "additionalProperties": false,
       "properties": {
@@ -537,6 +703,17 @@
       "additionalProperties": false,
       "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan\nresult fields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param composite_result: Inline composite energy (type must be ``composite``,\n    and a ``composite`` calculation must carry it). See\n    :class:`CompositeResultPayload`.\n:param sp_energy_components: Inline parts of the single point's\n    electronic energy (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param scan_result: Inline scan result (type must be ``scan``): the\n    stepped coordinates and the points along them. Whether a route accepts\n    a ``scan`` calculation at all is that route's own allow-list; this\n    field is only where the points go when it does.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
       "properties": {
+        "actual_protocol_declaration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActualProtocolDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "composite_result": {
           "anyOf": [
             {
@@ -1263,6 +1440,31 @@
       "title": "CondaRuntime",
       "type": "object"
     },
+    "ConstraintFact": {
+      "additionalProperties": false,
+      "description": "Whether the geometry search was constrained.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/FactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConstraintTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "ConstraintFact",
+      "type": "object"
+    },
     "ConstraintKind": {
       "enum": [
         "cartesian_atom",
@@ -1272,6 +1474,15 @@
         "improper"
       ],
       "title": "ConstraintKind",
+      "type": "string"
+    },
+    "ConstraintTreatment": {
+      "description": "Whether the geometry search ran under constraints.",
+      "enum": [
+        "unconstrained",
+        "constrained"
+      ],
+      "title": "ConstraintTreatment",
       "type": "string"
     },
     "ContainerRuntime": {
@@ -1334,6 +1545,99 @@
       ],
       "title": "CoreTreatment",
       "type": "string"
+    },
+    "CoreTreatmentFact": {
+      "additionalProperties": false,
+      "description": "Which electrons the post-SCF method correlated.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/FactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "CoreTreatmentFact",
+      "type": "object"
+    },
+    "DeclarationOrigin": {
+      "description": "Who produced the declaration: the depositor, or a parser reading the program output.",
+      "enum": [
+        "producer_declared",
+        "parser_derived"
+      ],
+      "title": "DeclarationOrigin",
+      "type": "string"
+    },
+    "DeclarationSource": {
+      "additionalProperties": false,
+      "description": "Where the declaration came from: who made the claim and with which tool and version.\n\n:param origin: ``producer_declared`` or ``parser_derived``.\n:param producer: The producing tool or person-facing label (at most 64 characters).\n:param producer_version: Its version.\n:param parser_version: The output parser's version, for a ``parser_derived`` declaration.",
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/DeclarationOrigin"
+        },
+        "parser_version": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parser Version"
+        },
+        "producer": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Producer"
+        },
+        "producer_version": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Producer Version"
+        }
+      },
+      "required": [
+        "origin"
+      ],
+      "title": "DeclarationSource",
+      "type": "object"
     },
     "DepositRights": {
       "additionalProperties": false,
@@ -1399,6 +1703,34 @@
         "description"
       ],
       "title": "DescribedRuntime",
+      "type": "object"
+    },
+    "ElectronicStateFact": {
+      "additionalProperties": false,
+      "description": "The electronic state: ``root`` 0 is the ground-state root of the stated spin and symmetry.",
+      "properties": {
+        "root": {
+          "anyOf": [
+            {
+              "maximum": 999,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root"
+        },
+        "state": {
+          "$ref": "#/$defs/FactState"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "ElectronicStateFact",
       "type": "object"
     },
     "EnergyComponentKind": {
@@ -1547,6 +1879,16 @@
       ],
       "title": "ExecutionEnvironmentManifestPayload",
       "type": "object"
+    },
+    "FactState": {
+      "description": "Whether one fact of a recipe is stated: ``known`` (with a value), ``unknown`` or ``not_applicable``.",
+      "enum": [
+        "known",
+        "unknown",
+        "not_applicable"
+      ],
+      "title": "FactState",
+      "type": "string"
     },
     "FreqResultPayload": {
       "additionalProperties": false,
@@ -2095,6 +2437,22 @@
       "title": "ImaginaryModeDisposition",
       "type": "string"
     },
+    "IncludedCorrection": {
+      "description": "A correction the stored number already includes.",
+      "enum": [
+        "zero_point_energy",
+        "thermal_energy",
+        "core_valence",
+        "scalar_relativistic",
+        "diagonal_born_oppenheimer",
+        "higher_order_correlation",
+        "basis_set_extrapolation",
+        "dispersion",
+        "counterpoise"
+      ],
+      "title": "IncludedCorrection",
+      "type": "string"
+    },
     "LevelOfTheoryRef": {
       "additionalProperties": false,
       "description": "Upload-facing reference to a level of theory: a program's method, or your own recipe.\n\nSend exactly one of ``method`` and ``composite_scheme``. ``method`` is a\nmethod a program ran (including a named composite method such as CBS-QB3,\nsent by name alone). ``composite_scheme`` defines a recipe of your own\n(a CCSD(T)/CBS extrapolation, a focal-point sum) from ordinary levels of\ntheory; the server names the resulting level of theory and binds it to the\nrecipe. Both, or neither, is refused. With ``composite_scheme`` the other\nlevel fields (basis, dispersion, ...) are not sent: they belong to the\nscheme's input levels.",
@@ -2435,6 +2793,50 @@
       "title": "MoleculeKind",
       "type": "string"
     },
+    "NumericalApproximation": {
+      "additionalProperties": false,
+      "description": "One material numerical approximation, with its setting when the producer states one.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/NumericalApproximationKind"
+        },
+        "setting": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Setting"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "NumericalApproximation",
+      "type": "object"
+    },
+    "NumericalApproximationKind": {
+      "description": "A numerical approximation that can change a number by more than rounding.",
+      "enum": [
+        "density_fitting",
+        "resolution_of_identity",
+        "chain_of_spheres",
+        "local_correlation",
+        "pair_natural_orbital",
+        "integral_screening",
+        "integration_grid",
+        "scf_convergence_threshold"
+      ],
+      "title": "NumericalApproximationKind",
+      "type": "string"
+    },
     "OptResultPayload": {
       "additionalProperties": false,
       "description": "Optional inline result for an optimisation calculation.\n\n:param converged: Whether the optimisation converged.\n:param n_steps: Number of optimisation steps.\n:param final_energy_hartree: Final electronic energy in hartree.",
@@ -2765,6 +3167,42 @@
       "title": "PathSearchResultPayload",
       "type": "object"
     },
+    "RelativisticFact": {
+      "additionalProperties": false,
+      "description": "The scalar-relativistic treatment.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/FactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelativisticTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "RelativisticFact",
+      "type": "object"
+    },
+    "RelativisticTreatment": {
+      "description": "The scalar-relativistic Hamiltonian: none (non-relativistic), Douglas-Kroll-Hess, X2C or ZORA.",
+      "enum": [
+        "none",
+        "dkh",
+        "x2c",
+        "zora"
+      ],
+      "title": "RelativisticTreatment",
+      "type": "string"
+    },
     "SCFStabilityPayload": {
       "additionalProperties": false,
       "description": "SCF stability evidence that may cite rows outside its own record.\n\nThe primitive upload routes take this shape. They already accept\ndatabase ids as a deliberate programmatic-chaining mechanism, so\nnaming the calculation or artifact that carries the stability log is\nthe same kind of claim they already support.\n\nBundle roots take :class:`SCFStabilityContent` instead, which names the\nmeasuring job by local key rather than by id. Both share\n:class:`SCFStabilityBase`, so neither route publishes the other's\ncitation field.\n\n:param source_calculation_id: Optional FK to the calculation whose\n    log carries the stability evidence (when separate from the\n    owning calculation).\n:param source_artifact_id: Optional FK to a ``calculation_artifact``\n    row holding the stability log bytes (e.g. an ``ancillary`` or\n    ``output_log`` artifact).",
@@ -3054,6 +3492,56 @@
       "title": "SoftwareReleaseRef",
       "type": "object"
     },
+    "SolvationFact": {
+      "additionalProperties": false,
+      "description": "The environment. ``detail`` names the solvent and model of an implicit or explicit environment.\n\n``detail`` is optional on a known environment; a comparison reads an unstated detail as unknown.",
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SolvationKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "state": {
+          "$ref": "#/$defs/FactState"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "SolvationFact",
+      "type": "object"
+    },
+    "SolvationKind": {
+      "description": "The environment the energy refers to. ``gas_phase`` is a claim, never the reading of an absent field.",
+      "enum": [
+        "gas_phase",
+        "implicit_solvent",
+        "explicit_solvent"
+      ],
+      "title": "SolvationKind",
+      "type": "string"
+    },
     "SpeciesEntryIdentityPayload": {
       "additionalProperties": false,
       "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo label such as ``R`` or ``E``.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
@@ -3223,6 +3711,41 @@
       "title": "SpinDiagnosticPayload",
       "type": "object"
     },
+    "SpinFact": {
+      "additionalProperties": false,
+      "description": "The reference spin treatment.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/FactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpinKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "SpinFact",
+      "type": "object"
+    },
+    "SpinKind": {
+      "description": "The spin treatment of the reference wavefunction (restricted, unrestricted, restricted open-shell).",
+      "enum": [
+        "restricted",
+        "unrestricted",
+        "restricted_open"
+      ],
+      "title": "SpinKind",
+      "type": "string"
+    },
     "SpinTreatment": {
       "description": "Spin treatment of the electronic-structure method (DR-0034).",
       "enum": [
@@ -3252,6 +3775,35 @@
       ],
       "title": "StereoKind",
       "type": "string"
+    },
+    "TokenFact": {
+      "additionalProperties": false,
+      "description": "A named fact (an effective core potential, an auxiliary basis, a dispersion correction).\n\n``not_applicable`` means the recipe used none.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/FactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "TokenFact",
+      "type": "object"
     },
     "TransportCalculationIn": {
       "additionalProperties": false,

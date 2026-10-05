@@ -169,6 +169,12 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "statmech_source_calculation",
         "statmech_torsion",
         "statmech_torsion_definition",
+        # A source-attributed claim about a geometry, basin or saddle, the calculations pinned to its roles, and
+        # the append-only findings about it: identity and evidence a restore must hand back whole (a
+        # calculation's actual_protocol_declaration is a column of ``calculation`` and travels with it).
+        "structure_determination",
+        "structure_determination_source",
+        "structure_evidence_finding",
         "submission",
         "submission_audit_event",
         "submission_record_link",

@@ -164,6 +164,19 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
             "transition_state_entry_id",
             children=(ChildTable("reaction_atom_map_pair", "atom_map_id"),),
         ),
+        # A structure determination is the source-attributed claim about this saddle that a task-aware
+        # selection reads (its target, recipe, energy convention, pinned calculations and any finding about
+        # it). It is what says which calculation supplied which role, so a released entry without it would
+        # read like one that never stated them. A determination is shipped with its sources and its own
+        # findings; findings scoped to a bare geometry or calculation are cited by ref elsewhere.
+        ChildTable(
+            "structure_determination",
+            "transition_state_entry_id",
+            children=(
+                ChildTable("structure_determination_source", "determination_id"),
+                ChildTable("structure_evidence_finding", "subject_determination_id"),
+            ),
+        ),
     ),
 }
 
@@ -173,6 +186,8 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
 #: must not carry.
 RELEASE_OMITTED_COLUMNS: dict[str, tuple[str, ...]] = {
     "network_kinetics_determination": ("identity_hash",),
+    # Both digests are over this database's row ids (the owner, the geometry, the source calculations).
+    "structure_determination": ("identity_hash", "content_hash"),
 }
 
 
@@ -247,6 +262,12 @@ RECORD_CHILD_EXCLUSIONS: dict[tuple[str, str], str] = {
     ),
     ("transition_state_entry", "transition_state_validation_evidence"): (
         "shipped under transition_state_entry itself"
+    ),
+    ("structure_evidence_finding", "structure_evidence_finding"): (
+        "a superseding finding is a row of the same list, naming the finding it supersedes by ref"
+    ),
+    ("transition_state_entry", "structure_determination_source"): (
+        "shipped nested under structure_determination, which is shipped under transition_state_entry"
     ),
     # --- belongs to the network, not to any one solve ----------------------
     ("transition_state_entry", "network_channel_microreaction"): (
@@ -798,6 +819,7 @@ def calculation_provenance(
             calc.c.id,
             calc.c.public_ref,
             calc.c.type,
+            calc.c.actual_protocol_declaration,
             lot.c.public_ref.label("lot_ref"),
             lot.c.method,
             lot.c.basis,
@@ -819,6 +841,13 @@ def calculation_provenance(
         row.id: {
             "calculation_ref": row.public_ref,
             "calculation_type": encode_scalar(row.type),
+            # The recipe the depositor declared this calculation ran. Present only when stated, so a calculation
+            # deposited without one keeps the provenance block (and the release digest) it always had.
+            **(
+                {"actual_protocol_declaration": encode_scalar(row.actual_protocol_declaration)}
+                if row.actual_protocol_declaration is not None
+                else {}
+            ),
             "level_of_theory": (
                 {
                     "level_of_theory_ref": row.lot_ref,
@@ -851,7 +880,8 @@ def cited_calculation_ids(
     record_type: SubmissionRecordType,
     record_ids: list[int],
 ) -> dict[int, list[int]]:
-    """Calculation ids each record cites through its ``*_source_calculation``."""
+    """Calculation ids each record cites: through its ``*_source_calculation`` and, for a transition state entry,
+    through the sources of its structure determinations."""
     if not record_ids:
         return {}
     out: dict[int, list[int]] = {}
@@ -868,6 +898,18 @@ def cited_calculation_ids(
         for parent_id, calculation_id in rows:
             if calculation_id is not None:
                 out.setdefault(parent_id, []).append(calculation_id)
+    if record_type is SubmissionRecordType.transition_state_entry:
+        # The calculations a structure determination of the entry pins are cited provenance too. They sit one level
+        # down (determination, then source), so the ``*_source_calculation`` naming above does not reach them.
+        determination = _table("structure_determination")
+        source = _table("structure_determination_source")
+        rows = session.execute(
+            select(determination.c.transition_state_entry_id, source.c.calculation_id)
+            .select_from(source.join(determination, source.c.determination_id == determination.c.id))
+            .where(determination.c.transition_state_entry_id.in_(sorted(set(record_ids))))
+        ).all()
+        for parent_id, calculation_id in rows:
+            out.setdefault(parent_id, []).append(calculation_id)
     return {k: sorted(set(v)) for k, v in out.items()}
 
 

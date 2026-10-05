@@ -44,6 +44,7 @@ from app.services.species_resolution import (
     assert_geometry_composition_matches_identity,
     assert_geometry_isotopes_match_identity,
 )
+from app.services.structure_determination_resolution import DeterminationOwner, persist_structure_determinations
 from app.services.transition_state_resolution import (
     create_transition_state_and_entry,
     persist_ts_calculations,
@@ -167,6 +168,23 @@ def persist_transition_state_upload(
     )
 
     session.flush()
+
+    # Structure determinations pin this request's own calculations by their local key.
+    if request.structure_determinations:
+        persist_structure_determinations(
+            session,
+            list(request.structure_determinations),
+            owner=DeterminationOwner(transition_state_entry_id=ts_entry.id),
+            calculations_by_key={
+                payload_calc.key: calc_row
+                for payload_calc, calc_row in [
+                    (request.primary_opt, primary_calc),
+                    *zip(request.additional_calculations, additional_calcs, strict=True),
+                ]
+                if payload_calc.key is not None
+            },
+            created_by=created_by,
+        )
 
     # 5. Structured evidence, each record bound to the single additional
     #    calculation of the type it is about (irc for an irc record, freq for

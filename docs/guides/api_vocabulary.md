@@ -61,10 +61,10 @@ Three things are deliberately absent:
 | Kind of token | Count | Read from |
 | --- | --- | --- |
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
-| Identifier prefixes | 40 | `backend/app/services/public_refs.py` |
+| Identifier prefixes | 42 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 286 | `backend/app/api/code_catalogue.py` |
-| **total** | **589** | |
+| Refusal codes a caller can receive | 290 | `backend/app/api/code_catalogue.py` |
+| **total** | **595** | |
 
 ## How a record is named
 
@@ -95,7 +95,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `wfr_` | workflow tool release | yes |
 | `wft_` | workflow tool | yes |
 
-### Opaque prefixes (27)
+### Opaque prefixes (29)
 
 | Prefix | Names a | Same on every instance? |
 | --- | --- | --- |
@@ -118,6 +118,8 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `rpa_` | record reproducibility assessment | no — one row, one database |
 | `rsel_` | release selection | no — one row, one database |
 | `rxe_` | reaction entry | no — one row, one database |
+| `sdet_` | structure determination | no — one row, one database |
+| `sfnd_` | structure evidence finding | no — one row, one database |
 | `sm_` | statmech | no — one row, one database |
 | `spe_` | species entry | no — one row, one database |
 | `sra_` | submission rights attestation | no — one row, one database |
@@ -753,7 +755,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (229 codes)
+### HTTP 422 (233 codes)
 
 | Code | Names |
 | --- | --- |
@@ -941,6 +943,10 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `statmech_sp_geometry_mismatch` | a relationship — read `context` |
 | `statmech_torsion_scan_calculation_owner_mismatch` | a relationship — read `context` |
 | `stored_species_smiles_unparseable` | a thing |
+| `structure_declaration_invalid` | a thing |
+| `structure_declaration_version_unsupported` | a thing |
+| `structure_determination_invalid` | a relationship — read `context` |
+| `structure_determination_mismatch` | a relationship — read `context` |
 | `subject_type_mismatch` | a relationship — read `context` |
 | `supersedes_same_record` | a relationship — read `context` |
 | `thermo_declaration_invalid` | a thing |
