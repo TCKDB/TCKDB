@@ -219,12 +219,48 @@ class TestConformerDetermination:
         _post(client, _conformer())
         assert _count(db_session, StructureDetermination) == 0
 
-    def test_a_redeposit_over_new_calculations_is_new_evidence_not_a_merge(self, client, db_session):
+    def test_a_basin_claim_is_per_observation_so_the_same_payload_twice_makes_two_basins(self, client, db_session):
+        # Each conformer upload creates a new observation, and a basin is about one observation; the key is scoped
+        # to it, so the same key does not collide across uploads and a basin cannot be restated across them.
         payload = _conformer(structure_determinations=[_determination()])
         _post(client, payload)
         _post(client, payload)
-        refs = db_session.scalars(select(StructureDetermination.public_ref)).all()
-        assert len(refs) == 2 and len(set(refs)) == 2
+        rows = db_session.scalars(select(StructureDetermination)).all()
+        assert len(rows) == 2 and len({r.public_ref for r in rows}) == 2
+        assert len({r.conformer_observation_id for r in rows}) == 2
+
+    def test_a_geometry_claim_key_is_an_identifier_the_same_key_with_new_calculations_is_refused(self, client, db_session):
+        payload = _conformer(structure_determinations=[_determination(target_kind="geometry", key="geometry-key")])
+        _post(client, payload)
+        response = client.post(CONFORMERS, json=payload)  # fresh calculations under the same owner, source and key
+        assert response.status_code == 422, response.text[:800]
+        body = response.json()
+        assert body["code"] == "structure_determination_mismatch" and body["context"]["reason"] == "content"
+        assert _count(db_session, StructureDetermination) == 1
+
+    def test_a_basin_claim_cannot_pin_calculations_anchored_to_another_observation(self, client, db_session):
+        _post(client, _conformer())
+        earlier = _calc_by_key(db_session)
+        declared = _determination(
+            evaluated_geometry={"calculation_key": "opt"},
+            sources=[
+                {"role": "geometry_optimization", "calculation_key": "opt"},
+                {"role": "energy", "calculation_ref": earlier["sp"].public_ref},
+            ],
+        )
+        response = client.post(CONFORMERS, json=_conformer(structure_determinations=[declared]))
+        assert response.status_code == 422, response.text[:800]
+        body = response.json()
+        assert body["code"] == "structure_determination_mismatch" and body["context"]["reason"] == "observation"
+
+    def test_the_evaluated_geometry_names_a_calculation_the_determination_pins(self, client):
+        declared = _determination(
+            evaluated_geometry={"calculation_key": "freq"},
+            sources=[{"role": "energy", "calculation_key": "sp"}, {"role": "geometry_optimization", "calculation_key": "opt"}],
+        )
+        response = client.post(CONFORMERS, json=_conformer(structure_determinations=[declared]))
+        assert response.status_code == 422, response.text[:800]
+        assert response.json()["context"]["reason"] == "geometry"
 
     def test_a_replay_with_the_same_idempotency_key_returns_the_same_determination(self, client, db_session):
         payload = _conformer(structure_determinations=[_determination()])

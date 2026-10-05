@@ -10,11 +10,16 @@ determinations (`tckdb_schemas.structure_declarations`), all optional and stored
   core correlation, auxiliary basis, dispersion, solvation, constraints, material numerical approximations and the
   corrections the number includes. Each single fact is `known` (with a value), `unknown` or `not_applicable`; a fact
   left out is not stated, never read as a default or as gas phase. Version `1` only.
-- `structure_determinations` on `ConformerUploadRequest` and `TransitionStateUploadRequest`: a source-attributed claim
-  about a geometry, conformer basin or saddle point that pins the upload's own calculations (by `key`) to the roles
-  energy, geometry optimization, curvature, correction, connectivity and alternative characterization.
+- `structure_determinations` on `ConformerUploadRequest`, `TransitionStateUploadRequest`, each `ConformerInBundle` of a
+  computed-species upload and each `ConformerIn` and the `BundleTransitionStateIn` of a computed-reaction upload: a
+  source-attributed claim about a geometry, conformer basin or saddle point that pins the upload's own calculations (by
+  `key`) to the roles energy, geometry optimization, curvature, correction, connectivity and alternative characterization.
+  The determination key (with its owner and source) is an identifier: stating it again with the same content resolves to the
+  same determination, with different content it is refused.
+- `ActualProtocolDeclaration.supporting_dois` is omitted (not stated) or a list, like the other list facts.
 - `TransitionStateUploadRequest.primary_opt` and `additional_calculations` accept an optional `key` (new component
-  `TransitionStateCalculationIn`), unique within the request, so a determination can name them.
+  `TransitionStateCalculationIn`), unique within the request, so a determination can name them. A plain
+  `CalculationWithResultsPayload` built in Python is still accepted there (lifted, with no key).
 - New enums `StructureDeterminationTargetKind`, `StructureDeterminationQuantity`, `StructureSourceRole`. New refusal
   codes `structure_declaration_invalid`, `structure_declaration_version_unsupported`, `structure_determination_invalid`
   and `structure_determination_mismatch`.

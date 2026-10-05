@@ -137,6 +137,7 @@ from app.services.statmech_resolution import (
     assert_statmech_role_compatible,
     collect_frequency_scale_factor_software_mismatch_warnings,
 )
+from app.services.structure_determination_resolution import DeterminationOwner, persist_structure_determinations
 from app.services.thermo_declaration_resolution import (
     assert_thermo_declaration,
     resolve_thermo_declarations,
@@ -607,6 +608,21 @@ def persist_computed_species_upload(
         calc_keys_to_id,
         warnings=upload_warnings,
     )
+
+    # Structure determinations pin this bundle's own calculations by their (bundle-global) local key. Every
+    # calculation and its geometries exist, and each is anchored to its conformer's observation, so a basin claim
+    # can be checked against the observation it is about.
+    for outcome in conformer_outcomes:
+        if outcome.conformer_in_bundle.structure_determinations:
+            persist_structure_determinations(
+                session,
+                list(outcome.conformer_in_bundle.structure_determinations),
+                owner=DeterminationOwner(
+                    species_entry_id=species_entry.id, conformer_observation_id=outcome.observation.id
+                ),
+                calculations_by_key=calc_keys_to_id,
+                created_by=created_by,
+            )
 
     # Step 5: explicit dependency edges. The idempotent helper handles
     # both same-transaction and already-persisted duplicates, and rejects

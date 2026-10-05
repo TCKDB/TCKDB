@@ -2275,12 +2275,15 @@ One source-attributed claim about a defined geometry, conformer basin or saddle,
   `energy_convention` (how the zero-point energy inside an E0 was obtained, which corrections it includes) is stated
   exactly when the quantity is `zero_kelvin_energy` (`ck_..._convention_iff_zero_kelvin`). Neither energy is ever
   derived from the other.
-- **Identity:** `identity_hash` is the unique digest of the owner, target kind, the observation (for a basin only), source attribution
-  (`literature_id` or `workflow_tool_release_id`, one required), source-scoped `determination_key`, evaluated
-  geometry and pinned calculations, so restating a determination over the same calculations resolves to one row,
-  while a re-deposit that creates new calculation rows is new evidence and a new determination. `content_hash`
-  digests what it claims (quantity, convention, recipe); restating one identity with a different claim is refused
-  (`structure_determination_mismatch`, `context.reason` `content`), never merged.
+- **Identity:** the owner, the observation (for a basin only), the source attribution (`literature_id` or
+  `workflow_tool_release_id`, one required) and the source-scoped `determination_key` are the identifier, unique
+  (`uq_structure_determination_key`, NULLS NOT DISTINCT; `identity_hash` is its digest). Stating the key again with the
+  same content resolves to the existing row, with or without an Idempotency-Key, so a repeat is never an additional
+  determination. `content_hash` digests everything else (target kind, quantity, convention, recipe, evaluated geometry,
+  pinned calculations); stating the key with different content is refused (`structure_determination_mismatch`,
+  `context.reason` `content`), never merged. A basin is per observation and each conformer upload creates a new
+  observation, so a basin claim cannot be restated across uploads; a geometry or saddle claim can be, over calculations
+  already deposited.
 - **Immutable from creation:** `trg_structure_determination_immutable` refuses every UPDATE.
 
 ### `structure_determination_source`
@@ -2288,9 +2291,17 @@ One source-attributed claim about a defined geometry, conformer basin or saddle,
 One calculation pinned to one role (`energy`, `geometry_optimization`, `curvature`, `correction`, `connectivity`,
 `alternative_characterization`) of a determination; one calculation can fill several roles, each its own row, and
 alternative bundles are separate determinations (no Cartesian combination of an owner's attachments is ever built).
-The owner columns repeat the determination's, and four composite foreign keys make "this source is a calculation of
-the determination's own owner" a database fact (whichever owner column is set, its two keys are checked; the two
-`uq_calculation_scope_*` constraints on `calculation` exist only as their targets). `geometry_id` is the one geometry
+The owner columns repeat the determination's, and six composite foreign keys make "this source is a calculation of
+the determination's own owner, and for a basin of its observation" a database fact (whichever owner column is set, its
+keys are checked; the three `uq_calculation_scope_*` constraints on `calculation` exist only as their targets). A source
+is pinned in the transaction that creates its determination and never added or removed afterwards: the database refuses
+an INSERT that is not under the creation marker (`tckdb.structure_determination_writing`, a transaction-local setting the
+write path sets; a tripwire against accidental or scripted edits, not access control) and every DELETE. The determination
+is immutable and, with its sources, frozen under an accepted owner: the shared accepted-science guards
+(`tckdb_guard_accepted_child`, `tckdb_guard_accepted_via_child`) cover the transition state entry and the conformer
+observation, and TRUNCATE is refused on all three tables. These owner columns are nullable by design (one of two owners),
+so this revision registers them in its own tuples and `tests/db/test_structure_determination_migration.py` checks them
+against the model and `pg_trigger`; the shared registry's NOT NULL rule does not apply. `geometry_id` is the one geometry
 the role's result describes, recorded only where the calculation's type makes it unambiguous (an optimization's one
 output geometry, a single point's or frequency job's one input geometry) and NULL otherwise.
 
@@ -2306,9 +2317,11 @@ table is where a confirmed interpretation is recorded without rewriting them. No
 
 ### Where each rule is enforced
 
-That a basin's observation belongs to the determination's species entry, that the evaluated geometry is one of a source
-calculation's own geometries, and that the pinned calculations exist are cross-table facts the write path enforces
-(`app.services.structure_determination_resolution`; codes `structure_determination_mismatch`,
+A basin's observation belongs to the determination's species entry (a trigger on INSERT), and every source of a basin is
+anchored to that observation (composite keys). That the evaluated geometry is one of a source calculation's own
+geometries (the geometry is shared, content-addressed content, so the database cannot check its owner), that the
+evaluating calculation is one of the pinned sources and that the pinned calculations exist are cross-table facts the write
+path enforces (`app.services.structure_determination_resolution`; codes `structure_determination_mismatch`,
 `calculation_key_undeclared`, `unknown_calculation_ref`, `structure_determination_invalid`).
 
 ### Lifecycle

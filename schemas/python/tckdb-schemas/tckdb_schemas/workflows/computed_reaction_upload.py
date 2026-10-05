@@ -116,6 +116,10 @@ from tckdb_schemas.stationary_point import (
     raise_for_blocking_findings,
 )
 from tckdb_schemas.statmech_bits import StatmechTorsionCoordinateIn
+from tckdb_schemas.structure_declarations import (
+    StructureDeterminationDeclaration,
+    assert_structure_pin_keys_declared,
+)
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from tckdb_schemas.utils import normalize_optional_text, normalize_tunneling_model
 from tckdb_schemas.workflows.conformer_upload import ElectronicLevelIn
@@ -300,6 +304,14 @@ class ConformerIn(SchemaBase):
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
     label: str | None = None
     note: str | None = None
+    structure_determinations: list[StructureDeterminationDeclaration] = Field(
+        default_factory=list,
+        max_length=16,
+        description=(
+            "Source-attributed claims about this conformer's geometry or basin, each pinning calculations of this bundle (by "
+            "their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves."
+        ),
+    )
 
     @model_validator(mode="after")
     def normalize_text(self) -> Self:
@@ -1032,6 +1044,14 @@ class BundleTransitionStateIn(SchemaBase):
     )
     label: str | None = None
     note: str | None = None
+    structure_determinations: list[StructureDeterminationDeclaration] = Field(
+        default_factory=list,
+        max_length=16,
+        description=(
+            "Source-attributed claims about this saddle point's geometry, each pinning calculations of this bundle (by "
+            "their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves."
+        ),
+    )
 
     @model_validator(mode="after")
     def normalize_text(self) -> Self:
@@ -1917,6 +1937,12 @@ class ComputedReactionUploadRequest(SchemaBase):
             all_calc_keys.add(self.transition_state.calculation.key)
             for calc in self.transition_state.calculations:
                 all_calc_keys.add(calc.key)
+
+        for sp in self.species:
+            for conf in sp.conformers:
+                assert_structure_pin_keys_declared(conf.structure_determinations, all_calc_keys)
+        if self.transition_state:
+            assert_structure_pin_keys_declared(self.transition_state.structure_determinations, all_calc_keys)
 
         # depends_on edges: parent must exist; child cannot equal parent.
         def _check_depends_on(calc: ComputedReactionCalculationIn) -> None:

@@ -9,7 +9,7 @@ The backend resolves the reaction identity, creates the TS concept and entry,
 resolves the geometry, and persists calculations.
 """
 
-from typing import Self
+from typing import Any, Self
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -330,6 +330,23 @@ class TransitionStateUploadRequest(SchemaBase):
         return [
             calc.key for calc in [self.primary_opt, *self.additional_calculations] if calc.key is not None
         ]
+
+    @field_validator("primary_opt", "additional_calculations", mode="before")
+    @classmethod
+    def accept_plain_calculation_payloads(cls, value: Any) -> Any:
+        """A ``CalculationWithResultsPayload`` built in Python is accepted as it always was.
+
+        The two fields are typed :class:`TransitionStateCalculationIn` so a determination can name a calculation by
+        key; a producer that builds the request from the shared payload (without a key) must not be refused for
+        that, so a plain payload is lifted to the keyed type here, field for field, with no key.
+        """
+
+        def lift(item: Any) -> Any:
+            if isinstance(item, CalculationWithResultsPayload) and not isinstance(item, TransitionStateCalculationIn):
+                return TransitionStateCalculationIn.model_validate(item, from_attributes=True)
+            return item
+
+        return [lift(item) for item in value] if isinstance(value, list) else lift(value)
 
     @model_validator(mode="after")
     def validate_calculation_keys(self) -> Self:

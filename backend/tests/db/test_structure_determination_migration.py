@@ -122,23 +122,38 @@ def _insert_determination(db_session, **overrides) -> int:
     )
 
 
-def _insert_source(db_session, determination_id: int, calculation: Calculation, *, role="energy", **overrides) -> int:
+def _insert_source(
+    db_session, determination_id: int, calculation: Calculation, *, role="energy", writing=True, **overrides
+) -> int:
+    """A source row, written the way the write path writes one: under the creation marker (``writing=False`` is a
+    direct insert)."""
     values = {
         "det": determination_id,
         "role": role,
         "calc": calculation.id,
         "species": calculation.species_entry_id,
         "ts": calculation.transition_state_entry_id,
+        "obs": None,
     }
     values.update(overrides)
-    return db_session.scalar(
+    if writing:
+        db_session.execute(
+            text("SELECT set_config('tckdb.structure_determination_writing', :id, true)"), {"id": str(determination_id)}
+        )
+    # No ``finally``: when the insert is refused the caller's savepoint is rolled back, which also takes back the
+    # transaction-local marker, and a statement run here would only fail on the aborted transaction and mask the
+    # refusal being tested.
+    result = db_session.scalar(
         text(
             "INSERT INTO structure_determination_source (determination_id, role, calculation_id, species_entry_id, "
-            "transition_state_entry_id) VALUES (:det, CAST(:role AS structure_source_role), :calc, :species, :ts) "
-            "RETURNING id"
+            "transition_state_entry_id, conformer_observation_id) "
+            "VALUES (:det, CAST(:role AS structure_source_role), :calc, :species, :ts, :obs) RETURNING id"
         ),
         values,
     )
+    if writing:
+        db_session.execute(text("SELECT set_config('tckdb.structure_determination_writing', '', true)"))
+    return result
 
 
 def _insert_finding(db_session, **overrides) -> int:
@@ -251,10 +266,17 @@ def test_downgrade_removes_exactly_what_upgrade_added(db_session, migration):
     for name in (
         "uq_calculation_scope_species",
         "uq_calculation_scope_ts",
+        "uq_calculation_scope_observation",
         "ck_calculation_actual_protocol_declaration_versioned_object",
     ):
         assert db_session.scalar(text("SELECT count(*) FROM pg_constraint WHERE conname = :n"), {"n": name}) == 0, name
-    for function in ("tckdb_structure_row_immutable", "tckdb_structure_finding_append_only"):
+    for function in (
+        "tckdb_structure_row_immutable",
+        "tckdb_structure_finding_append_only",
+        "tckdb_structure_determination_guard",
+        "tckdb_structure_source_insert_guard",
+        "tckdb_structure_source_delete_guard",
+    ):
         assert db_session.scalar(text("SELECT count(*) FROM pg_proc WHERE proname = :n"), {"n": function}) == 0, function
     # The pre-existing calculation constraints survive.
     assert db_session.scalar(text("SELECT count(*) FROM pg_constraint WHERE conname = 'ck_calculation_one_owner'")) == 1
@@ -333,6 +355,133 @@ def test_one_identity_is_one_row(db_session):
     ident = hashlib.sha256(b"same").hexdigest()
     _insert_determination(db_session, species=entry.id, ident=ident)
     _refuses(db_session, "identity_hash", _insert_determination, species=entry.id, ident=ident)
+
+
+def test_an_owner_a_source_and_a_key_name_one_determination_even_where_columns_are_null(db_session):
+    entry, other = _entry(db_session), _entry(db_session)
+    literature = make_literature(db_session).id
+    first = _insert_determination(db_session, species=entry.id, key="k", lit=literature)
+    # The same owner, source and key again, whatever the content: a second row is refused (NULL owner and
+    # observation columns count as equal, so a bare geometry claim and a saddle claim are not exempt).
+    _refuses(db_session, "uq_structure_determination_key", _insert_determination, species=entry.id, key="k", lit=literature)
+    _refuses(
+        db_session, "uq_structure_determination_key", _insert_determination, species=entry.id, key="k", lit=literature,
+        quantity="electronic_energy",
+    )
+    # Another key, another owner or another source is another determination.
+    assert _insert_determination(db_session, species=entry.id, key="other", lit=literature)
+    assert _insert_determination(db_session, species=other.id, key="k", lit=literature)
+    assert _insert_determination(db_session, species=entry.id, key="k", lit=make_literature(db_session).id)
+    assert first
+
+
+def test_a_basin_names_an_observation_of_its_own_species_entry(db_session):
+    entry, other = _entry(db_session), _entry(db_session)
+    mine = make_conformer_observation(db_session, conformer_group=make_conformer_group(db_session, entry))
+    theirs = make_conformer_observation(db_session, conformer_group=make_conformer_group(db_session, other))
+    assert _insert_determination(db_session, species=entry.id, kind="conformer_basin", obs=mine.id)
+    with pytest.raises((IntegrityError, DBAPIError), match="structure_determination_observation_owner"), db_session.begin_nested():
+        _insert_determination(db_session, species=entry.id, kind="conformer_basin", obs=theirs.id)
+
+
+def test_a_basin_source_is_a_calculation_anchored_to_that_observation(db_session):
+    entry = _entry(db_session)
+    group = make_conformer_group(db_session, entry)
+    mine = make_conformer_observation(db_session, conformer_group=group)
+    elsewhere = make_conformer_observation(db_session, conformer_group=group)
+    det = _insert_determination(db_session, species=entry.id, kind="conformer_basin", obs=mine.id)
+    anchored = make_calculation(db_session, species_entry_id=entry.id, conformer_observation_id=mine.id)
+    other = make_calculation(db_session, species_entry_id=entry.id, conformer_observation_id=elsewhere.id)
+    unanchored = make_calculation(db_session, species_entry_id=entry.id)
+    assert _insert_source(db_session, det, anchored, obs=mine.id)
+    for calc in (other, unanchored):
+        with pytest.raises(IntegrityError, match="scope_calc_observation"), db_session.begin_nested():
+            _insert_source(db_session, det, calc, obs=mine.id)
+    # A source that does not repeat its determination's observation is refused, and so is one that names another.
+    with pytest.raises((IntegrityError, DBAPIError), match="structure_determination_source_observation"), db_session.begin_nested():
+        _insert_source(db_session, det, anchored, role="curvature", obs=None)
+    with pytest.raises((IntegrityError, DBAPIError), match="structure_determination_source_observation"), db_session.begin_nested():
+        _insert_source(db_session, det, other, role="curvature", obs=elsewhere.id)
+
+
+# ---------------------------------------------------------------------------
+# pinned at creation, and protected under an accepted parent
+# ---------------------------------------------------------------------------
+
+
+def test_a_source_is_pinned_when_its_determination_is_created_and_never_added_or_removed_afterwards(db_session):
+    entry = _entry(db_session)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    extra = make_calculation(db_session, species_entry_id=entry.id)
+    det = _insert_determination(db_session, species=entry.id)
+    with pytest.raises(DBAPIError, match="structure_determination_sources_are_pinned_at_creation"), db_session.begin_nested():
+        _insert_source(db_session, det, calc, writing=False)
+    # The marker names one determination; it does not open another.
+    other = _insert_determination(db_session, species=entry.id)
+    with pytest.raises(DBAPIError, match="structure_determination_sources_are_pinned_at_creation"), db_session.begin_nested():
+        db_session.execute(text("SELECT set_config('tckdb.structure_determination_writing', :i, true)"), {"i": str(other)})
+        _insert_source(db_session, det, calc, writing=False)
+    source = _insert_source(db_session, det, calc)
+    assert _insert_source(db_session, det, extra, role="curvature")
+    with pytest.raises(DBAPIError, match="structure_determination_sources_are_pinned_at_creation"), db_session.begin_nested():
+        db_session.execute(text("DELETE FROM structure_determination_source WHERE id = :i"), {"i": source})
+    assert db_session.scalar(text("SELECT count(*) FROM structure_determination_source WHERE determination_id = :d"), {"d": det}) == 2
+
+
+def _accept(db_session, record_type, record_id):
+    _approve(db_session, record_type, record_id, _actor(db_session))
+
+
+def test_nothing_can_be_added_changed_or_removed_under_an_accepted_transition_state_entry(db_session):
+    ts = _ts_entry(db_session)
+    calc = make_calculation(db_session, transition_state_entry_id=ts.id)
+    det = _insert_determination(db_session, ts=ts.id, kind="saddle_point")
+    _insert_source(db_session, det, calc)
+    _accept(db_session, SubmissionRecordType.transition_state_entry, ts.id)
+    with pytest.raises(DBAPIError, match="accepted transition_state_entry record .* is immutable"), db_session.begin_nested():
+        _insert_determination(db_session, ts=ts.id, kind="saddle_point", key="another")
+    with pytest.raises(DBAPIError, match="accepted transition_state_entry record .* is immutable"), db_session.begin_nested():
+        db_session.execute(text("DELETE FROM structure_determination WHERE id = :i"), {"i": det})
+    other_calc = make_calculation(db_session, transition_state_entry_id=ts.id)
+    with pytest.raises(DBAPIError, match="accepted transition_state_entry record .* is immutable"), db_session.begin_nested():
+        _insert_source(db_session, det, other_calc, role="curvature")
+    with pytest.raises(DBAPIError, match="accepted transition_state_entry record .* is immutable"), db_session.begin_nested():
+        db_session.execute(text("DELETE FROM structure_determination_source WHERE determination_id = :i"), {"i": det})
+    assert db_session.scalar(text("SELECT count(*) FROM structure_determination WHERE id = :i"), {"i": det}) == 1
+
+
+def test_nothing_can_be_added_under_an_accepted_conformer_observation(db_session):
+    entry = _entry(db_session)
+    obs = make_conformer_observation(db_session, conformer_group=make_conformer_group(db_session, entry))
+    calc = make_calculation(db_session, species_entry_id=entry.id, conformer_observation_id=obs.id)
+    det = _insert_determination(db_session, species=entry.id, kind="conformer_basin", obs=obs.id)
+    _insert_source(db_session, det, calc, obs=obs.id)
+    _accept(db_session, SubmissionRecordType.conformer_observation, obs.id)
+    with pytest.raises(DBAPIError, match="accepted conformer_observation record .* is immutable"), db_session.begin_nested():
+        _insert_determination(db_session, species=entry.id, kind="conformer_basin", obs=obs.id, key="another")
+    with pytest.raises(DBAPIError, match="accepted conformer_observation record .* is immutable"), db_session.begin_nested():
+        _insert_source(db_session, det, calc, role="curvature", obs=obs.id)
+
+
+def test_an_accepted_calculation_may_still_be_cited_by_a_determination_of_an_unaccepted_owner(db_session):
+    entry = _entry(db_session)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    _accept(db_session, SubmissionRecordType.calculation, calc.id)
+    det = _insert_determination(db_session, species=entry.id)
+    assert _insert_source(db_session, det, calc)  # a source cites its calculation; it is not that calculation's child
+
+
+def test_the_three_tables_cannot_be_truncated(db_session):
+    for table in TABLES:
+        with pytest.raises(DBAPIError, match="cannot be truncated"), db_session.begin_nested():
+            db_session.execute(text(f"TRUNCATE {table} CASCADE"))
+
+
+def test_a_finding_may_be_appended_about_accepted_science(db_session):
+    entry = _entry(db_session)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    _accept(db_session, SubmissionRecordType.calculation, calc.id)
+    assert _insert_finding(db_session, scope="calculation", calc=calc.id)
 
 
 # ---------------------------------------------------------------------------
@@ -435,3 +584,34 @@ def test_a_finding_rationale_is_present_and_bounded_and_the_version_positive(db_
     _refuses(db_session, "rationale_bounded", _insert_finding, rationale="   ")
     _refuses(db_session, "rationale_bounded", _insert_finding, rationale="r" * 2001)
     _refuses(db_session, "semantic_version_positive", _insert_finding, version=0)
+
+
+def test_the_guard_registry_covers_every_ownership_column_to_an_accepted_root_and_exists_in_the_database(
+    db_session, migration
+):
+    """Every column of the new tables that points at an accepted-science root is guarded, and every guard exists.
+
+    The shared accepted-science registry (``c6f2a9d4e7b1``) requires each guarded column to be NOT NULL; a
+    determination is owned by one of two entries, so its owner columns are nullable by design and the guard
+    function skips a NULL one. They are therefore registered here, in this revision's own tuples, and checked
+    against the model and against ``pg_trigger`` by this test instead of the shared one.
+    """
+    roots = {"transition_state_entry", "conformer_observation"}
+    tables = Base.metadata.tables
+    declared = {
+        (migration._DETERMINATION, column, record_type) for _, record_type, column in migration._DETERMINATION_GUARDS
+    } | {(migration._SOURCE, column, record_type) for _, record_type, column in migration._SOURCE_GUARDS}
+    expected = set()
+    for table in (migration._DETERMINATION, migration._SOURCE):
+        for column in tables[table].c:
+            for fk in column.foreign_keys:
+                if fk.column.table.name in roots:
+                    expected.add((table, column.name, fk.column.table.name))
+    assert declared == expected and len(expected) == 4
+    for name, _, _ in (*migration._DETERMINATION_GUARDS, *migration._SOURCE_GUARDS):
+        assert db_session.scalar(text("SELECT count(*) FROM pg_trigger WHERE tgname = :n"), {"n": name}) == 1, name
+    for table in TABLES:
+        assert (
+            db_session.scalar(text("SELECT count(*) FROM pg_trigger WHERE tgname = :n"), {"n": f"trg_{table}_truncate"})
+            == 1
+        ), table

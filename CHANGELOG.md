@@ -34,16 +34,23 @@ never backfilled (a calculation deposited without one reads "not stated"). Migra
   material numerical approximations and the corrections the number includes. Each single fact is `known`, `unknown` or
   `not_applicable`; a fact left out is not stated, never read as a default or as gas phase. Read back on the calculation
   detail as `provenance.actual_protocol_declaration`.
-- **`structure_determinations`** on conformer and transition-state uploads: a source-attributed claim about a geometry,
-  conformer basin or saddle point that pins the upload's own calculations (by `key`, or an earlier `calc_` ref) to the
-  roles energy, geometry optimization, curvature, correction, connectivity and alternative characterization. Immutable;
-  restating one over the same calculations resolves to the same record, a different claim under the same identity is
-  refused, and the pinned calculations must belong to the determination's own species entry or transition state entry
-  (composite foreign keys). Transition-state calculations accept an optional `key` for this.
+- **`structure_determinations`** on conformer and transition-state uploads and on the computed-species and
+  computed-reaction bundles (each conformer, and the reaction bundle's transition state): a source-attributed claim about a
+  geometry, conformer basin or saddle point that pins the upload's own calculations (by `key`, or an earlier `calc_` ref) to
+  the roles energy, geometry optimization, curvature, correction, connectivity and alternative characterization.
+  Immutable. **The key is an identifier**: the owner (a basin's observation too), the source and the key name one
+  determination; stating it again with the same content resolves to the existing one (no Idempotency-Key needed), with
+  different content it is refused (`structure_determination_mismatch`, reason `content`). A basin is per observation, so it
+  cannot be restated across uploads. The pinned calculations must belong to the determination's own species entry or
+  transition state entry and, for a basin, to its observation (composite foreign keys); they are fixed when the determination
+  is created. Once the transition state entry or conformer observation is accepted, nothing can be added to, changed on or
+  removed from its determinations (the shared accepted-science guards; TRUNCATE is refused). Transition-state calculations
+  accept an optional `key` for this.
 - **Findings table** (`structure_evidence_finding`, append-only) exists for confirmed identity, state or path
   incompatibility and adjudication; nothing writes it yet.
-- Released transition-state entries ship their determinations; the new tables are in the archive registry; the new
-  calculation column is out of the review digests while NULL, so no stored review goes stale.
+- Released transition-state entries ship their determinations and cite what they pin (with each calculation's declared
+  actual protocol); the new tables are in the archive registry; the new calculation column is out of the review digests while
+  NULL, so no stored review goes stale.
 - `tckdb-schemas` 0.105.0 adds the models, enums and four refusal codes; `tckdb-client` 0.136.0 adds
   `Calculation(..., actual_protocol_declaration=...)`. See `docs/guides/declaring_structure_evidence.md`. Producer contract:
   676,025 bytes against the 700,000 ceiling.

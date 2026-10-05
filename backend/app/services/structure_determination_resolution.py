@@ -8,20 +8,23 @@ source-attributed claim about a geometry, basin or saddle. This module turns it 
   needs a species owner and an observation, a ``saddle_point`` a transition-state owner; anything else is
   refused with ``structure_determination_mismatch`` (``context.reason`` ``target``).
 * **Sources.** Each pin names a calculation by local key (in this request) or public ref (already
-  deposited) and must belong to the owner (``reason`` ``owner``). One calculation can play several roles.
+  deposited) and must belong to the owner (``reason`` ``owner``); for a basin, to the owner's observation
+  (``reason`` ``observation``). One calculation can play several roles. The calculation the evaluated geometry
+  is read from must itself be one of the pinned sources.
 * **Evaluated geometry.** The named calculation's one ``output`` or ``input`` geometry. A calculation with no
   geometry on that side, or several, does not pin one and is refused (``reason`` ``geometry``): a Hessian or
   energy is never attached to a geometry by guesswork.
-* **Idempotency.** ``identity_hash`` digests the owner, target kind, observation, source attribution, key,
-  evaluated geometry and pinned calculations; the same content resolves to one row, so restating a determination
-  over the same calculations is never an additional one. (A re-deposit that creates new calculation rows is new
-  evidence, and a new determination.)
-  ``content_hash`` digests what it claims (quantity, energy convention, recipe); stating the same determination
-  again with a different claim is refused (``reason`` ``content``), because a determination is immutable and
-  silently merging would re-describe it.
+* **The key is an identifier.** The owner (for a basin, its observation), the source attribution and the
+  ``determination_key`` name one determination (``uq_structure_determination_key``). Stating the key again with
+  the same content resolves to the existing row, with or without an Idempotency-Key, so a repeat is never an
+  additional determination; stating it with different content (target kind, quantity, energy convention, recipe,
+  evaluated geometry or pinned calculations) is refused (``reason`` ``content``), because a determination is
+  immutable and silently merging would re-describe it. A basin is per observation and each conformer upload
+  creates a new observation, so a basin claim cannot be restated across uploads; a geometry or saddle claim can,
+  over calculations already deposited.
 
 Nothing is inferred. A source row records the geometry its role's result describes only where the
-calculation's type makes that unambiguous (a single-point or frequency job's one input geometry, an
+calculation's type makes it unambiguous (a single-point or frequency job's one input geometry, an
 optimization's one output geometry) and leaves it NULL otherwise.
 """
 
@@ -33,7 +36,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from tckdb_schemas.local_key_codes import W_CALCULATION_KEY_UNDECLARED, undeclared_key_context
@@ -58,9 +61,9 @@ from app.services.literature_resolution import resolve_or_create_literature
 from app.services.upload_reference import W_UNKNOWN_CALCULATION_REF, unknown_reference
 
 #: A declaration contradicts the stored facts it names: the target does not fit the owner, a source calculation
-#: belongs to another owner, a pinned calculation has no single geometry on the side named, or the key was
-#: already used with different content. ``context['reason']`` names which: ``target``, ``owner``, ``geometry``
-#: or ``content``.
+#: belongs to another owner or (for a basin) another observation, a pinned calculation has no single geometry on
+#: the side named, or the key was already used with different content. ``context['reason']`` names which:
+#: ``target``, ``owner``, ``observation``, ``geometry`` or ``content``.
 W_STRUCTURE_DETERMINATION_MISMATCH = "structure_determination_mismatch"
 
 #: Bumped only when what goes into ``identity_hash`` or ``content_hash`` changes.
@@ -104,46 +107,45 @@ def identity_hash(
     literature_id: int | None,
     workflow_tool_release_id: int | None,
     determination_key: str,
-    evaluated_geometry_id: int,
-    sources: list[tuple[str, int]],
 ) -> str:
-    """Digest of exactly the content a determination's identity is made of.
+    """Digest of the identifier of a determination: owner, source attribution and key.
 
-    The pinned calculations and the evaluated geometry are part of the identity: a determination is a claim about
-    *these* calculations, so a re-deposit that creates new calculation rows is a different determination (a
-    different piece of evidence), while a statement that pins the same calculations again is the same one.
+    It names the same tuple ``uq_structure_determination_key`` makes unique. Only a basin is about an
+    observation; a bare geometry or saddle claim is the same claim whichever upload happened to create a
+    conformer observation beside it, so the observation enters only for a ``conformer_basin``.
     """
     return _canonical(
         {
             "version": IDENTITY_VERSION,
             "species_entry_id": owner.species_entry_id,
             "transition_state_entry_id": owner.transition_state_entry_id,
-            # Only a basin is about an observation; a bare geometry claim is the same claim whichever upload
-            # happened to create a conformer observation beside it.
             "conformer_observation_id": owner.conformer_observation_id if target_kind == "conformer_basin" else None,
-            "target_kind": target_kind,
             "literature_id": literature_id,
             "workflow_tool_release_id": workflow_tool_release_id,
             "determination_key": determination_key,
-            "evaluated_geometry_id": evaluated_geometry_id,
-            "sources": sorted(sources),
         }
     )
 
 
 def content_hash(
     *,
+    target_kind: str,
     quantity: str | None,
     energy_convention: dict[str, Any] | None,
     actual_recipe: dict[str, Any] | None,
+    evaluated_geometry_id: int,
+    sources: list[tuple[str, int]],
 ) -> str:
-    """Digest of what a determination claims about its identity: the statement a restatement must repeat."""
+    """Digest of everything a determination claims beyond its identifier: what a restatement must repeat."""
     return _canonical(
         {
             "version": IDENTITY_VERSION,
+            "target_kind": target_kind,
             "quantity": quantity,
             "energy_convention": energy_convention,
             "actual_recipe": actual_recipe,
+            "evaluated_geometry_id": evaluated_geometry_id,
+            "sources": sorted(sources),
         }
     )
 
@@ -209,6 +211,28 @@ def _source_geometry_id(calculation: Calculation) -> int | None:
     return _single_geometry(calculation, side) if side is not None else None
 
 
+def _check_owned(calculation: Calculation, owner: DeterminationOwner, target_kind: StructureDeterminationTargetKind) -> None:
+    """A pinned or evaluating calculation belongs to the owner and, for a basin, to the owner's observation."""
+    if (calculation.species_entry_id, calculation.transition_state_entry_id) != (
+        owner.species_entry_id,
+        owner.transition_state_entry_id,
+    ):
+        raise _mismatch(
+            "owner",
+            "A calculation of a structure determination belongs to the determination's own species entry or "
+            "transition state entry; one of the calculations named belongs to another.",
+        )
+    if (
+        target_kind is StructureDeterminationTargetKind.conformer_basin
+        and calculation.conformer_observation_id != owner.conformer_observation_id
+    ):
+        raise _mismatch(
+            "observation",
+            "A conformer_basin claim is about one observation: every calculation it names is anchored to that "
+            "observation. One of the calculations named is anchored to another observation, or to none.",
+        )
+
+
 def _check_target(declaration: StructureDeterminationDeclaration, owner: DeterminationOwner) -> None:
     kind = StructureDeterminationTargetKind(declaration.target_kind.value)
     if kind is StructureDeterminationTargetKind.conformer_basin and owner.conformer_observation_id is None:
@@ -251,23 +275,17 @@ def persist_structure_determinations(
             raise CodedValueError(code, message, context={"field": "structure_determinations"}, message_prefix=False)
         _check_target(declaration, owner)
 
+        target_kind = StructureDeterminationTargetKind(declaration.target_kind.value)
         pins = [(source.role, _resolve_pin(session, source, calculations_by_key)) for source in declaration.sources]
-        for _, calculation in pins:
-            if (calculation.species_entry_id, calculation.transition_state_entry_id) != (
-                owner.species_entry_id,
-                owner.transition_state_entry_id,
-            ):
-                raise _mismatch(
-                    "owner",
-                    "A source calculation of a structure determination belongs to the determination's own "
-                    "species entry or transition state entry; one of the calculations named belongs to another.",
-                )
         evaluating = _resolve_pin(session, declaration.evaluated_geometry, calculations_by_key)
-        if (evaluating.species_entry_id, evaluating.transition_state_entry_id) != (
-            owner.species_entry_id,
-            owner.transition_state_entry_id,
-        ):
-            raise _mismatch("owner", "The evaluated_geometry calculation belongs to another owner.")
+        for calculation in (*(c for _, c in pins), evaluating):
+            _check_owned(calculation, owner, target_kind)
+        if evaluating.id not in {c.id for _, c in pins}:
+            raise _mismatch(
+                "geometry",
+                "The evaluated_geometry names a calculation the determination does not pin: the geometry it is "
+                "about is read from one of its own sources.",
+            )
         evaluated_geometry_id = _single_geometry(evaluating, declaration.evaluated_geometry.side.value)
         if evaluated_geometry_id is None:
             raise _mismatch(
@@ -302,29 +320,33 @@ def persist_structure_determinations(
             else None
         )
         quantity = declaration.quantity.value if declaration.quantity is not None else None
-        target_kind = StructureDeterminationTargetKind(declaration.target_kind.value)
         ident = identity_hash(
             owner=owner,
             target_kind=target_kind.value,
             literature_id=literature_id,
             workflow_tool_release_id=workflow_tool_release_id,
             determination_key=declaration.key,
+        )
+        if ident in seen_identities:
+            raise _mismatch("content", "One request states a determination key once; a repeated key is refused.")
+        seen_identities.add(ident)
+        content = content_hash(
+            target_kind=target_kind.value,
+            quantity=quantity,
+            energy_convention=convention,
+            actual_recipe=recipe,
             evaluated_geometry_id=evaluated_geometry_id,
             sources=[(role.value, calculation.id) for role, calculation in pins],
         )
-        if ident in seen_identities:
-            raise _mismatch("content", "One request states a determination once; a repeated statement is refused.")
-        seen_identities.add(ident)
-        content = content_hash(quantity=quantity, energy_convention=convention, actual_recipe=recipe)
 
         existing = session.scalar(select(StructureDetermination).where(StructureDetermination.identity_hash == ident))
         if existing is not None:
             if existing.content_hash != content:
                 raise _mismatch(
                     "content",
-                    "This determination (the same key, subject, source, evaluated geometry and calculations) "
-                    "was already stated with a different claim (quantity, energy convention or recipe). A "
-                    "determination is immutable: state a different key for a different claim.",
+                    "This determination key was already stated, for this subject and source, with different "
+                    "content (target kind, quantity, energy convention, recipe, evaluated geometry or pinned "
+                    "calculations). A determination is immutable: state a different key for a different claim.",
                 )
             rows.append(existing)
             continue
@@ -353,6 +375,12 @@ def persist_structure_determinations(
             with session.begin_nested():
                 session.add(row)
                 session.flush()
+                # The database refuses a source that is not pinned in the transaction that creates its
+                # determination; this says that it is (see ``tckdb_structure_source_insert_guard``).
+                session.execute(
+                    text("SELECT set_config('tckdb.structure_determination_writing', :id, true)"),
+                    {"id": str(row.id)},
+                )
                 for role, calculation in pins:
                     session.add(
                         StructureDeterminationSource(
@@ -361,10 +389,12 @@ def persist_structure_determinations(
                             calculation_id=calculation.id,
                             species_entry_id=owner.species_entry_id,
                             transition_state_entry_id=owner.transition_state_entry_id,
+                            conformer_observation_id=row.conformer_observation_id,
                             geometry_id=_source_geometry_id(calculation),
                         )
                     )
                 session.flush()
+                session.execute(text("SELECT set_config('tckdb.structure_determination_writing', '', true)"))
         except IntegrityError:
             # A concurrent upload created the same content first; it is the one row.
             winner = session.scalar(

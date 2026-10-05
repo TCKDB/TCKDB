@@ -1,51 +1,70 @@
 """Let a calculation declare its actual protocol and a record declare structure determinations.
 
-Additive, with no data step. Three new tables, seven new enums, one nullable column and two
+Additive, with no data step. Three new tables, seven new enums, one nullable column and three
 composite-key targets on ``calculation``:
 
 ``structure_determination`` (public ref prefix ``sdet``)
     One source-attributed claim about a defined geometry, conformer basin or saddle, and the
-    quantity it supplies. Its identity is content -- the owner (a species entry, or a transition
-    state entry), the target kind, the conformer observation of a basin, the source attribution
-    (literature, workflow-tool release), a source-scoped key, the evaluated geometry and the pinned
-    calculations -- and ``identity_hash`` is the unique digest of that content, so the same content
-    resolves to one row. ``content_hash`` digests what it claims (quantity, energy convention,
-    recipe), so a restatement of one identity that says something different is refused by the write
-    path rather than merged. **Immutable from creation:** ``trg_structure_determination_immutable``
-    refuses every UPDATE, including while the row is shared.
+    quantity it supplies. Its identifier is the owner (a species entry, or a transition state
+    entry; for a basin also its conformer observation), the source attribution (literature,
+    workflow-tool release) and a source-scoped key, unique (``uq_structure_determination_key``,
+    NULLS NOT DISTINCT; ``identity_hash`` is its digest). Stating the key again with the same
+    content resolves to the existing row; with different content it is refused by the write path.
+    ``content_hash`` digests everything else (target kind, quantity, energy convention, recipe,
+    evaluated geometry, pinned calculations). **Immutable from creation:**
+    ``trg_structure_determination_immutable`` refuses every UPDATE, including while the row is
+    shared. A BEFORE INSERT trigger refuses a basin whose observation is not of its own species entry.
 
 ``structure_determination_source``
-    One calculation pinned to one role of a determination. The owner columns repeat the
-    determination's owner so four composite foreign keys make "this determination's source is a
-    calculation of the determination's own owner" a database fact (whichever owner column is set,
-    its two keys to the determination and to the calculation are checked; a NULL column skips its keys). **Immutable:**
-    ``trg_structure_determination_source_immutable`` refuses every UPDATE.
+    One calculation pinned to one role of a determination. The owner columns (and, for a basin, the
+    observation) repeat the determination's, so composite foreign keys make "this determination's source
+    is a calculation of the determination's own owner, and for a basin of its observation" a database
+    fact (whichever owner column is set, its keys to the determination and to the calculation are
+    checked; a NULL column skips its keys). **Pinned at creation:** a source may be inserted only in the
+    transaction that creates its determination (the write path sets the transaction-local
+    ``tckdb.structure_determination_writing`` to the determination id; a tripwire against accidental or
+    scripted edits, not access control) and may never be deleted, because the determination's content
+    digest and key cover its pinned calculations. **Immutable:** no UPDATE.
 
 ``structure_evidence_finding`` (public ref prefix ``sfnd``)
     An append-only event pinned to a geometry, a calculation or a determination.
     ``trg_structure_evidence_finding_append_only`` refuses every UPDATE and DELETE; a correction is a
     new finding that names the one it supersedes.
 
+Accepted-science protection. A determination and its sources belong to the transition state entry or the
+conformer observation they are about, both accepted-science roots (``c6f2a9d4e7b1``). The shared guards
+``tckdb_guard_accepted_child`` (determination) and ``tckdb_guard_accepted_via_child`` (source, through its
+determination) are installed on both roots, INSERT, UPDATE and DELETE, and TRUNCATE is refused on all three
+tables, as for ``network_kinetics_determination`` (``e5b9c2a7d4f1``). The owner columns are nullable by
+design (a determination has one of two owners, and the guard function skips a NULL one), so they are
+registered in this revision's own tuples (``_DETERMINATION_GUARDS``, ``_SOURCE_GUARDS``), which
+``tests/db/test_structure_determination_migration.py`` checks against the model and ``pg_trigger``; the
+shared registry's NOT NULL rule is not applicable to them. A source cites its calculation without being its
+child, so an accepted calculation can still be cited, and a finding can still be appended about accepted
+science.
+
 ``calculation`` gains ``actual_protocol_declaration`` (JSONB, nullable), a versioned object whose
 shape is owned by ``tckdb_schemas.structure_declarations`` (the database checks only that it is an
 object carrying a numeric ``version``; the ``coalesce`` matters, because an object with no ``version``
-key would otherwise make the predicate NULL and a CHECK passes on NULL), and two unique constraints
-``(id, species_entry_id)`` and ``(id, transition_state_entry_id)``: ``id`` is already unique, the pairs
-exist only so the source table's composite keys have something to point at.
+key would otherwise make the predicate NULL and a CHECK passes on NULL), and three unique constraints
+``(id, species_entry_id)``, ``(id, transition_state_entry_id)`` and ``(id, conformer_observation_id)``:
+``id`` is already unique, the pairs exist only so the source table's composite keys have something to
+point at.
 
 What the database does not check
 --------------------------------
-That a basin's conformer observation belongs to the determination's species entry, that the evaluated
-geometry is one of a source calculation's own geometries, and that a transition-state determination's
-owner matches an upload's are cross-table facts a CHECK cannot state. The services that write the rows
-enforce them and refuse with a code (``app.services.structure_determination_resolution``).
+That the evaluated geometry is one of a source calculation's own geometries (a geometry is shared,
+content-addressed content, so the database cannot check its owner), that the calculation it is read from
+is one of the pinned sources, and that a transition-state determination's owner matches an upload's are
+cross-table facts a CHECK cannot state. The services that write the rows enforce them and refuse with a
+code (``app.services.structure_determination_resolution``).
 
 What this revision deliberately does not do
 -------------------------------------------
 * **No backfill.** Existing calculations keep NULL in the new column. A protocol, a determination and a
   finding are attributed claims, never inferred from a level of theory, a job type or a link; "not stated"
   is the honest reading of everything deposited before this revision.
-* **No change to the accepted-science guards.** ``trg_as_root_calculation`` refuses any UPDATE of an
+* **No change to the existing accepted-science guards.** ``trg_as_root_calculation`` refuses any UPDATE of an
   accepted calculation whichever column it touches, so the new column is frozen with the rest of the row
   the moment it is accepted; ``ADD COLUMN`` of a nullable column with no default fires no UPDATE trigger,
   so the upgrade does not touch an approved row. Adding the two unique constraints rewrites no row.
@@ -146,6 +165,90 @@ $$
 """
 
 
+_DETERMINATION_GUARD_FUNCTION = "tckdb_structure_determination_guard"
+_SOURCE_INSERT_GUARD_FUNCTION = "tckdb_structure_source_insert_guard"
+_SOURCE_DELETE_GUARD_FUNCTION = "tckdb_structure_source_delete_guard"
+
+#: ``(trigger name, record type, column)``: the accepted-science roots a determination belongs to.
+_DETERMINATION_GUARDS = (
+    ("trg_structure_determination_accepted_ts_entry", "transition_state_entry", "transition_state_entry_id"),
+    ("trg_structure_determination_accepted_observation", "conformer_observation", "conformer_observation_id"),
+)
+#: The same roots, reached from a source row through its determination.
+_SOURCE_GUARDS = (
+    ("trg_structure_determination_source_accepted_ts_entry", "transition_state_entry", "transition_state_entry_id"),
+    ("trg_structure_determination_source_accepted_observation", "conformer_observation", "conformer_observation_id"),
+)
+
+_DETERMINATION_GUARD_SQL = f"""
+CREATE OR REPLACE FUNCTION public.{_DETERMINATION_GUARD_FUNCTION}()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    -- A basin whose owner is not a species entry is refused by the target check, with its own message.
+    IF NEW.conformer_observation_id IS NOT NULL AND NEW.species_entry_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1
+        FROM public.conformer_observation o
+        JOIN public.conformer_group g ON g.id = o.conformer_group_id
+        WHERE o.id = NEW.conformer_observation_id AND g.species_entry_id = NEW.species_entry_id
+    ) THEN
+        RAISE EXCEPTION
+            'structure_determination_observation_owner: a basin claim names an observation of its own species entry'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$$
+"""
+
+_SOURCE_INSERT_GUARD_SQL = f"""
+CREATE OR REPLACE FUNCTION public.{_SOURCE_INSERT_GUARD_FUNCTION}()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    -- A determination is its pinned calculations: its content digest and its key cover them, so a source added or
+    -- removed afterwards would change what it says under an unchanged identity. The write path pins every source in
+    -- the transaction that creates the determination and says so here; nothing else may add one. This is a tripwire
+    -- against accidental or scripted edits, not access control: whoever sets the variable is acting on purpose.
+    IF current_setting('tckdb.structure_determination_writing', true) IS DISTINCT FROM NEW.determination_id::text THEN
+        RAISE EXCEPTION
+            'structure_determination_sources_are_pinned_at_creation: determination % takes no further source',
+            NEW.determination_id
+            USING ERRCODE = '23514',
+                  HINT = 'State a different determination key for a different set of calculations.';
+    END IF;
+    IF NEW.conformer_observation_id IS DISTINCT FROM (
+        SELECT d.conformer_observation_id FROM public.structure_determination d WHERE d.id = NEW.determination_id
+    ) THEN
+        RAISE EXCEPTION
+            'structure_determination_source_observation: a source names the observation of its determination'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$$
+"""
+
+_SOURCE_DELETE_GUARD_SQL = f"""
+CREATE OR REPLACE FUNCTION public.{_SOURCE_DELETE_GUARD_FUNCTION}()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    RAISE EXCEPTION
+        'structure_determination_sources_are_pinned_at_creation: a source of determination % cannot be removed',
+        OLD.determination_id
+        USING ERRCODE = '23514';
+END;
+$$
+"""
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     for enum in _ENUMS:
@@ -167,6 +270,7 @@ def upgrade() -> None:
     )
     op.create_unique_constraint("uq_calculation_scope_species", "calculation", ["id", "species_entry_id"])
     op.create_unique_constraint("uq_calculation_scope_ts", "calculation", ["id", "transition_state_entry_id"])
+    op.create_unique_constraint("uq_calculation_scope_observation", "calculation", ["id", "conformer_observation_id"])
 
     op.create_table(
         _DETERMINATION,
@@ -279,6 +383,17 @@ def upgrade() -> None:
         sa.UniqueConstraint("identity_hash", name=op.f("uq_structure_determination_identity_hash")),
         sa.UniqueConstraint("id", "species_entry_id", name="uq_structure_determination_scope_species"),
         sa.UniqueConstraint("id", "transition_state_entry_id", name="uq_structure_determination_scope_ts"),
+        sa.UniqueConstraint("id", "conformer_observation_id", name="uq_structure_determination_scope_observation"),
+        sa.UniqueConstraint(
+            "species_entry_id",
+            "transition_state_entry_id",
+            "conformer_observation_id",
+            "literature_id",
+            "workflow_tool_release_id",
+            "determination_key",
+            name="uq_structure_determination_key",
+            postgresql_nulls_not_distinct=True,
+        ),
     )
     op.create_index(op.f("ix_structure_determination_public_ref"), _DETERMINATION, ["public_ref"], unique=True)
     for column in ("species_entry_id", "transition_state_entry_id", "conformer_observation_id", "evaluated_geometry_id"):
@@ -292,6 +407,7 @@ def upgrade() -> None:
         sa.Column("calculation_id", sa.BigInteger(), nullable=False),
         sa.Column("species_entry_id", sa.BigInteger(), nullable=True),
         sa.Column("transition_state_entry_id", sa.BigInteger(), nullable=True),
+        sa.Column("conformer_observation_id", sa.BigInteger(), nullable=True),
         sa.Column("geometry_id", sa.BigInteger(), nullable=True),
         sa.CheckConstraint(
             "num_nonnulls(species_entry_id, transition_state_entry_id) = 1",
@@ -350,6 +466,27 @@ def upgrade() -> None:
             ["calculation_id", "transition_state_entry_id"],
             ["calculation.id", "calculation.transition_state_entry_id"],
             name="fk_structure_determination_source_scope_calc_ts",
+            initially="IMMEDIATE",
+            deferrable=True,
+        ),
+        sa.ForeignKeyConstraint(
+            ["conformer_observation_id"],
+            ["conformer_observation.id"],
+            name="fk_structure_determination_source_observation",
+            initially="IMMEDIATE",
+            deferrable=True,
+        ),
+        sa.ForeignKeyConstraint(
+            ["determination_id", "conformer_observation_id"],
+            ["structure_determination.id", "structure_determination.conformer_observation_id"],
+            name="fk_structure_determination_source_scope_det_observation",
+            initially="IMMEDIATE",
+            deferrable=True,
+        ),
+        sa.ForeignKeyConstraint(
+            ["calculation_id", "conformer_observation_id"],
+            ["calculation.id", "calculation.conformer_observation_id"],
+            name="fk_structure_determination_source_scope_calc_observation",
             initially="IMMEDIATE",
             deferrable=True,
         ),
@@ -478,6 +615,9 @@ def upgrade() -> None:
 
     op.execute(_IMMUTABLE_SQL)
     op.execute(_APPEND_ONLY_SQL)
+    op.execute(_DETERMINATION_GUARD_SQL)
+    op.execute(_SOURCE_INSERT_GUARD_SQL)
+    op.execute(_SOURCE_DELETE_GUARD_SQL)
     for table in (_DETERMINATION, _SOURCE):
         op.execute(
             f"CREATE TRIGGER trg_{table}_immutable BEFORE UPDATE ON public.{table} "
@@ -487,6 +627,38 @@ def upgrade() -> None:
         f"CREATE TRIGGER trg_{_FINDING}_append_only BEFORE UPDATE OR DELETE ON public.{_FINDING} "
         f"FOR EACH ROW EXECUTE FUNCTION public.{_APPEND_ONLY_FUNCTION}()"
     )
+    op.execute(
+        f"CREATE TRIGGER trg_{_DETERMINATION}_guard BEFORE INSERT ON public.{_DETERMINATION} "
+        f"FOR EACH ROW EXECUTE FUNCTION public.{_DETERMINATION_GUARD_FUNCTION}()"
+    )
+    op.execute(
+        f"CREATE TRIGGER trg_{_SOURCE}_insert_guard BEFORE INSERT ON public.{_SOURCE} "
+        f"FOR EACH ROW EXECUTE FUNCTION public.{_SOURCE_INSERT_GUARD_FUNCTION}()"
+    )
+    op.execute(
+        f"CREATE TRIGGER trg_{_SOURCE}_delete_guard BEFORE DELETE ON public.{_SOURCE} "
+        f"FOR EACH ROW EXECUTE FUNCTION public.{_SOURCE_DELETE_GUARD_FUNCTION}()"
+    )
+    # Accepted-science protection. A determination and its sources belong to the transition state entry or the
+    # conformer observation they are about, both accepted-science roots: once one is accepted, nothing may be added to,
+    # changed on or removed from what it says. The guards are the shared ones (``c6f2a9d4e7b1``); they skip a NULL
+    # column, so one function serves a table whose owner is one of two columns.
+    for name, record_type, column in _DETERMINATION_GUARDS:
+        op.execute(
+            f"CREATE TRIGGER {name} BEFORE INSERT OR UPDATE OR DELETE ON public.{_DETERMINATION} "
+            f"FOR EACH ROW EXECUTE FUNCTION public.tckdb_guard_accepted_child('{record_type}', '{column}')"
+        )
+    for name, record_type, column in _SOURCE_GUARDS:
+        op.execute(
+            f"CREATE TRIGGER {name} BEFORE INSERT OR UPDATE OR DELETE ON public.{_SOURCE} "
+            f"FOR EACH ROW EXECUTE FUNCTION public.tckdb_guard_accepted_via_child("
+            f"'{record_type}', 'determination_id', '{_DETERMINATION}', 'id', '{column}')"
+        )
+    for table in (_DETERMINATION, _SOURCE, _FINDING):
+        op.execute(
+            f"CREATE TRIGGER trg_{table}_truncate BEFORE TRUNCATE ON public.{table} "
+            "FOR EACH STATEMENT EXECUTE FUNCTION public.tckdb_reject_truncate()"
+        )
 
 
 def downgrade() -> None:
@@ -504,9 +676,21 @@ def downgrade() -> None:
         f"on {declared} calculation(s)."
     )
 
+    for table in (_FINDING, _SOURCE, _DETERMINATION):
+        op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_truncate ON public.{table}")
+    for name, _, _ in _SOURCE_GUARDS:
+        op.execute(f"DROP TRIGGER IF EXISTS {name} ON public.{_SOURCE}")
+    for name, _, _ in _DETERMINATION_GUARDS:
+        op.execute(f"DROP TRIGGER IF EXISTS {name} ON public.{_DETERMINATION}")
+    op.execute(f"DROP TRIGGER IF EXISTS trg_{_SOURCE}_delete_guard ON public.{_SOURCE}")
+    op.execute(f"DROP TRIGGER IF EXISTS trg_{_SOURCE}_insert_guard ON public.{_SOURCE}")
+    op.execute(f"DROP TRIGGER IF EXISTS trg_{_DETERMINATION}_guard ON public.{_DETERMINATION}")
     op.execute(f"DROP TRIGGER IF EXISTS trg_{_FINDING}_append_only ON public.{_FINDING}")
     for table in (_SOURCE, _DETERMINATION):
         op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_immutable ON public.{table}")
+    op.execute(f"DROP FUNCTION IF EXISTS public.{_SOURCE_DELETE_GUARD_FUNCTION}()")
+    op.execute(f"DROP FUNCTION IF EXISTS public.{_SOURCE_INSERT_GUARD_FUNCTION}()")
+    op.execute(f"DROP FUNCTION IF EXISTS public.{_DETERMINATION_GUARD_FUNCTION}()")
     op.execute(f"DROP FUNCTION IF EXISTS public.{_APPEND_ONLY_FUNCTION}()")
     op.execute(f"DROP FUNCTION IF EXISTS public.{_IMMUTABLE_FUNCTION}()")
 
@@ -514,6 +698,7 @@ def downgrade() -> None:
     op.drop_table(_SOURCE)
     op.drop_table(_DETERMINATION)
 
+    op.drop_constraint("uq_calculation_scope_observation", "calculation", type_="unique")
     op.drop_constraint("uq_calculation_scope_ts", "calculation", type_="unique")
     op.drop_constraint("uq_calculation_scope_species", "calculation", type_="unique")
     op.drop_constraint(op.f("ck_calculation_actual_protocol_declaration_versioned_object"), "calculation", type_="check")

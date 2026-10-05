@@ -2435,9 +2435,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             note=(
                 "context.reason names target (the kind does not fit the upload's owner), owner (a pinned "
-                "calculation belongs to another subject), geometry (the pinned calculation has no single "
-                "geometry on the side named) or content (the same determination was stated with a different "
-                "claim)."
+                "calculation belongs to another subject), observation (a basin claim pins a calculation anchored "
+                "to another observation), geometry (the pinned calculation has no single geometry on the side "
+                "named, or the evaluated geometry is read from a calculation the determination does not pin) or "
+                "content (the same determination key was stated with different content)."
             )),
     ApiCode("stored_species_smiles_unparseable", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py"),

@@ -4,13 +4,14 @@ Three tables, none of which holds a number:
 
 ``structure_determination``
     One source-attributed claim about a defined geometry, conformer basin or saddle, and the quantity
-    the claim supplies. **Identity, not provenance**: its identity is content (the owner, the target kind, the
-    source attribution, a source-scoped key, the evaluated geometry and the pinned calculations),
-    ``identity_hash`` is the unique digest of that content, and the same content resolves to one row, so
-    restating a determination over the same calculations is idempotent and never becomes an additional
-    statistical member (a re-deposit that creates new calculation rows is new evidence and a new
-    determination). ``content_hash`` digests what it claims (quantity, energy convention, recipe) so a
-    restatement of one identity that says something different is refused rather than merged.
+    the claim supplies. **Identity, not provenance**: its identity is the owner (a species entry or a transition
+    state entry, and for a basin its observation), the source attribution and a source-scoped
+    ``determination_key``, unique (``uq_structure_determination_key``). Stating the key again with the same
+    content resolves to the existing row, so a repeat is idempotent and never an additional statistical
+    member; stating it with different content is refused. ``content_hash`` digests what the determination
+    claims (target kind, quantity, energy convention, recipe, evaluated geometry and the pinned calculations).
+    A basin is per observation, and each conformer upload creates a new observation, so a basin claim cannot be
+    restated across uploads; a geometry or saddle claim can be, over calculations already deposited.
     **Immutable from creation**: a trigger refuses every UPDATE.
 
 ``structure_determination_source``
@@ -188,17 +189,31 @@ class StructureDetermination(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
             "AND coalesce(jsonb_typeof(actual_recipe -> 'version'), '') = 'number')",
             name="actual_recipe_versioned_object",
         ),
+        # The key is an identifier: one owner, one source and one key name one determination. Stating it again
+        # either resolves to that determination (the same content) or is refused (a different one).
+        UniqueConstraint(
+            "species_entry_id",
+            "transition_state_entry_id",
+            "conformer_observation_id",
+            "literature_id",
+            "workflow_tool_release_id",
+            "determination_key",
+            name="uq_structure_determination_key",
+            postgresql_nulls_not_distinct=True,
+        ),
         # The targets the child's composite foreign keys point at.
         UniqueConstraint("id", "species_entry_id", name="uq_structure_determination_scope_species"),
         UniqueConstraint("id", "transition_state_entry_id", name="uq_structure_determination_scope_ts"),
+        UniqueConstraint("id", "conformer_observation_id", name="uq_structure_determination_scope_observation"),
     )
 
 
 class StructureDeterminationSource(Base):
     """One calculation pinned to one role of a determination.
 
-    The owner columns repeat the determination's owner so two composite foreign keys can make "this
-    determination's source is a calculation of the determination's own owner" a database fact: whichever of
+    The owner columns repeat the determination's owner so composite foreign keys can make "this
+    determination's source is a calculation of the determination's own owner (and, for a basin, of its
+    observation)" a database fact: whichever of
     the two owner columns is set, both its composite keys are checked (a NULL column skips its keys; the other
     one applies).
     """
@@ -228,6 +243,18 @@ class StructureDeterminationSource(Base):
         ForeignKey(
             "transition_state_entry.id",
             name="fk_structure_determination_source_ts_entry",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=True,
+    )
+    #: The basin's observation, repeated from the determination (NULL for any other target). Two composite keys make
+    #: "every source of a basin claim is a calculation anchored to that observation" a database fact.
+    conformer_observation_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "conformer_observation.id",
+            name="fk_structure_determination_source_observation",
             deferrable=True,
             initially="IMMEDIATE",
         ),
@@ -288,6 +315,20 @@ class StructureDeterminationSource(Base):
             ["calculation_id", "transition_state_entry_id"],
             ["calculation.id", "calculation.transition_state_entry_id"],
             name="fk_structure_determination_source_scope_calc_ts",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        ForeignKeyConstraint(
+            ["determination_id", "conformer_observation_id"],
+            ["structure_determination.id", "structure_determination.conformer_observation_id"],
+            name="fk_structure_determination_source_scope_det_observation",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        ForeignKeyConstraint(
+            ["calculation_id", "conformer_observation_id"],
+            ["calculation.id", "calculation.conformer_observation_id"],
+            name="fk_structure_determination_source_scope_calc_observation",
             deferrable=True,
             initially="IMMEDIATE",
         ),

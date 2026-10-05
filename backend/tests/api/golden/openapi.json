@@ -13,7 +13,7 @@
       },
       "ActualProtocolDeclaration-Input": {
         "additionalProperties": false,
-        "description": "The recipe a calculation actually ran. Version 1.\n\nComplements the level-of-theory reference (method, basis, auxiliary basis, dispersion, solvent) with the\nfacts the label cannot carry. A declaration that restates a level-of-theory field is *compared* with it\nwhen a selection reads the record, and a disagreement is a finding; neither side wins by upload order.\n\nEvery statement is optional; at least one is required. A fact left out is not stated. Operational\nsettings that do not change the number (threads, memory, scratch) have no place here.\n\n:param version: Only the integer ``1``.\n:param source: Who made the claim.\n:param numerical_approximations: Omitted: not stated. Empty: none.\n:param included_corrections: Corrections the stored number already includes. Omitted: not stated. Empty: none.\n:param supporting_dois: Literature that documents the recipe (DOIs).",
+        "description": "The recipe a calculation actually ran. Version 1.\n\nComplements the level-of-theory reference (method, basis, auxiliary basis, dispersion, solvent) with the\nfacts the label cannot carry. A declaration that restates a level-of-theory field is *compared* with it\nwhen a selection reads the record, and a disagreement is a finding; neither side wins by upload order.\n\nEvery statement is optional; at least one is required. A fact left out is not stated. Operational\nsettings that do not change the number (threads, memory, scratch) have no place here.\n\n:param version: Only the integer ``1``.\n:param source: Who made the claim.\n:param numerical_approximations: Omitted: not stated. Empty: none.\n:param included_corrections: Corrections the stored number already includes. Omitted: not stated. Empty: none.\n:param supporting_dois: Literature that documents the recipe (DOIs). Omitted: not stated. Empty: none.",
         "properties": {
           "auxiliary_basis": {
             "anyOf": [
@@ -137,14 +137,21 @@
             ]
           },
           "supporting_dois": {
-            "items": {
-              "maxLength": 200,
-              "pattern": "^10\\.\\d{4,9}/\\S+$",
-              "type": "string"
-            },
-            "maxItems": 20,
-            "title": "Supporting Dois",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 200,
+                  "pattern": "^10\\.\\d{4,9}/\\S+$",
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supporting Dois"
           },
           "version": {
             "title": "Version",
@@ -160,7 +167,7 @@
       },
       "ActualProtocolDeclaration-Output": {
         "additionalProperties": false,
-        "description": "The recipe a calculation actually ran. Version 1.\n\nComplements the level-of-theory reference (method, basis, auxiliary basis, dispersion, solvent) with the\nfacts the label cannot carry. A declaration that restates a level-of-theory field is *compared* with it\nwhen a selection reads the record, and a disagreement is a finding; neither side wins by upload order.\n\nEvery statement is optional; at least one is required. A fact left out is not stated. Operational\nsettings that do not change the number (threads, memory, scratch) have no place here.\n\n:param version: Only the integer ``1``.\n:param source: Who made the claim.\n:param numerical_approximations: Omitted: not stated. Empty: none.\n:param included_corrections: Corrections the stored number already includes. Omitted: not stated. Empty: none.\n:param supporting_dois: Literature that documents the recipe (DOIs).",
+        "description": "The recipe a calculation actually ran. Version 1.\n\nComplements the level-of-theory reference (method, basis, auxiliary basis, dispersion, solvent) with the\nfacts the label cannot carry. A declaration that restates a level-of-theory field is *compared* with it\nwhen a selection reads the record, and a disagreement is a finding; neither side wins by upload order.\n\nEvery statement is optional; at least one is required. A fact left out is not stated. Operational\nsettings that do not change the number (threads, memory, scratch) have no place here.\n\n:param version: Only the integer ``1``.\n:param source: Who made the claim.\n:param numerical_approximations: Omitted: not stated. Empty: none.\n:param included_corrections: Corrections the stored number already includes. Omitted: not stated. Empty: none.\n:param supporting_dois: Literature that documents the recipe (DOIs). Omitted: not stated. Empty: none.",
         "properties": {
           "auxiliary_basis": {
             "anyOf": [
@@ -284,14 +291,21 @@
             ]
           },
           "supporting_dois": {
-            "items": {
-              "maxLength": 200,
-              "pattern": "^10\\.\\d{4,9}/\\S+$",
-              "type": "string"
-            },
-            "maxItems": 20,
-            "title": "Supporting Dois",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 200,
+                  "pattern": "^10\\.\\d{4,9}/\\S+$",
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supporting Dois"
           },
           "version": {
             "title": "Version",
@@ -4307,6 +4321,15 @@
                 "type": "null"
               }
             ]
+          },
+          "structure_determinations": {
+            "description": "Source-attributed claims about this saddle point's geometry, each pinning calculations of this bundle (by their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves.",
+            "items": {
+              "$ref": "#/components/schemas/StructureDeterminationDeclaration"
+            },
+            "maxItems": 16,
+            "title": "Structure Determinations",
+            "type": "array"
           },
           "unmapped_smiles": {
             "anyOf": [
@@ -14017,6 +14040,15 @@
           },
           "primary_calculation": {
             "$ref": "#/components/schemas/CalculationInBundle"
+          },
+          "structure_determinations": {
+            "description": "Source-attributed claims about this conformer's geometry or basin, each pinning calculations of this bundle (by their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves.",
+            "items": {
+              "$ref": "#/components/schemas/StructureDeterminationDeclaration"
+            },
+            "maxItems": 16,
+            "title": "Structure Determinations",
+            "type": "array"
           }
         },
         "required": [
@@ -63772,6 +63804,15 @@
           "scientific_origin": {
             "$ref": "#/components/schemas/ScientificOriginKind",
             "default": "computed"
+          },
+          "structure_determinations": {
+            "description": "Source-attributed claims about this conformer's geometry or basin, each pinning calculations of this bundle (by their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves.",
+            "items": {
+              "$ref": "#/components/schemas/StructureDeterminationDeclaration"
+            },
+            "maxItems": 16,
+            "title": "Structure Determinations",
+            "type": "array"
           }
         },
         "required": [

@@ -232,11 +232,16 @@ determinations (`tckdb_schemas.structure_declarations`), all optional and stored
   core correlation, auxiliary basis, dispersion, solvation, constraints, material numerical approximations and the
   corrections the number includes. Each single fact is `known` (with a value), `unknown` or `not_applicable`; a fact
   left out is not stated, never read as a default or as gas phase. Version `1` only.
-- `structure_determinations` on `ConformerUploadRequest` and `TransitionStateUploadRequest`: a source-attributed claim
-  about a geometry, conformer basin or saddle point that pins the upload's own calculations (by `key`) to the roles
-  energy, geometry optimization, curvature, correction, connectivity and alternative characterization.
+- `structure_determinations` on `ConformerUploadRequest`, `TransitionStateUploadRequest`, each `ConformerInBundle` of a
+  computed-species upload and each `ConformerIn` and the `BundleTransitionStateIn` of a computed-reaction upload: a
+  source-attributed claim about a geometry, conformer basin or saddle point that pins the upload's own calculations (by
+  `key`) to the roles energy, geometry optimization, curvature, correction, connectivity and alternative characterization.
+  The determination key (with its owner and source) is an identifier: stating it again with the same content resolves to the
+  same determination, with different content it is refused.
+- `ActualProtocolDeclaration.supporting_dois` is omitted (not stated) or a list, like the other list facts.
 - `TransitionStateUploadRequest.primary_opt` and `additional_calculations` accept an optional `key` (new component
-  `TransitionStateCalculationIn`), unique within the request, so a determination can name them.
+  `TransitionStateCalculationIn`), unique within the request, so a determination can name them. A plain
+  `CalculationWithResultsPayload` built in Python is still accepted there (lifted, with no key).
 - New enums `StructureDeterminationTargetKind`, `StructureDeterminationQuantity`, `StructureSourceRole`. New refusal
   codes `structure_declaration_invalid`, `structure_declaration_version_unsupported`, `structure_determination_invalid`
   and `structure_determination_mismatch`.
@@ -770,6 +775,17 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 
 ### Code group 16
 
+2 codes on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
+
+| Code | Status | Traced via |
+|---|---|---|
+| [`structure_determination_invalid`](#c-structure-determination-invalid) | 422 | payload validation; route handler |
+| [`structure_determination_mismatch`](#c-structure-determination-mismatch) | 422 | route handler |
+
+<a id="cg-17"></a>
+
+### Code group 17
+
 20 codes on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
 | Code | Status | Traced via |
@@ -795,9 +811,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`thermo_target_group_owner_mismatch`](#c-thermo-target-group-owner-mismatch) | 422 | route handler |
 | [`thermo_target_group_required`](#c-thermo-target-group-required) | 422 | payload validation; route handler |
 
-<a id="cg-17"></a>
+<a id="cg-18"></a>
 
-### Code group 17
+### Code group 18
 
 1 code on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -805,9 +821,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 |---|---|---|
 | [`unknown_statmech_ref`](#c-unknown-statmech-ref) | 404 | route handler |
 
-<a id="cg-18"></a>
+<a id="cg-19"></a>
 
-### Code group 18
+### Code group 19
 
 1 code on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest).
 
@@ -815,9 +831,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 |---|---|---|
 | [`statmech_torsion_scan_calculation_owner_mismatch`](#c-statmech-torsion-scan-calculation-owner-mismatch) | 422 | route handler |
 
-<a id="cg-19"></a>
+<a id="cg-20"></a>
 
-### Code group 19
+### Code group 20
 
 1 code on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest).
 
@@ -825,9 +841,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 |---|---|---|
 | [`transport_source_calculation_owner_mismatch`](#c-transport-source-calculation-owner-mismatch) | 422 | payload validation; route handler |
 
-<a id="cg-20"></a>
+<a id="cg-21"></a>
 
-### Code group 20
+### Code group 21
 
 15 codes on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -849,9 +865,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`unknown_network_kinetics_ref`](#c-unknown-network-kinetics-ref) | 404 | route handler |
 | [`unknown_transition_state_entry_ref`](#c-unknown-transition-state-entry-ref) | 404 | route handler |
 
-<a id="cg-21"></a>
+<a id="cg-22"></a>
 
-### Code group 21
+### Code group 22
 
 12 codes on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
@@ -870,9 +886,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`ts_energy_ordering_stated_energy_mismatch`](#c-ts-energy-ordering-stated-energy-mismatch) | 422 | route handler |
 | [`ts_validation_source_calculation_owner_mismatch`](#c-ts-validation-source-calculation-owner-mismatch) | 422 | route handler |
 
-<a id="cg-22"></a>
+<a id="cg-23"></a>
 
-### Code group 22
+### Code group 23
 
 1 code on 3 surfaces: [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -880,9 +896,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 |---|---|---|
 | [`reaction_reversible_required`](#c-reaction-reversible-required) | 422 | route handler |
 
-<a id="cg-23"></a>
+<a id="cg-24"></a>
 
-### Code group 23
+### Code group 24
 
 3 codes on 2 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest).
 
@@ -892,9 +908,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`scf_stability_source_calculation_owner_mismatch`](#c-scf-stability-source-calculation-owner-mismatch) | 422 | payload validation; route handler |
 | [`scf_stability_source_geometry_mismatch`](#c-scf-stability-source-geometry-mismatch) | 422 | payload validation; route handler |
 
-<a id="cg-24"></a>
+<a id="cg-25"></a>
 
-### Code group 24
+### Code group 25
 
 6 codes on 2 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest).
 
@@ -907,9 +923,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`transition_state_reaction_coordinate_ambiguous`](#c-transition-state-reaction-coordinate-ambiguous) | 422 | payload validation |
 | [`transition_state_reaction_coordinate_not_designated`](#c-transition-state-reaction-coordinate-not-designated) | 422 | payload validation |
 
-<a id="cg-25"></a>
+<a id="cg-26"></a>
 
-### Code group 25
+### Code group 26
 
 2 codes on 2 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
@@ -918,26 +934,15 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`atom_map_atoms_unaccounted_for`](#c-atom-map-atoms-unaccounted-for) | 422 | payload validation; route handler |
 | [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | payload validation; route handler |
 
-<a id="cg-26"></a>
+<a id="cg-27"></a>
 
-### Code group 26
+### Code group 27
 
 1 code on 2 surfaces: [`ConformerUploadRequest`](#s-conformeruploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest).
 
 | Code | Status | Traced via |
 |---|---|---|
 | [`statmech_calculation_key_undeclared`](#c-statmech-calculation-key-undeclared) | 422 | payload validation; route handler |
-
-<a id="cg-27"></a>
-
-### Code group 27
-
-2 codes on 2 surfaces: [`ConformerUploadRequest`](#s-conformeruploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
-
-| Code | Status | Traced via |
-|---|---|---|
-| [`structure_determination_invalid`](#c-structure-determination-invalid) | 422 | payload validation; route handler |
-| [`structure_determination_mismatch`](#c-structure-determination-mismatch) | 422 | route handler |
 
 <a id="cg-28"></a>
 
@@ -1127,13 +1132,24 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 
 ### Model group 13
 
-1 model nested on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ArtifactsUploadRequest`](#s-artifactsuploadrequest).
+4 models nested on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
-- [`ArtifactIn`](#m-artifactin)
+- [`StructureDeterminationDeclaration`](#m-structuredeterminationdeclaration)
+- [`StructureEnergyConvention`](#m-structureenergyconvention)
+- [`StructureEvaluatedGeometry`](#m-structureevaluatedgeometry)
+- [`StructureSourceDeclaration`](#m-structuresourcedeclaration)
 
 <a id="mg-14"></a>
 
 ### Model group 14
+
+1 model nested on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ArtifactsUploadRequest`](#s-artifactsuploadrequest).
+
+- [`ArtifactIn`](#m-artifactin)
+
+<a id="mg-15"></a>
+
+### Model group 15
 
 9 models nested on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1147,25 +1163,25 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`ThermoTargetDeclaration`](#m-thermotargetdeclaration)
 - [`ThermoThermalApproximation`](#m-thermothermalapproximation)
 
-<a id="mg-15"></a>
+<a id="mg-16"></a>
 
-### Model group 15
+### Model group 16
 
 1 model nested on 4 surfaces: [`ConformerUploadRequest`](#s-conformeruploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
 - [`AppliedEnergyCorrectionUploadPayload`](#m-appliedenergycorrectionuploadpayload)
 
-<a id="mg-16"></a>
+<a id="mg-17"></a>
 
-### Model group 16
+### Model group 17
 
 1 model nested on 4 surfaces: [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
 - [`CalculationWithResultsPayload`](#m-calculationwithresultspayload)
 
-<a id="mg-17"></a>
+<a id="mg-18"></a>
 
-### Model group 17
+### Model group 18
 
 3 models nested on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest).
 
@@ -1173,9 +1189,9 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`StatmechInBundle`](#m-statmechinbundle)
 - [`StatmechTorsionInBundle`](#m-statmechtorsioninbundle)
 
-<a id="mg-18"></a>
+<a id="mg-19"></a>
 
-### Model group 18
+### Model group 19
 
 8 models nested on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1188,9 +1204,9 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`KineticsProtocolDeclaration`](#m-kineticsprotocoldeclaration)
 - [`KineticsTunnelingApplicationUpload`](#m-kineticstunnelingapplicationupload)
 
-<a id="mg-19"></a>
+<a id="mg-20"></a>
 
-### Model group 19
+### Model group 20
 
 3 models nested on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
@@ -1198,18 +1214,18 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`TransitionStateComparedEnergy`](#m-transitionstatecomparedenergy)
 - [`TransitionStateValidationEvidenceIn`](#m-transitionstatevalidationevidencein)
 
-<a id="mg-20"></a>
+<a id="mg-21"></a>
 
-### Model group 20
+### Model group 21
 
 2 models nested on 3 surfaces: [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
 - [`KineticsReactionParticipantUpload`](#m-kineticsreactionparticipantupload)
 - [`KineticsReactionUpload`](#m-kineticsreactionupload)
 
-<a id="mg-21"></a>
+<a id="mg-22"></a>
 
-### Model group 21
+### Model group 22
 
 5 models nested on 2 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest).
 
@@ -1219,41 +1235,30 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`TransportInBundle`](#m-transportinbundle)
 - [`TransportSourceCalcInBundle`](#m-transportsourcecalcinbundle)
 
-<a id="mg-22"></a>
+<a id="mg-23"></a>
 
-### Model group 22
+### Model group 23
 
 2 models nested on 2 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
 - [`ReactionAtomMapIn`](#m-reactionatommapin)
 - [`ReactionAtomMapParticipantIn`](#m-reactionatommapparticipantin)
 
-<a id="mg-23"></a>
+<a id="mg-24"></a>
 
-### Model group 23
+### Model group 24
 
 1 model nested on 2 surfaces: [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest).
 
 - [`TransportUploadPayload`](#m-transportuploadpayload)
 
-<a id="mg-24"></a>
-
-### Model group 24
-
-1 model nested on 2 surfaces: [`ConformerUploadRequest`](#s-conformeruploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest).
-
-- [`StatmechTorsionIn`](#m-statmechtorsionin)
-
 <a id="mg-25"></a>
 
 ### Model group 25
 
-4 models nested on 2 surfaces: [`ConformerUploadRequest`](#s-conformeruploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
+1 model nested on 2 surfaces: [`ConformerUploadRequest`](#s-conformeruploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest).
 
-- [`StructureDeterminationDeclaration`](#m-structuredeterminationdeclaration)
-- [`StructureEnergyConvention`](#m-structureenergyconvention)
-- [`StructureEvaluatedGeometry`](#m-structureevaluatedgeometry)
-- [`StructureSourceDeclaration`](#m-structuresourcedeclaration)
+- [`StatmechTorsionIn`](#m-statmechtorsionin)
 
 <a id="mg-26"></a>
 
@@ -1581,7 +1586,7 @@ Unknown keys are refused.
 | `kinetics` | array of [`BundleKineticsIn`](#m-bundlekineticsin) | no | `[]`
 | `atom_map` | [`ReactionAtomMapIn`](#m-reactionatommapin) \| null | no |  |  | Which atom of each reactant and product is which atom of the transition state. Supplied by the depositor and never derived here: TCKDB does not run a mapping algorithm, because several chemically distinct maps are usually consistent with the same reactants and products and choosing one by algorithm would manufacture provenance (ADR 0011). Optional — a reaction deposited without one succeeds and returns a 'reaction_atom_map_absent' upload warning, because an unmapped reaction is incomplete rather than false. Requires a transition state: both legs of the map run toward the saddle point.
 
-Nested models (96; fields and rules in the [model reference](#model-reference)):
+Nested models (100; fields and rules in the [model reference](#model-reference)):
 
 - [`BundleSpeciesIn`](#m-bundlespeciesin)
 - [`BundleTransitionStateIn`](#m-bundletransitionstatein)
@@ -1602,13 +1607,14 @@ Nested models (96; fields and rules in the [model reference](#model-reference)):
 - [Model group 9](#mg-9): 2 models, nested on 6 surfaces
 - [Model group 11](#mg-11): 2 models, nested on 5 surfaces
 - [Model group 12](#mg-12): 1 model, nested on 4 surfaces
-- [Model group 13](#mg-13): 1 model, nested on 4 surfaces
-- [Model group 14](#mg-14): 9 models, nested on 4 surfaces
-- [Model group 17](#mg-17): 3 models, nested on 3 surfaces
-- [Model group 18](#mg-18): 8 models, nested on 3 surfaces
-- [Model group 19](#mg-19): 3 models, nested on 3 surfaces
-- [Model group 21](#mg-21): 5 models, nested on 2 surfaces
-- [Model group 22](#mg-22): 2 models, nested on 2 surfaces
+- [Model group 13](#mg-13): 4 models, nested on 4 surfaces
+- [Model group 14](#mg-14): 1 model, nested on 4 surfaces
+- [Model group 15](#mg-15): 9 models, nested on 4 surfaces
+- [Model group 18](#mg-18): 3 models, nested on 3 surfaces
+- [Model group 19](#mg-19): 8 models, nested on 3 surfaces
+- [Model group 20](#mg-20): 3 models, nested on 3 surfaces
+- [Model group 22](#mg-22): 5 models, nested on 2 surfaces
+- [Model group 23](#mg-23): 2 models, nested on 2 surfaces
 
 ### Rules the payload model enforces
 
@@ -1719,15 +1725,16 @@ Nested models (96; fields and rules in the [model reference](#model-reference)):
 - [Code group 13](#cg-13): 1 code, returned on 5 surfaces
 - [Code group 14](#cg-14): 1 code, returned on 5 surfaces
 - [Code group 15](#cg-15): 1 code, returned on 5 surfaces
-- [Code group 16](#cg-16): 20 codes, returned on 4 surfaces
-- [Code group 17](#cg-17): 1 code, returned on 4 surfaces
-- [Code group 18](#cg-18): 1 code, returned on 3 surfaces
+- [Code group 16](#cg-16): 2 codes, returned on 4 surfaces
+- [Code group 17](#cg-17): 20 codes, returned on 4 surfaces
+- [Code group 18](#cg-18): 1 code, returned on 4 surfaces
 - [Code group 19](#cg-19): 1 code, returned on 3 surfaces
-- [Code group 20](#cg-20): 15 codes, returned on 3 surfaces
-- [Code group 21](#cg-21): 12 codes, returned on 3 surfaces
-- [Code group 23](#cg-23): 3 codes, returned on 2 surfaces
-- [Code group 24](#cg-24): 6 codes, returned on 2 surfaces
-- [Code group 25](#cg-25): 2 codes, returned on 2 surfaces
+- [Code group 20](#cg-20): 1 code, returned on 3 surfaces
+- [Code group 21](#cg-21): 15 codes, returned on 3 surfaces
+- [Code group 22](#cg-22): 12 codes, returned on 3 surfaces
+- [Code group 24](#cg-24): 3 codes, returned on 2 surfaces
+- [Code group 25](#cg-25): 6 codes, returned on 2 surfaces
+- [Code group 26](#cg-26): 2 codes, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -1810,7 +1817,7 @@ Unknown keys are refused.
 | `workflow_tool_release` | [`WorkflowToolReleaseRef`](#m-workflowtoolreleaseref) \| null | no |  |  | Bundle-level workflow-tool provenance. Used as the default for the thermo, statmech and transport blocks; a value on any of those overrides it.
 | `note` | string \| null | no |  |  | Free-text note about the bundle. Accepted and validated but not persisted: there is no bundle-level row to carry it.
 
-Nested models (81; fields and rules in the [model reference](#model-reference)):
+Nested models (85; fields and rules in the [model reference](#model-reference)):
 
 - [`ConformerInBundle`](#m-conformerinbundle)
 - [`ThermoInBundle`](#m-thermoinbundle)
@@ -1826,10 +1833,11 @@ Nested models (81; fields and rules in the [model reference](#model-reference)):
 - [Model group 9](#mg-9): 2 models, nested on 6 surfaces
 - [Model group 11](#mg-11): 2 models, nested on 5 surfaces
 - [Model group 12](#mg-12): 1 model, nested on 4 surfaces
-- [Model group 13](#mg-13): 1 model, nested on 4 surfaces
-- [Model group 14](#mg-14): 9 models, nested on 4 surfaces
-- [Model group 17](#mg-17): 3 models, nested on 3 surfaces
-- [Model group 21](#mg-21): 5 models, nested on 2 surfaces
+- [Model group 13](#mg-13): 4 models, nested on 4 surfaces
+- [Model group 14](#mg-14): 1 model, nested on 4 surfaces
+- [Model group 15](#mg-15): 9 models, nested on 4 surfaces
+- [Model group 18](#mg-18): 3 models, nested on 3 surfaces
+- [Model group 22](#mg-22): 5 models, nested on 2 surfaces
 
 ### Rules the payload model enforces
 
@@ -1844,6 +1852,7 @@ Nested models (81; fields and rules in the [model reference](#model-reference)):
   Producers that want disambiguation can prefix keys
   (``conf0_opt``, ``conf1_opt``).
 
+- **ComputedSpeciesUploadRequest.validate_structure_determination_keys_resolve** (model, after; can refuse via `assert_structure_pin_keys_declared`): Every calculation a determination pins by key is declared in this bundle.
 - **ComputedSpeciesUploadRequest.validate_dependency_keys_resolve** (model, after; can refuse):
 
   Every ``depends_on`` edge must name a calculation this bundle declares.
@@ -1917,10 +1926,11 @@ Nested models (81; fields and rules in the [model reference](#model-reference)):
 - [Code group 13](#cg-13): 1 code, returned on 5 surfaces
 - [Code group 14](#cg-14): 1 code, returned on 5 surfaces
 - [Code group 15](#cg-15): 1 code, returned on 5 surfaces
-- [Code group 16](#cg-16): 20 codes, returned on 4 surfaces
-- [Code group 18](#cg-18): 1 code, returned on 3 surfaces
+- [Code group 16](#cg-16): 2 codes, returned on 4 surfaces
+- [Code group 17](#cg-17): 20 codes, returned on 4 surfaces
 - [Code group 19](#cg-19): 1 code, returned on 3 surfaces
-- [Code group 23](#cg-23): 3 codes, returned on 2 surfaces
+- [Code group 20](#cg-20): 1 code, returned on 3 surfaces
+- [Code group 24](#cg-24): 3 codes, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -2018,10 +2028,10 @@ Nested models (70; fields and rules in the [model reference](#model-reference)):
 - [Model group 10](#mg-10): 1 model, nested on 6 surfaces
 - [Model group 11](#mg-11): 2 models, nested on 5 surfaces
 - [Model group 12](#mg-12): 1 model, nested on 4 surfaces
-- [Model group 15](#mg-15): 1 model, nested on 4 surfaces
-- [Model group 23](#mg-23): 1 model, nested on 2 surfaces
+- [Model group 13](#mg-13): 4 models, nested on 4 surfaces
+- [Model group 16](#mg-16): 1 model, nested on 4 surfaces
 - [Model group 24](#mg-24): 1 model, nested on 2 surfaces
-- [Model group 25](#mg-25): 4 models, nested on 2 surfaces
+- [Model group 25](#mg-25): 1 model, nested on 2 surfaces
 
 ### Rules the payload model enforces
 
@@ -2084,8 +2094,8 @@ Nested models (70; fields and rules in the [model reference](#model-reference)):
 - [Code group 11](#cg-11): 3 codes, returned on 6 surfaces
 - [Code group 12](#cg-12): 8 codes, returned on 5 surfaces
 - [Code group 13](#cg-13): 1 code, returned on 5 surfaces
-- [Code group 26](#cg-26): 1 code, returned on 2 surfaces
-- [Code group 27](#cg-27): 2 codes, returned on 2 surfaces
+- [Code group 16](#cg-16): 2 codes, returned on 4 surfaces
+- [Code group 27](#cg-27): 1 code, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -2193,8 +2203,8 @@ Nested models (25; fields and rules in the [model reference](#model-reference)):
 - [Model group 2](#mg-2): 1 model, nested on 12 surfaces
 - [Model group 3](#mg-3): 3 models, nested on 11 surfaces
 - [Model group 4](#mg-4): 5 models, nested on 10 surfaces
-- [Model group 18](#mg-18): 8 models, nested on 3 surfaces
-- [Model group 20](#mg-20): 2 models, nested on 3 surfaces
+- [Model group 19](#mg-19): 8 models, nested on 3 surfaces
+- [Model group 21](#mg-21): 2 models, nested on 3 surfaces
 - [Model group 26](#mg-26): 5 models, nested on 2 surfaces
 
 ### Rules the payload model enforces
@@ -2286,9 +2296,9 @@ Nested models (25; fields and rules in the [model reference](#model-reference)):
 - [Code group 9](#cg-9): 1 code, returned on 8 surfaces
 - [Code group 10](#cg-10): 3 codes, returned on 7 surfaces
 - [Code group 14](#cg-14): 1 code, returned on 5 surfaces
-- [Code group 17](#cg-17): 1 code, returned on 4 surfaces
-- [Code group 20](#cg-20): 15 codes, returned on 3 surfaces
-- [Code group 22](#cg-22): 1 code, returned on 3 surfaces
+- [Code group 18](#cg-18): 1 code, returned on 4 surfaces
+- [Code group 21](#cg-21): 15 codes, returned on 3 surfaces
+- [Code group 23](#cg-23): 1 code, returned on 3 surfaces
 - [Code group 28](#cg-28): 2 codes, returned on 2 surfaces
 
 ### Minimal valid example
@@ -2381,7 +2391,7 @@ Nested models (9; fields and rules in the [model reference](#model-reference)):
 - [Model group 1](#mg-1): 1 model, nested on 13 surfaces
 - [Model group 2](#mg-2): 1 model, nested on 12 surfaces
 - [Model group 3](#mg-3): 3 models, nested on 11 surfaces
-- [Model group 20](#mg-20): 2 models, nested on 3 surfaces
+- [Model group 21](#mg-21): 2 models, nested on 3 surfaces
 
 ### Rules the payload model enforces
 
@@ -2402,7 +2412,7 @@ Nested models (9; fields and rules in the [model reference](#model-reference)):
 - [Code group 3](#cg-3): 1 code, returned on 13 surfaces
 - [Code group 4](#cg-4): 5 codes, returned on 12 surfaces
 - [Code group 10](#cg-10): 3 codes, returned on 7 surfaces
-- [Code group 22](#cg-22): 1 code, returned on 3 surfaces
+- [Code group 23](#cg-23): 1 code, returned on 3 surfaces
 
 ### Minimal valid example
 
@@ -2504,10 +2514,10 @@ Nested models (87; fields and rules in the [model reference](#model-reference)):
 - [Model group 6](#mg-6): 1 model, nested on 8 surfaces
 - [Model group 11](#mg-11): 2 models, nested on 5 surfaces
 - [Model group 12](#mg-12): 1 model, nested on 4 surfaces
-- [Model group 13](#mg-13): 1 model, nested on 4 surfaces
-- [Model group 17](#mg-17): 3 models, nested on 3 surfaces
-- [Model group 19](#mg-19): 3 models, nested on 3 surfaces
-- [Model group 23](#mg-23): 1 model, nested on 2 surfaces
+- [Model group 14](#mg-14): 1 model, nested on 4 surfaces
+- [Model group 18](#mg-18): 3 models, nested on 3 surfaces
+- [Model group 20](#mg-20): 3 models, nested on 3 surfaces
+- [Model group 24](#mg-24): 1 model, nested on 2 surfaces
 
 ### Rules the payload model enforces
 
@@ -2643,9 +2653,9 @@ Nested models (87; fields and rules in the [model reference](#model-reference)):
 - [Code group 10](#cg-10): 3 codes, returned on 7 surfaces
 - [Code group 12](#cg-12): 8 codes, returned on 5 surfaces
 - [Code group 15](#cg-15): 1 code, returned on 5 surfaces
-- [Code group 18](#cg-18): 1 code, returned on 3 surfaces
-- [Code group 21](#cg-21): 12 codes, returned on 3 surfaces
-- [Code group 24](#cg-24): 6 codes, returned on 2 surfaces
+- [Code group 19](#cg-19): 1 code, returned on 3 surfaces
+- [Code group 22](#cg-22): 12 codes, returned on 3 surfaces
+- [Code group 25](#cg-25): 6 codes, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -2863,8 +2873,8 @@ Nested models (62; fields and rules in the [model reference](#model-reference)):
 - [Model group 8](#mg-8): 4 models, nested on 7 surfaces
 - [Model group 10](#mg-10): 1 model, nested on 6 surfaces
 - [Model group 11](#mg-11): 2 models, nested on 5 surfaces
-- [Model group 16](#mg-16): 1 model, nested on 4 surfaces
-- [Model group 24](#mg-24): 1 model, nested on 2 surfaces
+- [Model group 17](#mg-17): 1 model, nested on 4 surfaces
+- [Model group 25](#mg-25): 1 model, nested on 2 surfaces
 
 ### Rules the payload model enforces
 
@@ -2952,7 +2962,7 @@ Nested models (62; fields and rules in the [model reference](#model-reference)):
 - [Code group 8](#cg-8): 32 codes, returned on 9 surfaces
 - [Code group 9](#cg-9): 1 code, returned on 8 surfaces
 - [Code group 12](#cg-12): 8 codes, returned on 5 surfaces
-- [Code group 26](#cg-26): 1 code, returned on 2 surfaces
+- [Code group 27](#cg-27): 1 code, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -3047,9 +3057,9 @@ Nested models (76; fields and rules in the [model reference](#model-reference)):
 - [Model group 8](#mg-8): 4 models, nested on 7 surfaces
 - [Model group 9](#mg-9): 2 models, nested on 6 surfaces
 - [Model group 10](#mg-10): 1 model, nested on 6 surfaces
-- [Model group 14](#mg-14): 9 models, nested on 4 surfaces
-- [Model group 15](#mg-15): 1 model, nested on 4 surfaces
+- [Model group 15](#mg-15): 9 models, nested on 4 surfaces
 - [Model group 16](#mg-16): 1 model, nested on 4 surfaces
+- [Model group 17](#mg-17): 1 model, nested on 4 surfaces
 - [Model group 27](#mg-27): 7 models, nested on 2 surfaces
 
 ### Rules the payload model enforces
@@ -3168,8 +3178,8 @@ Nested models (76; fields and rules in the [model reference](#model-reference)):
 - [Code group 13](#cg-13): 1 code, returned on 5 surfaces
 - [Code group 14](#cg-14): 1 code, returned on 5 surfaces
 - [Code group 15](#cg-15): 1 code, returned on 5 surfaces
-- [Code group 16](#cg-16): 20 codes, returned on 4 surfaces
-- [Code group 17](#cg-17): 1 code, returned on 4 surfaces
+- [Code group 17](#cg-17): 20 codes, returned on 4 surfaces
+- [Code group 18](#cg-18): 1 code, returned on 4 surfaces
 - [Code group 29](#cg-29): 1 code, returned on 2 surfaces
 
 ### Minimal valid example
@@ -3371,10 +3381,10 @@ Nested models (71; fields and rules in the [model reference](#model-reference)):
 - [Model group 8](#mg-8): 4 models, nested on 7 surfaces
 - [Model group 9](#mg-9): 2 models, nested on 6 surfaces
 - [Model group 10](#mg-10): 1 model, nested on 6 surfaces
-- [Model group 15](#mg-15): 1 model, nested on 4 surfaces
-- [Model group 19](#mg-19): 3 models, nested on 3 surfaces
-- [Model group 22](#mg-22): 2 models, nested on 2 surfaces
-- [Model group 25](#mg-25): 4 models, nested on 2 surfaces
+- [Model group 13](#mg-13): 4 models, nested on 4 surfaces
+- [Model group 16](#mg-16): 1 model, nested on 4 surfaces
+- [Model group 20](#mg-20): 3 models, nested on 3 surfaces
+- [Model group 23](#mg-23): 2 models, nested on 2 surfaces
 
 ### Rules the payload model enforces
 
@@ -3436,6 +3446,14 @@ Nested models (71; fields and rules in the [model reference](#model-reference)):
   reaction coordinate, and no undeclared mode stiff enough to make
   that designation meaningless).
 
+- **TransitionStateUploadRequest.accept_plain_calculation_payloads** (field, before on `primary_opt, additional_calculations`; can refuse):
+
+  A ``CalculationWithResultsPayload`` built in Python is accepted as it always was.
+
+  The two fields are typed :class:`TransitionStateCalculationIn` so a determination can name a calculation by
+  key; a producer that builds the request from the shared payload (without a key) must not be refused for
+  that, so a plain payload is lifted to the keyed type here, field for field, with no key.
+
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
@@ -3466,9 +3484,9 @@ Nested models (71; fields and rules in the [model reference](#model-reference)):
 - [Code group 8](#cg-8): 32 codes, returned on 9 surfaces
 - [Code group 10](#cg-10): 3 codes, returned on 7 surfaces
 - [Code group 11](#cg-11): 3 codes, returned on 6 surfaces
-- [Code group 21](#cg-21): 12 codes, returned on 3 surfaces
-- [Code group 25](#cg-25): 2 codes, returned on 2 surfaces
-- [Code group 27](#cg-27): 2 codes, returned on 2 surfaces
+- [Code group 16](#cg-16): 2 codes, returned on 4 surfaces
+- [Code group 22](#cg-22): 12 codes, returned on 3 surfaces
+- [Code group 26](#cg-26): 2 codes, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -3598,7 +3616,7 @@ Nested models (58; fields and rules in the [model reference](#model-reference)):
 - [Model group 7](#mg-7): 10 models, nested on 8 surfaces
 - [Model group 8](#mg-8): 4 models, nested on 7 surfaces
 - [Model group 10](#mg-10): 1 model, nested on 6 surfaces
-- [Model group 16](#mg-16): 1 model, nested on 4 surfaces
+- [Model group 17](#mg-17): 1 model, nested on 4 surfaces
 
 ### Rules the payload model enforces
 
@@ -3657,7 +3675,7 @@ Nested models (58; fields and rules in the [model reference](#model-reference)):
 - [Code group 6](#cg-6): 7 codes, returned on 10 surfaces
 - [Code group 7](#cg-7): 2 codes, returned on 10 surfaces
 - [Code group 8](#cg-8): 32 codes, returned on 9 surfaces
-- [Code group 19](#cg-19): 1 code, returned on 3 surfaces
+- [Code group 20](#cg-20): 1 code, returned on 3 surfaces
 
 ### Minimal valid example
 
@@ -3791,11 +3809,11 @@ Nested models (100; fields and rules in the [model reference](#model-reference))
 - [Model group 8](#mg-8): 4 models, nested on 7 surfaces
 - [Model group 9](#mg-9): 2 models, nested on 6 surfaces
 - [Model group 10](#mg-10): 1 model, nested on 6 surfaces
-- [Model group 14](#mg-14): 9 models, nested on 4 surfaces
-- [Model group 15](#mg-15): 1 model, nested on 4 surfaces
+- [Model group 15](#mg-15): 9 models, nested on 4 surfaces
 - [Model group 16](#mg-16): 1 model, nested on 4 surfaces
-- [Model group 18](#mg-18): 8 models, nested on 3 surfaces
-- [Model group 20](#mg-20): 2 models, nested on 3 surfaces
+- [Model group 17](#mg-17): 1 model, nested on 4 surfaces
+- [Model group 19](#mg-19): 8 models, nested on 3 surfaces
+- [Model group 21](#mg-21): 2 models, nested on 3 surfaces
 - [Model group 26](#mg-26): 5 models, nested on 2 surfaces
 - [Model group 27](#mg-27): 7 models, nested on 2 surfaces
 
@@ -3846,10 +3864,10 @@ Nested models (100; fields and rules in the [model reference](#model-reference))
 - [Code group 13](#cg-13): 1 code, returned on 5 surfaces
 - [Code group 14](#cg-14): 1 code, returned on 5 surfaces
 - [Code group 15](#cg-15): 1 code, returned on 5 surfaces
-- [Code group 16](#cg-16): 20 codes, returned on 4 surfaces
-- [Code group 17](#cg-17): 1 code, returned on 4 surfaces
-- [Code group 20](#cg-20): 15 codes, returned on 3 surfaces
-- [Code group 22](#cg-22): 1 code, returned on 3 surfaces
+- [Code group 17](#cg-17): 20 codes, returned on 4 surfaces
+- [Code group 18](#cg-18): 1 code, returned on 4 surfaces
+- [Code group 21](#cg-21): 15 codes, returned on 3 surfaces
+- [Code group 23](#cg-23): 1 code, returned on 3 surfaces
 - [Code group 28](#cg-28): 2 codes, returned on 2 surfaces
 - [Code group 29](#cg-29): 1 code, returned on 2 surfaces
 
@@ -3961,7 +3979,7 @@ Unknown keys are silently ignored.
 
 Nested models (1; fields and rules in the [model reference](#model-reference)):
 
-- [Model group 13](#mg-13): 1 model, nested on 4 surfaces
+- [Model group 14](#mg-14): 1 model, nested on 4 surfaces
 
 ### Rules the payload model enforces
 
@@ -4171,7 +4189,7 @@ Unknown keys are refused.
 | `constraints` | [`ConstraintFact`](#m-constraintfact) \| null | no
 | `numerical_approximations` | array of [`NumericalApproximation`](#m-numericalapproximation) \| null | no |  |  | Omitted: not stated. Empty: none.
 | `included_corrections` | array of `IncludedCorrection` \| null | no |  | [`IncludedCorrection`](#e-includedcorrection) (9 values) | Corrections the stored number already includes. Omitted: not stated. Empty: none.
-| `supporting_dois` | array of string | no | `[]` | length <= 20 | Literature that documents the recipe (DOIs).
+| `supporting_dois` | array of string \| null | no |  | length <= 20 | Literature that documents the recipe (DOIs). Omitted: not stated. Empty: none.
 
 - **ActualProtocolDeclaration.validate_content** (model, after; can refuse): At least one statement; no repeated approximation kind or correction.
 - **ActualProtocolDeclaration.validate_version** (field, after on `version`; can refuse): ``version`` is a supported version (``1``).
@@ -4773,6 +4791,7 @@ Unknown keys are refused.
 | `validation_evidence` | array of [`TransitionStateValidationEvidenceIn`](#m-transitionstatevalidationevidencein) | no | `[]` |  | Structured validation evidence for this saddle point, at most one record per kind. kind='irc': the path connects the bundle's declared reactants and products; ``source_calculation_key`` names an irc calculation owned by this transition state. kind='imaginary_mode': the frequency calculation found the expected imaginary mode; ``source_calculation_key`` names a freq calculation owned by this transition state. kind='energy_ordering': the saddle point lies above both wells; each compared energy names its own source calculation, owned by the saddle point or by that participant's species. Optional but strongly recommended: a deposit without a passing IRC record succeeds and returns a 'transition_state_missing_irc_evidence' upload warning; the other kinds do not silence it.
 | `label` | string \| null | no |  |  | Optional label.
 | `note` | string \| null | no |  |  | Optional note.
+| `structure_determinations` | array of [`StructureDeterminationDeclaration`](#m-structuredeterminationdeclaration) | no | `[]` | length <= 16 | Source-attributed claims about this saddle point's geometry, each pinning calculations of this bundle (by their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves.
 
 - **BundleTransitionStateIn.validate_primary_is_not_an_assembled_composite** (model, after; can refuse via `assert_assembled_not_primary`): The saddle point's primary produced its geometry; an assembled composite produced nothing.
 - **BundleTransitionStateIn.normalize_text** (model, after): applies `normalize_optional_text` to `label`, `note`, `unmapped_smiles`: Trim optional text inputs and collapse blank strings to None.
@@ -5584,6 +5603,7 @@ Unknown keys are refused.
 | `scientific_origin` | `ScientificOriginKind` | no | `"computed"` | `computed`, `experimental`, `estimated`
 | `label` | string \| null | no
 | `note` | string \| null | no
+| `structure_determinations` | array of [`StructureDeterminationDeclaration`](#m-structuredeterminationdeclaration) | no | `[]` | length <= 16 | Source-attributed claims about this conformer's geometry or basin, each pinning calculations of this bundle (by their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves.
 
 - **ConformerIn (computed_reaction_upload).normalize_text** (model, after): applies `normalize_optional_text` to `label`, `note`: Trim optional text inputs and collapse blank strings to None.
 - **ConformerIn (computed_reaction_upload).validate_primary_calc_is_opt** (model, after; can refuse via `require_opt_primary_unless_monatomic`):
@@ -5627,6 +5647,7 @@ Unknown keys are refused.
 | `primary_calculation` | [`CalculationInBundle`](#m-calculationinbundle) | yes
 | `additional_calculations` | array of [`CalculationInBundle`](#m-calculationinbundle) | no | `[]`
 | `note` | string \| null | no
+| `structure_determinations` | array of [`StructureDeterminationDeclaration`](#m-structuredeterminationdeclaration) | no | `[]` | length <= 16 | Source-attributed claims about this conformer's geometry or basin, each pinning calculations of this bundle (by their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves.
 
 - **ConformerInBundle.validate_primary_is_opt** (model, after; can refuse via `require_opt_primary_unless_monatomic`):
 
@@ -10144,7 +10165,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/structure_determination_resolution.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
-- Note: context.reason names target (the kind does not fit the upload's owner), owner (a pinned calculation belongs to another subject), geometry (the pinned calculation has no single geometry on the side named) or content (the same determination was stated with a different claim).
+- Note: context.reason names target (the kind does not fit the upload's owner), owner (a pinned calculation belongs to another subject), observation (a basin claim pins a calculation anchored to another observation), geometry (the pinned calculation has no single geometry on the side named, or the evaluated geometry is read from a calculation the determination does not pin) or content (the same determination key was stated with different content).
 
 <a id="c-submission-supersede-not-owner"></a>
 

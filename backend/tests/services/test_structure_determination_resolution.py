@@ -19,6 +19,8 @@ from tests.services.scientific_read._factories import (
     attach_input_geometry,
     attach_output_geometry,
     make_calculation,
+    make_conformer_group,
+    make_conformer_observation,
     make_geometry,
     make_species,
     make_species_entry,
@@ -97,25 +99,56 @@ def test_the_same_determination_with_a_different_claim_is_refused_not_merged(db_
     assert stored.energy_convention is None
 
 
-def test_a_different_set_of_calculations_is_a_different_determination(db_session, subject):
+def test_the_same_key_over_a_different_set_of_calculations_is_refused_and_another_key_is_another_determination(
+    db_session, subject
+):
     (first,) = _persist(db_session, subject, _declaration())
     other_sp = make_calculation(db_session, type=CalculationType.sp, species_entry_id=subject["entry"].id)
     attach_input_geometry(db_session, calculation=other_sp, geometry=subject["geometry"])
     calcs = {**subject["calcs"], "sp2": other_sp}
+    restated = _declaration(
+        sources=[
+            {"role": "geometry_optimization", "calculation_key": "opt"},
+            {"role": "energy", "calculation_key": "sp2"},
+        ]
+    )
+    with pytest.raises(CodedValueError) as exc:
+        persist_structure_determinations(
+            db_session, [restated], owner=DeterminationOwner(species_entry_id=subject["entry"].id), calculations_by_key=calcs
+        )
+    _mismatch(exc, "content")
+    # The key is the identifier: a different set of calculations is stated under a different key.
     (second,) = persist_structure_determinations(
         db_session,
-        [_declaration(sources=[{"role": "energy", "calculation_key": "sp2"}])],
+        [_declaration(key="d2", sources=restated.model_dump(mode="json")["sources"])],
         owner=DeterminationOwner(species_entry_id=subject["entry"].id),
         calculations_by_key=calcs,
     )
-    assert second.id != first.id
-    assert second.public_ref != first.public_ref
+    assert second.id != first.id and second.public_ref != first.public_ref
+    assert {s.calculation_id for s in first.sources} != {s.calculation_id for s in second.sources}
 
 
-def test_one_request_cannot_state_the_same_determination_twice(db_session, subject):
+def test_one_request_cannot_state_the_same_key_twice(db_session, subject):
     with pytest.raises(CodedValueError) as exc:
         _persist(db_session, subject, _declaration(), _declaration())
     _mismatch(exc, "content")
+
+
+def test_the_same_key_for_another_owner_or_source_is_another_determination(db_session, subject):
+    (first,) = _persist(db_session, subject, _declaration())
+    other_entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key()))
+    geometry = make_geometry(db_session)
+    opt = make_calculation(db_session, type=CalculationType.opt, species_entry_id=other_entry.id)
+    attach_output_geometry(db_session, calculation=opt, geometry=geometry)
+    sp = make_calculation(db_session, type=CalculationType.sp, species_entry_id=other_entry.id)
+    attach_input_geometry(db_session, calculation=sp, geometry=geometry)
+    (elsewhere,) = persist_structure_determinations(
+        db_session, [_declaration()], owner=DeterminationOwner(species_entry_id=other_entry.id),
+        calculations_by_key={"opt": opt, "sp": sp},
+    )
+    assert elsewhere.id != first.id
+    (other_source,) = _persist(db_session, subject, _declaration(workflow_tool_release={"name": "ARC", "version": "9.9.9"}))
+    assert other_source.id != first.id
 
 
 def test_a_source_geometry_is_recorded_only_where_the_calculation_type_names_one_side(db_session, subject):
@@ -178,7 +211,7 @@ def test_a_pin_naming_another_owners_calculation_is_refused(db_session, subject)
     _mismatch(exc, "owner")
 
 
-def test_the_identity_hash_separates_what_is_a_different_claim_and_the_content_hash_what_restates_it():
+def test_the_identity_hash_is_the_identifier_and_the_content_hash_is_everything_else():
     owner = DeterminationOwner(species_entry_id=1)
     base = {
         "owner": owner,
@@ -186,32 +219,157 @@ def test_the_identity_hash_separates_what_is_a_different_claim_and_the_content_h
         "literature_id": None,
         "workflow_tool_release_id": 5,
         "determination_key": "k",
-        "evaluated_geometry_id": 9,
-        "sources": [("energy", 3)],
     }
     reference = identity_hash(**base)
     for change in (
         {"owner": DeterminationOwner(species_entry_id=2)},
-        {"target_kind": "conformer_basin"},
+        {"owner": DeterminationOwner(transition_state_entry_id=1)},
+        {"literature_id": 3},
         {"workflow_tool_release_id": 6},
         {"determination_key": "other"},
-        {"evaluated_geometry_id": 10},
-        {"sources": [("energy", 4)]},
-        {"sources": [("energy", 3), ("curvature", 3)]},
     ):
         assert identity_hash(**{**base, **change}) != reference, change
     # An observation matters to a basin claim only: a geometry claim is the same claim whichever upload created an
     # observation beside it.
     with_observation = DeterminationOwner(species_entry_id=1, conformer_observation_id=7)
     assert identity_hash(**{**base, "owner": with_observation}) == reference
-    assert identity_hash(**{**base, "owner": with_observation, "target_kind": "conformer_basin"}) != identity_hash(
-        **{**base, "owner": DeterminationOwner(species_entry_id=1, conformer_observation_id=8), "target_kind": "conformer_basin"}
+    basin = {**base, "target_kind": "conformer_basin"}
+    assert identity_hash(**{**basin, "owner": with_observation}) != identity_hash(
+        **{**basin, "owner": DeterminationOwner(species_entry_id=1, conformer_observation_id=8)}
     )
+    # What the determination claims is not in the identifier.
+    assert identity_hash(**{**base, "target_kind": "saddle_point"}) == reference
+    claim = {
+        "target_kind": "geometry",
+        "quantity": "electronic_energy",
+        "energy_convention": None,
+        "actual_recipe": None,
+        "evaluated_geometry_id": 9,
+        "sources": [("energy", 3)],
+    }
+    reference_content = content_hash(**claim)
+    for change in (
+        {"target_kind": "saddle_point"},
+        {"quantity": None},
+        {"energy_convention": {"zero_point_treatment": "scaled_harmonic"}},
+        {"actual_recipe": {"version": 1}},
+        {"evaluated_geometry_id": 10},
+        {"sources": [("energy", 4)]},
+        {"sources": [("energy", 3), ("curvature", 3)]},
+    ):
+        assert content_hash(**{**claim, **change}) != reference_content, change
     # Source order does not matter; the source set does.
-    assert identity_hash(**{**base, "sources": [("curvature", 3), ("energy", 3)]}) == identity_hash(
-        **{**base, "sources": [("energy", 3), ("curvature", 3)]}
+    assert content_hash(**{**claim, "sources": [("curvature", 3), ("energy", 3)]}) == content_hash(
+        **{**claim, "sources": [("energy", 3), ("curvature", 3)]}
     )
-    claim = {"quantity": "electronic_energy", "energy_convention": None, "actual_recipe": None}
-    assert content_hash(**claim) != content_hash(**{**claim, "quantity": None})
-    assert content_hash(**claim) != content_hash(**{**claim, "actual_recipe": {"version": 1}})
-    assert content_hash(**claim) == content_hash(**claim)
+    assert content_hash(**claim) == reference_content
+
+
+def _basin_world(db_session):
+    entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key()))
+    group = make_conformer_group(db_session, entry)
+    mine = make_conformer_observation(db_session, conformer_group=group)
+    elsewhere = make_conformer_observation(db_session, conformer_group=group)
+    geometry = make_geometry(db_session)
+
+    def calc(kind, observation, *, side="input"):
+        c = make_calculation(db_session, type=kind, species_entry_id=entry.id, conformer_observation_id=observation.id if observation else None)
+        (attach_input_geometry if side == "input" else attach_output_geometry)(db_session, calculation=c, geometry=geometry)
+        return c
+
+    return entry, mine, elsewhere, calc
+
+
+def _basin(**changes):
+    return _declaration(target_kind="conformer_basin", **changes)
+
+
+def test_a_basin_claim_pins_only_calculations_anchored_to_its_own_observation(db_session):
+    entry, mine, elsewhere, calc = _basin_world(db_session)
+    opt = calc(CalculationType.opt, mine, side="output")
+    good_sp = calc(CalculationType.sp, mine)
+    foreign_sp = calc(CalculationType.sp, elsewhere)
+    unanchored_sp = calc(CalculationType.sp, None)
+    owner = DeterminationOwner(species_entry_id=entry.id, conformer_observation_id=mine.id)
+    persist_structure_determinations(
+        db_session, [_basin(key="ok")], owner=owner, calculations_by_key={"opt": opt, "sp": good_sp}
+    )
+    for bad in (foreign_sp, unanchored_sp):
+        with pytest.raises(CodedValueError) as exc:
+            persist_structure_determinations(
+                db_session, [_basin(key="bad")], owner=owner, calculations_by_key={"opt": opt, "sp": bad}
+            )
+        _mismatch(exc, "observation")
+    # The evaluating calculation is judged the same way, and the owner check comes first when it fails.
+    with pytest.raises(CodedValueError) as exc:
+        persist_structure_determinations(
+            db_session,
+            [_basin(key="bad2", evaluated_geometry={"calculation_key": "other"}, sources=[
+                {"role": "energy", "calculation_key": "sp"}, {"role": "geometry_optimization", "calculation_key": "other"}])],
+            owner=owner,
+            calculations_by_key={"sp": good_sp, "other": calc(CalculationType.opt, elsewhere, side="output")},
+        )
+    _mismatch(exc, "observation")
+    # A calculation of another entry fails on its owner before its observation is looked at.
+    stranger = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key()))
+    foreign_owner = make_calculation(db_session, type=CalculationType.sp, species_entry_id=stranger.id, conformer_observation_id=mine.id)
+    attach_input_geometry(db_session, calculation=foreign_owner, geometry=make_geometry(db_session))
+    with pytest.raises(CodedValueError) as exc:
+        persist_structure_determinations(
+            db_session, [_basin(key="bad3")], owner=owner, calculations_by_key={"opt": opt, "sp": foreign_owner}
+        )
+    _mismatch(exc, "owner")
+
+
+def test_a_geometry_claim_may_pin_unanchored_calculations(db_session):
+    entry, mine, elsewhere, calc = _basin_world(db_session)
+    opt = calc(CalculationType.opt, None, side="output")
+    sp = calc(CalculationType.sp, elsewhere)
+    persist_structure_determinations(
+        db_session, [_declaration(key="geometry-claim")], owner=DeterminationOwner(species_entry_id=entry.id, conformer_observation_id=mine.id),
+        calculations_by_key={"opt": opt, "sp": sp},
+    )
+
+
+def test_the_evaluating_calculation_must_belong_to_the_owner_and_be_one_of_the_pinned_sources(db_session, subject):
+    entry = subject["entry"]
+    stranger = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key()))
+    geometry = make_geometry(db_session)
+    foreign = make_calculation(db_session, type=CalculationType.opt, species_entry_id=stranger.id)
+    attach_output_geometry(db_session, calculation=foreign, geometry=geometry)
+    calcs = {**subject["calcs"], "foreign": foreign}
+    with pytest.raises(CodedValueError) as exc:
+        persist_structure_determinations(
+            db_session, [_declaration(evaluated_geometry={"calculation_key": "foreign"})],
+            owner=DeterminationOwner(species_entry_id=entry.id), calculations_by_key=calcs,
+        )
+    _mismatch(exc, "owner")
+    # A calculation of the owner that the determination does not pin cannot supply its geometry either.
+    extra = make_calculation(db_session, type=CalculationType.opt, species_entry_id=entry.id)
+    attach_output_geometry(db_session, calculation=extra, geometry=make_geometry(db_session))
+    with pytest.raises(CodedValueError) as exc:
+        persist_structure_determinations(
+            db_session, [_declaration(key="unpinned", evaluated_geometry={"calculation_key": "extra"})],
+            owner=DeterminationOwner(species_entry_id=entry.id), calculations_by_key={**subject["calcs"], "extra": extra},
+        )
+    _mismatch(exc, "geometry")
+
+
+def test_a_frequency_job_describes_its_input_geometry_not_its_output(db_session, subject):
+    freq = make_calculation(db_session, type=CalculationType.freq, species_entry_id=subject["entry"].id)
+    attach_input_geometry(db_session, calculation=freq, geometry=subject["geometry"])
+    attach_output_geometry(db_session, calculation=freq, geometry=make_geometry(db_session))
+    calcs = {**subject["calcs"], "freq": freq}
+    (row,) = persist_structure_determinations(
+        db_session,
+        [_declaration(sources=[
+            {"role": "geometry_optimization", "calculation_key": "opt"},
+            {"role": "energy", "calculation_key": "sp"},
+            {"role": "curvature", "calculation_key": "freq"},
+        ])],
+        owner=DeterminationOwner(species_entry_id=subject["entry"].id),
+        calculations_by_key=calcs,
+    )
+    by_role = {s.role: s.geometry_id for s in row.sources}
+    assert by_role[StructureSourceRole.curvature] == subject["geometry"].id
+    assert by_role[StructureSourceRole.curvature] != freq.output_geometries[0].geometry_id

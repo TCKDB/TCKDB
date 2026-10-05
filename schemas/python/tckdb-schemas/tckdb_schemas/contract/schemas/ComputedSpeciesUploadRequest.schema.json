@@ -2,7 +2,7 @@
   "$defs": {
     "ActualProtocolDeclaration": {
       "additionalProperties": false,
-      "description": "The recipe a calculation actually ran. Version 1.\n\nComplements the level-of-theory reference (method, basis, auxiliary basis, dispersion, solvent) with the\nfacts the label cannot carry. A declaration that restates a level-of-theory field is *compared* with it\nwhen a selection reads the record, and a disagreement is a finding; neither side wins by upload order.\n\nEvery statement is optional; at least one is required. A fact left out is not stated. Operational\nsettings that do not change the number (threads, memory, scratch) have no place here.\n\n:param version: Only the integer ``1``.\n:param source: Who made the claim.\n:param numerical_approximations: Omitted: not stated. Empty: none.\n:param included_corrections: Corrections the stored number already includes. Omitted: not stated. Empty: none.\n:param supporting_dois: Literature that documents the recipe (DOIs).",
+      "description": "The recipe a calculation actually ran. Version 1.\n\nComplements the level-of-theory reference (method, basis, auxiliary basis, dispersion, solvent) with the\nfacts the label cannot carry. A declaration that restates a level-of-theory field is *compared* with it\nwhen a selection reads the record, and a disagreement is a finding; neither side wins by upload order.\n\nEvery statement is optional; at least one is required. A fact left out is not stated. Operational\nsettings that do not change the number (threads, memory, scratch) have no place here.\n\n:param version: Only the integer ``1``.\n:param source: Who made the claim.\n:param numerical_approximations: Omitted: not stated. Empty: none.\n:param included_corrections: Corrections the stored number already includes. Omitted: not stated. Empty: none.\n:param supporting_dois: Literature that documents the recipe (DOIs). Omitted: not stated. Empty: none.",
       "properties": {
         "auxiliary_basis": {
           "anyOf": [
@@ -137,14 +137,22 @@
           "default": null
         },
         "supporting_dois": {
-          "items": {
-            "maxLength": 200,
-            "pattern": "^10\\.\\d{4,9}/\\S+$",
-            "type": "string"
-          },
-          "maxItems": 20,
-          "title": "Supporting Dois",
-          "type": "array"
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 200,
+                "pattern": "^10\\.\\d{4,9}/\\S+$",
+                "type": "string"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supporting Dois"
         },
         "version": {
           "title": "Version",
@@ -1754,6 +1762,15 @@
         },
         "primary_calculation": {
           "$ref": "#/$defs/CalculationInBundle"
+        },
+        "structure_determinations": {
+          "description": "Source-attributed claims about this conformer's geometry or basin, each pinning calculations of this bundle (by their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves.",
+          "items": {
+            "$ref": "#/$defs/StructureDeterminationDeclaration"
+          },
+          "maxItems": 16,
+          "title": "Structure Determinations",
+          "type": "array"
         }
       },
       "required": [
@@ -2725,6 +2742,15 @@
       ],
       "title": "GeometryPayload",
       "type": "object"
+    },
+    "GeometrySide": {
+      "description": "Which geometry of a calculation a pin names: its ``output`` geometry or its ``input`` geometry.",
+      "enum": [
+        "output",
+        "input"
+      ],
+      "title": "GeometrySide",
+      "type": "string"
     },
     "HPCModuleRuntime": {
       "additionalProperties": false,
@@ -4882,6 +4908,235 @@
       "title": "StereoKind",
       "type": "string"
     },
+    "StructureDeterminationDeclaration": {
+      "additionalProperties": false,
+      "description": "One source-attributed claim about a geometry, basin or saddle, and the calculations behind it.\n\nThe owner is the upload's own: a conformer upload's species entry (and, for ``conformer_basin``, the\nobservation it creates), a transition-state upload's transition state entry. The backend finds or\ncreates the determination from the owner, the source attribution and ``key``; stating the same key again\njoins it and must restate the same content.\n\n:param key: Source-scoped key (at most 128 characters).\n:param target_kind: ``geometry``, ``conformer_basin`` (conformer uploads) or ``saddle_point``\n    (transition-state uploads).\n:param quantity: The energy this determination supplies; omitted for an evidence-only determination.\n:param energy_convention: Required with ``zero_kelvin_energy``; refused otherwise.\n:param actual_recipe: The composite recipe actually used, when it differs from or adds to any one\n    calculation's own declaration.\n:param evaluated_geometry: The geometry the claim is about.\n:param sources: The calculations and the role each plays.\n:param literature: Source attribution (a paper), or\n:param workflow_tool_release: source attribution (a workflow tool release). At least one is required,\n    because a key is scoped to a source.",
+      "properties": {
+        "actual_recipe": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActualProtocolDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "energy_convention": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StructureEnergyConvention"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "evaluated_geometry": {
+          "$ref": "#/$defs/StructureEvaluatedGeometry"
+        },
+        "key": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StructureDeterminationQuantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/StructureSourceDeclaration"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Sources",
+          "type": "array"
+        },
+        "target_kind": {
+          "$ref": "#/$defs/StructureDeterminationTargetKind"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "key",
+        "target_kind",
+        "evaluated_geometry",
+        "sources"
+      ],
+      "title": "StructureDeterminationDeclaration",
+      "type": "object"
+    },
+    "StructureDeterminationQuantity": {
+      "description": "The energy a structure determination supplies.",
+      "enum": [
+        "electronic_energy",
+        "zero_kelvin_energy"
+      ],
+      "title": "StructureDeterminationQuantity",
+      "type": "string"
+    },
+    "StructureDeterminationTargetKind": {
+      "description": "What a structure determination is a claim about (API energy ordering).",
+      "enum": [
+        "geometry",
+        "conformer_basin",
+        "saddle_point"
+      ],
+      "title": "StructureDeterminationTargetKind",
+      "type": "string"
+    },
+    "StructureEnergyConvention": {
+      "additionalProperties": false,
+      "description": "What a supplied E0 includes. Required with ``zero_kelvin_energy``; refused otherwise.\n\n:param zero_point_treatment: How the zero-point energy inside the number was obtained.\n:param included_corrections: Corrections the number includes. Omitted: not stated. Empty: none.",
+      "properties": {
+        "included_corrections": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/IncludedCorrection"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Included Corrections"
+        },
+        "zero_point_treatment": {
+          "$ref": "#/$defs/ZeroPointTreatment"
+        }
+      },
+      "required": [
+        "zero_point_treatment"
+      ],
+      "title": "StructureEnergyConvention",
+      "type": "object"
+    },
+    "StructureEvaluatedGeometry": {
+      "additionalProperties": false,
+      "description": "The geometry the determination is evaluated at: the named calculation's ``output`` or ``input`` geometry.\n\nA calculation with several geometries on that side does not pin one; the declaration is refused as\nambiguous when it is resolved.",
+      "properties": {
+        "calculation_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Key"
+        },
+        "calculation_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Ref"
+        },
+        "side": {
+          "$ref": "#/$defs/GeometrySide",
+          "default": "output"
+        }
+      },
+      "title": "StructureEvaluatedGeometry",
+      "type": "object"
+    },
+    "StructureSourceDeclaration": {
+      "additionalProperties": false,
+      "description": "One calculation and the role it plays in the determination (one calculation can play several).",
+      "properties": {
+        "calculation_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Key"
+        },
+        "calculation_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Ref"
+        },
+        "role": {
+          "$ref": "#/$defs/StructureSourceRole"
+        }
+      },
+      "required": [
+        "role"
+      ],
+      "title": "StructureSourceDeclaration",
+      "type": "object"
+    },
+    "StructureSourceRole": {
+      "description": "The role one pinned calculation plays in a structure determination.",
+      "enum": [
+        "energy",
+        "geometry_optimization",
+        "curvature",
+        "correction",
+        "connectivity",
+        "alternative_characterization"
+      ],
+      "title": "StructureSourceRole",
+      "type": "string"
+    },
     "ThermoCalculationRole": {
       "enum": [
         "opt",
@@ -6068,6 +6323,17 @@
       ],
       "title": "WorkflowToolReleaseRef",
       "type": "object"
+    },
+    "ZeroPointTreatment": {
+      "description": "How the zero-point energy inside a supplied E0 was obtained.",
+      "enum": [
+        "unscaled_harmonic",
+        "scaled_harmonic",
+        "anharmonic",
+        "composite_recipe"
+      ],
+      "title": "ZeroPointTreatment",
+      "type": "string"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

@@ -381,7 +381,7 @@ class ActualProtocolDeclaration(SchemaBase):
     :param source: Who made the claim.
     :param numerical_approximations: Omitted: not stated. Empty: none.
     :param included_corrections: Corrections the stored number already includes. Omitted: not stated. Empty: none.
-    :param supporting_dois: Literature that documents the recipe (DOIs).
+    :param supporting_dois: Literature that documents the recipe (DOIs). Omitted: not stated. Empty: none.
     """
 
     version: StrictInt
@@ -397,7 +397,7 @@ class ActualProtocolDeclaration(SchemaBase):
     constraints: ConstraintFact | None = None
     numerical_approximations: list[NumericalApproximation] | None = None
     included_corrections: list[IncludedCorrection] | None = None
-    supporting_dois: list[_DOI] = Field(default_factory=list, max_length=20)
+    supporting_dois: list[_DOI] | None = Field(default=None, max_length=20)
 
     @field_validator("version")
     @classmethod

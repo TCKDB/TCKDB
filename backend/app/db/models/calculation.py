@@ -410,6 +410,7 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         # be a foreign-key target.
         UniqueConstraint("id", "species_entry_id", name="uq_calculation_scope_species"),
         UniqueConstraint("id", "transition_state_entry_id", name="uq_calculation_scope_ts"),
+        UniqueConstraint("id", "conformer_observation_id", name="uq_calculation_scope_observation"),
         CheckConstraint(
             "actual_protocol_declaration IS NULL OR (jsonb_typeof(actual_protocol_declaration) = 'object' "
             "AND coalesce(jsonb_typeof(actual_protocol_declaration -> 'version'), '') = 'number')",

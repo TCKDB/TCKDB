@@ -69,10 +69,16 @@ A determination pins this upload's own calculations to the roles they play in a 
 ```
 
 - **Where.** On a conformer upload (`target_kind` `geometry` or `conformer_basin`; the basin is the observation the
-  upload creates) or a transition-state upload (`geometry` or `saddle_point`). A transition-state upload accepts an
-  optional `key` on `primary_opt` and each additional calculation, unique within the request, for this purpose only.
-  A calculation can also be named by `calculation_ref` (a `calc_` ref) when it was deposited earlier, but it must
-  belong to the same species entry or transition state entry.
+  upload creates), a transition-state upload (`geometry` or `saddle_point`), and inside the computed-species and
+  computed-reaction bundles: each conformer carries its own `structure_determinations` (a basin claim over that
+  conformer's calculations) and a reaction bundle's transition state carries its own (a saddle claim). In a bundle a
+  calculation is named by its bundle-global `key`. A transition-state upload accepts an optional `key` on `primary_opt`
+  and each additional calculation, unique within the request, for this purpose only. A calculation can also be named by
+  `calculation_ref` (a `calc_` ref) when it was deposited earlier, but it must belong to the same species entry or
+  transition state entry.
+- **A basin is about one observation.** Every calculation a `conformer_basin` claim names (and the one its geometry is
+  read from) must be anchored to that conformer's observation; one anchored to another observation, or to none, is
+  refused (`context.reason` `observation`). A `geometry` or `saddle_point` claim has no such requirement.
 - **Roles.** `energy`, `geometry_optimization`, `curvature`, `correction`, `connectivity`,
   `alternative_characterization`. One calculation can play several roles (one source entry each). Different
   claims are different determinations: TCKDB never builds the combinations of an owner's attachments for you.
@@ -82,9 +88,15 @@ A determination pins this upload's own calculations to the roles they play in a 
 - **Evaluated geometry.** The named calculation's one `output` or `input` geometry. A calculation with none or several
   on that side does not pin one and is refused (`structure_determination_mismatch`, `context.reason` `geometry`).
 - **Source attribution.** `literature` or `workflow_tool_release` is required: the key is scoped to a source.
-- **Repeats.** Restating a determination over the same calculations resolves to the same record. Depositing the claim
-  again with new calculations is new evidence and a new determination. Restating the same determination with a
-  different quantity, convention or recipe is refused (`context.reason` `content`); a determination is immutable.
+- **The key is an identifier.** The owner (for a basin, its observation), the source attribution and the `key` name one
+  determination. Stating the key again with the same content resolves to the existing determination (no Idempotency-Key
+  needed), so a repeat is never an additional determination. Stating it with different content (target kind, quantity,
+  convention, recipe, evaluated geometry or pinned calculations) is refused (`context.reason` `content`): a determination
+  is immutable, and its pinned calculations are fixed when it is created. State a different key for a different claim.
+- **A basin cannot be restated across uploads**, because each conformer upload creates a new observation. A `geometry` or
+  `saddle_point` claim can be restated, over calculations already deposited and named by `calculation_ref`.
+- **Frozen with its owner.** Once the transition state entry or conformer observation a determination belongs to is
+  accepted, nothing can be added to, changed on or removed from its determinations or their sources.
 
 ## Refusals
 
@@ -93,7 +105,7 @@ A determination pins this upload's own calculations to the roles they play in a 
 | `structure_declaration_version_unsupported` | `version` is not `1`. |
 | `structure_declaration_invalid` | A declaration reached the server without passing validation and fails it. |
 | `structure_determination_invalid` | The determination contradicts itself (quantity and convention, no energy source for a stated quantity, a repeated source, no source attribution). |
-| `structure_determination_mismatch` | `context.reason` is `target` (the kind does not fit the upload), `owner` (a pinned calculation belongs to another subject), `geometry` or `content`. |
+| `structure_determination_mismatch` | `context.reason` is `target` (the kind does not fit the upload), `owner` (a pinned calculation belongs to another subject), `observation` (a basin claim pins a calculation anchored to another observation), `geometry` (no single geometry on the side named, or the geometry is read from a calculation the determination does not pin) or `content` (the key was already stated with different content). |
 | `calculation_key_undeclared` | A pin names a `key` this upload never declared; `context.declared_keys` lists the ones that would work. |
 | `unknown_calculation_ref` | A `calculation_ref` names no calculation. |
 

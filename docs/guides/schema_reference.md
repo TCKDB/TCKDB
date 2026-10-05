@@ -2981,6 +2981,7 @@ the gap.
 | `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
 | `species_entry_id` | BIGINT | yes | — | calculation.species_entry_id | — | not documented |
 | `transition_state_entry_id` | BIGINT | yes | — | calculation.transition_state_entry_id | — | not documented |
+| `conformer_observation_id` | BIGINT | yes | — | calculation.conformer_observation_id | — | not documented |
 | `geometry_id` | BIGINT | yes | — | geometry.id | — | not documented |
 
 **Check constraints:**

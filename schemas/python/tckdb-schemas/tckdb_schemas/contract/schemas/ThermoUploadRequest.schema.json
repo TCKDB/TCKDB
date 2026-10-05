@@ -2,7 +2,7 @@
   "$defs": {
     "ActualProtocolDeclaration": {
       "additionalProperties": false,
-      "description": "The recipe a calculation actually ran. Version 1.\n\nComplements the level-of-theory reference (method, basis, auxiliary basis, dispersion, solvent) with the\nfacts the label cannot carry. A declaration that restates a level-of-theory field is *compared* with it\nwhen a selection reads the record, and a disagreement is a finding; neither side wins by upload order.\n\nEvery statement is optional; at least one is required. A fact left out is not stated. Operational\nsettings that do not change the number (threads, memory, scratch) have no place here.\n\n:param version: Only the integer ``1``.\n:param source: Who made the claim.\n:param numerical_approximations: Omitted: not stated. Empty: none.\n:param included_corrections: Corrections the stored number already includes. Omitted: not stated. Empty: none.\n:param supporting_dois: Literature that documents the recipe (DOIs).",
+      "description": "The recipe a calculation actually ran. Version 1.\n\nComplements the level-of-theory reference (method, basis, auxiliary basis, dispersion, solvent) with the\nfacts the label cannot carry. A declaration that restates a level-of-theory field is *compared* with it\nwhen a selection reads the record, and a disagreement is a finding; neither side wins by upload order.\n\nEvery statement is optional; at least one is required. A fact left out is not stated. Operational\nsettings that do not change the number (threads, memory, scratch) have no place here.\n\n:param version: Only the integer ``1``.\n:param source: Who made the claim.\n:param numerical_approximations: Omitted: not stated. Empty: none.\n:param included_corrections: Corrections the stored number already includes. Omitted: not stated. Empty: none.\n:param supporting_dois: Literature that documents the recipe (DOIs). Omitted: not stated. Empty: none.",
       "properties": {
         "auxiliary_basis": {
           "anyOf": [
@@ -137,14 +137,22 @@
           "default": null
         },
         "supporting_dois": {
-          "items": {
-            "maxLength": 200,
-            "pattern": "^10\\.\\d{4,9}/\\S+$",
-            "type": "string"
-          },
-          "maxItems": 20,
-          "title": "Supporting Dois",
-          "type": "array"
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 200,
+                "pattern": "^10\\.\\d{4,9}/\\S+$",
+                "type": "string"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supporting Dois"
         },
         "version": {
           "title": "Version",

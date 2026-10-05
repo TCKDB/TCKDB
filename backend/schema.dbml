@@ -1612,6 +1612,7 @@ Table calculation {
     transition_state_entry_id [name: 'ix_calculation_transition_state_entry_id']
     (type, id) [name: 'ix_calculation_type_id']
     workflow_tool_release_id [name: 'ix_calculation_workflow_tool_release_id']
+    (id, conformer_observation_id) [unique, name: 'uq_calculation_scope_observation']
     (id, species_entry_id) [unique, name: 'uq_calculation_scope_species']
     (id, transition_state_entry_id) [unique, name: 'uq_calculation_scope_ts']
   }
@@ -3761,6 +3762,8 @@ Table structure_determination {
     species_entry_id [name: 'ix_structure_determination_species_entry_id']
     transition_state_entry_id [name: 'ix_structure_determination_transition_state_entry_id']
     identity_hash [unique, name: 'uq_structure_determination_identity_hash']
+    (species_entry_id, transition_state_entry_id, conformer_observation_id, literature_id, workflow_tool_release_id, determination_key) [unique, name: 'uq_structure_determination_key']
+    (id, conformer_observation_id) [unique, name: 'uq_structure_determination_scope_observation']
     (id, species_entry_id) [unique, name: 'uq_structure_determination_scope_species']
     (id, transition_state_entry_id) [unique, name: 'uq_structure_determination_scope_ts']
   }
@@ -3787,6 +3790,7 @@ Table structure_determination_source {
   calculation_id bigint [not null, ref: > calculation.id]
   species_entry_id bigint [ref: > calculation.species_entry_id]
   transition_state_entry_id bigint [ref: > calculation.transition_state_entry_id]
+  conformer_observation_id bigint [ref: > calculation.conformer_observation_id]
   geometry_id bigint [ref: > geometry.id]
 
   indexes {
@@ -4368,9 +4372,13 @@ Ref fk_reaction_atom_map_pair_structure_participant: reaction_atom_map_pair.(str
 
 Ref fk_reaction_atom_map_pair_ts_geometry_id_geometry_atom: reaction_atom_map_pair.(transition_state_geometry_id, ts_atom_index, ts_element) > geometry_atom.(geometry_id, atom_index, element)
 
+Ref fk_structure_determination_source_scope_calc_observation: structure_determination_source.(calculation_id, conformer_observation_id) > calculation.(id, conformer_observation_id)
+
 Ref fk_structure_determination_source_scope_calc_species: structure_determination_source.(calculation_id, species_entry_id) > calculation.(id, species_entry_id)
 
 Ref fk_structure_determination_source_scope_calc_ts: structure_determination_source.(calculation_id, transition_state_entry_id) > calculation.(id, transition_state_entry_id)
+
+Ref fk_structure_determination_source_scope_det_observation: structure_determination_source.(determination_id, conformer_observation_id) > structure_determination.(id, conformer_observation_id)
 
 Ref fk_structure_determination_source_scope_det_species: structure_determination_source.(determination_id, species_entry_id) > structure_determination.(id, species_entry_id)
 

@@ -81,6 +81,10 @@ from tckdb_schemas.stationary_point import (
     evaluate_species_entry_frequency,
     raise_for_blocking_findings,
 )
+from tckdb_schemas.structure_declarations import (
+    StructureDeterminationDeclaration,
+    assert_structure_pin_keys_declared,
+)
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from tckdb_schemas.upload_warning import UploadWarning
 from tckdb_schemas.workflows.conformer_upload import ElectronicLevelIn
@@ -454,6 +458,14 @@ class ConformerInBundle(SchemaBase):
     primary_calculation: CalculationInBundle
     additional_calculations: list[CalculationInBundle] = Field(default_factory=list)
     note: str | None = None
+    structure_determinations: list[StructureDeterminationDeclaration] = Field(
+        default_factory=list,
+        max_length=16,
+        description=(
+            "Source-attributed claims about this conformer's geometry or basin, each pinning calculations of this bundle (by "
+            "their 'key') to the roles they play. Optional; nothing is inferred from the calculations themselves."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_primary_is_opt(self) -> Self:
@@ -980,6 +992,14 @@ class ComputedSpeciesUploadRequest(SchemaBase):
         all_keys = self._all_calc_keys_list()
         if len(set(all_keys)) != len(all_keys):
             raise ValueError("calculation keys must be unique across the bundle.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_structure_determination_keys_resolve(self) -> Self:
+        """Every calculation a determination pins by key is declared in this bundle."""
+        declared = set(self._all_calc_keys_list())
+        for conformer in self.conformers:
+            assert_structure_pin_keys_declared(conformer.structure_determinations, declared)
         return self
 
     @model_validator(mode="after")

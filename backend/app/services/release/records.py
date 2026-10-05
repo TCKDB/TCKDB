@@ -819,6 +819,7 @@ def calculation_provenance(
             calc.c.id,
             calc.c.public_ref,
             calc.c.type,
+            calc.c.actual_protocol_declaration,
             lot.c.public_ref.label("lot_ref"),
             lot.c.method,
             lot.c.basis,
@@ -840,6 +841,13 @@ def calculation_provenance(
         row.id: {
             "calculation_ref": row.public_ref,
             "calculation_type": encode_scalar(row.type),
+            # The recipe the depositor declared this calculation ran. Present only when stated, so a calculation
+            # deposited without one keeps the provenance block (and the release digest) it always had.
+            **(
+                {"actual_protocol_declaration": encode_scalar(row.actual_protocol_declaration)}
+                if row.actual_protocol_declaration is not None
+                else {}
+            ),
             "level_of_theory": (
                 {
                     "level_of_theory_ref": row.lot_ref,
@@ -872,7 +880,8 @@ def cited_calculation_ids(
     record_type: SubmissionRecordType,
     record_ids: list[int],
 ) -> dict[int, list[int]]:
-    """Calculation ids each record cites through its ``*_source_calculation``."""
+    """Calculation ids each record cites: through its ``*_source_calculation`` and, for a transition state entry,
+    through the sources of its structure determinations."""
     if not record_ids:
         return {}
     out: dict[int, list[int]] = {}
@@ -889,6 +898,18 @@ def cited_calculation_ids(
         for parent_id, calculation_id in rows:
             if calculation_id is not None:
                 out.setdefault(parent_id, []).append(calculation_id)
+    if record_type is SubmissionRecordType.transition_state_entry:
+        # The calculations a structure determination of the entry pins are cited provenance too. They sit one level
+        # down (determination, then source), so the ``*_source_calculation`` naming above does not reach them.
+        determination = _table("structure_determination")
+        source = _table("structure_determination_source")
+        rows = session.execute(
+            select(determination.c.transition_state_entry_id, source.c.calculation_id)
+            .select_from(source.join(determination, source.c.determination_id == determination.c.id))
+            .where(determination.c.transition_state_entry_id.in_(sorted(set(record_ids))))
+        ).all()
+        for parent_id, calculation_id in rows:
+            out.setdefault(parent_id, []).append(calculation_id)
     return {k: sorted(set(v)) for k, v in out.items()}
 
 
