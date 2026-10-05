@@ -17,6 +17,11 @@ Sub-routers:
     network_export.router   → /scientific/networks/{ref}/kinetics/export-selected
     thermo.router           → /scientific/species-entries/{id}/thermo
     thermo_selection.router → /scientific/species-entries/{ref}/thermo/select (+ /manifest)
+    structure_selection.species_router
+                            → /scientific/species-entries/{ref}/calculations/select (+ /manifest)
+                              /scientific/species-entries/{ref}/conformers/select (+ /manifest)
+    structure_selection.tse_router
+                            → /scientific/transition-state-entries/{ref}/evidence/select (+ /manifest)
     species_subresources.router
                             → /scientific/species-entries/{id}/statmech
                               /scientific/species-entries/{id}/transport
@@ -82,6 +87,7 @@ from app.api.routes.scientific import (
     species_subresources,
     statmech,
     structure,
+    structure_selection,
     thermo,
     thermo_search,
     thermo_selection,
@@ -121,6 +127,10 @@ scientific_router.include_router(kinetics_selection.router)
 scientific_router.include_router(thermo.router)
 # Method-aware H298 selection; a sibling of the per-entry thermo browse, same prefix, deeper path.
 scientific_router.include_router(thermo_selection.router)
+# Structure selection (calculations, conformer basins, transition-state evidence): siblings of the per-entry
+# browses, same prefixes, deeper paths. The transition-state route takes an *entry* (tse_), not the concept.
+scientific_router.include_router(structure_selection.species_router)
+scientific_router.include_router(structure_selection.tse_router)
 # Sibling per-entry subresource reads (statmech / transport) sharing the
 # ``/species-entries`` prefix with the thermo per-entry endpoint.
 scientific_router.include_router(species_subresources.router)

@@ -211,6 +211,45 @@ def validate_network_selection_rules() -> None:
         ) from exc
 
 
+class StructureSelectionRulesError(RuntimeError):
+    """Raised when the shipped structure-selection rule registry cannot be built.
+
+    The registry pins its audited candidate manifest by SHA-256, so an edited, truncated or malformed manifest refuses to
+    load, and a wheel that does not carry the manifest cannot read it at all. Checked at startup so either fails the
+    deploy rather than the first structure selection request.
+    """
+
+
+def validate_structure_selection_rules() -> None:
+    """Build the structure selection rule registry now, so a bad manifest pin stops the boot.
+
+    Runs in every deployment mode, ``local`` included: it reads one packaged file and needs no network or database.
+
+    :raises StructureSelectionRulesError: the registry (or the manifest it pins) does not load.
+    """
+    from app.api.error_contract import CodedValueError
+    from app.chemistry.structure_rules.manifest import ManifestError
+    from app.services.structure_selection.rules import default_rules
+
+    try:
+        default_rules()
+    except ManifestError as exc:
+        raise StructureSelectionRulesError(
+            f"structure selection rule registry failed to load: the packaged manifest was refused: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise StructureSelectionRulesError(
+            f"structure selection rule registry failed to load: the packaged manifest file could not be read "
+            f"({type(exc).__name__}: {exc})"
+        ) from exc
+    except CodedValueError:
+        raise  # a coded refusal keeps its own code; it is not a rule-construction failure
+    except ValueError as exc:
+        raise StructureSelectionRulesError(
+            f"structure selection rule registry failed to load: a rule was refused: {exc}"
+        ) from exc
+
+
 #: The only encoding this deployment is designed for. Anything else stores
 #: bytes without validating them (``SQL_ASCII``) or silently transcodes.
 EXPECTED_SERVER_ENCODING = "UTF8"

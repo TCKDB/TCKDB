@@ -533,8 +533,16 @@ def _numerical(request: StructureRequest, eligible: list[_U], everyone: list[_U]
             StructureOutcome.incomparable_alternatives,
             BASIS_CROSS_COHORT_PARTIAL if unordered else BASIS_CROSS_COHORT,
             selected_refs=(),
-            administrative_first=_first(
-                request, reps, what="administrative order among cohort minima; total energies of different protocols are not comparable"
+            # Suppressed when any established cohort could not be ordered: an administrative first drawn only from the
+            # cohorts that could be ordered would read as the first of all of them, and its label cannot say one was left out.
+            administrative_first=(
+                None
+                if unordered
+                else _first(
+                    request,
+                    reps,
+                    what="administrative order among cohort minima; total energies of different protocols are not comparable",
+                )
             ),
             coverage=cov,
             notes=tuple(notes_cross),

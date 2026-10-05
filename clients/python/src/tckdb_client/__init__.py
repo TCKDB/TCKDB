@@ -41,6 +41,13 @@ from tckdb_client.retry import (
     RetryPolicy,
 )
 from tckdb_client.scientific_types import (
+    CalculationSelectionRequest,
+    ConformerSelectionRequest,
+    StructureSelectionDisclosures,
+    StructureSelectionOutcomeToken,
+    StructureSelectionResponse,
+    StructureSelectionUnit,
+    TransitionStateEvidenceSelectionRequest,
     AppliedEnergyCorrection,
     AppliedEnergyCorrectionComponent,
     ArtifactRecord,
@@ -138,6 +145,13 @@ from tckdb_client.scientific_types import (
 )
 
 __all__ = [
+    "CalculationSelectionRequest",
+    "ConformerSelectionRequest",
+    "StructureSelectionDisclosures",
+    "StructureSelectionOutcomeToken",
+    "StructureSelectionResponse",
+    "StructureSelectionUnit",
+    "TransitionStateEvidenceSelectionRequest",
     "ArtifactUploadBatchResult",
     "TCKDBClient",
     "TCKDBResponse",

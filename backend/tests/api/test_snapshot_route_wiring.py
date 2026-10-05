@@ -23,6 +23,12 @@ SNAPSHOT_SUFFIXES = (
     "/kinetics/select",
     "/kinetics/select/manifest",
     "/kinetics/export-selected",
+    "/calculations/select",
+    "/calculations/select/manifest",
+    "/conformers/select",
+    "/conformers/select/manifest",
+    "/evidence/select",
+    "/evidence/select/manifest",
 )
 #: Selection routes that read through ``get_db`` today (see the module docstring).
 KNOWN_NON_SNAPSHOT = frozenset(
@@ -63,6 +69,15 @@ def test_every_selection_and_export_route_uses_the_snapshot_dependency(api_route
         "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest",
         "/api/v1/scientific/networks/{network_ref}/kinetics/select",
         "/api/v1/scientific/networks/{network_ref}/kinetics/select/manifest",
+    } <= paths
+    # The structure selections (calculations, conformer basins, transition-state evidence), each with its manifest.
+    assert {
+        "/api/v1/scientific/species-entries/{species_entry_ref}/calculations/select",
+        "/api/v1/scientific/species-entries/{species_entry_ref}/calculations/select/manifest",
+        "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/select",
+        "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/select/manifest",
+        "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select",
+        "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select/manifest",
     } <= paths
     missing = [r.path for r in selection if get_snapshot_db not in _direct(r)]
     assert missing == []

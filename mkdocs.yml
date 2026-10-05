@@ -76,6 +76,7 @@ nav:
       - Declaring a Network Solve: guides/declaring_a_network_solve.md
       - Network Selection Rules: guides/network_selection_rules.md
       - Selecting Thermo for H298: guides/selecting_thermo_for_h298.md
+      - Selecting Structures: guides/selecting_structures.md
       - Selecting Kinetics: guides/selecting_kinetics.md
       - Selecting Network Kinetics: guides/selecting_network_kinetics.md
       - Query Cookbook: guides/scientific_query_cookbook.md

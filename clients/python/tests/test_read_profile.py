@@ -102,6 +102,12 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "export_selected_network_kinetics": ("net_1",),
     "get_network_kinetics_selection_manifest": ("net_1",),
     "get_reaction_kinetics_selection_manifest": ("rxe_1",),
+    "select_species_calculations": ("spe_1",),
+    "get_species_calculation_selection_manifest": ("spe_1",),
+    "select_conformer_basins": ("spe_1",),
+    "get_species_conformer_selection_manifest": ("spe_1",),
+    "select_transition_state_evidence": ("tse_1",),
+    "get_transition_state_evidence_selection_manifest": ("tse_1",),
 }
 
 #: Methods with required *keyword-only* parameters beyond the handle in

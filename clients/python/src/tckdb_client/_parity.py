@@ -270,6 +270,30 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "get_reaction_kinetics_selection_manifest", None, None, "tests/test_kinetics_selection.py",
     ),
     (
+        "POST", "/api/v1/scientific/species-entries/{species_entry_ref}/calculations/select",
+        "select_species_calculations", None, None, "tests/test_structure_selection.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/species-entries/{species_entry_ref}/calculations/select/manifest",
+        "get_species_calculation_selection_manifest", None, None, "tests/test_structure_selection.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/select",
+        "select_conformer_basins", None, None, "tests/test_structure_selection.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/select/manifest",
+        "get_species_conformer_selection_manifest", None, None, "tests/test_structure_selection.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select",
+        "select_transition_state_evidence", None, None, "tests/test_structure_selection.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select/manifest",
+        "get_transition_state_evidence_selection_manifest", None, None, "tests/test_structure_selection.py",
+    ),
+    (
         "POST", "/api/v1/scientific/networks/{network_ref}/kinetics/select",
         "select_network_kinetics", None, None, "tests/test_network_selection.py",
     ),

@@ -23,6 +23,7 @@ from app.api.startup_checks import (
     validate_deployment_safety,
     validate_kinetics_selection_rules,
     validate_network_selection_rules,
+    validate_structure_selection_rules,
     validate_thermo_selection_rules,
 )
 
@@ -126,6 +127,7 @@ def create_app() -> FastAPI:
     validate_thermo_selection_rules()
     validate_kinetics_selection_rules()
     validate_network_selection_rules()
+    validate_structure_selection_rules()
     docs_kwargs = _docs_kwargs(settings)
     app = FastAPI(
         title="TCKDB",

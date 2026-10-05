@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.139.0 - 2026-10-06
+
+Structure selection: `select_species_calculations`, `select_conformer_basins`, `select_transition_state_evidence` and
+their `get_..._selection_manifest` siblings, with typed requests and `StructureSelectionResponse`. The client invents no default
+of the question, sends `quantity=None` as JSON null only (evidence-only qualification), refuses an integer id, a ref of the wrong
+kind and any bound, page, sort or rule before a request is made, and returns the server's answer untouched.
+
 ## 0.138.0 - 2026-10-05
 
 `RejectionCode` gains `structure_selection_manifest_too_large` (`tckdb-schemas` 0.107.0). No method changed; nothing in the

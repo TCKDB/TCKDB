@@ -864,6 +864,16 @@
         "title": "AdminObservationIdentityAttachResponse",
         "type": "object"
       },
+      "AdminPolicy": {
+        "description": "Named administrative order, applied only within a scientific front or among exact ties.",
+        "enum": [
+          "default",
+          "latest",
+          "earliest"
+        ],
+        "title": "AdminPolicy",
+        "type": "string"
+      },
       "AdminRunFakeMachineReviewResponse": {
         "additionalProperties": false,
         "description": "Admin-only response for an explicitly invoked fake machine-review run.\n\nMirrors :class:`~app.services.machine_review.MachineReviewOrchestrationResult`\none-for-one. ``extra=\"forbid\"`` so it can carry no mutation instruction; it\nreports an outcome, it does not perform one. No public ``trust.machine_review``.",
@@ -9829,6 +9839,169 @@
         "title": "CalculationScanSummary",
         "type": "object"
       },
+      "CalculationSelectionRequest": {
+        "additionalProperties": false,
+        "description": "Which of one species entry's calculations supplies the lowest comparable recorded energy (or which protocol).",
+        "properties": {
+          "administrative_policy": {
+            "$ref": "#/components/schemas/AdminPolicy",
+            "default": "default",
+            "description": "Administrative order within a scientific front or among exact ties. Never reorders fronts."
+          },
+          "apply_rules": {
+            "default": true,
+            "description": "Whether the audited rule registry takes part (it holds no active rule in this release).",
+            "title": "Apply Rules",
+            "type": "boolean"
+          },
+          "coverage_requirement": {
+            "$ref": "#/components/schemas/CoverageRequirement",
+            "default": "known_values",
+            "description": "known_values orders what is known, conditional on it; all_requested_members is a complete claim."
+          },
+          "geometry_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A fixed-geometry target (a public geom_ ref).",
+            "title": "Geometry Ref"
+          },
+          "intent": {
+            "default": "recorded_minimum",
+            "enum": [
+              "recorded_minimum",
+              "protocol_preferred"
+            ],
+            "title": "Intent",
+            "type": "string"
+          },
+          "member_refs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An explicit population (calculation or determination public refs). Omitted: the complete authorized corpus.",
+            "title": "Member Refs"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A stricter review floor than the read profile's. Applied at every owning grain."
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Objective"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for protocol_preferred; refused otherwise."
+          },
+          "permitted_quality": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CalculationQuality"
+                },
+                "maxItems": 3,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Calculation qualities that qualify. Omitted: raw and curated (never rejected).",
+            "title": "Permitted Quality"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "electronic_energy",
+            "description": "electronic_energy or zero_kelvin_energy. Omit for evidence-only qualification (qualify_evidence). A recognised deferred quantity (enthalpy, gibbs_energy, entropy, heat_capacity, barrier, rate) is a structured 422 structure_selection_unsupported, never answered with an energy that was not asked for.",
+            "title": "Quantity"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActualProtocolDeclaration-Input"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A requested actual recipe (the declaration's shape, version 1). The units' own stated facts must establish it; a request never manufactures a missing fact."
+          },
+          "reference_model": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Model"
+          },
+          "repeat_policy": {
+            "$ref": "#/components/schemas/RepeatPolicy",
+            "default": "retain_alternates"
+          },
+          "require_stable_reference": {
+            "default": false,
+            "title": "Require Stable Reference",
+            "type": "boolean"
+          },
+          "result_mode": {
+            "$ref": "#/components/schemas/ResultMode",
+            "default": "all"
+          },
+          "validation_claim": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationClaim"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The structural claim the evidence must support. Omitted: the grain's conventional characterization."
+          }
+        },
+        "title": "CalculationSelectionRequest",
+        "type": "object"
+      },
       "CalculationSpinDiagnosticSummary": {
         "description": "Parsed spin-contamination ``<S^2>`` evidence for the\n``include=spin_diagnostic`` heavy include.\n\nThe companion to :class:`CalculationWavefunctionDiagnosticSummary`. A\nrow exists only when ``<S^2>`` was actually parsed from an unrestricted\ncalculation; absence reads as \"not parsed / not applicable / not\nreported\" via ``available_sections.has_spin_diagnostic``.\n\nThe schema constrains at most one row per calculation\n(PK = ``calculation_id``); the wrapping field is still a list for\nAPI symmetry — it will contain zero or one entry.\n\nThresholds for interpreting spin contamination are deliberately NOT\nenforced or labelled by the schema — readers and curators apply\nheuristics on top.",
         "properties": {
@@ -14566,6 +14739,170 @@
         "title": "ConformerSelectionRead",
         "type": "object"
       },
+      "ConformerSelectionRequest": {
+        "additionalProperties": false,
+        "description": "Which of one species entry's validated conformer basins is lowest, which support a claim, or which protocol.",
+        "properties": {
+          "administrative_policy": {
+            "$ref": "#/components/schemas/AdminPolicy",
+            "default": "default",
+            "description": "Administrative order within a scientific front or among exact ties. Never reorders fronts."
+          },
+          "apply_rules": {
+            "default": true,
+            "description": "Whether the audited rule registry takes part (it holds no active rule in this release).",
+            "title": "Apply Rules",
+            "type": "boolean"
+          },
+          "coverage_requirement": {
+            "$ref": "#/components/schemas/CoverageRequirement",
+            "default": "known_values",
+            "description": "known_values orders what is known, conditional on it; all_requested_members is a complete claim."
+          },
+          "geometry_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A fixed-geometry target (a public geom_ ref).",
+            "title": "Geometry Ref"
+          },
+          "intent": {
+            "default": "validated_minimum",
+            "enum": [
+              "validated_minimum",
+              "qualify_evidence",
+              "protocol_preferred"
+            ],
+            "title": "Intent",
+            "type": "string"
+          },
+          "member_refs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An explicit population (calculation or determination public refs). Omitted: the complete authorized corpus.",
+            "title": "Member Refs"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A stricter review floor than the read profile's. Applied at every owning grain."
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Objective"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for protocol_preferred; refused otherwise."
+          },
+          "permitted_quality": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CalculationQuality"
+                },
+                "maxItems": 3,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Calculation qualities that qualify. Omitted: raw and curated (never rejected).",
+            "title": "Permitted Quality"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "electronic_energy",
+            "description": "electronic_energy or zero_kelvin_energy. Omit for evidence-only qualification (qualify_evidence). A recognised deferred quantity (enthalpy, gibbs_energy, entropy, heat_capacity, barrier, rate) is a structured 422 structure_selection_unsupported, never answered with an energy that was not asked for.",
+            "title": "Quantity"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActualProtocolDeclaration-Input"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A requested actual recipe (the declaration's shape, version 1). The units' own stated facts must establish it; a request never manufactures a missing fact."
+          },
+          "reference_model": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Model"
+          },
+          "repeat_policy": {
+            "$ref": "#/components/schemas/RepeatPolicy",
+            "default": "retain_alternates"
+          },
+          "require_stable_reference": {
+            "default": false,
+            "title": "Require Stable Reference",
+            "type": "boolean"
+          },
+          "result_mode": {
+            "$ref": "#/components/schemas/ResultMode",
+            "default": "all"
+          },
+          "validation_claim": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationClaim"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The structural claim the evidence must support. Omitted: the grain's conventional characterization."
+          }
+        },
+        "title": "ConformerSelectionRequest",
+        "type": "object"
+      },
       "ConformerSelectionSummary": {
         "description": "One conformer-selection row projected for the read surface.\n\n``conformer_selection`` has no ``public_ref`` column today — the\ninteger ``conformer_selection_id`` is the only addressable handle\nand it is stripped under the Phase D default visibility policy.\nCallers identify selections by ``(selection_kind, assignment_scheme_ref)``\ninstead of by id.\n\nConformer selections are NOT reviewable records (not listed in\n``SubmissionRecordType``), so no review badge is attached.",
         "properties": {
@@ -16120,6 +16457,15 @@
         ],
         "title": "CoreTreatmentFact",
         "type": "object"
+      },
+      "CoverageRequirement": {
+        "description": "``known_values``: an ordering of what is known, conditional on it. ``all_requested_members``: a complete claim.",
+        "enum": [
+          "known_values",
+          "all_requested_members"
+        ],
+        "title": "CoverageRequirement",
+        "type": "string"
       },
       "CreateReleaseRequest": {
         "description": "Open a draft release.\n\nNo ``doi`` field: a DOI is recorded after a deposit, never asserted up\nfront.\n\n``data_license`` and ``code_license`` are optional and default to the\nhouse pair — ``CC-BY-4.0`` for the corpus, ``MIT`` for the code. A curator\ncutting an ordinary release does not have to restate the licensing of the\nproject on every request, and one who is publishing under different terms\npasses them explicitly and gets exactly what they passed. An empty string\nis still refused: not naming a license and declaring there is none are\ndifferent claims.",
@@ -36393,6 +36739,16 @@
         "title": "NumericalApproximationKind",
         "type": "string"
       },
+      "Objective": {
+        "description": "What a protocol preference optimises. ``model_fidelity`` is relative to a *pinned* reference model.",
+        "enum": [
+          "physical_accuracy",
+          "expected_accuracy",
+          "model_fidelity"
+        ],
+        "title": "Objective",
+        "type": "string"
+      },
       "ObservationExternalSource": {
         "description": "Where this observation's bytes came from.\n\nTwo provenance shapes coexist on the underlying table (see\n``app/db/models/molecular_property_observation.py`` and\n``app/db/models/external_source.py``): legacy CCCBDB rows carry\nflattened ``external_source_*`` columns with no schema identifier /\n``mapping_version``; new rows (Phase C-E1 onward) cite an\n``external_source_record`` custody row that carries those two plus a\ncontent digest. This fragment is the union of both — whichever fields\nthe row's provenance shape actually has are populated, the rest are\n``null``.\n\n``schema_label`` mirrors the ORM column ``external_source_record.\nschema_id`` under a different wire name on purpose: the column holds a\nfree-text schema identifier (e.g. ``\"thermoml.v1\"``), not a database\nprimary key, but any field ending in ``_id``/``_ids`` is stripped from\nevery public response by the Phase D internal-ID policy\n(``app/services/scientific_read/internal_ids.py::is_internal_id_key``).\nNaming it ``schema_id`` on the wire would silently vanish it from every\nunauthenticated response.",
         "properties": {
@@ -40381,6 +40737,15 @@
         "title": "ReleaseVersionBinding",
         "type": "object"
       },
+      "RepeatPolicy": {
+        "description": "How several determinations of one target (one basin, geometry or saddle) are treated.\n\n``retain_alternates``: every one stays; a target whose repeats disagree exactly has no single value, so the\ncohort it sits in cannot be ordered. ``administrative_representative``: the first repeat in the administrative\norder stands for its target, and the decision says so. That representative is a labelled administrative\nchoice: it is never advertised as the minimum of all stored values.",
+        "enum": [
+          "retain_alternates",
+          "administrative_representative"
+        ],
+        "title": "RepeatPolicy",
+        "type": "string"
+      },
       "ReproducibilityAssessmentRead": {
         "description": "Read projection for one immutable assessment row.",
         "properties": {
@@ -40610,6 +40975,14 @@
         ],
         "title": "ResourceLink",
         "type": "object"
+      },
+      "ResultMode": {
+        "enum": [
+          "all",
+          "first"
+        ],
+        "title": "ResultMode",
+        "type": "string"
       },
       "ReviewDetail": {
         "description": "``include_review`` query parameter values.",
@@ -51521,6 +51894,26 @@
         "title": "StructureMatchSummary",
         "type": "object"
       },
+      "StructureOutcome": {
+        "description": "What a decision found. A negative scientific outcome is a valid answer, not an error.",
+        "enum": [
+          "no_candidates",
+          "energy_unavailable",
+          "unresolved_comparability",
+          "no_applicable_candidate",
+          "recorded_minimum",
+          "representative_minimum",
+          "qualified_evidence",
+          "validated_corpus_minimum",
+          "policy_preferred",
+          "sole_eligible_candidate",
+          "incomparable_alternatives",
+          "policy_conflict",
+          "evidence_conflict"
+        ],
+        "title": "StructureOutcome",
+        "type": "string"
+      },
       "StructureQueryKind": {
         "description": "Identifies which query field the match came from.\n\nEchoed in :class:`StructureMatchSummary` so callers can attribute\nthe result back to the query input without re-parsing the request.",
         "enum": [
@@ -51541,6 +51934,692 @@
         ],
         "title": "StructureSearchMode",
         "type": "string"
+      },
+      "StructureSelectionDisclosures": {
+        "properties": {
+          "excluded_by_review": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Excluded By Review",
+            "type": "array"
+          },
+          "excluded_by_review_withheld": {
+            "title": "Excluded By Review Withheld",
+            "type": "boolean"
+          },
+          "excluded_count": {
+            "title": "Excluded Count",
+            "type": "integer"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "unresolved_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Refs",
+            "type": "array"
+          },
+          "unsupported_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported Refs",
+            "type": "array"
+          },
+          "visible_units": {
+            "title": "Visible Units",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unresolved_refs",
+          "unsupported_refs",
+          "visible_units",
+          "excluded_by_review",
+          "excluded_count",
+          "excluded_by_review_withheld",
+          "notes"
+        ],
+        "title": "StructureSelectionDisclosures",
+        "type": "object"
+      },
+      "StructureSelectionIntegrity": {
+        "properties": {
+          "algorithm": {
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "manifest_sha256": {
+            "title": "Manifest Sha256",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "algorithm",
+          "manifest_sha256",
+          "note"
+        ],
+        "title": "StructureSelectionIntegrity",
+        "type": "object"
+      },
+      "StructureSelectionManifest": {
+        "additionalProperties": true,
+        "description": "The replayable decision manifest of the ``/manifest`` downloads.\n\nPublic refs only: the normalised request, read profile, snapshot isolation, subject, every normalised unit and\nsource calculation, each assessment, the registry entries consulted and the decision. ``replay_structure_assessment``\nand ``replay_structure_decision`` (``tckdb_client``) recompute it offline. The digests in ``integrity`` are\nchecksums, not signatures: they detect edits and anyone who edits a manifest can recompute them, so replay\nshows the reasoning follows from the captured inputs and proves neither that they are true nor that the\npopulation was complete. The download is a new snapshot of the current data, not a retrieval of an earlier decision.",
+        "properties": {
+          "assessments": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Assessments",
+            "type": "array"
+          },
+          "calculations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Calculations",
+            "type": "array"
+          },
+          "decision": {
+            "additionalProperties": true,
+            "title": "Decision",
+            "type": "object"
+          },
+          "determinations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Determinations",
+            "type": "array"
+          },
+          "disclosures": {
+            "additionalProperties": true,
+            "title": "Disclosures",
+            "type": "object"
+          },
+          "effective_review_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Effective Review Statuses",
+            "type": "array"
+          },
+          "integrity": {
+            "$ref": "#/components/schemas/StructureSelectionIntegrity"
+          },
+          "manifest_format_version": {
+            "title": "Manifest Format Version",
+            "type": "integer"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/StructureOutcome"
+          },
+          "population": {
+            "additionalProperties": true,
+            "title": "Population",
+            "type": "object"
+          },
+          "read_profile": {
+            "additionalProperties": true,
+            "title": "Read Profile",
+            "type": "object"
+          },
+          "request": {
+            "$ref": "#/components/schemas/StructureSelectionManifestRequest"
+          },
+          "snapshot_isolation": {
+            "title": "Snapshot Isolation",
+            "type": "string"
+          },
+          "subject": {
+            "additionalProperties": true,
+            "title": "Subject",
+            "type": "object"
+          },
+          "versions": {
+            "additionalProperties": true,
+            "title": "Versions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "manifest_format_version",
+          "versions",
+          "request",
+          "effective_review_statuses",
+          "read_profile",
+          "snapshot_isolation",
+          "subject",
+          "population",
+          "calculations",
+          "determinations",
+          "assessments",
+          "decision",
+          "outcome",
+          "integrity"
+        ],
+        "title": "StructureSelectionManifest",
+        "type": "object"
+      },
+      "StructureSelectionManifestRequest": {
+        "additionalProperties": true,
+        "description": "The manifest's normalised request. Every key the decision recorded is kept (``extra=allow``).\n\nThe manifest is served as a download and is replayed offline, so the read profile it was made under is the\nmanifest's own ``read_profile`` block; the profile echo fields here keep the published shape uniform with every\nother scientific envelope and are not part of the digested content.",
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          }
+        },
+        "title": "StructureSelectionManifestRequest",
+        "type": "object"
+      },
+      "StructureSelectionReason": {
+        "properties": {
+          "applicability": {
+            "title": "Applicability",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "applicability"
+        ],
+        "title": "StructureSelectionReason",
+        "type": "object"
+      },
+      "StructureSelectionRequestEcho": {
+        "additionalProperties": true,
+        "description": "The normalised request the decision was made under, with the read profile it was made under.",
+        "properties": {
+          "administrative_policy": {
+            "title": "Administrative Policy",
+            "type": "string"
+          },
+          "apply_rules": {
+            "title": "Apply Rules",
+            "type": "boolean"
+          },
+          "bounds": {
+            "additionalProperties": true,
+            "description": "The server's engineering bounds this decision was made under (never settable by the caller).",
+            "title": "Bounds",
+            "type": "object"
+          },
+          "coverage": {
+            "title": "Coverage",
+            "type": "string"
+          },
+          "entry_ref": {
+            "title": "Entry Ref",
+            "type": "string"
+          },
+          "geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geometry Ref"
+          },
+          "grain": {
+            "title": "Grain",
+            "type": "string"
+          },
+          "intent": {
+            "title": "Intent",
+            "type": "string"
+          },
+          "member_refs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Refs"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective"
+          },
+          "permitted_quality": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permitted Quality",
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe"
+          },
+          "reference_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Model"
+          },
+          "repeat_policy": {
+            "title": "Repeat Policy",
+            "type": "string"
+          },
+          "require_connectivity": {
+            "title": "Require Connectivity",
+            "type": "boolean"
+          },
+          "require_stable_reference": {
+            "title": "Require Stable Reference",
+            "type": "boolean"
+          },
+          "result_mode": {
+            "title": "Result Mode",
+            "type": "string"
+          },
+          "validation_claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Claim"
+          }
+        },
+        "required": [
+          "entry_ref",
+          "grain",
+          "intent",
+          "coverage",
+          "permitted_quality",
+          "require_stable_reference",
+          "require_connectivity",
+          "administrative_policy",
+          "result_mode",
+          "apply_rules",
+          "repeat_policy",
+          "bounds"
+        ],
+        "title": "StructureSelectionRequestEcho",
+        "type": "object"
+      },
+      "StructureSelectionResponse": {
+        "description": "The outcome of a structure selection and everything it rests on, public refs only.\n\n``outcome`` is the selection basis (13 values; see the spec). ``selected_refs`` holds every tied minimum, the\nqualified determinations, or the selected protocol's cohort id; it is empty where nothing is selected. The\n``coverage`` block always says it is the caller's authorized population only, never a global-search certificate.\n``integrity`` carries the manifest checksum: a checksum, not a signature.",
+        "properties": {
+          "administrative_first": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Administrative First"
+          },
+          "administrative_key": {
+            "additionalProperties": true,
+            "title": "Administrative Key",
+            "type": "object"
+          },
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "cohorts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          },
+          "contested_targets": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Contested Targets",
+            "type": "array"
+          },
+          "coverage": {
+            "additionalProperties": true,
+            "title": "Coverage",
+            "type": "object"
+          },
+          "disclosures": {
+            "$ref": "#/components/schemas/StructureSelectionDisclosures"
+          },
+          "integrity": {
+            "$ref": "#/components/schemas/StructureSelectionIntegrity"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/StructureOutcome"
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protocol"
+          },
+          "representative_policy": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Representative Policy"
+          },
+          "request": {
+            "$ref": "#/components/schemas/StructureSelectionRequestEcho"
+          },
+          "review": {
+            "$ref": "#/components/schemas/StructureSelectionReview"
+          },
+          "search_completeness": {
+            "title": "Search Completeness",
+            "type": "string"
+          },
+          "selected_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Refs",
+            "type": "array"
+          },
+          "snapshot_isolation": {
+            "title": "Snapshot Isolation",
+            "type": "string"
+          },
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/StructureSelectionUnit"
+            },
+            "title": "Units",
+            "type": "array"
+          },
+          "unresolved": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Unresolved",
+            "type": "array"
+          },
+          "versions": {
+            "additionalProperties": true,
+            "title": "Versions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "request",
+          "review",
+          "outcome",
+          "basis",
+          "selected_refs",
+          "cohorts",
+          "contested_targets",
+          "unresolved",
+          "coverage",
+          "administrative_key",
+          "search_completeness",
+          "notes",
+          "units",
+          "disclosures",
+          "versions",
+          "snapshot_isolation",
+          "integrity"
+        ],
+        "title": "StructureSelectionResponse",
+        "type": "object"
+      },
+      "StructureSelectionReview": {
+        "properties": {
+          "effective_floor": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "effective_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Effective Statuses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "effective_floor",
+          "effective_statuses"
+        ],
+        "title": "StructureSelectionReview",
+        "type": "object"
+      },
+      "StructureSelectionUnit": {
+        "description": "One assessed unit (a calculation, or a basin or saddle determination) with every finding that fed its verdict.",
+        "properties": {
+          "advisory": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Advisory",
+            "type": "array"
+          },
+          "applicability": {
+            "title": "Applicability",
+            "type": "string"
+          },
+          "blocking": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocking",
+            "type": "array"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
+          },
+          "comparative_unknown": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Comparative Unknown",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "eligible": {
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "energy": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/StructureSelectionReason"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "unit_ref": {
+            "title": "Unit Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit_ref",
+          "review_status",
+          "created_at",
+          "applicability",
+          "reasons",
+          "blocking",
+          "advisory",
+          "comparative_unknown",
+          "eligible"
+        ],
+        "title": "StructureSelectionUnit",
+        "type": "object"
       },
       "StructureSourceDeclaration": {
         "additionalProperties": false,
@@ -58153,6 +59232,176 @@
         "title": "TransitionStateEvidenceCoverage",
         "type": "object"
       },
+      "TransitionStateEvidenceSelectionRequest": {
+        "additionalProperties": false,
+        "description": "Which of one transition state entry's saddle determinations support a claim, are lowest, or which protocol.\n\nOne entry only: comparison across several entries needs an explicit validated same-path declaration, which this\nrelease does not take, so sibling entries are assessed one at a time.",
+        "properties": {
+          "administrative_policy": {
+            "$ref": "#/components/schemas/AdminPolicy",
+            "default": "default",
+            "description": "Administrative order within a scientific front or among exact ties. Never reorders fronts."
+          },
+          "apply_rules": {
+            "default": true,
+            "description": "Whether the audited rule registry takes part (it holds no active rule in this release).",
+            "title": "Apply Rules",
+            "type": "boolean"
+          },
+          "coverage_requirement": {
+            "$ref": "#/components/schemas/CoverageRequirement",
+            "default": "known_values",
+            "description": "known_values orders what is known, conditional on it; all_requested_members is a complete claim."
+          },
+          "geometry_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A fixed-geometry target (a public geom_ ref).",
+            "title": "Geometry Ref"
+          },
+          "intent": {
+            "default": "validated_saddle",
+            "enum": [
+              "validated_saddle",
+              "qualify_evidence",
+              "protocol_preferred"
+            ],
+            "title": "Intent",
+            "type": "string"
+          },
+          "member_refs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An explicit population (calculation or determination public refs). Omitted: the complete authorized corpus.",
+            "title": "Member Refs"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A stricter review floor than the read profile's. Applied at every owning grain."
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Objective"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for protocol_preferred; refused otherwise."
+          },
+          "permitted_quality": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CalculationQuality"
+                },
+                "maxItems": 3,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Calculation qualities that qualify. Omitted: raw and curated (never rejected).",
+            "title": "Permitted Quality"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "electronic_energy",
+            "description": "electronic_energy or zero_kelvin_energy. Omit for evidence-only qualification (qualify_evidence). A recognised deferred quantity (enthalpy, gibbs_energy, entropy, heat_capacity, barrier, rate) is a structured 422 structure_selection_unsupported, never answered with an energy that was not asked for.",
+            "title": "Quantity"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActualProtocolDeclaration-Input"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A requested actual recipe (the declaration's shape, version 1). The units' own stated facts must establish it; a request never manufactures a missing fact."
+          },
+          "reference_model": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Model"
+          },
+          "repeat_policy": {
+            "$ref": "#/components/schemas/RepeatPolicy",
+            "default": "retain_alternates"
+          },
+          "require_connectivity": {
+            "default": false,
+            "description": "Also require reactive-connectivity evidence (IRC or a supported alternative) bound to the saddle.",
+            "title": "Require Connectivity",
+            "type": "boolean"
+          },
+          "require_stable_reference": {
+            "default": false,
+            "title": "Require Stable Reference",
+            "type": "boolean"
+          },
+          "result_mode": {
+            "$ref": "#/components/schemas/ResultMode",
+            "default": "all"
+          },
+          "validation_claim": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationClaim"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The structural claim the evidence must support. Omitted: the grain's conventional characterization."
+          }
+        },
+        "title": "TransitionStateEvidenceSelectionRequest",
+        "type": "object"
+      },
       "TransitionStateEvidenceSummary": {
         "description": "Compact calculation-evidence projection for a TS **concept**.\n\n``entry_count`` is the number of ``transition_state_entry`` rows\nunder the TS — the same number as ``entries_summary.total``,\nrepeated here so the coverage block is readable without\ncross-referencing another block. ``calculation_count`` is the number\nof calculations across all of those entries.\n``evidence_coverage`` reports, per evidence kind, how many of the\n``entry_count`` entries carry it.\n\nPrimary calculation refs are deferred — the data model does not\ncurrently carry a unique notion of \"primary\" per type, so this block\nexposes counts only.\n\nWhy counts here and booleans on the entry surface\n-------------------------------------------------\nThis block deliberately has a **different shape** from\n:class:`TransitionStateEntryEvidenceSummary`. That asymmetry is the\npoint, not an oversight, and it should not be smoothed over.\n\nA TS concept pools several candidate entries. The booleans this\nblock used to carry (``has_opt`` / ``has_freq`` / …) were a plain OR\nacross all of them, which made them asymmetrically informative:\n``false`` was strong (nothing under the TS has it) while ``true``\nwas nearly empty (one calculation under one entry made it ``true``).\nA reader seeing ``has_sp: true`` on a three-entry TS could not tell\nwhether three entries had single points or one did. Counts answer\nthat question — ``sp: 1`` against ``entry_count: 3`` shows an\nunevenly covered TS at a glance — and ``count > 0`` reproduces the\nretired boolean exactly, so nothing the boolean expressed was lost.\n\nA TS entry is a single candidate saddle point, so on that surface\nthe booleans are unambiguous and are kept as they were.",
         "properties": {
@@ -61118,6 +62367,17 @@
         },
         "title": "ValidationBlock",
         "type": "object"
+      },
+      "ValidationClaim": {
+        "description": "The structural claim a validated intent asks the evidence to support.",
+        "enum": [
+          "local_minimum",
+          "first_order_saddle",
+          "higher_order_saddle",
+          "reactive_connectivity"
+        ],
+        "title": "ValidationClaim",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -90577,6 +91837,342 @@
         ]
       }
     },
+    "/api/v1/scientific/species-entries/{species_entry_ref}/calculations/select": {
+      "post": {
+        "description": "The lowest comparable recorded energy among the entry's calculations, or the audited-rule protocol preference.\n\nValues are ordered only inside one cohort (the same established recipe, quantity and energy convention); several\ncohorts end as ``incomparable_alternatives`` and a lower absolute energy never names a method winner. A calculation\nkeeps its own record: observations are not collapsed. The answer is conditional on the authorized population the\ncaller can see and is never a global-search certificate. More than 500 visible candidates, 5,000 nested rows, a\ndependency traversal past depth 8 or a manifest over 10 MiB is refused with a coded 422: nothing is chosen from a\nprefix. A deferred quantity (enthalpy, Gibbs energy, barrier, rate, ...) is 422 ``structure_selection_unsupported``.",
+        "operationId": "select_species_calculations_api_v1_scientific_species_entries__species_entry_ref__calculations_select_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "species_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Species Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalculationSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructureSelectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select among one species entry's calculations for a stated energy question",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/species-entries/{species_entry_ref}/calculations/select/manifest": {
+      "post": {
+        "description": "The same request, answered with the decision manifest as a download (a new snapshot, not a saved decision).",
+        "operationId": "select_species_calculations_manifest_api_v1_scientific_species_entries__species_entry_ref__calculations_select_manifest_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "species_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Species Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalculationSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructureSelectionManifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download the replayable decision manifest for a calculation selection",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/select": {
+      "post": {
+        "description": "The lowest validated basin of one cohort, the basins that support a claim, or the protocol preference.\n\nA basin needs supported curvature evidence on its own geometry: imaginary modes are judged by magnitude against\nthe stored tau (ADR 0012), never counted. Repeated determinations of one basin are alternates, not independent\nconfirmation, and a basin with a passing and a refuted determination is contested. A complete profile claim\n(``all_requested_members``) needs every requested basin eligible and in one cohort; no mixed-method profile is\never built from each basin's available method.",
+        "operationId": "select_species_conformers_api_v1_scientific_species_entries__species_entry_ref__conformers_select_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "species_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Species Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConformerSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructureSelectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select among one species entry's validated conformer basins",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/select/manifest": {
+      "post": {
+        "description": "The same request, answered with the decision manifest as a download.",
+        "operationId": "select_species_conformers_manifest_api_v1_scientific_species_entries__species_entry_ref__conformers_select_manifest_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "species_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Species Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConformerSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructureSelectionManifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download the replayable decision manifest for a conformer selection",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
     "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select": {
       "post": {
         "description": "Assess every visible thermo record of the entry for H298 and say which, if any, to use.\n\n``outcome`` is the selection basis: ``policy_preferred`` (a registered method rule leaves one\ncandidate with nothing preferred over it), ``incomparable_alternatives`` (the rules do not\nrank the leading candidates), ``sole_eligible_candidate``, ``no_applicable_candidate`` or\n``policy_conflict`` (opposing rules or a cycle: nothing is selected). More than 500 visible\ncandidates is refused with 422 ``thermo_selection_population_too_large``: nothing is assessed,\nbecause a winner picked from part of the population would say nothing about the rest. Only records\nvisible under the caller's read profile are counted.\n\n``result_mode=first`` may name a record among unranked first-front alternatives; the\n``selection`` then says ``administrative_first`` and that this is not a method claim.",
@@ -93030,6 +94626,174 @@
           }
         },
         "summary": "Scientific Transition State Entry Detail",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select": {
+      "post": {
+        "description": "Which saddle determinations support the claim (default: a conventional first-order saddle), or the lowest one.\n\nA first-order claim does not depend on counting imaginary modes: extra modes follow the stored tau and their\ndeclared dispositions. A higher-order characterization, when supported, never implies first-order TST\nsuitability. Reactive connectivity is an additional claim that needs path evidence bound to the saddle geometry.",
+        "operationId": "select_transition_state_evidence_api_v1_scientific_transition_state_entries__transition_state_entry_ref__evidence_select_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transition_state_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Transition State Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionStateEvidenceSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructureSelectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select among one transition state entry's saddle determinations",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select/manifest": {
+      "post": {
+        "description": "The same request, answered with the decision manifest as a download.",
+        "operationId": "select_transition_state_evidence_manifest_api_v1_scientific_transition_state_entries__transition_state_entry_ref__evidence_select_manifest_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transition_state_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Transition State Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionStateEvidenceSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructureSelectionManifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download the replayable decision manifest for a transition-state evidence selection",
         "tags": [
           "scientific"
         ]

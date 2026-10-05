@@ -157,6 +157,23 @@ def test_a_second_cohort_that_cannot_be_ordered_never_leaves_the_first_as_the_si
     del b2_again
 
 
+def test_first_never_names_an_administrative_winner_while_a_cohort_could_not_be_ordered():
+    """An administrative first drawn only from the cohorts that could be ordered would read as the first of all of them."""
+    a1 = basin(1, -76.40, obs="cobs_1", target="conformer_basin")
+    a2 = basin(2, -76.41, obs="cobs_2", target="conformer_basin")
+    b1 = basin(3, -76.50, obs="cobs_1", target="conformer_basin", lot=LOT_B, declared=DECL_B)
+    b2 = basin(4, -76.51, obs="cobs_2", target="conformer_basin", lot=LOT_B, declared=DECL_B)
+    first = minimum_request(result_mode=ResultMode.first)
+    ordered = decide_dets([a1, a2, b1, b2], first)
+    assert ordered.outcome is O.incomparable_alternatives and ordered.administrative_first is not None  # both ordered
+    b1_again = basin(5, -76.55, obs="cobs_1", target="conformer_basin", lot=LOT_B, declared=DECL_B)
+    broken = decide_dets([a1, a2, b1, b2, b1_again], first)
+    assert broken.outcome is O.incomparable_alternatives and broken.selected_refs == ()
+    assert broken.administrative_first is None
+    assert any("could not be ordered" in n for n in broken.notes)
+    assert decide_dets([a1, a2, b1, b2, b1_again], minimum_request()).administrative_first is None
+
+
 def test_an_intermediate_geometry_value_is_its_own_cohort():
     free = declaration(constraints={"state": "known", "value": "unconstrained"})
     converged = calc("c1", type="opt", energy=-76.40, declared=free)

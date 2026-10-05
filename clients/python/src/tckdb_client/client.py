@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json as _json
 import time
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Mapping
@@ -100,6 +100,7 @@ from tckdb_client.scientific_types import (
     ThermoRecord,
     ThermoSearchResponse,
     ThermoSelectionRequest,
+    StructureSelectionResponse,
     ThermoSelectionResponse,
     TransitionStateDetailResponse,
     TransitionStateEntryDetailResponse,
@@ -252,6 +253,71 @@ def _kinetics_selection_body(
         if value is not None:
             body[key] = value
     return body  # type: ignore[return-value]
+
+
+class _Unset:
+    """Marks an argument the caller did not give (so ``None`` can still mean JSON null where that is meaningful)."""
+
+    _instance: "_Unset | None" = None
+
+    def __new__(cls) -> "_Unset":
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self) -> str:  # pragma: no cover - cosmetic
+        return "UNSET"
+
+
+UNSET: Any = _Unset()
+"""Default of ``quantity`` on the structure selection methods: not sent, so the server's default applies. Pass
+``quantity=None`` to send JSON null (evidence-only qualification, which asks for no energy)."""
+
+_STRUCTURE_SELECTION_PREFIXES = {
+    "species-entries": ("spe_", "species_entry_ref", "a public species-entry ref starting with 'spe_'"),
+    "transition-state-entries": (
+        "tse_", "transition_state_entry_ref", "a public transition-state-entry ref starting with 'tse_'"
+    ),
+}
+
+
+def _structure_selection_path(family: str, ref: str, operation: str) -> str:
+    """Path of a structure selection endpoint for a public entry ref (integer ids are refused)."""
+    prefix, name, what = _STRUCTURE_SELECTION_PREFIXES[family]
+    if not isinstance(ref, str) or not ref.startswith(prefix):
+        raise ValueError(f"{name} must be {what}; got {ref!r}.")
+    return f"/scientific/{family}/{quote(ref, safe='')}/{operation}/select"
+
+
+_STRUCTURE_SELECTION_REFUSED = frozenset(
+    {"bounds", "limit", "offset", "page", "page_size", "cursor", "max_candidates", "manifest_bytes", "sort", "rules"}
+)
+
+
+def _structure_selection_body(fields: Mapping[str, Any]) -> dict[str, Any]:
+    """The body: whichever fields were supplied, and never a default of ours.
+
+    A field left ``None`` is not sent, except ``quantity``, where ``None`` is the way to ask for no energy and is sent
+    as JSON null. The engineering bounds are the server's: this client refuses to carry one, a page, a sort or a rule.
+    """
+    refused = sorted(_STRUCTURE_SELECTION_REFUSED & fields.keys())
+    if refused:
+        raise ValueError(
+            f"{refused!r} are not request fields: the bounds are the server's, a selection is over the complete "
+            "authorized population (never a page) and a caller cannot author a rule or a sort."
+        )
+    body: dict[str, Any] = {}
+    for key, value in fields.items():
+        if isinstance(value, _Unset):
+            continue
+        if value is None and key != "quantity":
+            continue
+        if key == "recipe" and value is not None:
+            value = dict(value)
+        elif key in ("member_refs", "permitted_quality") and value is not None:
+            value = list(value)
+        body[key] = value
+    return body
 
 
 def _legacy_detail_code(detail: object) -> str | None:
@@ -1934,6 +2000,182 @@ class TCKDBClient:
         return self.request_json(
             "POST", _kinetics_selection_path(reaction_entry_ref) + "/manifest", json=body,
             params={"profile": profile}, authenticated=False,
+        ).data
+
+    def select_species_calculations(
+        self,
+        species_entry_ref: str,
+        *,
+        intent: str | None = None,
+        quantity: Any = UNSET,
+        coverage_requirement: str | None = None,
+        validation_claim: str | None = None,
+        min_review_status: str | None = None,
+        permitted_quality: Sequence[str] | None = None,
+        geometry_ref: str | None = None,
+        member_refs: Sequence[str] | None = None,
+        recipe: Mapping[str, Any] | None = None,
+        require_stable_reference: bool | None = None,
+        administrative_policy: str | None = None,
+        result_mode: str | None = None,
+        apply_rules: bool | None = None,
+        objective: str | None = None,
+        reference_model: str | None = None,
+        repeat_policy: str | None = None,
+        profile: str | None = None,
+    ) -> StructureSelectionResponse:
+        """``POST /scientific/species-entries/{ref}/calculations/select``.
+
+        The lowest comparable recorded energy among one species entry's calculations, or an audited-rule protocol
+        preference. Read-only; browse orders are unchanged. ``intent`` is ``recorded_minimum`` (the server default) or
+        ``protocol_preferred`` (which needs ``objective`` and a fixed ``geometry_ref``).
+
+        Values are ordered only inside one cohort (the same established recipe, quantity and energy convention);
+        several cohorts end as ``incomparable_alternatives``. The answer is conditional on the authorized population
+        the caller can see. A population over the server's bounds is a coded 422, never a prefix winner; this client
+        never caps or pages it. Report ``outcome`` and ``basis`` verbatim. The client invents no default of the
+        question: only the fields you pass are sent.
+        """
+        path = _structure_selection_path("species-entries", species_entry_ref, "calculations")
+        body = _structure_selection_body(
+            {
+                "intent": intent, "quantity": quantity, "coverage_requirement": coverage_requirement,
+                "validation_claim": validation_claim, "min_review_status": min_review_status,
+                "permitted_quality": permitted_quality, "geometry_ref": geometry_ref, "member_refs": member_refs,
+                "recipe": recipe, "require_stable_reference": require_stable_reference,
+                "administrative_policy": administrative_policy, "result_mode": result_mode,
+                "apply_rules": apply_rules, "objective": objective, "reference_model": reference_model,
+                "repeat_policy": repeat_policy,
+            }
+        )
+        return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
+
+    def get_species_calculation_selection_manifest(
+        self, species_entry_ref: str, *, profile: str | None = None, **request: Any
+    ) -> JSONDict:
+        """``POST /scientific/species-entries/{ref}/calculations/select/manifest``.
+
+        The replayable decision manifest for the same request as :meth:`select_species_calculations` (pass the same
+        keyword arguments). Public refs only. A new snapshot of the current data, not a saved decision. Its digests are
+        checksums, not signatures.
+        """
+        path = _structure_selection_path("species-entries", species_entry_ref, "calculations") + "/manifest"
+        return self.request_json(
+            "POST", path, json=_structure_selection_body(request), params={"profile": profile}, authenticated=False
+        ).data
+
+    def select_conformer_basins(
+        self,
+        species_entry_ref: str,
+        *,
+        intent: str | None = None,
+        quantity: Any = UNSET,
+        coverage_requirement: str | None = None,
+        validation_claim: str | None = None,
+        min_review_status: str | None = None,
+        permitted_quality: Sequence[str] | None = None,
+        geometry_ref: str | None = None,
+        member_refs: Sequence[str] | None = None,
+        recipe: Mapping[str, Any] | None = None,
+        require_stable_reference: bool | None = None,
+        administrative_policy: str | None = None,
+        result_mode: str | None = None,
+        apply_rules: bool | None = None,
+        objective: str | None = None,
+        reference_model: str | None = None,
+        repeat_policy: str | None = None,
+        profile: str | None = None,
+    ) -> StructureSelectionResponse:
+        """``POST /scientific/species-entries/{ref}/conformers/select``.
+
+        The lowest validated conformer basin of one cohort, the basins that support a claim, or a protocol
+        preference. ``intent`` is ``validated_minimum`` (the server default), ``qualify_evidence`` (pass
+        ``quantity=None`` and a ``validation_claim``) or ``protocol_preferred``. A basin needs curvature evidence on
+        its own geometry, judged by magnitude against the stored tau (never by counting imaginary modes). Repeated
+        determinations of one basin are alternates, not independent confirmation. Report ``outcome`` and ``basis``
+        verbatim.
+        """
+        path = _structure_selection_path("species-entries", species_entry_ref, "conformers")
+        body = _structure_selection_body(
+            {
+                "intent": intent, "quantity": quantity, "coverage_requirement": coverage_requirement,
+                "validation_claim": validation_claim, "min_review_status": min_review_status,
+                "permitted_quality": permitted_quality, "geometry_ref": geometry_ref, "member_refs": member_refs,
+                "recipe": recipe, "require_stable_reference": require_stable_reference,
+                "administrative_policy": administrative_policy, "result_mode": result_mode,
+                "apply_rules": apply_rules, "objective": objective, "reference_model": reference_model,
+                "repeat_policy": repeat_policy,
+            }
+        )
+        return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
+
+    def get_species_conformer_selection_manifest(
+        self, species_entry_ref: str, *, profile: str | None = None, **request: Any
+    ) -> JSONDict:
+        """``POST /scientific/species-entries/{ref}/conformers/select/manifest``.
+
+        The replayable decision manifest for the same request as :meth:`select_conformer_basins`.
+        """
+        path = _structure_selection_path("species-entries", species_entry_ref, "conformers") + "/manifest"
+        return self.request_json(
+            "POST", path, json=_structure_selection_body(request), params={"profile": profile}, authenticated=False
+        ).data
+
+    def select_transition_state_evidence(
+        self,
+        transition_state_entry_ref: str,
+        *,
+        intent: str | None = None,
+        quantity: Any = UNSET,
+        coverage_requirement: str | None = None,
+        validation_claim: str | None = None,
+        min_review_status: str | None = None,
+        permitted_quality: Sequence[str] | None = None,
+        geometry_ref: str | None = None,
+        member_refs: Sequence[str] | None = None,
+        recipe: Mapping[str, Any] | None = None,
+        require_stable_reference: bool | None = None,
+        require_connectivity: bool | None = None,
+        administrative_policy: str | None = None,
+        result_mode: str | None = None,
+        apply_rules: bool | None = None,
+        objective: str | None = None,
+        reference_model: str | None = None,
+        repeat_policy: str | None = None,
+        profile: str | None = None,
+    ) -> StructureSelectionResponse:
+        """``POST /scientific/transition-state-entries/{ref}/evidence/select``.
+
+        Which saddle determinations of one transition state *entry* support a claim (by default a conventional
+        first-order saddle), or are lowest. ``intent`` is ``validated_saddle`` (the server default),
+        ``qualify_evidence`` (``quantity=None`` plus a ``validation_claim``) or ``protocol_preferred``. A higher-order
+        characterization never implies first-order TST suitability; reactive connectivity is an additional claim
+        (``require_connectivity``). Report ``outcome`` and ``basis`` verbatim.
+        """
+        path = _structure_selection_path("transition-state-entries", transition_state_entry_ref, "evidence")
+        body = _structure_selection_body(
+            {
+                "intent": intent, "quantity": quantity, "coverage_requirement": coverage_requirement,
+                "validation_claim": validation_claim, "min_review_status": min_review_status,
+                "permitted_quality": permitted_quality, "geometry_ref": geometry_ref, "member_refs": member_refs,
+                "recipe": recipe, "require_stable_reference": require_stable_reference,
+                "require_connectivity": require_connectivity, "administrative_policy": administrative_policy,
+                "result_mode": result_mode, "apply_rules": apply_rules, "objective": objective,
+                "reference_model": reference_model, "repeat_policy": repeat_policy,
+            }
+        )
+        return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
+
+    def get_transition_state_evidence_selection_manifest(
+        self, transition_state_entry_ref: str, *, profile: str | None = None, **request: Any
+    ) -> JSONDict:
+        """``POST /scientific/transition-state-entries/{ref}/evidence/select/manifest``.
+
+        The replayable decision manifest for the same request as :meth:`select_transition_state_evidence`.
+        """
+        path = _structure_selection_path("transition-state-entries", transition_state_entry_ref, "evidence") + "/manifest"
+        return self.request_json(
+            "POST", path, json=_structure_selection_body(request), params={"profile": profile}, authenticated=False
         ).data
 
     def select_network_kinetics(

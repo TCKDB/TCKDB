@@ -147,6 +147,17 @@ def test_a_manifest_over_its_bound_is_refused_whole(db_session):
     assert select(db_session, world, minimum_request()).outcome is O.validated_corpus_minimum
 
 
+def test_an_exploratory_manifest_lists_what_the_callers_own_floor_excluded(db_session):
+    world = make_world(db_session)
+    world.sp("ok", -76.4, declared=declaration())
+    pending = world.sp("pending", -76.9, declared=declaration(), status=None)
+    result = select(db_session, world, request(min_review_status=RecordReviewStatus.approved))
+    population = result.manifest["population"]
+    assert population["excluded_by_review_withheld"] is False and population["excluded_count"] == 1
+    assert [e["unit_ref"] for e in population["excluded_by_review"]] == [pending.public_ref]
+    assert replay_matches(result.manifest)
+
+
 def test_the_manifest_bound_is_inclusive_at_the_limit_and_refuses_one_byte_over():
     bounds = SelectionBounds(manifest_bytes=1_000)
     check_manifest_size(bounds, 999)
@@ -262,6 +273,10 @@ def test_a_manifest_that_contradicts_its_own_profile_or_floor_is_refused(db_sess
     finally:
         reset_current_read_profile(token)
     assert curated_result.manifest["read_profile"] == {"profile": "curated", "review_floor": "approved"}
+    population = curated_result.manifest["population"]
+    # Under a profile floor nothing below it is listed or counted (the redaction precedes the checksum, so it verifies).
+    assert population["excluded_by_review_withheld"] is True and population["excluded_by_review"] == []
+    assert population["excluded_count"] == 0 and population["total_units"] == population["visible_units"]
     assert [a.unit_ref for a in curated_result.assessment.assessments] == [approved.public_ref]
     assert pending.public_ref not in json.dumps(curated_result.manifest)
     assert replay_matches(curated_result.manifest)
