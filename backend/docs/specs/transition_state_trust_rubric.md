@@ -1,5 +1,10 @@
 # Transition-State Trust Rubric — `computed_transition_state_v2`
 
+> **Superseded in part by `computed_transition_state_v3` (2026-10).** An automated geometry-validation `fail` on a source
+> calculation is a warning, no longer the hard fail `geometry_validation_failed_for_source_calculation`, and a frequency
+> contradiction hard-fails only when every source frequency result contradicts the saddle (not just the latest). See
+> [automated_trust_layer.md](automated_trust_layer.md), "Trust contract version 2". The text below describes version 2.
+
 **Status:** implemented — `computed_transition_state_v2` ships in
 `app/services/trust/rubrics.py` and is wired into the standalone
 transition-state-entry detail read and propagated into the composite

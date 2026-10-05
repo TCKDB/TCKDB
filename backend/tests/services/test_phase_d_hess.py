@@ -698,7 +698,7 @@ def test_hess_rubric_restales_nothing_stored(db_conn):
 
     assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS["hess_consistency_v1"] == "1"
     # The reviewer family's kinetics recipe is filtered to its own rubric.
-    assert active_rubric_versions_for_record_type("kinetics") == {"computed_kinetics_v1": "1"}
+    assert active_rubric_versions_for_record_type("kinetics") == {"computed_kinetics_v2": "2"}
     with uploads(db_conn) as session:
         kinetics, thermo = abstraction(session)
         digest, prompt, rubrics = _seed_reviewer_review(

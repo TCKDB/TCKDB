@@ -469,8 +469,8 @@ def test_detail_include_trust_returns_fragment(client, db_session):
     }
     evidence = trust["evidence"]
     assert evidence["record_type"] == "calculation"
-    assert evidence["rubric"] == "computed_calculation_v1"
-    assert evidence["rubric_version"] == 1
+    assert evidence["rubric"] == "computed_calculation_v2"
+    assert evidence["rubric_version"] == 2
     assert "evidence_completeness" in evidence
     assert evidence["checks"], "the calculation rubric ran, so checks cannot be empty"
     assert set(evidence["checks"].values()) <= LEGAL_OUTCOMES
@@ -590,9 +590,10 @@ def test_detail_include_trust_rejected_calculation_hard_failed(
     assert evidence["hard_fail_reason"] == "calculation_rejected"
 
 
-def test_detail_include_trust_geometry_validation_fail_hard_failed(
+def test_detail_include_trust_geometry_validation_fail_is_a_warning_not_a_hard_fail(
     client, db_session
 ):
+    """Rubric v2: the automated mismatch is curator attention. It is still reported, as a warning on the check."""
     _, _, calc = _make_species_owned_calc(db_session)
     attach_geometry_validation(
         db_session, calculation=calc, status=ValidationStatus.fail
@@ -602,8 +603,9 @@ def test_detail_include_trust_geometry_validation_fail_hard_failed(
         f"/api/v1/scientific/calculations/{calc.public_ref}?include=trust"
     ).json()
     evidence = body["record"]["trust"]["evidence"]
-    assert evidence["label"] == "hard_failed"
-    assert evidence["hard_fail_reason"] == "geometry_validation_failed"
+    assert evidence["label"] != "hard_failed"
+    assert evidence["hard_fail_reason"] is None
+    assert evidence["checks"]["geometry_validation_passed_or_warning"] == "warning"
 
 
 def test_detail_include_all_does_not_include_trust(client, db_session):

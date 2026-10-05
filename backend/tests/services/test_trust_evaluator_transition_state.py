@@ -54,7 +54,7 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.services.trust import (
-    COMPUTED_TRANSITION_STATE_V2,
+    COMPUTED_TRANSITION_STATE_V3,
     EvidenceBadge,
     EvidenceOutcome,
     HardFailReason,
@@ -551,7 +551,7 @@ def test_none_input_hard_fails():
     assert result.label is EvidenceBadge.hard_failed
     assert result.hard_fail_reason is HardFailReason.transition_state_entry_missing
     assert result.rubric == "computed_transition_state"
-    assert result.rubric_version == 2
+    assert result.rubric_version == 3
     assert result.record_type == "transition_state_entry"
     assert result.record_id is None
 
@@ -993,21 +993,19 @@ def test_source_calc_artifacts_lot_software(db_session: Session):
     assert result.checks["source_calculation_artifacts_present"] is EvidenceOutcome.passed
 
 
-def test_source_calc_failed_geometry_validation_hard_fails(db_session: Session):
+def test_source_calc_failed_geometry_validation_is_a_warning_not_a_hard_fail(db_session: Session):
+    """Rubric v3: an automated geometry-validation ``fail`` is curator attention, never a hard fail."""
     ts_entry = _make_ts_entry(db_session)
     _attach_ts_opt_calc(db_session, ts_entry, geom_validation=ValidationStatus.fail)
     db_session.refresh(ts_entry)
 
     result = evaluate_loaded_transition_state_entry(ts_entry)
-    assert result.label is EvidenceBadge.hard_failed
-    assert (
-        result.hard_fail_reason
-        is HardFailReason.geometry_validation_failed_for_source_calculation
-    )
-    # The warning check is suppressed to not_applicable when the hard-fail fires.
+    assert result.label is not EvidenceBadge.hard_failed
+    assert result.hard_fail_reason is None
+    # The signal is demoted, not erased: it stays visible as a warning outcome on the geometry check.
     assert (
         result.checks["geometry_validation_not_failed_for_source_calculations"]
-        is EvidenceOutcome.not_applicable
+        is EvidenceOutcome.warning
     )
 
 
@@ -1076,15 +1074,18 @@ def test_session_wrapper_returns_hard_fail_for_missing_id(db_session: Session):
 
 def test_rubric_metadata_pinned():
     """Pin the public contract of the rubric metadata."""
-    assert COMPUTED_TRANSITION_STATE_V2.name == "computed_transition_state"
+    assert COMPUTED_TRANSITION_STATE_V3.name == "computed_transition_state"
     # Bumped by ADR 0012: the required imaginary-mode check changed from
     # counting to citing the recorded designation, and a new advisory
     # check surfaces the structural flag. A machine review performed
     # under the counting rule is genuinely stale, which is what a version
-    # bump is for.
-    assert COMPUTED_TRANSITION_STATE_V2.version == 2
-    assert COMPUTED_TRANSITION_STATE_V2.record_type == "transition_state_entry"
-    assert len(COMPUTED_TRANSITION_STATE_V2.checks) == 29
+    # bump is for. Bumped again to 3 by the trust-contract correction: an
+    # automated geometry-validation fail is advisory (a warning), not a hard
+    # fail, and the frequency contradiction is judged over every source
+    # frequency result, not the one the rubric calls representative.
+    assert COMPUTED_TRANSITION_STATE_V3.version == 3
+    assert COMPUTED_TRANSITION_STATE_V3.record_type == "transition_state_entry"
+    assert len(COMPUTED_TRANSITION_STATE_V3.checks) == 29
 
 
 def test_calculation_dependencies_check_passes_when_freq_linked(db_session: Session):
@@ -1097,29 +1098,46 @@ def test_calculation_dependencies_check_passes_when_freq_linked(db_session: Sess
     assert result.checks["calculation_dependencies_present"] is EvidenceOutcome.passed
 
 
-def test_freq_representative_picks_latest_by_id(db_session: Session):
-    """When multiple freq calcs exist, the latest by id wins (tie-break rule)."""
+def test_a_later_bad_frequency_rerun_does_not_hard_fail_while_an_earlier_one_supports_the_saddle(
+    db_session: Session,
+):
+    """Rubric v3: the hard fail is judged over every source frequency result, not the arbitrary "latest" one.
+
+    The latest-by-id result is still the graded checks' representative; it no longer decides a hard fail alone.
+    """
     ts_entry = _make_ts_entry(
         db_session, status=TransitionStateEntryStatus.validated
     )
     opt = _attach_ts_opt_calc(db_session, ts_entry)
-    # Earlier freq calc with n_imag=1 (good).
-    _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=1, imag_freq_cm1=-500.0)
-    # Later freq calc with n_imag=0 (would-be contradiction for validated).
+    _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=1, imag_freq_cm1=-500.0)  # earlier, supports the saddle
     later_freq = _attach_ts_freq_calc(
-        db_session, ts_entry, opt, n_imag=0, imag_freq_cm1=None
+        db_session, ts_entry, opt, n_imag=0, imag_freq_cm1=None  # later rerun with no imaginary mode
     )
     db_session.refresh(ts_entry)
 
-    # The latest is the contradiction → hard-fail under validated status.
+    result = evaluate_loaded_transition_state_entry(ts_entry)
+    assert result.label is not EvidenceBadge.hard_failed
+    assert result.hard_fail_reason is None
+    assert later_freq.id > opt.id
+
+
+def test_every_frequency_result_contradicting_the_saddle_still_hard_fails_whichever_is_latest(
+    db_session: Session,
+):
+    ts_entry = _make_ts_entry(
+        db_session, status=TransitionStateEntryStatus.validated
+    )
+    opt = _attach_ts_opt_calc(db_session, ts_entry)
+    _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=0, imag_freq_cm1=None)
+    _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=0, imag_freq_cm1=None)
+    db_session.refresh(ts_entry)
+
     result = evaluate_loaded_transition_state_entry(ts_entry)
     assert result.label is EvidenceBadge.hard_failed
     assert (
         result.hard_fail_reason
         is HardFailReason.frequency_source_has_zero_imaginary_modes_for_validated_ts
     )
-    # Sanity: the later one has the larger id.
-    assert later_freq.id > opt.id
 
 
 def test_ts_dependency_role_buckets_agree_with_enforcement_table():

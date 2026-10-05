@@ -200,7 +200,7 @@ Why a record was hard-failed. Each names one discrete, evidenced structural fail
 | `invalid_temperature_range` | The record's validity range is definitionally impossible: a non-positive temperature, or a minimum above the maximum. Note that a single-temperature range (`tmin == tmax`) is legal and does **not** fire this, and there is no upper bound — shock-tube and plasma chemistry are not structurally broken. |
 | `invalid_external_symmetry` | The external symmetry number is below 1. A backstop — the upload path refuses this. |
 | `invalid_torsion_dimension` | A hindered-rotor torsion declares a dimension below 1. A backstop — the upload path refuses this. |
-| `geometry_validation_failed` | TCKDB compared the calculation's geometry against the structure the record claims it is, and the comparison failed. |
+| `geometry_validation_failed` | Historic: stored trust results under the version 1 rubrics carried this when an automated geometry comparison failed. Version 2 rubrics no longer hard-fail on it; the failure is a warning on the geometry check. |
 | `artifact_integrity_failed` | The stored bytes behind one of this calculation's artifacts no longer match their digest, or are gone. This one is a statement about **TCKDB's custody of the evidence**, not about the depositor's science: the record may be perfectly good and we can no longer show you what it rests on. It reflects the latest observation per artifact, so a restored object clears it. |
 | `missing_required_identity` | The kinetics record does not identify a complete reaction — no reaction entry, or a side with no participants on it. |
 | `source_calculation_hard_failed_for_required_role` | A calculation this record depends on for a role it cannot do without — a reactant or product energy, the TS energy, the frequencies — is itself hard-failed. The failure is inherited, so read that calculation's own reason. |
@@ -210,7 +210,7 @@ Why a record was hard-failed. Each names one discrete, evidenced structural fail
 | `ts_entry_status_rejected` | The transition-state entry's own `status` is `rejected`. |
 | `multiplicity_invalid` | The spin multiplicity is below 1. A backstop — the upload path refuses this. |
 | `all_source_calculations_hard_failed` | Every calculation supporting this transition-state entry is itself hard-failed, so nothing is left to support it. |
-| `geometry_validation_failed_for_source_calculation` | A calculation supporting this transition-state entry failed geometry validation. |
+| `geometry_validation_failed_for_source_calculation` | Historic: stored version 2 transition-state trust results carried this when a supporting calculation failed the automated geometry comparison. Version 3 no longer hard-fails on it; it is a warning. |
 | `frequency_source_has_zero_imaginary_modes_for_validated_ts` | A transition-state entry whose status is `optimized` or `validated`, whose frequency evidence reports no imaginary mode. The record says saddle point and the numbers say minimum. |
 | `frequency_source_reaction_coordinate_not_designated_for_validated_ts` | The record reports more than one imaginary mode and does not say which one is the reaction coordinate. More than one imaginary mode is acceptable — this fires only on the missing designation, which is why it is a question about what was recorded and not about physics. |
 
@@ -249,7 +249,7 @@ A check name is an assertion, so read it together with its value: `"irc_evidence
 
 `kind` decides what a failure costs: **required** — failing it stops the record reaching `well_supported`, however good the ratio is; **optional** — contributes to completeness; its absence blocks no badge; **warning** — informational; carries zero weight. `weight` is that check's share of the completeness ratio.
 
-Which rubric applies is decided by the kind of record: `computed_calculation` (v1), `computed_kinetics` (v1), `computed_statmech` (v1), `computed_thermo` (v1), `computed_transition_state` (v2), `computed_transport` (v1).
+Which rubric applies is decided by the kind of record: `computed_calculation` (v2), `computed_kinetics` (v2), `computed_statmech` (v2), `computed_thermo` (v2), `computed_transition_state` (v3), `computed_transport` (v2).
 
 | Check | Rubric | Kind | Weight | What it asks |
 | --- | --- | --- | --- | --- |
@@ -624,7 +624,7 @@ What TCKDB found when it compared a calculation's geometry against the structure
 | --- | --- |
 | `passed` | The geometry is the structure the record claims. |
 | `warning` | Something differs and TCKDB will not call it a failure. An optimisation that drifted is science to record, not a payload to refuse. |
-| `fail` | The geometry is not the claimed structure. This hard-fails the calculation's trust badge with `geometry_validation_failed`. |
+| `fail` | The automated comparison found a mismatch. It is a curator-attention signal, not proof the geometry is wrong, and it does not hard-fail the calculation's trust badge: it is reported as a warning on the geometry check. |
 | `not_present` | Nobody checked. There is no validation row for this calculation, and the read layer says so rather than leaving the field empty — an absent check and a passed check are different answers and TCKDB will not let them look alike. |
 
 The record itself stores only `passed`, `warning`, `fail`; `not_present` is added by the read layer, which is why you will not find it in the database schema.

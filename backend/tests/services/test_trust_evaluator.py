@@ -103,11 +103,11 @@ from app.db.models.transport import Transport, TransportSourceCalculation
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.services.record_review import set_record_review_status
 from app.services.trust import (
-    COMPUTED_CALCULATION_V1,
-    COMPUTED_KINETICS_V1,
-    COMPUTED_STATMECH_V1,
-    COMPUTED_THERMO_V1,
-    COMPUTED_TRANSPORT_V1,
+    COMPUTED_CALCULATION_V2,
+    COMPUTED_KINETICS_V2,
+    COMPUTED_STATMECH_V2,
+    COMPUTED_THERMO_V2,
+    COMPUTED_TRANSPORT_V2,
     EvidenceBadge,
     EvidenceEvaluation,
     EvidenceOutcome,
@@ -805,14 +805,14 @@ class TestRubricRegistry:
         rubric = select_rubric("calculation")
         assert rubric is not None
         assert rubric.name == "computed_calculation"
-        assert rubric.version == 1
-        assert rubric is COMPUTED_CALCULATION_V1
+        assert rubric.version == 2
+        assert rubric is COMPUTED_CALCULATION_V2
 
     def test_unknown_record_type_returns_none(self):
         assert select_rubric("not_a_real_record_type") is None
 
     def test_rubric_contains_expected_checks(self):
-        names = {c.name for c in COMPUTED_CALCULATION_V1.checks}
+        names = {c.name for c in COMPUTED_CALCULATION_V2.checks}
         # Spot-check a representative subset of names from spec §9.5.
         expected_subset = {
             "calculation_has_owner",
@@ -853,7 +853,7 @@ class TestMissingCalculation:
         assert result.evidence_completeness == 0.0
         # Should still name the rubric, not bail with an exception.
         assert result.rubric == "computed_calculation"
-        assert result.rubric_version == 1
+        assert result.rubric_version == 2
         assert result.record_id == 999_999_999
 
     def test_missing_calculation_does_not_raise(self, db_session):
@@ -986,11 +986,21 @@ class TestGeometryValidation:
         assert result.checks["geometry_validation_passed_or_warning"] is EvidenceOutcome.warning
         assert result.label is not EvidenceBadge.hard_failed
 
-    def test_fail_status_is_hard_failed(self, db_session):
+    def test_fail_status_is_a_warning_not_a_hard_fail(self, db_session):
         calc = _make_minimal_opt_calc(db_session, geom_validation=ValidationStatus.fail)
         result = evaluate_computed_calculation(db_session, calc.id)
+        assert result.label is not EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is None
+        # Demoted, not erased: the automated mismatch stays visible as a warning outcome.
+        assert result.checks["geometry_validation_passed_or_warning"] is EvidenceOutcome.warning
+
+    def test_a_rejected_quality_calculation_with_a_geometry_fail_is_still_hard_failed_for_the_rejection(self, db_session):
+        calc = _make_minimal_opt_calc(
+            db_session, geom_validation=ValidationStatus.fail, quality=CalculationQuality.rejected
+        )
+        result = evaluate_computed_calculation(db_session, calc.id)
         assert result.label is EvidenceBadge.hard_failed
-        assert result.hard_fail_reason is HardFailReason.geometry_validation_failed
+        assert result.hard_fail_reason is HardFailReason.calculation_rejected
 
 
 class TestArtifactIntegrityIsACustodyJudgement:
@@ -1541,9 +1551,9 @@ class TestComputedKineticsEvaluator:
 
     def test_kinetics_rubric_registered(self):
         rubric = select_rubric("kinetics")
-        assert rubric is COMPUTED_KINETICS_V1
+        assert rubric is COMPUTED_KINETICS_V2
         assert rubric.name == "computed_kinetics"
-        assert rubric.version == 1
+        assert rubric.version == 2
 
     def test_missing_loaded_kinetics_returns_hard_failed(self):
         result = evaluate_loaded_kinetics(None)
@@ -1656,7 +1666,9 @@ class TestComputedKineticsEvaluator:
         assert result.label is not EvidenceBadge.hard_failed
         assert result.hard_fail_reason is None
 
-    def test_source_geometry_failure_hard_fails_required_role(self, db_session):
+    def test_source_geometry_failure_is_advisory_not_a_hard_fail(self, db_session):
+        # Rubric v2: an automated geometry-validation fail is curator attention, never a hard fail. It stays
+        # visible as a warning on the geometry check and does not touch the non-hard-failed evidence check.
         kinetics = _make_kinetics(db_session)
         calc = _make_minimal_opt_calc(
             db_session,
@@ -1670,10 +1682,11 @@ class TestComputedKineticsEvaluator:
         )
 
         result = evaluate_computed_kinetics(db_session, kinetics.id)
-        assert result.label is EvidenceBadge.hard_failed
+        assert result.label is not EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is None
         assert (
-            result.hard_fail_reason
-            is HardFailReason.source_calculation_hard_failed_for_required_role
+            result.checks["geometry_validation_not_failed_for_source_calculations"]
+            is EvidenceOutcome.warning
         )
 
     def test_source_geometry_warning_is_advisory(self, db_session):
@@ -1753,9 +1766,9 @@ class TestComputedThermoEvaluator:
 
     def test_thermo_rubric_registered(self):
         rubric = select_rubric("thermo")
-        assert rubric is COMPUTED_THERMO_V1
+        assert rubric is COMPUTED_THERMO_V2
         assert rubric.name == "computed_thermo"
-        assert rubric.version == 1
+        assert rubric.version == 2
 
     def test_missing_loaded_thermo_returns_hard_failed(self):
         result = evaluate_loaded_thermo(None)
@@ -1992,7 +2005,9 @@ class TestComputedThermoEvaluator:
         assert result.label is not EvidenceBadge.hard_failed
         assert result.hard_fail_reason is None
 
-    def test_source_geometry_failure_hard_fails_required_role(self, db_session):
+    def test_source_geometry_failure_is_advisory_not_a_hard_fail(self, db_session):
+        # Rubric v2: an automated geometry-validation fail is curator attention, never a hard fail. It stays
+        # visible as a warning on the geometry check and does not touch the non-hard-failed evidence check.
         thermo = _make_thermo(db_session, scalar=True)
         calc = _make_minimal_opt_calc(
             db_session,
@@ -2006,15 +2021,22 @@ class TestComputedThermoEvaluator:
         )
 
         result = evaluate_computed_thermo(db_session, thermo.id)
-        assert result.label is EvidenceBadge.hard_failed
-        assert (
-            result.hard_fail_reason
-            is HardFailReason.source_calculation_hard_failed_for_required_role
-        )
+        assert result.label is not EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is None
         assert (
             result.checks["source_calculation_has_non_hard_failed_evidence"]
-            is EvidenceOutcome.missing
+            is EvidenceOutcome.passed
         )
+
+    def test_a_rejected_quality_source_still_hard_fails_and_fails_the_evidence_check(self, db_session):
+        thermo = _make_thermo(db_session, scalar=True)
+        calc = _make_minimal_opt_calc(db_session, quality=CalculationQuality.rejected)
+        _link_thermo_source(db_session, thermo=thermo, calculation=calc, role=ThermoCalculationRole.opt)
+
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is HardFailReason.source_calculation_hard_failed_for_required_role
+        assert result.checks["source_calculation_has_non_hard_failed_evidence"] is EvidenceOutcome.missing
 
     def test_source_geometry_warning_is_advisory(self, db_session):
         thermo = _make_thermo(db_session, scalar=True)
@@ -2268,9 +2290,9 @@ class TestComputedStatmechEvaluator:
 
     def test_statmech_rubric_registered(self):
         rubric = select_rubric("statmech")
-        assert rubric is COMPUTED_STATMECH_V1
+        assert rubric is COMPUTED_STATMECH_V2
         assert rubric.name == "computed_statmech"
-        assert rubric.version == 1
+        assert rubric.version == 2
 
     def test_missing_loaded_statmech_returns_hard_failed(self):
         result = evaluate_loaded_statmech(None)
@@ -2406,7 +2428,9 @@ class TestComputedStatmechEvaluator:
         assert result.checks["torsion_symmetry_recorded"] is EvidenceOutcome.passed
         assert result.checks["scan_source_present_if_torsions_present"] is EvidenceOutcome.passed
 
-    def test_source_geometry_failure_hard_fails_required_role(self, db_session):
+    def test_source_geometry_failure_is_advisory_not_a_hard_fail(self, db_session):
+        # Rubric v2: an automated geometry-validation fail is curator attention, never a hard fail. It stays
+        # visible as a warning on the geometry check and does not touch the non-hard-failed evidence check.
         statmech = _make_statmech(db_session)
         calc = _make_minimal_opt_calc(
             db_session,
@@ -2420,15 +2444,22 @@ class TestComputedStatmechEvaluator:
         )
 
         result = evaluate_computed_statmech(db_session, statmech.id)
-        assert result.label is EvidenceBadge.hard_failed
-        assert (
-            result.hard_fail_reason
-            is HardFailReason.source_calculation_hard_failed_for_required_role
-        )
+        assert result.label is not EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is None
         assert (
             result.checks["source_calculation_has_non_hard_failed_evidence"]
-            is EvidenceOutcome.missing
+            is EvidenceOutcome.passed
         )
+
+    def test_a_rejected_quality_source_still_hard_fails_and_fails_the_evidence_check(self, db_session):
+        statmech = _make_statmech(db_session)
+        calc = _make_minimal_opt_calc(db_session, quality=CalculationQuality.rejected)
+        _link_statmech_source(db_session, statmech=statmech, calculation=calc, role=StatmechCalculationRole.opt)
+
+        result = evaluate_computed_statmech(db_session, statmech.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is HardFailReason.source_calculation_hard_failed_for_required_role
+        assert result.checks["source_calculation_has_non_hard_failed_evidence"] is EvidenceOutcome.missing
 
     def test_source_geometry_warning_is_advisory(self, db_session):
         statmech = _make_statmech(db_session)
@@ -2507,9 +2538,9 @@ class TestComputedTransportEvaluator:
 
     def test_transport_rubric_registered(self):
         rubric = select_rubric("transport")
-        assert rubric is COMPUTED_TRANSPORT_V1
+        assert rubric is COMPUTED_TRANSPORT_V2
         assert rubric.name == "computed_transport"
-        assert rubric.version == 1
+        assert rubric.version == 2
 
     def test_missing_loaded_transport_returns_hard_failed(self):
         result = evaluate_loaded_transport(None)
@@ -2653,7 +2684,9 @@ class TestComputedTransportEvaluator:
         )
         assert result.hard_fail_reason is None
 
-    def test_source_geometry_failure_hard_fails_required_role(self, db_session):
+    def test_source_geometry_failure_is_advisory_not_a_hard_fail(self, db_session):
+        # Rubric v2: an automated geometry-validation fail is curator attention, never a hard fail. It stays
+        # visible as a warning on the geometry check and does not touch the non-hard-failed evidence check.
         transport = _make_transport(db_session, lj=True)
         calc = _make_minimal_opt_calc(
             db_session,
@@ -2667,14 +2700,11 @@ class TestComputedTransportEvaluator:
         )
 
         result = evaluate_computed_transport(db_session, transport.id)
-        assert result.label is EvidenceBadge.hard_failed
-        assert (
-            result.hard_fail_reason
-            is HardFailReason.source_calculation_hard_failed_for_required_role
-        )
+        assert result.label is not EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is None
         assert (
             result.checks["source_calculation_has_non_hard_failed_evidence"]
-            is EvidenceOutcome.missing
+            is EvidenceOutcome.passed
         )
 
     def test_source_calculation_rejected_quality_affects_transport(self, db_session):
@@ -2857,7 +2887,7 @@ class TestCheckMapShape:
         calc = _make_minimal_opt_calc(db_session)
         result = evaluate_computed_calculation(db_session, calc.id)
 
-        declared = [spec.name for spec in COMPUTED_CALCULATION_V1.checks]
+        declared = [spec.name for spec in COMPUTED_CALCULATION_V2.checks]
         position = {name: index for index, name in enumerate(declared)}
         keys = list(result.checks)
         assert keys == sorted(keys, key=position.__getitem__)
@@ -2888,7 +2918,7 @@ class TestCheckMapShape:
         calc = _make_minimal_opt_calc(db_session)
         result = evaluate_computed_calculation(db_session, calc.id)
 
-        declared = {spec.name for spec in COMPUTED_CALCULATION_V1.checks}
+        declared = {spec.name for spec in COMPUTED_CALCULATION_V2.checks}
         assert set(result.checks) <= declared
         assert set(result.checks.values()) <= set(EvidenceOutcome)
 

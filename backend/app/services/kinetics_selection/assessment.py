@@ -427,6 +427,9 @@ def assess_candidate(
         if evidence.hard_fail_reason is not None:
             blocking.append(f"evidence_hard_failed:{evidence.hard_fail_reason.value}")
         advisory.append(f"evidence_label:{evidence.label.value}")
+        # Which trust-contract version produced the blocking verdict above (rubric v2 / TS v3 demote an automated geometry
+        # fail to advisory), so a manifest says what the evidence semantics were when it was made.
+        advisory.append(f"evidence_rubric:{evidence.rubric}@{evidence.rubric_version}")
         for name, outcome in evidence.checks.items():
             if outcome.value in {"missing", "warning"}:
                 advisory.append(f"evidence_check_{outcome.value}:{name}")

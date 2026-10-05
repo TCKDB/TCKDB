@@ -787,6 +787,30 @@ def test_include_rejected_quality_opts_in(db_session):
     assert {r.calculation.calculation_id for r in response.records} == {rejected.id}
 
 
+def test_the_explicit_rejected_quality_filter_still_needs_the_inspection_opt_in(db_session):
+    """Deliberate behaviour change (plan section 9): naming ``calculation_quality=rejected`` is not an opt-in.
+
+    It used to return rejected calculations on its own; it now matches the generic calculation search, which answers
+    an empty page unless ``include_rejected_quality`` is also set. The other quality filters are unchanged.
+    """
+    _, entry = _entry(db_session, smiles="Q3")
+    raw = make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
+    rejected = make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
+    rejected.quality = CalculationQuality.rejected
+    db_session.flush()
+
+    def ids(**kw):
+        response = search_species_calculations(
+            db_session, SpeciesCalculationsSearchRequest(smiles="Q3", **kw)
+        )
+        return {r.calculation.calculation_id for r in response.records}
+
+    assert ids(calculation_quality=CalculationQuality.rejected) == set()
+    assert ids(calculation_quality=CalculationQuality.rejected, include_rejected_quality=True) == {rejected.id}
+    assert ids(calculation_quality=CalculationQuality.raw) == {raw.id}
+    assert ids(include_rejected_quality=True) == {raw.id, rejected.id}
+
+
 def test_min_review_status_filters_calculation_review(db_session):
     _, entry = _entry(db_session, smiles="MR1")
     approved = make_calculation(

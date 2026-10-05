@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.db.models.common import (
+    CalculationQuality,
     CalculationType,
     RecordReviewStatus,
     ReproducibilityAssessorKind,
@@ -283,8 +284,8 @@ def test_detail_include_trust_returns_transport_fragment(client, db_session):
     trust = body["record"]["trust"]
     assert trust["review_status"] == "not_reviewed"
     assert trust["evidence"]["record_type"] == "transport"
-    assert trust["evidence"]["rubric"] == "computed_transport_v1"
-    assert trust["evidence"]["rubric_version"] == 1
+    assert trust["evidence"]["rubric"] == "computed_transport_v2"
+    assert trust["evidence"]["rubric_version"] == 2
     assert trust["llm_precheck"] == {
         "enabled": False,
         "label": "not_run",
@@ -389,7 +390,8 @@ def test_detail_include_trust_no_property_hard_fail(client, db_session):
     assert evidence["hard_fail_reason"] == "no_transport_property_present"
 
 
-def test_detail_include_trust_source_calc_hard_fail(client, db_session):
+def test_detail_include_trust_source_calc_geometry_fail_is_not_a_hard_fail(client, db_session):
+    """Rubric v2: a source calculation's automated geometry fail no longer hard-fails the record."""
     _, entry, tr = _make_transport(db_session)
     calc = _attach_supported_source(db_session, tr, species_entry=entry)
     calc.geometry_validation.validation_status = ValidationStatus.fail
@@ -397,11 +399,19 @@ def test_detail_include_trust_source_calc_hard_fail(client, db_session):
 
     body = client.get(_detail_url(tr.public_ref, include="trust")).json()
     evidence = body["record"]["trust"]["evidence"]
+    assert evidence["label"] != "hard_failed"
+    assert evidence["hard_fail_reason"] is None
+
+
+def test_detail_include_trust_rejected_source_calc_still_hard_fails(client, db_session):
+    _, entry, tr = _make_transport(db_session)
+    calc = _attach_supported_source(db_session, tr, species_entry=entry)
+    calc.quality = CalculationQuality.rejected
+
+    body = client.get(_detail_url(tr.public_ref, include="trust")).json()
+    evidence = body["record"]["trust"]["evidence"]
     assert evidence["label"] == "hard_failed"
-    assert (
-        evidence["hard_fail_reason"]
-        == "source_calculation_hard_failed_for_required_role"
-    )
+    assert evidence["hard_fail_reason"] == "source_calculation_hard_failed_for_required_role"
 
 
 def test_detail_include_trust_preserves_internal_id_policy(client, db_session):

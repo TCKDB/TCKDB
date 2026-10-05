@@ -22,6 +22,25 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Trust-contract correction, inspection-filter correction and the structure coverage inventory (2026-10-06)
+
+**Chunk 6 of 6 of calculation, conformer and transition-state energy selection: legacy corrections.** This changes live answers
+and is kept separate from the selection work so it can be judged on its own. Migration: none. New environment variable: none.
+
+- **Trust contract version 2.** An automated geometry-validation `fail` no longer hard-fails a record; it is a warning on the
+  geometry check. A transition state's saddle-frequency contradiction hard-fails only when every source frequency result
+  contradicts (not just the latest). `computed_calculation`, `computed_kinetics`, `computed_thermo`, `computed_statmech` and
+  `computed_transport` are version 2; `computed_transition_state` is version 3. Reviewer-family machine reviews made under the
+  previous versions read as stale and are re-planned; no stored review is rewritten. H298 and kinetics selection consume the
+  evidence hard-fail, so a record whose only flaw was an automated geometry fail is now eligible there (the H298 policy version
+  and golden decisions are unchanged); each assessment records `evidence_rubric:<rubric>@<version>`.
+- **Inspection filter.** On the species calculation search, `calculation_quality=rejected` now also requires
+  `include_rejected_quality=true`, as on the generic calculation search; without it the page is empty.
+- **Legacy TS browse projection.** `saddle_point` carries `basis: "latest_direct_frequency"`: it is the latest directly attached
+  frequency result, not validated saddle evidence.
+- **Read-only inventory.** `scripts/ops/structure_selection_coverage_inventory.py` counts which recipe, geometry, grouping,
+  validation and coverage facts structure selection would find unstated. It names its database, runs READ ONLY and backfills nothing.
+
 ## Structure rule audit: the ACONFL example registered inactive (2026-10-05)
 
 **Chunk 4 of 6 of calculation, conformer and transition-state energy selection: rule audit.** The structure rule registry now

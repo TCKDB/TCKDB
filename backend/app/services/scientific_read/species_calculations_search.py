@@ -254,6 +254,13 @@ def search_species_calculations(
         or lot_pair is NO_MATCH
     ):
         return _empty_response(request, includes, offset, limit)
+    # Asking for rejected-quality calculations by name is not an opt-in: the inspection flag is still required, exactly
+    # as on the generic calculation search. (Before this correction the explicit filter alone returned them.)
+    if (
+        request.calculation_quality is CalculationQuality.rejected
+        and not request.include_rejected_quality
+    ):
+        return _empty_response(request, includes, offset, limit)
     effective_species_id: int | None = species_pair  # type: ignore[assignment]
     effective_species_entry_id: int | None = species_entry_pair  # type: ignore[assignment]
     effective_lot_id: int | None = lot_pair  # type: ignore[assignment]

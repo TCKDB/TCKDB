@@ -418,6 +418,14 @@ they can be opted back in via `include_rejected_quality=true` (separate
 from review's `include_rejected`). This rule is documented separately
 because quality and review are distinct concepts in the schema.
 
+**Behaviour change (trust and legacy corrections, 2026-10).** Naming
+`calculation_quality=rejected` is not itself an opt-in. Before, the explicit
+filter alone returned rejected-quality calculations; now it also needs
+`include_rejected_quality=true`, and without it the answer is an empty page,
+exactly as on the generic calculation search. `calculation_quality=raw` and
+`curated` are unchanged. A curated read profile's review floor still applies on
+top of any inspection opt-in.
+
 ---
 
 ## Evidence and trust fields surfaced per record

@@ -164,8 +164,8 @@ def test_include_trust_returns_computed_statmech_v1(client, db_session):
     }
     evidence = trust["evidence"]
     assert evidence["record_type"] == "statmech"
-    assert evidence["rubric"] == "computed_statmech_v1"
-    assert evidence["rubric_version"] == 1
+    assert evidence["rubric"] == "computed_statmech_v2"
+    assert evidence["rubric_version"] == 2
     assert "record_id" not in evidence
 
 

@@ -18,6 +18,38 @@ read-API authors.
 
 ---
 
+## Trust contract version 2 (2026-10): what changed and what did not
+
+Two corrections to the deterministic rubrics, shipped together because they share one question: when is a hard-fail badge
+an honest judgement?
+
+- **An automated geometry-validation `fail` is advisory, not a hard fail.** `calc_geometry_validation` documents its own `fail`
+  as a curator-attention signal: connectivity perceived from XYZ is unreliable for weak complexes, stretched bonds, radicals
+  and proton-transfer-like geometries. The evaluator no longer emits `geometry_validation_failed` or
+  `geometry_validation_failed_for_source_calculation`, and so no longer emits
+  `source_calculation_hard_failed_for_required_role` or `all_source_calculations_hard_failed` *because of* such a row. The
+  failure stays visible: the geometry checks report `warning` (zero weight) for `fail` as well as for `warning`. Rejected
+  calculation quality and a recorded artifact-integrity break still hard-fail exactly as before. A *confirmed* identity failure is
+  a structure-determination finding judged by structure selection in its own role, not by this badge.
+- **A transition state's frequency contradiction is judged over every source frequency result, not the "representative" one.**
+  The representative result (latest by creation time) still feeds the graded checks, but it no longer hard-fails a record alone:
+  a newest bad rerun beside an older valid frequency job no longer condemns the entry. The record is hard-failed only when no
+  stored frequency result supports a validated saddle.
+
+**Versioning.** `computed_calculation`, `computed_kinetics`, `computed_thermo`, `computed_statmech` and `computed_transport`
+are now version 2 and `computed_transition_state` is version 3. The reviewer-family machine-review recipe stamps the rubric
+version, so a review made under the previous version compares **stale** (`rubric_versions_mismatch`) and a re-review is planned;
+the stored review row is never rewritten and keeps its own recipe and verdict as history. The scientific-check families and the
+external-Cp runner keep their own keys and are not restaled. The context-hash schema version is unchanged (the shape did not change).
+The `HardFailReason` members are kept so stored version-1 results and reviews still parse; they are simply no longer produced for
+these two causes.
+
+**Live consumers.** H298 and kinetics selection block on `evidence.hard_fail_reason`, so a record whose only flaw was an automated
+geometry fail is now eligible, and fresh answers can differ from earlier ones. Each assessment now carries
+`evidence_rubric:<rubric>@<version>` in its advisory list so a manifest records which semantics produced its verdict. Historic
+manifests replay unchanged (replay reads the recorded assessments, not the current rubric). See
+`tests/services/thermo_selection/test_trust_correction_h298.py` for the exact probes.
+
 ## 1. Why this exists
 
 TCKDB has matured past the point where manual curator review can gate

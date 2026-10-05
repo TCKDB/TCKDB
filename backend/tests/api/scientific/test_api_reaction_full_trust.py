@@ -221,8 +221,8 @@ def test_full_include_trust_attaches_kinetics_trust(client, db_session):
     trust = body["kinetics"][0]["trust"]
     assert trust is not None
     assert trust["review_status"] == "approved"
-    assert trust["evidence"]["rubric"] == "computed_kinetics_v1"
-    assert trust["evidence"]["rubric_version"] == 1
+    assert trust["evidence"]["rubric"] == "computed_kinetics_v2"
+    assert trust["evidence"]["rubric_version"] == 2
     assert trust["llm_precheck"] == {
         "enabled": False,
         "label": "not_run",
@@ -297,8 +297,8 @@ def test_full_include_trust_attaches_calculation_trust(client, db_session):
     trust = calc_records[0]["trust"]
     assert trust is not None
     assert trust["review_status"] == "approved"
-    assert trust["evidence"]["rubric"] == "computed_calculation_v1"
-    assert trust["evidence"]["rubric_version"] == 1
+    assert trust["evidence"]["rubric"] == "computed_calculation_v2"
+    assert trust["evidence"]["rubric_version"] == 2
     assert trust["llm_precheck"]["enabled"] is False
     assert trust["llm_precheck"]["label"] == "not_run"
     assert "record_id" not in trust["evidence"]
@@ -489,8 +489,8 @@ def test_full_include_trust_attaches_ts_trust(client, db_session):
     assert trust["review_status"] == "not_reviewed"
     assert trust["is_certified"] is False
     assert trust["evidence"]["record_type"] == "transition_state_entry"
-    assert trust["evidence"]["rubric"] == "computed_transition_state_v2"
-    assert trust["evidence"]["rubric_version"] == 2
+    assert trust["evidence"]["rubric"] == "computed_transition_state_v3"
+    assert trust["evidence"]["rubric_version"] == 3
     checks = trust["evidence"]["checks"]
     assert checks, "the TS rubric ran, so the check map cannot be empty"
     assert set(checks.values()) <= {
