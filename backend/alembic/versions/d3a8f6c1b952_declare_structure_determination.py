@@ -22,8 +22,9 @@ composite-key targets on ``calculation``:
     fact (whichever owner column is set, its keys to the determination and to the calculation are
     checked; a NULL column skips its keys). **Pinned at creation:** a source may be inserted only in the
     transaction that creates its determination (the write path sets the transaction-local
-    ``tckdb.structure_determination_writing`` to the determination id; a tripwire against accidental or
-    scripted edits, not access control) and may never be deleted, because the determination's content
+    ``tckdb.structure_determination_writing`` to the determination id, and an archive restore, which re-creates
+    determinations and their sources together in one transaction, to the ids it is restoring; a tripwire against
+    accidental or scripted edits, not access control) and may never be deleted, because the determination's content
     digest and key cover its pinned calculations. **Immutable:** no UPDATE.
 
 ``structure_evidence_finding`` (public ref prefix ``sfnd``)
@@ -212,9 +213,14 @@ AS $$
 BEGIN
     -- A determination is its pinned calculations: its content digest and its key cover them, so a source added or
     -- removed afterwards would change what it says under an unchanged identity. The write path pins every source in
-    -- the transaction that creates the determination and says so here; nothing else may add one. This is a tripwire
-    -- against accidental or scripted edits, not access control: whoever sets the variable is acting on purpose.
-    IF current_setting('tckdb.structure_determination_writing', true) IS DISTINCT FROM NEW.determination_id::text THEN
+    -- the transaction that creates the determination and says so here (an archive restore does the same for the
+    -- determinations it re-creates, as a comma-separated list); nothing else may add one. This is a tripwire against
+    -- accidental or scripted edits, not access control: whoever sets the variable is acting on purpose.
+    IF NOT (
+        NEW.determination_id::text = ANY (
+            string_to_array(coalesce(current_setting('tckdb.structure_determination_writing', true), ''), ',')
+        )
+    ) THEN
         RAISE EXCEPTION
             'structure_determination_sources_are_pinned_at_creation: determination % takes no further source',
             NEW.determination_id

@@ -56,6 +56,8 @@ from app.db.models.common import (
     StructureSourceRole,
 )
 from app.db.models.structure_determination import StructureDetermination, StructureDeterminationSource
+from app.services.calc_isotopes import assert_isotopes
+from app.services.calculation_geometry_composition import assert_calculation_geometry_composition
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.upload_reference import W_UNKNOWN_CALCULATION_REF, unknown_reference
@@ -382,6 +384,24 @@ def persist_structure_determinations(
                     {"id": str(row.id)},
                 )
                 for role, calculation in pins:
+                    source_geometry_id = _source_geometry_id(calculation)
+                    if source_geometry_id is not None:
+                        # The geometry the calculation's own links name was composition-checked when it was linked;
+                        # a source repeats it, and the check is repeated here so no write site of a
+                        # geometry-bearing table is exempt (a row that names a geometry it does not own would
+                        # otherwise be one more place to get it wrong).
+                        assert_calculation_geometry_composition(
+                            session,
+                            calc=calculation,
+                            geometry_id=source_geometry_id,
+                            field=f"structure_determinations['{declaration.key}']",
+                        )
+                        assert_isotopes(
+                            session,
+                            calc=calculation,
+                            geometry_id=source_geometry_id,
+                            field=f"structure_determinations['{declaration.key}']",
+                        )
                     session.add(
                         StructureDeterminationSource(
                             determination_id=row.id,
@@ -390,7 +410,7 @@ def persist_structure_determinations(
                             species_entry_id=owner.species_entry_id,
                             transition_state_entry_id=owner.transition_state_entry_id,
                             conformer_observation_id=row.conformer_observation_id,
-                            geometry_id=_source_geometry_id(calculation),
+                            geometry_id=source_geometry_id,
                         )
                     )
                 session.flush()

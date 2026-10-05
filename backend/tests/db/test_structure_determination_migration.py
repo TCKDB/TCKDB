@@ -421,11 +421,20 @@ def test_a_source_is_pinned_when_its_determination_is_created_and_never_added_or
     with pytest.raises(DBAPIError, match="structure_determination_sources_are_pinned_at_creation"), db_session.begin_nested():
         db_session.execute(text("SELECT set_config('tckdb.structure_determination_writing', :i, true)"), {"i": str(other)})
         _insert_source(db_session, det, calc, writing=False)
+    # A restore names the determinations it re-creates as a list: each listed id is opened and no other, and an id
+    # that merely starts with a listed one is not listed.
+    for marker in (f"{det}0", f"{other},{det}0", ""):
+        with pytest.raises(DBAPIError, match="structure_determination_sources_are_pinned_at_creation"), db_session.begin_nested():
+            db_session.execute(text("SELECT set_config('tckdb.structure_determination_writing', :i, true)"), {"i": marker})
+            _insert_source(db_session, det, calc, writing=False)
+    db_session.execute(text("SELECT set_config('tckdb.structure_determination_writing', :i, true)"), {"i": f"{other},{det}"})
+    assert _insert_source(db_session, det, extra, role="alternative_characterization", writing=False)
+    db_session.execute(text("SELECT set_config('tckdb.structure_determination_writing', '', true)"))
     source = _insert_source(db_session, det, calc)
     assert _insert_source(db_session, det, extra, role="curvature")
     with pytest.raises(DBAPIError, match="structure_determination_sources_are_pinned_at_creation"), db_session.begin_nested():
         db_session.execute(text("DELETE FROM structure_determination_source WHERE id = :i"), {"i": source})
-    assert db_session.scalar(text("SELECT count(*) FROM structure_determination_source WHERE determination_id = :d"), {"d": det}) == 2
+    assert db_session.scalar(text("SELECT count(*) FROM structure_determination_source WHERE determination_id = :d"), {"d": det}) == 3
 
 
 def _accept(db_session, record_type, record_id):

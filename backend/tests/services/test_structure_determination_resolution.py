@@ -8,7 +8,9 @@ from tckdb_schemas.structure_declarations import StructureDeterminationDeclarati
 
 from app.api.error_contract import CodedValueError
 from app.db.models.common import CalculationType, StructureSourceRole
+from app.db.models.geometry import GeometryAtom
 from app.db.models.structure_determination import StructureDetermination, StructureDeterminationSource
+from app.services.calculation_geometry_composition import _species_entry_reference
 from app.services.structure_determination_resolution import (
     DeterminationOwner,
     content_hash,
@@ -47,10 +49,26 @@ def _declaration(**changes) -> StructureDeterminationDeclaration:
     return StructureDeterminationDeclaration.model_validate(raw)
 
 
+def _geometry_of(session, entry):
+    """A stored geometry made of exactly the atoms of ``entry``'s species.
+
+    A source repeats the geometry its calculation is linked to, and the write path checks that composition (as every
+    link of a geometry to a calculation is checked), so a fixture that links an empty geometry to a methane
+    calculation is a fixture the application would have refused.
+    """
+    counts = _species_entry_reference(session, entry.id)
+    atoms = [element for element, n in sorted(counts.items()) for _ in range(n)]
+    geometry = make_geometry(session, natoms=len(atoms))
+    for index, element in enumerate(atoms):
+        session.add(GeometryAtom(geometry_id=geometry.id, atom_index=index + 1, element=element, x=float(index), y=0.0, z=0.0))
+    session.flush()
+    return geometry
+
+
 @pytest.fixture
 def subject(db_session):
     entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key()))
-    geometry = make_geometry(db_session)
+    geometry = _geometry_of(db_session, entry)
     opt = make_calculation(db_session, type=CalculationType.opt, species_entry_id=entry.id)
     attach_output_geometry(db_session, calculation=opt, geometry=geometry)
     sp = make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
@@ -137,7 +155,7 @@ def test_one_request_cannot_state_the_same_key_twice(db_session, subject):
 def test_the_same_key_for_another_owner_or_source_is_another_determination(db_session, subject):
     (first,) = _persist(db_session, subject, _declaration())
     other_entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key()))
-    geometry = make_geometry(db_session)
+    geometry = _geometry_of(db_session, other_entry)
     opt = make_calculation(db_session, type=CalculationType.opt, species_entry_id=other_entry.id)
     attach_output_geometry(db_session, calculation=opt, geometry=geometry)
     sp = make_calculation(db_session, type=CalculationType.sp, species_entry_id=other_entry.id)
@@ -270,7 +288,7 @@ def _basin_world(db_session):
     group = make_conformer_group(db_session, entry)
     mine = make_conformer_observation(db_session, conformer_group=group)
     elsewhere = make_conformer_observation(db_session, conformer_group=group)
-    geometry = make_geometry(db_session)
+    geometry = _geometry_of(db_session, entry)
 
     def calc(kind, observation, *, side="input"):
         c = make_calculation(db_session, type=kind, species_entry_id=entry.id, conformer_observation_id=observation.id if observation else None)
@@ -334,7 +352,7 @@ def test_a_geometry_claim_may_pin_unanchored_calculations(db_session):
 def test_the_evaluating_calculation_must_belong_to_the_owner_and_be_one_of_the_pinned_sources(db_session, subject):
     entry = subject["entry"]
     stranger = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key()))
-    geometry = make_geometry(db_session)
+    geometry = _geometry_of(db_session, stranger)
     foreign = make_calculation(db_session, type=CalculationType.opt, species_entry_id=stranger.id)
     attach_output_geometry(db_session, calculation=foreign, geometry=geometry)
     calcs = {**subject["calcs"], "foreign": foreign}

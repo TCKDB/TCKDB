@@ -89,10 +89,15 @@ A determination pins this upload's own calculations to the roles they play in a 
   on that side does not pin one and is refused (`structure_determination_mismatch`, `context.reason` `geometry`).
 - **Source attribution.** `literature` or `workflow_tool_release` is required: the key is scoped to a source.
 - **The key is an identifier.** The owner (for a basin, its observation), the source attribution and the `key` name one
-  determination. Stating the key again with the same content resolves to the existing determination (no Idempotency-Key
-  needed), so a repeat is never an additional determination. Stating it with different content (target kind, quantity,
-  convention, recipe, evaluated geometry or pinned calculations) is refused (`context.reason` `content`): a determination
-  is immutable, and its pinned calculations are fixed when it is created. State a different key for a different claim.
+  determination. Stating the key again with the same content resolves to the existing determination, so a repeat is
+  never an additional determination. That holds without an Idempotency-Key **only for a claim whose calculations are
+  named by `calculation_ref`** (calculations already deposited). Re-sending a whole conformer or transition state upload
+  whose claims pin calculations by *local key* creates new calculations each time, so the restated claim pins different
+  calculations and is refused with 422 `structure_determination_mismatch` (`context.reason` `content`). To retry such an
+  upload, send it again with the **same Idempotency-Key** (the retry then replays the first response and writes nothing).
+  Stating the key with different content (target kind, quantity, convention, recipe, evaluated geometry or pinned
+  calculations) is refused the same way: a determination is immutable, and its pinned calculations are fixed when it is
+  created. State a different key for a different claim.
 - **A basin cannot be restated across uploads**, because each conformer upload creates a new observation. A `geometry` or
   `saddle_point` claim can be restated, over calculations already deposited and named by `calculation_ref`.
 - **Frozen with its owner.** Once the transition state entry or conformer observation a determination belongs to is

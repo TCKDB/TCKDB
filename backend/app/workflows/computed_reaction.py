@@ -706,7 +706,9 @@ def persist_computed_reaction_upload(
                     session,
                     list(conf.structure_determinations),
                     owner=DeterminationOwner(
-                        species_entry_id=species_key_to_entry[sp.key].id,  # type: ignore[attr-defined]
+                        species_entry_id=resolve_species_key(
+                            sp.key, species_key_to_entry, field=f"species['{sp.key}']"
+                        ).id,  # type: ignore[attr-defined]
                         conformer_observation_id=observation_id_by_conformer_key[sp.key][conf.key],
                     ),
                     calculations_by_key=_calculation_rows(session, calculation_key_to_id),

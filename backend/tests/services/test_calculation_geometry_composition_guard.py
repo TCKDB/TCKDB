@@ -42,6 +42,7 @@ _EXPECTED_SITES = {
     "services/calculation_scan_resolution.py::persist_calculation_scan",
     "services/hessian_extraction.py::_insert",
     "services/input_geometry_extraction.py::_mint_and_link_extracted_geometry",
+    "services/structure_determination_resolution.py::persist_structure_determinations",
     "services/transition_state_resolution.py::persist_ts_calculations",
     "workflows/network_pdep.py::_persist_calculation",
 }
@@ -111,6 +112,11 @@ _EXEMPT_TABLES = {
         "records a comparison between geometries that are ALREADY linked to the "
         "calculation (it reads them back from the input/output links), so it "
         "attaches nothing new"
+    ),
+    "structure_evidence_finding": (
+        "a finding names exactly one subject, a geometry OR a calculation OR a determination "
+        "(ck_structure_evidence_finding_subject_matches_scope makes the columns mutually exclusive), so it never links "
+        "a geometry to a calculation, and nothing writes one yet"
     ),
     "transition_state_validation_evidence": (
         "its saddle-point geometry (transition_state_geometry_id) is the TS "
