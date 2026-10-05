@@ -112,7 +112,7 @@ def test_it_loads_but_is_not_activatable_and_names_every_blocker():
         "comparator_protocol_unverified",
         "only_aggregate_evidence",
         "reference_geometry_not_expressible",
-        "no_record_declares_the_energy_level",
+        "declared_energy_level_not_verifiable_from_calculations",
         "correction_changes_a_cited_total",
     }
     assert XYG3B3LYPBarrierRule(manifest).status == "inactive"
@@ -190,7 +190,7 @@ def test_the_energy_level_blocker_describes_the_field_that_exists_and_no_text_is
     manifest = load_xyg3_barrier_manifest(expected_sha256=XYG3_MANIFEST_SHA256)
     texts = {b["id"]: b["text"] for b in manifest.activation_blockers}
     assert "electronic_method_not_a_protocol_field" not in texts
-    text = " ".join(texts["no_record_declares_the_energy_level"].split())
+    text = " ".join(texts["declared_energy_level_not_verifiable_from_calculations"].split())
     assert "energy_level_of_theory_id" in text and "has no electronic method" not in text
     # The source and the rule's own output carry the plain characters; an entity can only come from a later display.
     reasons = " ".join(XYG3B3LYPBarrierRule(manifest).inactive_reasons)
