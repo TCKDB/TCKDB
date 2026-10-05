@@ -1,7 +1,7 @@
 # Structure selection: decision, manifest and replay
 
-Status: service layer (chunk 3 of the calculation, conformer and transition-state ordering work). No HTTP route serves
-it yet, nothing is persisted, and no literature rule is active.
+Status: served by three read-only `POST .../select` routes and their `/manifest` siblings (see
+`docs/guides/selecting_structures.md`); nothing is persisted and no literature rule is active.
 
 This note says what a decision is and what it is not. It sits on top of the assessment
 (`app.services.structure_selection.assessment`), which says whether one unit can supply a requested energy and

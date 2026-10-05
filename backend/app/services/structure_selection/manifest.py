@@ -114,6 +114,24 @@ def _without_digest(raw: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     return body, raw.get("content_sha256")
 
 
+def _population(result: StructureAssessmentResult, *, withhold_excluded: bool) -> dict[str, Any]:
+    """The population block. Under a read profile that imposes a floor the records below it are not listed or counted.
+
+    Under ``curated`` the floor is ``approved``: a record below it is one the caller could not have reached through any
+    other curated read, so naming or counting it would be a leak. The redaction is made here, before the manifest's
+    checksum is computed, so the downloaded manifest still verifies and replays; the total is replaced by the visible
+    count so the difference cannot be recovered from the arithmetic.
+    """
+    return {
+        "total_units": result.visible_units if withhold_excluded else result.total_units,
+        "visible_units": result.visible_units,
+        "nested_rows": result.nested_rows,
+        "excluded_count": 0 if withhold_excluded else result.excluded_count,
+        "excluded_by_review": [] if withhold_excluded else [dict(e) for e in result.excluded_by_review],
+        "excluded_by_review_withheld": withhold_excluded,
+    }
+
+
 def build_manifest(
     result: StructureAssessmentResult,
     decision: StructureDecision,
@@ -141,13 +159,7 @@ def build_manifest(
         "read_profile": dict(profile),
         "snapshot_isolation": result.snapshot_isolation,
         "subject": result.subject.to_dict(),
-        "population": {
-            "total_units": result.total_units,
-            "visible_units": result.visible_units,
-            "nested_rows": result.nested_rows,
-            "excluded_count": result.excluded_count,
-            "excluded_by_review": [dict(e) for e in result.excluded_by_review],
-        },
+        "population": _population(result, withhold_excluded=profile.get("review_floor") is not None),
         "calculations": [_with_digest(c.to_dict()) for c in result.calculations],
         "determinations": [_with_digest(d.to_dict()) for d in result.determinations],
         "assessments": [a.to_dict() for a in result.assessments],

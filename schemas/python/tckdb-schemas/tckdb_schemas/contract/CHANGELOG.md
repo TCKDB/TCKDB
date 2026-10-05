@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.108.0 - 2026-10-06
+
+The producer contract lists the six read routes of structure selection (`POST .../species-entries/{ref}/calculations/select`,
+`.../conformers/select`, `.../transition-state-entries/{ref}/evidence/select`, each with `/manifest`). No upload model changed.
+
 ## 0.107.0 - 2026-10-05
 
 New refusal code `structure_selection_manifest_too_large` (a structure decision whose replayable manifest exceeds its

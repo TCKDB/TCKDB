@@ -1766,3 +1766,133 @@ __all__ = [
     "WatermarkEcho",
     "WorkflowToolReleaseIdentity",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Structure selection (calculations, conformer basins, transition-state evidence)
+# ---------------------------------------------------------------------------
+
+StructureSelectionOutcomeToken: TypeAlias = Literal[
+    "no_candidates",
+    "energy_unavailable",
+    "unresolved_comparability",
+    "no_applicable_candidate",
+    "recorded_minimum",
+    "representative_minimum",
+    "qualified_evidence",
+    "validated_corpus_minimum",
+    "policy_preferred",
+    "sole_eligible_candidate",
+    "incomparable_alternatives",
+    "policy_conflict",
+    "evidence_conflict",
+]
+"""The 13 outcomes of a structure selection. ``incomparable_alternatives`` means more than one cohort (or protocol)
+survived and none is named: total energies of different protocols are not on one scale. ``representative_minimum`` is
+the lowest administrative *representative* per target and is never the minimum of all stored values."""
+
+
+class _StructureSelectionRequestBase(TypedDict, total=False):
+    """Fields every structure selection request may carry. Nothing here is a database id, a bound, a sort or a rule.
+
+    ``quantity`` is ``electronic_energy`` (the server default) or ``zero_kelvin_energy``; send ``None`` explicitly (JSON
+    null) only for evidence-only qualification. A recognised deferred quantity (enthalpy, Gibbs energy, barrier, rate,
+    ...) is a 422 ``structure_selection_unsupported``.
+    """
+
+    quantity: str | None
+    coverage_requirement: Literal["known_values", "all_requested_members"]
+    validation_claim: Literal["local_minimum", "first_order_saddle", "higher_order_saddle", "reactive_connectivity"]
+    min_review_status: str
+    permitted_quality: list[Literal["raw", "curated", "rejected"]]
+    geometry_ref: str
+    member_refs: list[str]
+    recipe: JSONDict
+    require_stable_reference: bool
+    administrative_policy: Literal["default", "latest", "earliest"]
+    result_mode: Literal["all", "first"]
+    apply_rules: bool
+    objective: Literal["physical_accuracy", "expected_accuracy", "model_fidelity"]
+    reference_model: str
+    repeat_policy: Literal["retain_alternates", "administrative_representative"]
+
+
+class CalculationSelectionRequest(_StructureSelectionRequestBase, total=False):
+    """Body of ``POST .../species-entries/{ref}/calculations/select``."""
+
+    intent: Literal["recorded_minimum", "protocol_preferred"]
+
+
+class ConformerSelectionRequest(_StructureSelectionRequestBase, total=False):
+    """Body of ``POST .../species-entries/{ref}/conformers/select``."""
+
+    intent: Literal["validated_minimum", "qualify_evidence", "protocol_preferred"]
+
+
+class TransitionStateEvidenceSelectionRequest(_StructureSelectionRequestBase, total=False):
+    """Body of ``POST .../transition-state-entries/{ref}/evidence/select``.
+
+    One transition state *entry*: comparison across several entries needs a validated same-path declaration that is not
+    taken yet.
+    """
+
+    intent: Literal["validated_saddle", "qualify_evidence", "protocol_preferred"]
+    require_connectivity: bool
+
+
+class StructureSelectionUnit(TypedDict):
+    """One assessed unit (a calculation, or a basin or saddle determination) and every finding behind its verdict."""
+
+    unit_ref: str
+    review_status: str
+    created_at: str
+    applicability: str
+    reasons: list[JSONDict]
+    blocking: list[str]
+    advisory: list[str]
+    comparative_unknown: list[str]
+    energy: JSONDict | None
+    recipe: JSONDict | None
+    claim: JSONDict | None
+    eligible: bool
+
+
+class StructureSelectionDisclosures(TypedDict):
+    unresolved_refs: list[str]
+    unsupported_refs: list[str]
+    visible_units: int
+    excluded_by_review: list[JSONDict]
+    excluded_count: int
+    excluded_by_review_withheld: bool
+    notes: list[str]
+
+
+class StructureSelectionResponse(TypedDict):
+    """A structure selection's outcome and everything it rests on, as public refs only.
+
+    Report ``outcome`` and ``basis`` verbatim. ``selected_refs`` holds every tied minimum, the qualified determinations or
+    the selected protocol's cohort id, and is empty where nothing is selected. ``coverage`` always says it is the
+    caller's authorized population, never a global-search certificate. ``integrity`` carries the manifest checksum: a
+    checksum, not a signature.
+    """
+
+    request: JSONDict
+    review: JSONDict
+    outcome: StructureSelectionOutcomeToken
+    basis: str
+    selected_refs: list[str]
+    administrative_first: dict[str, str] | None
+    cohorts: list[JSONDict]
+    contested_targets: list[JSONDict]
+    unresolved: list[JSONDict]
+    coverage: JSONDict
+    representative_policy: JSONDict | None
+    protocol: JSONDict | None
+    administrative_key: JSONDict
+    search_completeness: str
+    notes: list[str]
+    units: list[StructureSelectionUnit]
+    disclosures: StructureSelectionDisclosures
+    versions: JSONDict
+    snapshot_isolation: str
+    integrity: JSONDict

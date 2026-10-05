@@ -34,6 +34,9 @@ committed backend OpenAPI golden snapshot at
 | `tckdb_select_species_entry_thermo` | `POST /api/v1/scientific/species-entries/{spe_ref}/thermo/select` | Method-aware 298 K formation-enthalpy selection |
 | `tckdb_select_reaction_entry_kinetics` | `POST /api/v1/scientific/reaction-entries/{rxe_ref}/kinetics/select` | Method-aware gas-phase rate-coefficient selection |
 | `tckdb_select_network_kinetics` | `POST /api/v1/scientific/networks/{net_ref}/kinetics/select` | Method-aware pressure-dependent network selection |
+| `tckdb_select_species_entry_calculations` | `POST /api/v1/scientific/species-entries/{spe_ref}/calculations/select` | Lowest comparable recorded energy among an entry's calculations |
+| `tckdb_select_species_entry_conformers` | `POST /api/v1/scientific/species-entries/{spe_ref}/conformers/select` | Validated conformer basins: lowest, claim support, protocol preference |
+| `tckdb_select_transition_state_entry_evidence` | `POST /api/v1/scientific/transition-state-entries/{tse_ref}/evidence/select` | Saddle determinations of one transition state entry |
 | `tckdb_export_selected_network_kinetics` | `POST /api/v1/scientific/networks/{net_ref}/kinetics/export-selected` | Serialise a verified network selection (native or CHEMKIN) |
 | `tckdb_get_geometry` | `GET /api/v1/scientific/geometries/{geom_ref}` | Geometry detail |
 | `tckdb_get_reaction_entry_full` | `GET /api/v1/scientific/reaction-entries/{rxe_ref}/full` | Composite reaction record |
@@ -683,6 +686,34 @@ Output: the server response, unchanged, or its refusal code (`network_export_man
 `network_export_manifest_stale`, `network_export_choice_not_allowed`, `network_export_representation_choice_invalid`,
 `network_export_unsupported_form`), which should be reported verbatim. Integer ids and any rule or verdict field are
 refused here. See `docs/guides/selecting_network_kinetics.md`.
+
+### `tckdb_select_species_entry_calculations`, `tckdb_select_species_entry_conformers`, `tckdb_select_transition_state_entry_evidence`
+
+Structure selection: which stored energy, conformer basin or saddle of ONE entry answers a stated question, and why.
+Read-only; browse orders are unchanged. The transition-state tool takes a transition state *entry* (`tse_`), not the
+transition-state concept (`ts_`).
+
+```text
+<entry ref>: string                 # REQUIRED: species_entry_ref ("spe_") or transition_state_entry_ref ("tse_")
+intent?: string                     # recorded_minimum | protocol_preferred (calculations);
+                                    # validated_minimum | qualify_evidence | protocol_preferred (conformers);
+                                    # validated_saddle | qualify_evidence | protocol_preferred (transition states)
+quantity?: string | null            # electronic_energy (default) | zero_kelvin_energy; null only for qualify_evidence
+coverage_requirement?: "known_values" | "all_requested_members"
+validation_claim?: "local_minimum" | "first_order_saddle" | "higher_order_saddle" | "reactive_connectivity"
+min_review_status?, permitted_quality?, geometry_ref? ("geom_"), member_refs?, recipe?, require_stable_reference?
+require_connectivity?: boolean      # transition states only
+administrative_policy?, result_mode?, apply_rules?, objective?, reference_model?, repeat_policy?
+profile?: "exploratory" | "curated"
+```
+
+Output: the server response, unchanged. Quote its `outcome` and `basis` verbatim: `incomparable_alternatives`,
+`unresolved_comparability`, `evidence_conflict` and `policy_conflict` mean nothing was selected, and a
+`representative_minimum` is not the minimum of all stored values. Integer ids, `bounds`, `max_candidates`, `manifest_bytes`
+and any paging, sort or rule field are refused here; the engineering bounds are the server's and above them it refuses with
+a coded 422 (`structure_selection_population_too_large`, `..._evidence_too_large`, `..._traversal_too_deep`,
+`..._manifest_too_large`). A deferred quantity (enthalpy, Gibbs energy, barrier, rate) is
+`structure_selection_unsupported`. See `docs/guides/selecting_structures.md`.
 
 ### `tckdb_get_geometry`
 

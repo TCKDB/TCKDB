@@ -29,6 +29,7 @@ from .tools import scientific_reads as scientific_reads_tools
 from .tools import species as species_tool
 from .tools import species_thermo as species_thermo_tool
 from .tools import species_thermo_selection as species_thermo_selection_tool
+from .tools import structure_selection as structure_selection_tools
 from .tools import thermo_search as thermo_search_tool
 
 logger = logging.getLogger("tckdb_mcp")
@@ -103,7 +104,7 @@ def list_tools_payload() -> list[dict[str, Any]]:
             "inputSchema": kinetics_search_tool.INPUT_SCHEMA,
         },
         *scientific_reads_tools.list_tool_payloads(),
-    ]
+    ] + structure_selection_tools.catalogue()
 
 
 def dispatch_tool(
@@ -144,6 +145,8 @@ def dispatch_tool(
         return thermo_search_tool.run(client, config, arguments)
     if name == kinetics_search_tool.TOOL_NAME:
         return kinetics_search_tool.run(client, config, arguments)
+    if name in structure_selection_tools.TOOL_NAMES:
+        return structure_selection_tools.run(name, client, config, arguments)
     if name in scientific_reads_tools.SEARCH_TOOLS:
         return scientific_reads_tools.run_search(
             client, config, scientific_reads_tools.SEARCH_TOOLS[name], arguments

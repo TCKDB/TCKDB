@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 115 |
+| typed | 121 |
 | raw_only | 107 |
 | not_applicable | 45 |
-| **total** | **267** |
+| **total** | **273** |
 
 ## Typed coverage
 
@@ -108,6 +108,10 @@ A first-class client method exists for these operations.
 | `POST /api/v1/scientific/species-calculations/search` | yes | `search_species_calculations` | `iter_species_calculations` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |
 | `GET /api/v1/scientific/species-entries/{species_entry_id}/observations` | yes | `get_species_observations` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/species-entries/{species_entry_id}/thermo` | yes | `get_species_thermo` | — | `examples/scientific_reads.py` | `tests/test_scientific.py` |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/calculations/select` | yes | `select_species_calculations` | — | — | `tests/test_structure_selection.py` |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/calculations/select/manifest` | yes | `get_species_calculation_selection_manifest` | — | — | `tests/test_structure_selection.py` |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/select` | yes | `select_conformer_basins` | — | — | `tests/test_structure_selection.py` |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/select/manifest` | yes | `get_species_conformer_selection_manifest` | — | — | `tests/test_structure_selection.py` |
 | `POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select` | yes | `select_species_thermo` | — | — | `tests/test_thermo_selection.py` |
 | `POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select/manifest` | yes | `get_species_thermo_selection_manifest` | — | — | `tests/test_thermo_selection.py` |
 | `GET /api/v1/scientific/species/browse` | yes | `browse_species` | `iter_species_browse` | — | `tests/test_scientific.py` |
@@ -119,6 +123,8 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/thermo/search` | yes | `search_thermo` | `iter_thermo` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |
 | `POST /api/v1/scientific/thermo/search` | yes | `search_thermo` | `iter_thermo` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |
 | `GET /api/v1/scientific/transition-state-entries/{transition_state_entry_ref_or_id}` | yes | `get_transition_state_entry` | — | — | `tests/test_typed_parity_methods.py` |
+| `POST /api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select` | yes | `select_transition_state_evidence` | — | — | `tests/test_structure_selection.py` |
+| `POST /api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select/manifest` | yes | `get_transition_state_evidence_selection_manifest` | — | — | `tests/test_structure_selection.py` |
 | `GET /api/v1/scientific/transition-states/search` | yes | `search_transition_states` | `iter_transition_states` | — | `tests/test_typed_parity_methods.py` |
 | `POST /api/v1/scientific/transition-states/search` | yes | `search_transition_states` | `iter_transition_states` | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/transition-states/{transition_state_ref_or_id}` | yes | `get_transition_state` | — | — | `tests/test_typed_parity_methods.py` |
