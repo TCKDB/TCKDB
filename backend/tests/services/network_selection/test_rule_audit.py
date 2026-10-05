@@ -52,7 +52,7 @@ def raw_manifest() -> dict:
 def test_the_shipped_manifest_is_exactly_the_pinned_bytes_and_loads():
     assert hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest() == NETWORK_RULE_MANIFEST_SHA256
     manifest = manifest_module.load_network_rule_manifest(expected_sha256=NETWORK_RULE_MANIFEST_SHA256)
-    assert manifest.sha256 == NETWORK_RULE_MANIFEST_SHA256 and manifest.version == "0.1.0"
+    assert manifest.sha256 == NETWORK_RULE_MANIFEST_SHA256 and manifest.version == "0.2.0"
     assert {c.rule_id for c in manifest.candidates} >= set(COUNCIL_EXAMPLES)
     # No shipped entry is approved, and none is activatable: that is the owner's signed act, never ours.
     assert [c.activatable for c in manifest.candidates] == [False] * len(manifest.candidates)
@@ -112,8 +112,10 @@ def test_the_specific_blockers_are_named_not_generic():
     assert {"compared_objects_are_falloff_fits", "fit_audit_is_partial"} <= by_id["N-AMEDRO-HE-FC"]
     assert "fit_parameters_not_audited" not in by_id["N-AMEDRO-HE-FC"]  # the abstract never carried Fc
     assert {"article_not_read", "reduction_vocabulary_one_open_name"} <= by_id["N-JG-REDUCTION-FIDELITY"]
-    assert {"abstract_level_evidence_only", "transfer_treatment_not_typed"} <= by_id["N-JM-CH4-TRANSFER"]
-    assert {"experimental_reference_not_read"} <= by_id["N-JM-CH4-RATE"]
+    assert {"reference_values_only_as_curves", "transfer_treatment_not_typed"} <= by_id["N-JM-CH4-TRANSFER"]
+    assert "abstract_level_evidence_only" not in by_id["N-JM-CH4-TRANSFER"]  # the full article has been read
+    assert {"agreement_is_qualitative_and_by_figure", "paper_ranks_no_competing_solves"} <= by_id["N-JM-CH4-RATE"]
+    assert "experimental_reference_not_read" not in by_id["N-JM-CH4-RATE"]
     assert {"no_verification_step"} <= by_id["N-ME-CONVERGENCE"] and {"no_pinned_heldout_set"} <= by_id["N-REP-HELDOUT"]
 
 
@@ -320,9 +322,10 @@ def test_the_amedro_entry_is_anchored_to_two_pinned_open_sources():
     assert sources["AMEDRO_2020_SUPPLEMENT"]["sha256"] == (
         "05a0e9b72254aabab8867e2defca6b1873d17ab38ce47f3c60631e33b18be37b"
     )
-    assert all(s["used_for"] and s["open_access"] is True for s in sources.values())
+    assert all(s["used_for"] for s in sources.values())
+    assert sources["AMEDRO_2020"]["open_access"] is True and sources["AMEDRO_2020_SUPPLEMENT"]["open_access"] is True
     amedro = manifest.candidate("N-AMEDRO-HE-FC")
-    assert set(amedro.source_ids) == set(sources) and amedro.open_access is True
+    assert set(amedro.source_ids) == {"AMEDRO_2020", "AMEDRO_2020_SUPPLEMENT"} and amedro.open_access is True
     where = " ".join(a["where"] for a in amedro.anchors)
     assert "p. 3095" in where and "Fig. S2" in where and "Table 1" in where
     assert manifest.candidate("N-JG-REDUCTION-FIDELITY").open_access is True
@@ -342,3 +345,52 @@ def test_a_rule_citing_an_unpinned_source_or_a_source_without_a_digest_is_refuse
     raw["sources"].append(copy.deepcopy(raw["sources"][0]))
     with pytest.raises(ManifestError, match="source ids repeat"):
         parse_network_rule_manifest(raw)
+
+
+JASPER_MILLER_SHA256 = "7a8e3f0de177ced81c058e6a858af60d57e9c9c20d8fb5eda914f41f9234ebd6"
+
+
+def test_the_jasper_miller_entries_are_anchored_to_the_pinned_full_article():
+    manifest = manifest_module.load_network_rule_manifest(expected_sha256=NETWORK_RULE_MANIFEST_SHA256)
+    source = {s["id"]: s for s in manifest.sources}["JASPER_MILLER_2011"]
+    assert source["sha256"] == JASPER_MILLER_SHA256 and source["used_for"] and source["open_access"] is False
+    for rule_id in ("N-JM-CH4-TRANSFER", "N-JM-CH4-RATE"):
+        rule = manifest.candidate(rule_id)
+        assert rule.source_ids == ("JASPER_MILLER_2011",) and rule.version == "0.2.0"
+        assert rule.anchors and all(a["claim"] and a["where"] for a in rule.anchors)
+        assert all("p. 64" in a["where"] or "Fig" in a["where"] or "Table" in a["where"] for a in rule.anchors)
+    transfer = " ".join(a["where"] + a["claim"] for a in manifest.candidate("N-JM-CH4-TRANSFER").anchors)
+    assert "Table 4" in transfer and "Table 2" in transfer and "Fig. 3" in transfer and "p. 6450" in transfer
+    rate = " ".join(a["where"] for a in manifest.candidate("N-JM-CH4-RATE").anchors)
+    assert "Fig. 12" in rate and "Fig. 13" in rate and "Fig. 14" in rate
+    assert manifest.candidate("N-JM-CH4-TRANSFER").objective.value == "model_fidelity"
+    assert manifest.candidate("N-JM-CH4-RATE").objective.value == "physical_accuracy"
+
+
+def test_the_manifest_history_ends_at_the_shipped_version():
+    raw = raw_manifest()
+    assert raw["history"][-1]["version"] == raw["manifest_version"]
+    assert [h["version"] for h in raw["history"]] == ["0.1.0", "0.2.0"]
+
+
+def test_an_edited_number_in_the_jasper_miller_anchors_makes_the_pin_refuse():
+    data = MANIFEST_PATH.read_bytes()
+    assert b"He 117, 0.95" in data
+    edited = data.replace(b"He 117, 0.95", b"He 118, 0.95")
+    with pytest.raises(ManifestError, match="pinned digest"):
+        parse_network_rule_manifest_bytes(edited, expected_sha256=NETWORK_RULE_MANIFEST_SHA256)
+
+
+@pytest.mark.parametrize("rule_id", ["N-JM-CH4-TRANSFER", "N-JM-CH4-RATE"])
+def test_an_approved_copy_of_a_jasper_miller_rule_stays_inactive_while_predicates_are_off(monkeypatch, rule_id):
+    raw = copy.deepcopy(raw_manifest())
+    target = next(r for r in raw["rules"] if r["rule_id"] == rule_id)
+    target.update(activation_approved=True, activation_blockers=[], owner_acceptance=_signed())
+    data = yaml.safe_dump(raw).encode()
+    pinned = hashlib.sha256(data).hexdigest()
+    monkeypatch.setattr(rules_module, "NETWORK_RULE_MANIFEST_SHA256", pinned)
+    manifest = parse_network_rule_manifest_bytes(data, expected_sha256=pinned)
+    rule = AuditedNetworkRule(manifest.candidate(rule_id), manifest)
+    assert manifest.candidate(rule_id).activatable is True
+    assert rule.status == RULE_INACTIVE and "the rule's predicates are not implemented" in rule.inactive_reasons
+    assert rule_id not in rules_module.RULES_WITH_IMPLEMENTED_PREDICATES
