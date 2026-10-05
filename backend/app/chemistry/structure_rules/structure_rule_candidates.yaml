@@ -1,0 +1,331 @@
+# Candidate structure-energy preference rules, audit manifest version 0.1.0 (2026-10-05).
+#
+# NOTHING HERE IS ACTIVE. Every entry has activation_approved: false, no owner acceptance and a list of blockers, and
+# the registry (app.services.structure_selection.rules) loads this file only against its pinned SHA-256 and registers
+# each entry INACTIVE. An agent never activates a rule: activation needs the owner's signed acceptance in this file AND
+# the rule's predicates to be implemented and reviewed, and neither exists. A change to an entry, a blocker or a source
+# list is a new manifest version, a new pin and a new rule version, never an in-place edit.
+#
+# Provenance of what follows. The council's relative-conformer-energy example (council rationale of 2026-10-04,
+# section 3: "Revised ACONFL, Santra/Martin") was audited against Santra and Martin, J. Phys. Chem. A 126, 9375-9391
+# (2022), doi:10.1021/acs.jpca.2c06407, which is open access (PMC9791657; arXiv 2209.03285). Which version each number
+# was read from is stated in the sources below. The published PDF could not be downloaded (PMC and the publisher serve
+# it behind a bot challenge); what was read is (1) the published open-access full text as Europe PMC serves it
+# (JATS XML: text, tables and table footnotes of the journal version), (2) the arXiv v2 PDF, whose page numbers are
+# the page anchors used here, and (3) the published Supporting Information PDF and data archive, both from Europe PMC.
+# The numbers quoted below were compared between (1) and (2) and agree. Nothing was digitised from a figure.
+#
+# The other two council examples that could have become a preference rule are registered here too: the one proposed
+# form with no source ("controlled convergence on one fixed model") as an inactive candidate with its missing
+# prerequisites, and the three examples that support distinctions but are not preferences are listed under
+# considered_not_rules so that their absence from the rules is a recorded decision.
+manifest_version: 0.1.0
+manifest_date: '2026-10-05'
+history:
+- version: 0.1.0
+  date: '2026-10-05'
+  change: >-
+    First registration (chunk 4 of the structure-ordering work). The ACONFL example was audited against the open-access
+    article and its Supporting Information. Two candidate rules were derived from it, each narrowly scoped to
+    relative conformer energies of the three n-alkanes in the dataset. The fixed-model convergence form was registered
+    with no source. All rules inactive.
+audit_status: inactive_registered_with_missing_prerequisites
+sources:
+- id: SANTRA_MARTIN_2022_PUBLISHED_TEXT
+  citation: Santra, G. and Martin, J. M. L., J. Phys. Chem. A 126(50), 9375-9391 (2022), doi:10.1021/acs.jpca.2c06407; PMC9791657 (Performance of Localized-Orbital Coupled-Cluster Approaches for the Conformational Energies of Longer n-Alkane Chains)
+  version: published journal version, open access, as Europe PMC serves its full text (JATS XML)
+  license: CC BY 4.0 (stated in the article's JATS front matter, PMC9791657); the file is not committed to this repository
+  open_access: true
+  read_from: https://www.ebi.ac.uk/europepmc/webservices/rest/PMC9791657/fullTextXML
+  sha256: 44f452bb502bc81f58a3e7ab27f2dc4577253417d5bf5222721ffd1f7ab85207
+  accessed: '2026-10-05'
+  used_for: "Abstract; Introduction (the ACONFL definition: 12, 16 and 20 conformer energies for n-dodecane, n-hexadecane and n-icosane, ref 24); Computational Details (software, thresholds, basis sets, extrapolation exponents, geometries from ref 24); Results and Discussion (a) (reference for ACONF12, the 'silver' standard), (b) (reference for ACONF16 and ACONF20: HLC14), (c) (Table 5 discussion, including the sentence that the top LNO variants are indistinguishable given the statistical uncertainty of the reference), (d) (Table 6 discussion); Tables 1-6 with their footnotes; Conclusions (the 0.31 kcal/mol MAD between the old and the revised reference). Page numbers are not in this source: page anchors below are those of the arXiv v2 PDF"
+- id: SANTRA_MARTIN_2022_ARXIV_V2
+  citation: Santra, G. and Martin, J. M. L., arXiv:2209.03285v2 (the author's manuscript of the same article)
+  version: arXiv v2, 35 PDF pages (the page numbers quoted as 'arXiv v2 p. N')
+  license: arXiv author manuscript; the file is not committed to this repository
+  open_access: true
+  read_from: https://arxiv.org/pdf/2209.03285v2
+  sha256: 897ccc1a10d44ec963fa1df5eb2c9ebc068495dd25b386f15c92797f9eafb11d
+  accessed: '2026-10-05'
+  used_for: "Page anchors for every number quoted: abstract p. 1; ACONFL definition pp. 2-3; software p. 4; accuracy thresholds, basis sets p. 5; extrapolation exponents and geometries (ref 24) p. 6; 'silver' standard and Table 1 p. 7; Table 2 p. 10; Table 3 (HLC1-HLC22, HLC14) p. 11; Table 4 and its caption p. 12; selection of HLC14, reference shifts +0.60/-0.67 kcal/mol p. 13; Table 5 and the 'indistinguishable' sentence p. 14; Table 6 and the DLPNO-CCSD(T1)-F12 statements p. 19-20; Conclusions (silver, 0.31 kcal/mol upper limit) p. 25-26. Table 5 and Table 6 rows quoted below were compared with the published text and agree"
+- id: SANTRA_MARTIN_2022_SI_PDF
+  citation: Supporting Information (PDF) to Santra and Martin, J. Phys. Chem. A 126, 9375-9391 (2022), file jp2c06407_si_001.pdf
+  version: published Supporting Information
+  license: open access with the article; the file is not committed to this repository
+  open_access: true
+  read_from: Europe PMC supplementary files of PMC9791657 (jp2c06407_si_001.pdf)
+  sha256: 3d0329d9c4f512b16aad64adbc9c17e120bced9979e531d5299444fa4626246f
+  accessed: '2026-10-05'
+  used_for: "Table S1 read (RI-MP2 and RI-MP2-F12 conformer energies of n-dodecane against the revised reference, with MAD, RMSD and MSD rows). Tables S2-S9 (HLC components, HLC energies of individual species, the same statistics with HLC8, composite-method coefficients, PNO-LCCSD(T) with the default REXT) were located and NOT extracted"
+- id: SANTRA_MARTIN_2022_SI_DATA
+  citation: Supporting Information data archive (spreadsheets) to the same article, file jp2c06407_si_002.zip
+  version: published Supporting Information
+  license: open access with the article; the file is not committed to this repository
+  open_access: true
+  read_from: Europe PMC supplementary files of PMC9791657 (jp2c06407_si_002.zip)
+  sha256: dc0a4157b28507c983fcd0ab9243670e3540eae5b0139bbcff1127845e6f99b5
+  accessed: '2026-10-05'
+  used_for: "Located only (spreadsheets: ACONF12 HLCs, DFT results, L-F12 results, among others); NOT opened. Per-conformer reference and method energies, which a per-conformer error or an uncertainty estimate would need, are here and have not been extracted"
+considered_not_rules:
+- id: ORCA_THERMOCHEMISTRY_DECOMPOSITION
+  source: ORCA 6.1 manual, thermochemistry (indexed by the council)
+  why: >-
+    Electronic, zero-point, thermal and entropy contributions differ, so a lowest-G(T) request needs its own complete
+    recipe and conditions. That is a recipe and quantity distinction (already carried by the actual-protocol
+    declaration and the energy convention), and no numerical tolerance or cross-method preference follows from it.
+- id: ORCA_GOAT_ENSEMBLE
+  source: ORCA 6.1 manual, GOAT histidine example (indexed by the council)
+  why: >-
+    A stated xTB ensemble at 298.15 K reports 37.96 % for its lowest member. Minimum search and ensemble-entropy
+    convergence are distinct questions; this is a model example, not an experimental population, not a search-completeness
+    certificate and not a preference between protocols.
+- id: TS_MODE_AND_IRC_CHARACTERIZATION
+  source: ORCA 6.1 manual (frequencies, TS searches, IRC) and the repository's ADR 0012 (indexed by the council)
+  why: >-
+    Appropriate curvature and path witnesses support different claims. Their existence supports role-aware suitability,
+    which the assessment already evaluates; it does not justify a universal IRC prerequisite or a preference for the
+    largest imaginary frequency, and ADR 0012 judges imaginary modes by magnitude, not by count.
+rules:
+
+- rule_id: S-ACONFL-LNO-LARGE-BASIS
+  version: 0.1.0
+  objective: expected_accuracy
+  objective_key: relative_conformer_energy_benchmark_mad
+  observable: relative_conformer_energy
+  activation_approved: false
+  owner_acceptance: null
+  source_ids: [SANTRA_MARTIN_2022_PUBLISHED_TEXT, SANTRA_MARTIN_2022_ARXIV_V2, SANTRA_MARTIN_2022_SI_PDF]
+  open_access: true
+  citation: Santra, G. and Martin, J. M. L., J. Phys. Chem. A 126, 9375-9391 (2022), doi:10.1021/acs.jpca.2c06407 (revised ACONFL, localized-orbital LNO-CCSD(T) conformer energies of n-dodecane, n-hexadecane and n-icosane).
+  protocols:
+    preferred:
+    - "LNO-CCSD(T) (MRCC 2022), threshold Tight, aug-cc-pV{Q,5}Z two-point extrapolation (exponent 3.0), JKfit and aug-cc-pVnZ-RI fitting bases"
+    - "LNO-CCSD(T) (MRCC 2022), threshold vTight, aug-cc-pV{Q,5}Z two-point extrapolation (exponent 3.0), JKfit and aug-cc-pVnZ-RI fitting bases"
+    - "LNO-CCSD(T) (MRCC 2022), threshold vTight, aug-cc-pV5Z, JKfit and aug-cc-pVnZ-RI fitting bases"
+    yielding:
+    - "LNO-CCSD(T) (MRCC 2022), any other threshold (Normal, Tight, vTight or vvTight) at aug-cc-pVTZ, JKfit and aug-cc-pVnZ-RI fitting bases"
+  scope:
+    observable: >-
+      ΔEconf, a conformer energy relative to a NAMED reference conformer (not the lowest in general): conformer 0
+      (all-trans) for n-dodecane and n-hexadecane, conformer 00 (hairpin) for n-icosane (Table 4 caption, arXiv v2 p. 12)
+    chemistry: n-dodecane (C12H26), n-hexadecane (C16H34) and n-icosane (C20H42) only; the 12, 16 and 20 conformer energies of ACONF12, ACONF16 and ACONF20 (arXiv v2 pp. 2-3)
+    state_and_geometry: >-
+      Electronic energies at the conformer geometries extracted from ref 24 (Ehlert et al., the original ACONFL set);
+      the optimisation level of those geometries is not stated in this article (arXiv v2 p. 6)
+    domain: the named dataset members only; no other alkane, no branched or functionalised molecule, no condensed phase
+  anchors:
+  - claim: the dataset is 12, 16 and 20 conformer energies of n-dodecane, n-hexadecane and n-icosane (ACONF12, ACONF16, ACONF20), the 13, 17 and 21 lowest-energy conformers of ref 24
+    where: Introduction, arXiv v2 pp. 2-3; published text Introduction
+  - claim: "LNO-CCSD(T) mean absolute deviation (kcal/mol) against the revised ACONFL reference, ACONFL / ACONF12 / ACONF16 / ACONF20: Tight/AV{Q,5}Z 0.04 / 0.01 / 0.03 / 0.08 (MSD -0.04, RMSD 0.06); vTight/AV5Z 0.06 / 0.04 / 0.04 / 0.08 (MSD 0.01, RMSD 0.07); vTight/AV{Q,5}Z 0.07 / 0.05 / 0.06 / 0.09 (MSD 0.00, RMSD 0.08)"
+    where: Table 5, arXiv v2 p. 14 (same rows in the published Table 5)
+  - claim: "the AVTZ rows of the same method: Normal 0.95 / 0.77 / 0.98 / 1.03 (MSD -0.13, RMSD 1.05); Tight 0.80 / 0.60 / 0.80 / 0.93; vTight 0.73 / 0.51 / 0.69 / 0.89; vvTight 0.72 / 0.50 / 0.69 / 0.87 (MSD -0.03). The paper says tightening from vTight to vvTight has no additional advantage at AVTZ"
+    where: Table 5, arXiv v2 p. 14
+  - claim: considering the statistical uncertainty of the reference energies, the performance of LNO-CCSD(T,Tight)/AV{Q,5}Z, LNO-CCSD(T,vTight)/AV{Q,5}Z and LNO-CCSD(T,vTight)/AV5Z is 'actually indistinguishable'; the excellent LNO-CCSD(T,Normal)/AV{T,Q}Z (MAD 0.05) is attributed to fortunate error compensation between the localized-orbital error and the basis set incompleteness error
+    where: Results (c), arXiv v2 pp. 13-14
+  - claim: the reference for ACONF12 is MP2-F12/V{T,Q}Z-F12 + [CCSD(F12*) - MP2-F12]/VTZ-F12 + (T)/AV{D,T}Z, which the authors call a 'silver' standard; for ACONF16 and ACONF20 it is MP2-F12/V{T,Q}Z-F12 + [LNO-CCSD(T) - LMP2]/vTight/AV{Q,5}Z (HLC14), a correction whose localized-orbital part is the same LNO-CCSD(T)/vTight/AV{Q,5}Z calculation that one of the preferred protocols is
+    where: Results (a), arXiv v2 p. 7 ('silver'); Results (b) and Table 3 (HLC14), arXiv v2 pp. 11-13; Table 4 footnotes [a] and [b], arXiv v2 p. 12
+  - claim: the revised reference differs from the original ACONFL reference energies by up to +0.60 and down to -0.67 kcal/mol, multiple n-icosane conformers change order, and the MAD between the old and the revised reference sets is 0.31 kcal/mol (an upper limit for the change in a method's MAD)
+    where: arXiv v2 p. 13 and p. 26 (Conclusions)
+  proposed_statement: >-
+    For relative conformer energies (against the named reference conformer of each set) of the 12, 16 and 20 conformers
+    of n-dodecane, n-hexadecane and n-icosane of the revised ACONFL dataset, LNO-CCSD(T) at the Tight or vTight
+    threshold with an aug-cc-pV{Q,5}Z extrapolation (or vTight with aug-cc-pV5Z) is preferred over LNO-CCSD(T) with
+    aug-cc-pVTZ at any threshold (Normal, Tight, vTight or vvTight), on the objective of expected accuracy as measured by the paper's mean
+    absolute deviation against its own reference. Only the coarse separation (a mean absolute deviation of about 0.04-0.07
+    against about 0.7-0.95 kcal/mol) is stated; the three preferred variants are not ordered among themselves.
+  required_predicates:
+  - The request is a relative conformer energy over one named conformer set, with the reference conformer named, and covers every member of the set (no mixed-method profile is built from each member's available method).
+  - The conformer set is the ACONF12, ACONF16 or ACONF20 set of the revised ACONFL dataset, identified by member, not by the molecule's name alone.
+  - Each candidate protocol states its program and version, the LNO threshold, the basis sets and the extrapolation, the density fitting, and the frozen-core or all-electron treatment, all established (none inferred from a label).
+  - Both candidates use the same geometries, taken from the same source.
+  - The objective is expected accuracy (a benchmark statement), never model fidelity and never a per-conformer error bar.
+  exceptions:
+  - Any molecule, conformer set or condition outside the three named alkanes.
+  - Any candidate whose threshold, basis, extrapolation or program is not established.
+  - A request for an absolute energy, a free energy or a barrier.
+  activation_blockers:
+  - id: reference_is_silver_and_partly_circular
+    text: The ACONF12 reference is a 'silver' standard (canonical MP2-F12 plus a CCSD(F12*) and (T) correction) and is the only
+      independent comparison; the ACONF16 and ACONF20 reference is canonical MP2-F12/CBS plus the
+      [LNO-CCSD(T) - LMP2]/vTight/AV{Q,5}Z correction (HLC14), whose localized-orbital part is the same calculation one preferred
+      protocol is, so that protocol's agreement with the reference on those two subsets (MAD 0.06 and 0.09 kcal/mol, against 0.05 on
+      ACONF12) shares a component with the reference and is not independent evidence. The rule can lean only on the 12 ACONF12 conformers of one molecule.
+  - id: no_numeric_reference_uncertainty
+    text: The article states no numeric uncertainty for the reference energies. It says only that the three best LNO variants are
+      'indistinguishable' given the statistical uncertainty, and that the revision moved conformer energies by up to
+      +0.60/-0.67 kcal/mol (MAD 0.31 between old and new references). A mean absolute deviation of 0.04-0.07 kcal/mol is
+      below that scale, so no ordering among the preferred variants can be stated and the margin of the coarse claim
+      against the reference uncertainty is not quantified.
+  - id: mad_is_not_a_per_conformer_error
+    text: Every figure is a mean absolute deviation over a set (RMSD and MSD also given). None is an error bar for one
+      conformer's relative energy, and the benchmark cannot be turned into an uncertainty on a stored value.
+  - id: core_correlation_and_corrections_not_stated
+    text: The text read states neither the frozen-core or all-electron treatment nor whether the conformer energies contain
+      zero-point or thermal contributions (the numbers behave as fixed-geometry electronic energies). The actual-protocol
+      facts core_treatment and included_corrections that a cohort needs would have to be read from the datasets.
+  - id: geometry_level_not_stated
+    text: The conformer geometries are 'extracted from ref 24'; the level at which they were optimised is not stated in this
+      article, so the geometry facts a cohort needs cannot be established from it.
+  - id: relative_energy_is_not_a_supported_quantity
+    text: TCKDB's structure selection compares an electronic energy or a zero-kelvin energy. A relative conformer energy against
+      a named reference conformer (which is the all-trans conformer for two sets and the hairpin for the third, and is
+      not the lowest conformer for n-hexadecane, where conformer 00 is 0.49 kcal/mol lower) is a derived quantity with no
+      intent of its own yet. Until one exists the rule's observable never matches and it cannot make an edge.
+  - id: localized_orbital_settings_need_vocabulary
+    text: The actual-protocol declaration can carry local_correlation and pair_natural_orbital approximations with a free
+      setting, but the LNO accuracy threshold, the extrapolation exponents, the (T) treatment and the program-specific
+      meaning of 'Tight' are not typed; the same threshold name in MRCC, ORCA and Molpro is not the same approximation.
+  - id: domain_is_three_molecules
+    text: The evidence is the conformer sets of three n-alkanes. Nothing in the article supports a statement for other alkanes,
+      branched or functionalised molecules, other conformer counts or other geometries.
+  - id: owner_acceptance_and_predicates
+    text: The rule is not approved by the owner and its predicates are not implemented or reviewed.
+  evidence_needed:
+  - source: Santra and Martin Supporting Information data archive (jp2c06407_si_002.zip), already pinned above
+    items: the per-conformer reference and method energies behind Table 5, so the ACONF12-only (independent) comparison and a per-conformer scatter can be computed and cited; open, located but not extracted
+  - source: Ehlert, S., Grimme, S. and Hansen, A., J. Phys. Chem. A 126, 3521-3535 (2022) (ref 24 of the article; the article's own citation). Closed access. DOI 10.1021/acs.jpca.2c02439 and a ChemRxiv preprint, doi 10.26434/chemrxiv-2022-cfqhh (v2, CC BY-NC 4.0), as identified in review; those two identifiers are not printed in the files read here and were not independently opened
+    items: the geometry level of the conformers and the original DLPNO reference, which this article does not state
+  - source: the article's Computational Details beyond the text read, or the program inputs
+    items: the frozen-core or all-electron setting and whether any zero-point or thermal term is in the conformer energies
+  - source: owner decision
+    items: whether a relative-energy intent belongs in structure selection and which conformer is the reference; whether a benchmark MAD may order protocols at all without a numeric reference uncertainty
+
+- rule_id: S-ACONFL-DLPNO-F12-VERYTIGHT
+  version: 0.1.0
+  objective: expected_accuracy
+  objective_key: relative_conformer_energy_benchmark_mad
+  observable: relative_conformer_energy
+  activation_approved: false
+  owner_acceptance: null
+  source_ids: [SANTRA_MARTIN_2022_PUBLISHED_TEXT, SANTRA_MARTIN_2022_ARXIV_V2]
+  open_access: true
+  citation: Santra, G. and Martin, J. M. L., J. Phys. Chem. A 126, 9375-9391 (2022), doi:10.1021/acs.jpca.2c06407 (revised ACONFL, explicitly correlated DLPNO-CCSD(T1)-F12 conformer energies).
+  protocols:
+    preferred:
+    - "DLPNO-CCSD(T1)-F12 (ORCA 5.0.3), VeryTightPNO, cc-pVDZ-F12, density fitting, the row Table 6 labels DLPNO-CCSD(T1)-F12 (not its (T1s) row; see blocker t_scaling_row_labels)"
+    yielding:
+    - "DLPNO-CCSD(T1)-F12 (ORCA 5.0.3), NormalPNO, cc-pVTZ-F12, density fitting, the row Table 6 labels DLPNO-CCSD(T1)-F12 (see blocker t_scaling_row_labels)"
+    - "DLPNO-CCSD(T1) (ORCA 5.0.3), NormalPNO, aug-cc-pVTZ, RIJCOSX"
+  scope:
+    observable: the same ΔEconf against the named reference conformer of each set as the entry above
+    chemistry: n-dodecane, n-hexadecane and n-icosane only (the ACONF12, ACONF16 and ACONF20 sets)
+    state_and_geometry: electronic energies at the conformer geometries extracted from ref 24 (level not stated in this article)
+    domain: the named dataset members only
+  anchors:
+  - claim: "DLPNO-CCSD(T1)-F12/VDZ-F12 with VeryTightPNO: MAD 0.04 (ACONFL), 0.04 (ACONF12), 0.05 (ACONF16), 0.04 (ACONF20), MSD 0.01, RMSD 0.05 kcal/mol; the authors call it the best pick among all the DLPNO-based methods tested and say it outperforms every standard DLPNO-CCSD(T1) in the study. Its VTZ-F12 and VQZ-F12 variants were computed for ACONF12 only (0.06 and 0.07)"
+    where: Table 6, arXiv v2 p. 19; abstract p. 1; Results (d), p. 20; Conclusions, p. 26
+  - claim: "the loose comparison: NormalPNO with VDZ-F12 0.15 (0.09 / 0.09 / 0.24) but with VTZ-F12 0.36 (0.27 / 0.40 / 0.39, MSD -0.35, RMSD 0.57), which the authors attribute to fortuitous error compensation between the loose cutoffs and basis set incompleteness; standard DLPNO-CCSD(T1)/AVTZ NormalPNO 0.74 (0.70 / 0.91 / 0.63, MSD -0.26)"
+    where: Table 6, arXiv v2 p. 19; the fortuitous-error-compensation sentence, arXiv v2 p. 18; Table 5, arXiv v2 p. 15
+  - claim: for a given accuracy threshold and basis set DLPNO-CCSD(T1) and DLPNO-CCSD(T0) perform comparably, and the improvement from TightPNO to VeryTightPNO is not statistically significant for the twelve n-dodecane conformers
+    where: abstract p. 1; Results (c), arXiv v2 p. 17
+  - claim: the reference energies are those of the first entry (silver for ACONF12; MP2-F12/CBS plus the LNO-based HLC14 for ACONF16 and ACONF20); the revised and original references differ by a MAD of 0.31 kcal/mol
+    where: arXiv v2 pp. 7, 11-13 and 26
+  proposed_statement: >-
+    For the named relative conformer energies of the 12, 16 and 20 conformers of the three alkanes of the revised ACONFL
+    dataset, DLPNO-CCSD(T1)-F12/VDZ-F12 with VeryTightPNO is preferred over DLPNO-CCSD(T1)-F12/VTZ-F12 with NormalPNO and
+    over standard DLPNO-CCSD(T1)/aug-cc-pVTZ with NormalPNO, on the objective of expected accuracy as measured by the
+    paper's mean absolute deviation against its own reference. A coarse separation only (0.04 against 0.36 and 0.74 kcal/mol).
+  required_predicates:
+  - The request is a relative conformer energy over one named conformer set, with the reference conformer named, covering every member.
+  - The conformer set is ACONF12, ACONF16 or ACONF20 of the revised ACONFL dataset, identified by member.
+  - Each candidate states its program and version, the PNO threshold family, the basis, the density fitting and RIJCOSX settings and the (T) treatment, all established.
+  - Both candidates use the same geometries, from the same source.
+  - The objective is expected accuracy.
+  exceptions:
+  - Any molecule, conformer set or condition outside the three named alkanes.
+  - Any candidate whose PNO cutoffs, basis or program are not established, including 'VeryTightPNO' from another program or version.
+  activation_blockers:
+  - id: reference_is_silver_and_not_canonical_beyond_dodecane
+    text: The ACONF12 reference is a 'silver' standard; for ACONF16 and ACONF20 the reference is canonical MP2-F12/CBS plus a
+      localized LNO-CCSD(T) correction, not a canonical coupled-cluster result, so the MAD on those two subsets measures
+      agreement with another localized method.
+  - id: no_numeric_reference_uncertainty
+    text: No numeric reference uncertainty is stated, and the revision moved reference energies by up to +0.60/-0.67 kcal/mol
+      (MAD 0.31 between old and new references), so a 0.04 MAD cannot be separated from the reference's own uncertainty
+      and only the coarse gap to the loose protocols is defensible.
+  - id: t_scaling_row_labels
+    text: Table 6 lists DLPNO-CCSD(T1)-F12 and DLPNO-CCSD(T1s)-F12 rows (the '(Ts) approximation' of arXiv v2 pp. 6-7), yet the
+      text (arXiv v2 p. 18) and the Table 6 footnote say the (T) components of these energies are scaled by the global factors
+      1.1413, 1.0527 and 1.0232 for VDZ-F12, VTZ-F12 and VQZ-F12. Which rows apply the scaling is not settled by what was
+      read, so the protocols are named by the paper's own row labels and the (T) treatment of each is not asserted.
+  - id: the_explicitly_correlated_variants_are_a_subset
+    text: The VDZ-F12 VeryTightPNO variant was computed for all three sets, its VTZ-F12 and VQZ-F12 variants for ACONF12 only,
+      so the comparison across basis sets within VeryTightPNO is a one-molecule statement.
+  - id: relative_energy_is_not_a_supported_quantity
+    text: As for the entry above, a relative conformer energy against a named reference conformer has no intent in structure selection yet.
+  - id: core_geometry_and_corrections_not_stated
+    text: The frozen-core or all-electron treatment, the geometry level and whether the energies contain zero-point or thermal
+      terms are not stated in the text read.
+  - id: program_specific_thresholds
+    text: VeryTightPNO is an ORCA 5.0.3 setting (TightPNO with TCutPNO = 10^-8, TCutMKN = 10^-4, TCutPairs = 10^-6, arXiv v2 p. 20);
+      the same name in another program or version is not the same approximation, and the declaration vocabulary does not
+      type PNO cutoffs.
+  - id: domain_is_three_molecules
+    text: The evidence is the conformer sets of three n-alkanes only.
+  - id: owner_acceptance_and_predicates
+    text: The rule is not approved by the owner and its predicates are not implemented or reviewed.
+  evidence_needed:
+  - source: Santra and Martin Supporting Information data archive (jp2c06407_si_002.zip, L-F12 results spreadsheet), already pinned above
+    items: the per-conformer DLPNO-CCSD(T1)-F12 energies and reference, to compute a per-conformer scatter and an ACONF12-only comparison; located, not extracted
+  - source: Ehlert, Grimme and Hansen, J. Phys. Chem. A 126, 3521-3535 (2022) (ref 24; closed access; ChemRxiv preprint doi 10.26434/chemrxiv-2022-cfqhh, v2, CC BY-NC 4.0)
+    items: the geometry level of the conformers
+  - source: owner decision
+    items: whether a relative-energy intent belongs in structure selection; whether a benchmark MAD may order protocols without a numeric reference uncertainty
+
+- rule_id: S-FIXED-MODEL-CONVERGENCE
+  version: 0.1.0
+  objective: model_fidelity
+  objective_key: numerical_convergence_on_one_fixed_model
+  observable: structure_energy
+  activation_approved: false
+  owner_acceptance: null
+  source_ids: []
+  open_access: false
+  citation: >-
+    No source. The council's proposed rule form (council rationale of 2026-10-04, section 3: "Controlled convergence on
+    one fixed model"): "a demonstrably resolved result can be preferred to a demonstrably inaccurate approximation for a
+    declared numerical-fidelity objective". The council says this is a proposed form, not a rule from merely tighter keyword spelling.
+  protocols:
+    preferred:
+    - a result shown, against a pinned reference calculation of the same model, to be resolved to a stated error
+    yielding:
+    - a result shown, against the same pinned reference, to be inaccurate by more than that error
+  scope:
+    observable: electronic energy (or zero-kelvin energy) of one fixed model chemistry, at one geometry
+    chemistry: not stated (no source)
+    state_and_geometry: one fixed geometry and one fixed model; the two candidates differ only in a numerical setting
+    domain: not stated (no source)
+  anchors: []
+  council_observation: >-
+    A proposed rule form with no primary-source comparison. The council's own conditions are that the comparison and the
+    reference are pinned and that the error resolution is demonstrated; tighter keywords, more basis functions, more
+    attachments or lower absolute totals alone create no edge.
+  proposed_statement: >-
+    For one fixed model chemistry at one geometry, a calculation shown against a pinned reference to be resolved to a stated
+    error is preferred over one shown against the same reference to be inaccurate by more than that error, on the objective
+    of model fidelity to that pinned reference. No statement about any specific method, basis or setting is made.
+  required_predicates:
+  - The two candidates differ only in a numerical setting of one fixed model.
+  - The request names the pinned reference model (reference_model) and the error resolution it is judged against.
+  - The error of each candidate against the reference is established by a recorded comparison, not by the setting's name.
+  exceptions:
+  - A comparison with no pinned reference, or in which the reference's own resolution is not stated.
+  - Any difference between candidates other than the one numerical setting.
+  activation_blockers:
+  - id: no_source
+    text: There is no primary source, dataset or comparison behind this form. It is a council proposal, so there is no scope, no
+      reliability and no uncertainty to pin.
+  - id: no_pinned_reference_in_the_store
+    text: TCKDB stores no pinned reference calculation against which a candidate's error could be established, and the structure
+      declarations have no field for a recorded reference comparison.
+  - id: setting_names_do_not_imply_accuracy
+    text: A tighter keyword (a tighter cutoff, a larger grid, a bigger basis) is not evidence of accuracy by itself, and the
+      declared numerical approximations are descriptions, not demonstrated errors.
+  - id: owner_acceptance_and_predicates
+    text: The rule is not approved by the owner and its predicates are not implemented or reviewed.
+  evidence_needed:
+  - source: a specific primary source or dataset that pins a reference and demonstrates the error resolution for a named numerical setting
+    items: the reference calculation, the settings compared, the error of each against the reference with its uncertainty, and the domain
+  - source: owner decision
+    items: whether a recorded reference comparison belongs in the declaration vocabulary at all
