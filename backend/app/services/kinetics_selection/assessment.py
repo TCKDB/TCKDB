@@ -44,6 +44,7 @@ from app.services.kinetics_selection.models import (
     Reason,
 )
 from app.services.selection_kernel import Applicability
+from app.services.structure_selection.source_findings import SourceFindings
 from app.services.trust.models import EvidenceEvaluation
 
 _FALLOFF_MODELS = frozenset({"lindemann", "troe", "sri"})
@@ -400,12 +401,19 @@ def _check_degeneracy(c: NormalizedKinetics, f: _Findings, advisory: list[str]) 
 
 
 def assess_candidate(
-    c: NormalizedKinetics, *, request: KineticsRequest, evidence: EvidenceEvaluation | None
+    c: NormalizedKinetics,
+    *,
+    request: KineticsRequest,
+    evidence: EvidenceEvaluation | None,
+    source_findings: SourceFindings | None = None,
 ) -> KineticsAssessment:
     """Assess one record for the request. Pure; see the module docstring for what each verdict means.
 
     :param evidence: The computed-kinetics evidence evaluation, or ``None`` when the rubric does not apply
         (an experimental or estimated rate needs no transition-state chain).
+    :param source_findings: What live, supported structure findings say about the record's own source calculations in the
+        roles it uses them for (``structure_selection.source_findings``): a confirmed invalidation blocks, an unresolved one
+        leaves the record unresolved, anything unreadable is disclosed.
     """
     f = _Findings()
     advisory: list[str] = []
@@ -420,6 +428,11 @@ def assess_candidate(
     _check_degeneracy(c, f, advisory)
 
     blocking: list[str] = []
+    if source_findings is not None:
+        blocking.extend(source_findings.blocking)
+        advisory.extend(source_findings.advisory)
+        for code in source_findings.unresolved:
+            f.unresolved(code)
     if evidence is None:
         if c.scientific_origin != ScientificOriginKind.computed.value:
             advisory.append(f"evidence_rubric_not_applicable:{c.scientific_origin}")
@@ -427,6 +440,9 @@ def assess_candidate(
         if evidence.hard_fail_reason is not None:
             blocking.append(f"evidence_hard_failed:{evidence.hard_fail_reason.value}")
         advisory.append(f"evidence_label:{evidence.label.value}")
+        # Which trust-contract version produced the blocking verdict above (rubric v2 / TS v3 demote an automated geometry
+        # fail to advisory), so a manifest says what the evidence semantics were when it was made.
+        advisory.append(f"evidence_rubric:{evidence.rubric}@{evidence.rubric_version}")
         for name, outcome in evidence.checks.items():
             if outcome.value in {"missing", "warning"}:
                 advisory.append(f"evidence_check_{outcome.value}:{name}")

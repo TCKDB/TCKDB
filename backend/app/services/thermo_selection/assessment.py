@@ -37,6 +37,7 @@ from typing import Any
 from app.db.models.common import EnthalpyReferenceKind, ScientificOriginKind
 from app.db.models.thermo import Thermo
 from app.services.consistency import engine
+from app.services.structure_selection.source_findings import SourceFindings
 from app.services.thermo_selection.models import (
     REFERENCE_TEMPERATURE_K,
     Applicability,
@@ -156,7 +157,11 @@ def _combine(reasons: list[Reason]) -> Applicability:
 
 
 def assess_candidate(
-    thermo: Thermo, *, request: H298Request, evidence: EvidenceEvaluation | None
+    thermo: Thermo,
+    *,
+    request: H298Request,
+    evidence: EvidenceEvaluation | None,
+    source_findings: SourceFindings | None = None,
 ) -> CandidateAssessment:
     """Assess one loaded thermo record for the request. Deterministic; reads only what is loaded.
 
@@ -164,6 +169,10 @@ def assess_candidate(
     :param request: The normalised request (target and conformer group).
     :param evidence: The computed-thermo evidence evaluation for this record, or ``None`` when the
         record is not computed (experimental and estimated records are not graded by that rubric).
+    :param source_findings: What live, supported structure findings say about the record's own source calculations in the
+        roles it uses them for (``structure_selection.source_findings``). A confirmed invalidation blocks, an unresolved one
+        leaves the record unresolved, anything unreadable is disclosed. ``None`` only for callers that assess one record with
+        no database (unit tests); the services always pass it.
     """
     representations = evaluate_representations(thermo)
     answering = {r["representation"]: r["value_kj_mol"] for r in representations if r["value_kj_mol"] is not None}
@@ -172,10 +181,15 @@ def assess_candidate(
     reasons = _record_level_reasons(thermo, request)
     if answer is None:
         reasons.extend(_classify_unanswered(representations))
+    if source_findings is not None:
+        reasons.extend(Reason(code, Applicability.unresolved) for code in source_findings.unresolved)
     applicability = _combine(reasons)
 
     blocking: list[str] = []
     advisory: list[str] = []
+    if source_findings is not None:
+        blocking.extend(source_findings.blocking)
+        advisory.extend(source_findings.advisory)
     if thermo.reference_pressure_bar is None:
         advisory.append("reference_pressure_not_recorded")
     if evidence is None:
@@ -185,6 +199,9 @@ def assess_candidate(
         if evidence.hard_fail_reason is not None:
             blocking.append(f"evidence_hard_failed:{evidence.hard_fail_reason.value}")
         advisory.append(f"evidence_label:{evidence.label.value}")
+        # Which trust-contract version produced the blocking verdict above (rubric v2 / TS v3 demote an automated geometry
+        # fail to advisory), so a manifest says what the evidence semantics were when it was made.
+        advisory.append(f"evidence_rubric:{evidence.rubric}@{evidence.rubric_version}")
         for name, outcome in evidence.checks.items():
             if outcome in (EvidenceOutcome.missing, EvidenceOutcome.warning):
                 advisory.append(f"evidence_check_{outcome.value}:{name}")

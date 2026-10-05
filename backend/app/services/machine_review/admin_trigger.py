@@ -80,12 +80,12 @@ from app.services.trust.models import (
     TrustFragment,
 )
 from app.services.trust.rubrics import (
-    COMPUTED_CALCULATION_V1,
-    COMPUTED_KINETICS_V1,
-    COMPUTED_STATMECH_V1,
-    COMPUTED_THERMO_V1,
-    COMPUTED_TRANSITION_STATE_V2,
-    COMPUTED_TRANSPORT_V1,
+    COMPUTED_CALCULATION_V2,
+    COMPUTED_KINETICS_V2,
+    COMPUTED_STATMECH_V2,
+    COMPUTED_THERMO_V2,
+    COMPUTED_TRANSITION_STATE_V3,
+    COMPUTED_TRANSPORT_V2,
 )
 
 
@@ -113,37 +113,37 @@ _RESOLVERS: dict[str, _RecordTypeResolver] = {
         Calculation,
         evaluate_computed_calculation,
         SubmissionRecordType.calculation,
-        COMPUTED_CALCULATION_V1,
+        COMPUTED_CALCULATION_V2,
     ),
     "kinetics": _RecordTypeResolver(
         Kinetics,
         evaluate_computed_kinetics,
         SubmissionRecordType.kinetics,
-        COMPUTED_KINETICS_V1,
+        COMPUTED_KINETICS_V2,
     ),
     "thermo": _RecordTypeResolver(
         Thermo,
         evaluate_computed_thermo,
         SubmissionRecordType.thermo,
-        COMPUTED_THERMO_V1,
+        COMPUTED_THERMO_V2,
     ),
     "statmech": _RecordTypeResolver(
         Statmech,
         evaluate_computed_statmech,
         SubmissionRecordType.statmech,
-        COMPUTED_STATMECH_V1,
+        COMPUTED_STATMECH_V2,
     ),
     "transport": _RecordTypeResolver(
         Transport,
         evaluate_computed_transport,
         SubmissionRecordType.transport,
-        COMPUTED_TRANSPORT_V1,
+        COMPUTED_TRANSPORT_V2,
     ),
     "transition_state_entry": _RecordTypeResolver(
         TransitionStateEntry,
         evaluate_computed_transition_state_entry,
         SubmissionRecordType.transition_state_entry,
-        COMPUTED_TRANSITION_STATE_V2,
+        COMPUTED_TRANSITION_STATE_V3,
     ),
 }
 

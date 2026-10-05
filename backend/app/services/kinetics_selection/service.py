@@ -36,6 +36,7 @@ from app.services.kinetics_selection.models import (
 )
 from app.services.read_snapshot import begin_read_snapshot
 from app.services.selection_kernel import Applicability
+from app.services.structure_selection.source_findings import assess_source_findings, kinetics_uses
 from app.services.trust import evaluate_loaded_kinetics
 
 
@@ -106,12 +107,15 @@ def assess_reaction_entry_kinetics(
 
     assessments: list[KineticsAssessment] = []
     eligible = []
+    source_findings = assess_source_findings(session, {k.id: kinetics_uses(k) for k in loaded.rows})
     for kinetics in loaded.rows:
         evidence = (
             evaluate_loaded_kinetics(kinetics) if kinetics.scientific_origin is ScientificOriginKind.computed else None
         )
         normalized = loaded.candidates[kinetics.id]
-        assessment = assess_candidate(normalized, request=request, evidence=evidence)
+        assessment = assess_candidate(
+            normalized, request=request, evidence=evidence, source_findings=source_findings[kinetics.id]
+        )
         assessments.append(assessment)
         if assessment.physically_eligible:
             eligible.append(normalized)

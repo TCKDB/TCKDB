@@ -558,8 +558,8 @@ def test_detail_include_trust_adds_statmech_trust_fragment(
 
     evidence = trust["evidence"]
     assert evidence["record_type"] == "statmech"
-    assert evidence["rubric"] == "computed_statmech_v1"
-    assert evidence["rubric_version"] == 1
+    assert evidence["rubric"] == "computed_statmech_v2"
+    assert evidence["rubric_version"] == 2
     assert evidence["is_certified"] is False
     assert "record_id" not in evidence
 
@@ -592,7 +592,7 @@ def test_detail_include_trust_sparse_statmech_reports_missing_checks(
     body = client.get(_detail_url(sm.public_ref, include="trust")).json()
     evidence = body["record"]["trust"]["evidence"]
 
-    assert evidence["rubric"] == "computed_statmech_v1"
+    assert evidence["rubric"] == "computed_statmech_v2"
     assert evidence["checks"]["source_calculations_present"] == "missing"
     assert evidence["checks"]["statmech_treatment_present"] == "missing"
 

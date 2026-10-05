@@ -8350,11 +8350,6 @@
  "manifests": {
   "chain": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -8863,11 +8858,6 @@
   },
   "conflict_elsewhere": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -9648,11 +9638,6 @@
   },
   "cycle": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -10297,11 +10282,6 @@
   },
   "e1_blank_blocks_unique_winner": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -10889,11 +10869,6 @@
   },
   "e1_g4_over_g3": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -11410,11 +11385,6 @@
   },
   "e1_status_cannot_reverse": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -11931,11 +11901,6 @@
   },
   "empty": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [],
     "decision": {
      "administrative_first": null,
@@ -12261,11 +12226,6 @@
   },
   "inactive_rule": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -12496,11 +12456,6 @@
   },
   "no_rules_incomparable": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -12737,11 +12692,6 @@
   },
   "opposing_mutual_supersession": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -13188,11 +13138,6 @@
   },
   "opposing_superseded": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -13613,11 +13558,6 @@
   },
   "opposing_unresolved": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -14056,11 +13996,6 @@
   },
   "outside_scope": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -14303,11 +14238,6 @@
   },
   "policy_matters_inside_a_front": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -14782,11 +14712,6 @@
   },
   "policy_matters_no_rules": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -15073,11 +14998,6 @@
   },
   "policy_matters_with_a_single_winner_chain": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -15546,11 +15466,6 @@
   },
   "single": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -15969,11 +15884,6 @@
   },
   "superseded_rule_removed_before_conflict": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -16504,11 +16414,6 @@
   },
   "two_fronts_admin_order": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {
@@ -16971,11 +16876,6 @@
   },
   "unknown_scope": {
    "manifest": {
-    "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
-    },
     "candidates": [
      {
       "assessment": {

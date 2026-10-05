@@ -61,12 +61,12 @@ _PROMPT = "machine_review_v1"
 
 #: What each reviewer-family record type must store: exactly its own rubric.
 _REVIEWER_RECIPES = {
-    "calculation": {"computed_calculation_v1": "1"},
-    "kinetics": {"computed_kinetics_v1": "1"},
-    "thermo": {"computed_thermo_v1": "1"},
-    "statmech": {"computed_statmech_v1": "1"},
-    "transport": {"computed_transport_v1": "1"},
-    "transition_state_entry": {"computed_transition_state_v2": "2"},
+    "calculation": {"computed_calculation_v2": "2"},
+    "kinetics": {"computed_kinetics_v2": "2"},
+    "thermo": {"computed_thermo_v2": "2"},
+    "statmech": {"computed_statmech_v2": "2"},
+    "transport": {"computed_transport_v2": "2"},
+    "transition_state_entry": {"computed_transition_state_v3": "3"},
 }
 
 #: What each scientific-check runner must store: exactly its own rubric.

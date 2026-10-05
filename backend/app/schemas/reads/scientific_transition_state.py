@@ -404,6 +404,12 @@ class TransitionStateEntryValidationEvidence(BaseModel):
 class TransitionStateSaddlePointEvidence(BaseModel):
     """The imaginary-frequency verdict for a TS entry, always present.
 
+    A one-statement browse projection, labelled by ``basis`` as ``latest_direct_frequency``: it reports what the
+    latest directly attached frequency calculation says and nothing more. It is NOT validated saddle evidence: it
+    checks no geometry, no connectivity and no reaction-coordinate coherence, and it is not the answer to
+    ``POST /scientific/transition-state-entries/{ref}/evidence/select``, which judges determinations against a
+    stated claim. Do not read ``n_imag == 1`` here as "validated".
+
     Taken from the entry's *representative* freq result: the calculation
     directly attached to this entry (``calculation.transition_state_entry_id
     == entry.id``) with ``type == freq`` and a ``calc_freq_result`` row,
@@ -428,6 +434,7 @@ class TransitionStateSaddlePointEvidence(BaseModel):
     nor the structural flag at all.
     """
 
+    basis: Literal["latest_direct_frequency"] = "latest_direct_frequency"
     n_imag: int | None = None
     imag_freq_cm1: float | None = None
     reaction_coordinate_mode_index: int | None = None

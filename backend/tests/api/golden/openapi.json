@@ -24067,6 +24067,18 @@
       "KineticsSelectionManifest": {
         "description": "The replayable decision manifest of ``POST .../kinetics/select/manifest``.\n\nPublic refs only. Holds the normalised request, the snapshot isolation it was read under, every assessed\ncandidate with its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the\ndeterminations the eligible ones form, the rules consulted with each rule's verdict per determination, the\npair checks, the preference edges, the fronts and the administrative order: enough to recompute the decision\nwith no database.",
         "properties": {
+          "assessment_semantics": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Semantics"
+          },
           "candidates": {
             "items": {
               "additionalProperties": true,
@@ -56806,6 +56818,18 @@
       "ThermoSelectionManifest": {
         "description": "The replayable decision manifest of ``POST .../thermo/select/manifest``.\n\nPublic refs only. Holds the normalised request, the effective review floor, every assessed candidate\nwith its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the rules\napplied with each rule's verdict per candidate, the preference edges, the fronts and the administrative\norder: enough to recompute the decision with no database.",
         "properties": {
+          "assessment_semantics": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Semantics"
+          },
           "candidates": {
             "items": {
               "additionalProperties": true,
@@ -59803,8 +59827,14 @@
         "type": "object"
       },
       "TransitionStateSaddlePointEvidence": {
-        "description": "The imaginary-frequency verdict for a TS entry, always present.\n\nTaken from the entry's *representative* freq result: the calculation\ndirectly attached to this entry (``calculation.transition_state_entry_id\n== entry.id``) with ``type == freq`` and a ``calc_freq_result`` row,\npicking the latest by ``created_at`` with ``calculation.id`` as the\ntie-break — the same deterministic rule the trust rubric's\n``_ts_representative_freq_result`` uses (spec §8.5). That rule agrees\nwith this block whenever the representative freq calc is directly\nattached to the entry, which is the common case — but the rubric's own\nsource-calculation discovery additionally walks one dependency hop\n(e.g. a ``freq_on`` edge), so a freq calc the rubric reaches only that\nway is invisible to this block, and the two surfaces CAN disagree on\nwhich freq result is \"representative\" in that case. See\n``app.services.scientific_read.transition_states._build_saddle_point_index``\nfor the exact scope this block uses.\n\n``None`` on the parent record exactly when the entry carries no freq\ncalculation with a result row — a real absence, not a zeroed-out\nstruct. When present, every field below still reports its own\n``None`` faithfully: a freq result can record ``n_imag`` without a\ndesignated ``reaction_coordinate_mode_index`` (single imaginary mode,\nADR 0012), and a pre-ADR-0012 record may have neither the mode index\nnor the structural flag at all.",
+        "description": "The imaginary-frequency verdict for a TS entry, always present.\n\nA one-statement browse projection, labelled by ``basis`` as ``latest_direct_frequency``: it reports what the\nlatest directly attached frequency calculation says and nothing more. It is NOT validated saddle evidence: it\nchecks no geometry, no connectivity and no reaction-coordinate coherence, and it is not the answer to\n``POST /scientific/transition-state-entries/{ref}/evidence/select``, which judges determinations against a\nstated claim. Do not read ``n_imag == 1`` here as \"validated\".\n\nTaken from the entry's *representative* freq result: the calculation\ndirectly attached to this entry (``calculation.transition_state_entry_id\n== entry.id``) with ``type == freq`` and a ``calc_freq_result`` row,\npicking the latest by ``created_at`` with ``calculation.id`` as the\ntie-break — the same deterministic rule the trust rubric's\n``_ts_representative_freq_result`` uses (spec §8.5). That rule agrees\nwith this block whenever the representative freq calc is directly\nattached to the entry, which is the common case — but the rubric's own\nsource-calculation discovery additionally walks one dependency hop\n(e.g. a ``freq_on`` edge), so a freq calc the rubric reaches only that\nway is invisible to this block, and the two surfaces CAN disagree on\nwhich freq result is \"representative\" in that case. See\n``app.services.scientific_read.transition_states._build_saddle_point_index``\nfor the exact scope this block uses.\n\n``None`` on the parent record exactly when the entry carries no freq\ncalculation with a result row — a real absence, not a zeroed-out\nstruct. When present, every field below still reports its own\n``None`` faithfully: a freq result can record ``n_imag`` without a\ndesignated ``reaction_coordinate_mode_index`` (single imaginary mode,\nADR 0012), and a pre-ADR-0012 record may have neither the mode index\nnor the structural flag at all.",
         "properties": {
+          "basis": {
+            "const": "latest_direct_frequency",
+            "default": "latest_direct_frequency",
+            "title": "Basis",
+            "type": "string"
+          },
           "calculation_ref": {
             "title": "Calculation Ref",
             "type": "string"

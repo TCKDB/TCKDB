@@ -1786,6 +1786,8 @@ def test_tse_detail_saddle_point_served_from_representative_freq(
     body = client.get(_tse_detail_url(tse.public_ref)).json()
     saddle = body["record"]["saddle_point"]
     assert saddle is not None
+    # The projection says what it is: the latest directly attached frequency result, not validated saddle evidence.
+    assert saddle["basis"] == "latest_direct_frequency"
     assert saddle["n_imag"] == 1
     assert saddle["imag_freq_cm1"] == -768.67
     assert saddle["calculation_ref"] == freq_calc.public_ref
@@ -1861,6 +1863,7 @@ def test_ts_detail_include_entries_serves_saddle_point_per_entry(
     _attach_ts_freq(db_session, tse=entries[0], n_imag=1, imag_freq_cm1=-768.67)
     body = client.get(_ts_detail_url(ts.public_ref, include="entries")).json()
     entry_records = body["record"]["entries"]
+    assert entry_records[0]["saddle_point"]["basis"] == "latest_direct_frequency"
     assert entry_records[0]["saddle_point"]["n_imag"] == 1
 
 
@@ -1874,8 +1877,8 @@ def test_tse_detail_include_trust_returns_fragment(client, db_session):
     assert trust["is_certified"] is False
     evidence = trust["evidence"]
     assert evidence["record_type"] == "transition_state_entry"
-    assert evidence["rubric"] == "computed_transition_state_v2"
-    assert evidence["rubric_version"] == 2
+    assert evidence["rubric"] == "computed_transition_state_v3"
+    assert evidence["rubric_version"] == 3
     # Evidence object carries the deterministic check breakdown.
     for key in (
         "checks",
@@ -1995,7 +1998,7 @@ def test_tse_detail_trust_validated_n_imag_one_passes_freq_check(
     )
 
 
-def test_tse_detail_trust_optimized_n_imag_zero_hard_fails(client, db_session):
+def test_tse_detail_trust_optimized_n_imag_zero_warns_visibly_and_is_not_a_hard_fail(client, db_session):
     _, _, _, entries = _make_reaction_with_ts(
         db_session, statuses=[TransitionStateEntryStatus.optimized]
     )
@@ -2006,10 +2009,11 @@ def test_tse_detail_trust_optimized_n_imag_zero_hard_fails(client, db_session):
     trust = client.get(
         _tse_detail_url(entries[0].public_ref, include="trust")
     ).json()["record"]["trust"]
-    assert trust["trust_status"] == "hard_failed"
+    assert trust["trust_status"] != "hard_failed"  # rubric v3: the badge issues no frequency verdict
+    assert trust["evidence"]["checks"]["no_frequency_result_lacks_an_imaginary_mode"] == "warning"
 
 
-def test_tse_detail_trust_optimized_n_imag_multiple_hard_fails(
+def test_tse_detail_trust_optimized_n_imag_multiple_is_a_missing_designation_not_a_hard_fail(
     client, db_session
 ):
     _, _, _, entries = _make_reaction_with_ts(
@@ -2026,7 +2030,8 @@ def test_tse_detail_trust_optimized_n_imag_multiple_hard_fails(
     trust = client.get(
         _tse_detail_url(entries[0].public_ref, include="trust")
     ).json()["record"]["trust"]
-    assert trust["trust_status"] == "hard_failed"
+    assert trust["trust_status"] != "hard_failed"
+    assert trust["evidence"]["checks"]["reaction_coordinate_designated_for_ts"] == "missing"
 
 
 def test_tse_detail_trust_guess_n_imag_not_one_warns_not_hard_fail(

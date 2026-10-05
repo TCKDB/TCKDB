@@ -232,19 +232,17 @@ def _check_geometry_validation_present(calc: Calculation) -> EvidenceOutcome:
 def _check_geometry_validation_passed_or_warning(calc: Calculation) -> EvidenceOutcome:
     """Return passed/warning/not_applicable based on geometry-validation status.
 
-    ``ValidationStatus.fail`` is intentionally NOT reported here — it is
-    promoted to a hard-fail signal by the evaluator before this check
-    is reached. A warning row produces a warning outcome (advisory only,
-    zero weight).
+    A ``warning`` row and a ``fail`` row both produce a warning outcome
+    (advisory only, zero weight): ``fail`` is an automated heuristic
+    mismatch, a curator-attention signal, not a hard fail (rubric v2).
     """
     if calc.geometry_validation is None:
         return EvidenceOutcome.not_applicable
     status = calc.geometry_validation.validation_status
     if status is ValidationStatus.passed:
         return EvidenceOutcome.passed
-    if status is ValidationStatus.warning:
-        return EvidenceOutcome.warning
-    return EvidenceOutcome.not_applicable
+    # ``fail`` is an automated, heuristic mismatch: advisory (zero weight), visible, never a hard fail.
+    return EvidenceOutcome.warning
 
 
 def _check_scf_stability_present_if_claimed(calc: Calculation) -> EvidenceOutcome:
@@ -611,15 +609,12 @@ def _check_geometry_validation_not_failed_for_source_calculations(
     if not validations:
         return EvidenceOutcome.not_applicable
     if any(
-        validation.validation_status is ValidationStatus.warning
+        validation.validation_status
+        in (ValidationStatus.warning, ValidationStatus.fail)
         for validation in validations
     ):
+        # ``fail`` is an automated heuristic mismatch: advisory, never a hard fail (rubric v2).
         return EvidenceOutcome.warning
-    if any(
-        validation.validation_status is ValidationStatus.fail
-        for validation in validations
-    ):
-        return EvidenceOutcome.not_applicable
     return EvidenceOutcome.passed
 
 
@@ -975,11 +970,6 @@ def _check_source_calculation_has_non_hard_failed_evidence(
     return _bool_outcome(
         all(
             calc.quality is not CalculationQuality.rejected
-            and (
-                calc.geometry_validation is None
-                or calc.geometry_validation.validation_status
-                is not ValidationStatus.fail
-            )
             for calc in calcs
         )
     )
@@ -1013,15 +1003,12 @@ def _check_thermo_geometry_validation_not_failed_for_source_calculations(
     if not validations:
         return EvidenceOutcome.not_applicable
     if any(
-        validation.validation_status is ValidationStatus.warning
+        validation.validation_status
+        in (ValidationStatus.warning, ValidationStatus.fail)
         for validation in validations
     ):
+        # ``fail`` is an automated heuristic mismatch: advisory, never a hard fail (rubric v2).
         return EvidenceOutcome.warning
-    if any(
-        validation.validation_status is ValidationStatus.fail
-        for validation in validations
-    ):
-        return EvidenceOutcome.not_applicable
     return EvidenceOutcome.passed
 
 
@@ -1381,11 +1368,6 @@ def _check_statmech_source_calculation_has_non_hard_failed_evidence(
     return _bool_outcome(
         all(
             calc.quality is not CalculationQuality.rejected
-            and (
-                calc.geometry_validation is None
-                or calc.geometry_validation.validation_status
-                is not ValidationStatus.fail
-            )
             for calc in calcs
         )
     )
@@ -1419,15 +1401,12 @@ def _check_statmech_geometry_validation_not_failed_for_source_calculations(
     if not validations:
         return EvidenceOutcome.not_applicable
     if any(
-        validation.validation_status is ValidationStatus.warning
+        validation.validation_status
+        in (ValidationStatus.warning, ValidationStatus.fail)
         for validation in validations
     ):
+        # ``fail`` is an automated heuristic mismatch: advisory, never a hard fail (rubric v2).
         return EvidenceOutcome.warning
-    if any(
-        validation.validation_status is ValidationStatus.fail
-        for validation in validations
-    ):
-        return EvidenceOutcome.not_applicable
     return EvidenceOutcome.passed
 
 
@@ -1734,11 +1713,6 @@ def _check_transport_source_calculation_has_non_hard_failed_evidence(
     return _bool_outcome(
         all(
             calc.quality is not CalculationQuality.rejected
-            and (
-                calc.geometry_validation is None
-                or calc.geometry_validation.validation_status
-                is not ValidationStatus.fail
-            )
             for calc in calcs
         )
     )
@@ -1772,15 +1746,12 @@ def _check_transport_geometry_validation_not_failed_for_source_calculations(
     if not validations:
         return EvidenceOutcome.not_applicable
     if any(
-        validation.validation_status is ValidationStatus.warning
+        validation.validation_status
+        in (ValidationStatus.warning, ValidationStatus.fail)
         for validation in validations
     ):
+        # ``fail`` is an automated heuristic mismatch: advisory, never a hard fail (rubric v2).
         return EvidenceOutcome.warning
-    if any(
-        validation.validation_status is ValidationStatus.fail
-        for validation in validations
-    ):
-        return EvidenceOutcome.not_applicable
     return EvidenceOutcome.passed
 
 
@@ -1796,9 +1767,14 @@ def _check_transport_not_rejected_or_deprecated_if_applicable(
 # one-atom calculation): trust is computed on read, and the machine-review
 # context_hash already folds in the per-check sets (context_adapter.py); same
 # ruling as #393, #463, #78.
-COMPUTED_CALCULATION_V1: EvidenceRubric = EvidenceRubric(
+# Trust contract version 2 (2026-10), applying to the five computed rubrics below at version 2 and to the transition
+# state rubric at version 3: an automated geometry-validation ``fail`` is advisory (a ``warning`` outcome on the geometry
+# checks), no longer a hard fail, and the "non hard failed evidence" checks mirror the narrowed hard fail (rejected quality
+# only). A machine review stamped with the previous version is genuinely stale, which is what the bump is for. Never edit
+# a stored review; see ``backend/docs/specs/automated_trust_layer.md``.
+COMPUTED_CALCULATION_V2: EvidenceRubric = EvidenceRubric(
     name="computed_calculation",
-    version=1,
+    version=2,
     record_type="calculation",
     checks=(
         EvidenceCheckSpec(
@@ -1899,9 +1875,9 @@ COMPUTED_CALCULATION_V1: EvidenceRubric = EvidenceRubric(
 )
 
 
-COMPUTED_KINETICS_V1: EvidenceRubric = EvidenceRubric(
+COMPUTED_KINETICS_V2: EvidenceRubric = EvidenceRubric(
     name="computed_kinetics",
-    version=1,
+    version=2,
     record_type="kinetics",
     checks=(
         EvidenceCheckSpec(
@@ -2048,9 +2024,9 @@ COMPUTED_KINETICS_V1: EvidenceRubric = EvidenceRubric(
 )
 
 
-COMPUTED_THERMO_V1: EvidenceRubric = EvidenceRubric(
+COMPUTED_THERMO_V2: EvidenceRubric = EvidenceRubric(
     name="computed_thermo",
-    version=1,
+    version=2,
     record_type="thermo",
     checks=(
         EvidenceCheckSpec(
@@ -2228,9 +2204,9 @@ COMPUTED_THERMO_V1: EvidenceRubric = EvidenceRubric(
 )
 
 
-COMPUTED_STATMECH_V1: EvidenceRubric = EvidenceRubric(
+COMPUTED_STATMECH_V2: EvidenceRubric = EvidenceRubric(
     name="computed_statmech",
-    version=1,
+    version=2,
     record_type="statmech",
     checks=(
         EvidenceCheckSpec(
@@ -2393,9 +2369,9 @@ COMPUTED_STATMECH_V1: EvidenceRubric = EvidenceRubric(
 )
 
 
-COMPUTED_TRANSPORT_V1: EvidenceRubric = EvidenceRubric(
+COMPUTED_TRANSPORT_V2: EvidenceRubric = EvidenceRubric(
     name="computed_transport",
-    version=1,
+    version=2,
     record_type="transport",
     checks=(
         EvidenceCheckSpec(
@@ -2911,17 +2887,15 @@ def _check_ts_source_calculation_has_non_hard_failed_evidence(
     """Return passed when at least one source calc is not deterministically hard-failed.
 
     "Hard-failed" mirrors the calculation rubric's signals: quality=rejected
-    or geometry-validation status=fail. The evaluator promotes the
-    "all source calcs hard-failed" case to its own ``HardFailReason``.
+    (rubric v3; an automated geometry-validation ``fail`` is advisory and no
+    longer counts). The evaluator promotes the "all source calcs hard-failed"
+    case to its own ``HardFailReason``.
     """
     source = _ts_source_calculations(ts_entry)
     if not source:
         return EvidenceOutcome.missing
     for calc in source:
         if calc.quality is CalculationQuality.rejected:
-            continue
-        gv = calc.geometry_validation
-        if gv is not None and gv.validation_status is ValidationStatus.fail:
             continue
         return EvidenceOutcome.passed
     return EvidenceOutcome.missing
@@ -2953,10 +2927,10 @@ def _check_ts_geometry_validation_present_for_source_calculations(
 def _check_ts_geometry_validation_not_failed_for_source_calculations(
     ts_entry: TransitionStateEntry,
 ) -> EvidenceOutcome:
-    """Return warning when any source calc carries a ``warning`` geometry status.
+    """Return warning when any source calc carries a ``warning`` or ``fail`` geometry status.
 
-    ``fail`` is promoted to a hard fail by the evaluator before this runs;
-    in that case the runner reports ``not_applicable``.
+    ``fail`` (an automated heuristic mismatch) is reported as a warning too:
+    from rubric v3 it is advisory, never a hard fail.
     """
     validations = [
         calc.geometry_validation
@@ -2965,9 +2939,10 @@ def _check_ts_geometry_validation_not_failed_for_source_calculations(
     ]
     if not validations:
         return EvidenceOutcome.not_applicable
-    if any(v.validation_status is ValidationStatus.fail for v in validations):
-        return EvidenceOutcome.not_applicable
-    if any(v.validation_status is ValidationStatus.warning for v in validations):
+    if any(
+        v.validation_status in (ValidationStatus.warning, ValidationStatus.fail)
+        for v in validations
+    ):
         return EvidenceOutcome.warning
     return EvidenceOutcome.passed
 
@@ -3014,6 +2989,29 @@ def _check_ts_reaction_coordinate_designated(
     if freq.n_imag == 1:
         return EvidenceOutcome.passed
     return _bool_outcome(freq.reaction_coordinate_mode_index is not None)
+
+
+def _check_ts_no_frequency_result_lacks_an_imaginary_mode(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return warning when any attached frequency result records no imaginary mode at all.
+
+    The badge makes no stationary-point verdict (no hard fail, no certificate): it cannot pin the target a saddle claim is
+    about. What it can do is keep a contradiction visible instead of letting the representative result's
+    ``imaginary_frequency_count_recorded: passed`` stand for the whole entry. Every source result with a *recorded* count is
+    read (a result whose count is null is unknown, never a contradiction, and neither rescues nor condemns); a recorded
+    count of zero is a warning whether it stands alone, disagrees with another result or sits beside a newer one. ``passed``
+    means only that no recorded result lacks an imaginary mode, not that the saddle is certified; the scoped judgement is
+    ``POST /scientific/transition-state-entries/{ref}/evidence/select``.
+    """
+    counts = [
+        calc.freq_result.n_imag
+        for calc in _ts_source_calculations(ts_entry)
+        if calc.freq_result is not None and calc.freq_result.n_imag is not None
+    ]
+    if not counts:
+        return EvidenceOutcome.not_applicable
+    return EvidenceOutcome.warning if any(n == 0 for n in counts) else EvidenceOutcome.passed
 
 
 def _check_ts_extra_imaginary_modes_not_flagged(
@@ -3067,9 +3065,9 @@ def _check_ts_review_not_rejected_or_deprecated_if_applicable(
 # designation instead of recounting, and a new advisory check surfaces
 # the recorded structural flag. Bumping the version is deliberate — a
 # machine review performed under the counting rule is genuinely stale.
-COMPUTED_TRANSITION_STATE_V2: EvidenceRubric = EvidenceRubric(
+COMPUTED_TRANSITION_STATE_V3: EvidenceRubric = EvidenceRubric(
     name="computed_transition_state",
-    version=2,
+    version=3,
     record_type="transition_state_entry",
     checks=(
         EvidenceCheckSpec(
@@ -3247,6 +3245,15 @@ COMPUTED_TRANSITION_STATE_V2: EvidenceRubric = EvidenceRubric(
             runner=_check_ts_reaction_coordinate_designated,
         ),
         EvidenceCheckSpec(
+            name="no_frequency_result_lacks_an_imaginary_mode",
+            kind=EvidenceCheckKind.warning,
+            explain=(
+                "No attached frequency result with a recorded count reports zero imaginary modes (advisory; the "
+                "badge does not certify the saddle)."
+            ),
+            runner=_check_ts_no_frequency_result_lacks_an_imaginary_mode,
+        ),
+        EvidenceCheckSpec(
             name="extra_imaginary_modes_not_flagged",
             kind=EvidenceCheckKind.warning,
             explain=(
@@ -3272,12 +3279,12 @@ COMPUTED_TRANSITION_STATE_V2: EvidenceRubric = EvidenceRubric(
 
 
 RUBRIC_REGISTRY: dict[str, EvidenceRubric] = {
-    "calculation": COMPUTED_CALCULATION_V1,
-    "kinetics": COMPUTED_KINETICS_V1,
-    "statmech": COMPUTED_STATMECH_V1,
-    "thermo": COMPUTED_THERMO_V1,
-    "transition_state_entry": COMPUTED_TRANSITION_STATE_V2,
-    "transport": COMPUTED_TRANSPORT_V1,
+    "calculation": COMPUTED_CALCULATION_V2,
+    "kinetics": COMPUTED_KINETICS_V2,
+    "statmech": COMPUTED_STATMECH_V2,
+    "thermo": COMPUTED_THERMO_V2,
+    "transition_state_entry": COMPUTED_TRANSITION_STATE_V3,
+    "transport": COMPUTED_TRANSPORT_V2,
 }
 """Lookup of the latest active rubric per record-type discriminator.
 
@@ -3316,7 +3323,7 @@ def get_rubric_for_record_type(record_type: str) -> Optional[EvidenceRubric]:
 # ``checks=()`` deliberately: no computed-trust evaluator ever runs it, so it
 # is NOT added to RUBRIC_REGISTRY -- doing so would offer it to
 # get_rubric_for_record_type for the "thermo" record type, colliding with
-# COMPUTED_THERMO_V1's own meaning of that key.
+# COMPUTED_THERMO_V2's own meaning of that key.
 EXTERNAL_CP_COMPARISON_V1: EvidenceRubric = EvidenceRubric(
     name="external_cp_comparison",
     version=1,

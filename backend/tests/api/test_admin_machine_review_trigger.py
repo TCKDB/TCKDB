@@ -375,7 +375,7 @@ def test_admin_fake_machine_review_response_contains_context_hash(
     assert isinstance(body["context_hash"], str) and len(body["context_hash"]) == 64
     assert body["context_schema_version"]
     assert body["prompt_version"] == "machine_review_v1"
-    assert body["rubric_versions"] == {"computed_calculation_v1": "1"}
+    assert body["rubric_versions"] == {"computed_calculation_v2": "2"}
 
     # The stored row's currency key matches what the response reported.
     row = db_session.get(RecordMachineReviewRow, body["appended_review_id"])
@@ -407,8 +407,8 @@ def test_admin_fake_trigger_uses_shared_active_recipe(
     # Only the rubric relevant to the record type is stamped, taken from the
     # shared recipe (not re-derived locally).
     assert body["rubric_versions"] == {
-        "computed_calculation_v1": ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[
-            "computed_calculation_v1"
+        "computed_calculation_v2": ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[
+            "computed_calculation_v2"
         ]
     }
 

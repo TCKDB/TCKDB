@@ -24,12 +24,12 @@ from app.services.machine_review.recipe import (
     public_rubric_name,
 )
 from app.services.trust.rubrics import (
-    COMPUTED_CALCULATION_V1,
-    COMPUTED_KINETICS_V1,
-    COMPUTED_STATMECH_V1,
-    COMPUTED_THERMO_V1,
-    COMPUTED_TRANSITION_STATE_V2,
-    COMPUTED_TRANSPORT_V1,
+    COMPUTED_CALCULATION_V2,
+    COMPUTED_KINETICS_V2,
+    COMPUTED_STATMECH_V2,
+    COMPUTED_THERMO_V2,
+    COMPUTED_TRANSITION_STATE_V3,
+    COMPUTED_TRANSPORT_V2,
     EXTERNAL_CP_COMPARISON_V2,
     GIBBS_SELF_CONSISTENCY_V1,
     HESS_CONSISTENCY_V1,
@@ -40,12 +40,12 @@ from app.services.trust.rubrics import (
 )
 
 _ACTIVE_RUBRICS = (
-    COMPUTED_CALCULATION_V1,
-    COMPUTED_KINETICS_V1,
-    COMPUTED_THERMO_V1,
-    COMPUTED_STATMECH_V1,
-    COMPUTED_TRANSPORT_V1,
-    COMPUTED_TRANSITION_STATE_V2,
+    COMPUTED_CALCULATION_V2,
+    COMPUTED_KINETICS_V2,
+    COMPUTED_THERMO_V2,
+    COMPUTED_STATMECH_V2,
+    COMPUTED_TRANSPORT_V2,
+    COMPUTED_TRANSITION_STATE_V3,
     # Phase C-E4: not a computed-trust rubric (checks=()), but it is part of
     # the machine-review recipe -- see the comment on _ACTIVE_RUBRICS in
     # app.services.machine_review.recipe.
@@ -87,10 +87,10 @@ def test_active_machine_review_recipe_derives_rubric_versions_from_trust_constan
 def test_filtered_recipes_are_independent_copies():
     """Mutating a returned filtered recipe never mutates the module constant."""
     reviewer = active_rubric_versions_for_record_type("calculation")
-    assert reviewer == {"computed_calculation_v1": "1"}
-    reviewer["computed_calculation_v1"] = "999"
-    assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS["computed_calculation_v1"] == "1"
-    assert active_rubric_versions_for_record_type("calculation") == {"computed_calculation_v1": "1"}
+    assert reviewer == {"computed_calculation_v2": "2"}
+    reviewer["computed_calculation_v2"] = "999"
+    assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS["computed_calculation_v2"] == "2"
+    assert active_rubric_versions_for_record_type("calculation") == {"computed_calculation_v2": "2"}
 
     advisory = AdvisoryResult(target=None, runner="thermo_consistency", rubric=THERMO_CONSISTENCY_V1,
                               findings=(), inputs_json="{}")

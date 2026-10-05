@@ -55,6 +55,7 @@ from app.services.kinetics_selection.models import (
 from app.services.kinetics_selection.rules import default_rules
 from app.services.scientific_read.common import fetch_review_badges
 from app.services.selection_kernel import Applicability
+from app.services.structure_selection.source_findings import assess_source_findings, kinetics_uses
 from app.services.trust import evaluate_loaded_kinetics
 
 #: A collider ref no stored record names, to ask "can this record answer for any collider?".
@@ -194,6 +195,7 @@ def kinetics_coverage_inventory(session: Session, *, batch_size: int = 100) -> d
             badges = fetch_review_badges(session, record_type=SubmissionRecordType.kinetics, record_ids=ids)
             statuses: dict[int, RecordReviewStatus] = {i: badges[i].status for i in ids}
             normalized = normalize_rows(session, entry, rows, statuses)
+            source_findings = assess_source_findings(session, {k.id: kinetics_uses(k) for k in rows})
             entries += 1
             any_applicable = False
             subject = None
@@ -219,7 +221,7 @@ def kinetics_coverage_inventory(session: Session, *, batch_size: int = 100) -> d
                 evidence = (
                     evaluate_loaded_kinetics(k) if k.scientific_origin is ScientificOriginKind.computed else None
                 )
-                assessment = assess_candidate(c, request=request, evidence=evidence)
+                assessment = assess_candidate(c, request=request, evidence=evidence, source_findings=source_findings[k.id])
                 applicability[assessment.applicability.value] += 1
                 for reason in assessment.reasons:
                     reasons[_code(reason.code)] += 1

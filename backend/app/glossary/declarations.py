@@ -336,8 +336,9 @@ _HARD_FAIL = Vocabulary(
         Term(
             token="geometry_validation_failed",
             means=(
-                "TCKDB compared the calculation's geometry against the "
-                "structure the record claims it is, and the comparison failed."
+                "Historic: stored trust results under the version 1 rubrics carried this when an automated geometry "
+                "comparison failed. Version 2 rubrics no longer hard-fail on it; the failure is a warning on the "
+                "geometry check."
             ),
         ),
         Term(
@@ -397,25 +398,28 @@ _HARD_FAIL = Vocabulary(
         ),
         Term(
             token="geometry_validation_failed_for_source_calculation",
-            means="A calculation supporting this transition-state entry failed geometry validation.",
+            means=(
+                "Historic: stored version 2 transition-state trust results carried this when a supporting calculation "
+                "failed the automated geometry comparison. Version 3 no longer hard-fails on it; it is a warning."
+            ),
         ),
         Term(
             token="frequency_source_has_zero_imaginary_modes_for_validated_ts",
             means=(
-                "A transition-state entry whose status is `optimized` or "
-                "`validated`, whose frequency evidence reports no imaginary "
-                "mode. The record says saddle point and the numbers say "
-                "minimum."
+                "Historic: stored version 2 transition-state trust results carried this when the latest "
+                "frequency result reported no imaginary mode. Version 3 issues no frequency verdict; the same fact is "
+                "the warning `no_frequency_result_lacks_an_imaginary_mode`, and the scoped judgement (does a usable "
+                "result on the evaluated geometry contradict the saddle claim) is the structure assessment's."
             ),
         ),
         Term(
             token="frequency_source_reaction_coordinate_not_designated_for_validated_ts",
             means=(
-                "The record reports more than one imaginary mode and does not "
-                "say which one is the reaction coordinate. More than one "
-                "imaginary mode is acceptable — this fires only on the missing "
-                "designation, which is why it is a question about what was "
-                "recorded and not about physics."
+                "Historic: stored version 2 transition-state trust results carried this when the latest "
+                "frequency result reported several imaginary modes without a designated reaction coordinate. Version 3 "
+                "issues no frequency verdict; the missing designation is the missing check "
+                "`reaction_coordinate_designated_for_ts`, and the structure assessment reports it as the unresolved "
+                "`reaction_coordinate_not_established`."
             ),
         ),
     ),
@@ -1066,8 +1070,9 @@ _VALIDATION_STATUS = Vocabulary(
         Term(
             token="fail",
             means=(
-                "The geometry is not the claimed structure. This hard-fails the "
-                "calculation's trust badge with `geometry_validation_failed`."
+                "The automated comparison found a mismatch. It is a curator-attention signal, not proof the "
+                "geometry is wrong, and it does not hard-fail the calculation's trust badge: it is reported as a "
+                "warning on the geometry check."
             ),
         ),
     ),

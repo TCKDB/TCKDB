@@ -38,7 +38,6 @@ from app.db.models.common import (
     ThermoCalculationRole,
     TransitionStateEntryStatus,
     TransportCalculationRole,
-    ValidationStatus,
 )
 from app.db.models.energy_correction import AppliedEnergyCorrection
 from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
@@ -62,13 +61,12 @@ from app.services.trust.models import (
     label_from_completeness,
 )
 from app.services.trust.rubrics import (
-    COMPUTED_CALCULATION_V1,
-    COMPUTED_KINETICS_V1,
-    COMPUTED_STATMECH_V1,
-    COMPUTED_THERMO_V1,
-    COMPUTED_TRANSITION_STATE_V2,
-    COMPUTED_TRANSPORT_V1,
-    _ts_representative_freq_result,
+    COMPUTED_CALCULATION_V2,
+    COMPUTED_KINETICS_V2,
+    COMPUTED_STATMECH_V2,
+    COMPUTED_THERMO_V2,
+    COMPUTED_TRANSITION_STATE_V3,
+    COMPUTED_TRANSPORT_V2,
     _ts_source_calculations,
     get_rubric_for_record_type,
 )
@@ -108,9 +106,13 @@ def _detect_calculation_hard_fail(calc: Calculation) -> Optional[HardFailReason]
         for artifact in calc.artifacts
     ):
         return HardFailReason.artifact_integrity_failed
-    gv = calc.geometry_validation
-    if gv is not None and gv.validation_status is ValidationStatus.fail:
-        return HardFailReason.geometry_validation_failed
+    # An automated geometry-validation ``fail`` is deliberately NOT a hard fail (trust contract v2: the computed rubrics
+    # at the next version). The row says an automated connectivity check found a mismatch, which is curator-attention
+    # evidence (see ``CalculationGeometryValidation``): connectivity perceived from XYZ is unreliable for weak
+    # complexes, stretched bonds, radicals and proton-transfer-like geometries. It stays visible as a ``warning``
+    # outcome on the geometry checks. A *confirmed* identity failure is a different thing and is recorded as a
+    # structure determination finding, judged by the task-aware assessment in its own role, not by this badge.
+    # ``HardFailReason.geometry_validation_failed`` remains a member so stored v1 reviews and responses still parse.
     return None
 
 
@@ -619,12 +621,9 @@ def _detect_transition_state_entry_hard_fail(
 
     source = _ts_source_calculations(ts_entry)
 
-    # Any source-calc geometry validation failure structurally compromises
-    # the TS evidence (spec §6.1).
-    for calc in source:
-        gv = calc.geometry_validation
-        if gv is not None and gv.validation_status is ValidationStatus.fail:
-            return HardFailReason.geometry_validation_failed_for_source_calculation
+    # An automated geometry-validation failure on a source calculation is not a hard fail from rubric v3 on: it is a
+    # heuristic observation (see ``_detect_calculation_hard_fail``) and stays a ``warning`` on
+    # ``geometry_validation_not_failed_for_source_calculations``.
 
     # If every source calc is itself a hard fail at the calculation rubric
     # level, the TS entry inherits a hard fail.
@@ -633,41 +632,22 @@ def _detect_transition_state_entry_hard_fail(
     ):
         return HardFailReason.all_source_calculations_hard_failed
 
-    # Frequency contradictions for status-validated TS entries are hard
-    # fails per spec §8.2, as narrowed by ADR 0012.
+    # The badge issues NO stationary-point verdict from rubric v3 on (it no longer hard-fails on a frequency result, and it
+    # certifies nothing either). A saddle claim is about a *declared target*: the geometry it evaluates, the role bundle
+    # that supports it, the surface, a usable source and the owner's persisted treatment of extra modes (ADR 0012). The
+    # badge has none of those, only "some frequency result is attached", and both ways of reading that were wrong:
     #
-    # Zero imaginary modes still hard-fails: that is definitional and the
-    # blocking tier refuses it too, so the two agree. What is *not*
-    # re-derived here any more is the old ``n_imag > 1`` gate. ADR 0012
-    # accepts a higher-order saddle whose reaction coordinate is
-    # designated and whose other imaginary modes are declared, so
-    # counting again at read time would hard-fail a record the upload
-    # tier deliberately accepted — the exact contradiction ADR 0008 §9
-    # warned about.
+    # * "the representative (latest) result decides" lets a bad rerun on another geometry condemn a coherent older
+    #   bundle, and lets an unusable newer result hide a genuine disproof;
+    # * "every attached result must contradict" lets a rejected or unrelated older one-mode result rescue a record whose
+    #   own bundle is disproved, and ignores curvature stored on optimisation and composite jobs.
     #
-    # The read layer therefore asks a question about persisted state
-    # rather than about physics: does this record carry the reaction
-    # coordinate the blocking tier required of it? Anything that passed
-    # upload validation does. Only a record written around the upload
-    # path can fail here, and for that record the judgement is genuinely
-    # absent rather than negative.
-    if ts_entry.status in {
-        TransitionStateEntryStatus.optimized,
-        TransitionStateEntryStatus.validated,
-    }:
-        freq = _ts_representative_freq_result(ts_entry)
-        if freq is not None and freq.n_imag is not None:
-            if freq.n_imag == 0:
-                return (
-                    HardFailReason.frequency_source_has_zero_imaginary_modes_for_validated_ts
-                )
-            if (
-                freq.n_imag > 1
-                and freq.reaction_coordinate_mode_index is None
-            ):
-                return (
-                    HardFailReason.frequency_source_reaction_coordinate_not_designated_for_validated_ts
-                )
+    # The scoped judgement is the task-aware structure assessment (``structure_selection.assessment``), which pins the
+    # geometry, ignores unusable and other-geometry results, reads opt/composite characterisation on its output
+    # geometry, keeps a same-target disagreement unresolved and applies authorized adjudications. It answers at
+    # ``POST /scientific/transition-state-entries/{ref}/evidence/select``. The graded checks below still report what was
+    # recorded (count, designation, structural flag), which is presence, not certification. The two HardFailReason
+    # members for the old rule remain so stored version-2 results parse; they are no longer produced.
 
     return None
 
@@ -706,7 +686,7 @@ def evaluate_loaded_calculation(
     which ``_check_quality_recorded`` reads to decide whether an
     independent reviewer, not the depositor, approved this calculation.
     """
-    rubric = COMPUTED_CALCULATION_V1
+    rubric = COMPUTED_CALCULATION_V2
     if calculation is None:
         return _empty_evaluation_for_missing_calculation(None, rubric)
 
@@ -714,17 +694,7 @@ def evaluate_loaded_calculation(
 
     check_results: list[EvidenceCheckResult] = []
     for spec in rubric.checks:
-        # Suppress the geometry-validation warning check when the
-        # underlying row is a hard-fail — the hard-fail signal is the
-        # primary report; surfacing the same condition again as a
-        # warning would be noise.
-        if (
-            hard_fail is HardFailReason.geometry_validation_failed
-            and spec.name == "geometry_validation_passed_or_warning"
-        ):
-            outcome = EvidenceOutcome.not_applicable
-        else:
-            outcome = spec.runner(calculation)
+        outcome = spec.runner(calculation)
         check_results.append(
             EvidenceCheckResult(
                 name=spec.name,
@@ -778,7 +748,7 @@ def evaluate_loaded_kinetics(
     their own queries. Callers are responsible for eager-loading the
     relationships required by ``computed_kinetics_v1``.
     """
-    rubric = COMPUTED_KINETICS_V1
+    rubric = COMPUTED_KINETICS_V2
     if kinetics is None:
         return _empty_evaluation_for_missing_kinetics(None, rubric)
 
@@ -786,13 +756,7 @@ def evaluate_loaded_kinetics(
 
     check_results: list[EvidenceCheckResult] = []
     for spec in rubric.checks:
-        if (
-            hard_fail is HardFailReason.source_calculation_hard_failed_for_required_role
-            and spec.name == "geometry_validation_not_failed_for_source_calculations"
-        ):
-            outcome = EvidenceOutcome.not_applicable
-        else:
-            outcome = spec.runner(kinetics)
+        outcome = spec.runner(kinetics)
         check_results.append(
             EvidenceCheckResult(
                 name=spec.name,
@@ -846,7 +810,7 @@ def evaluate_loaded_thermo(
     their own queries. Callers are responsible for eager-loading the
     relationships required by ``computed_thermo_v1``.
     """
-    rubric = COMPUTED_THERMO_V1
+    rubric = COMPUTED_THERMO_V2
     if thermo is None:
         return _empty_evaluation_for_missing_thermo(None, rubric)
 
@@ -854,13 +818,7 @@ def evaluate_loaded_thermo(
 
     check_results: list[EvidenceCheckResult] = []
     for spec in rubric.checks:
-        if (
-            hard_fail is HardFailReason.source_calculation_hard_failed_for_required_role
-            and spec.name == "geometry_validation_not_failed_for_source_calculations"
-        ):
-            outcome = EvidenceOutcome.not_applicable
-        else:
-            outcome = spec.runner(thermo)
+        outcome = spec.runner(thermo)
         check_results.append(
             EvidenceCheckResult(
                 name=spec.name,
@@ -914,7 +872,7 @@ def evaluate_loaded_statmech(
     their own queries. Callers are responsible for eager-loading the
     relationships required by ``computed_statmech_v1``.
     """
-    rubric = COMPUTED_STATMECH_V1
+    rubric = COMPUTED_STATMECH_V2
     if statmech is None:
         return _empty_evaluation_for_missing_statmech(None, rubric)
 
@@ -922,13 +880,7 @@ def evaluate_loaded_statmech(
 
     check_results: list[EvidenceCheckResult] = []
     for spec in rubric.checks:
-        if (
-            hard_fail is HardFailReason.source_calculation_hard_failed_for_required_role
-            and spec.name == "geometry_validation_not_failed_for_source_calculations"
-        ):
-            outcome = EvidenceOutcome.not_applicable
-        else:
-            outcome = spec.runner(statmech)
+        outcome = spec.runner(statmech)
         check_results.append(
             EvidenceCheckResult(
                 name=spec.name,
@@ -982,7 +934,7 @@ def evaluate_loaded_transport(
     their own queries. Callers are responsible for eager-loading the
     relationships required by ``computed_transport_v1``.
     """
-    rubric = COMPUTED_TRANSPORT_V1
+    rubric = COMPUTED_TRANSPORT_V2
     if transport is None:
         return _empty_evaluation_for_missing_transport(None, rubric)
 
@@ -990,13 +942,7 @@ def evaluate_loaded_transport(
 
     check_results: list[EvidenceCheckResult] = []
     for spec in rubric.checks:
-        if (
-            hard_fail is HardFailReason.source_calculation_hard_failed_for_required_role
-            and spec.name == "geometry_validation_not_failed_for_source_calculations"
-        ):
-            outcome = EvidenceOutcome.not_applicable
-        else:
-            outcome = spec.runner(transport)
+        outcome = spec.runner(transport)
         check_results.append(
             EvidenceCheckResult(
                 name=spec.name,
@@ -1056,7 +1002,7 @@ def evaluate_loaded_transition_state_entry(
     ``child_dependencies`` (both directions), and the linked calcs along
     each dependency edge.
     """
-    rubric = COMPUTED_TRANSITION_STATE_V2
+    rubric = COMPUTED_TRANSITION_STATE_V3
     if transition_state_entry is None:
         return _empty_evaluation_for_missing_transition_state_entry(None, rubric)
 
@@ -1064,16 +1010,7 @@ def evaluate_loaded_transition_state_entry(
 
     check_results: list[EvidenceCheckResult] = []
     for spec in rubric.checks:
-        # Suppress the geometry-validation warning check when the
-        # underlying signal already hard-failed the entry; the hard-fail
-        # carries the same evidence and the warning would be noise.
-        if (
-            hard_fail is HardFailReason.geometry_validation_failed_for_source_calculation
-            and spec.name == "geometry_validation_not_failed_for_source_calculations"
-        ):
-            outcome = EvidenceOutcome.not_applicable
-        else:
-            outcome = spec.runner(transition_state_entry)
+        outcome = spec.runner(transition_state_entry)
         check_results.append(
             EvidenceCheckResult(
                 name=spec.name,
@@ -1136,7 +1073,7 @@ def evaluate_computed_calculation(
     )
     if calculation is None:
         return _empty_evaluation_for_missing_calculation(
-            calculation_id, COMPUTED_CALCULATION_V1
+            calculation_id, COMPUTED_CALCULATION_V2
         )
     return evaluate_loaded_calculation(calculation)
 
@@ -1181,7 +1118,7 @@ def evaluate_computed_kinetics(
     )
     kinetics = session.scalars(statement).one_or_none()
     if kinetics is None:
-        return _empty_evaluation_for_missing_kinetics(kinetics_id, COMPUTED_KINETICS_V1)
+        return _empty_evaluation_for_missing_kinetics(kinetics_id, COMPUTED_KINETICS_V2)
     return evaluate_loaded_kinetics(kinetics)
 
 
@@ -1230,7 +1167,7 @@ def evaluate_computed_thermo(
     )
     thermo = session.scalars(statement).one_or_none()
     if thermo is None:
-        return _empty_evaluation_for_missing_thermo(thermo_id, COMPUTED_THERMO_V1)
+        return _empty_evaluation_for_missing_thermo(thermo_id, COMPUTED_THERMO_V2)
     return evaluate_loaded_thermo(thermo)
 
 
@@ -1283,7 +1220,7 @@ def evaluate_computed_statmech(
     )
     statmech = session.scalars(statement).one_or_none()
     if statmech is None:
-        return _empty_evaluation_for_missing_statmech(statmech_id, COMPUTED_STATMECH_V1)
+        return _empty_evaluation_for_missing_statmech(statmech_id, COMPUTED_STATMECH_V2)
     return evaluate_loaded_statmech(statmech)
 
 
@@ -1326,7 +1263,7 @@ def evaluate_computed_transport(
     transport = session.scalars(statement).one_or_none()
     if transport is None:
         return _empty_evaluation_for_missing_transport(
-            transport_id, COMPUTED_TRANSPORT_V1
+            transport_id, COMPUTED_TRANSPORT_V2
         )
     return evaluate_loaded_transport(transport)
 
@@ -1435,6 +1372,6 @@ def evaluate_computed_transition_state_entry(
     ts_entry = session.scalars(statement).one_or_none()
     if ts_entry is None:
         return _empty_evaluation_for_missing_transition_state_entry(
-            transition_state_entry_id, COMPUTED_TRANSITION_STATE_V2
+            transition_state_entry_id, COMPUTED_TRANSITION_STATE_V3
         )
     return evaluate_loaded_transition_state_entry(ts_entry)

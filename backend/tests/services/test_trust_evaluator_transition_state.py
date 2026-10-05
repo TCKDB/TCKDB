@@ -54,7 +54,7 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.services.trust import (
-    COMPUTED_TRANSITION_STATE_V2,
+    COMPUTED_TRANSITION_STATE_V3,
     EvidenceBadge,
     EvidenceOutcome,
     HardFailReason,
@@ -551,7 +551,7 @@ def test_none_input_hard_fails():
     assert result.label is EvidenceBadge.hard_failed
     assert result.hard_fail_reason is HardFailReason.transition_state_entry_missing
     assert result.rubric == "computed_transition_state"
-    assert result.rubric_version == 2
+    assert result.rubric_version == 3
     assert result.record_type == "transition_state_entry"
     assert result.record_id is None
 
@@ -655,7 +655,11 @@ def test_validated_with_n_imag_one_passes_freq_check(
     assert result.checks["imaginary_frequency_value_present"] is EvidenceOutcome.passed
 
 
-def test_validated_with_n_imag_zero_hard_fails(db_session: Session):
+def test_validated_with_n_imag_zero_is_a_visible_warning_not_a_hard_fail_and_not_a_certificate(db_session: Session):
+    """Rubric v3: the badge issues no stationary-point verdict (it cannot pin the declared target), so a recorded zero
+    imaginary-mode count is neither a hard fail nor a pass. It is a visible warning; the scoped judgement (it contradicts a
+    saddle claim on its own geometry) is the structure assessment's, see ``test_saddle_witness_scoping.py``.
+    """
     ts_entry = _make_ts_entry(
         db_session, status=TransitionStateEntryStatus.validated
     )
@@ -664,24 +668,17 @@ def test_validated_with_n_imag_zero_hard_fails(db_session: Session):
     db_session.refresh(ts_entry)
 
     result = evaluate_loaded_transition_state_entry(ts_entry)
-    assert result.label is EvidenceBadge.hard_failed
-    assert (
-        result.hard_fail_reason
-        is HardFailReason.frequency_source_has_zero_imaginary_modes_for_validated_ts
-    )
+    assert result.label is not EvidenceBadge.hard_failed and result.hard_fail_reason is None
+    assert result.checks["no_frequency_result_lacks_an_imaginary_mode"] is EvidenceOutcome.warning
+    # presence is not certification: the count check still says only that a count was recorded
+    assert result.checks["imaginary_frequency_count_recorded"] is EvidenceOutcome.passed
 
 
-def test_validated_with_undesignated_extra_modes_hard_fails(db_session: Session):
-    """Renamed from ``test_validated_with_n_imag_multiple_hard_fails``.
-
-    The old test asserted that ``n_imag > 1`` hard-fails, full stop. ADR
-    0012 accepts such a record at upload when its reaction coordinate is
-    designated, so re-deriving the count here would hard-fail a record
-    the blocking tier deliberately let through. What survives is the
-    narrower fact: a stored record that reports several imaginary modes
-    and does not say which is the barrier carries no usable reaction
-    coordinate. It cannot be produced by the upload path at all, so this
-    now covers records written around it.
+def test_undesignated_extra_modes_are_a_missing_designation_not_a_hard_fail(db_session: Session):
+    """Rubric v3 (reason change): several imaginary modes with no designated reaction coordinate used to hard-fail with
+    ``frequency_source_reaction_coordinate_not_designated_for_validated_ts``. The badge no longer issues a frequency
+    verdict, so the fact surfaces where it always did, as the missing ``reaction_coordinate_designated_for_ts`` check; the
+    scoped treatment (unresolved ``reaction_coordinate_not_established``) is the structure assessment's.
     """
     ts_entry = _make_ts_entry(
         db_session, status=TransitionStateEntryStatus.optimized
@@ -691,11 +688,9 @@ def test_validated_with_undesignated_extra_modes_hard_fails(db_session: Session)
     db_session.refresh(ts_entry)
 
     result = evaluate_loaded_transition_state_entry(ts_entry)
-    assert result.label is EvidenceBadge.hard_failed
-    assert (
-        result.hard_fail_reason
-        is HardFailReason.frequency_source_reaction_coordinate_not_designated_for_validated_ts
-    )
+    assert result.label is not EvidenceBadge.hard_failed and result.hard_fail_reason is None
+    assert result.checks["reaction_coordinate_designated_for_ts"] is EvidenceOutcome.missing
+    assert "no_frequency_result_lacks_an_imaginary_mode" not in result.checks  # a warning check is recorded only when it fires
 
 
 @pytest.mark.parametrize(
@@ -993,21 +988,19 @@ def test_source_calc_artifacts_lot_software(db_session: Session):
     assert result.checks["source_calculation_artifacts_present"] is EvidenceOutcome.passed
 
 
-def test_source_calc_failed_geometry_validation_hard_fails(db_session: Session):
+def test_source_calc_failed_geometry_validation_is_a_warning_not_a_hard_fail(db_session: Session):
+    """Rubric v3: an automated geometry-validation ``fail`` is curator attention, never a hard fail."""
     ts_entry = _make_ts_entry(db_session)
     _attach_ts_opt_calc(db_session, ts_entry, geom_validation=ValidationStatus.fail)
     db_session.refresh(ts_entry)
 
     result = evaluate_loaded_transition_state_entry(ts_entry)
-    assert result.label is EvidenceBadge.hard_failed
-    assert (
-        result.hard_fail_reason
-        is HardFailReason.geometry_validation_failed_for_source_calculation
-    )
-    # The warning check is suppressed to not_applicable when the hard-fail fires.
+    assert result.label is not EvidenceBadge.hard_failed
+    assert result.hard_fail_reason is None
+    # The signal is demoted, not erased: it stays visible as a warning outcome on the geometry check.
     assert (
         result.checks["geometry_validation_not_failed_for_source_calculations"]
-        is EvidenceOutcome.not_applicable
+        is EvidenceOutcome.warning
     )
 
 
@@ -1076,15 +1069,18 @@ def test_session_wrapper_returns_hard_fail_for_missing_id(db_session: Session):
 
 def test_rubric_metadata_pinned():
     """Pin the public contract of the rubric metadata."""
-    assert COMPUTED_TRANSITION_STATE_V2.name == "computed_transition_state"
+    assert COMPUTED_TRANSITION_STATE_V3.name == "computed_transition_state"
     # Bumped by ADR 0012: the required imaginary-mode check changed from
     # counting to citing the recorded designation, and a new advisory
     # check surfaces the structural flag. A machine review performed
     # under the counting rule is genuinely stale, which is what a version
-    # bump is for.
-    assert COMPUTED_TRANSITION_STATE_V2.version == 2
-    assert COMPUTED_TRANSITION_STATE_V2.record_type == "transition_state_entry"
-    assert len(COMPUTED_TRANSITION_STATE_V2.checks) == 29
+    # bump is for. Bumped again to 3 by the trust-contract correction: an
+    # automated geometry-validation fail is advisory (a warning), not a hard
+    # fail, and the frequency contradiction is judged over every source
+    # frequency result, not the one the rubric calls representative.
+    assert COMPUTED_TRANSITION_STATE_V3.version == 3
+    assert COMPUTED_TRANSITION_STATE_V3.record_type == "transition_state_entry"
+    assert len(COMPUTED_TRANSITION_STATE_V3.checks) == 30
 
 
 def test_calculation_dependencies_check_passes_when_freq_linked(db_session: Session):
@@ -1097,29 +1093,57 @@ def test_calculation_dependencies_check_passes_when_freq_linked(db_session: Sess
     assert result.checks["calculation_dependencies_present"] is EvidenceOutcome.passed
 
 
-def test_freq_representative_picks_latest_by_id(db_session: Session):
-    """When multiple freq calcs exist, the latest by id wins (tie-break rule)."""
-    ts_entry = _make_ts_entry(
-        db_session, status=TransitionStateEntryStatus.validated
-    )
-    opt = _attach_ts_opt_calc(db_session, ts_entry)
-    # Earlier freq calc with n_imag=1 (good).
-    _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=1, imag_freq_cm1=-500.0)
-    # Later freq calc with n_imag=0 (would-be contradiction for validated).
-    later_freq = _attach_ts_freq_calc(
-        db_session, ts_entry, opt, n_imag=0, imag_freq_cm1=None
-    )
-    db_session.refresh(ts_entry)
+def test_a_contradicting_result_stays_visible_whether_it_is_older_newer_or_alone(db_session: Session):
+    """The contradiction is never hidden behind the representative result's ``passed`` and never certified away."""
+    for order in ("zero_older", "zero_newer"):
+        ts_entry = _make_ts_entry(db_session, status=TransitionStateEntryStatus.validated)
+        opt = _attach_ts_opt_calc(db_session, ts_entry)
+        counts = (0, 1) if order == "zero_older" else (1, 0)
+        for n in counts:
+            _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=n, imag_freq_cm1=-500.0 if n else None)
+        db_session.refresh(ts_entry)
+        result = evaluate_loaded_transition_state_entry(ts_entry)
+        assert result.hard_fail_reason is None, order
+        assert result.checks["no_frequency_result_lacks_an_imaginary_mode"] is EvidenceOutcome.warning, order
 
-    # The latest is the contradiction → hard-fail under validated status.
+
+def test_a_null_count_is_unknown_it_neither_rescues_nor_condemns(db_session: Session):
+    """Reviewer case T4: an older zero-mode result plus a newer result with ``n_imag`` null. The unknown newer count must
+    not read as a contradiction (it used to make the entry hard-fail via the null-skipping representative) and must not
+    hide the older recorded zero either."""
+    ts_entry = _make_ts_entry(db_session, status=TransitionStateEntryStatus.validated)
+    opt = _attach_ts_opt_calc(db_session, ts_entry)
+    _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=0, imag_freq_cm1=None)
+    _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=None, imag_freq_cm1=None)
+    db_session.refresh(ts_entry)
     result = evaluate_loaded_transition_state_entry(ts_entry)
-    assert result.label is EvidenceBadge.hard_failed
-    assert (
-        result.hard_fail_reason
-        is HardFailReason.frequency_source_has_zero_imaginary_modes_for_validated_ts
-    )
-    # Sanity: the later one has the larger id.
-    assert later_freq.id > opt.id
+    assert result.label is not EvidenceBadge.hard_failed and result.hard_fail_reason is None
+    assert result.checks["no_frequency_result_lacks_an_imaginary_mode"] is EvidenceOutcome.warning
+
+
+def test_only_null_counts_say_nothing(db_session: Session):
+    ts_entry = _make_ts_entry(db_session, status=TransitionStateEntryStatus.validated)
+    opt = _attach_ts_opt_calc(db_session, ts_entry)
+    _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=None, imag_freq_cm1=None)
+    db_session.refresh(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry)
+    assert result.checks["no_frequency_result_lacks_an_imaginary_mode"] is EvidenceOutcome.not_applicable
+
+
+def test_the_badge_never_hard_fails_on_a_frequency_result_of_any_shape(db_session: Session):
+    """Neither latest-only nor every-result voting is sufficient, so the badge uses neither: no combination of recorded
+    counts produces one of the two retired frequency hard fails."""
+    retired = {
+        HardFailReason.frequency_source_has_zero_imaginary_modes_for_validated_ts,
+        HardFailReason.frequency_source_reaction_coordinate_not_designated_for_validated_ts,
+    }
+    for counts in [(0,), (0, 0), (3,), (0, 3), (None, 0), (1, 0, 3)]:
+        ts_entry = _make_ts_entry(db_session, status=TransitionStateEntryStatus.validated)
+        opt = _attach_ts_opt_calc(db_session, ts_entry)
+        for n in counts:
+            _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=n, imag_freq_cm1=None)
+        db_session.refresh(ts_entry)
+        assert evaluate_loaded_transition_state_entry(ts_entry).hard_fail_reason not in retired, counts
 
 
 def test_ts_dependency_role_buckets_agree_with_enforcement_table():
