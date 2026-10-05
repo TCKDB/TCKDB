@@ -305,6 +305,10 @@ class RejectionCode(str, Enum):
     STRUCTURE_DECLARATION_VERSION_UNSUPPORTED = "structure_declaration_version_unsupported"
     STRUCTURE_DETERMINATION_INVALID = "structure_determination_invalid"
     STRUCTURE_DETERMINATION_MISMATCH = "structure_determination_mismatch"
+    STRUCTURE_SELECTION_EVIDENCE_TOO_LARGE = "structure_selection_evidence_too_large"
+    STRUCTURE_SELECTION_POPULATION_TOO_LARGE = "structure_selection_population_too_large"
+    STRUCTURE_SELECTION_TRAVERSAL_TOO_DEEP = "structure_selection_traversal_too_deep"
+    STRUCTURE_SELECTION_UNSUPPORTED = "structure_selection_unsupported"
     SUBJECT_TYPE_MISMATCH = "subject_type_mismatch"
     SUBMISSION_SUPERSEDE_NOT_OWNER = "submission_supersede_not_owner"
     SUPERSEDES_SAME_RECORD = "supersedes_same_record"
@@ -362,6 +366,7 @@ class RejectionCode(str, Enum):
     UNKNOWN_RELEASE_ARTIFACT = "unknown_release_artifact"
     UNKNOWN_SELECTION = "unknown_selection"
     UNKNOWN_STATMECH_REF = "unknown_statmech_ref"
+    UNKNOWN_STRUCTURE_MEMBER_REF = "unknown_structure_member_ref"
     UNKNOWN_TRANSITION_STATE_ENTRY_REF = "unknown_transition_state_entry_ref"
     UNSAFE_LOWEST_ENERGY_COMPARISON = "unsafe_lowest_energy_comparison"
     UNSUPPORTED_DIRECTION = "unsupported_direction"
@@ -566,6 +571,10 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STRUCTURE_DECLARATION_VERSION_UNSUPPORTED,
         RejectionCode.STRUCTURE_DETERMINATION_INVALID,
         RejectionCode.STRUCTURE_DETERMINATION_MISMATCH,
+        RejectionCode.STRUCTURE_SELECTION_EVIDENCE_TOO_LARGE,
+        RejectionCode.STRUCTURE_SELECTION_POPULATION_TOO_LARGE,
+        RejectionCode.STRUCTURE_SELECTION_TRAVERSAL_TOO_DEEP,
+        RejectionCode.STRUCTURE_SELECTION_UNSUPPORTED,
         RejectionCode.SUBJECT_TYPE_MISMATCH,
         RejectionCode.SUPERSEDES_SAME_RECORD,
         RejectionCode.THERMO_DECLARATION_INVALID,
@@ -884,6 +893,10 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STRUCTURE_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.STRUCTURE_DETERMINATION_INVALID: frozenset({422}),
     RejectionCode.STRUCTURE_DETERMINATION_MISMATCH: frozenset({422}),
+    RejectionCode.STRUCTURE_SELECTION_EVIDENCE_TOO_LARGE: frozenset({422}),
+    RejectionCode.STRUCTURE_SELECTION_POPULATION_TOO_LARGE: frozenset({422}),
+    RejectionCode.STRUCTURE_SELECTION_TRAVERSAL_TOO_DEEP: frozenset({422}),
+    RejectionCode.STRUCTURE_SELECTION_UNSUPPORTED: frozenset({422}),
     RejectionCode.SUBJECT_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.SUBMISSION_SUPERSEDE_NOT_OWNER: frozenset({403}),
     RejectionCode.SUPERSEDES_SAME_RECORD: frozenset({422}),
@@ -941,6 +954,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNKNOWN_RELEASE_ARTIFACT: frozenset({404}),
     RejectionCode.UNKNOWN_SELECTION: frozenset({404}),
     RejectionCode.UNKNOWN_STATMECH_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_STRUCTURE_MEMBER_REF: frozenset({404}),
     RejectionCode.UNKNOWN_TRANSITION_STATE_ENTRY_REF: frozenset({404}),
     RejectionCode.UNSAFE_LOWEST_ENERGY_COMPARISON: frozenset({422}),
     RejectionCode.UNSUPPORTED_DIRECTION: frozenset({422}),

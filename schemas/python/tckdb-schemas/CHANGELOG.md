@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.106.0 - 2026-10-05
+
+New refusal codes `structure_selection_population_too_large`, `structure_selection_evidence_too_large`,
+`structure_selection_traversal_too_deep`, `structure_selection_unsupported` and `unknown_structure_member_ref` (the bounds and
+refusals of a structure assessment, service layer only). No upload model changed.
+
 ## 0.105.0 - 2026-10-05
 
 A calculation can declare the recipe it actually ran, and a conformer or transition-state upload can declare structure

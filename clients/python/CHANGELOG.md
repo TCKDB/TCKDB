@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.137.0 - 2026-10-05
+
+`RejectionCode` gains `structure_selection_population_too_large`, `structure_selection_evidence_too_large`,
+`structure_selection_traversal_too_deep`, `structure_selection_unsupported` and `unknown_structure_member_ref` (`tckdb-schemas` 0.106.0).
+No method changed; nothing in the server serves them yet.
+
 ## 0.136.0 - 2026-10-05
 
 `Calculation.opt/freq/sp(..., actual_protocol_declaration=...)` carries a calculation's declared actual protocol

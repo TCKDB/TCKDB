@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 42 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 290 | `backend/app/api/code_catalogue.py` |
-| **total** | **595** | |
+| Refusal codes a caller can receive | 295 | `backend/app/api/code_catalogue.py` |
+| **total** | **600** | |
 
 ## How a record is named
 
@@ -691,7 +691,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `rights_attestation_requires_curator` | a thing |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (23 codes)
+### HTTP 404 (24 codes)
 
 | Code | Names |
 | --- | --- |
@@ -717,6 +717,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_release_artifact` | a thing |
 | `unknown_selection` | a thing |
 | `unknown_statmech_ref` | a thing |
+| `unknown_structure_member_ref` | a thing |
 | `unknown_transition_state_entry_ref` | a thing |
 
 ### HTTP 409 (24 codes)
@@ -755,7 +756,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (233 codes)
+### HTTP 422 (237 codes)
 
 | Code | Names |
 | --- | --- |
@@ -947,6 +948,10 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `structure_declaration_version_unsupported` | a thing |
 | `structure_determination_invalid` | a relationship — read `context` |
 | `structure_determination_mismatch` | a relationship — read `context` |
+| `structure_selection_evidence_too_large` | a relationship — read `context` |
+| `structure_selection_population_too_large` | a relationship — read `context` |
+| `structure_selection_traversal_too_deep` | a relationship — read `context` |
+| `structure_selection_unsupported` | a relationship — read `context` |
 | `subject_type_mismatch` | a relationship — read `context` |
 | `supersedes_same_record` | a relationship — read `context` |
 | `thermo_declaration_invalid` | a thing |

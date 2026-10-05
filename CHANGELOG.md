@@ -22,6 +22,42 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Structure assessment: which stored energies can answer a stated question (2026-10-05)
+
+**Chunk 2 of 6 of calculation, conformer and transition-state energy selection: snapshot and assessment.** A service layer
+(`app.services.structure_selection`) that decides, for each calculation, basin determination or saddle determination of one entry,
+whether it can supply a requested energy and, where asked, a requested structural claim. It reads one read-only REPEATABLE READ
+snapshot and returns assessments. Nothing is ordered, ranked or chosen yet (chunk 3), no route serves it (chunk 5), and nothing is
+written. Migration: none.
+
+- **Verdicts.** `applicable`, `incompatible`, `unresolved` or `unsupported`, with every finding, split into blocking, advisory and
+  comparative-unknown. A missing energy is unavailable, never zero. A known failure blocks only the claim it invalidates (an
+  unconverged optimisation keeps a labelled endpoint value but cannot support an optimised minimum).
+- **The recipe is normalised, never assumed.** The level of theory and the depositor's `actual_protocol_declaration` combine into
+  established / contradicted / unestablished facts. Equal nulls do not prove equivalence: a unit comparable with others needs every
+  required fact established (`recipe.cohort_key`); an undeclared unit is still reported on its own. Software identity does not divide
+  a cohort in normaliser version 1 (disclosed, not hidden).
+- **Curvature belongs to a geometry.** A frequency result supports a minimum or saddle claim only on the geometry the determination
+  evaluates, or on its optimisation's output, and only through the owner's persisted judgement (count, structural flag, designated
+  reaction coordinate) re-evaluated by the shared stationary-point owner (ADR 0012). Imaginary modes are judged by magnitude, not counted: a minimum claim is
+  supported by no imaginary mode or by every one below the stored tau (however many; the owner's count-based findings are
+  advisories), contradicted only by a mode at or above tau, and unresolved when modes are counted but no magnitude is stored; a
+  transition state's extra modes follow tau and their declared dispositions; nothing is borrowed
+  from another geometry or observation, and a stored Hessian that was never evaluated does not certify (the matrix itself is never
+  loaded). Every structure-consuming intent defaults to its grain's conventional characterization (a minimum, or a first-order
+  saddle for transition-state use). A lower-level characterisation of a higher-level energy states its own surface.
+- **Findings** are read at their own subject and role: a failed rerun on another geometry does not erase an older bundle, a live
+  confirmed disproof blocks, only an authorized adjudication about the same subject settles a finding (a producer's assertion, another
+  kind of finding, or an adjudication about a different subject never does; the database refuses a non-adjudication that names
+  one), and an unknown kind or version is disclosed, never a universal failure.
+- **Visibility and bounds.** Review floors apply at the grain that owns each record (a group's approval does not approve its observations).
+  A record the read profile hides is dropped without trace, a hidden pinned calculation reads as one generic code, and hidden entries
+  and members behave exactly like missing ones; that covers lineage, validation evidence, observation refs, counts and the depth
+  refusal. The entry's own floor applies at the calculation grain too. A shared parent under two dependency paths is a diamond, not
+  a cycle. Population (500), nested rows (5,000) and dependency depth (8) are counted over the
+  whole authorized population and refuse with coded 422s rather than taking a prefix.
+- `tckdb-schemas` 0.106.0 and `tckdb-client` 0.137.0 add five refusal codes. A deferred quantity (enthalpy, Gibbs energy, barrier, rate, ...) is a structured `structure_selection_unsupported` refusal. Producer contract: 679,047 bytes against the 700,000 ceiling.
+
 ## Actual protocols and structure determinations (2026-10-05)
 
 **Chunk 1 of 6 of calculation, conformer and transition-state energy selection: contracts and metadata.** A calculation can

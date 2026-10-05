@@ -115,8 +115,11 @@ _EXEMPT_TABLES = {
     ),
     "structure_evidence_finding": (
         "a finding names exactly one subject, a geometry OR a calculation OR a determination "
-        "(ck_structure_evidence_finding_subject_matches_scope makes the columns mutually exclusive), so it never links "
-        "a geometry to a calculation, and nothing writes one yet"
+        "(ck_structure_evidence_finding_subject_matches_scope makes the subject columns mutually exclusive). A "
+        "geometry-scoped finding may also carry a source_calculation_id in the same row, but that cites the calculation "
+        "as the evidence the finding rests on; it does not claim the geometry belongs to it. Nothing writes a finding "
+        "yet: the future write path must decide whether a composition check of the cited calculation against the "
+        "geometry belongs there, and add this table to LINK_CLASSES if it does"
     ),
     "transition_state_validation_evidence": (
         "its saddle-point geometry (transition_state_geometry_id) is the TS "
