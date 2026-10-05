@@ -14,8 +14,8 @@ and reviewed, rule by rule; neither exists. The registry is built when the API s
 | --- | --- | --- | --- | --- |
 | `N-AMEDRO-HE-FC` | solves | representation fidelity (named dataset reproduction) | OH + NO2 in He: the He-specific broadening factor (Fc = 0.32) reproduces the stated dataset better than the N2 value (0.39) | the compared objects are Troe falloff fits, not network fits; Table 1 is located but not extracted; only the two He fits were audited; no verified evidence state exists |
 | `N-JG-REDUCTION-FIDELITY` | solves | model fidelity | one pinned PES, bath, cell set and window: a reduction closer to the energy-grained flux over a less close one (council-reported, unverified) | the open-access article has not been read here; cells, metric and variant definitions unaudited; whether to add `simulation_least_squares` to the reduction vocabulary is open; a transient flux is not a phenomenological coefficient |
-| `N-JM-CH4-TRANSFER` | solves | model fidelity | CH4 in He, Ne or H2: one interaction-potential transfer treatment over another against full-dimensional direct dynamics | abstract-level evidence only; `network_solve_energy_transfer.model` is free text, with no typed field for how the parameters were obtained |
-| `N-JM-CH4-RATE` | solves | physical accuracy | CH4: the solve whose rates agree better with the study's experiments | the experimental comparison is in the paywalled full text; no verification step |
+| `N-JM-CH4-TRANSFER` | solves | model fidelity | CH4 in He, 300-2000 K: an exp/6 pairwise interaction treatment over a Lennard-Jones one, against MP2 direct dynamics (for Ne exp/6 matches MP2 but no competitor was tested; H2 has no preferred fit) | the reference averages are plotted curves, not a table, and the reference is a validated low-level surface; the preference holds for He only; `network_solve_energy_transfer.model` is free text, with no typed field for how the parameters were obtained |
+| `N-JM-CH4-RATE` | solves | physical accuracy | CH4 in He, Ar, Kr or CH4: the solve whose rates agree better with the measurements | the paper shows agreement for one prediction per bath by figure, with no metric and no competing solve; density-of-states error confounds it; no verification step |
 | `N-ME-CONVERGENCE` | solves | model fidelity | a verified converged solve over a demonstrated inadequate one of the same model | a proposed rule with no source comparison; no verification step; "same model" is not a stated fact |
 | `N-REP-HELDOUT` | fits of one solve | representation fidelity | the fit with the better held-out error under one declared metric | no pinned held-out set; no verification step |
 
@@ -32,7 +32,15 @@ direct dynamics are a model-fidelity claim, and only its final CH4 rates against
   extracted.
 - **Johnson and Green, Faraday Discuss. 238, 380-404 (2022)**, CC BY 3.0, open copies at MIT DSpace (hdl 1721.1/143677)
   and OSTI. Not read here; statements about it are council-reported and unverified.
-- **Jasper and Miller, J. Phys. Chem. A 115, 6438-6455 (2011)**: the open abstract only.
+- **Jasper and Miller, J. Phys. Chem. A 115, 6438-6455 (2011)**: read in full (manifest 0.2.0) from the owner's copy,
+  pinned in the manifest by SHA-256 and anchored to journal page, table and figure. The article is licensed and is
+  not in the repository. Its Supporting Information was not supplied. Anchors include Table 2 (potential errors
+  against QCISD(T)/CBS, p. 6441), Table 4 (alpha300 and n for eight baths, p. 6450), Figs. 3-5 (transfer averages
+  against direct dynamics for He, Ne and H2), Fig. 6 (the N2 and CO pairwise fits compared with each other, with no
+  direct-dynamics reference), and Figs. 12-14 (rates against experiment for He, Ar, Kr and
+  CH4). Direct dynamics was run for four baths (He, Ne, H2, CH4), the potential tests cover three (the
+  Lennard-Jones comparison only He), and the experimental comparison covers four (the Kr data are plotted against
+  the Ar prediction).
 
 ## What would be needed (for the owner)
 
@@ -42,9 +50,13 @@ direct dynamics are a model-fidelity claim, and only its final CH4 rates against
 - **Johnson and Green:** open access. A browser fetch is needed only if a reduction-fidelity rule is wanted; then the
   reduction definitions, PES variants, cells, metric and results, and a decision on `simulation_least_squares`
   (the other reduction names already exist in `NetworkReductionMethod`).
-- **Jasper and Miller (ACS, paywalled):** the full text and supporting information (the interaction potentials,
-  temperature range, transfer averages against direct dynamics, and the experimental CH4 rates); and a typed
-  energy-transfer treatment field in the protocol declaration.
+- **Jasper and Miller (supplied, pinned):** nothing more is needed from the article body. The Supporting Information
+  is described (p. 6454) as the fitted V_TM parameters and figures of the approach geometries and of
+  QCISD(T)/CBS energies against the surfaces; it would matter only to a rule that must identify a fitted potential by its
+  parameters, and it is not described as holding transfer averages. The averages the transfer rule would need are
+  plotted in the article, not tabulated; the owner would have to get them from the authors or accept digitising.
+  The rate rule would need the experimental papers it cites. Both still need a typed energy-transfer treatment
+  field in the protocol declaration, which is an owner decision and has not been added.
 - For convergence and held-out rules: the criterion, a pinned reference and its uncertainty, and the verification
   procedure that would turn a producer's declared validation entry into a verified one.
 

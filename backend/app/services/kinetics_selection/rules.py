@@ -40,10 +40,10 @@ RULE_REVOKED = "revoked"
 #: What an edge from a benchmark rule is, in the manifest and everywhere it is shown.
 EDGE_LABEL = "expected-performance inference"
 
-#: SHA-256 of ``xyg3_b3lyp_barrier_manifest.yaml`` as shipped (manifest 0.2.0). The rule refuses to load over any
+#: SHA-256 of ``xyg3_b3lyp_barrier_manifest.yaml`` as shipped (manifest 0.3.0). The rule refuses to load over any
 #: other bytes; a change to a member, a barrier height or a blocker is a new manifest version, a new pin and a new
 #: rule version.
-XYG3_MANIFEST_SHA256 = "da0da1f678af5e9f55228ac5cc4e59e097143987d5f559af03270a1abfcc60d7"
+XYG3_MANIFEST_SHA256 = "1ce59bde6133851d0b92324e6a563f9d7b43c5e2813226fdc91dfcfef1aedd96"
 
 #: The protocol components, other than the one a rule compares, that must be stated and equal on both sides for the
 #: rule's evidence to speak about the whole rate.
