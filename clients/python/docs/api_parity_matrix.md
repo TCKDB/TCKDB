@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 114 |
+| typed | 115 |
 | raw_only | 107 |
 | not_applicable | 45 |
-| **total** | **266** |
+| **total** | **267** |
 
 ## Typed coverage
 
@@ -94,6 +94,7 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/networks/search` | yes | `search_networks` | `iter_networks` | — | `tests/test_typed_scientific.py` |
 | `POST /api/v1/scientific/networks/search` | yes | `search_networks` | `iter_networks` | — | `tests/test_typed_scientific.py` |
 | `POST /api/v1/scientific/networks/{network_ref_or_id}/kinetics/evaluate` | yes | `evaluate_network_kinetics_batch` | — | — | `tests/test_typed_parity_methods.py` |
+| `POST /api/v1/scientific/networks/{network_ref}/kinetics/export-selected` | yes | `export_selected_network_kinetics` | — | — | `tests/test_network_selection_export.py` |
 | `POST /api/v1/scientific/networks/{network_ref}/kinetics/select` | yes | `select_network_kinetics` | — | — | `tests/test_network_selection.py` |
 | `POST /api/v1/scientific/networks/{network_ref}/kinetics/select/manifest` | yes | `get_network_kinetics_selection_manifest` | — | — | `tests/test_network_selection.py` |
 | `GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/full` | yes | `get_reaction_full` | — | `examples/scientific_reads.py` | `tests/test_scientific.py` |

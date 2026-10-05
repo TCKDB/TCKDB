@@ -64,7 +64,7 @@ from app.services.network_selection.models import (
 from app.services.network_selection.rules import NetworkRule, default_rules
 from app.services.scientific_read.profile import current_read_profile
 
-MANIFEST_FORMAT_VERSION = 1
+MANIFEST_FORMAT_VERSION = 2
 
 REPLAY_BOUNDARY = (
     "Replay reproduces the reasoning from the captured inputs. It does not authenticate their scientific truth and "

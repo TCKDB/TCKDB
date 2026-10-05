@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.104.0 - 2026-10-04
+
+New refusal codes `network_export_manifest_invalid`, `network_export_manifest_stale`, `network_export_choice_not_allowed`,
+`network_export_representation_choice_invalid` and `network_export_unsupported_form`, and the producer contract's list of
+read-only POST routes gains `POST /api/v1/scientific/networks/{network_ref}/kinetics/export-selected`. No upload model changed.
+
 ## 0.103.0 - 2026-10-04
 
 The producer contract's list of read-only POST routes gains the two network selection routes

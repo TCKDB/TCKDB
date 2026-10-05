@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api import deps as api_deps
 from app.api.app import create_app
+from app.api.routes.scientific import network_export as export_route_module
 from app.api.routes.scientific import network_selection as route_module
 from app.services.read_snapshot import SnapshotNotConsistentError
 from tests.services.network_selection._world import build_world
@@ -101,3 +102,72 @@ def test_the_real_app_resolves_the_ref_and_runs_the_selection_on_one_repeatable_
     finally:
         factory.configure(bind=previous)
         engine.dispose()
+
+
+def test_the_export_route_reads_in_the_snapshot_and_hands_the_connection_back_clean(db_engine, monkeypatch):
+    """The export route runs ref resolution and the verification on one REPEATABLE READ, read-only connection."""
+    engine = create_engine(db_engine.url, pool_size=1, max_overflow=0, pool_timeout=5)
+    factory = api_deps.SessionLocal
+    previous = factory.kw.get("bind")
+    factory.configure(bind=engine)
+    seen: dict[str, tuple[str, str, int]] = {}
+
+    def probe(session: Session) -> tuple[str, str, int]:
+        return (
+            _setting(session, "transaction_isolation"),
+            _setting(session, "transaction_read_only"),
+            int(session.scalar(text("SELECT pg_backend_pid()"))),
+        )
+
+    def spy_resolve(session, ref):
+        seen["resolve"] = probe(session)
+        return 1
+
+    def spy_export(session, **kwargs):
+        seen["export"] = probe(session)
+        raise _Stop
+
+    monkeypatch.setattr(export_route_module, "resolve_network_ref", spy_resolve)
+    monkeypatch.setattr(export_route_module, "export_selected", spy_export)
+    body = {"manifest": {}, "node_ref": "nkdet_x", "representation_refs": ["nkin_x"]}
+    try:
+        app = create_app()
+        assert api_deps.get_snapshot_db not in app.dependency_overrides
+        with TestClient(app) as test_client:
+            with pytest.raises(_Stop):
+                test_client.post("/api/v1/scientific/networks/net_anything/kinetics/export-selected", json=body)
+            assert seen["resolve"][:2] == ("repeatable read", "on")
+            assert seen["export"][:2] == ("repeatable read", "on")
+            assert seen["resolve"][2] == seen["export"][2]
+            after = factory()
+            try:
+                assert probe(after)[:2] == ("read committed", "off")
+            finally:
+                after.close()
+    finally:
+        factory.configure(bind=previous)
+        engine.dispose()
+
+
+def test_the_export_route_given_get_dbs_kind_of_session_fails_loudly(client, db_session):
+    """A valid manifest, but a session that is not a snapshot: the verification refuses instead of reading it."""
+    import json
+
+    from app.services.network_selection import select_network
+    from tests.services.network_selection._requests import channel_request
+    from tests.services.network_selection._rules import protocol
+    from tests.services.network_selection._world import add_solve, fit_spec
+
+    world = build_world(db_session)
+    solve = add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol("chemically_significant_eigenvalues"))
+    manifest = json.loads(
+        json.dumps(select_network(db_session, request=channel_request(world), require_snapshot=False).manifest)
+    )
+    client.app.dependency_overrides[api_deps.get_snapshot_db] = lambda: db_session  # no opt-out: a plain session
+    body = {
+        "manifest": manifest,
+        "node_ref": solve._dets["d_assoc"].public_ref,
+        "representation_refs": [solve._fits[0].public_ref],
+    }
+    with pytest.raises(SnapshotNotConsistentError):
+        client.post(f"/api/v1/scientific/networks/{world.ref}/kinetics/export-selected", json=body)

@@ -99,6 +99,7 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "get_species_thermo_selection_manifest": ("spe_1",),
     "select_reaction_kinetics": ("rxe_1",),
     "select_network_kinetics": ("net_1",),
+    "export_selected_network_kinetics": ("net_1",),
     "get_network_kinetics_selection_manifest": ("net_1",),
     "get_reaction_kinetics_selection_manifest": ("rxe_1",),
 }
@@ -115,6 +116,7 @@ _REQUIRED_KEYWORD_ARGUMENTS: dict[str, dict] = {
     "get_reaction_kinetics_selection_manifest": {"direction": "forward", "target": {"kind": "whole_reaction"}, "coefficient_basis": "elementary_coefficient", "temperature_min_k": 500.0, "temperature_max_k": 1500.0, "pressure": {"kind": "independent"}},
     "select_network_kinetics": {"coefficient_basis": "kernel", "temperature_min_k": 500.0, "temperature_max_k": 1500.0, "pressure_min_bar": 0.5, "pressure_max_bar": 5.0, "bath": {"components": [{"species_ref": "spe_1"}]}, "partition": {"retained": ["a"]}, "channel_key": "assoc", "observable": "product_resolved_coefficient"},
     "get_network_kinetics_selection_manifest": {"coefficient_basis": "kernel", "temperature_min_k": 500.0, "temperature_max_k": 1500.0, "pressure_min_bar": 0.5, "pressure_max_bar": 5.0, "bath": {"components": [{"species_ref": "spe_1"}]}, "partition": {"retained": ["a"]}, "channel_key": "assoc", "observable": "product_resolved_coefficient"},
+    "export_selected_network_kinetics": {"manifest": {"digest": {}}, "node_ref": "nkdet_1", "representation_refs": ["nkin_1"]},
     "evaluate_network_kinetics_batch": {
         "temperature_k": [1000.0],
         "pressure_bar": [1.0],

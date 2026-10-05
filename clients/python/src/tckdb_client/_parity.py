@@ -277,6 +277,10 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "POST", "/api/v1/scientific/networks/{network_ref}/kinetics/select/manifest",
         "get_network_kinetics_selection_manifest", None, None, "tests/test_network_selection.py",
     ),
+    (
+        "POST", "/api/v1/scientific/networks/{network_ref}/kinetics/export-selected",
+        "export_selected_network_kinetics", None, None, "tests/test_network_selection_export.py",
+    ),
     # --- Species-entry subresources ---------------------------------
     (
         "GET", "/api/v1/scientific/species-entries/{species_entry_id}/thermo",

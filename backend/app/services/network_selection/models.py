@@ -431,6 +431,8 @@ class FitFacts:
     plog_finite: bool = True
     point_cells: tuple[tuple[float, float], ...] = ()
     point_values_finite: bool = True
+    #: SHA-256 of the fit's stored numbers, units and domain, so a manifest pins the coefficients, not only a summary.
+    content_digest: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         d = dict(self.__dict__)

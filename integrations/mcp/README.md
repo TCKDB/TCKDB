@@ -34,6 +34,7 @@ committed backend OpenAPI golden snapshot at
 | `tckdb_select_species_entry_thermo` | `POST /api/v1/scientific/species-entries/{spe_ref}/thermo/select` | Method-aware 298 K formation-enthalpy selection |
 | `tckdb_select_reaction_entry_kinetics` | `POST /api/v1/scientific/reaction-entries/{rxe_ref}/kinetics/select` | Method-aware gas-phase rate-coefficient selection |
 | `tckdb_select_network_kinetics` | `POST /api/v1/scientific/networks/{net_ref}/kinetics/select` | Method-aware pressure-dependent network selection |
+| `tckdb_export_selected_network_kinetics` | `POST /api/v1/scientific/networks/{net_ref}/kinetics/export-selected` | Serialise a verified network selection (native or CHEMKIN) |
 | `tckdb_get_geometry` | `GET /api/v1/scientific/geometries/{geom_ref}` | Geometry detail |
 | `tckdb_get_reaction_entry_full` | `GET /api/v1/scientific/reaction-entries/{rxe_ref}/full` | Composite reaction record |
 | `tckdb_calculation_search` | `POST /api/v1/scientific/calculations/search` | Calculation search |
@@ -659,6 +660,29 @@ review and recency choice, not a method claim. Every rule in this release is ina
 nothing yet. Integer ids, a candidate cap, bounds and paging arguments are refused: the bounds are the server's (a
 422 `network_selection_population_too_large` over one) and this tool never pages the population. See
 `docs/guides/selecting_network_kinetics.md`.
+
+### `tckdb_export_selected_network_kinetics`
+
+Serialise one network selection you already made with `tckdb_select_network_kinetics`. Read-only. The server replays the
+submitted manifest, re-checks it against its own content under one snapshot, and refuses a stale, forged or incomplete
+one with a structured 422.
+
+```text
+network_ref: string                # REQUIRED, must start with "net_"; the only thing in the URL path
+manifest: object                   # REQUIRED, the server's decision manifest exactly as returned
+node_ref: string                   # REQUIRED, the chosen determination ref or "<solve ref>/<product set key>"
+representation_refs: [string]      # REQUIRED, exactly one eligible fit ref per member of the node
+format?: "native" | "chemkin"      # default "native"; CHEMKIN is forward-only with no thermodynamics
+allow_administrative_choice?: boolean   # default false on the server
+energy_units?: string              # CHEMKIN only
+naming_policy?: "formula" | "public_ref"
+profile?: "exploratory" | "curated"
+```
+
+Output: the server response, unchanged, or its refusal code (`network_export_manifest_invalid`,
+`network_export_manifest_stale`, `network_export_choice_not_allowed`, `network_export_representation_choice_invalid`,
+`network_export_unsupported_form`), which should be reported verbatim. Integer ids and any rule or verdict field are
+refused here. See `docs/guides/selecting_network_kinetics.md`.
 
 ### `tckdb_get_geometry`
 

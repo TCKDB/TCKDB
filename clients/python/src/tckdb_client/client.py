@@ -74,6 +74,7 @@ from tckdb_client.scientific_types import (
     NetworkKineticsSearchResponse,
     NetworkRecord,
     NetworkSearchResponse,
+    NetworkSelectedKineticsExport,
     NetworkSelectionRequest,
     NetworkSelectionResponse,
     NetworkSolveRecord,
@@ -157,6 +158,13 @@ def _selection_body(
         if value is not None:
             body[key] = value
     return body  # type: ignore[return-value]
+
+
+def _network_export_path(network_ref: str) -> str:
+    """Path of the selected-export endpoint for a public ``net_`` ref (integer ids are refused)."""
+    if not isinstance(network_ref, str) or not network_ref.startswith("net_"):
+        raise ValueError(f"network_ref must be a public network ref starting with 'net_'; got {network_ref!r}.")
+    return f"/scientific/networks/{quote(network_ref, safe='')}/kinetics/export-selected"
 
 
 def _network_selection_path(network_ref: str) -> str:
@@ -2041,6 +2049,49 @@ class TCKDBClient:
         return self.request_json(
             "POST", _network_selection_path(network_ref) + "/manifest", json=body,
             params={"profile": profile}, authenticated=False,
+        ).data
+
+    def export_selected_network_kinetics(
+        self,
+        network_ref: str,
+        *,
+        manifest: Mapping[str, Any],
+        node_ref: str,
+        representation_refs: list[str],
+        format: str | None = None,
+        allow_administrative_choice: bool | None = None,
+        energy_units: str | None = None,
+        naming_policy: str | None = None,
+        include_reported: bool | None = None,
+        profile: str | None = None,
+    ) -> NetworkSelectedKineticsExport:
+        """``POST /scientific/networks/{ref}/kinetics/export-selected``.
+
+        Serialise one network selection you saved from :meth:`get_network_kinetics_selection_manifest`. The server
+        replays the manifest, re-runs the selection against its own content under one snapshot and refuses a stale,
+        forged or incomplete manifest, a node the decision does not allow, anything but exactly one eligible
+        representation per member, and any form it cannot serialise (a structured 422; nothing is exported).
+
+        ``network_ref`` must be a public ``net_...`` ref. ``format`` is ``native`` (the server default) or
+        ``chemkin`` (forward-only, no thermodynamics). ``allow_administrative_choice`` is false on the server unless
+        you pass true, and then permits only an unranked leading-front choice. Optional fields that are ``None`` are
+        dropped, never sent as JSON null. A solve of kind ``reported`` (rates transcribed from a publication) is written
+        into CHEMKIN only with ``include_reported=True``, and then annotated with its literature (ADR 0010).
+        """
+        path = _network_export_path(network_ref)
+        body: dict[str, Any] = {
+            "manifest": dict(manifest),
+            "node_ref": node_ref,
+            "representation_refs": list(representation_refs),
+        }
+        for key, value in (
+            ("format", format), ("allow_administrative_choice", allow_administrative_choice),
+            ("energy_units", energy_units), ("naming_policy", naming_policy), ("include_reported", include_reported),
+        ):
+            if value is not None:
+                body[key] = value
+        return self.request_json(
+            "POST", path, json=body, params={"profile": profile}, authenticated=False
         ).data
 
     def get_species_observations(

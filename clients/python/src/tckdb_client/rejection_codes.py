@@ -214,6 +214,12 @@ class RejectionCode(str, Enum):
     NETWORK_DECLARATION_VERSION_UNSUPPORTED = "network_declaration_version_unsupported"
     NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH = "network_energy_source_subject_mismatch"
     NETWORK_ENERGY_SOURCE_TYPE_MISMATCH = "network_energy_source_type_mismatch"
+    NETWORK_EXPORT_BODY_TOO_LARGE = "network_export_body_too_large"
+    NETWORK_EXPORT_CHOICE_NOT_ALLOWED = "network_export_choice_not_allowed"
+    NETWORK_EXPORT_MANIFEST_INVALID = "network_export_manifest_invalid"
+    NETWORK_EXPORT_MANIFEST_STALE = "network_export_manifest_stale"
+    NETWORK_EXPORT_REPRESENTATION_CHOICE_INVALID = "network_export_representation_choice_invalid"
+    NETWORK_EXPORT_UNSUPPORTED_FORM = "network_export_unsupported_form"
     NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE = "network_kinetics_batch_evaluate_grid_too_large"
     NETWORK_KINETICS_EVALUATE_GRID_TOO_LARGE = "network_kinetics_evaluate_grid_too_large"
     NETWORK_KINETICS_EVALUATE_INVALID_POINT = "network_kinetics_evaluate_invalid_point"
@@ -481,6 +487,11 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.NETWORK_DECLARATION_VERSION_UNSUPPORTED,
         RejectionCode.NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH,
         RejectionCode.NETWORK_ENERGY_SOURCE_TYPE_MISMATCH,
+        RejectionCode.NETWORK_EXPORT_CHOICE_NOT_ALLOWED,
+        RejectionCode.NETWORK_EXPORT_MANIFEST_INVALID,
+        RejectionCode.NETWORK_EXPORT_MANIFEST_STALE,
+        RejectionCode.NETWORK_EXPORT_REPRESENTATION_CHOICE_INVALID,
+        RejectionCode.NETWORK_EXPORT_UNSUPPORTED_FORM,
         RejectionCode.NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE,
         RejectionCode.NETWORK_KINETICS_EVALUATE_GRID_TOO_LARGE,
         RejectionCode.NETWORK_KINETICS_EVALUATE_INVALID_POINT,
@@ -774,6 +785,12 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.NETWORK_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH: frozenset({422}),
     RejectionCode.NETWORK_ENERGY_SOURCE_TYPE_MISMATCH: frozenset({422}),
+    RejectionCode.NETWORK_EXPORT_BODY_TOO_LARGE: frozenset({413}),
+    RejectionCode.NETWORK_EXPORT_CHOICE_NOT_ALLOWED: frozenset({422}),
+    RejectionCode.NETWORK_EXPORT_MANIFEST_INVALID: frozenset({422}),
+    RejectionCode.NETWORK_EXPORT_MANIFEST_STALE: frozenset({422}),
+    RejectionCode.NETWORK_EXPORT_REPRESENTATION_CHOICE_INVALID: frozenset({422}),
+    RejectionCode.NETWORK_EXPORT_UNSUPPORTED_FORM: frozenset({422}),
     RejectionCode.NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE: frozenset({422}),
     RejectionCode.NETWORK_KINETICS_EVALUATE_GRID_TOO_LARGE: frozenset({422}),
     RejectionCode.NETWORK_KINETICS_EVALUATE_INVALID_POINT: frozenset({422}),

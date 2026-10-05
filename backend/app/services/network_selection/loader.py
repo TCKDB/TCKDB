@@ -20,6 +20,8 @@ listed or named, in a refusal or anywhere else.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 from dataclasses import dataclass
 
@@ -285,6 +287,32 @@ def _declaration(model: type, raw: object) -> tuple[str, dict | None]:
         return "unreadable", None
 
 
+def _fit_content_digest(
+    fit: NetworkKinetics, cheb: NetworkKineticsChebyshev | None, plog_rows: list[NetworkKineticsPlog],
+    point_rows: list[NetworkKineticsPoint],
+) -> str:
+    """SHA-256 over everything numeric the export would write for the fit: change a coefficient and it changes."""
+    content = {
+        "model_kind": fit.model_kind.value,
+        "units": [
+            fit.rate_units.value if fit.rate_units is not None else None,
+            fit.pressure_units.value if fit.pressure_units is not None else None,
+            fit.temperature_units.value if fit.temperature_units is not None else None,
+        ],
+        "stores_log10_k": fit.stores_log10_k,
+        "domain": [fit.tmin_k, fit.tmax_k, fit.pmin_bar, fit.pmax_bar],
+        "plog": sorted(
+            [r.pressure_bar, r.entry_index, r.a, r.a_units.value if r.a_units is not None else None, r.n, r.ea_kj_mol]
+            for r in plog_rows
+        ),
+        "chebyshev": None
+        if cheb is None
+        else {"n_temperature": cheb.n_temperature, "n_pressure": cheb.n_pressure, "coefficients": cheb.coefficients},
+        "points": sorted([r.temperature_k, r.pressure_bar, r.rate_value] for r in point_rows),
+    }
+    return hashlib.sha256(json.dumps(content, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+
+
 def _finite_matrix(matrix: object, rows: int, cols: int) -> bool:
     return (
         isinstance(matrix, list)
@@ -404,6 +432,7 @@ def load_population(session: Session, scan: PopulationScan, request: NetworkRequ
                 plog_finite=all(math.isfinite(r.a) and math.isfinite(r.n) and math.isfinite(r.ea_kj_mol) for r in plog_rows),
                 point_cells=tuple((r.temperature_k, r.pressure_bar) for r in point_rows),
                 point_values_finite=all(math.isfinite(r.rate_value) for r in point_rows),
+                content_digest=_fit_content_digest(f, c, plog_rows, point_rows),
             )
         )
 

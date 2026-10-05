@@ -28354,6 +28354,63 @@
         "title": "NetworkEvidenceSummary",
         "type": "object"
       },
+      "NetworkExportRequestEcho": {
+        "description": "What was asked, with the read profile it was answered under.",
+        "properties": {
+          "allow_administrative_choice": {
+            "title": "Allow Administrative Choice",
+            "type": "boolean"
+          },
+          "format": {
+            "enum": [
+              "native",
+              "chemkin"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "include_reported": {
+            "default": false,
+            "title": "Include Reported",
+            "type": "boolean"
+          },
+          "network_ref": {
+            "title": "Network Ref",
+            "type": "string"
+          },
+          "node_ref": {
+            "title": "Node Ref",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          }
+        },
+        "required": [
+          "network_ref",
+          "node_ref",
+          "format",
+          "allow_administrative_choice"
+        ],
+        "title": "NetworkExportRequestEcho",
+        "type": "object"
+      },
       "NetworkFitOrigin": {
         "description": "``solver_output``: the coefficients are the solver's own. ``refit``: refitted from tabulated\nsolver output. ``transcribed``: copied from a publication.",
         "enum": [
@@ -31337,6 +31394,181 @@
           }
         },
         "title": "NetworkSearchRequest",
+        "type": "object"
+      },
+      "NetworkSelectedKineticsExport": {
+        "description": "The serialised selection, with the provenance and assumptions that bound it.",
+        "properties": {
+          "administrative": {
+            "title": "Administrative",
+            "type": "boolean"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "equation_collisions": {
+            "description": "Chosen channels sharing both endpoints. Reported, never summed.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Equation Collisions",
+            "type": "array"
+          },
+          "files": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "CHEMKIN files by name; null for a native export.",
+            "title": "Files"
+          },
+          "format": {
+            "enum": [
+              "native",
+              "chemkin"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "members": {
+            "description": "Each member of the node: determination, channel with directed endpoints, and the one chosen representation with its stored numbers.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "network_ref": {
+            "title": "Network Ref",
+            "type": "string"
+          },
+          "node_ref": {
+            "title": "Node Ref",
+            "type": "string"
+          },
+          "provenance": {
+            "additionalProperties": true,
+            "title": "Provenance",
+            "type": "object"
+          },
+          "request": {
+            "$ref": "#/components/schemas/NetworkExportRequestEcho"
+          },
+          "selection_basis": {
+            "description": "The selection's outcome, or 'administrative_choice' when the caller accepted one of several unranked alternatives (not a method claim).",
+            "title": "Selection Basis",
+            "type": "string"
+          },
+          "solve_ref": {
+            "title": "Solve Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request",
+          "format",
+          "network_ref",
+          "node_ref",
+          "solve_ref",
+          "selection_basis",
+          "administrative",
+          "provenance",
+          "assumptions",
+          "members"
+        ],
+        "title": "NetworkSelectedKineticsExport",
+        "type": "object"
+      },
+      "NetworkSelectedKineticsExportRequest": {
+        "additionalProperties": false,
+        "description": "Request body. ``allow_administrative_choice`` is false unless the caller says otherwise.",
+        "properties": {
+          "allow_administrative_choice": {
+            "default": false,
+            "description": "Accept exporting one of several unranked leading alternatives. It never bypasses a conflict, an incomplete membership or an unsupported serialisation.",
+            "title": "Allow Administrative Choice",
+            "type": "boolean"
+          },
+          "energy_units": {
+            "default": "cal/mol",
+            "description": "CHEMKIN REACTIONS energy unit. An unknown unit is refused, never replaced.",
+            "enum": [
+              "cal/mol",
+              "kcal/mol",
+              "j/mol",
+              "kj/mol",
+              "k"
+            ],
+            "title": "Energy Units",
+            "type": "string"
+          },
+          "format": {
+            "default": "native",
+            "enum": [
+              "native",
+              "chemkin"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "include_reported": {
+            "default": false,
+            "description": "CHEMKIN only: a solve of kind 'reported' (rates transcribed from a publication) is written into a mechanism only when this is true, and then annotated with its literature (ADR 0010).",
+            "title": "Include Reported",
+            "type": "boolean"
+          },
+          "manifest": {
+            "additionalProperties": true,
+            "description": "The decision manifest from .../kinetics/select/manifest, exactly as downloaded.",
+            "title": "Manifest",
+            "type": "object"
+          },
+          "naming_policy": {
+            "default": "formula",
+            "enum": [
+              "formula",
+              "public_ref"
+            ],
+            "title": "Naming Policy",
+            "type": "string"
+          },
+          "node_ref": {
+            "description": "The chosen node: a determination ref, or '<solve ref>/<product set key>' for a bundle.",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Node Ref",
+            "type": "string"
+          },
+          "representation_refs": {
+            "description": "Exactly one eligible fitted representation (a public network-kinetics ref) per member.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Representation Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "manifest",
+          "node_ref",
+          "representation_refs"
+        ],
+        "title": "NetworkSelectedKineticsExportRequest",
         "type": "object"
       },
       "NetworkSelectionBathComponent": {
@@ -85619,6 +85851,122 @@
           }
         },
         "summary": "Scientific Network Kinetics Batch Evaluate",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/networks/{network_ref}/kinetics/export-selected": {
+      "post": {
+        "description": "Serialise the chosen node of a saved selection manifest, after verifying it against the server.\n\nRefusals (all 422, nothing exported): ``network_export_manifest_invalid`` (incomplete, another network's, or it\ndoes not replay), ``network_export_manifest_stale`` (the content, review states, rules, population or read profile\nchanged, or the document was edited), ``network_export_choice_not_allowed`` (not the selected node; an unranked\nleading alternative without ``allow_administrative_choice``; a conflict or an empty selection),\n``network_export_representation_choice_invalid`` (not exactly one eligible fit per member) and\n``network_export_unsupported_form`` (a form or species with no CHEMKIN serialisation, or two chosen channels\nwith one equation). CHEMKIN output is forward-only and writes no thermodynamics; alternatives are never added and\n``DUPLICATE`` is never written.",
+        "operationId": "export_selected_network_kinetics_api_v1_scientific_networks__network_ref__kinetics_export_selected_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "network_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Network Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NetworkSelectedKineticsExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkSelectedKineticsExport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export a verified network selection (native or CHEMKIN)",
         "tags": [
           "scientific"
         ]
