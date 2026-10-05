@@ -35,8 +35,9 @@ direct dynamics are a model-fidelity claim, and only its final CH4 rates against
 - **Jasper and Miller, J. Phys. Chem. A 115, 6438-6455 (2011)**: read in full (manifest 0.2.0) from the owner's copy,
   pinned in the manifest by SHA-256 and anchored to journal page, table and figure. The article is licensed and is
   not in the repository. Its Supporting Information was not supplied. Anchors include Table 2 (potential errors
-  against QCISD(T)/CBS, p. 6441), Table 4 (alpha300 and n for eight baths, p. 6450), Figs. 3-6 (transfer averages
-  against direct dynamics for He, Ne, H2, N2 and CO), and Figs. 12-14 (rates against experiment for He, Ar, Kr and
+  against QCISD(T)/CBS, p. 6441), Table 4 (alpha300 and n for eight baths, p. 6450), Figs. 3-5 (transfer averages
+  against direct dynamics for He, Ne and H2), Fig. 6 (the N2 and CO pairwise fits compared with each other, with no
+  direct-dynamics reference), and Figs. 12-14 (rates against experiment for He, Ar, Kr and
   CH4). Direct dynamics was run for four baths (He, Ne, H2, CH4), the potential tests cover three (the
   Lennard-Jones comparison only He), and the experimental comparison covers four (the Kr data are plotted against
   the Ar prediction).
