@@ -19,6 +19,7 @@ CODE_POPULATION_TOO_LARGE = "structure_selection_population_too_large"
 CODE_EVIDENCE_TOO_LARGE = "structure_selection_evidence_too_large"
 CODE_TRAVERSAL_TOO_DEEP = "structure_selection_traversal_too_deep"
 CODE_UNSUPPORTED = "structure_selection_unsupported"
+CODE_MANIFEST_TOO_LARGE = "structure_selection_manifest_too_large"
 
 
 def check_candidates(bounds: SelectionBounds, visible: int) -> None:
@@ -87,3 +88,18 @@ def parse_quantity(raw: str) -> Quantity:
                 quantity=raw,
             ) from None
         raise ValueError(f"unknown quantity {raw!r}") from None
+
+def check_manifest_size(bounds: SelectionBounds, size_bytes: int) -> None:
+    """Refuse (422 ``structure_selection_manifest_too_large``) when the canonical manifest exceeds the bound.
+
+    The decision was made, but a decision whose replayable record cannot be returned whole is not returned: a
+    truncated manifest would replay to something else.
+    """
+    if size_bytes > bounds.manifest_bytes:
+        raise CodedValueError(
+            CODE_MANIFEST_TOO_LARGE,
+            f"the replayable manifest is {size_bytes} bytes, over the limit of {bounds.manifest_bytes}; "
+            "no decision is returned without its complete manifest.",
+            context={"bound": "manifest_bytes", "size": size_bytes, "limit": bounds.manifest_bytes, "bounds_version": bounds.version},
+            message_prefix=False,
+        )
