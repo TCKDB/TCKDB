@@ -510,6 +510,10 @@ class ComputedSpeciesUpload:
 
         if calc.execution_environment is not None:
             out["execution_environment"] = calc.execution_environment.model_dump(mode="json")
+        if calc.actual_protocol_declaration is not None:
+            out["actual_protocol_declaration"] = calc.actual_protocol_declaration.model_dump(
+                mode="json", exclude_none=True
+            )
 
         result = calc.result_block()
         if result is not None:
@@ -1871,6 +1875,10 @@ class ComputedReactionUpload:
             out["geometry_key"] = geometry_key
         if calc.execution_environment is not None:
             out["execution_environment"] = calc.execution_environment.model_dump(mode="json")
+        if calc.actual_protocol_declaration is not None:
+            out["actual_protocol_declaration"] = calc.actual_protocol_declaration.model_dump(
+                mode="json", exclude_none=True
+            )
         out.update(calc.result_fields_flat())
         if calc.depends_on:
             out["depends_on"] = [

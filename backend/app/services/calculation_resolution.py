@@ -18,6 +18,10 @@ from tckdb_schemas.fragments.calculation import (
 )
 from tckdb_schemas.sp_energy_components import check_sp_energy_components
 from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
+from tckdb_schemas.structure_declarations import (
+    W_STRUCTURE_DECLARATION_INVALID,
+    ActualProtocolDeclaration,
+)
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.basis_set_names import basis_identity_key
@@ -453,6 +457,29 @@ def refuse_workflow_tool_as_calculation_software(
     )
 
 
+def stored_actual_protocol_declaration(declaration: ActualProtocolDeclaration | None) -> dict | None:
+    """The form of a declared actual protocol that is stored on ``calculation``: JSON, ``None`` fields left out.
+
+    ``None`` stays ``None`` (SQL NULL, "not stated"). A declaration that reached this seam without passing
+    request validation (built with ``model_construct`` or ``model_copy``) is validated again here, so the stored
+    form is always a readable version-1 declaration, and an unreadable one is refused with a code rather than
+    stored.
+    """
+    if declaration is None:
+        return None
+    try:
+        checked = ActualProtocolDeclaration.model_validate(declaration.model_dump(mode="json"))
+    except ValueError as exc:
+        raise CodedValueError(
+            W_STRUCTURE_DECLARATION_INVALID,
+            "actual_protocol_declaration is not a valid version-1 declaration; "
+            "state at least one fact and a supported version.",
+            context={"block": "actual_protocol_declaration"},
+            message_prefix=False,
+        ) from exc
+    return checked.model_dump(mode="json", exclude_none=True)
+
+
 def resolve_calculation_create_request(
     session: Session,
     request: CalculationCreateRequest,
@@ -504,6 +531,7 @@ def resolve_calculation_create_request(
         lot_id=level_of_theory.id,
         literature_id=request.literature_id,
         execution_environment_manifest_id=environment.id if environment else None,
+        actual_protocol_declaration=stored_actual_protocol_declaration(request.actual_protocol_declaration),
     )
 
 
@@ -531,6 +559,7 @@ def persist_calculation(
         lot_id=resolved.lot_id,
         literature_id=resolved.literature_id,
         execution_environment_manifest_id=resolved.execution_environment_manifest_id,
+        actual_protocol_declaration=resolved.actual_protocol_declaration,
         created_by=created_by,
     )
     session.add(calculation)
@@ -2267,6 +2296,7 @@ def resolve_and_persist_calculation_with_results(
         level_of_theory=calc_upload.level_of_theory,
         literature_id=literature_id,
         execution_environment=calc_upload.execution_environment,
+        actual_protocol_declaration=calc_upload.actual_protocol_declaration,
     )
     resolved = resolve_calculation_create_request(session, request)
     calculation = persist_calculation(session, resolved, created_by=created_by)

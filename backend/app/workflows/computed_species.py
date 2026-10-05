@@ -216,6 +216,7 @@ def _to_calc_with_results_payload(
         level_of_theory=calc_in.level_of_theory,
         literature=calc_in.literature,
         execution_environment=calc_in.execution_environment,
+        actual_protocol_declaration=calc_in.actual_protocol_declaration,
         opt_result=calc_in.opt_result,
         freq_result=calc_in.freq_result,
         sp_result=calc_in.sp_result,

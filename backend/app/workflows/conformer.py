@@ -37,6 +37,7 @@ from app.services.statmech_resolution import (
     collect_frequency_scale_factor_software_mismatch_warnings,
     resolve_or_create_statmech,
 )
+from app.services.structure_determination_resolution import DeterminationOwner, persist_structure_determinations
 from app.services.transport_resolution import resolve_and_create_transport
 
 
@@ -300,6 +301,26 @@ def persist_conformer_upload(
         )
 
     session.flush()
+
+    # Structure determinations pin this request's own calculations by their local key. Every calculation and
+    # its geometries exist and are flushed by now, and the observation a basin claim is about was just created.
+    if request.structure_determinations:
+        persist_structure_determinations(
+            session,
+            list(request.structure_determinations),
+            owner=DeterminationOwner(
+                species_entry_id=species_entry.id, conformer_observation_id=observation.id
+            ),
+            calculations_by_key={
+                payload_calc.key: calc_row
+                for payload_calc, calc_row in [
+                    (request.calculation, calculation),
+                    *zip(request.additional_calculations, additional_calcs, strict=True),
+                ]
+                if payload_calc.key is not None
+            },
+            created_by=created_by,
+        )
 
     # An assembled composite's inputs are written, and its total checked, now that
     # every calculation it may name exists (ADR 0021, P5). Before the review

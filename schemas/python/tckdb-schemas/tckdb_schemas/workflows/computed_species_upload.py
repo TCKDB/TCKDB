@@ -70,6 +70,7 @@ from tckdb_schemas.fragments.refs import (
 )
 from tckdb_schemas.fragments.scan import CalculationScanResultCreate
 from tckdb_schemas.literature import LiteratureUploadRequest
+from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 from tckdb_schemas.rights import DepositRights
 from tckdb_schemas.statmech_bits import (
     StatmechSourceCalcIn,
@@ -180,6 +181,8 @@ class CalculationInBundle(SchemaBase):
     level_of_theory: LevelOfTheoryRef
     literature: LiteratureUploadRequest | None = None
     execution_environment: ExecutionEnvironmentManifestPayload | None = None
+    #: The recipe this calculation actually ran, as the depositor declares it. Omitted: not stated.
+    actual_protocol_declaration: ActualProtocolDeclaration | None = None
 
     parameters_json: dict | None = None
     parameters: list[CalculationParameterObservation] | None = None

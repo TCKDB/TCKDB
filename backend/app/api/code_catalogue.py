@@ -2418,6 +2418,27 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("statmech_torsion_scan_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
             shape=Shape.relationship),
+    ApiCode("structure_declaration_invalid", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/structure_declarations.py"),
+    ApiCode("structure_declaration_version_unsupported", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/structure_declarations.py"),
+    ApiCode("structure_determination_invalid", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/structure_declarations.py",
+            shape=Shape.relationship,
+            note=(
+                "A determination contradicts itself: a quantity without its energy convention (or the reverse), "
+                "no energy source for a stated quantity, a repeated (role, calculation) source, or no source "
+                "attribution."
+            )),
+    ApiCode("structure_determination_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/structure_determination_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "context.reason names target (the kind does not fit the upload's owner), owner (a pinned "
+                "calculation belongs to another subject), geometry (the pinned calculation has no single "
+                "geometry on the side named) or content (the same determination was stated with a different "
+                "claim)."
+            )),
     ApiCode("stored_species_smiles_unparseable", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py"),
     ApiCode("subject_type_mismatch", 422, Surface.message_prefix,

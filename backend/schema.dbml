@@ -690,6 +690,52 @@ enum StereoKind {
   ez_isomer
 }
 
+enum StructureDeterminationQuantity {
+  electronic_energy
+  zero_kelvin_energy
+}
+
+enum StructureDeterminationTargetKind {
+  geometry
+  conformer_basin
+  saddle_point
+}
+
+enum StructureFindingAuthority {
+  producer_assertion
+  authorized_adjudication
+}
+
+enum StructureFindingKind {
+  identity_incompatibility
+  state_incompatibility
+  path_incompatibility
+  role_invalidation
+  contradictory_characterization
+  adjudication
+}
+
+enum StructureFindingScope {
+  geometry
+  calculation
+  determination
+}
+
+enum StructureFindingVerdict {
+  invalidates
+  does_not_invalidate
+  unresolved
+}
+
+enum StructureSourceRole {
+  energy
+  geometry_optimization
+  curvature
+  correction
+  connectivity
+  alternative_characterization
+}
+
 enum SubmissionActorKind {
   user
   curator
@@ -1549,6 +1595,7 @@ Table calculation {
   software_reconciliation_status SoftwareReconciliationStatus
   observed_software_banner text
   declared_software_banner text
+  actual_protocol_declaration jsonb
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
   public_ref string [not null]
@@ -1565,9 +1612,12 @@ Table calculation {
     transition_state_entry_id [name: 'ix_calculation_transition_state_entry_id']
     (type, id) [name: 'ix_calculation_type_id']
     workflow_tool_release_id [name: 'ix_calculation_workflow_tool_release_id']
+    (id, species_entry_id) [unique, name: 'uq_calculation_scope_species']
+    (id, transition_state_entry_id) [unique, name: 'uq_calculation_scope_ts']
   }
 
   checks {
+    `actual_protocol_declaration IS NULL OR (jsonb_typeof(actual_protocol_declaration) = 'object' AND coalesce(jsonb_typeof(actual_protocol_declaration -> 'version'), '') = 'number')` [name: 'ck_calculation_actual_protocol_declaration_versioned_object']
     `
                 (
                     transition_state_entry_id IS NOT NULL
@@ -3685,6 +3735,111 @@ Table statmech_torsion_definition {
   Note: 'Atom indices for a torsional coordinate.'
 }
 
+Table structure_determination {
+  id bigint [pk, not null]
+  species_entry_id bigint [ref: > species_entry.id]
+  transition_state_entry_id bigint [ref: > transition_state_entry.id]
+  conformer_observation_id bigint [ref: > conformer_observation.id]
+  target_kind StructureDeterminationTargetKind [not null]
+  quantity StructureDeterminationQuantity
+  evaluated_geometry_id bigint [not null, ref: > geometry.id]
+  literature_id bigint [ref: > literature.id]
+  workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
+  determination_key text [not null]
+  energy_convention jsonb
+  actual_recipe jsonb
+  identity_hash string [not null]
+  content_hash string [not null]
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+  public_ref string [not null]
+
+  indexes {
+    conformer_observation_id [name: 'ix_structure_determination_conformer_observation_id']
+    evaluated_geometry_id [name: 'ix_structure_determination_evaluated_geometry_id']
+    public_ref [unique, name: 'ix_structure_determination_public_ref']
+    species_entry_id [name: 'ix_structure_determination_species_entry_id']
+    transition_state_entry_id [name: 'ix_structure_determination_transition_state_entry_id']
+    identity_hash [unique, name: 'uq_structure_determination_identity_hash']
+    (id, species_entry_id) [unique, name: 'uq_structure_determination_scope_species']
+    (id, transition_state_entry_id) [unique, name: 'uq_structure_determination_scope_ts']
+  }
+
+  checks {
+    `actual_recipe IS NULL OR (jsonb_typeof(actual_recipe) = 'object' AND coalesce(jsonb_typeof(actual_recipe -> 'version'), '') = 'number')` [name: 'ck_structure_determination_actual_recipe_versioned_object']
+    `content_hash ~ '^[0-9a-f]{64}$'` [name: 'ck_structure_determination_content_hash_sha256_hex']
+    `coalesce(quantity = 'zero_kelvin_energy', false) = (energy_convention IS NOT NULL)` [name: 'ck_structure_determination_convention_iff_zero_kelvin']
+    `energy_convention IS NULL OR (jsonb_typeof(energy_convention) = 'object')` [name: 'ck_structure_determination_energy_convention_object']
+    `identity_hash ~ '^[0-9a-f]{64}$'` [name: 'ck_structure_determination_identity_hash_sha256_hex']
+    `length(btrim(determination_key)) > 0 AND length(determination_key) <= 128` [name: 'ck_structure_determination_key_bounded']
+    `num_nonnulls(species_entry_id, transition_state_entry_id) = 1` [name: 'ck_structure_determination_one_owner']
+    `literature_id IS NOT NULL OR workflow_tool_release_id IS NOT NULL` [name: 'ck_structure_determination_source_required']
+    `(target_kind = 'conformer_basin' AND species_entry_id IS NOT NULL AND conformer_observation_id IS NOT NULL) OR (target_kind = 'saddle_point' AND transition_state_entry_id IS NOT NULL AND conformer_observation_id IS NULL) OR (target_kind = 'geometry' AND conformer_observation_id IS NULL)` [name: 'ck_structure_determination_target_matches_owner']
+  }
+
+  Note: 'One source-attributed claim about a geometry, basin or saddle, immutable from creation.'
+}
+
+Table structure_determination_source {
+  id bigint [pk, not null]
+  determination_id bigint [not null, ref: > structure_determination.id]
+  role StructureSourceRole [not null]
+  calculation_id bigint [not null, ref: > calculation.id]
+  species_entry_id bigint [ref: > calculation.species_entry_id]
+  transition_state_entry_id bigint [ref: > calculation.transition_state_entry_id]
+  geometry_id bigint [ref: > geometry.id]
+
+  indexes {
+    calculation_id [name: 'ix_structure_determination_source_calculation_id']
+    determination_id [name: 'ix_structure_determination_source_determination_id']
+    (determination_id, role, calculation_id) [unique, name: 'uq_structure_determination_source_role']
+  }
+
+  checks {
+    `num_nonnulls(species_entry_id, transition_state_entry_id) = 1` [name: 'ck_structure_determination_source_one_owner']
+  }
+
+  Note: 'One calculation pinned to one role of a determination.'
+}
+
+Table structure_evidence_finding {
+  id bigint [pk, not null]
+  kind StructureFindingKind [not null]
+  scope StructureFindingScope [not null]
+  subject_geometry_id bigint [ref: > geometry.id]
+  subject_calculation_id bigint [ref: > calculation.id]
+  subject_determination_id bigint [ref: > structure_determination.id]
+  role StructureSourceRole
+  verdict StructureFindingVerdict [not null]
+  authority StructureFindingAuthority [not null]
+  rationale text [not null]
+  semantic_version int [not null]
+  source_calculation_id bigint [ref: > calculation.id]
+  literature_id bigint [ref: > literature.id]
+  supersedes_finding_id bigint [ref: > structure_evidence_finding.id]
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_structure_evidence_finding_public_ref']
+    subject_calculation_id [name: 'ix_structure_evidence_finding_subject_calculation_id']
+    subject_determination_id [name: 'ix_structure_evidence_finding_subject_determination_id']
+    subject_geometry_id [name: 'ix_structure_evidence_finding_subject_geometry_id']
+    supersedes_finding_id [name: 'ix_structure_evidence_finding_supersedes_finding_id']
+  }
+
+  checks {
+    `kind <> 'adjudication' OR (supersedes_finding_id IS NOT NULL AND authority = 'authorized_adjudication')` [name: 'ck_structure_evidence_finding_adjudication_needs_authority']
+    `length(btrim(rationale)) > 0 AND length(rationale) <= 2000` [name: 'ck_structure_evidence_finding_rationale_bounded']
+    `(kind = 'role_invalidation') = (role IS NOT NULL)` [name: 'ck_structure_evidence_finding_role_iff_role_invalidation']
+    `semantic_version >= 1` [name: 'ck_structure_evidence_finding_semantic_version_positive']
+    `(scope = 'geometry' AND subject_geometry_id IS NOT NULL AND subject_calculation_id IS NULL AND subject_determination_id IS NULL) OR (scope = 'calculation' AND subject_calculation_id IS NOT NULL AND subject_geometry_id IS NULL AND subject_determination_id IS NULL) OR (scope = 'determination' AND subject_determination_id IS NOT NULL AND subject_geometry_id IS NULL AND subject_calculation_id IS NULL)` [name: 'ck_structure_evidence_finding_subject_matches_scope']
+  }
+
+  Note: 'One appended finding about a geometry, calculation or determination.'
+}
+
 Table submission {
   id bigint [pk, not null]
   created_by bigint [not null, ref: > app_user.id]
@@ -4212,3 +4367,11 @@ Ref fk_reaction_atom_map_pair_geometry_id_geometry_atom: reaction_atom_map_pair.
 Ref fk_reaction_atom_map_pair_structure_participant: reaction_atom_map_pair.(structure_participant_id, side) > reaction_entry_structure_participant.(id, role)
 
 Ref fk_reaction_atom_map_pair_ts_geometry_id_geometry_atom: reaction_atom_map_pair.(transition_state_geometry_id, ts_atom_index, ts_element) > geometry_atom.(geometry_id, atom_index, element)
+
+Ref fk_structure_determination_source_scope_calc_species: structure_determination_source.(calculation_id, species_entry_id) > calculation.(id, species_entry_id)
+
+Ref fk_structure_determination_source_scope_calc_ts: structure_determination_source.(calculation_id, transition_state_entry_id) > calculation.(id, transition_state_entry_id)
+
+Ref fk_structure_determination_source_scope_det_species: structure_determination_source.(determination_id, species_entry_id) > structure_determination.(id, species_entry_id)
+
+Ref fk_structure_determination_source_scope_det_ts: structure_determination_source.(determination_id, transition_state_entry_id) > structure_determination.(id, transition_state_entry_id)

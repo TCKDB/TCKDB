@@ -907,6 +907,81 @@ class KineticsDeterminationTargetKind(str, Enum):
     resolved_channel = "resolved_channel"
 
 
+class StructureDeterminationTargetKind(str, Enum):
+    """What a structure determination is a claim about (API energy ordering).
+
+    ``geometry``: one recorded geometry, with no claim that it is a basin or a
+    saddle. ``conformer_basin``: the basin one conformer observation is assigned
+    to. ``saddle_point``: one transition state entry's saddle geometry. A basin
+    belongs to a species entry and a saddle to a transition state entry
+    (``ck_structure_determination_target_matches_owner``).
+    """
+
+    geometry = "geometry"
+    conformer_basin = "conformer_basin"
+    saddle_point = "saddle_point"
+
+
+class StructureDeterminationQuantity(str, Enum):
+    """The energy a determination supplies. NULL on the row: an evidence-only determination.
+
+    ``electronic_energy``: an electronic total at the evaluated geometry.
+    ``zero_kelvin_energy``: a supplied E0 whose zero-point and correction
+    convention the determination states. Neither is ever derived from the other.
+    """
+
+    electronic_energy = "electronic_energy"
+    zero_kelvin_energy = "zero_kelvin_energy"
+
+
+class StructureSourceRole(str, Enum):
+    """The role one pinned calculation plays in a determination.
+
+    One calculation can fill several roles; each is its own source row.
+    """
+
+    energy = "energy"
+    geometry_optimization = "geometry_optimization"
+    curvature = "curvature"
+    correction = "correction"
+    connectivity = "connectivity"
+    alternative_characterization = "alternative_characterization"
+
+
+class StructureFindingKind(str, Enum):
+    """What a scoped structure-evidence finding records."""
+
+    identity_incompatibility = "identity_incompatibility"
+    state_incompatibility = "state_incompatibility"
+    path_incompatibility = "path_incompatibility"
+    role_invalidation = "role_invalidation"
+    contradictory_characterization = "contradictory_characterization"
+    adjudication = "adjudication"
+
+
+class StructureFindingScope(str, Enum):
+    """The kind of subject a finding is about: the matching subject column is the one that is set."""
+
+    geometry = "geometry"
+    calculation = "calculation"
+    determination = "determination"
+
+
+class StructureFindingVerdict(str, Enum):
+    """What the author concludes about the claim the finding names."""
+
+    invalidates = "invalidates"
+    does_not_invalidate = "does_not_invalidate"
+    unresolved = "unresolved"
+
+
+class StructureFindingAuthority(str, Enum):
+    """Who stands behind a finding: the depositor's own assertion, or an authorized adjudication."""
+
+    producer_assertion = "producer_assertion"
+    authorized_adjudication = "authorized_adjudication"
+
+
 class KineticsDegeneracyConvention(str, Enum):
     """Whether a stored reaction-path degeneracy is already in the rate."""
 

@@ -183,6 +183,17 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         ),
     )
 
+    # The recipe that was actually run, as the depositor declared it
+    # (``tckdb_schemas.structure_declarations.ActualProtocolDeclaration``): facts the level-of-theory label
+    # cannot carry (electronic state and root, reference spin treatment, relativistic treatment, effective core
+    # potential, core correlation, material numerical approximations, included corrections). An attributed
+    # claim, never inferred and never backfilled: NULL means "not stated", not "standard" and not "gas phase".
+    # ``none_as_null``: Python ``None`` is SQL NULL, never the JSON value ``null``, which would be a stored
+    # claim of nothing. Frozen with the rest of the row when the calculation is accepted.
+    actual_protocol_declaration: Mapped[Optional[dict]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
+
     species_entry: Mapped[Optional["SpeciesEntry"]] = relationship(
         back_populates="calculations",
         foreign_keys=[species_entry_id],
@@ -394,6 +405,16 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         # the index make that scan index-only; see revision
         # a7c2e4f8b6d9 for the measured plans.
         Index("ix_calculation_type_id", "type", "id"),
+        # The targets of ``structure_determination_source``'s composite foreign keys: a source can only name a
+        # calculation of the determination's own owner. ``id`` is already unique; these exist so the pair can
+        # be a foreign-key target.
+        UniqueConstraint("id", "species_entry_id", name="uq_calculation_scope_species"),
+        UniqueConstraint("id", "transition_state_entry_id", name="uq_calculation_scope_ts"),
+        CheckConstraint(
+            "actual_protocol_declaration IS NULL OR (jsonb_typeof(actual_protocol_declaration) = 'object' "
+            "AND coalesce(jsonb_typeof(actual_protocol_declaration -> 'version'), '') = 'number')",
+            name="actual_protocol_declaration_versioned_object",
+        ),
     )
 
 

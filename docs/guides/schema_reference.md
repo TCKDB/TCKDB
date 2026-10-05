@@ -1388,12 +1388,14 @@ the gap.
 | `software_reconciliation_status` | SoftwareReconciliationStatus (enum) | yes | — | — | `matched`, `enriched`, `mismatch`, `declared_only`, `parsed_only` | not documented |
 | `observed_software_banner` | TEXT | yes | — | — | — | not documented |
 | `declared_software_banner` | TEXT | yes | — | — | — | not documented |
+| `actual_protocol_declaration` | JSONB | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
 
 **Check constraints:**
 
+- `ck_calculation_actual_protocol_declaration_versioned_object`: `actual_protocol_declaration IS NULL OR (jsonb_typeof(actual_protocol_declaration) = 'object' AND coalesce(jsonb_typeof(actual_protocol_declaration -> 'version'), '') = 'number')`
 - `ck_calculation_one_owner`: `
                 (
                     transition_state_entry_id IS NOT NULL
@@ -2926,6 +2928,98 @@ the gap.
 - `ck_statmech_torsion_definition_atom3_index_ge_1`: `atom3_index >= 1`
 - `ck_statmech_torsion_definition_atom4_index_ge_1`: `atom4_index >= 1`
 - `ck_statmech_torsion_definition_coordinate_index_ge_1`: `coordinate_index >= 1`
+
+### `structure_determination`
+
+**Role:** role not stated on the model
+
+**Purpose:** One source-attributed claim about a geometry, basin or saddle, immutable from creation.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `species_entry_id` | BIGINT | yes | — | species_entry.id | — | not documented |
+| `transition_state_entry_id` | BIGINT | yes | — | transition_state_entry.id | — | not documented |
+| `conformer_observation_id` | BIGINT | yes | — | conformer_observation.id | — | not documented |
+| `target_kind` | StructureDeterminationTargetKind (enum) | no | — | — | `geometry`, `conformer_basin`, `saddle_point` | not documented |
+| `quantity` | StructureDeterminationQuantity (enum) | yes | — | — | `electronic_energy`, `zero_kelvin_energy` | not documented |
+| `evaluated_geometry_id` | BIGINT | no | — | geometry.id | — | not documented |
+| `literature_id` | BIGINT | yes | — | literature.id | — | not documented |
+| `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |
+| `determination_key` | TEXT | no | — | — | — | not documented |
+| `energy_convention` | JSONB | yes | — | — | — | not documented |
+| `actual_recipe` | JSONB | yes | — | — | — | not documented |
+| `identity_hash` | VARCHAR(64) | no | — | — | — | not documented |
+| `content_hash` | VARCHAR(64) | no | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
+| `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_structure_determination_actual_recipe_versioned_object`: `actual_recipe IS NULL OR (jsonb_typeof(actual_recipe) = 'object' AND coalesce(jsonb_typeof(actual_recipe -> 'version'), '') = 'number')`
+- `ck_structure_determination_content_hash_sha256_hex`: `content_hash ~ '^[0-9a-f]{64}$'`
+- `ck_structure_determination_convention_iff_zero_kelvin`: `coalesce(quantity = 'zero_kelvin_energy', false) = (energy_convention IS NOT NULL)`
+- `ck_structure_determination_energy_convention_object`: `energy_convention IS NULL OR (jsonb_typeof(energy_convention) = 'object')`
+- `ck_structure_determination_identity_hash_sha256_hex`: `identity_hash ~ '^[0-9a-f]{64}$'`
+- `ck_structure_determination_key_bounded`: `length(btrim(determination_key)) > 0 AND length(determination_key) <= 128`
+- `ck_structure_determination_one_owner`: `num_nonnulls(species_entry_id, transition_state_entry_id) = 1`
+- `ck_structure_determination_source_required`: `literature_id IS NOT NULL OR workflow_tool_release_id IS NOT NULL`
+- `ck_structure_determination_target_matches_owner`: `(target_kind = 'conformer_basin' AND species_entry_id IS NOT NULL AND conformer_observation_id IS NOT NULL) OR (target_kind = 'saddle_point' AND transition_state_entry_id IS NOT NULL AND conformer_observation_id IS NULL) OR (target_kind = 'geometry' AND conformer_observation_id IS NULL)`
+
+### `structure_determination_source`
+
+**Role:** role not stated on the model
+
+**Purpose:** One calculation pinned to one role of a determination.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `determination_id` | BIGINT | no | — | structure_determination.id | — | not documented |
+| `role` | StructureSourceRole (enum) | no | — | — | `energy`, `geometry_optimization`, `curvature`, `correction`, `connectivity`, `alternative_characterization` | not documented |
+| `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+| `species_entry_id` | BIGINT | yes | — | calculation.species_entry_id | — | not documented |
+| `transition_state_entry_id` | BIGINT | yes | — | calculation.transition_state_entry_id | — | not documented |
+| `geometry_id` | BIGINT | yes | — | geometry.id | — | not documented |
+
+**Check constraints:**
+
+- `ck_structure_determination_source_one_owner`: `num_nonnulls(species_entry_id, transition_state_entry_id) = 1`
+
+### `structure_evidence_finding`
+
+**Role:** role not stated on the model
+
+**Purpose:** One appended finding about a geometry, calculation or determination.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `kind` | StructureFindingKind (enum) | no | — | — | `identity_incompatibility`, `state_incompatibility`, `path_incompatibility`, `role_invalidation`, `contradictory_characterization`, `adjudication` | not documented |
+| `scope` | StructureFindingScope (enum) | no | — | — | `geometry`, `calculation`, `determination` | not documented |
+| `subject_geometry_id` | BIGINT | yes | — | geometry.id | — | not documented |
+| `subject_calculation_id` | BIGINT | yes | — | calculation.id | — | not documented |
+| `subject_determination_id` | BIGINT | yes | — | structure_determination.id | — | not documented |
+| `role` | StructureSourceRole (enum) | yes | — | — | `energy`, `geometry_optimization`, `curvature`, `correction`, `connectivity`, `alternative_characterization` | not documented |
+| `verdict` | StructureFindingVerdict (enum) | no | — | — | `invalidates`, `does_not_invalidate`, `unresolved` | not documented |
+| `authority` | StructureFindingAuthority (enum) | no | — | — | `producer_assertion`, `authorized_adjudication` | not documented |
+| `rationale` | TEXT | no | — | — | — | not documented |
+| `semantic_version` | SMALLINT | no | — | — | — | not documented |
+| `source_calculation_id` | BIGINT | yes | — | calculation.id | — | not documented |
+| `literature_id` | BIGINT | yes | — | literature.id | — | not documented |
+| `supersedes_finding_id` | BIGINT | yes | — | structure_evidence_finding.id | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
+| `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_structure_evidence_finding_adjudication_needs_authority`: `kind <> 'adjudication' OR (supersedes_finding_id IS NOT NULL AND authority = 'authorized_adjudication')`
+- `ck_structure_evidence_finding_rationale_bounded`: `length(btrim(rationale)) > 0 AND length(rationale) <= 2000`
+- `ck_structure_evidence_finding_role_iff_role_invalidation`: `(kind = 'role_invalidation') = (role IS NOT NULL)`
+- `ck_structure_evidence_finding_semantic_version_positive`: `semantic_version >= 1`
+- `ck_structure_evidence_finding_subject_matches_scope`: `(scope = 'geometry' AND subject_geometry_id IS NOT NULL AND subject_calculation_id IS NULL AND subject_determination_id IS NULL) OR (scope = 'calculation' AND subject_calculation_id IS NOT NULL AND subject_geometry_id IS NULL AND subject_determination_id IS NULL) OR (scope = 'determination' AND subject_determination_id IS NOT NULL AND subject_geometry_id IS NULL AND subject_calculation_id IS NULL)`
 
 ### `submission`
 

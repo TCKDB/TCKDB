@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field
+from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
 from app.db.models.common import (
     AppliedCorrectionComponentKind,
@@ -292,6 +293,12 @@ class CalculationEvidenceProvenanceSummary(BaseModel):
     scf_stability_status: SCFStabilityStatusValue
     submission_id: int | None = None
     submission_ref: str | None = None
+    #: The recipe the depositor declared this calculation ran, exactly as stored (``null`` when none was
+    #: declared). ``absent``: nothing was declared, which is "not stated" and never "standard" or "gas phase";
+    #: ``valid``: the declaration is returned; ``unreadable``: something is stored that this server cannot
+    #: read as a version-1 declaration (withheld, never repaired).
+    actual_protocol_declaration_state: Literal["absent", "valid", "unreadable"] = "absent"
+    actual_protocol_declaration: ActualProtocolDeclaration | None = None
 
 
 # ---------------------------------------------------------------------------

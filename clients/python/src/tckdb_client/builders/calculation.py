@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
+from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
 from tckdb_client.builders.artifact import Artifact
 from tckdb_client.builders.geometry import Geometry
@@ -173,6 +174,11 @@ class Calculation:
     #: The
     #: builder preserves it verbatim; TCKDB schemas own canonical validation.
     execution_environment: ExecutionEnvironmentManifestPayload | Mapping[str, Any] | None = None
+    #: Optional declaration of the recipe this calculation actually ran (electronic state and root, spin
+    #: treatment, relativistic treatment, core potential, core correlation, material numerical approximations,
+    #: included corrections). A claim stored as made: left out, the server reads it as "not stated", never as a
+    #: standard recipe or gas phase. Validated against the shared ``tckdb-schemas`` model.
+    actual_protocol_declaration: ActualProtocolDeclaration | Mapping[str, Any] | None = None
 
     # Result-block fields (one cluster per type).
     final_energy_hartree: float | None = None
@@ -229,6 +235,15 @@ class Calculation:
             except Exception as exc:
                 raise TCKDBBuilderValidationError(
                     "execution_environment must be a valid execution-environment manifest."
+                ) from exc
+        if self.actual_protocol_declaration is not None:
+            try:
+                self.actual_protocol_declaration = ActualProtocolDeclaration.model_validate(
+                    self.actual_protocol_declaration
+                )
+            except Exception as exc:
+                raise TCKDBBuilderValidationError(
+                    "actual_protocol_declaration must be a valid version-1 actual protocol declaration."
                 ) from exc
         if self.n_steps is not None:
             n_steps = ensure_int(self.n_steps, field="n_steps")
@@ -307,6 +322,7 @@ class Calculation:
         label: str | None = None,
         note: str | None = None,
         execution_environment: ExecutionEnvironmentManifestPayload | Mapping[str, Any] | None = None,
+        actual_protocol_declaration: ActualProtocolDeclaration | Mapping[str, Any] | None = None,
     ) -> "Calculation":
         """Geometry-optimisation calculation.
 
@@ -325,6 +341,7 @@ class Calculation:
             label=label,
             note=note,
             execution_environment=execution_environment,
+            actual_protocol_declaration=actual_protocol_declaration,
             final_energy_hartree=final_energy_hartree,
             converged=converged,
             n_steps=n_steps,
@@ -346,6 +363,7 @@ class Calculation:
         label: str | None = None,
         note: str | None = None,
         execution_environment: ExecutionEnvironmentManifestPayload | Mapping[str, Any] | None = None,
+        actual_protocol_declaration: ActualProtocolDeclaration | Mapping[str, Any] | None = None,
     ) -> "Calculation":
         """Harmonic-frequency calculation.
 
@@ -362,6 +380,7 @@ class Calculation:
             label=label,
             note=note,
             execution_environment=execution_environment,
+            actual_protocol_declaration=actual_protocol_declaration,
             frequencies_cm1=(
                 list(frequencies_cm1) if frequencies_cm1 is not None else None
             ),
@@ -383,6 +402,7 @@ class Calculation:
         label: str | None = None,
         note: str | None = None,
         execution_environment: ExecutionEnvironmentManifestPayload | Mapping[str, Any] | None = None,
+        actual_protocol_declaration: ActualProtocolDeclaration | Mapping[str, Any] | None = None,
     ) -> "Calculation":
         """Single-point energy calculation.
 
@@ -399,6 +419,7 @@ class Calculation:
             label=label,
             note=note,
             execution_environment=execution_environment,
+            actual_protocol_declaration=actual_protocol_declaration,
             electronic_energy_hartree=electronic_energy_hartree,
         )
 

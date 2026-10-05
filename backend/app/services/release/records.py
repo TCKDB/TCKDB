@@ -164,6 +164,19 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
             "transition_state_entry_id",
             children=(ChildTable("reaction_atom_map_pair", "atom_map_id"),),
         ),
+        # A structure determination is the source-attributed claim about this saddle that a task-aware
+        # selection reads (its target, recipe, energy convention, pinned calculations and any finding about
+        # it). It is what says which calculation supplied which role, so a released entry without it would
+        # read like one that never stated them. A determination is shipped with its sources and its own
+        # findings; findings scoped to a bare geometry or calculation are cited by ref elsewhere.
+        ChildTable(
+            "structure_determination",
+            "transition_state_entry_id",
+            children=(
+                ChildTable("structure_determination_source", "determination_id"),
+                ChildTable("structure_evidence_finding", "subject_determination_id"),
+            ),
+        ),
     ),
 }
 
@@ -173,6 +186,8 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
 #: must not carry.
 RELEASE_OMITTED_COLUMNS: dict[str, tuple[str, ...]] = {
     "network_kinetics_determination": ("identity_hash",),
+    # Both digests are over this database's row ids (the owner, the geometry, the source calculations).
+    "structure_determination": ("identity_hash", "content_hash"),
 }
 
 
@@ -247,6 +262,12 @@ RECORD_CHILD_EXCLUSIONS: dict[tuple[str, str], str] = {
     ),
     ("transition_state_entry", "transition_state_validation_evidence"): (
         "shipped under transition_state_entry itself"
+    ),
+    ("structure_evidence_finding", "structure_evidence_finding"): (
+        "a superseding finding is a row of the same list, naming the finding it supersedes by ref"
+    ),
+    ("transition_state_entry", "structure_determination_source"): (
+        "shipped nested under structure_determination, which is shipped under transition_state_entry"
     ),
     # --- belongs to the network, not to any one solve ----------------------
     ("transition_state_entry", "network_channel_microreaction"): (

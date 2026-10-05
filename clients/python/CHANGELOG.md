@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.136.0 - 2026-10-05
+
+`Calculation.opt/freq/sp(..., actual_protocol_declaration=...)` carries a calculation's declared actual protocol
+(electronic state and root, spin and relativistic treatment, core potential, core correlation, material numerical
+approximations, included corrections) to both bundle wires (`tckdb-schemas` 0.105.0). It is validated against the shared
+model when the builder is made; left out it is not sent, which the server reads as "not stated", never as a standard
+recipe or gas phase. `RejectionCode` gains `structure_declaration_invalid`, `structure_declaration_version_unsupported`,
+`structure_determination_invalid` and `structure_determination_mismatch`.
+
 ## 0.135.0 - 2026-10-04
 
 `export_selected_network_kinetics(network_ref, *, manifest, node_ref, representation_refs, format=None,
