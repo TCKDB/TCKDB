@@ -14,7 +14,7 @@ and reviewed, rule by rule; neither exists. The registry is built when the API s
 | --- | --- | --- | --- | --- |
 | `N-AMEDRO-HE-FC` | solves | representation fidelity (named dataset reproduction) | OH + NO2 in He: the He-specific broadening factor (Fc = 0.32) reproduces the stated dataset better than the N2 value (0.39) | the compared objects are Troe falloff fits, not network fits; Table 1 is located but not extracted; only the two He fits were audited; no verified evidence state exists |
 | `N-JG-REDUCTION-FIDELITY` | solves | model fidelity | one pinned PES, bath, cell set and window: a reduction closer to the energy-grained flux over a less close one (council-reported, unverified) | the open-access article has not been read here; cells, metric and variant definitions unaudited; whether to add `simulation_least_squares` to the reduction vocabulary is open; a transient flux is not a phenomenological coefficient |
-| `N-JM-CH4-TRANSFER` | solves | model fidelity | CH4 in He or Ne: an exp/6 pairwise interaction treatment over a Lennard-Jones one (He only), against MP2 direct dynamics (SAC for H2, where no fit is preferred) | the reference averages are plotted curves, not a table, and the reference is a validated low-level surface; the preference holds for two baths; `network_solve_energy_transfer.model` is free text, with no typed field for how the parameters were obtained |
+| `N-JM-CH4-TRANSFER` | solves | model fidelity | CH4 in He, 300-2000 K: an exp/6 pairwise interaction treatment over a Lennard-Jones one, against MP2 direct dynamics (for Ne exp/6 matches MP2 but no competitor was tested; H2 has no preferred fit) | the reference averages are plotted curves, not a table, and the reference is a validated low-level surface; the preference holds for He only; `network_solve_energy_transfer.model` is free text, with no typed field for how the parameters were obtained |
 | `N-JM-CH4-RATE` | solves | physical accuracy | CH4 in He, Ar, Kr or CH4: the solve whose rates agree better with the measurements | the paper shows agreement for one prediction per bath by figure, with no metric and no competing solve; density-of-states error confounds it; no verification step |
 | `N-ME-CONVERGENCE` | solves | model fidelity | a verified converged solve over a demonstrated inadequate one of the same model | a proposed rule with no source comparison; no verification step; "same model" is not a stated fact |
 | `N-REP-HELDOUT` | fits of one solve | representation fidelity | the fit with the better held-out error under one declared metric | no pinned held-out set; no verification step |
@@ -37,8 +37,9 @@ direct dynamics are a model-fidelity claim, and only its final CH4 rates against
   not in the repository. Its Supporting Information was not supplied. Anchors include Table 2 (potential errors
   against QCISD(T)/CBS, p. 6441), Table 4 (alpha300 and n for eight baths, p. 6450), Figs. 3-6 (transfer averages
   against direct dynamics for He, Ne, H2, N2 and CO), and Figs. 12-14 (rates against experiment for He, Ar, Kr and
-  CH4). Direct dynamics was run for four baths (He, Ne, H2, CH4), the potential tests cover three, and the
-  experimental comparison covers four.
+  CH4). Direct dynamics was run for four baths (He, Ne, H2, CH4), the potential tests cover three (the
+  Lennard-Jones comparison only He), and the experimental comparison covers four (the Kr data are plotted against
+  the Ar prediction).
 
 ## What would be needed (for the owner)
 
@@ -49,8 +50,8 @@ direct dynamics are a model-fidelity claim, and only its final CH4 rates against
   reduction definitions, PES variants, cells, metric and results, and a decision on `simulation_least_squares`
   (the other reduction names already exist in `NetworkReductionMethod`).
 - **Jasper and Miller (supplied, pinned):** nothing more is needed from the article body. The Supporting Information
-  is described (p. 6454) as the fitted intermolecular potential parameters and figures comparing QCISD(T)/CBS
-  energies with the surfaces; it would matter only to a rule that must identify a fitted potential by its
+  is described (p. 6454) as the fitted V_TM parameters and figures of the approach geometries and of
+  QCISD(T)/CBS energies against the surfaces; it would matter only to a rule that must identify a fitted potential by its
   parameters, and it is not described as holding transfer averages. The averages the transfer rule would need are
   plotted in the article, not tabulated; the owner would have to get them from the authors or accept digitising.
   The rate rule would need the experimental papers it cites. Both still need a typed energy-transfer treatment

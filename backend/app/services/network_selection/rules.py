@@ -214,7 +214,7 @@ def validate_rules(rules: tuple[NetworkRule, ...]) -> None:
 #: SHA-256 of ``network_rule_candidates.yaml`` as shipped (manifest 0.2.0). The registry refuses to load over any
 #: other bytes; a change to an entry, a blocker or a source list is a new manifest version, a new pin and a new rule
 #: version. A manifest handed to a rule must be the one this pins.
-NETWORK_RULE_MANIFEST_SHA256 = "0af89ef42bab2f3b3b5765ee46e7a90cbf94a762a85c459c1a53ba4bf805197b"
+NETWORK_RULE_MANIFEST_SHA256 = "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5"
 
 
 #: Ids of audited rules whose predicates have been written and reviewed. None yet: approval in the manifest alone

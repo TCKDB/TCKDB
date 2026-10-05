@@ -13,7 +13,7 @@
 # (0.2.0) were audited against the full article, supplied by the owner, pinned below by SHA-256 and anchored to
 # journal page, table and figure; the article is licensed, is not in this repository and must never be committed.
 # Its Supporting Information was not supplied. Johnson/Green was seen only through indexed passages and its entry
-# says so. No table was extracted or fit reconstructed. Each entry says what is missing, and `evidence_needed`
+# says so. Each entry says what is missing, and `evidence_needed`
 # lists exactly which paper, table or data would have to be supplied or authorised before any of them could be
 # considered.
 manifest_version: 0.2.0
@@ -30,10 +30,13 @@ history:
     dynamics was run for four baths (He, Ne, H2, CH4), not three; the reference is a validated low-level surface
     (SAC for H2), not an exact one; the Lennard-Jones comparison is He only; the intramolecular-potential
     insensitivity is He and Ne only; the diatomic uncertainty is stated as 20-40 %, 10-50 % and up to 50 % in
-    different places; the experimental comparison covers four baths (He, Ar, Kr, CH4) with no error metric and
-    ranks no competing solves. The Supporting Information, as the article describes it, holds fitted potential
-    parameters and comparison figures, not transfer averages, so the earlier expectation of tabulated averages
-    there was wrong. All rules remain inactive.
+    different places; the experimental comparison covers four baths (He, Ar, Kr, CH4; the Kr data are plotted
+    against the Ar prediction, Fig. 12a) with no error metric and ranks no competing solves. The exp/6-over-LJ
+    preference is He only (LJ was not considered for any other bath, p. 6444) and covers 300-2000 K; for Ne exp/6
+    reproduces MP2 direct dynamics with no competitor tested. The Supporting Information, as the article
+    describes it, holds fitted V_TM parameters and approach-geometry and potential-comparison figures, not
+    transfer averages, so the earlier expectation of tabulated averages there was wrong. Decisions exported under
+    the 0.1.0 pin do not replay against 0.2.0, by design. All rules remain inactive.
 audit_status: inactive_registered_with_missing_prerequisites
 sources:
 - id: AMEDRO_2020
@@ -184,16 +187,16 @@ rules:
     where: J. Phys. Chem. A 115, title, p. 6438; Lennard-Jones collision parameters for all eight, Table 1, p. 6441
   - claim: full-dimensional direct dynamics was run for four baths, He, Ne, H2 and CH4. The interaction-potential approximations were tested against it for He, Ne and H2 only. No separable-pairwise potential was fitted for CH4, so CH4 has direct dynamics and no comparison. N2 and CO have no full-dimensional direct dynamics. Ar and Kr have none either (their exp/6 parameters are taken from Alexander and Troya)
     where: p. 6439 (last paragraph of the introduction), p. 6441 (Direct Dynamics), p. 6443 (Ar and Kr parameters), p. 6445 (no CH4 fit), p. 6448 (no MP2 results for N2 and CO), p. 6453 (Conclusions)
-  - claim: the direct-dynamics reference is not exact. It is MP2/aug'-cc-pVDZ for He, Ne and CH4 and the same method with correlation scaled (SAC, F = 0.8, empirically fitted) for H2, each checked against counterpoise-corrected QCISD(T)/CBS interaction energies. The paper calls the accuracy of the MP2 level partly a cancellation of errors and its general accuracy unknown
+  - claim: the direct-dynamics reference is not exact. It is MP2/aug'-cc-pVDZ for He, Ne and CH4 and the same method with correlation scaled (SAC, F = 0.8, empirically fitted) for H2, each checked against counterpoise-corrected QCISD(T)/CBS interaction energies. The paper says the good accuracy of the MP2 level is likely due to a cancellation of errors and that its general accuracy is unknown
     where: Table 2, 'Direct Dynamics' block (p. 6441), eps_min 3.9, 4.9, 10.3 and 24.3 cm-1 for He, Ne, CH4 and H2 (MP2), 11.1 cm-1 for H2 (SAC); pp. 6442-6443
   - claim: direct-dynamics ensembles have about 10 % relative 1-sigma uncertainty in the deactivating-collision average (100-2000 trajectories); the cheaper TB+exp/6 ensembles a few percent (5000-20000 trajectories)
     where: p. 6446, last paragraph
   - claim: potential forms compared for the bath interaction V_TM, as a separable sum of atom-atom pairs. Lennard-Jones (eq 23; LJ-A fitted to QCISD(T)/CBS and LJ-B from tabulated parameters, He only) and a modified Buckingham exp/6 (eq 24). For the diatomic baths three exp/6 fits each (compromise RP, radial-only R, perpendicular-only P; CO has two radial sets, O-in and C-in). Intramolecular CH4 potential V_T compared as MP2/aug'-cc-pVDZ against a semiempirical tight-binding model (Wang and Mak). Results are labelled A+B (V_T + V_TM)
     where: eqs 21-24 and following text, pp. 6443-6445; Table 2, 'Separable Pairwise' block, p. 6441; labelling convention p. 6445
-  - claim: "He, deactivating-collision average against MP2 direct dynamics. LJ-A overestimates by 120-150 %; LJ-B by 70 % at 300 K and almost a factor 3 at 1150 and 2000 K; MP2+exp/6 within 15 % of MP2 at 1150 and 2000 K and about 30 % apart at 300 K (said to be near the 1-sigma statistical uncertainty); TB+exp/6 differs from MP2+exp/6 by 5-15 % for He and Ne. Fig. 3 (five surfaces: MP2, MP2+exp/6, TB+exp/6, MP2+LJ A, MP2+LJ B). LJ was tested for He only"
-    where: Fig. 3 (p. 6447); text p. 6447, left and right columns
-  - claim: Ne, the same comparison for MP2, MP2+exp/6 and TB+exp/6
-    where: Fig. 4 (p. 6447); text p. 6447
+  - claim: "He, deactivating-collision average against MP2 direct dynamics. LJ-A overestimates by 120-150 %; LJ-B by 70 % at 300 K and almost a factor 3 at 1150 and 2000 K; MP2+exp/6 within 15 % of MP2 at 1150 and 2000 K and about 30 % apart at 300 K (said to be near the 1-sigma statistical uncertainty); TB+exp/6 differs from MP2+exp/6 by 5-15 % for He and Ne. Fig. 3 (five surfaces: MP2, MP2+exp/6, TB+exp/6, MP2+LJ A, MP2+LJ B). LJ points exist only at 300, 1150 and 2000 K, so the exp/6-over-LJ comparison covers 300-2000 K. LJ was tested for He only: the paper says eq 23 was not considered for the other baths"
+    where: Fig. 3 (p. 6447); text p. 6447, left and right columns; p. 6444 (LJ form not considered for the other baths)
+  - claim: "Ne, Fig. 4 plots only MP2, MP2+exp/6 and TB+exp/6. exp/6 reproduces MP2 direct dynamics and TB and MP2 intramolecular choices differ by 5-15 %, but no competitor to exp/6 (no LJ) was tested for Ne, so there is no preference result for Ne. The authors expect the LJ deficiencies to be general (p. 6447: 'likely ... general'); that is their expectation, not a Ne result"
+    where: Fig. 4 (p. 6447); text p. 6447; p. 6444
   - claim: H2, against SAC direct dynamics. exp/6 RP is about 25 % low; exp/6 R agrees well but the authors call that agreement likely accidental; exp/6 P is accurate at high temperature and worse at 300 K. The spread of the three fits is taken as an additional uncertainty of the separable-pairwise approximation
     where: Fig. 5 (p. 6448); text p. 6448, left column
   - claim: N2 fits differ from each other by about 10 % and CO fits by 25-50 %, with no direct-dynamics reference for either. The additional uncertainty for the diatomic baths is stated three ways, 20-40 % (abstract and Table 4 footnote), up to 50 % (p. 6448) and 10-50 % (pp. 6449 and 6453)
@@ -206,7 +209,7 @@ rules:
     where: pp. 6439-6440 (eqs 1, 14, 15), p. 6446 (eqs 26-32), p. 6451 (<dE>)
   - claim: tabulated parameters, Table 4, alpha300 in cm-1 and n. He 117, 0.95; Ne 104, 0.86; Ar 115, 0.75; Kr 123, 0.67; H2 162, 0.83; N2 130, 0.76; CO 130, 0.76; CH4 390, 0.60. Stated 1-sigma 15 % (statistics and the limits of the functional form), with an additional 20-40 % for the diatomic baths. The fit minimises the mean unsigned error over the Fig. 9 data. It underpredicts 300 K by 10-20 % for the atomic baths and overpredicts 1150 K by up to 15 % for the polyatomic baths. Fig. 9 surfaces by bath, TB+exp/6 for He, Ne, Ar, Kr; SAC for H2; MP2 for CH4; the several TB+exp/6 fits averaged for N2 and CO
     where: Table 4 and footnote (p. 6450); Fig. 9 and text (p. 6450)
-  - claim: the deactivating-collision averages as functions of temperature are plotted (Figs. 3-7 and 9) in the article, not tabulated. Only Table 4 is numeric. A few values are quoted in text, for example <dE^2>^1/2 at 2000 K of 940, 716, 604, 572, 839, 702, 712 and 1146 cm-1 for He, Ne, Ar, Kr, H2, N2, CO and CH4
+  - claim: the deactivating-collision averages as functions of temperature are plotted (Figs. 3-7 and 9) in the article, not tabulated. Only Table 4 gives transfer parameters. A few values are quoted in text, for example <dE^2>^1/2 at 2000 K of 940, 716, 604, 572, 839, 702, 712 and 1146 cm-1 for He, Ne, Ar, Kr, H2, N2, CO and CH4
     where: p. 6451, left column; Figs. 3-7, 9
   - claim: the paper's limits on its own transfer results. Classical trajectories with no zero-point-energy enforcement; the dependence of alpha on the initial energy is neglected; relative bath efficiencies change with temperature (crossover near 500 K) so room-temperature ranks do not carry to combustion; per-collision averages depend on an arbitrary Lennard-Jones scaling; the separable-pairwise approach may be worse for less spherical targets
     where: p. 6446 (zero-point energy), p. 6440 (initial-energy dependence), p. 6449 (efficiencies, scaling), p. 6448 (less spherical targets)
@@ -214,44 +217,49 @@ rules:
     Read in full (owner-supplied copy, pinned as JASPER_MILLER_2011; the Supporting Information was not supplied).
     The paper compares ways of modelling the CH4 + M interaction against full-dimensional direct dynamics for He, Ne
     and H2 (direct dynamics was also run for CH4, with nothing to compare it to). The reference is a validated
-    low-level surface (MP2, or scaled-correlation SAC for H2), not an exact one. For the atomic baths an exp/6 pairwise
-    potential reproduces the direct-dynamics deactivating-collision average closely while a Lennard-Jones one
-    overshoots it (shown for He only); for H2, N2 and CO the pairwise form is too inflexible and its parametrisation
+    low-level surface (MP2, or scaled-correlation SAC for H2), not an exact one. For He and Ne an exp/6 pairwise
+    potential reproduces the direct-dynamics deactivating-collision average closely; a Lennard-Jones one
+    overshoots it, tested for He only, at 300-2000 K (the paper expects the deficiency to be general, p. 6447); for H2, N2 and CO the pairwise form is too inflexible and its parametrisation
     adds an uncertainty the paper states as 20-40 %, 10-50 % or up to 50 % in different places. The transfer
     averages did not depend on the intramolecular potential (shown for He and Ne only). The comparison is a
     fidelity-to-a-model claim: only the paper's final CH4 rates against experiment are physical accuracy, registered
     separately as N-JM-CH4-RATE.
   proposed_statement: >-
-    For CH4 in He or Ne, an exponential-6 pairwise interaction treatment is preferred over a Lennard-Jones one
-    (He only), within the stated temperature range, on the objective of agreement with the paper's MP2 direct-dynamics
-    deactivating-collision average. For H2 the paper supports no preference among its three exp/6 fits (the best
-    agreement is called accidental) and for N2, CO, Ar and Kr there is no direct-dynamics reference. A fidelity
-    claim about a trajectory interaction potential, not a whole-rate or level-of-theory preference.
+    For CH4 in He, between 300 and 2000 K, an exponential-6 pairwise interaction treatment is preferred over a
+    Lennard-Jones one, on the objective of agreement with the paper's MP2 direct-dynamics deactivating-collision
+    average. For Ne, exp/6 reproduces MP2 direct dynamics but no competitor was tested, so no preference is stated;
+    any Ne extension would rest only on the authors' expectation (p. 6447) that the Lennard-Jones deficiency is
+    general. For H2 the paper supports no preference among its three exp/6 fits (the best agreement is called
+    accidental) and for N2, CO, Ar and Kr there is no direct-dynamics reference. A fidelity claim about a
+    trajectory interaction potential, not a whole-rate or level-of-theory preference.
   required_predicates:
   - The candidates differ only in the energy-transfer treatment (the interaction potential), the rest of the coupled protocol verified equal.
-  - The bath is He or Ne (a bath for which the paper gives a direct-dynamics reference and a pairwise potential preferred over another), and the temperature range lies inside the plotted comparison range.
+  - The bath is He (the only bath for which the paper tests a competitor to exp/6 against direct dynamics) and the temperature range lies inside 300-2000 K, where the Lennard-Jones points of Fig. 3 lie.
   - The reference direct-dynamics transfer data and their uncertainty (about 10 % relative 1-sigma in the paper) are pinned in a form that can be compared, which the article gives only as curves.
   exceptions:
   - A claim that a better intramolecular electronic treatment improves energy transfer (shown for He and Ne only, and the TB and MP2 surfaces differ in density of states).
   - A diatomic bath treated with the separable pairwise approximation (20-40 %, 10-50 % or up to 50 % additional uncertainty depending on the page).
   - H2, where the paper calls the agreement of its best exp/6 fit accidental.
+  - Ne, where no competitor to exp/6 was tested; any extension to Ne rests only on the authors' p. 6447 expectation that the Lennard-Jones deficiency is general.
   - N2, CO, Ar and Kr, which carry no direct-dynamics reference.
   activation_blockers:
   - id: reference_values_only_as_curves
     text: The article gives the direct-dynamics and pairwise deactivating-collision averages as plotted curves (Figs. 3-6,
       7 and 9), not as a table; the only tabulated numbers are the fitted alpha300 and n of Table 4 and a few values
       quoted in the text. A numeric reference with its uncertainty cannot be pinned from the main article, and the
-      Supporting Information, as the article describes it, holds fitted potential parameters and potential-comparison
-      figures, not transfer averages. Reading values off the figures was not done here.
+      Supporting Information, as the article describes it, holds the fitted V_TM parameters and the approach-geometry
+      and potential-comparison figures, not transfer averages. Reading values off the figures was not done here.
   - id: reference_is_a_validated_low_level_surface
     text: The reference is MP2/aug'-cc-pVDZ (SAC for H2) direct dynamics, itself checked against QCISD(T)/CBS interaction
       energies (Table 2, p. 6441) with an estimated 10 % statistical uncertainty in the average, so a preference is
       for agreement with that model, not with a converged or measured energy transfer. The H2 comparison is the only
       one that uses the SAC surface.
-  - id: preference_holds_for_two_atomic_baths
-    text: The supported preference (exp/6 over Lennard-Jones, shown for He, with the MP2 and TB intramolecular choices
-      indistinguishable) covers He and Ne. For H2 the best exp/6 fit is called accidental, N2 and CO have no direct
-      dynamics, and Ar and Kr have no direct dynamics either, so the rule's domain is two baths.
+  - id: preference_holds_for_he_only
+    text: The one supported preference (exp/6 over Lennard-Jones) was tested for He only, at 300, 1150 and 2000 K (Fig. 3);
+      the paper did not consider Lennard-Jones for any other bath (p. 6444). For Ne exp/6 reproduces MP2 direct dynamics
+      but no competitor was tested, so any Ne extension would rest only on the authors' expectation (p. 6447) that the
+      deficiency is general. For H2 the best exp/6 fit is called accidental, and N2, CO, Ar and Kr have no direct
+      dynamics, so the rule's domain is one bath.
   - id: transfer_treatment_not_typed
     text: network_solve_energy_transfer.model exists as free text. What is missing is a typed field for how the
       parameters were obtained (which interaction potential or fitted kernel), so a candidate cannot state the
@@ -285,7 +293,7 @@ rules:
   anchors:
   - claim: "the master-equation rates are parameter-free: alpha(T) of Table 4 (from trajectories), a single-exponential-down kernel, Lennard-Jones collision rates, microcanonical k(E,J) from a VRC-TST capture calculation, rigid-rotor harmonic-oscillator partition functions, solved with VariFlex"
     where: Section II.A, p. 6441 (last paragraph before II.B); Section III.C, p. 6451
-  - claim: experimental comparison for four baths only, He, Ar, Kr and CH4; none for Ne, H2, N2 or CO (the eight-bath rate survey of Fig. 11 is prediction only)
+  - claim: "experimental comparison for four baths only, He, Ar, Kr and CH4; none for Ne, H2, N2 or CO (the eight-bath rate survey of Fig. 11 is prediction only). The Kr measurements are compared with the Ar prediction (Fig. 12a caption: CH4 in Ar against experimental results in Ar and Kr); no Kr-specific prediction panel was found"
     where: abstract (p. 6438); Section III.C, p. 6451; Figs. 11-14
   - claim: Ar, low-pressure limit. Compared with several groups' measurements (refs 61-65, including Kiefer and Kumaran, Hartig et al., Koike et al., Sutherland et al. in Kr, and the revised Davidson et al.) and the Baulch et al. recommendation (J. Phys. Chem. Ref. Data 34, 757, 2005). The prediction is about 25 % below the recommended value, called excellent agreement; the newest Kr and the revised Davidson data are somewhat lower and closer to the prediction
     where: Fig. 12a (p. 6452); text p. 6452, left column
@@ -293,17 +301,17 @@ rules:
     where: Fig. 12b (p. 6452); text p. 6452, left column
   - claim: "CH4 bath falloff against Barnes et al. (ref 67), Chen et al. (ref 70) and Baulch et al.: good agreement, on average somewhat underpredicting the measurements"
     where: Fig. 13 (p. 6452); text p. 6452, right column
-  - claim: "He, association and dissociation at 300, 600 and 1150 K against two groups (Barnes et al. ref 67; Brouard et al. ref 71) and Baulch et al.: close agreement"
+  - claim: "He, association and dissociation at 300, 600 and 1150 K against two groups (Barnes et al. ref 67; Brouard et al. ref 71) and Baulch et al.: good agreement"
     where: Fig. 14 (p. 6453); text p. 6452, right column to p. 6453
   - claim: a harmonic-frequency scaling of 0.91 that doubles the threshold density of states raises the Ar k0 to about 50 % above the recommended value and improves the Ar falloff; worsens He; and raises the CH4 bath k by up to a factor of 2 with no clear gain. The paper states that RRHO density-of-states error can matter more than the energy-transfer error at intermediate and low pressures, and that agreement is good with or without the correction
     where: pp. 6452-6453 (text and Figs. 12-14); p. 6453, left column
-  - claim: the paper's own verdict. Agreement for He, Ar, Kr and CH4 is excellent and within the recommended factor-2 experimental uncertainties (the recommended uncertainty of k0 is Delta ln k0 = +-0.3, p. 6452), with the possible exception of the Ar falloff. No error metric or table of agreement is given
+  - claim: the paper's own verdict. Agreement for He, Ar, Kr and CH4 is excellent and within the recommended factor of 2 experimental uncertainties as the paper words it (p. 6454), with the possible exception of the Ar falloff. Separately, for the CH4 bath the Baulch et al. uncertainty is quoted as printed 'Delta ln k0 = +-0.3' (p. 6452); that is not restated here as a factor. No error metric or table of agreement is given
     where: p. 6453 (end of Section III.C); Conclusions, p. 6454
   council_observation: >-
     Read in full (owner-supplied copy, pinned as JASPER_MILLER_2011; the Supporting Information was not supplied).
     The paper compares one parameter-free master-equation prediction per bath with measurements and the Baulch et al.
     recommendations for four of its eight baths (He, Ar, Kr, CH4), by figure, with no stated error metric: Ar k0
-    about 25 % below the recommendation, Ar falloff low by up to a factor of 2, CH4 slightly low on average, He close.
+    about 25 % below the recommendation, Ar falloff low by up to a factor of 2, CH4 slightly low on average, He good.
     It does not rank alternative energy-transfer treatments by their rates, and it says density-of-states error can
     matter more than energy-transfer error. That is the only part of the paper that bears on physical accuracy.
   proposed_statement: >-
@@ -320,7 +328,7 @@ rules:
   activation_blockers:
   - id: agreement_is_qualitative_and_by_figure
     text: The paper states agreement in words and figures (Ar k0 about 25 % low, Ar falloff low by up to a factor of 2,
-      CH4 slightly low, He close) with no metric, no table of predicted and measured values and no per-point
+      CH4 slightly low, He good) with no metric, no table of predicted and measured values and no per-point
       uncertainty. The experimental points belong to the cited papers (refs 61-67, 70, 71) and the Baulch et al.
       evaluation, none of which was read here, so no reference set or metric can be pinned.
   - id: paper_ranks_no_competing_solves
@@ -329,7 +337,9 @@ rules:
       another's.
   - id: density_of_states_confounds_the_comparison
     text: The paper reports that density-of-states error can be larger than the energy-transfer error at intermediate
-      and low pressure, and that the anharmonic scaling helps Ar and does not clearly help He or CH4. A rate comparison
+      and low pressure, and that the anharmonic scaling that doubles the threshold density of states makes the Ar k0 about 50 % too high
+      (worse than the harmonic calculation, p. 6452), improves only the Ar falloff, worsens He (pp. 6452-6453) and is
+      unclear for He, Ar and CH4 overall (p. 6453). A rate comparison
       is not an energy-transfer comparison unless the density of states is verified equal.
   - id: four_of_eight_baths
     text: Only He, Ar, Kr and CH4 have an experimental comparison; the other four baths have none.

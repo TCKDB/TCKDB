@@ -394,4 +394,3 @@ def test_an_approved_copy_of_a_jasper_miller_rule_stays_inactive_while_predicate
     assert manifest.candidate(rule_id).activatable is True
     assert rule.status == RULE_INACTIVE and "the rule's predicates are not implemented" in rule.inactive_reasons
     assert rule_id not in rules_module.RULES_WITH_IMPLEMENTED_PREDICATES
-
