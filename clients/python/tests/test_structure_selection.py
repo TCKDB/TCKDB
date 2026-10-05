@@ -148,3 +148,24 @@ def test_the_response_type_names_every_outcome_the_server_can_return():
         "sole_eligible_candidate", "incomparable_alternatives", "policy_conflict", "evidence_conflict",
     }
     assert StructureSelectionResponse.__required_keys__ >= {"outcome", "basis", "selected_refs", "coverage", "integrity"}
+
+
+@pytest.mark.parametrize(
+    ("method", "manifest", "ref", "tail"),
+    [
+        ("select_species_calculations", "get_species_calculation_selection_manifest", "spe_a/b?c", "/calculations/select"),
+        ("select_conformer_basins", "get_species_conformer_selection_manifest", "spe_a/b?c", "/conformers/select"),
+        ("select_transition_state_evidence", "get_transition_state_evidence_selection_manifest", "tse_a/b?c", "/evidence/select"),
+    ],
+)
+def test_the_path_ref_is_url_quoted_so_it_cannot_climb_or_inject_a_query(method, manifest, ref, tail):
+    """A ref carrying ``/`` or ``?`` stays one path segment: the client quotes it, as the MCP does."""
+    seen, handler = _recorder()
+    quoted = ref.replace("/", "%2F").replace("?", "%3F")
+    with _client(handler) as client:
+        getattr(client, method)(ref)
+        getattr(client, manifest)(ref)
+    paths = [str(r.url).split("?")[0] for r in seen]
+    assert all(quoted in p for p in paths), paths
+    assert paths[0].endswith(f"{quoted}{tail}") and paths[1].endswith(f"{quoted}{tail}/manifest")
+    assert all(r.url.query == b"" or b"c" not in r.url.query for r in seen)  # the "?c" never became a query string

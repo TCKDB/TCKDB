@@ -236,6 +236,9 @@ def _check_consistency(
             "inconsistent_manifest",
             "the effective review statuses are not what the recorded profile and request floor allow",
         )
+    # Belt and braces: the expected-statuses comparison above already pins a curated profile to approved-only, so this
+    # cannot fire on its own; it states the curated invariant where a reader looks for it and survives a change to
+    # ``expected_effective_statuses``.
     if name == "curated" and recorded != frozenset({RecordReviewStatus.approved}):
         raise ReplayError("inconsistent_manifest", "a curated profile admits approved records only")
     # Every recorded input, not only the units: a determination's source calculations carry their own status, and a
