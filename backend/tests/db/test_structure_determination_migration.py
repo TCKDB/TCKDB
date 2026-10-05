@@ -580,6 +580,21 @@ def test_an_adjudication_supersedes_an_earlier_finding_and_needs_authority(db_se
     )
 
 
+def test_only_an_adjudication_may_name_a_finding_it_supersedes(db_session):
+    earlier = _insert_finding(db_session)
+    for kind in ("identity_incompatibility", "state_incompatibility", "path_incompatibility", "contradictory_characterization"):
+        for authority in ("producer_assertion", "authorized_adjudication"):
+            _refuses(
+                db_session, "only_adjudication_supersedes", _insert_finding, kind=kind, supersedes=earlier,
+                authority=authority, verdict="does_not_invalidate",
+            )
+    _refuses(
+        db_session, "only_adjudication_supersedes", _insert_finding, kind="role_invalidation", role="energy",
+        supersedes=earlier, verdict="does_not_invalidate",
+    )
+    assert _insert_finding(db_session, kind="adjudication", supersedes=earlier, authority="authorized_adjudication")
+
+
 def test_a_finding_is_append_only(db_session):
     finding = _insert_finding(db_session)
     with pytest.raises(DBAPIError, match="structure_evidence_finding_is_append_only"), db_session.begin_nested():

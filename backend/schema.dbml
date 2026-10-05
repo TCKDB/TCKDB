@@ -3835,6 +3835,7 @@ Table structure_evidence_finding {
 
   checks {
     `kind <> 'adjudication' OR (supersedes_finding_id IS NOT NULL AND authority = 'authorized_adjudication')` [name: 'ck_structure_evidence_finding_adjudication_needs_authority']
+    `supersedes_finding_id IS NULL OR kind = 'adjudication'` [name: 'ck_structure_evidence_finding_only_adjudication_supersedes']
     `length(btrim(rationale)) > 0 AND length(rationale) <= 2000` [name: 'ck_structure_evidence_finding_rationale_bounded']
     `(kind = 'role_invalidation') = (role IS NOT NULL)` [name: 'ck_structure_evidence_finding_role_iff_role_invalidation']
     `semantic_version >= 1` [name: 'ck_structure_evidence_finding_semantic_version_positive']

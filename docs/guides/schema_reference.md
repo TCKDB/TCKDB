@@ -3017,6 +3017,7 @@ the gap.
 **Check constraints:**
 
 - `ck_structure_evidence_finding_adjudication_needs_authority`: `kind <> 'adjudication' OR (supersedes_finding_id IS NOT NULL AND authority = 'authorized_adjudication')`
+- `ck_structure_evidence_finding_only_adjudication_supersedes`: `supersedes_finding_id IS NULL OR kind = 'adjudication'`
 - `ck_structure_evidence_finding_rationale_bounded`: `length(btrim(rationale)) > 0 AND length(rationale) <= 2000`
 - `ck_structure_evidence_finding_role_iff_role_invalidation`: `(kind = 'role_invalidation') = (role IS NOT NULL)`
 - `ck_structure_evidence_finding_semantic_version_positive`: `semantic_version >= 1`

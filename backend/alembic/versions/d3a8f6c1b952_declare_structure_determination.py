@@ -29,8 +29,10 @@ composite-key targets on ``calculation``:
 
 ``structure_evidence_finding`` (public ref prefix ``sfnd``)
     An append-only event pinned to a geometry, a calculation or a determination.
-    ``trg_structure_evidence_finding_append_only`` refuses every UPDATE and DELETE; a correction is a
-    new finding that names the one it supersedes.
+    ``trg_structure_evidence_finding_append_only`` refuses every UPDATE and DELETE. Only an authorized
+    adjudication may name an earlier finding it supersedes (``only_adjudication_supersedes`` and
+    ``adjudication_needs_authority``); any other finding stands beside the ones it disagrees with, because a
+    finding that could erase an earlier one by naming it would let a producer's assertion remove a disproof.
 
 Accepted-science protection. A determination and its sources belong to the transition state entry or the
 conformer observation they are about, both accepted-science roots (``c6f2a9d4e7b1``). The shared guards
@@ -157,10 +159,10 @@ SET search_path = pg_catalog, public
 AS $$
 BEGIN
     RAISE EXCEPTION
-        'structure_evidence_finding_is_append_only: a finding cannot be %d. A correction is a new '
-        'finding that names the one it supersedes.', lower(TG_OP)
+        'structure_evidence_finding_is_append_only: a finding cannot be %d. Only an authorized adjudication '
+        'settles an earlier finding.', lower(TG_OP)
         USING ERRCODE = '23514',
-              HINT = 'Append a superseding finding instead.';
+              HINT = 'Append a finding (or, with authority, an adjudication) instead.';
 END;
 $$
 """
@@ -551,6 +553,10 @@ def upgrade() -> None:
             "kind <> 'adjudication' OR (supersedes_finding_id IS NOT NULL "
             "AND authority = 'authorized_adjudication')",
             name=op.f("ck_structure_evidence_finding_adjudication_needs_authority"),
+        ),
+        sa.CheckConstraint(
+            "supersedes_finding_id IS NULL OR kind = 'adjudication'",
+            name=op.f("ck_structure_evidence_finding_only_adjudication_supersedes"),
         ),
         sa.CheckConstraint(
             "length(btrim(rationale)) > 0 AND length(rationale) <= 2000",

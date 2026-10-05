@@ -339,7 +339,7 @@ class StructureDeterminationSource(Base):
 class StructureEvidenceFinding(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """One appended finding about a geometry, calculation or determination.
 
-    Append-only: a correction is a new finding that names the one it supersedes. The subject column matching
+    Append-only: only an authorized adjudication names (and so settles) an earlier finding; any other finding stands beside it. The subject column matching
     ``scope`` is set and the others are NULL. ``authority`` keeps a depositor's own assertion distinct from an
     authorized adjudication; a finding's kind and verdict are claims, and a kind this release does not read is
     ignored by the assessor, never promoted to a universal failure.
@@ -441,6 +441,8 @@ class StructureEvidenceFinding(Base, TimestampMixin, CreatedByMixin, PublicRefMi
             "AND authority = 'authorized_adjudication')",
             name="adjudication_needs_authority",
         ),
+        # Only an adjudication supersedes: a finding that merely names an earlier one must not be able to erase it.
+        CheckConstraint("supersedes_finding_id IS NULL OR kind = 'adjudication'", name="only_adjudication_supersedes"),
         CheckConstraint(
             "length(btrim(rationale)) > 0 AND length(rationale) <= 2000", name="rationale_bounded"
         ),
