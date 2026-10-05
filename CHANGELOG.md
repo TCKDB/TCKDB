@@ -22,6 +22,47 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Structure decision and replay: cohorts, numerical order, protocol preference (2026-10-05)
+
+**Chunk 3 of 6 of calculation, conformer and transition-state energy selection: decision and replay.** On top of the assessment, a
+pure decision stage (`app.services.structure_selection.decide_structures`, entry point `select_entry_structures`) and a replayable
+manifest with two-level replay. No route serves it (chunk 5), nothing is persisted, and no literature rule is active. Migration:
+none. Contract: 679,085 bytes against the 700,000 ceiling (one new refusal code).
+
+- **A cohort is the unit of numerical comparison.** Units are ordered by value only inside one cohort (same established actual recipe,
+  quantity, energy convention, and scope family: an unconverged optimisation's intermediate value is its own cohort). Several cohorts
+  each return a conditional minimum and the outcome is `incomparable_alternatives` (also when one established cohort cannot be
+  ordered: a single cohort is never named the winner because another is unorderable): total energies of different protocols are not on
+  one scale, so there is never an overall winner by absolute energy. Values compare exactly: ties keep every tied reference, there is
+  no tolerance and no chain of "near".
+- **Outcomes** (13). `no_candidates`, `energy_unavailable`, `unresolved_comparability`, `no_applicable_candidate`, `recorded_minimum`,
+  `representative_minimum`, `qualified_evidence`, `validated_corpus_minimum`, `policy_preferred`, `sole_eligible_candidate`, `incomparable_alternatives`,
+  `policy_conflict`, `evidence_conflict`. A complete claim (`all_requested_members`) needs every requested member eligible and in one
+  cohort; the result always says its coverage is the caller's authorized population, not a search certificate.
+- **Repeats and contradictions.** Determinations of one target are alternates, not independent confirmation. If their values differ
+  exactly the cohort is not ordered unless the request names the administrative-representative policy (then the first repeat in the
+  administrative order stands for its target and the outcome is `representative_minimum` with `representative_minimum_hartree`, never
+  the minimum of all stored values). A target with a passing and a refuted determination is
+  contested: nothing of it certifies.
+- **Administrative key** (versioned, echoed): review rank, permitted-quality rank, creation time descending, ordinal descending;
+  `latest` and `earliest` by time and ordinal. It sorts within a scientific front or among exact ties only. The shared kernel gains an
+  optional adapter-supplied `admin_key` on `AdminNode`; thermo, kinetics and network adapters pass none and their goldens are
+  unchanged.
+- **Protocol preference** (`protocol_preferred`) states its objective (`physical_accuracy`, `expected_accuracy` or `model_fidelity`
+  with a pinned reference model); candidates are whole protocols that cover every requested target (no mixed profile is invented);
+  edges come only from audited rules through the shared graph kernel, a rule applies only under its own objective and reference
+  model, and sole eligibility is `sole_eligible_candidate`, never superiority. The rule registry exists with none active; an active
+  rule must name its objective and pin an audited manifest digest.
+- **Manifest and replay.** The manifest carries the normalised request, read profile, every normalised unit and source calculation,
+  each assessment and the decision, by public ref and non-reversible ordinal (no database id). `replay_structure_assessment`
+  recomputes every assessment from the normalised inputs and refuses on any difference; `replay_structure_decision` then decides
+  over the *recomputed* assessments. Unknown manifest, semantic or rule versions, a failed checksum, a profile or review status the
+  request could not see, an unavailable or changed rule: all refused. **The digests are checksums, not signatures**: they detect
+  edits and anyone who edits a manifest can recompute them, so replay reproduces reasoning from captured inputs and does not
+  authenticate scientific truth or prove a forged population was complete. A manifest over 10 MiB is refused whole
+  (`structure_selection_manifest_too_large`).
+- `tckdb-schemas` 0.107.0 and `tckdb-client` 0.138.0 add the one refusal code.
+
 ## Structure assessment: which stored energies can answer a stated question (2026-10-05)
 
 **Chunk 2 of 6 of calculation, conformer and transition-state energy selection: snapshot and assessment.** A service layer

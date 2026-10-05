@@ -53,12 +53,18 @@ class AdminNode:
 
     ``id_rank`` is the node's position when the population is ordered by database id; it stands in
     for the id as the last tie-break and is not an id.
+
+    ``admin_key`` is the optional adapter-supplied administrative key: a tuple of already-signed sortable
+    values (direction is baked in by the adapter, which names and versions it). When every node of a population
+    carries one, it replaces the ``SelectionPolicy`` key; a population that mixes keyed and unkeyed nodes is a
+    caller bug and is refused. Adapters that pass none (thermo, kinetics, network) are unaffected.
     """
 
     ref: str
     id_rank: int
     review_status: RecordReviewStatus
     created_at: datetime
+    admin_key: tuple | None = None
 
 
 def order_admin(nodes: Sequence[AdminNode], policy: SelectionPolicy) -> list[AdminNode]:
@@ -66,6 +72,11 @@ def order_admin(nodes: Sequence[AdminNode], policy: SelectionPolicy) -> list[Adm
     by_rank = {n.id_rank: n for n in nodes}
     if len(by_rank) != len(nodes):
         raise ValueError("candidate id_rank values must be distinct")
+    keyed = [n for n in nodes if n.admin_key is not None]
+    if keyed:
+        if len(keyed) != len(nodes):
+            raise ValueError("either every node carries an admin_key or none does")
+        return sorted(nodes, key=lambda n: (n.admin_key, n.id_rank))
     statuses = {n.id_rank: n.review_status for n in nodes}
     created = {n.id_rank: n.created_at for n in nodes}
     return sorted(

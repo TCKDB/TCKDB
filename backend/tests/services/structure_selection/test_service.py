@@ -372,23 +372,23 @@ def test_a_decision_needs_a_read_only_snapshot_unless_the_caller_says_it_accepts
 
 
 def build_basin(
-    world, *, energy=-76.4, lot=None, declared=None, n_freq=(100.0, 200.0), wire=True, statuses=None, qualities=None, **det
+    world, *, energy=-76.4, lot=None, geometry=None, declared=None, n_freq=(100.0, 200.0), wire=True, statuses=None, qualities=None, **det
 ):
     declared = declaration() if declared is None else declared
     obs = det.get("observation")
     statuses = statuses or {}
     qualities = qualities or {}
     ok = RecordReviewStatus.approved
-    opt = world.opt(f"o{len(world.calcs)}", energy + 0.01, declared=declared, lot=lot, observation=obs, status=statuses.get("opt", ok),
+    opt = world.opt(f"o{len(world.calcs)}", energy + 0.01, declared=declared, lot=lot, geometry=geometry, observation=obs, status=statuses.get("opt", ok),
                     quality=qualities.get("opt"))
-    sp = world.sp(f"s{len(world.calcs)}", energy, declared=declared, lot=lot, observation=obs, status=statuses.get("sp", ok),
+    sp = world.sp(f"s{len(world.calcs)}", energy, declared=declared, lot=lot, geometry=geometry, observation=obs, status=statuses.get("sp", ok),
                   quality=qualities.get("sp"))
-    f = world.freq(f"f{len(world.calcs)}", frequencies=n_freq, declared=declared, lot=lot, observation=obs, status=statuses.get("freq", ok),
+    f = world.freq(f"f{len(world.calcs)}", frequencies=n_freq, declared=declared, lot=lot, geometry=geometry, observation=obs, status=statuses.get("freq", ok),
                    quality=qualities.get("freq"))
     if wire:
         attach_dependency(world.session, parent=opt, child=sp, role=CalculationDependencyRole.single_point_on)
         attach_dependency(world.session, parent=opt, child=f, role=CalculationDependencyRole.freq_on)
-    d = world.determination([("geometry_optimization", opt), ("energy", sp), ("curvature", f)], **det)
+    d = world.determination([("geometry_optimization", opt), ("energy", sp), ("curvature", f)], evaluated=geometry, **det)
     return d, opt, sp, f
 
 

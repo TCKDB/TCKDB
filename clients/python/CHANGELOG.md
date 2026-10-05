@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.138.0 - 2026-10-05
+
+`RejectionCode` gains `structure_selection_manifest_too_large` (`tckdb-schemas` 0.107.0). No method changed; nothing in the
+server serves it yet.
+
 ## 0.137.0 - 2026-10-05
 
 `RejectionCode` gains `structure_selection_population_too_large`, `structure_selection_evidence_too_large`,

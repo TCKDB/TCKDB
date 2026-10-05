@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.107.0 - 2026-10-05
+
+New refusal code `structure_selection_manifest_too_large` (a structure decision whose replayable manifest exceeds its
+bound is refused whole; service layer only). No upload model changed.
+
 ## 0.106.0 - 2026-10-05
 
 New refusal codes `structure_selection_population_too_large`, `structure_selection_evidence_too_large`,

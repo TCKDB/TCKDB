@@ -306,6 +306,7 @@ class RejectionCode(str, Enum):
     STRUCTURE_DETERMINATION_INVALID = "structure_determination_invalid"
     STRUCTURE_DETERMINATION_MISMATCH = "structure_determination_mismatch"
     STRUCTURE_SELECTION_EVIDENCE_TOO_LARGE = "structure_selection_evidence_too_large"
+    STRUCTURE_SELECTION_MANIFEST_TOO_LARGE = "structure_selection_manifest_too_large"
     STRUCTURE_SELECTION_POPULATION_TOO_LARGE = "structure_selection_population_too_large"
     STRUCTURE_SELECTION_TRAVERSAL_TOO_DEEP = "structure_selection_traversal_too_deep"
     STRUCTURE_SELECTION_UNSUPPORTED = "structure_selection_unsupported"
@@ -572,6 +573,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STRUCTURE_DETERMINATION_INVALID,
         RejectionCode.STRUCTURE_DETERMINATION_MISMATCH,
         RejectionCode.STRUCTURE_SELECTION_EVIDENCE_TOO_LARGE,
+        RejectionCode.STRUCTURE_SELECTION_MANIFEST_TOO_LARGE,
         RejectionCode.STRUCTURE_SELECTION_POPULATION_TOO_LARGE,
         RejectionCode.STRUCTURE_SELECTION_TRAVERSAL_TOO_DEEP,
         RejectionCode.STRUCTURE_SELECTION_UNSUPPORTED,
@@ -894,6 +896,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STRUCTURE_DETERMINATION_INVALID: frozenset({422}),
     RejectionCode.STRUCTURE_DETERMINATION_MISMATCH: frozenset({422}),
     RejectionCode.STRUCTURE_SELECTION_EVIDENCE_TOO_LARGE: frozenset({422}),
+    RejectionCode.STRUCTURE_SELECTION_MANIFEST_TOO_LARGE: frozenset({422}),
     RejectionCode.STRUCTURE_SELECTION_POPULATION_TOO_LARGE: frozenset({422}),
     RejectionCode.STRUCTURE_SELECTION_TRAVERSAL_TOO_DEEP: frozenset({422}),
     RejectionCode.STRUCTURE_SELECTION_UNSUPPORTED: frozenset({422}),
