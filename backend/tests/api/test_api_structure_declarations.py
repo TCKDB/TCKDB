@@ -226,6 +226,39 @@ class TestConformerDetermination:
         refs = db_session.scalars(select(StructureDetermination.public_ref)).all()
         assert len(refs) == 2 and len(set(refs)) == 2
 
+    def test_a_replay_with_the_same_idempotency_key_returns_the_same_determination(self, client, db_session):
+        payload = _conformer(structure_determinations=[_determination()])
+        headers = {"Idempotency-Key": "structure-determination-replay-0001"}
+        first = client.post(CONFORMERS, json=payload, headers=headers)
+        again = client.post(CONFORMERS, json=payload, headers=headers)
+        assert first.status_code in (200, 201), first.text[:800]
+        assert again.json() == first.json()
+        assert _count(db_session, StructureDetermination) == 1
+        assert _count(db_session, Calculation) == 3
+
+    def test_restating_a_determination_over_calculations_already_deposited_resolves_to_the_same_one(
+        self, client, db_session
+    ):
+        _post(client, _conformer())
+        calcs = _calc_by_key(db_session)
+        pinned = {
+            "key": "geometry-1",
+            "target_kind": "geometry",
+            "quantity": "electronic_energy",
+            "evaluated_geometry": {"calculation_ref": calcs["opt"].public_ref},
+            "sources": [
+                {"role": "geometry_optimization", "calculation_ref": calcs["opt"].public_ref},
+                {"role": "energy", "calculation_ref": calcs["sp"].public_ref},
+            ],
+            "workflow_tool_release": WTR,
+        }
+        # The second upload deposits fresh calculations of its own and names none of them: its determination
+        # only cites the calculations that already exist, so it is the same claim over the same evidence.
+        _post(client, _conformer(structure_determinations=[pinned]))
+        _post(client, _conformer(structure_determinations=[pinned]))
+        refs = db_session.scalars(select(StructureDetermination.public_ref)).all()
+        assert len(refs) == 1
+
     def test_a_pin_naming_an_undeclared_key_is_refused_before_anything_is_written(self, client, db_session):
         declared = _determination(sources=[{"role": "energy", "calculation_key": "nope"}])
         response = client.post(CONFORMERS, json=_conformer(structure_determinations=[declared]))

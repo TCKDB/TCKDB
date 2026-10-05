@@ -2275,7 +2275,7 @@ One source-attributed claim about a defined geometry, conformer basin or saddle,
   `energy_convention` (how the zero-point energy inside an E0 was obtained, which corrections it includes) is stated
   exactly when the quantity is `zero_kelvin_energy` (`ck_..._convention_iff_zero_kelvin`). Neither energy is ever
   derived from the other.
-- **Identity:** `identity_hash` is the unique digest of the owner, target kind, observation, source attribution
+- **Identity:** `identity_hash` is the unique digest of the owner, target kind, the observation (for a basin only), source attribution
   (`literature_id` or `workflow_tool_release_id`, one required), source-scoped `determination_key`, evaluated
   geometry and pinned calculations, so restating a determination over the same calculations resolves to one row,
   while a re-deposit that creates new calculation rows is new evidence and a new determination. `content_hash`

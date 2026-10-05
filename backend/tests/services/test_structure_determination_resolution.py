@@ -200,6 +200,13 @@ def test_the_identity_hash_separates_what_is_a_different_claim_and_the_content_h
         {"sources": [("energy", 3), ("curvature", 3)]},
     ):
         assert identity_hash(**{**base, **change}) != reference, change
+    # An observation matters to a basin claim only: a geometry claim is the same claim whichever upload created an
+    # observation beside it.
+    with_observation = DeterminationOwner(species_entry_id=1, conformer_observation_id=7)
+    assert identity_hash(**{**base, "owner": with_observation}) == reference
+    assert identity_hash(**{**base, "owner": with_observation, "target_kind": "conformer_basin"}) != identity_hash(
+        **{**base, "owner": DeterminationOwner(species_entry_id=1, conformer_observation_id=8), "target_kind": "conformer_basin"}
+    )
     # Source order does not matter; the source set does.
     assert identity_hash(**{**base, "sources": [("curvature", 3), ("energy", 3)]}) == identity_hash(
         **{**base, "sources": [("energy", 3), ("curvature", 3)]}

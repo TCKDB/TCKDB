@@ -118,7 +118,9 @@ def identity_hash(
             "version": IDENTITY_VERSION,
             "species_entry_id": owner.species_entry_id,
             "transition_state_entry_id": owner.transition_state_entry_id,
-            "conformer_observation_id": owner.conformer_observation_id,
+            # Only a basin is about an observation; a bare geometry claim is the same claim whichever upload
+            # happened to create a conformer observation beside it.
+            "conformer_observation_id": owner.conformer_observation_id if target_kind == "conformer_basin" else None,
             "target_kind": target_kind,
             "literature_id": literature_id,
             "workflow_tool_release_id": workflow_tool_release_id,
