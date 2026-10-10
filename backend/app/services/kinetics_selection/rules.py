@@ -30,6 +30,7 @@ from app.chemistry.kinetics_rules.xyg3_barrier_manifest import (
     XYG3BarrierManifest,
     load_xyg3_barrier_manifest,
 )
+from app.chemistry.manifest_attestation import is_attested
 from app.services.kinetics_selection.models import KineticsRequest, KineticsSubject, NormalizedKinetics, SpeciesFact
 from app.services.selection_kernel import RuleMatch, Tri
 
@@ -187,12 +188,20 @@ class XYG3B3LYPBarrierRule(KineticsRule):
     def __init__(self, manifest: XYG3BarrierManifest | None = None) -> None:
         if manifest is None:
             manifest = load_xyg3_barrier_manifest(expected_sha256=XYG3_MANIFEST_SHA256)
-        elif manifest.sha256 != XYG3_MANIFEST_SHA256:
+        # The checks run for the loaded default too: the loader is cached, and its object holds dicts that can be
+        # changed in place. They run here, at construction; a manifest changed after the rule exists is not detected.
+        if manifest.sha256 != XYG3_MANIFEST_SHA256:
             # A manifest passed in is held to the same pin as the shipped one: a rule never runs over bytes the
             # audit did not pin, so an approval cannot be supplied by constructing an edited copy.
             raise ManifestError(
                 "XYG3 barrier manifest content does not match its pinned digest "
                 f"(expected {XYG3_MANIFEST_SHA256}, got {manifest.sha256})"
+            )
+        if not is_attested(manifest):
+            # The digest field survives dataclasses.replace, so it proves nothing about the content in hand: compare
+            # the content with what the pinned bytes parsed to.
+            raise ManifestError(
+                "XYG3 barrier manifest is not what the pinned file parses to: its content was edited after loading"
             )
         self._manifest = manifest
         facts = self._manifest.protocol_facts

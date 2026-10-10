@@ -24,6 +24,8 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from app.chemistry.manifest_attestation import attest
+
 MANIFEST_PATH = Path(__file__).with_name("e1_g4_over_g3_manifest.yaml")
 
 #: How a member is matched against a species.
@@ -178,7 +180,7 @@ def parse_e1_manifest_bytes(data: bytes, *, expected_sha256: str | None) -> E1Ma
             raise ManifestError(
                 f"E1 manifest content does not match its pinned digest (expected {expected_sha256}, got {actual})"
             )
-    return dataclasses.replace(parse_e1_manifest(yaml.safe_load(data)), sha256=actual)
+    return attest(dataclasses.replace(parse_e1_manifest(yaml.safe_load(data)), sha256=actual))
 
 
 @lru_cache(maxsize=4)
