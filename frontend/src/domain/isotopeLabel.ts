@@ -33,7 +33,8 @@ export function hasIsotopeLabel(atoms: IsotopeLabelledAtom[]): boolean {
 }
 
 /**
- * Hill-order formula (C first, H second, rest alphabetical) that keeps
+ * H-second ordering (as `hillFormula` on the geometry page: C first, H
+ * second, rest alphabetical; not strict Hill when there is no carbon) that keeps
  * isotopologues distinct: D2O is written `²H2O`, HDO is `H²HO`. Within one
  * element the unlabelled atoms come first, then labelled ones by mass.
  */

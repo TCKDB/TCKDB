@@ -221,7 +221,8 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                         {isotopeLabelled && (
                             <p className="note">
                                 Formula and element labels include the isotope mass numbers stored on this
-                                geometry's atoms (superscript prefix, e.g. ²H).
+                                geometry's atoms (superscript prefix, e.g. ²H). The owning entry's formula
+                                lists elements only, so it is not used here.
                             </p>
                         )}
                         {formulaIsFallback && (

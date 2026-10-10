@@ -76,6 +76,26 @@ describe("GeometryDetailPage isotope labels (#685)", () => {
         expect(screen.getByRole("cell", { name: "¹³C" })).toBeVisible()
     })
 
+    it("shows the geometry's own ²H2O formula even though the owning entry serves H2O", async () => {
+        const rec = {
+            ...record([O, hAt(2, 0.76), hAt(2, -0.76)]),
+            identity: {
+                kind: "species_entry",
+                species_entry: {
+                    species_ref: "spc_w", species_entry_ref: "spe_w", formula: "H2O",
+                    canonical_smiles: "O", inchi_key: "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
+                    charge: 0, multiplicity: 1,
+                },
+                transition_state_entry: null,
+                ambiguous_owners: [],
+            },
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(rec)))
+        page()
+        expect(await screen.findByRole("heading", { name: "²H2O geometry" })).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "H2O geometry" })).not.toBeInTheDocument()
+    })
+
     it("does not invent an isotope for an unlabelled geometry", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(record([O, hAt(null, 0.76), hAt(null, -0.76)]))))
         page()
