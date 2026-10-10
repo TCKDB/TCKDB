@@ -232,6 +232,9 @@ class CompositeExtrapolationFormula(str, Enum):
     inverse_power_shifted_half = "inverse_power_shifted_half"
     karton_martin_scf = "karton_martin_scf"
     exponential_three_point = "exponential_three_point"
+    # ORCA's SCF form ``E_SCF(X) = E_CBS + A exp(-alpha sqrt(X))``; the term's
+    # ``exponent`` carries alpha.
+    exponential_sqrt = "exponential_sqrt"
 
 
 class CompositeInputSlot(str, Enum):

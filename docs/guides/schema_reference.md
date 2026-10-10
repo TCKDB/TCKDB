@@ -212,7 +212,7 @@ the gap.
 | `position` | SMALLINT | no | — | — | — | not documented |
 | `operation` | CompositeTermOperation (enum) | no | — | — | `base`, `extrapolation`, `difference`, `value`, `empirical` | not documented |
 | `energy_component` | EnergyComponentKind (enum) | no | — | — | `total`, `reference`, `correlation`, `triples`, `dboc`, `scalar_relativistic`, `correlation_excluding_triples` | not documented |
-| `formula` | CompositeExtrapolationFormula (enum) | yes | — | — | `inverse_power`, `inverse_power_shifted_half`, `karton_martin_scf`, `exponential_three_point` | not documented |
+| `formula` | CompositeExtrapolationFormula (enum) | yes | — | — | `inverse_power`, `inverse_power_shifted_half`, `karton_martin_scf`, `exponential_three_point`, `exponential_sqrt` | not documented |
 | `exponent` | DOUBLE PRECISION | yes | — | — | — | not documented |
 
 **Check constraints:**

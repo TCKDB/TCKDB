@@ -678,8 +678,9 @@ class CompositeSchemeTermIn(SchemaBase):
         triples included), ``triples``, ``dboc``, ``scalar_relativistic``.
     :param formula: The extrapolation formula (``extrapolation`` terms only).
     :param exponent: The formula's exponent where it has one (``inverse_power``,
-        ``inverse_power_shifted_half``). Part of the identity: exponent 3 and 3.4
-        are two schemes.
+        ``inverse_power_shifted_half``); for ``exponential_sqrt`` it is ORCA's
+        alpha in ``exp(-alpha*sqrt(n))`` (ORCA: 4.42 for cc-pV{D,T}Z, 5.46 for
+        cc-pV{T,Q}Z). Part of the identity: exponent 3 and 3.4 are two schemes.
     :param inputs: The levels the term reads, each filling a slot.
     """
 

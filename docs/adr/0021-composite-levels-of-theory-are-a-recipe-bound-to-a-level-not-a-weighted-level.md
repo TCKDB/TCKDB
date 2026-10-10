@@ -219,13 +219,16 @@ plan left a choice:
   `extrapolation` has only value and extrapolation terms, `additive` has at least
   one difference term. An `empirical` term cannot be user-defined: there is nothing
   to recompute it from.
-- **The four formulas** (`inverse_power`, `inverse_power_shifted_half`,
-  `karton_martin_scf`, `exponential_three_point`) are closed forms in
-  `tckdb_schemas.composite_formulas`, with their sources. The exponent belongs to
-  the first two and is part of identity; the exponential takes three consecutive
-  cardinal numbers. Only `inverse_power` has published worked numbers in the
-  group's sources (five ORCA manual values, reproduced to the printed digits); the
-  others are tested by recovering a known limit from the model they invert.
+- **The five formulas** (`inverse_power`, `inverse_power_shifted_half`,
+  `karton_martin_scf`, `exponential_three_point`, `exponential_sqrt`) are closed
+  forms in `tckdb_schemas.composite_formulas`, with their sources. The exponent
+  belongs to `inverse_power`, `inverse_power_shifted_half` and `exponential_sqrt`
+  (where it is ORCA's SCF alpha in `exp(-alpha*sqrt(n))`) and is part of identity;
+  the three-point exponential takes three consecutive cardinal numbers. Only
+  `inverse_power` (five ORCA manual correlation energies) and `exponential_sqrt`
+  (the two ORCA manual SCF energies, #659) have published worked numbers in the
+  group's sources, reproduced to the printed digits; the others are tested by
+  recovering a known limit from the model they invert.
 - **Identity.** `definition_hash` is a SHA-256 over the canonical JSON of `kind`
   and the terms **in canonical order**, each with operation, component, formula,
   exponent and its inputs (sorted by slot then cardinal number) as slot, declared

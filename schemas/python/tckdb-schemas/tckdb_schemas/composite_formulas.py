@@ -12,7 +12,7 @@ for a double-zeta basis, 3 for triple-zeta, ...), never derived from a basis
 name. Every form is the closed-form solution of the model for the energy limit
 ``E_CBS`` from the stated number of points.
 
-The four formulas (names are the ``CompositeExtrapolationFormula`` members)
+The five formulas (names are the ``CompositeExtrapolationFormula`` members)
 ----------------------------------------------------------------------------
 ``inverse_power`` -- ``E_n = E_CBS + A * n**(-x)``, two points, exponent ``x``
     ``E_CBS = (X**x * E_X - Y**x * E_Y) / (X**x - Y**x)``. With ``x = 3`` this
@@ -35,6 +35,19 @@ The four formulas (names are the ``CompositeExtrapolationFormula`` members)
     ``EXTRAPOLATE`` method ``KM``. With ``f(n) = (n+1) exp(-9 sqrt(n))``,
     ``E_CBS = (E_X * f(Y) - E_Y * f(X)) / (f(Y) - f(X))``.
 
+``exponential_sqrt`` -- ``E_n = E_CBS + A * exp(-alpha * sqrt(n))``, two points, ``exponent`` is alpha
+    ORCA's automatic SCF basis-set extrapolation (``! Extrapolate(X/Y,basis)``; ORCA 6.1 manual,
+    "Automatic extrapolation to the basis set limit", Eq. 3.123; Neese and Valeev,
+    J. Chem. Theory Comput. 7, 33 (2011)). ``n`` is the cardinal number and alpha is
+    ORCA's, dimensionless and multiplying ``sqrt(n)``: the scheme's ``exponent`` field
+    carries it, so it is part of the recipe's identity exactly as an ``inverse_power``
+    exponent is. ORCA fixes ``A`` as free and alpha by the basis family and the pair
+    (optimised values from the manual's table): cc-pVnZ 4.42 (2/3) and 5.46 (3/4);
+    pc-n 7.02 and 9.78; def2 10.39 and 7.88; ano-pVnZ 5.41 and 4.48; saug-ano-pVnZ
+    5.48 and 4.18; aug-ano-pVnZ 5.12 (2/3 only). With ``f(n) = exp(-alpha sqrt(n))``,
+    ``E_CBS = (E_X * f(Y) - E_Y * f(X)) / (f(Y) - f(X))``. Unlike
+    ``karton_martin_scf`` (fixed ``9`` and a ``(n+1)`` prefactor) alpha is free.
+
 ``exponential_three_point`` -- ``E_n = E_CBS + A * exp(-C * n)``, three consecutive points, no exponent
     The three-point exponential of D. Feller, J. Chem. Phys. 96, 6104 (1992);
     Molpro 2026 manual, ``EXTRAPOLATE`` ``E_n = E_CBS + A exp(-C n)``. For
@@ -47,7 +60,8 @@ What is checked against published numbers
 -----------------------------------------
 ``inverse_power`` reproduces five extrapolated correlation energies printed in
 the ORCA 5.0.4 and 6.1 manuals to the digits printed
-(``tests/test_composite_formulas.py``). The other three
+(``tests/test_composite_formulas.py``), and ``exponential_sqrt`` reproduces the
+two extrapolated SCF energies printed beside them. The other three
 have no worked number in the sources the group's knowledge base holds, so they
 are tested by recovering a known ``E_CBS`` from energies generated with the
 stated model, and by a hand-computed case.
@@ -65,6 +79,7 @@ __all__ = [
     "FORMULA_POINT_COUNT",
     "ExtrapolationError",
     "extrapolate",
+    "extrapolate_exponential_sqrt",
     "extrapolate_exponential_three_point",
     "extrapolate_inverse_power",
     "extrapolate_inverse_power_shifted_half",
@@ -79,6 +94,7 @@ EXPONENT_FORMULAS = frozenset(
     {
         CompositeExtrapolationFormula.inverse_power,
         CompositeExtrapolationFormula.inverse_power_shifted_half,
+        CompositeExtrapolationFormula.exponential_sqrt,
     }
 )
 
@@ -87,6 +103,7 @@ FORMULA_POINT_COUNT: dict[CompositeExtrapolationFormula, int] = {
     CompositeExtrapolationFormula.inverse_power: 2,
     CompositeExtrapolationFormula.inverse_power_shifted_half: 2,
     CompositeExtrapolationFormula.karton_martin_scf: 2,
+    CompositeExtrapolationFormula.exponential_sqrt: 2,
     CompositeExtrapolationFormula.exponential_three_point: 3,
 }
 
@@ -129,6 +146,11 @@ def _karton_martin(n: int) -> float:
 def extrapolate_karton_martin_scf(x: int, e_x: float, y: int, e_y: float) -> float:
     """``E_n = E_CBS + A (n+1) exp(-9 sqrt(n))`` through the two points."""
     return _two_point(_karton_martin(x), e_x, _karton_martin(y), e_y)
+
+
+def extrapolate_exponential_sqrt(x: int, e_x: float, y: int, e_y: float, alpha: float) -> float:
+    """``E_n = E_CBS + A exp(-alpha sqrt(n))`` through ``(x, e_x)`` and ``(y, e_y)`` (ORCA's SCF form)."""
+    return _two_point(math.exp(-alpha * math.sqrt(x)), e_x, math.exp(-alpha * math.sqrt(y)), e_y)
 
 
 def extrapolate_exponential_three_point(n: int, e_n: float, e_n1: float, e_n2: float) -> float:
@@ -186,6 +208,10 @@ def extrapolation_weights(
         if exponent is None:
             raise ExtrapolationError(f"{kind.value} needs an exponent")
         f_x, f_y = (x + 0.5) ** -exponent, (y + 0.5) ** -exponent
+    elif kind is CompositeExtrapolationFormula.exponential_sqrt:
+        if exponent is None:
+            raise ExtrapolationError(f"{kind.value} needs an exponent (alpha)")
+        f_x, f_y = math.exp(-exponent * math.sqrt(x)), math.exp(-exponent * math.sqrt(y))
     else:
         f_x, f_y = _karton_martin(x), _karton_martin(y)
     denominator = f_y - f_x
@@ -248,6 +274,10 @@ def extrapolation_coefficients(
         if exponent is None:
             raise ExtrapolationError(f"{kind.value} needs an exponent")
         f_x, f_y = (x + 0.5) ** -exponent, (y + 0.5) ** -exponent
+    elif kind is CompositeExtrapolationFormula.exponential_sqrt:
+        if exponent is None:
+            raise ExtrapolationError(f"{kind.value} needs an exponent (alpha)")
+        f_x, f_y = math.exp(-exponent * math.sqrt(x)), math.exp(-exponent * math.sqrt(y))
     else:
         f_x, f_y = _karton_martin(x), _karton_martin(y)
     denominator = f_y - f_x
@@ -261,13 +291,14 @@ def extrapolate(
     points: Sequence[tuple[int, float]],
     exponent: float | None = None,
 ) -> float:
-    """Extrapolate ``(cardinal, energy)`` points with one of the four formulas.
+    """Extrapolate ``(cardinal, energy)`` points with one of the five formulas.
 
     :param formula: The formula.
     :param points: ``(cardinal_number, energy)`` pairs, in any order. Two for the
         two-point formulas; three consecutive cardinals for the exponential.
-    :param exponent: The exponent ``x``; required by ``inverse_power`` and
-        ``inverse_power_shifted_half``, ignored by the others.
+    :param exponent: The exponent ``x`` (alpha for ``exponential_sqrt``); required by
+        ``inverse_power``, ``inverse_power_shifted_half`` and ``exponential_sqrt``,
+        ignored by the others.
     :returns: The extrapolated energy. Nothing is stored by the caller.
     :raises ExtrapolationError: when the point count or cardinals do not fit the
         formula, or the arithmetic is degenerate.
@@ -286,6 +317,8 @@ def extrapolate(
         (x, e_x), (y, e_y) = ordered
         if kind is CompositeExtrapolationFormula.inverse_power:
             return extrapolate_inverse_power(x, e_x, y, e_y, exponent)
+        if kind is CompositeExtrapolationFormula.exponential_sqrt:
+            return extrapolate_exponential_sqrt(x, e_x, y, e_y, exponent)
         return extrapolate_inverse_power_shifted_half(x, e_x, y, e_y, exponent)
     if kind is CompositeExtrapolationFormula.karton_martin_scf:
         (x, e_x), (y, e_y) = ordered

@@ -171,6 +171,39 @@ def test_karton_martin_scf_uses_its_own_basis_function(client, db_session):
     assert _coefficients(record, 0) == pytest.approx([c3, c4], rel=1e-9)
 
 
+def test_exponential_sqrt_reproduces_the_orca_manual_scf_energy_through_the_whole_upload(client, db_session):
+    """#659: ORCA 6.1 prints -76.066687152 for the cc-pV{T,Q}Z SCF extrapolation (alpha = 5.46) of water.
+
+    The server accepts the total only if its own arithmetic gets the printed number back from the two SCF
+    energies, and the read reports the closed-form weights written out here from exp(-alpha sqrt n).
+    """
+    alpha = 5.46
+    e3, e4, printed = -76.056728252, -76.064381269, -76.066687152
+    hf = {3: {"method": "HF", "basis": "cc-pVTZ"}, 4: {"method": "HF", "basis": "cc-pVQZ"}}
+    term = {
+        "key": "scf",
+        "operation": "extrapolation",
+        "energy_component": "total",
+        "formula": "exponential_sqrt",
+        "exponent": alpha,
+        "inputs": [{"slot": "cardinal", "cardinal_number": n, "level_of_theory": hf[n]} for n in (3, 4)],
+    }
+    inputs = [{"term_key": "scf", "slot": "cardinal", "cardinal_number": n, "calculation_key": f"sp{n}"} for n in (3, 4)]
+    sps = [f.sp("sp3", hf[3], e3), f.sp("sp4", hf[4], e4)]
+    bundle = f.bundle([*sps, f.assembled({"kind": "extrapolation", "terms": [term]}, inputs, printed)])
+    record = _scheme_record(client, db_session, bundle)
+
+    def g(n: int) -> float:
+        return math.exp(-alpha * math.sqrt(n))
+
+    c3, c4 = g(4) / (g(4) - g(3)), -g(3) / (g(4) - g(3))
+    assert c3 * e3 + c4 * e4 == pytest.approx(printed, abs=2e-9)
+    assert record["terms"][0]["exponent"] == alpha
+    assert _coefficients(record, 0) == pytest.approx([c3, c4], rel=1e-9)
+    assert record["terms"][0]["linearity"] == "linear"
+    assert "exponential_sqrt alpha=5.46" in record["composite_scheme"]["name"]
+
+
 def test_the_exponential_three_point_is_not_linear_and_gives_no_coefficients(client, db_session):
     # d1 = E2 - E3 = 0.06, d2 = E3 - E4 = 0.02, so the limit is E4 - d2^2 / (d1 - d2).
     total = E[4] - 0.02**2 / (0.06 - 0.02)
@@ -271,6 +304,7 @@ def test_term_linearity_by_operation_and_formula():
     assert term_linearity(_op("difference"), None) is L.linear
     assert term_linearity(_op("extrapolation"), F.inverse_power) is L.linear
     assert term_linearity(_op("extrapolation"), F.karton_martin_scf) is L.linear
+    assert term_linearity(_op("extrapolation"), F.exponential_sqrt) is L.linear
     assert term_linearity(_op("extrapolation"), F.exponential_three_point) is L.nonlinear
     assert term_linearity(_op("extrapolation"), None) is L.not_applicable
     assert term_linearity(_op("empirical"), None) is L.not_applicable
