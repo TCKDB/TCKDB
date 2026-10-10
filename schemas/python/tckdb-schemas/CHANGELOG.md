@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.108.1 - 2026-10-10
+
+The producer contract now lists `SchemeAtomParamPayload`, `SchemeBondParamPayload` and `SchemeComponentParamPayload`, the inline
+parameter models of an energy-correction scheme. They were always accepted but were left out of the rendered contract, because the
+generator read an unresolved forward-reference annotation. No upload model changed.
+
 ## 0.108.0 - 2026-10-06
 
 The producer contract lists the six read routes of structure selection (`POST .../species-entries/{ref}/calculations/select`,

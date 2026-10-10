@@ -146,6 +146,39 @@ def test_committed_contract_is_in_sync() -> None:
     assert generator.main(["--check"]) == 0
 
 
+_FRESH_PROCESS_PROBE = """
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("generate_producer_contract", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+sys.modules["generate_producer_contract"] = module
+spec.loader.exec_module(module)
+from tckdb_schemas.energy_correction import EnergyCorrectionSchemeRef
+print("\\n".join(sorted(m.__name__ for m in module.model_closure(EnergyCorrectionSchemeRef))))
+"""
+
+
+def test_model_discovery_does_not_depend_on_what_else_was_imported() -> None:
+    """A model's forward-referenced field types are found in a process that has used nothing else.
+
+    ``EnergyCorrectionSchemeRef`` names its parameter payloads as strings. Pydantic only
+    resolves them the first time something validates or builds a schema from the model,
+    so a fresh process saw an unresolved annotation and dropped the three
+    ``Scheme*ParamPayload`` models, while a process that had run ``test_public_refs``
+    first listed them (#717, #661). The probe runs in a subprocess so no earlier test
+    can have resolved them.
+    """
+    done = subprocess.run(
+        [sys.executable, "-c", _FRESH_PROCESS_PROBE, str(GENERATOR_PATH)],
+        capture_output=True,
+        text=True,
+        env={**os.environ},
+        cwd=str(REPO_ROOT),
+    )
+    assert done.returncode == 0, done.stderr[-3000:]
+    found = set(done.stdout.split())
+    assert {"SchemeAtomParamPayload", "SchemeBondParamPayload", "SchemeComponentParamPayload"} <= found, found
+
+
 def test_the_generator_is_deterministic() -> None:
     """Two renders are byte-identical, or ``--check`` would fire at random."""
     first = generator.render()
