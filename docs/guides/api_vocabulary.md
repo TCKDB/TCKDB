@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 146 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 300 | `backend/app/api/code_catalogue.py` |
-| **total** | **607** | |
+| Refusal codes a caller can receive | 303 | `backend/app/api/code_catalogue.py` |
+| **total** | **610** | |
 
 ## How a record is named
 
@@ -693,7 +693,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `rights_attestation_requires_curator` | a thing |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (25 codes)
+### HTTP 404 (26 codes)
 
 | Code | Names |
 | --- | --- |
@@ -718,6 +718,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_release` | a thing |
 | `unknown_release_artifact` | a thing |
 | `unknown_selection` | a thing |
+| `unknown_statmech_candidate_ref` | a thing |
 | `unknown_statmech_ref` | a thing |
 | `unknown_structure_determination_ref` | a thing |
 | `unknown_structure_member_ref` | a thing |
@@ -759,7 +760,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (241 codes)
+### HTTP 422 (243 codes)
 
 | Code | Names |
 | --- | --- |
@@ -945,6 +946,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `statmech_model_declaration_mismatch` | a relationship — read `context` |
 | `statmech_model_declaration_version_unsupported` | a thing |
 | `statmech_role_duplicate` | a relationship — read `context` |
+| `statmech_selection_bound_exceeded` | a relationship — read `context` |
+| `statmech_selection_unsupported` | a relationship — read `context` |
 | `statmech_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `statmech_source_role_type_mismatch` | a relationship — read `context` |
 | `statmech_sp_geometry_mismatch` | a relationship — read `context` |
