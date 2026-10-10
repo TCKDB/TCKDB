@@ -815,7 +815,9 @@ def upload_calculation_artifacts(
         )
         # Fill-when-absent: a freq log / ORCA .hess yields the Cartesian
         # force-constant matrix, bound to the calc's input geometry.
-        try_extract_hessian_from_artifact_upload(session, calculation, art_in)
+        hessian_warning = try_extract_hessian_from_artifact_upload(session, calculation, art_in)
+        if hessian_warning is not None:
+            warnings.append(hessian_warning)
         # Fill-when-absent-or-degenerate: an opt calc's own input deck / log
         # yields its true starting geometry, when none is on file yet or the
         # one on file only duplicates the output (see the module docstring).
