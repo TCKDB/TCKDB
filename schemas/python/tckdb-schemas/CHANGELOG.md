@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.111.0 - 2026-10-11
+
+A kinetics record's Arrhenius A-units are held to the order of the side its coefficient is a rate of (#695): the products for
+a `reverse` record, the reactants for a `forward` one. A `net` record is not checked, and a record that states no
+direction keeps the reactant-side check. So the correct units of a reverse rate on a reaction with unequal sides (the
+reverse of H2 -> 2H is bimolecular) are accepted, and the units of the wrong side are refused. This covers the main line,
+every `multi_arrhenius` and PLOG entry, and `falloff.low_a_units` (one order above the side). No upload model gained or
+lost a field.
+
 ## 0.108.1 - 2026-10-10
 
 The producer contract now lists four models it had left out: `SchemeAtomParamPayload`, `SchemeBondParamPayload` and

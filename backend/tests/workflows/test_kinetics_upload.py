@@ -732,7 +732,8 @@ def test_forward_and_reverse_kinetics_persist_distinctly(db_conn, monkeypatch):
             session, _kinetics_request(direction="forward")
         )
         rev = persist_kinetics_upload(
-            session, _kinetics_request(direction="reverse")
+            # The fixture is 2H -> H2; its reverse rate is a rate of the single product, so first order (#695).
+            session, _kinetics_request(direction="reverse", a_units="per_s")
         )
         assert fwd.id != rev.id
         assert fwd.direction == KineticsDirection.forward

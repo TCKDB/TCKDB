@@ -501,7 +501,22 @@ class KineticsUploadRequest(SchemaBase):
             )
         return self
 
-    def _main_line_molecularity(self) -> int:
+    def _rate_side_count(self) -> int | None:
+        """Species on the side the coefficient is a rate *of*; ``None`` when no order exists.
+
+        A forward coefficient is a rate of the reactants, a reverse one of the
+        products (#695). A ``net`` rate folds both directions and has no single
+        order, so it is not checked. A record that states no direction keeps the
+        reactant side, as before: the check is not loosened for it, and no
+        direction is inferred.
+        """
+        if self.direction == KineticsDirection.net:
+            return None
+        if self.direction == KineticsDirection.reverse:
+            return len(self.reaction.products)
+        return len(self.reaction.reactants)
+
+    def _main_line_molecularity(self) -> int | None:
         """Effective concentration order of the main-line Arrhenius rate.
 
         A *simple* third-body reaction (generic ``+M`` collider, no falloff)
@@ -510,7 +525,9 @@ class KineticsUploadRequest(SchemaBase):
         high-pressure limit k∞ (M excluded); the low-pressure limit k0 is
         one order higher and validated via ``falloff.low_a_units``.
         """
-        molecularity = len(self.reaction.reactants)
+        molecularity = self._rate_side_count()
+        if molecularity is None:
+            return None
         if self.is_third_body and self.falloff is None:
             molecularity += 1
         return molecularity
@@ -547,7 +564,10 @@ class KineticsUploadRequest(SchemaBase):
     def validate_a_units_vs_molecularity(self) -> Self:
         if self.a_units is None:
             return self
-        validate_a_units_for_molecularity(self.a_units, self._main_line_molecularity())
+        molecularity = self._main_line_molecularity()
+        if molecularity is None:
+            return self
+        validate_a_units_for_molecularity(self.a_units, molecularity)
         return self
 
     @model_validator(mode="after")
@@ -556,6 +576,8 @@ class KineticsUploadRequest(SchemaBase):
         each term's ``a_units`` must match the main-line molecularity (DR-0036).
         """
         molecularity = self._main_line_molecularity()
+        if molecularity is None:
+            return self
         for entry in self.arrhenius_entries:
             if entry.a_units is None:
                 continue
@@ -572,6 +594,8 @@ class KineticsUploadRequest(SchemaBase):
         so its ``a_units`` shares the main-line molecularity (DR-0032 Part C).
         """
         molecularity = self._main_line_molecularity()
+        if molecularity is None:
+            return self
         for entry in self.plog_entries:
             if entry.a_units is None:
                 continue
@@ -585,15 +609,15 @@ class KineticsUploadRequest(SchemaBase):
     @model_validator(mode="after")
     def validate_falloff_low_a_units(self) -> Self:
         """The low-pressure-limit k0 Arrhenius is by definition one order higher
-        than k∞, so ``falloff.low_a_units`` validates at ``len(reactants) + 1``
-        regardless of ``is_third_body`` (DR-0032 Part B).
+        than k∞, so ``falloff.low_a_units`` validates one order above the
+        coefficient's side (reactants forward, products reverse) regardless of ``is_third_body`` (DR-0032 Part B).
         """
         if self.falloff is None or self.falloff.low_a_units is None:
             return self
-        molecularity = len(self.reaction.reactants) + 1
-        _validate_a_units_named(
-            "falloff.low_a_units", self.falloff.low_a_units, molecularity
-        )
+        side = self._rate_side_count()
+        if side is None:
+            return self
+        _validate_a_units_named("falloff.low_a_units", self.falloff.low_a_units, side + 1)
         return self
 
     @model_validator(mode="after")
