@@ -171,3 +171,52 @@ def test_a_record_the_evidence_rubric_hard_fails_is_not_counted_as_qualifying(db
     assert delta(after, before, "qualifying_records") == 0  # ...but is not eligible to compete
     assert delta(after, before, "blocking_validation", "evidence_hard_failed") == 1
     assert delta(after, before, "determinations_with_a_qualifying_record") == 0
+
+
+# -- a confirmed finding about a record's own source calculation (#724) ------------------------------------------------
+
+
+def _two_sourced_records(db_session, world):
+    """Two otherwise identical qualifying records, each resting on a source calculation of its own."""
+    from tests.services.kinetics_selection.test_source_findings_kinetics import Sources, record
+
+    sources = Sources(db_session, world)
+    (calc_a, _, role_a), (calc_b, _, role_b) = sources.energy(), sources.energy()
+    record(db_session, world, "fa", sources, links=[(calc_a, role_a)])
+    record(db_session, world, "fb", sources, links=[(calc_b, role_b)])
+    return sources, calc_a, calc_b
+
+
+def test_a_confirmed_finding_on_a_records_source_moves_only_that_record_out_of_the_qualifying_count(db_session, world):
+    """Record A's source is invalidated; record B's source is another subject, so B still qualifies (one of two, not zero)."""
+    from app.db.models.common import StructureFindingKind
+
+    baseline = kinetics_coverage_inventory(db_session)
+    sources, calc_a, _ = _two_sourced_records(db_session, world)
+    clean = kinetics_coverage_inventory(db_session)
+    assert delta(clean, baseline, "qualifying_records") == 2
+    assert delta(clean, baseline, "determinations_with_a_qualifying_record") == 2
+    assert delta(clean, baseline, "blocking_validation", "source_finding") == 0
+
+    sources.findings.finding(calculation=calc_a, kind=StructureFindingKind.identity_incompatibility)
+    found = kinetics_coverage_inventory(db_session)
+    assert delta(found, baseline, "kinetics_records") == 2  # still stored, still counted as records
+    assert delta(found, baseline, "qualifying_records") == 1
+    assert delta(found, baseline, "determinations_with_a_qualifying_record") == 1
+    assert delta(found, baseline, "blocking_validation", "source_finding") == 1
+    assert delta(found, baseline, "reaction_entries_with_a_qualifying_record") == 1  # the other record still qualifies
+
+
+def test_an_entry_whose_only_record_is_invalidated_no_longer_counts_as_having_a_qualifying_record(db_session, world):
+    from app.db.models.common import StructureFindingKind
+    from tests.services.kinetics_selection.test_source_findings_kinetics import Sources, record
+
+    baseline = kinetics_coverage_inventory(db_session)
+    sources = Sources(db_session, world)
+    calc, _, role = sources.energy()
+    record(db_session, world, "only", sources, links=[(calc, role)])
+    assert delta(kinetics_coverage_inventory(db_session), baseline, "reaction_entries_with_a_qualifying_record") == 1
+    sources.findings.finding(calculation=calc, kind=StructureFindingKind.identity_incompatibility)
+    found = kinetics_coverage_inventory(db_session)
+    assert delta(found, baseline, "reaction_entries_with_a_qualifying_record") == 0
+    assert delta(found, baseline, "qualifying_records") == 0
