@@ -19,12 +19,12 @@ from app.services.statmech_selection.vocabulary import (
     Task,
 )
 
-SPE = "spe_0123456789abcdefghijklmnop"
-TSE = "tse_0123456789abcdefghijklmnop"
-CG = "cg_0123456789abcdefghijklmnop"
-SMD = "smd_0123456789abcdefghijklmnop"
+SPE = "spe_abcdefghijklmnopqrstuvwxyz"
+TSE = "tse_abcdefghijklmnopqrstuvwxyz"
+CG = "cg_abcdefghijklmnopqrstuvwxyz"
+SMD = "smd_abcdefghijklmnopqrstuvwxyz"
 SMD2 = "smd_zzzzzzzzzzzzzzzzzzzzzzzzzz"
-SDET = "sdet_0123456789abcdefghijklmnop"
+SDET = "sdet_abcdefghijklmnopqrstuvwxyz"
 
 THERMAL: dict = {
     "intent": "qualify",
@@ -245,7 +245,7 @@ def test_populations_are_all_authorized_explicit_revisions_or_a_release_never_a_
     refuses(make(THERMAL, population={"kind": "model_revisions", "model_refs": []}), "at least 1")
     refuses(make(THERMAL, population={"kind": "model_revisions", "model_refs": [SMD, SMD]}), "named twice")
     refuses(make(THERMAL, population={"kind": "page", "limit": 10}), "does not match any of the expected tags")
-    assert accepts(make(THERMAL, population={"kind": "release", "release_ref": "rel_0123456789abcdefghijklmnop"})).population.release_ref
+    assert accepts(make(THERMAL, population={"kind": "release", "release_ref": "rel_abcdefghijklmnopqrstuvwxyz"})).population.release_ref
 
 
 @pytest.mark.parametrize("task", [t.value for t in DeferredTask])
@@ -304,3 +304,72 @@ def test_bounds_are_the_published_defaults_and_not_a_wire_field():
     assert (b.candidates, b.nested_rows, b.dependency_depth, b.manifest_bytes) == (500, 25_000, 8, 10 * 1024 * 1024)
     assert "bounds" not in StatmechSelectionRequest.model_fields
     assert StatmechSelectionRequest.model_config["extra"] == "forbid"
+
+
+def test_a_standard_state_entropy_needs_no_energy_reference():
+    """S and Cp do not depend on the energy zero or on zero-point inclusion, so a request for them never states one."""
+    body = make(
+        THERMAL,
+        conditions={
+            "temperature_domain_k": {"min": 298.15, "max": 298.15},
+            "normalization": "standard_state_pressure",
+            "pressure_pa": 100000.0,
+        },
+    )
+    request = accepts(body)
+    assert request.conditions.energy_reference is None and request.conditions.pressure_pa == 100000.0
+    refuses(make(body, conditions__pressure_pa=_DROP), "needs pressure_pa")
+    assert accepts(make(body, observable="heat_capacity")).observable.value == "heat_capacity"
+
+
+def test_a_component_claim_accepts_a_temperature_domain_it_does_not_require():
+    """A component is qualified without a temperature (the spec's table says so) and accepts one if it is stated."""
+    bare = make(THERMAL, task="vibrational_component", observable=_DROP, conditions=_DROP)
+    assert accepts(bare).conditions.temperature_domain_k is None
+    stated = make(bare, conditions={"temperature_domain_k": {"min": 300.0, "max": 600.0}})
+    assert accepts(stated).conditions.temperature_domain_k == (300.0, 600.0)
+
+
+@pytest.mark.parametrize(
+    "task, observable, ok",
+    [
+        ("density_of_states", "density_of_states", True),
+        ("density_of_states", "entropy", False),
+        ("sum_of_states", "density_of_states", False),
+        ("thermochemical_formation", "gibbs_energy", True),
+        ("thermochemical_formation", "entropy", False),
+        ("numerical_evaluation", "helmholtz_energy", True),
+        ("numerical_evaluation", "population", False),
+        ("prepared_population", "population", True),
+        ("trapped_population", "enthalpy", False),
+    ],
+)
+def test_a_deferred_task_still_validates_its_observable_pairing(task, observable, ok):
+    body = make(THERMAL, task=task, observable=observable, conditions=_DROP)
+    if ok:
+        assert accepts(body).deferred
+    else:
+        refuses(body, "accepts observable")
+
+
+@pytest.mark.parametrize(
+    "ref",
+    [
+        "spe_abcdefghijklmnopqrstuvwxy",  # 25 characters
+        "spe_abcdefghijklmnopqrstuvwxyz2",  # 27 characters
+        "spe_ABCDEFGHIJKLMNOPQRSTUVWXYZ",  # not lowercase
+        "spe_0123456789abcdefghijklmnop",  # digits outside the base32 alphabet
+        "tse_abcdefghijklmnopqrstuvwxyz",  # another record type's prefix
+        "17",  # a database id
+    ],
+)
+def test_a_public_ref_has_its_registered_prefix_and_its_exact_base32_body(ref):
+    refuses(make(THERMAL, target__species_entry_ref=ref), "pattern")
+
+
+def test_the_ref_grammar_comes_from_the_public_ref_registry():
+    from app.schemas.reads.scientific_statmech_selection import _ref_pattern
+    from app.services.public_refs import PREFIXES, PUBLIC_REF_BODY_LEN
+
+    assert PREFIXES["StatmechModelDeclaration"] == "smd"
+    assert _ref_pattern("SpeciesEntry") == f"^{PREFIXES['SpeciesEntry']}_[a-z2-7]{{{PUBLIC_REF_BODY_LEN}}}$"

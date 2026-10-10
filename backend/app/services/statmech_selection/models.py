@@ -21,6 +21,7 @@ from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.statmech_selection.vocabulary import (
     COMPONENT_OBSERVABLE,
+    DEFERRED_TASK_OBSERVABLES,
     OWNER_SCOPES,
     TASK_OBSERVABLES,
     TASK_SCOPES,
@@ -357,6 +358,10 @@ class StatmechRequest:
             raise ValueError("reference_model_ref belongs to a model_fidelity objective")
 
     def _check_deferred(self) -> None:
+        allowed = DEFERRED_TASK_OBSERVABLES[self.task]  # type: ignore[index]
+        if self.observable is not None and self.observable not in allowed:
+            names = ", ".join(sorted(o.value for o in allowed))
+            raise ValueError(f"task {self.task.value} accepts observable {names}, not {self.observable.value}")
         if self.task is DeferredTask.higher_order_ts_model and self.target.owner_kind is not OwnerKind.transition_state_entry:
             raise ValueError("higher_order_ts_model needs a transition_state_entry target")
 
@@ -406,8 +411,8 @@ class StatmechRequest:
                 raise ValueError("a ZPE interpretation states its energy_reference (zero and zpe inclusion)")
             return
         if task is Task.within_basin_thermal and normalization not in (None, Normalization.internal_only):
-            if c.energy_reference is None:
-                raise ValueError("a within-basin thermal request with a translational normalization states its energy_reference")
+            # A standard-state entropy or heat capacity states its translational convention, and nothing about the
+            # energy zero or zero-point inclusion: those do not enter S or Cp.
             return
         if normalization is None:
             object.__setattr__(self, "conditions", _with_internal(c))

@@ -44,10 +44,10 @@ bound are refused. A misspelled token is a validation error (422). Units are fix
 
 | Task | Observable | Scope | Needs |
 | --- | --- | --- | --- |
-| `rotational_component` | `rotational_characterization` | atom, basin, ts_determination | no temperature, no offset |
-| `vibrational_component` | `vibrational_treatment` | basin, ts_determination | no temperature |
+| `rotational_component` | `rotational_characterization` | atom, basin, ts_determination | nothing; no normalization (a stated temperature domain is accepted) |
+| `vibrational_component` | `vibrational_treatment` | basin, ts_determination | nothing; no normalization (a stated temperature domain is accepted) |
 | `zpe_component` | `zero_point_energy_interpretation` | atom, basin, ts_determination | `energy_reference` |
-| `within_basin_thermal` | `entropy`, `heat_capacity` | atom, basin | temperature domain; no electronic offset |
+| `within_basin_thermal` | `entropy`, `heat_capacity` | atom, basin | temperature domain; never an energy reference or electronic offset (a standard-state S or Cp states its pressure or concentration) |
 | `canonical_model` | `internal_partition`, `full_partition` | atom, basin, explicit_equilibrium_ensemble | temperature domain; a full model also a translational normalization and `energy_reference`; an internal model never needs a pressure |
 | `conventional_ts_transverse_model` | `transverse_partition` | ts_determination | TS owner, `dividing_surface`, `reaction_coordinate_excluded: true`, temperature domain |
 
@@ -88,17 +88,25 @@ coverage or a refusal, and it is suppressed when any group is unordered.
 Implemented in `app/services/statmech_selection/legacy.py` and reported by the read-only inventory
 (`backend/scripts/ops/statmech_selection_coverage_inventory.py`, which names its database explicitly and opens a
 read-only repeatable-read transaction). Each record, per claim, is `represented_and_usable`,
-`represented_but_ambiguous`, `absent` or (owner kind cannot carry the claim) `not_applicable_owner_kind`;
+`represented_but_ambiguous`, `absent` or, when the owner kind or scope cannot carry the claim at all,
+`not_applicable` (not a data gap);
 `unsupported_declaration_version` counts declared models this release cannot read and is 0 until stage 2.
 
-- A non-null scale factor establishes that a factor of a stated kind was applied (1.0 is explicitly unscaled).
-  Null is unknown application, never unity.
+- A linked scale factor (`frequency_scale_factor_id`) says which factor belongs to the record, not that the claim's
+  frequencies were scaled by it: application is unknown until a declaration states it. The one existing evidence of
+  application is an applied energy correction carrying a frequency scale factor on one of the record's own source
+  calculations. Purposes are not interchangeable: a ZPE factor does not stand in for an entropy or heat-capacity claim,
+  nor a fundamental-frequency factor for either. The profiles are therefore `within_basin_thermal.entropy` and
+  `.heat_capacity`, each needing its own purpose.
 - Curvature is discovered on any source calculation with a frequency or Hessian result, whatever its job type.
-- Several distinct source geometries are undeclared alternatives, not a pick.
-- An atom needs no frequency, scan or constants. An imported record needs no local geometry job.
+- Several distinct source geometries are undeclared alternatives, not a pick. Where an optimisation declares which
+  output is its `final` geometry, an initial or intermediate output is not an alternative to it.
+- An atom needs no frequency, scan or constants, and has no vibrational component (that scope is refused, so the
+  record is `not_applicable` there). An imported record needs no local geometry job.
 - A torsion-bearing record that does not say whether its frequencies were projected is ambiguous, not assumed
   projected. An invalidated rotor is ambiguous here and blocks the claim in an assessment.
-- An unknown optical factor or absent electronic levels keep the thermal claims open; they are not one.
+- An unknown optical factor or absent electronic levels keep the thermal claims open; they are not one. A chiral
+  saddle point exists, so the optical factor is also required of the transition-state claim.
 - No legacy record states an energy-reference zero, a zero-point inclusion convention or a translational
   normalization. The ZPE interpretation and the full partition function are reachable only through a declared
   model.

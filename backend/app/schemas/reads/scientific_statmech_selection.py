@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import SelectionPolicy
+from app.services.public_refs import PREFIXES, PUBLIC_REF_BODY_LEN
 from app.services.statmech_selection.models import (
     Conditions,
     EnergyReference,
@@ -49,12 +50,18 @@ from app.services.statmech_selection.vocabulary import (
     ZpeInclusion,
 )
 
-SpeciesEntryRef = Annotated[str, StringConstraints(pattern=r"^spe_[A-Za-z0-9]+$", max_length=64)]
-TransitionStateEntryRef = Annotated[str, StringConstraints(pattern=r"^tse_[A-Za-z0-9]+$", max_length=64)]
-ConformerGroupRef = Annotated[str, StringConstraints(pattern=r"^cg_[A-Za-z0-9]+$", max_length=64)]
-DeterminationRef = Annotated[str, StringConstraints(pattern=r"^sdet_[A-Za-z0-9]+$", max_length=64)]
-ModelRef = Annotated[str, StringConstraints(pattern=r"^smd_[A-Za-z0-9]+$", max_length=64)]
-ReleaseRef = Annotated[str, StringConstraints(pattern=r"^rel_[A-Za-z0-9]+$", max_length=64)]
+
+def _ref_pattern(model: str) -> str:
+    """The public-ref grammar of one record type: its registered prefix, then a base32 body of the registered length."""
+    return rf"^{PREFIXES[model]}_[a-z2-7]{{{PUBLIC_REF_BODY_LEN}}}$"
+
+
+SpeciesEntryRef = Annotated[str, StringConstraints(pattern=_ref_pattern("SpeciesEntry"))]
+TransitionStateEntryRef = Annotated[str, StringConstraints(pattern=_ref_pattern("TransitionStateEntry"))]
+ConformerGroupRef = Annotated[str, StringConstraints(pattern=_ref_pattern("ConformerGroup"))]
+DeterminationRef = Annotated[str, StringConstraints(pattern=_ref_pattern("StructureDetermination"))]
+ModelRef = Annotated[str, StringConstraints(pattern=_ref_pattern("StatmechModelDeclaration"))]
+ReleaseRef = Annotated[str, StringConstraints(pattern=_ref_pattern("DatasetRelease"))]
 
 
 class _Strict(BaseModel):

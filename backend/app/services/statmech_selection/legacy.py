@@ -13,10 +13,15 @@ Rules that run through it:
   factor is *unknown application*, not unity; an absent optical factor is unknown, not one; a record that does not
   state the translational normalisation of a full partition function is not a full model.
 * A profile is ``usable`` only when every requirement is present or not required; ``absent`` when every requirement
-  that applies is missing (the record represents nothing of the claim); otherwise ``ambiguous``. A row whose owner kind cannot carry the
-  claim at all is ``not_applicable``: an owner mismatch is not a data gap.
-* A non-null ``frequency_scale_factor_id`` establishes that a factor of a stated kind was applied (value 1.0 is an
-  explicit "unscaled"); null establishes nothing.
+  that applies is missing (the record represents nothing of the claim); otherwise ``ambiguous``. A row whose owner kind or scope cannot
+  carry the claim at all (a transition state for a stable-species claim, an atom for a vibrational component) is
+  ``not_applicable``: that is not a data gap.
+* A non-null ``frequency_scale_factor_id`` establishes that a factor of a stated *purpose* is linked to the record. It
+  does not establish that the factor was applied to the frequencies a claim uses: application is unknown until a
+  declaration states it. The one existing evidence of application is an applied energy correction that carries a
+  frequency scale factor on one of the record's own source calculations; it establishes application for the purpose of
+  that factor (fundamental, zero-point, enthalpy, entropy or heat capacity), and a factor of another purpose does not
+  stand in for it.
 * Facts a legacy row cannot hold are missing for every legacy row, by construction: the energy-reference zero and
   the zero-point inclusion convention, and the translational normalisation. Those claims are reachable only
   through a declared model.
@@ -45,15 +50,17 @@ class Readiness(str, Enum):
     usable = "represented_and_usable"
     ambiguous = "represented_but_ambiguous"
     absent = "absent"
-    not_applicable = "not_applicable_owner_kind"
+    not_applicable = "not_applicable"
 
 
-#: The claims a legacy record can be asked about. ``canonical_model`` is split by observable.
+#: The claims a legacy record can be asked about. ``canonical_model`` and ``within_basin_thermal`` are split by
+#: observable: a scale factor is calibrated for a purpose, and the purposes are not interchangeable.
 PROFILES: tuple[str, ...] = (
     "rotational_component",
     "vibrational_component",
     "zpe_component",
-    "within_basin_thermal",
+    "within_basin_thermal.entropy",
+    "within_basin_thermal.heat_capacity",
     "canonical_model.internal_partition",
     "canonical_model.full_partition",
     "conventional_ts_transverse_model",
@@ -75,6 +82,9 @@ class LegacyFacts:
     uses_projected_frequencies: bool | None = None
     scale_factor_kind: str | None = None
     has_scale_factor: bool = False
+    #: Purposes of the frequency scale factors an applied energy correction carries on the record's own source
+    #: calculations: the recorded evidence that a factor of that purpose was applied.
+    applied_scale_kinds: frozenset[str] = frozenset()
     n_electronic_levels: int = 0
     n_torsions: int = 0
     n_torsions_without_kind: int = 0
@@ -139,14 +149,19 @@ def _mode_treatment(f: LegacyFacts) -> str:
     return PRESENT if f.statmech_treatment is not None else MISSING
 
 
-def _scale(f: LegacyFacts, *, kind: str | None = None) -> str:
+def _scale(f: LegacyFacts, *, kind: str) -> str:
+    """Whether a factor of purpose ``kind`` was applied.
+
+    Present on recorded application; ambiguous when a factor is linked (or applied for another purpose) but its
+    application for this purpose is not stated; missing otherwise.
+    """
     if f.is_atom:
         return NOT_REQUIRED
-    if not f.has_scale_factor:
-        return MISSING
-    if kind is not None and f.scale_factor_kind != kind:
-        return AMBIGUOUS  # a factor was applied, but not of the purpose this claim needs
-    return PRESENT
+    if kind in f.applied_scale_kinds:
+        return PRESENT
+    if f.has_scale_factor or f.applied_scale_kinds:
+        return AMBIGUOUS
+    return MISSING
 
 
 def _projection(f: LegacyFacts) -> str:
@@ -181,22 +196,38 @@ def _reaction_coordinate(f: LegacyFacts) -> str:
     return PRESENT if f.reaction_coordinate_designated is True else MISSING
 
 
+#: The scale-factor purpose each claim needs. A ZPE-calibrated factor is not an entropy or heat-capacity factor, and
+#: neither is a fundamental-frequency factor; the purposes are not interchangeable proof.
+SCALE_PURPOSE: dict[str, str] = {
+    "vibrational_component": "fundamental",
+    "zpe_component": "zpe",
+    "within_basin_thermal.entropy": "entropy",
+    "within_basin_thermal.heat_capacity": "heat_capacity",
+    "canonical_model.internal_partition": "fundamental",
+    "canonical_model.full_partition": "fundamental",
+    "conventional_ts_transverse_model": "fundamental",
+}
+
+
 def requirements(profile: str, f: LegacyFacts) -> dict[str, str]:
-    """``{requirement: present|ambiguous|missing}`` for one claim. Deterministic and total."""
+    """``{requirement: present|not_required|ambiguous|missing}`` for one claim. Deterministic and total."""
+    if profile not in PROFILES:
+        raise ValueError(f"unknown profile {profile!r}")
     if profile == "rotational_component":
         return {"rotor": _rotor(f), "external_symmetry": _external_symmetry(f), "geometry": _geometry(f)}
+    scale = _scale(f, kind=SCALE_PURPOSE[profile])
     if profile == "vibrational_component":
         return {
             "curvature_source": _curvature(f),
             "geometry": _geometry(f),
             "mode_treatment": _mode_treatment(f),
-            "scale_application": _scale(f),
+            "scale_application": scale,
             "projection_status": _projection(f),
         }
     if profile == "zpe_component":
         return {
             "curvature_source": _curvature(f),
-            "scale_application": _scale(f, kind="zpe"),
+            "scale_application": scale,
             "energy_reference_convention": MISSING,
             "included_corrections": MISSING,
         }
@@ -208,34 +239,36 @@ def requirements(profile: str, f: LegacyFacts) -> dict[str, str]:
         "curvature_source": _curvature(f),
         "geometry": _geometry(f),
         "mode_treatment": _mode_treatment(f),
-        "scale_application": _scale(f),
+        "scale_application": scale,
         "projection_status": _projection(f),
         "rotor_treatment": _rotor_treatment(f),
     }
-    if profile in ("within_basin_thermal", "canonical_model.internal_partition"):
-        return internal
     if profile == "canonical_model.full_partition":
         return {**internal, "translational_normalization": MISSING, "energy_reference_convention": MISSING}
     if profile == "conventional_ts_transverse_model":
-        return {
-            **{k: v for k, v in internal.items() if k != "optical_factor"},
-            "reaction_coordinate_designation": _reaction_coordinate(f),
-            "determination_tie": _tie(f),
-        }
-    raise ValueError(f"unknown profile {profile!r}")
+        # A chiral saddle point exists, so the optical factor stays a requirement here too.
+        return {**internal, "reaction_coordinate_designation": _reaction_coordinate(f), "determination_tie": _tie(f)}
+    return internal
 
 
 def _owner_fits(profile: str, owner: OwnerKind) -> bool:
     if profile == "conventional_ts_transverse_model":
         return owner is OwnerKind.transition_state_entry
-    if profile in ("within_basin_thermal", "canonical_model.internal_partition", "canonical_model.full_partition"):
+    if profile.startswith(("within_basin_thermal", "canonical_model")):
         return owner is OwnerKind.species_entry
     return True
 
 
+def _scope_fits(profile: str, f: LegacyFacts) -> bool:
+    """An atom has no vibrational component to qualify (the request contract refuses that scope too)."""
+    return not (profile == "vibrational_component" and f.is_atom)
+
+
 def classify(profile: str, f: LegacyFacts) -> tuple[Readiness, dict[str, str]]:
     """The readiness of one legacy record for one claim, with the per-requirement states behind it."""
-    if not _owner_fits(profile, f.owner_kind):
+    if profile not in PROFILES:
+        raise ValueError(f"unknown profile {profile!r}")
+    if not _owner_fits(profile, f.owner_kind) or not _scope_fits(profile, f):
         return Readiness.not_applicable, {}
     states = requirements(profile, f)
     values = set(states.values()) - {NOT_REQUIRED}

@@ -27,7 +27,8 @@ from app.db.models.calculation import (
     CalculationInputGeometry,
     CalculationOutputGeometry,
 )
-from app.db.models.energy_correction import FrequencyScaleFactor
+from app.db.models.common import CalculationGeometryRole
+from app.db.models.energy_correction import AppliedEnergyCorrection, FrequencyScaleFactor
 from app.db.models.statmech import (
     Statmech,
     StatmechElectronicLevel,
@@ -64,11 +65,12 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
         i: k.value
         for i, k in session.execute(select(FrequencyScaleFactor.id, FrequencyScaleFactor.scale_kind)).all()
     }
-    levels = dict(
-        session.execute(
+    levels: dict[int, int] = {
+        sid: int(n)
+        for sid, n in session.execute(
             select(StatmechElectronicLevel.statmech_id, func.count()).group_by(StatmechElectronicLevel.statmech_id)
         ).all()
-    )
+    }
     torsions: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for sid, kind, invalidated, scan in session.execute(
         select(
@@ -107,14 +109,30 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
                 )
             )
         }
-    geometry: dict[int, dict[str, set[int]]] = defaultdict(lambda: {"input": set(), "output": set()})
+    geometry: dict[int, dict[str, set[int]]] = defaultdict(lambda: {"input": set(), "output": set(), "final": set()})
+    applied_scale: dict[int, set[str]] = defaultdict(set)
     if calc_ids:
+        # The one recorded evidence that a scale factor was applied: an applied energy correction that carries a
+        # frequency scale factor on one of the record's own source calculations.
+        for calc_id, kind in session.execute(
+            select(AppliedEnergyCorrection.source_calculation_id, FrequencyScaleFactor.scale_kind)
+            .join(FrequencyScaleFactor, FrequencyScaleFactor.id == AppliedEnergyCorrection.frequency_scale_factor_id)
+            .where(AppliedEnergyCorrection.source_calculation_id.in_(calc_ids))
+        ):
+            applied_scale[calc_id].add(kind.value)
         for c, g in session.execute(select(CalculationInputGeometry.calculation_id, CalculationInputGeometry.geometry_id).where(
                 CalculationInputGeometry.calculation_id.in_(calc_ids))):
             geometry[c]["input"].add(g)
-        for c, g in session.execute(select(CalculationOutputGeometry.calculation_id, CalculationOutputGeometry.geometry_id).where(
-                CalculationOutputGeometry.calculation_id.in_(calc_ids))):
+        for c, g, geometry_role in session.execute(
+            select(
+                CalculationOutputGeometry.calculation_id,
+                CalculationOutputGeometry.geometry_id,
+                CalculationOutputGeometry.role,
+            ).where(CalculationOutputGeometry.calculation_id.in_(calc_ids))
+        ):
             geometry[c]["output"].add(g)
+            if geometry_role is CalculationGeometryRole.final:
+                geometry[c]["final"].add(g)
     determinations: dict[int, set[int]] = defaultdict(set)
     if calc_ids:
         by_calc: dict[int, set[int]] = defaultdict(set)
@@ -129,12 +147,19 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
     per_statmech_curv: dict[int, int] = defaultdict(int)
     per_statmech_geoms: dict[int, set[int]] = defaultdict(set)
     per_statmech_rc: dict[int, bool] = {}
+    per_statmech_scale: dict[int, set[str]] = defaultdict(set)
     for sid, cid, ctype in links:
         if cid in curvature:
             per_statmech_curv[sid] += 1
         side = _GEOMETRY_SIDE.get(ctype.value)
         if side is not None:
-            per_statmech_geoms[sid] |= geometry[cid][side]
+            chosen = geometry[cid][side]
+            if side == "output" and geometry[cid]["final"]:
+                # Where the calculation declares which output is its final geometry, an initial or intermediate one
+                # is not an alternative to it.
+                chosen = geometry[cid]["final"]
+            per_statmech_geoms[sid] |= chosen
+        per_statmech_scale[sid] |= applied_scale.get(cid, set())
         if cid in designated:
             per_statmech_rc[sid] = per_statmech_rc.get(sid, False) or designated[cid]
         determinations[sid] |= by_calc.get(cid, set())
@@ -158,6 +183,7 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
             uses_projected_frequencies=r.uses_projected_frequencies,
             scale_factor_kind=scale_kind.get(r.frequency_scale_factor_id),
             has_scale_factor=r.frequency_scale_factor_id is not None,
+            applied_scale_kinds=frozenset(per_statmech_scale.get(r.id, ())),
             n_electronic_levels=int(levels.get(r.id, 0)),
             n_torsions=t.get("n", 0),
             n_torsions_without_kind=t.get("no_kind", 0),
@@ -189,7 +215,7 @@ def statmech_coverage_inventory(session: Session) -> dict[str, Any]:
         counts["unsupported_declaration_version"] = 0
         by_profile[profile] = counts
         gaps[profile] = dict(sorted(missing.items()))
-    owners = defaultdict(int)
+    owners: dict[str, int] = defaultdict(int)
     for f in facts.values():
         owners[f.owner_kind.value] += 1
     return {
@@ -198,7 +224,8 @@ def statmech_coverage_inventory(session: Session) -> dict[str, Any]:
         "by_profile": by_profile,
         "ambiguity_breakdown": gaps,
         "metadata": {
-            "with_scale_factor": sum(f.has_scale_factor for f in facts.values()),
+            "with_scale_factor_linked": sum(f.has_scale_factor for f in facts.values()),
+            "with_recorded_scale_application": sum(bool(f.applied_scale_kinds) for f in facts.values()),
             "with_electronic_levels": sum(f.n_electronic_levels > 0 for f in facts.values()),
             "with_optical_isomers": sum(f.optical_isomers is not None for f in facts.values()),
             "with_external_symmetry": sum(f.external_symmetry is not None for f in facts.values()),

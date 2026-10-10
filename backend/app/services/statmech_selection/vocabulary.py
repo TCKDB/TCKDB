@@ -69,6 +69,38 @@ COMPONENT_OBSERVABLE: dict[Task, Observable] = {
     Task.vibrational_component: Observable.vibrational_treatment,
     Task.zpe_component: Observable.zero_point_energy_interpretation,
 }
+#: Observables a recognised deferred task accepts (it may also state none). A pairing outside these is invalid.
+DEFERRED_TASK_OBSERVABLES: dict[DeferredTask, frozenset[Observable]] = {
+    DeferredTask.density_of_states: frozenset({Observable.density_of_states}),
+    DeferredTask.sum_of_states: frozenset({Observable.sum_of_states}),
+    DeferredTask.higher_order_ts_model: frozenset({Observable.transverse_partition}),
+    DeferredTask.prepared_population: frozenset({Observable.population}),
+    DeferredTask.trapped_population: frozenset({Observable.population}),
+    DeferredTask.thermochemical_formation: frozenset(
+        {Observable.enthalpy, Observable.gibbs_energy, Observable.formation_enthalpy}
+    ),
+    DeferredTask.numerical_evaluation: frozenset(
+        {
+            Observable.entropy,
+            Observable.heat_capacity,
+            Observable.enthalpy,
+            Observable.gibbs_energy,
+            Observable.helmholtz_energy,
+            Observable.internal_partition,
+            Observable.full_partition,
+        }
+    ),
+    DeferredTask.numerical_construction: frozenset(
+        {
+            Observable.entropy,
+            Observable.heat_capacity,
+            Observable.enthalpy,
+            Observable.gibbs_energy,
+            Observable.helmholtz_energy,
+            Observable.formation_enthalpy,
+        }
+    ),
+}
 #: Observables a supported task accepts.
 TASK_OBSERVABLES: dict[Task, frozenset[Observable]] = {
     Task.rotational_component: frozenset({Observable.rotational_characterization}),
