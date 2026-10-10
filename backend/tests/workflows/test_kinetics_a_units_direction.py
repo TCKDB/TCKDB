@@ -67,16 +67,43 @@ def test_units_of_the_wrong_side_are_refused(direction, a_units, word) -> None:
         KineticsUploadRequest.model_validate(_request(direction=direction, a_units=a_units))
 
 
-def test_unstated_direction_keeps_the_reactant_count_check() -> None:
-    """Direction not stated: the historical reactant-side check stands, nothing is loosened."""
-    ok = KineticsUploadRequest.model_validate(_request(direction=None, a_units="per_s"))
-    assert ok.direction is None
+@pytest.mark.parametrize("a_units", ["per_s", "cm3_mol_s"])
+def test_unstated_direction_accepts_units_of_either_side(a_units) -> None:
+    """H2 -> 2H states no direction: first order (reactant side) or second order (product side) is possible."""
+    request = KineticsUploadRequest.model_validate(_request(direction=None, a_units=a_units))
+    assert request.direction is None
+    assert request.a_units == ArrheniusAUnits(a_units)
+
+
+def test_unstated_direction_refuses_units_matching_neither_side_and_says_how_to_fix_it() -> None:
+    with pytest.raises(ValidationError) as raised:
+        KineticsUploadRequest.model_validate(_request(direction=None, a_units="cm6_mol2_s"))
+    message = str(raised.value)
+    assert "matches neither the reactant side (order 1) nor the product side (order 2)" in message
+    assert "State direction" in message
+    error = raised.value.errors()[0]["ctx"]["error"]
+    assert error.code == "arrhenius_a_units_molecularity_mismatch"
+    assert error.context["reactant_molecularity"] == 1 and error.context["product_molecularity"] == 2
+
+
+def test_unstated_direction_with_equal_sides_is_checked_as_before() -> None:
+    same = {"reactants": (_H2,), "products": (_H2,)}
+    KineticsUploadRequest.model_validate(_request(direction=None, a_units="per_s", **same))
     with pytest.raises(ValidationError, match="unimolecular"):
-        KineticsUploadRequest.model_validate(_request(direction=None, a_units="cm3_mol_s"))
+        KineticsUploadRequest.model_validate(_request(direction=None, a_units="cm3_mol_s", **same))
+
+
+def test_unstated_direction_and_third_body_shifts_both_sides() -> None:
+    """Simple +M: orders 2 (reactant side) and 3 (product side); first order is neither."""
+    for units in ("cm3_mol_s", "cm6_mol2_s"):
+        KineticsUploadRequest.model_validate(_request(direction=None, a_units=units, is_third_body=True))
+    with pytest.raises(ValidationError, match="matches neither"):
+        KineticsUploadRequest.model_validate(_request(direction=None, a_units="per_s", is_third_body=True))
 
 
 def test_net_rate_has_no_order_to_check() -> None:
-    for units in ("per_s", "cm3_mol_s"):
+    """A net rate folds both directions: no side's order applies, so even units matching neither side pass."""
+    for units in ("per_s", "cm3_mol_s", "cm6_mol2_s"):
         KineticsUploadRequest.model_validate(_request(direction="net", a_units=units))
 
 
@@ -100,6 +127,30 @@ def test_sibling_entries_follow_the_same_side() -> None:
     payload["direction"] = "forward"
     with pytest.raises(ValidationError, match=r"arrhenius_entries\[1\].a_units"):
         KineticsUploadRequest.model_validate(payload)
+
+
+def _plog(units: str, direction: str) -> dict:
+    payload = _request(direction=direction, a_units=None)
+    payload.pop("a")
+    payload["model_kind"] = "plog"
+    payload["plog_entries"] = [
+        {"entry_index": 1, "pressure_bar": 0.1, "a": 1.0e12, "a_units": units, "n": 0.0},
+        {"entry_index": 2, "pressure_bar": 1.0, "a": 2.0e12, "a_units": units, "n": 0.0},
+    ]
+    return payload
+
+
+def test_plog_entries_follow_the_side_the_direction_names() -> None:
+    KineticsUploadRequest.model_validate(_plog("cm3_mol_s", "reverse"))
+    KineticsUploadRequest.model_validate(_plog("per_s", "forward"))
+    with pytest.raises(ValidationError, match=r"plog_entries\[1\].a_units"):
+        KineticsUploadRequest.model_validate(_plog("per_s", "reverse"))
+    with pytest.raises(ValidationError, match=r"plog_entries\[1\].a_units"):
+        KineticsUploadRequest.model_validate(_plog("cm3_mol_s", "forward"))
+    # No direction: either side's order, and a PLOG entry of neither is refused naming its field.
+    KineticsUploadRequest.model_validate(_plog("cm3_mol_s", None))
+    with pytest.raises(ValidationError, match=r"plog_entries\[1\].a_units: .*matches neither"):
+        KineticsUploadRequest.model_validate(_plog("cm6_mol2_s", None))
 
 
 def test_falloff_low_pressure_units_are_one_order_above_the_side() -> None:

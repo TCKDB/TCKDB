@@ -118,7 +118,9 @@ def validate_a_units_for_molecularity(
     """Raise ValueError if a_units is incompatible with the reaction molecularity.
 
     :param a_units: The reported Arrhenius A units.
-    :param molecularity: Number of reactant molecules (1, 2, or 3).
+    :param molecularity: The effective order of the coefficient: the number of molecules on the side
+        it is a rate of (reactants for a forward rate, products for a reverse one), plus one for a
+        simple third body (1, 2, or 3).
     :raises ValueError: If the units do not match the expected order.
     """
     allowed = _A_UNITS_BY_ORDER.get(molecularity)
@@ -147,6 +149,49 @@ def validate_a_units_for_molecularity(
         )
 
 
+def validate_a_units_for_unstated_direction(
+    a_units: ArrheniusAUnits,
+    reactant_order: int,
+    product_order: int,
+) -> None:
+    """Raise if a_units matches neither side's order, for a record that states no direction (#695).
+
+    A forward coefficient is a rate of the reactants and a reverse one of the products, so a record
+    that says neither could be either. No direction is assumed: units of either side's order are
+    accepted and only units matching neither are refused. When the two orders are equal this is
+    exactly :func:`validate_a_units_for_molecularity`.
+
+    :param reactant_order: The effective order if the coefficient is the forward one.
+    :param product_order: The effective order if it is the reverse one.
+    :raises ValueError: ``arrhenius_a_units_molecularity_mismatch`` (or
+        ``unsupported_reaction_molecularity`` when neither order is 1..3).
+    """
+    if reactant_order == product_order:
+        validate_a_units_for_molecularity(a_units, reactant_order)
+        return
+    supported = [order for order in (reactant_order, product_order) if order in _A_UNITS_BY_ORDER]
+    if not supported:
+        validate_a_units_for_molecularity(a_units, reactant_order)  # raises the unsupported-order refusal
+        return
+    if any(a_units in _A_UNITS_BY_ORDER[order] for order in supported):
+        return
+    expected = sorted({unit.value for order in supported for unit in _A_UNITS_BY_ORDER[order]})
+    raise CodedValueError(
+        W_ARRHENIUS_A_UNITS_MISMATCH,
+        f"a_units '{a_units.value}' matches neither the reactant side (order {reactant_order}) nor the "
+        f"product side (order {product_order}) of this reaction, and the record states no direction. "
+        f"Expected one of: {expected}. State direction ('forward' or 'reverse') to have the units "
+        "checked against the side the coefficient is a rate of.",
+        context={
+            "a_units": a_units.value,
+            "reactant_molecularity": reactant_order,
+            "product_molecularity": product_order,
+            "expected": expected,
+        },
+        message_prefix=False,
+    )
+
+
 CHECK_ARRHENIUS_A_UNITS_MATCH_MOLECULARITY = ScientificCheck(
     group="Rate coefficients",
     sort_key=1,
@@ -173,13 +218,17 @@ CHECK_ARRHENIUS_A_UNITS_MATCH_MOLECULARITY = ScientificCheck(
             note=(
                 "Called from the kinetics upload schema, so it refuses at the "
                 "wire boundary. The order is not simply ``len(reactants)``: it "
-                "counts the side the coefficient is a rate of (products for a "
-                "reverse record; a ``net`` record is not checked); a "
-                "simple ``+M`` third-body reaction carries a ``[M]`` term on "
-                "the main line and validates one order higher, while a falloff "
-                "reaction's main line is the high-pressure limit k-infinity "
-                "and keeps ``len(reactants)``, its low-pressure limit k0 being "
-                "validated separately one order up."
+                "counts the side the coefficient is a rate of (reactants for a "
+                "forward record, products for a reverse one; a ``net`` record "
+                "is not checked). A record that states no direction is checked "
+                "against both sides and refused only when the units match "
+                "neither (``validate_a_units_for_unstated_direction``), so "
+                "no direction is assumed. A simple ``+M`` third-body reaction "
+                "carries a ``[M]`` term on the main line and validates one "
+                "order higher, while a falloff reaction's main line is the "
+                "high-pressure limit k-infinity, whose order is the side's "
+                "count, its low-pressure limit k0 being validated separately "
+                "one order up."
             ),
         ),
     ),
@@ -189,6 +238,9 @@ CHECK_ARRHENIUS_A_UNITS_MATCH_MOLECULARITY = ScientificCheck(
         "``is_third_body`` flag outright, because both already encode the full "
         "pressure dependence and the flag would otherwise inflate the expected "
         "order by one — rejecting a PLOG entry carrying the *correct* units "
-        "and accepting one carrying the units of the next order up."
+        "and accepting one carrying the units of the next order up. A record "
+        "whose sides differ in size and which states no direction is accepted "
+        "with units of either side's order; stating ``direction`` makes the "
+        "check exact."
     ),
 )

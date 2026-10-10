@@ -225,11 +225,13 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 ### 0.111.0 - 2026-10-11
 
 A kinetics record's Arrhenius A-units are held to the order of the side its coefficient is a rate of (#695): the products for
-a `reverse` record, the reactants for a `forward` one. A `net` record is not checked, and a record that states no
-direction keeps the reactant-side check. So the correct units of a reverse rate on a reaction with unequal sides (the
-reverse of H2 -> 2H is bimolecular) are accepted, and the units of the wrong side are refused. This covers the main line,
-every `multi_arrhenius` and PLOG entry, and `falloff.low_a_units` (one order above the side). No upload model gained or
-lost a field.
+a `reverse` record, the reactants for a `forward` one. A `net` record is not checked. A record that states no direction
+could be either, and none is assumed: units matching EITHER side's order are accepted, units matching neither are refused
+(`arrhenius_a_units_molecularity_mismatch`, whose message names both orders and asks for `direction`), and when the two
+sides are the same size the check is unchanged. So the correct units of a reverse rate on a reaction with unequal sides
+(the reverse of H2 -> 2H is bimolecular) are accepted, and the units of the wrong side are refused once `direction` is
+stated. This covers the main line, every `multi_arrhenius` and PLOG entry, and `falloff.low_a_units` (one order above the
+side). No upload model gained or lost a field.
 
 ### 0.108.1 - 2026-10-10
 
@@ -2219,7 +2221,7 @@ Nested models (25; fields and rules in the [model reference](#model-reference)):
   Both parameterizations already carry the full pressure dependence, so
   CHEMKIN does not admit a ``+M`` third-body designation on them.
   Accepting the flag was not merely cosmetic: it made
-  :meth:`_main_line_molecularity` raise the expected A-unit order by
+  :meth:`_main_line_molecularities` raise the expected A-unit order by
   one, so a PLOG entry carrying the CORRECT units for its molecularity
   was rejected while one carrying the units of the next order up was
   accepted.
@@ -2228,7 +2230,7 @@ Nested models (25; fields and rules in the [model reference](#model-reference)):
   wins: validators run in definition order, and the inflated-order unit
   error would otherwise mask the real cause.
 
-- **KineticsUploadRequest.validate_a_units_vs_molecularity** (model, after; can refuse via `validate_a_units_for_molecularity`): applies `validate_a_units_for_molecularity`: Raise ValueError if a_units is incompatible with the reaction molecularity.
+- **KineticsUploadRequest.validate_a_units_vs_molecularity** (model, after; can refuse via `validate_a_units_for_molecularity`): applies `_validate_a_units_orders`: One order (the side the direction names), or ``(reactant_order, product_order)`` when it names none.
 - **KineticsUploadRequest.validate_arrhenius_entries_a_units** (model, after; can refuse via `_validate_a_units_named`):
 
   Every summed ``multi_arrhenius`` term is the SAME reaction rate, so
@@ -2243,7 +2245,8 @@ Nested models (25; fields and rules in the [model reference](#model-reference)):
 
   The low-pressure-limit k0 Arrhenius is by definition one order higher
   than k∞, so ``falloff.low_a_units`` validates one order above the
-  coefficient's side (reactants forward, products reverse) regardless of ``is_third_body`` (DR-0032 Part B).
+  coefficient's side (reactants forward, products reverse, either when
+  no direction is stated) regardless of ``is_third_body`` (DR-0032 Part B).
 
 - **KineticsUploadRequest.validate_model_scientific_content** (model, after; can refuse): A fit must carry parameters for the declared functional form.
 - **KineticsUploadRequest.default_tunneling_model_from_application** (model, before): Fill the label from the evidence block at parse time (shared body).
@@ -9084,9 +9087,9 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/chemistry/units.py`.
 - The body's `context` names the things involved.
-- Message: "a_units '{a_units.value}' is incompatible with {order_label[molecularity]} reaction (molecularity={molecularity}). Expected one of: {allowed_names}."
+- Message: "a_units '{a_units.value}' matches neither the reactant side (order {reactant_order}) nor the product side (order {product_order}) of this reaction, and the record states no direction. Expected one of: {expected}. State direction ('forward' or 'reverse') to have the units checked against the side the coefficient is a rate of."
 - Scientific check (block): An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
-- If your chemistry is legitimate: None, and the refinements are the reason it can block without firing on correct science: PLOG and Chebyshev are refused the ``is_third_body`` flag outright, because both already encode the full pressure dependence and the flag would otherwise inflate the expected order by one — rejecting a PLOG entry carrying the *correct* units and accepting one carrying the units of the next order up.
+- If your chemistry is legitimate: None, and the refinements are the reason it can block without firing on correct science: PLOG and Chebyshev are refused the ``is_third_body`` flag outright, because both already encode the full pressure dependence and the flag would otherwise inflate the expected order by one — rejecting a PLOG entry carrying the *correct* units and accepting one carrying the units of the next order up. A record whose sides differ in size and which states no direction is accepted with units of either side's order; stating ``direction`` makes the check exact.
 
 <a id="c-artifact-integrity-failed"></a>
 
