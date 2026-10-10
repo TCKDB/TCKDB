@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from tckdb_schemas.workflows.transition_state_upload import TSReactionUpload
 
+from app.db.models.common import UploadJobKind
 from app.schemas.fragments.refs import collect_ref_warnings
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
@@ -148,3 +149,26 @@ def computed_reaction_request_warnings(request: ComputedReactionUploadRequest) -
         *computed_reaction_linearity_warnings(request),
         *collect_ref_warnings(request),
     ]
+
+
+_BY_JOB_KIND = {
+    UploadJobKind.computed_reaction: computed_reaction_request_warnings,
+    UploadJobKind.conformer: conformer_request_warnings,
+    UploadJobKind.reaction: reaction_request_warnings,
+    UploadJobKind.kinetics: kinetics_request_warnings,
+    UploadJobKind.network: network_request_warnings,
+    UploadJobKind.network_pdep: network_pdep_request_warnings,
+    UploadJobKind.thermo: thermo_request_warnings,
+    UploadJobKind.transition_state: transition_state_request_warnings,
+    UploadJobKind.transport: transport_request_warnings,
+}
+
+
+def request_warnings_for_job_kind(kind: UploadJobKind, request) -> list[UploadWarning]:
+    """The request-derived warnings for ``request`` of job ``kind``.
+
+    The enqueue route calls this on the request the depositor sent, before it is
+    re-dumped into the job payload, so a warning about a field the parse rewrote
+    (a banner software version) is still earned (#670).
+    """
+    return _BY_JOB_KIND[kind](request)
