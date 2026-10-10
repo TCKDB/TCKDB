@@ -29,6 +29,8 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from app.chemistry.manifest_attestation import attest
+
 MANIFEST_PATH = Path(__file__).with_name("structure_rule_candidates.yaml")
 
 #: The objectives a structure rule may compare on (the request's ``Objective`` values).
@@ -223,7 +225,7 @@ def parse_structure_rule_manifest_bytes(data: bytes, *, expected_sha256: str | N
         raise ManifestError(
             f"structure rule manifest content does not match its pinned digest (expected {expected_sha256}, got {actual})"
         )
-    return dataclasses.replace(parse_structure_rule_manifest(yaml.safe_load(data)), sha256=actual)
+    return attest(dataclasses.replace(parse_structure_rule_manifest(yaml.safe_load(data)), sha256=actual))
 
 
 def load_structure_rule_manifest(*, expected_sha256: str) -> StructureRuleManifest:

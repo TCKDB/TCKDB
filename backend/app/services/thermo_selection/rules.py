@@ -19,10 +19,12 @@ from abc import ABC, abstractmethod
 from functools import lru_cache
 from typing import Any
 
+from app.chemistry.manifest_attestation import is_attested
 from app.chemistry.thermo_rules.e1_manifest import (
     MATCH_CONNECTIVITY_AND_FORMULA,
     E1Manifest,
     E1Member,
+    ManifestError,
     load_e1_manifest,
 )
 from app.services.thermo_selection.models import QUANTITY, NormalizedCandidate, RuleMatch, Subject, Tri
@@ -160,7 +162,16 @@ class E1Rule(PreferenceRule):
     )
 
     def __init__(self, manifest: E1Manifest | None = None) -> None:
-        self._manifest = manifest or load_e1_manifest(expected_sha256=E1_MANIFEST_SHA256)
+        if manifest is None:
+            manifest = load_e1_manifest(expected_sha256=E1_MANIFEST_SHA256)
+        elif manifest.sha256 != E1_MANIFEST_SHA256:
+            raise ManifestError(
+                f"E1 manifest content does not match its pinned digest (expected {E1_MANIFEST_SHA256}, got {manifest.sha256})"
+            )
+        elif not is_attested(manifest):
+            # The digest field survives dataclasses.replace; what the manifest holds does not have to.
+            raise ManifestError("E1 manifest is not what the pinned file parses to: its content was edited after loading")
+        self._manifest = manifest
 
     @property
     def manifest(self) -> E1Manifest:

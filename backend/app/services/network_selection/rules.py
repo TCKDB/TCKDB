@@ -36,6 +36,7 @@ from typing import Any
 
 from tckdb_schemas.network_declarations import NetworkComparisonObjective
 
+from app.chemistry.manifest_attestation import is_attested
 from app.chemistry.network_rules.manifest import (
     NetworkRuleManifest,
     RuleCandidate,
@@ -247,6 +248,11 @@ class AuditedNetworkRule(NetworkRule):
             raise ValueError(
                 f"the manifest handed to rule {name} is not the pinned one "
                 f"(expected {NETWORK_RULE_MANIFEST_SHA256}, got {manifest.sha256})"
+            )
+        if not is_attested(manifest):
+            # The digest field survives dataclasses.replace, so it proves nothing about the content in hand.
+            raise ValueError(
+                f"the manifest handed to rule {name} is not what the pinned file parses to: its content was edited after loading"
             )
         if candidate not in manifest.candidates:
             raise ValueError(f"rule {name} is not an entry of the manifest it was built with")

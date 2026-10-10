@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
+from app.chemistry.manifest_attestation import is_attested
 from app.chemistry.structure_rules.manifest import (
     RuleCandidate,
     StructureRuleManifest,
@@ -213,6 +214,11 @@ class AuditedStructureRule(StructureRule):
             raise ValueError(
                 f"the manifest handed to rule {name} is not the pinned one "
                 f"(expected {STRUCTURE_RULE_MANIFEST_SHA256}, got {manifest.sha256})"
+            )
+        if not is_attested(manifest):
+            # The digest field survives dataclasses.replace, so it proves nothing about the content in hand.
+            raise ValueError(
+                f"the manifest handed to rule {name} is not what the pinned file parses to: its content was edited after loading"
             )
         if candidate not in manifest.candidates:
             raise ValueError(f"rule {name} is not an entry of the manifest it was built with")
