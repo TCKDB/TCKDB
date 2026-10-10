@@ -164,11 +164,13 @@ class E1Rule(PreferenceRule):
     def __init__(self, manifest: E1Manifest | None = None) -> None:
         if manifest is None:
             manifest = load_e1_manifest(expected_sha256=E1_MANIFEST_SHA256)
-        elif manifest.sha256 != E1_MANIFEST_SHA256:
+        # The checks run for the loaded default too: the loader is cached, and its object holds dicts that can be
+        # changed in place. They run here, at construction; a manifest changed after the rule exists is not detected.
+        if manifest.sha256 != E1_MANIFEST_SHA256:
             raise ManifestError(
                 f"E1 manifest content does not match its pinned digest (expected {E1_MANIFEST_SHA256}, got {manifest.sha256})"
             )
-        elif not is_attested(manifest):
+        if not is_attested(manifest):
             # The digest field survives dataclasses.replace; what the manifest holds does not have to.
             raise ManifestError("E1 manifest is not what the pinned file parses to: its content was edited after loading")
         self._manifest = manifest

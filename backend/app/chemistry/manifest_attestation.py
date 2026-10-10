@@ -12,6 +12,10 @@ manifest's whole content (every field except ``sha256`` itself, nested entries i
 that digest from the object it is given, so a manifest edited in any field, however it was edited, no longer matches
 and a rule refuses it. A manifest built from a parsed document alone has no byte digest and is never attested.
 
+The check runs when a rule is constructed, including the no-argument form over the cached default manifest (the production
+path), so a cached manifest whose nested dicts were changed in place is refused at the next construction. A manifest changed
+*after* its rule exists is not detected.
+
 This is a guard against an edited copy, not against code that calls :func:`attest` itself; nothing outside the four
 bytes parsers does. Moving a pin to the digest of edited bytes (a real approval is a new manifest and a new pin) still
 works, because the parser attests whatever bytes it was given and the rule then checks the pin.

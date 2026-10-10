@@ -172,3 +172,44 @@ def test_moving_the_pin_to_edited_bytes_is_still_how_an_approval_arrives(monkeyp
     monkeypatch.setattr(kinetics_rules, "XYG3_MANIFEST_SHA256", digest)
     manifest = xyg3_module.parse_xyg3_barrier_manifest_bytes(data, expected_sha256=digest)
     assert kinetics_rules.XYG3B3LYPBarrierRule(manifest).status == kinetics_rules.RULE_ACTIVE
+
+
+_PIN_FOR = {
+    e1_module.load_e1_manifest: thermo_rules.E1_MANIFEST_SHA256,
+    xyg3_module.load_xyg3_barrier_manifest: kinetics_rules.XYG3_MANIFEST_SHA256,
+}
+
+
+@pytest.mark.parametrize(
+    ("loader", "build", "tamper", "default_rules"),
+    [
+        (
+            e1_module.load_e1_manifest,
+            lambda: thermo_rules.E1Rule(),
+            lambda m: m.recipe_facts.__setitem__("standard_G4", "TAMPERED"),
+            thermo_rules.default_rules,
+        ),
+        (
+            xyg3_module.load_xyg3_barrier_manifest,
+            lambda: kinetics_rules.XYG3B3LYPBarrierRule(),
+            lambda m: m.protocol_facts.__setitem__("xyg3", "TAMPERED"),
+            kinetics_rules.default_rules,
+        ),
+    ],
+    ids=["E1", "XYG3"],
+)
+def test_the_no_argument_rule_refuses_a_cached_default_manifest_changed_in_place(loader, build, tamper, default_rules):
+    """``E1Rule()`` / ``XYG3B3LYPBarrierRule()`` is the production path (``default_rules``): it is checked too."""
+    loader.cache_clear()
+    default_rules.cache_clear()
+    try:
+        build()  # untampered: accepted, and this fills the cache with the shared object
+        tamper(loader(expected_sha256=_PIN_FOR[loader]))
+        with pytest.raises(ValueError, match="pinned"):
+            build()
+        with pytest.raises(ValueError, match="pinned"):
+            default_rules()
+    finally:
+        loader.cache_clear()  # drop the tampered shared object so no other test sees it
+        default_rules.cache_clear()
+    assert build() is not None
