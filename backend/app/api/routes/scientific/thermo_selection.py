@@ -13,6 +13,9 @@ The response is built from public refs only and is returned directly, not throug
 internal-id stripper that other scientific routes use: that stripper drops every key ending in
 ``_id``, which would delete the rule registry key (``rule_id``, e.g. ``E1``) from the decision.
 A test asserts instead that no database id appears anywhere in either document.
+
+The session is a read-only REPEATABLE READ snapshot opened **before** the route body runs (``get_snapshot_db``), so
+resolving the entry and conformer-group refs and the selection itself read one consistent state.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_snapshot_db
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.schemas.reads.scientific_thermo_selection import (
     ThermoSelectionManifest,
@@ -63,7 +66,7 @@ def select_species_thermo(
     request: Request,
     body: ThermoSelectionRequest,
     species_entry_ref: str = Path(..., min_length=1, max_length=64),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_snapshot_db),
 ) -> ThermoSelectionResponse:
     """Assess every visible thermo record of the entry for H298 and say which, if any, to use.
 
@@ -96,7 +99,7 @@ def select_species_thermo_manifest(
     request: Request,
     body: ThermoSelectionRequest,
     species_entry_ref: str = Path(..., min_length=1, max_length=64),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_snapshot_db),
 ) -> JSONResponse:
     """The same request as ``/thermo/select``, answered with the decision manifest as a download.
 

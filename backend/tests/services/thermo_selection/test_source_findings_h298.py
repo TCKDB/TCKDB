@@ -73,7 +73,7 @@ class Bench:
     def run(self):
         self.session.flush()
         self.session.expire_all()
-        return select_h298(self.session, species_entry_id=self.entry.id, request=EQUILIBRIUM)
+        return select_h298(self.session, species_entry_id=self.entry.id, request=EQUILIBRIUM, require_snapshot=False)
 
 
 @pytest.fixture

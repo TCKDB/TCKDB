@@ -52,7 +52,7 @@ def _source(session, entry, thermo, *, role=ThermoCalculationRole.opt, geometry=
 def _run(session, entry):
     session.flush()
     session.expire_all()
-    return select_h298(session, species_entry_id=entry.id, request=EQUILIBRIUM)
+    return select_h298(session, species_entry_id=entry.id, request=EQUILIBRIUM, require_snapshot=False)
 
 
 def _blocking(result, thermo):

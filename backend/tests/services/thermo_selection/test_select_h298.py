@@ -57,6 +57,7 @@ def methane(db_session):
 
 
 def run(session, entry, request=EQUILIBRIUM, **kw):
+    kw.setdefault("require_snapshot", False)  # the harness holds one outer transaction
     return select_h298(session, species_entry_id=entry.id, request=request, **kw)
 
 
@@ -203,7 +204,7 @@ def test_an_entry_with_no_thermo_is_no_applicable_candidate(db_session, methane)
 
 def test_an_unknown_entry_is_not_found(db_session):
     with pytest.raises(NotFoundError):
-        select_h298(db_session, species_entry_id=-1, request=EQUILIBRIUM)
+        select_h298(db_session, species_entry_id=-1, request=EQUILIBRIUM, require_snapshot=False)
 
 
 # -- review floors ---------------------------------------------------------------------------------------
