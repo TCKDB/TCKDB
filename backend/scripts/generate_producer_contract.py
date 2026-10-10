@@ -592,6 +592,11 @@ def model_closure(root: type[BaseModel]) -> list[type[BaseModel]]:
         if model in order:
             continue
         order.append(model)
+        if not model.__pydantic_complete__:
+            # A field typed by a forward reference ("SchemeAtomParamPayload") keeps the
+            # unresolved string as its annotation until something first validates the
+            # model. Resolve it here so the closure never depends on what ran before (#717).
+            model.model_rebuild()
         for field in model.model_fields.values():
             queue.extend(sub for sub in _nested_models(field.annotation) if sub not in order)
     return order
