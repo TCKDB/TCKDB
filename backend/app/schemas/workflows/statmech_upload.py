@@ -29,6 +29,7 @@ from tckdb_schemas.statmech_bits import (
     StatmechSourceCalcIn,
     StatmechTorsionIn,
 )
+from tckdb_schemas.statmech_declarations import StatmechModelDeclaration, assert_model_pin_keys_declared
 
 from app.db.models.common import (
     RigidRotorKind,
@@ -289,6 +290,15 @@ class StatmechUploadRequest(SchemaBase):
 
     energy_level_of_theory: LevelOfTheoryRef | None = None
 
+    model_declaration: StatmechModelDeclaration | None = Field(
+        default=None,
+        description=(
+            "The statistical model this record supplies: scope, attribution, recipe, ensemble members and the "
+            "sources each part rests on. Optional; a record deposited without one is read as it is, and nothing "
+            "is inferred from the other fields."
+        ),
+    )
+
     @model_validator(mode="after")
     def normalize_text_fields(self) -> Self:
         self.point_group = normalize_optional_text(self.point_group)
@@ -309,6 +319,7 @@ class StatmechUploadRequest(SchemaBase):
         keys = [c.key for c in self.calculations]
         if len(set(keys)) != len(keys):
             raise ValueError("Statmech calculations must have unique keys.")
+        assert_model_pin_keys_declared(self.model_declaration, set(keys))
         return self
 
     def stationary_point_findings(self) -> list[StationaryPointFinding]:

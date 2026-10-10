@@ -72,6 +72,7 @@ from app.services.energy_correction_resolution import resolve_or_create_freq_sca
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.software_resolution import resolve_software_release_ref
+from app.services.statmech_declaration_resolution import persist_statmech_model_declaration
 from app.services.upload_reference import (
     W_UNKNOWN_CALCULATION_REF,
     unknown_reference,
@@ -344,6 +345,7 @@ def resolve_or_create_statmech(
     calculations_by_key: Mapping[str, int] | None = None,
     created_by: int | None = None,
     warnings_out: list[UploadWarning] | None = None,
+    own_conformer_group_id: int | None = None,
 ) -> Statmech:
     """Create a statmech record and attach nested provenance.
 
@@ -369,7 +371,9 @@ def resolve_or_create_statmech(
         whenever the payload carries ``source_calculations`` or a torsion
         ``source_scan_calculation_key``.
     :param created_by: Optional application user id for newly created rows.
-    :returns: Newly created ``Statmech`` row with linked sources/torsions.
+    :param own_conformer_group_id: The conformer group a conformer deposit is about; a declared ``basin`` scope that
+        names no ``conformer_group_ref`` means this one.
+    :returns: Newly created ``Statmech`` row with linked sources/torsions (and its declared model, when stated).
     :raises ValueError: If ``uploaded_calculation_role`` is set but
         ``uploaded_calculation_id`` is not supplied.
     :raises CodedValueError: If a local calculation key does not resolve,
@@ -625,6 +629,15 @@ def resolve_or_create_statmech(
             )
 
     session.flush()
+    persist_statmech_model_declaration(
+        session,
+        statmech,
+        getattr(payload, "model_declaration", None),
+        calculations_by_key=key_map,
+        own_conformer_group_id=own_conformer_group_id,
+        created_by=created_by,
+        warnings_out=warnings_out,
+    )
     return statmech
 
 

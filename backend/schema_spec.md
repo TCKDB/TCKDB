@@ -2330,3 +2330,49 @@ Released transition-state entries ship their determinations, sources and the fin
 (`RECORD_VALUE_TABLES`; the two digests are omitted because they are over this database's row ids). The three tables
 are in the archive registry. Not yet released as selectable types: standalone calculations and conformer groups
 (unchanged). Downgrade drops the tables, the constraints, the column and the enums, and prints what it forgets.
+
+## Declared statistical models (2026-10-11)
+
+A statmech row is an interpretation container. A declaration says which model the container supplies. Revision
+`e6b3a9d1f742` (additive; nothing backfilled). Wire contract: `tckdb_schemas.statmech_declarations` (version 1).
+
+### `statmech_model_declaration` (public ref prefix `smd`)
+
+- At most one per statmech record (`uq_statmech_model_declaration_statmech_id`). A record deposited without one declares no
+  model; nothing is inferred from its other columns.
+- `scope_kind` (`statmech_model_scope_kind`): `atom`, `basin`, `explicit_equilibrium_ensemble`, `ts_determination`.
+  `conformer_group_id` is set exactly for `basin` and `structure_determination_id` exactly for `ts_determination`
+  (`scope_matches_pointers`). A basin is a conformer group of the record's own species entry; a ts determination is a
+  saddle determination of the record's own transition-state entry; a transition-state record takes only the latter
+  (`tckdb_statmech_model_declaration_guard`).
+- Attribution is required and separate from the statmech row's (`attribution_required`: `literature_id` or
+  `workflow_tool_release_id`). `recipe` (JSONB object, `ModelRecipe` as made, unset fields left out) holds the energy
+  zero, scale application and its contributions, vibrational scheme, projected and excluded modes, rotors and the modes they
+  replace, and which symmetry, optical and electronic factors are already counted. `content_hash` is a recomputable sha256
+  over the declaration, members and sources by public ref (a checksum, not an identity).
+
+### `statmech_model_member`
+
+- One member of an explicit equilibrium ensemble: another statmech record of the same species entry, never the declaring
+  record (`tckdb_statmech_model_member_guard`). Unique per declaration on `member_key`, on the member record and on the
+  basin, so a repeated observation is evidence and never another state.
+- `counting_multiplicity` is the depositor's attributed multiplicity; NULL is "not stated", never one.
+  `relative_energy_kj_mol` is finite. `region_key` names the configurational region it covers.
+
+### `statmech_model_source`
+
+- What one part of the model rests on, by `role` (`statmech_model_source_role`): exactly one of a calculation (optionally the
+  one geometry its result describes, which the calculation must have run on or produced), imported literature parameters or a
+  frequency scale factor (`exactly_one_locator`; the `scale_factor` role takes only the latter). A source calculation belongs
+  to the declaring record's subject (`tckdb_statmech_model_source_guard`). `member_key` scopes it to a member of the same
+  declaration (composite foreign key).
+
+### Lifecycle
+
+The declaration, its members and its sources are scientific content of the declaring statmech record: the accepted-science
+triggers (`tckdb_guard_accepted_child` / `_via_child`) freeze them with it, and TRUNCATE is refused. Approving a record that is
+only cited as a member does not freeze the ensemble that cites it. Correcting a declared model means a new, superseding statmech
+record. The reproducibility snapshot of a record gains its declaration only when it has one, so no stored assessment of an
+existing record goes stale. Archives carry the three tables; a release ships them under the statmech record (members cited by
+ref, the calculations they rest on listed as provenance).
+

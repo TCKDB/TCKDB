@@ -44,6 +44,7 @@ from tests.services.scientific_read._factories import (
 _MIGRATION = (
     Path(__file__).resolve().parents[2] / "alembic/versions/d3a8f6c1b952_declare_structure_determination.py"
 )
+_LATER = Path(__file__).resolve().parents[2] / "alembic/versions/e6b3a9d1f742_declare_statmech_models.py"
 TABLES = ("structure_determination", "structure_determination_source", "structure_evidence_finding")
 ENUMS = (
     "structure_determination_target_kind",
@@ -61,11 +62,15 @@ def migration(db_session, monkeypatch):
     spec = spec_from_file_location("structure_determination_migration", _MIGRATION)
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
-    monkeypatch.setattr(
-        module,
-        "op",
-        Operations(MigrationContext.configure(db_session.connection(), opts={"target_metadata": Base.metadata})),
-    )
+    operations = Operations(MigrationContext.configure(db_session.connection(), opts={"target_metadata": Base.metadata}))
+    monkeypatch.setattr(module, "op", operations)
+    # A later revision (declared statmech models) holds foreign keys into these tables, so this revision can only be
+    # taken down after it; the fixture's rollback puts it back.
+    later_spec = spec_from_file_location("statmech_model_migration_later", _LATER)
+    later = module_from_spec(later_spec)
+    later_spec.loader.exec_module(later)
+    monkeypatch.setattr(later, "op", operations)
+    later.downgrade()
     return module
 
 

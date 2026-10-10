@@ -2418,6 +2418,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("statmech_torsion_scan_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
             shape=Shape.relationship),
+    ApiCode("statmech_model_declaration_invalid", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/statmech_declarations.py"),
+    ApiCode("statmech_model_declaration_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/statmech_declaration_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "context.reason names owner, scope, basin, determination, member_owner, source_owner, "
+                "source_geometry or source_type."
+            )),
+    ApiCode("statmech_model_declaration_version_unsupported", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/statmech_declarations.py"),
     ApiCode("structure_selection_evidence_too_large", 422, Surface.coded_exception,
             "backend/app/services/structure_selection/bounds.py",
             shape=Shape.relationship,
@@ -2852,6 +2863,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "code that differed by spelling would have rebuilt one "
                 "field down what #195 removed from the status."
             )),
+    ApiCode("unknown_structure_determination_ref", 404, Surface.coded_exception,
+            "backend/app/services/statmech_declaration_resolution.py"),
     ApiCode("unknown_transition_state_entry_ref", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py",
             note=(

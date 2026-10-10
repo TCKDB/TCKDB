@@ -57,6 +57,8 @@ ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.KineticsRepresentationRole, wire_enums.KineticsRepresentationRole),
     (db_enums.KineticsDeterminationTargetKind, wire_enums.KineticsDeterminationTargetKind),
     (db_enums.KineticsEnsemblePolicy, wire_enums.KineticsEnsemblePolicy),
+    (db_enums.StatmechModelScopeKind, wire_enums.StatmechModelScopeKind),
+    (db_enums.StatmechModelSourceRole, wire_enums.StatmechModelSourceRole),
     (db_enums.StructureDeterminationTargetKind, wire_enums.StructureDeterminationTargetKind),
     (db_enums.StructureDeterminationQuantity, wire_enums.StructureDeterminationQuantity),
     (db_enums.StructureSourceRole, wire_enums.StructureSourceRole),

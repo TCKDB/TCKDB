@@ -219,6 +219,7 @@ def persist_conformer_upload(
             calculations_by_key=calculations_by_key,
             created_by=created_by,
             warnings_out=provenance_warnings,
+            own_conformer_group_id=observation.conformer_group_id,
         )
 
     transport_row = None

@@ -294,6 +294,9 @@ class RejectionCode(str, Enum):
     STATMECH_ENERGY_LEVEL_CONTRADICTION = "statmech_energy_level_contradiction"
     STATMECH_ENERGY_LEVEL_REQUIRES_SP = "statmech_energy_level_requires_sp"
     STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED = "statmech_energy_sp_and_composite_linked"
+    STATMECH_MODEL_DECLARATION_INVALID = "statmech_model_declaration_invalid"
+    STATMECH_MODEL_DECLARATION_MISMATCH = "statmech_model_declaration_mismatch"
+    STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED = "statmech_model_declaration_version_unsupported"
     STATMECH_ROLE_DUPLICATE = "statmech_role_duplicate"
     STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = "statmech_source_calculation_owner_mismatch"
     STATMECH_SOURCE_ROLE_TYPE_MISMATCH = "statmech_source_role_type_mismatch"
@@ -367,6 +370,7 @@ class RejectionCode(str, Enum):
     UNKNOWN_RELEASE_ARTIFACT = "unknown_release_artifact"
     UNKNOWN_SELECTION = "unknown_selection"
     UNKNOWN_STATMECH_REF = "unknown_statmech_ref"
+    UNKNOWN_STRUCTURE_DETERMINATION_REF = "unknown_structure_determination_ref"
     UNKNOWN_STRUCTURE_MEMBER_REF = "unknown_structure_member_ref"
     UNKNOWN_TRANSITION_STATE_ENTRY_REF = "unknown_transition_state_entry_ref"
     UNSAFE_LOWEST_ENERGY_COMPARISON = "unsafe_lowest_energy_comparison"
@@ -562,6 +566,9 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STATMECH_ENERGY_LEVEL_CONTRADICTION,
         RejectionCode.STATMECH_ENERGY_LEVEL_REQUIRES_SP,
         RejectionCode.STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED,
+        RejectionCode.STATMECH_MODEL_DECLARATION_INVALID,
+        RejectionCode.STATMECH_MODEL_DECLARATION_MISMATCH,
+        RejectionCode.STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED,
         RejectionCode.STATMECH_ROLE_DUPLICATE,
         RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH,
@@ -884,6 +891,9 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STATMECH_ENERGY_LEVEL_CONTRADICTION: frozenset({422}),
     RejectionCode.STATMECH_ENERGY_LEVEL_REQUIRES_SP: frozenset({422}),
     RejectionCode.STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED: frozenset({422}),
+    RejectionCode.STATMECH_MODEL_DECLARATION_INVALID: frozenset({422}),
+    RejectionCode.STATMECH_MODEL_DECLARATION_MISMATCH: frozenset({422}),
+    RejectionCode.STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.STATMECH_ROLE_DUPLICATE: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),
@@ -957,6 +967,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNKNOWN_RELEASE_ARTIFACT: frozenset({404}),
     RejectionCode.UNKNOWN_SELECTION: frozenset({404}),
     RejectionCode.UNKNOWN_STATMECH_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_STRUCTURE_DETERMINATION_REF: frozenset({404}),
     RejectionCode.UNKNOWN_STRUCTURE_MEMBER_REF: frozenset({404}),
     RejectionCode.UNKNOWN_TRANSITION_STATE_ENTRY_REF: frozenset({404}),
     RejectionCode.UNSAFE_LOWEST_ENERGY_COMPARISON: frozenset({422}),

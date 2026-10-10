@@ -133,6 +133,7 @@ from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
 from app.services.species_resolution import resolve_species_entry
+from app.services.statmech_declaration_resolution import persist_statmech_model_declaration
 from app.services.statmech_resolution import (
     assert_statmech_role_compatible,
     collect_frequency_scale_factor_software_mismatch_warnings,
@@ -1248,6 +1249,7 @@ def _persist_statmech_block(
     subject_xyz_texts: Sequence[str] = (),
     subject_smiles: str | None = None,
     content_warning_field: str = "statmech",
+    defer_model_declaration: bool = False,
 ) -> Statmech | None:
     """Persist an optional statmech block for exactly one species or TS subject.
 
@@ -1481,6 +1483,16 @@ def _persist_statmech_block(
                 )
 
     session.flush()
+
+    if not defer_model_declaration:
+        persist_statmech_model_declaration(
+            session,
+            statmech,
+            s.model_declaration,
+            calculations_by_key=calc_keys_to_id,
+            created_by=created_by,
+            warnings_out=warnings,
+        )
 
     if warnings is not None:
         warnings.extend(

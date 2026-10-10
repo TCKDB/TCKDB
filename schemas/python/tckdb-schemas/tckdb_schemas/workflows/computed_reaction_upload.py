@@ -115,6 +115,11 @@ from tckdb_schemas.stationary_point import (
     evaluate_species_entry_frequency,
     raise_for_blocking_findings,
 )
+from tckdb_schemas.statmech_declarations import (
+    StatmechModelDeclaration,
+    assert_model_determination_key_declared,
+    assert_model_pin_keys_declared,
+)
 from tckdb_schemas.statmech_bits import StatmechTorsionCoordinateIn
 from tckdb_schemas.structure_declarations import (
     StructureDeterminationDeclaration,
@@ -631,6 +636,14 @@ class BundleStatmechIn(SchemaBase):
     # for the exact rule. Stored as declared once it passes, and read back as
     # ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
+    model_declaration: StatmechModelDeclaration | None = Field(
+        default=None,
+        description=(
+            "The statistical model this record supplies: scope, attribution, recipe, ensemble members and the "
+            "sources each part rests on. Optional; a record deposited without one is read as it is, and nothing "
+            "is inferred from the other fields."
+        ),
+    )
     note: str | None = None
 
     @model_validator(mode="after")
@@ -1231,6 +1244,14 @@ class BundleTransitionStateIn(SchemaBase):
                     f"source_scan_calculation_key '{scan_key}' must reference "
                     "a scan-type calculation."
                 )
+        assert_model_pin_keys_declared(
+            self.statmech.model_declaration, set(own_types), field="transition_state.statmech.model_declaration"
+        )
+        assert_model_determination_key_declared(
+            self.statmech.model_declaration,
+            {d.key for d in self.structure_determinations},
+            field="transition_state.statmech.model_declaration",
+        )
         return self
 
 
@@ -2117,6 +2138,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         key=msc.calculation_key,
                         declared=all_calc_keys,
                     )
+            assert_model_pin_keys_declared(sp.statmech.model_declaration, set(all_calc_keys))
             for i, t in enumerate(sp.statmech.torsions):
                 key = t.source_scan_calculation_key
                 if key is None:
