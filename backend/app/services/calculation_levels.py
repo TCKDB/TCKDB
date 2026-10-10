@@ -533,10 +533,43 @@ def _rigid_motion_tolerance(decimals_a: int, decimals_b: int) -> float:
     return math.sqrt(3.0) / 2.0 * (10.0 ** -decimals_a + 10.0 ** -decimals_b)
 
 
+#: Slack on the radius-of-gyration prefilter, far above the float error of a sum of squares over
+#: a few hundred coordinates (about 1e-14) and far below any tolerance that matters.
+_GYRATION_SLACK = 1e-9
+
+#: Work units charged to the record's :class:`SearchBudget` for one same-order Kabsch comparison, per
+#: atom: the two coordinate arrays, their centred copies, the 3x3 covariance products and the
+#: residual, about 30 array elements per atom (the unit :class:`SearchBudget` counts in).
+_KABSCH_UNITS_PER_ATOM = 30
+
+
+def _gyration_radius(coordinates: Sequence[tuple[float, float, float]]) -> float:
+    """Root-mean-square distance of the atoms from their centroid (Angstrom).
+
+    Unchanged by a rotation, a translation and a relabelling, which are exactly the
+    differences :func:`_same_polyatomic_structure` forgives, and 1-Lipschitz in the
+    coordinates: two geometries whose Kabsch RMSD is ``r`` (in any atom order that
+    achieves it) have radii of gyration within ``r`` of each other, by the reverse
+    triangle inequality on the centred coordinate vectors. So a pair whose radii
+    differ by more than the rigid-motion tolerance cannot be one structure, and is
+    answered without touching an atom.
+    """
+    n = len(coordinates)
+    if n == 0:
+        return 0.0
+    cx = sum(c[0] for c in coordinates) / n
+    cy = sum(c[1] for c in coordinates) / n
+    cz = sum(c[2] for c in coordinates) / n
+    total = sum((x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2 for x, y, z in coordinates)
+    return math.sqrt(total / n)
+
+
 class _AtomsOf(NamedTuple):
     species: tuple[tuple[str, int | None], ...]
     coordinates: list[tuple[float, float, float]]
     decimals: int
+    #: Computed once per geometry by :func:`_atoms_of`; ``None`` is computed on use.
+    gyration_radius: float | None = None
 
 
 def _atoms_of(geometry: Geometry) -> _AtomsOf | None:
@@ -547,7 +580,7 @@ def _atoms_of(geometry: Geometry) -> _AtomsOf | None:
     coordinates = [(row.x, row.y, row.z) for row in rows]
     # Element and explicit isotope per atom, the atom path's own notion of "the same atom" (#663).
     species = tuple(_atom_nuclide(row) for row in rows)
-    return _AtomsOf(species, coordinates, _coordinate_decimals(coordinates))
+    return _AtomsOf(species, coordinates, _coordinate_decimals(coordinates), _gyration_radius(coordinates))
 
 
 def _same_polyatomic_structure(
@@ -571,8 +604,21 @@ def _same_polyatomic_structure(
     *different* (the behaviour before the search), never a match.
     """
     tolerance = _rigid_motion_tolerance(a.decimals, b.decimals)
-    if a.species == b.species and kabsch_rmsd(a.coordinates, b.coordinates) <= tolerance:
-        return True
+    # Constant-time answer for the common case of two different shapes (#692): neither the same-order
+    # Kabsch nor the relabelling search can accept a pair whose radii of gyration differ by more
+    # than the tolerance (see :func:`_gyration_radius`), so neither is run, and nothing is charged.
+    radius_a = _gyration_radius(a.coordinates) if a.gyration_radius is None else a.gyration_radius
+    radius_b = _gyration_radius(b.coordinates) if b.gyration_radius is None else b.gyration_radius
+    if abs(radius_a - radius_b) > tolerance + _GYRATION_SLACK:
+        return False
+    if a.species == b.species:
+        # Charged like the relabelling search: a record is allowed a fixed amount of comparison, not
+        # one that grows with the square of its geometries. A pair past the budget is *different*
+        # (the answer before the same-order test existed), never a match.
+        if budget is not None and not budget.charge(_KABSCH_UNITS_PER_ATOM * len(a.coordinates)):
+            return False
+        if kabsch_rmsd(a.coordinates, b.coordinates) <= tolerance:
+            return True
     if Counter(a.species) != Counter(b.species):
         return False
     first, second = prepared or (
@@ -589,6 +635,9 @@ def _merge_rigidly_equal_geometries(geometries: Sequence[Geometry]) -> dict[int,
     Pairwise over the record's own geometries (a handful), and only within a
     group of equal atom count, so an atom list is read from the database
     only for a geometry that has a same-size neighbour to be compared with.
+    A pair whose radii of gyration differ by more than the rounding tolerance is
+    answered in constant time (#692), and a pair that is compared pays for it in
+    the budget below, the same-order Kabsch included.
     One :class:`SearchBudget` is shared by every pair, and a pair already in one
     structure through a third geometry is not compared again. The relabelling
     search (#679) is charged to that budget: a gate on the sorted distance list
