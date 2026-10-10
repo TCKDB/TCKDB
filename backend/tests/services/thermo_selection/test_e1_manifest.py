@@ -146,6 +146,6 @@ def test_the_manifest_reports_the_digest_of_the_bytes_it_was_loaded_from():
     unpinned = parse_e1_manifest_bytes(_shipped_bytes().decode().replace("alpha=1.63", "alpha=1.64").encode(),
                                        expected_sha256=None)
     assert unpinned.sha256 != digest  # the reported digest follows the bytes loaded, not a constant
-    from app.services.thermo_selection.rules import E1Rule as _Rule
-
-    assert _Rule(unpinned).describe()["manifest_sha256"] == unpinned.sha256 != digest
+    # A manifest over other bytes is not accepted by the rule at all (#703): the reported digest is always the pin's.
+    with pytest.raises(ManifestError, match="pinned digest"):
+        E1Rule(unpinned)
