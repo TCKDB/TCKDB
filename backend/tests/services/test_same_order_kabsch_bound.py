@@ -21,6 +21,7 @@ What these tests hold
 
 from __future__ import annotations
 
+import math
 import random
 import time
 from collections import Counter
@@ -38,6 +39,7 @@ from tests.services.test_permuted_rigid_match import (
     _fake_geometry,
     _moved_and_permuted,
     _random_atoms,
+    _rotation,
     _round,
 )
 
@@ -196,7 +198,7 @@ def test_distinct_large_geometries_cost_no_kabsch_and_no_budget(monkeypatch) -> 
 
     assert roots == {g.id: g.id for g in geometries}
     assert kabsch_calls == [], f"{len(kabsch_calls)} Kabsch comparisons for 300 distinct shapes"
-    assert spent[0].work_left == prm.MAX_WORK_PER_RECORD and spent[0].fits_left == prm.MAX_FITS_PER_RECORD
+    assert spent[0].same_order_work_left == prm.MAX_SAME_ORDER_WORK_PER_RECORD and spent[0].work_left == prm.MAX_WORK_PER_RECORD and spent[0].fits_left == prm.MAX_FITS_PER_RECORD
     assert elapsed < 2.0, f"{elapsed:.2f} s (4.7 s before the change)"
 
 
@@ -216,7 +218,7 @@ def _same_radius_distinct_shapes(n: int, count: int):
 
 def test_pairs_the_cheap_test_cannot_separate_are_charged_and_stop_at_the_budget(monkeypatch) -> None:
     n, comparisons = 100, 400
-    monkeypatch.setattr(prm, "MAX_WORK_PER_RECORD", levels._KABSCH_UNITS_PER_ATOM * n * comparisons)
+    monkeypatch.setattr(prm, "MAX_SAME_ORDER_WORK_PER_RECORD", levels._KABSCH_UNITS_PER_ATOM * n * comparisons)
     kabsch_calls = []
     real_kabsch = levels.kabsch_rmsd
     monkeypatch.setattr(levels, "kabsch_rmsd", lambda *a, **k: kabsch_calls.append(1) or real_kabsch(*a, **k))
@@ -236,3 +238,122 @@ def test_an_uncapped_direct_comparison_is_unchanged() -> None:
     _named, geometries = _fixture_geometries()
     a, b = (levels._atoms_of(g) for g in geometries[:2])
     assert levels._same_polyatomic_structure(a, b) is True
+
+
+# ---- pinning the prefilter's decisions near the tolerance ------------------------------------------------------
+
+
+def _atoms_from(points, species="C"):
+    return levels._AtomsOf(tuple((species, None) for _ in points), [tuple(p) for p in points], 6, None)
+
+
+def _collinear(n: int = 8):
+    return [(1.5 * k, 0.0, 0.0) for k in range(n)]
+
+
+def _stretch_end_atom(points, delta: float):
+    out = [tuple(p) for p in points]
+    x, y, z = out[-1]
+    out[-1] = (x + delta, y, z)
+    return out
+
+
+def _delta_for_rmsd(points, target: float) -> float:
+    """The end-atom shift whose Kabsch RMSD to ``points`` is ``target`` (monotone: bisection)."""
+    low, high = 0.0, 1.0
+    for _ in range(200):
+        mid = (low + high) / 2
+        if kabsch_rmsd(points, _stretch_end_atom(points, mid)) < target:
+            low = mid
+        else:
+            high = mid
+    return (low + high) / 2
+
+
+def test_gyration_radius_is_the_root_mean_square_distance_from_the_centroid() -> None:
+    assert levels._gyration_radius([(0.0, 0.0, 0.0), (2.0, 0.0, 0.0)]) == pytest.approx(1.0)
+    cube = [(x, y, z) for x in (-1.0, 1.0) for y in (-1.0, 1.0) for z in (-1.0, 1.0)]
+    assert levels._gyration_radius(cube) == pytest.approx(math.sqrt(3.0))
+    assert levels._gyration_radius([(5.0, 5.0, 5.0)] * 3) == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("fraction", [0.5, 0.9, 0.99])
+def test_a_collinear_stretch_just_inside_the_tolerance_is_still_one_structure(fraction: float) -> None:
+    """The radius differs by nearly the whole RMSD here, so any prefilter tighter than the tolerance refuses it."""
+    base = _collinear()
+    moved = _stretch_end_atom(base, _delta_for_rmsd(base, fraction * TOL))
+    a, b = _atoms_from(base), _atoms_from(moved)
+    assert kabsch_rmsd(a.coordinates, b.coordinates) <= TOL
+    gap = abs(levels._gyration_radius(a.coordinates) - levels._gyration_radius(b.coordinates))
+    assert gap > 0.45 * fraction * TOL, "the case must press on the prefilter"
+    assert levels._same_polyatomic_structure(a, b, SearchBudget()) is True
+    assert _reference_same_structure(a, b, SearchBudget()) is True
+
+
+@pytest.mark.parametrize("fraction", [1.05, 1.5, 10.0])
+def test_a_collinear_stretch_just_outside_the_tolerance_is_a_different_structure(fraction: float) -> None:
+    base = _collinear()
+    moved = _stretch_end_atom(base, _delta_for_rmsd(base, fraction * TOL))
+    a, b = _atoms_from(base), _atoms_from(moved)
+    assert kabsch_rmsd(a.coordinates, b.coordinates) > TOL
+    assert levels._same_polyatomic_structure(a, b, SearchBudget()) is False
+    assert _reference_same_structure(a, b, SearchBudget()) is False
+
+
+# ---- the budget: its own allowance, the amount charged, and what past it means ---------------------------------
+
+
+def _moved_copy_pair(n: int = 12):
+    base = [(1.5 * k, 0.1 * (k % 3), 0.05 * (k % 5)) for k in range(n)]
+    rotation = _rotation(4)
+    moved = [tuple(float(v) for v in rotation @ np.asarray(p) + np.array([1.0, 2.0, 3.0])) for p in base]
+    return _atoms_from(base), _atoms_from(moved)
+
+
+def _exhausted() -> SearchBudget:
+    return SearchBudget(fits_left=0, work_left=0, same_order_work_left=0)
+
+
+def test_a_same_order_comparison_is_charged_thirty_units_per_atom_to_its_own_allowance() -> None:
+    a, b = _moved_copy_pair(12)
+    budget = SearchBudget()
+    assert levels._same_polyatomic_structure(a, b, budget) is True
+    assert levels._KABSCH_UNITS_PER_ATOM == 30
+    assert prm.MAX_SAME_ORDER_WORK_PER_RECORD - budget.same_order_work_left == 30 * 12
+    assert budget.work_left == prm.MAX_WORK_PER_RECORD and budget.fits_left == prm.MAX_FITS_PER_RECORD
+
+
+def test_a_pair_the_prefilter_dismisses_is_charged_nothing() -> None:
+    a = _atoms_from(_collinear(8))
+    b = _atoms_from([(2.0 * x, y, z) for x, y, z in _collinear(8)])
+    budget = SearchBudget()
+    assert levels._same_polyatomic_structure(a, b, budget) is False
+    assert budget.same_order_work_left == prm.MAX_SAME_ORDER_WORK_PER_RECORD
+    assert budget.work_left == prm.MAX_WORK_PER_RECORD
+
+
+def test_past_the_budget_a_pair_is_different_never_a_match() -> None:
+    a, b = _moved_copy_pair(12)
+    assert levels._same_polyatomic_structure(a, b, SearchBudget()) is True
+    assert levels._same_polyatomic_structure(a, b, _exhausted()) is False
+    # And a distinct pair that the radius cannot separate is not accepted past the budget either.
+    base = _collinear(8)
+    twisted = [(x, 0.0 if k % 2 else 0.4, 0.0) for k, (x, _y, _z) in enumerate(base)]
+    c, d = _atoms_from(base), _atoms_from(twisted)
+    assert levels._same_polyatomic_structure(c, d, _exhausted()) is False
+
+
+def test_a_spent_relabelling_budget_does_not_starve_the_same_order_comparison() -> None:
+    a, b = _moved_copy_pair(12)
+    starved = SearchBudget(fits_left=0, work_left=0)
+    assert levels._same_polyatomic_structure(a, b, starved) is True
+
+
+def test_a_record_still_merges_a_moved_same_order_copy_when_relabelling_has_no_budget(monkeypatch) -> None:
+    monkeypatch.setattr(prm, "MAX_WORK_PER_RECORD", 0)
+    base = _random_atoms(np.random.default_rng(21), 60)
+    rotation = _rotation(9)
+    moved = [(el, tuple(float(v) for v in rotation @ np.asarray(c) + np.array([1.0, -1.0, 2.0]))) for el, c in base]
+    geometries = [_fake_geometry(1, base), _fake_geometry(2, moved)]
+    roots = levels._merge_rigidly_equal_geometries(geometries)
+    assert roots[1] == roots[2]

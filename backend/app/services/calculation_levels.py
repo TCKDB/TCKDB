@@ -612,12 +612,12 @@ def _same_polyatomic_structure(
     if abs(radius_a - radius_b) > tolerance + _GYRATION_SLACK:
         return False
     if a.species == b.species:
-        # Charged like the relabelling search: a record is allowed a fixed amount of comparison, not
-        # one that grows with the square of its geometries. A pair past the budget is *different*
-        # (the answer before the same-order test existed), never a match.
-        if budget is not None and not budget.charge(_KABSCH_UNITS_PER_ATOM * len(a.coordinates)):
-            return False
-        if kabsch_rmsd(a.coordinates, b.coordinates) <= tolerance:
+        # A record is allowed a fixed amount of comparison, not one that grows with the square of its
+        # geometries. The allowance is its own (``SearchBudget.same_order_work_left``), so relabelling
+        # searches on other pairs cannot starve this cheap test. Past it the pair is not compared in
+        # order; the relabelling search below may still find it, and failing that it is *different*.
+        in_allowance = budget is None or budget.charge_same_order(_KABSCH_UNITS_PER_ATOM * len(a.coordinates))
+        if in_allowance and kabsch_rmsd(a.coordinates, b.coordinates) <= tolerance:
             return True
     if Counter(a.species) != Counter(b.species):
         return False
@@ -637,7 +637,7 @@ def _merge_rigidly_equal_geometries(geometries: Sequence[Geometry]) -> dict[int,
     only for a geometry that has a same-size neighbour to be compared with.
     A pair whose radii of gyration differ by more than the rounding tolerance is
     answered in constant time (#692), and a pair that is compared pays for it in
-    the budget below, the same-order Kabsch included.
+    its own per-record allowance, the same-order Kabsch included.
     One :class:`SearchBudget` is shared by every pair, and a pair already in one
     structure through a third geometry is not compared again. The relabelling
     search (#679) is charged to that budget: a gate on the sorted distance list
