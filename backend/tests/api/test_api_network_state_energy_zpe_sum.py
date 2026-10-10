@@ -18,8 +18,13 @@ from copy import deepcopy
 import pytest
 from sqlalchemy import select
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.units import HARTREE_TO_KJ_MOL as H
+from app.db.models.calculation import Calculation
+from app.db.models.common import CalculationType, EnergyCorrectionConvention, EnergyZeroConvention
 from app.db.models.network_pdep import NetworkSolveStateEnergy, NetworkSolveStateEnergySource
+from app.services.network_energy_sources import StateEnergyToCompare, compare_state_energy_sums
+from app.workflows.network_pdep import _participant_source
 from tests.api.test_api_network_pdep_state_energy_sources import (
     _MISMATCH,
     _NOT_COMPARED,
@@ -28,8 +33,9 @@ from tests.api.test_api_network_pdep_state_energy_sources import (
     _post,
     _refused,
 )
-from tests.workflows.test_network_pdep_upload import _LOT_DFT, _SOFTWARE, _XYZ_O2
+from tests.workflows.test_network_pdep_upload import _LOT_CC, _LOT_DFT, _SOFTWARE, _XYZ_O2
 
+_PLUS_ZPE = EnergyCorrectionConvention.electronic_plus_zpe
 _SCALE = 0.98
 _ZPE = {"ethyl": 0.05, "O2": 0.01}
 _E = {"ethyl": -79.8, "O2": -150.2}
@@ -143,6 +149,15 @@ def test_a_zpe_from_another_geometry_is_not_paired(client, db_session) -> None:
     )
 
 
+def test_a_scale_factor_with_no_cited_zpe_scales_nothing_and_is_refused(client) -> None:
+    payload = _zpe_payload()
+    for source in payload["solve"]["state_energies"][0]["source_calculation_keys"]:
+        source.pop("zpe_calculation_key")
+    resp = _post(client, payload)
+    assert resp.status_code == 422, resp.text
+    assert "would scale nothing" in resp.text
+
+
 def test_a_zpe_calculation_must_be_a_freq(client) -> None:
     payload = _zpe_payload()
     payload["solve"]["state_energies"][0]["source_calculation_keys"][0]["zpe_calculation_key"] = "ethyl_sp"
@@ -172,3 +187,49 @@ def test_the_zpe_fields_are_only_for_electronic_plus_zpe(client, which: str) -> 
     resp = _post(client, payload)
     assert resp.status_code == 422, resp.text
     assert "electronic_plus_zpe" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# An atom's sp is its E0: the workflow reads "atom" from the stored geometry
+# ---------------------------------------------------------------------------
+
+_AR_SP = {
+    "key": "Ar_sp", "type": "sp", "geometry_key": "Ar_geom", "software_release": _SOFTWARE,
+    "level_of_theory": _LOT_CC, "sp_electronic_energy_hartree": -0.5,
+}
+
+
+def _sp_of(db_session, smiles: str) -> Calculation:
+    rows = db_session.scalars(select(Calculation).where(Calculation.type == CalculationType.sp)).all()
+    matching = [r for r in rows if r.species_entry is not None and r.species_entry.species.smiles == smiles]
+    assert len(matching) == 1, smiles
+    return matching[0]
+
+
+def test_the_workflow_reads_an_atom_from_the_calculations_stored_geometry(client, db_session) -> None:
+    """The geometry -> ``is_atom`` step: an Ar atom's sp is an atom's, ethene's is not, and it feeds a real comparison."""
+    payload = deepcopy(_payload())
+    argon = next(sp for sp in payload["species"] if sp["key"] == "Ar")  # the bath gas: one atom
+    argon["calculations"] = [deepcopy(_AR_SP)]
+    assert _post(client, payload).status_code == 201
+
+    atom = _participant_source(
+        db_session, species_key="Ar", stoichiometry=1, calculation=_sp_of(db_session, "[Ar]"),
+        zpe_calculation=None, looks_up_geometry=True,
+    )
+    ethene = _participant_source(
+        db_session, species_key="ethene", stoichiometry=1, calculation=_sp_of(db_session, "C=C"),
+        zpe_calculation=None, looks_up_geometry=True,
+    )
+    assert atom.is_atom is True and ethene.is_atom is False
+
+    def state(participant, kj: float) -> StateEnergyToCompare:
+        return StateEnergyToCompare(
+            index=0, state_key="s", energy_kj_mol=kj, energy_zero_convention=EnergyZeroConvention.absolute,
+            correction_convention=_PLUS_ZPE, participants=(participant,), zpe_scale_factor=None,
+        )
+
+    assert compare_state_energy_sums([state(atom, -0.5 * H)])[0].status == "agrees"
+    with pytest.raises(CodedValueError):  # the atom branch really compares: +0.01 Eh is a contradiction
+        compare_state_energy_sums([state(atom, -0.49 * H)])
+    assert compare_state_energy_sums([state(ethene, -78.4 * H)])[0].reason == "zpe_not_in_source"

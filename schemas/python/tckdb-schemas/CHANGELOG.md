@@ -17,6 +17,8 @@ frequency ZPE, not only against a composite that stores an E0 (#693).
   when the unscaled sum agrees. A freq that stores no ZPE is `zpe_not_stated`; an sp and freq not at one geometry are
   `geometry_not_paired`; no ZPE is borrowed from a sibling calculation. A contradicted sum is refused with the existing
   `network_state_energy_sum_mismatch`, whose context gains `zpe_scale_factor`. No new refusal code.
+- A `zpe_scale_factor` on a state where no participant cites a `zpe_calculation_key` is refused: it would scale nothing.
+- `freq_zpe_hartree` (and the stored freq ZPE) is documented as the unscaled harmonic zero-point energy.
 - Reads gain `zpe_calculation_ref` per state-energy source and `zpe_scale_factor` per state energy.
 
 ## 0.112.0 - 2026-10-11

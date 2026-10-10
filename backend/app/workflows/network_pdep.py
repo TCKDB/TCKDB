@@ -168,7 +168,8 @@ def _energy_geometry_ids(session: Session, calculation: Calculation) -> frozense
     geometry; on this route a calculation's ``geometry_key`` is recorded as its ``final`` output
     geometry (``_persist_calculation``), so an sp or freq with no input geometry row is at that one.
     Both are the geometry the producer declared for that very calculation: nothing is taken from
-    another calculation.
+    another calculation. ``_energy_geometry_ids`` in ``app.services.transition_state_validation``
+    is the input-only counterpart used by the transition-state energy check; keep the two in step.
     """
     final = select(CalculationOutputGeometry.geometry_id).where(
         CalculationOutputGeometry.calculation_id == calculation.id,

@@ -840,6 +840,8 @@ class CalculationFreqResult(Base):
     )
     n_imag: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     imag_freq_cm1: Mapped[Optional[float]] = mapped_column(nullable=True)
+    #: Unscaled harmonic zero-point energy (hartree), as the program printed it; a scale factor is
+    #: stated where the energy is used and is never applied to the stored value.
     zpe_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
     zpe_uncertainty_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
 

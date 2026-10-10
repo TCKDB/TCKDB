@@ -104,7 +104,9 @@ class CalculationIn(SchemaBase):
     :param opt_final_energy_hartree: Opt result (if type=opt).
     :param freq_n_imag: Freq result (if type=freq).
     :param freq_imag_freq_cm1: Freq result (if type=freq).
-    :param freq_zpe_hartree: Freq result (if type=freq).
+    :param freq_zpe_hartree: Freq result (if type=freq): the unscaled harmonic zero-point energy
+        in hartree, as the program printed it. Any scale factor is stated where the energy is used
+        (for example a network state energy's zpe_scale_factor), never applied here.
     :param parameters: Optional parsed execution-control parameter observations,
         routed through the shared calculation persistence seam.
     :param parameters_json: Optional JSON snapshot from the parser.

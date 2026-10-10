@@ -829,8 +829,9 @@ _ZPE_SCALE_FACTOR_DESCRIPTION = (
     "electronic_plus_zpe only. The factor s the producer scaled the harmonic zero-point energies "
     "with, stated to at least 4 decimals (or exactly as used). The energy compared is "
     "sum(stoichiometry * (E_sp + s * ZPE)) over the participants that cite a zpe_calculation_key. "
-    "TCKDB stores the unscaled ZPE, so without this factor the sum is not compared "
-    "(zpe_scaling_unstated): one is never assumed."
+    "TCKDB stores the unscaled harmonic ZPE, so without this factor the sum is not compared "
+    "(zpe_scaling_unstated): one is never assumed. Refused when no participant cites a "
+    "zpe_calculation_key, since it would scale nothing."
 )
 
 
@@ -871,6 +872,14 @@ class StateEnergyIn(ConventionBlock):
     def validate_zpe_is_for_electronic_plus_zpe(self) -> Self:
         """A ZPE calculation and its scale factor only mean something on an ``electronic_plus_zpe`` energy."""
         if self.correction_convention == EnergyCorrectionConvention.electronic_plus_zpe:
+            if self.zpe_scale_factor is not None and not any(
+                source.zpe_calculation_key is not None for source in self.source_calculation_keys or []
+            ):
+                raise ValueError(
+                    "zpe_scale_factor scales the zero-point energies cited as zpe_calculation_key, and "
+                    "no participant of this energy cites one, so it would scale nothing. Cite the freq "
+                    "calculations, or leave the factor out."
+                )
             return self
         if self.zpe_scale_factor is not None:
             raise ValueError(

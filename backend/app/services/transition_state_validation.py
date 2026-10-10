@@ -234,7 +234,8 @@ def _energy_geometry_ids(session: Session, calculation: Calculation) -> frozense
     """The geometries a calculation's energy (or ZPE) is at.
 
     An ``sp`` and a ``freq`` are at their input geometry; an ``opt``'s energy
-    is at its final output geometry.
+    is at its final output geometry. The network route has its own reader with an input-or-final-output
+    fallback (``_energy_geometry_ids`` in ``app.workflows.network_pdep``); keep the two in step.
     """
 
     if calculation.type == CalculationType.opt:

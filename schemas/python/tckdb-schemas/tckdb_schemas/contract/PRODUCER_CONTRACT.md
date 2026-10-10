@@ -239,6 +239,8 @@ frequency ZPE, not only against a composite that stores an E0 (#693).
   when the unscaled sum agrees. A freq that stores no ZPE is `zpe_not_stated`; an sp and freq not at one geometry are
   `geometry_not_paired`; no ZPE is borrowed from a sibling calculation. A contradicted sum is refused with the existing
   `network_state_energy_sum_mismatch`, whose context gains `zpe_scale_factor`. No new refusal code.
+- A `zpe_scale_factor` on a state where no participant cites a `zpe_calculation_key` is refused: it would scale nothing.
+- `freq_zpe_hartree` (and the stored freq ZPE) is documented as the unscaled harmonic zero-point energy.
 - Reads gain `zpe_calculation_ref` per state-energy source and `zpe_scale_factor` per state energy.
 
 ### 0.112.0 - 2026-10-11
@@ -4916,7 +4918,7 @@ Unknown keys are refused.
 | `opt_final_energy_hartree` | number \| null | no |  | hartree |  | Opt result (if type=opt).
 | `freq_n_imag` | integer \| null | no |  |  |  | Freq result (if type=freq).
 | `freq_imag_freq_cm1` | number \| null | no |  | cm^-1 |  | Freq result (if type=freq).
-| `freq_zpe_hartree` | number \| null | no |  | hartree |  | Freq result (if type=freq).
+| `freq_zpe_hartree` | number \| null | no |  | hartree |  | Freq result (if type=freq): the unscaled harmonic zero-point energy in hartree, as the program printed it. Any scale factor is stated where the energy is used (for example a network state energy's zpe_scale_factor), never applied here.
 | `freq_frequencies_cm1` | array of number \| null | no |  | cm^-1
 | `freq_reaction_coordinate_mode_index` | integer \| null | no |  |  | >= 1
 | `freq_imaginary_dispositions` | object (integer -> `ImaginaryModeDisposition`) \| null | no |  |  | `rigid_body_residue`, `torsion`, `ring_pucker`, `intermolecular`, `symmetry_breaking`, `unassigned`
@@ -5435,7 +5437,7 @@ Unknown keys are refused.
 | `opt_final_energy_hartree` | number \| null | no |  | hartree |  | Opt result (if type=opt).
 | `freq_n_imag` | integer \| null | no |  |  |  | Freq result (if type=freq).
 | `freq_imag_freq_cm1` | number \| null | no |  | cm^-1 |  | Freq result (if type=freq).
-| `freq_zpe_hartree` | number \| null | no |  | hartree |  | Freq result (if type=freq).
+| `freq_zpe_hartree` | number \| null | no |  | hartree |  | Freq result (if type=freq): the unscaled harmonic zero-point energy in hartree, as the program printed it. Any scale factor is stated where the energy is used (for example a network state energy's zpe_scale_factor), never applied here.
 | `freq_frequencies_cm1` | array of number \| null | no |  | cm^-1
 | `freq_reaction_coordinate_mode_index` | integer \| null | no |  |  | >= 1
 | `freq_imaginary_dispositions` | object (integer -> `ImaginaryModeDisposition`) \| null | no |  |  | `rigid_body_residue`, `torsion`, `ring_pucker`, `intermolecular`, `symmetry_breaking`, `unassigned`
@@ -6140,7 +6142,7 @@ Unknown keys are refused.
 |---|---|---|---|---|---|---
 | `n_imag` | integer \| null | no |  |  |  | Number of imaginary frequencies.
 | `imag_freq_cm1` | number \| null | no |  | cm^-1 |  | Value of the imaginary frequency in cm⁻¹.
-| `zpe_hartree` | number \| null | no |  | hartree |  | Zero-point energy in hartree.
+| `zpe_hartree` | number \| null | no |  | hartree |  | Unscaled harmonic zero-point energy in hartree, as the program printed it. Any scale factor is stated where the energy is used, never applied here.
 | `modes` | array of [`FrequencyModePayload`](#m-frequencymodepayload) \| null | no |  |  |  | Optional per-mode frequency rows. When supplied, ``mode_index`` values must be unique within the payload, and the count of imaginary modes must agree with ``n_imag`` if both are present.
 | `reaction_coordinate_mode_index` | integer \| null | no |  |  | >= 1 | ``mode_index`` of the mode the depositor designates the reaction coordinate. ADR 0012 makes this the contract that replaces the old ``n_imag == 1`` gate: a transition state with more than one imaginary mode is accepted only if it says which one is the barrier and is removed from the partition function. Meaningless on a minimum, and refused there.
 
@@ -7974,7 +7976,7 @@ Unknown keys are refused.
 | `source_calculation_key` | string \| null | no |  |  |  | Local key of the calculation this energy came from. For correction_convention 'electronic_only' it is the calculation the electronic energy came from: an sp, an opt or a composite. For the composed conventions (electronic_plus_zpe, atom_and_bond_corrected, thermal_enthalpy_298k, other) it is the calculation of the energy's electronic part, or a composite that holds the whole E0; the frequency calculation goes in source_calculations with the well_freq or barrier_freq role. A calculation that reports no stationary-point energy (irc, scan, path_search, conf) is refused with network_energy_source_type_mismatch. The calculation must also belong to the subject the energy is stated for: a species of that state (any one of them for a bimolecular state) for a state energy, the transition state itself for a channel barrier; otherwise it is refused with network_energy_source_subject_mismatch.
 | `source_calculation_keys` | array of [`StateEnergySourceIn`](#m-stateenergysourcein) \| null | no |  |  | length >= 1 | One calculation per participant of the state, as {species_key, calculation_key}. A state energy of several species is the sum of theirs, weighted by each participant's stoichiometry. Each calculation passes the same type rule as source_calculation_key and must belong to exactly the species named beside it (network_energy_source_subject_mismatch otherwise). When the energy is on an absolute zero, or on a zero shared by several state energies of the solve (lowest_state, entrance_channel), and the sources cover every participant, TCKDB compares the stated energy with the sum of the stored energies: within printed precision it agrees; beyond that but within honest rounding of the stated kJ/mol (half of energy_precision_kj_mol, or of 1 kcal/mol when not stated) it is stored as not compared (stated_precision_unknown); only beyond that is it refused (network_state_energy_sum_mismatch). A comparison that cannot be made is stored as not compared with its reason and returns a network_state_energy_sum_not_compared warning. Send this or source_calculation_key, never both.
 | `energy_precision_kj_mol` | number \| null | no |  | kJ/mol | > 0 | The rounding unit of energy_kj_mol, in kJ/mol (0.1 for a value rounded to 0.1 kJ/mol, 4.184 for kcal/mol rounded to whole units). Used only when source calculations are cited: a stated energy that differs from the sum of their stored energies by more than hartree printed precision is compared with half this unit added, so a correctly rounded value is accepted and a wrong one is not. Without it TCKDB assumes 1 kcal/mol (2.09 kJ/mol of allowance) and stores a value beyond printed precision but within that allowance as not compared (stated_precision_unknown) with a network_state_energy_sum_not_compared warning. To be compared exactly, state unrounded kJ/mol derived from hartree with 2625.499639, or state this field. Never inferred from the digits of the number.
-| `zpe_scale_factor` | number \| null | no |  |  | > 0 | electronic_plus_zpe only. The factor s the producer scaled the harmonic zero-point energies with, stated to at least 4 decimals (or exactly as used). The energy compared is sum(stoichiometry * (E_sp + s * ZPE)) over the participants that cite a zpe_calculation_key. TCKDB stores the unscaled ZPE, so without this factor the sum is not compared (zpe_scaling_unstated): one is never assumed.
+| `zpe_scale_factor` | number \| null | no |  |  | > 0 | electronic_plus_zpe only. The factor s the producer scaled the harmonic zero-point energies with, stated to at least 4 decimals (or exactly as used). The energy compared is sum(stoichiometry * (E_sp + s * ZPE)) over the participants that cite a zpe_calculation_key. TCKDB stores the unscaled harmonic ZPE, so without this factor the sum is not compared (zpe_scaling_unstated): one is never assumed. Refused when no participant cites a zpe_calculation_key, since it would scale nothing.
 
 - **StateEnergyIn.validate_other_requires_note** (model, after; can refuse): convention_note is required when an energy convention is 'other'.
 - **StateEnergyIn.validate_zpe_is_for_electronic_plus_zpe** (model, after; can refuse): A ZPE calculation and its scale factor only mean something on an ``electronic_plus_zpe`` energy.
