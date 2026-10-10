@@ -6,11 +6,13 @@ already have run a statement and so cannot become a snapshot. These assertions w
 counting a hard-coded handful, so the next router that adds a selection route is held to the same rule and no count has
 to be updated.
 
-The H298 thermo selection routes (``/thermo/select``) predate the snapshot dependency and still read through ``get_db``;
-they are named here as the one known exception rather than silently skipped, so that moving them is a visible change.
+There is no exception: the H298 routes (``/thermo/select``) take the snapshot like the rest, and the last test fails if
+any route that selects (its path ends ``/select`` or ``/select/manifest``) is wired to ``get_db`` instead.
 """
 
 from __future__ import annotations
+
+import re
 
 import pytest
 from fastapi.routing import APIRoute
@@ -23,19 +25,14 @@ SNAPSHOT_SUFFIXES = (
     "/kinetics/select",
     "/kinetics/select/manifest",
     "/kinetics/export-selected",
+    "/thermo/select",
+    "/thermo/select/manifest",
     "/calculations/select",
     "/calculations/select/manifest",
     "/conformers/select",
     "/conformers/select/manifest",
     "/evidence/select",
     "/evidence/select/manifest",
-)
-#: Selection routes that read through ``get_db`` today (see the module docstring).
-KNOWN_NON_SNAPSHOT = frozenset(
-    {
-        "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select",
-        "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select/manifest",
-    }
 )
 
 
@@ -79,12 +76,19 @@ def test_every_selection_and_export_route_uses_the_snapshot_dependency(api_route
         "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select",
         "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select/manifest",
     } <= paths
+    # The H298 thermo selection and its manifest.
+    assert {
+        "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select",
+        "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select/manifest",
+    } <= paths
     missing = [r.path for r in selection if get_snapshot_db not in _direct(r)]
     assert missing == []
     assert all(get_db not in _direct(r) for r in selection)
 
 
-def test_the_known_non_snapshot_selection_routes_are_exactly_the_h298_ones(api_routes):
-    """If one of these moves to the snapshot, this list shrinks on purpose; if a new route joins it, that is visible."""
-    thermo = {r.path for r in api_routes if "/select" in r.path and get_db in _direct(r) and "/thermo/" in r.path}
-    assert thermo == set(KNOWN_NON_SNAPSHOT)
+def test_no_selection_route_reads_through_the_shared_session(api_routes):
+    """A route that selects is never on ``get_db``, whatever its path ends with, so a new one cannot slip past the suffix list."""
+    selecting = [r for r in api_routes if re.search(r"/select(/manifest)?$", r.path)]
+    assert len(selecting) >= 12, "the walk found too few selection routes to be checking anything"
+    assert [r.path for r in selecting if get_db in _direct(r)] == []
+    assert [r.path for r in selecting if get_snapshot_db not in _direct(r)] == []
