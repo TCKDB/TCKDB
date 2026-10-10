@@ -224,9 +224,10 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.108.1 - 2026-10-10
 
-The producer contract now lists `SchemeAtomParamPayload`, `SchemeBondParamPayload` and `SchemeComponentParamPayload`, the inline
-parameter models of an energy-correction scheme. They were always accepted but were left out of the rendered contract, because the
-generator read an unresolved forward-reference annotation. No upload model changed.
+The producer contract now lists four models it had left out: `SchemeAtomParamPayload`, `SchemeBondParamPayload` and
+`SchemeComponentParamPayload` (the inline parameter models of an energy-correction scheme) and `NetworkChannelMicroReactionIn`
+(the `microreaction_paths` of a network upload `channels` entry). All four were always accepted; the generator read an unresolved
+forward-reference annotation and dropped them. No upload model changed.
 
 ### 0.108.0 - 2026-10-06
 

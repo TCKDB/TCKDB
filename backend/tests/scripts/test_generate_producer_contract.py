@@ -179,6 +179,19 @@ def test_model_discovery_does_not_depend_on_what_else_was_imported() -> None:
     assert {"SchemeAtomParamPayload", "SchemeBondParamPayload", "SchemeComponentParamPayload"} <= found, found
 
 
+def test_a_network_upload_channel_lists_its_forward_referenced_microreaction_model() -> None:
+    """``microreaction_paths: list["NetworkChannelMicroReactionIn"]`` is a forward reference too (#717)."""
+    code = _FRESH_PROCESS_PROBE.replace(
+        "from tckdb_schemas.energy_correction import EnergyCorrectionSchemeRef",
+        "from app.schemas.workflows.network_pdep_upload import NetworkChannelIn as EnergyCorrectionSchemeRef",
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", code, str(GENERATOR_PATH)], capture_output=True, text=True, env={**os.environ}, cwd=str(REPO_ROOT)
+    )
+    assert done.returncode == 0, done.stderr[-3000:]
+    assert "NetworkChannelMicroReactionIn" in set(done.stdout.split())
+
+
 def test_the_generator_is_deterministic() -> None:
     """Two renders are byte-identical, or ``--check`` would fire at random."""
     first = generator.render()
