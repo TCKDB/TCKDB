@@ -21,6 +21,7 @@ from app.db.models.common import ScientificOriginKind
 from app.db.models.species import ConformerGroup
 from app.db.models.thermo import Thermo
 from app.services.calculation_ownership import assert_owned_by
+from app.services.read_snapshot import begin_read_snapshot
 from app.services.structure_selection.source_findings import assess_source_findings, thermo_uses
 from app.services.thermo_declaration_resolution import W_THERMO_TARGET_GROUP_OWNER_MISMATCH
 from app.services.thermo_selection.assessment import assess_candidate
@@ -82,15 +83,21 @@ def select_h298(
     species_entry_id: int,
     request: H298Request,
     rules: Sequence[PreferenceRule] | None = None,
+    require_snapshot: bool = True,
 ) -> H298Selection:
     """Assess every visible thermo record of a species entry for H298 and decide among the eligible.
 
     :param rules: The registry to apply; defaults to the rules shipped with this release (E1).
         Tests pass additional rules to build conflicts and cycles.
+    :param require_snapshot: Insist that the read runs in one read-only REPEATABLE READ snapshot, so the review
+        states, rows, children and source findings are one consistent state (``SnapshotNotConsistentError``
+        otherwise). A route opens a session for the purpose (``get_snapshot_db``); only a caller that cannot hold
+        one (a test inside one outer transaction) passes ``False``.
     :raises NotFoundError: unknown species entry or conformer group.
     :raises CodedValueError: the conformer group belongs to another species entry
         (``thermo_target_group_owner_mismatch``).
     """
+    begin_read_snapshot(session, require=require_snapshot)
     registry = tuple(default_rules() if rules is None else rules)
     group_ref = _group_ref(session, request, species_entry_id)
     scan = scan_population(session, species_entry_id=species_entry_id, request=request)

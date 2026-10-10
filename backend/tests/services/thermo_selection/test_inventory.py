@@ -106,3 +106,31 @@ def test_an_undeclared_target_is_assessed_against_itself_not_counted_as_a_mismat
     after = h298_coverage_inventory(db_session)
     assert delta(after, before, "h298_not_applicable_reasons", "target_kind_mismatch") == 0
     assert delta(after, before, "h298_not_applicable_reasons", "thermodynamic_target_not_declared") == 1
+
+
+# -- a confirmed finding about a record's own source calculation (#724) ------------------------------------------------
+
+
+def test_a_confirmed_finding_on_a_records_source_is_counted_as_blocking_validation_for_that_record_only(db_session):
+    """Record ``blocked``'s source is invalidated; ``clean`` rests on another calculation, so exactly one record is blocked."""
+    from app.db.models.common import StructureFindingKind
+    from tests.services.thermo_selection.test_source_findings_h298 import Bench
+
+    baseline = h298_coverage_inventory(db_session)
+    entry = species_entry_for(db_session, "Methane")
+    bench = Bench(db_session, entry)
+    blocked = make_thermo(db_session, entry, proto=protocol("g4"))
+    clean = make_thermo(db_session, entry, proto=protocol("g3"))
+    blocked_opt, _ = bench.opt(blocked)
+    bench.opt(clean)
+    db_session.flush()
+    before = h298_coverage_inventory(db_session)
+    assert delta(before, baseline, "thermo_records") == 2
+    assert delta(before, baseline, "h298_blocking_validation", "source_finding") == 0
+
+    bench.finding(calculation=blocked_opt, kind=StructureFindingKind.identity_incompatibility)
+    db_session.flush()
+    db_session.expire_all()
+    after = h298_coverage_inventory(db_session)
+    assert delta(after, baseline, "thermo_records") == 2  # the record is still stored and still counted
+    assert delta(after, baseline, "h298_blocking_validation", "source_finding") == 1  # exactly the invalidated one
