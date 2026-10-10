@@ -19,9 +19,12 @@ Rules that run through it:
 * A non-null ``frequency_scale_factor_id`` establishes that a factor of a stated *purpose* is linked to the record. It
   does not establish that the factor was applied to the frequencies a claim uses: application is unknown until a
   declaration states it. The one existing evidence of application is an applied energy correction that carries a
-  frequency scale factor on one of the record's own source calculations; it establishes application for the purpose of
-  that factor (fundamental, zero-point, enthalpy, entropy or heat capacity), and a factor of another purpose does not
-  stand in for it.
+  frequency scale factor on one of the record's own source calculations. Every such correction is an *energy* role
+  (zero-point energy, entropy contribution, thermal correction): none means "the frequencies were scaled". So the
+  purpose is read from the correction's ``application_role`` and counts only when the factor's own kind agrees with it
+  (a zero-point correction made with a zero-point factor). A factor of another kind in that role, or a role with no
+  matching kind, is evidence that *a* factor was used and nothing about which purpose it served. A fundamental-frequency
+  or heat-capacity scaling therefore cannot be evidenced by a correction at all, and stays unknown.
 * Facts a legacy row cannot hold are missing for every legacy row, by construction: the energy-reference zero and
   the zero-point inclusion convention, and the translational normalisation. Those claims are reachable only
   through a declared model.
@@ -85,6 +88,8 @@ class LegacyFacts:
     #: Purposes of the frequency scale factors an applied energy correction carries on the record's own source
     #: calculations: the recorded evidence that a factor of that purpose was applied.
     applied_scale_kinds: frozenset[str] = frozenset()
+    #: A scale-bearing correction exists whose role and factor kind do not agree, or whose role names no factor kind.
+    scale_evidence_unmatched: bool = False
     n_electronic_levels: int = 0
     n_torsions: int = 0
     n_torsions_without_kind: int = 0
@@ -159,7 +164,7 @@ def _scale(f: LegacyFacts, *, kind: str) -> str:
         return NOT_REQUIRED
     if kind in f.applied_scale_kinds:
         return PRESENT
-    if f.has_scale_factor or f.applied_scale_kinds:
+    if f.has_scale_factor or f.applied_scale_kinds or f.scale_evidence_unmatched:
         return AMBIGUOUS
     return MISSING
 

@@ -95,9 +95,13 @@ read-only repeatable-read transaction). Each record, per claim, is `represented_
 - A linked scale factor (`frequency_scale_factor_id`) says which factor belongs to the record, not that the claim's
   frequencies were scaled by it: application is unknown until a declaration states it. The one existing evidence of
   application is an applied energy correction carrying a frequency scale factor on one of the record's own source
-  calculations. Purposes are not interchangeable: a ZPE factor does not stand in for an entropy or heat-capacity claim,
-  nor a fundamental-frequency factor for either. The profiles are therefore `within_basin_thermal.entropy` and
-  `.heat_capacity`, each needing its own purpose.
+  calculations. Every such correction is an energy role (zero-point energy, entropy contribution, thermal correction),
+  none of which means "the frequencies were scaled", so the purpose is read from the correction's `application_role`
+  (`zpe` is a zero-point scaling, `entropy_contribution` an entropy scaling, `thermal_correction_enthalpy` an enthalpy
+  scaling) and counts only when the factor's own kind agrees. A factor of another kind in that role is evidence that a
+  factor was used and nothing about its purpose. A fundamental-frequency or heat-capacity scaling can never be
+  evidenced by a correction and stays unknown. Purposes are not interchangeable, so the profiles are
+  `within_basin_thermal.entropy` and `.heat_capacity`, each needing its own purpose.
 - Curvature is discovered on any source calculation with a frequency or Hessian result, whatever its job type.
 - Several distinct source geometries are undeclared alternatives, not a pick. Where an optimisation declares which
   output is its `final` geometry, an initial or intermediate output is not an alternative to it.

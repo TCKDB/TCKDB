@@ -39,6 +39,14 @@ from app.db.models.structure_determination import StructureDeterminationSource
 from app.services.statmech_selection.legacy import PROFILES, LegacyFacts, Readiness, classify
 from app.services.statmech_selection.vocabulary import OwnerKind
 
+#: The scale-factor purpose an applied energy correction's role evidences. Only these roles name a factor kind; every
+#: other role (a thermal-correction energy, a Gibbs correction, a BAC) names none.
+CORRECTION_ROLE_PURPOSE = {
+    "zpe": "zpe",
+    "entropy_contribution": "entropy",
+    "thermal_correction_enthalpy": "enthalpy",
+}
+
 _GEOMETRY_SIDE = {"opt": "output", "composite": "output", "freq": "input"}
 
 
@@ -111,15 +119,24 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
         }
     geometry: dict[int, dict[str, set[int]]] = defaultdict(lambda: {"input": set(), "output": set(), "final": set()})
     applied_scale: dict[int, set[str]] = defaultdict(set)
+    unmatched_scale: set[int] = set()
     if calc_ids:
         # The one recorded evidence that a scale factor was applied: an applied energy correction that carries a
         # frequency scale factor on one of the record's own source calculations.
-        for calc_id, kind in session.execute(
-            select(AppliedEnergyCorrection.source_calculation_id, FrequencyScaleFactor.scale_kind)
+        for calc_id, role, kind in session.execute(
+            select(
+                AppliedEnergyCorrection.source_calculation_id,
+                AppliedEnergyCorrection.application_role,
+                FrequencyScaleFactor.scale_kind,
+            )
             .join(FrequencyScaleFactor, FrequencyScaleFactor.id == AppliedEnergyCorrection.frequency_scale_factor_id)
             .where(AppliedEnergyCorrection.source_calculation_id.in_(calc_ids))
         ):
-            applied_scale[calc_id].add(kind.value)
+            purpose = CORRECTION_ROLE_PURPOSE.get(role.value)
+            if purpose is not None and purpose == kind.value:
+                applied_scale[calc_id].add(purpose)
+            else:
+                unmatched_scale.add(calc_id)
         for c, g in session.execute(select(CalculationInputGeometry.calculation_id, CalculationInputGeometry.geometry_id).where(
                 CalculationInputGeometry.calculation_id.in_(calc_ids))):
             geometry[c]["input"].add(g)
@@ -148,6 +165,7 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
     per_statmech_geoms: dict[int, set[int]] = defaultdict(set)
     per_statmech_rc: dict[int, bool] = {}
     per_statmech_scale: dict[int, set[str]] = defaultdict(set)
+    per_statmech_unmatched: set[int] = set()
     for sid, cid, ctype in links:
         if cid in curvature:
             per_statmech_curv[sid] += 1
@@ -160,6 +178,8 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
                 chosen = geometry[cid]["final"]
             per_statmech_geoms[sid] |= chosen
         per_statmech_scale[sid] |= applied_scale.get(cid, set())
+        if cid in unmatched_scale:
+            per_statmech_unmatched.add(sid)
         if cid in designated:
             per_statmech_rc[sid] = per_statmech_rc.get(sid, False) or designated[cid]
         determinations[sid] |= by_calc.get(cid, set())
@@ -184,6 +204,7 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
             scale_factor_kind=scale_kind.get(r.frequency_scale_factor_id),
             has_scale_factor=r.frequency_scale_factor_id is not None,
             applied_scale_kinds=frozenset(per_statmech_scale.get(r.id, ())),
+            scale_evidence_unmatched=r.id in per_statmech_unmatched,
             n_electronic_levels=int(levels.get(r.id, 0)),
             n_torsions=t.get("n", 0),
             n_torsions_without_kind=t.get("no_kind", 0),

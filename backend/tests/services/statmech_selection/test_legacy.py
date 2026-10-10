@@ -86,6 +86,15 @@ def test_a_linked_scale_factor_is_not_an_applied_one():
     assert requirements("vibrational_component", nothing)["scale_application"] == "missing"
 
 
+def test_a_correction_that_used_a_factor_for_no_known_purpose_is_ambiguous_evidence_not_application():
+    unmatched = species_row(has_scale_factor=False, scale_factor_kind=None, applied_scale_kinds=frozenset(), scale_evidence_unmatched=True)
+    for profile in SCALE_PURPOSE:
+        assert requirements(profile, unmatched)["scale_application"] == "ambiguous"
+    matched_and_unmatched = species_row(applied_scale_kinds=frozenset({"zpe"}), scale_evidence_unmatched=True)
+    assert requirements("zpe_component", matched_and_unmatched)["scale_application"] == "present"
+    assert requirements("vibrational_component", matched_and_unmatched)["scale_application"] == "ambiguous"
+
+
 @pytest.mark.parametrize(("profile", "purpose"), sorted(SCALE_PURPOSE.items()))
 def test_a_scale_factor_applied_for_another_purpose_is_not_this_claims(profile, purpose):
     other = next(p for p in sorted(ALL_PURPOSES) if p != purpose)

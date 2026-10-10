@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 import pytest
 from sqlalchemy import func, select
 
@@ -36,20 +38,24 @@ def _delta(after: dict, before: dict, profile: str) -> dict[str, int]:
     return {k: after["by_profile"][profile][k] - before["by_profile"][profile][k] for k in after["by_profile"][profile]}
 
 
-def _scale(session, world, kind: FrequencyScaleKind, value: float = 0.967) -> FrequencyScaleFactor:
+_VALUES = itertools.count(1)
+
+
+def _scale(session, world, kind: FrequencyScaleKind, value: float | None = None) -> FrequencyScaleFactor:
+    value = value if value is not None else 0.5 + next(_VALUES) / 1000  # a distinct row per call: identity includes the value
     fsf = FrequencyScaleFactor(level_of_theory_id=world.lot.id, scale_kind=kind, value=value)
     session.add(fsf)
     session.flush()
     return fsf
 
 
-def _apply(session, world, fsf, calculation) -> None:
+def _apply(session, world, fsf, calculation, role=EnergyCorrectionApplicationRole.zpe) -> None:
     session.add(
         AppliedEnergyCorrection(
             target_species_entry_id=world.entry.id,
             source_calculation_id=calculation.id,
             frequency_scale_factor_id=fsf.id,
-            application_role=EnergyCorrectionApplicationRole.zpe,
+            application_role=role,
             value=0.01,
             value_unit=EnergyUnit.hartree,
         )
@@ -72,7 +78,7 @@ def seeded(db_session):
     a.uses_projected_frequencies = False
     attach_statmech_source_calculation(db_session, statmech=a, calculation=freq, role=StatmechCalculationRole.freq)
     attach_statmech_electronic_level(db_session, statmech=a, level_index=1, energy_cm1=0.0, degeneracy=1)
-    _apply(db_session, world, entropy_factor, freq)
+    _apply(db_session, world, entropy_factor, freq, EnergyCorrectionApplicationRole.entropy_contribution)
     # B: a row that says nothing of its own and links nothing.
     b = make_statmech(
         db_session, species_entry=world.entry, external_symmetry=None, is_linear=None, statmech_treatment=None, point_group=None
@@ -117,11 +123,74 @@ def test_a_scale_factor_is_applied_only_where_an_applied_correction_records_it(d
     _, rows, _ = seeded
     facts = load_legacy_facts(db_session)
     a, c, d = (facts[rows[k].id] for k in "acd")
-    assert a.has_scale_factor and a.applied_scale_kinds == frozenset({"entropy"})
+    assert a.has_scale_factor and a.applied_scale_kinds == frozenset({"entropy"}) and not a.scale_evidence_unmatched
     # D links a fundamental factor but nothing records it as applied; C shares A's frequency job, so it reads the same
     # recorded application of that job (the evidence is the source calculation's).
     assert d.has_scale_factor and d.applied_scale_kinds == frozenset()
     assert c.applied_scale_kinds == frozenset({"entropy"})
+
+
+@pytest.mark.parametrize(
+    ("role", "kind", "applied", "unmatched"),
+    [
+        (EnergyCorrectionApplicationRole.zpe, FrequencyScaleKind.zpe, {"zpe"}, False),
+        (EnergyCorrectionApplicationRole.entropy_contribution, FrequencyScaleKind.entropy, {"entropy"}, False),
+        (EnergyCorrectionApplicationRole.thermal_correction_enthalpy, FrequencyScaleKind.enthalpy, {"enthalpy"}, False),
+        # The role names an energy, the factor was calibrated for something else: a factor was used, for no known purpose.
+        (EnergyCorrectionApplicationRole.zpe, FrequencyScaleKind.fundamental, set(), True),
+        (EnergyCorrectionApplicationRole.entropy_contribution, FrequencyScaleKind.heat_capacity, set(), True),
+        (EnergyCorrectionApplicationRole.zpe, FrequencyScaleKind.entropy, set(), True),
+        # A role that names no factor kind evidences none.
+        (EnergyCorrectionApplicationRole.thermal_correction_energy, FrequencyScaleKind.zpe, set(), True),
+        (EnergyCorrectionApplicationRole.thermal_correction_gibbs, FrequencyScaleKind.entropy, set(), True),
+    ],
+)
+def test_application_is_read_from_the_corrections_role_and_counts_only_when_the_factors_kind_agrees(
+    db_session, seeded, role, kind, applied, unmatched
+):
+    _, _, world = seeded
+    calc = world.freq("role_probe", frequencies=(100.0, 200.0, 300.0))
+    row = make_statmech(db_session, species_entry=world.entry)
+    attach_statmech_source_calculation(db_session, statmech=row, calculation=calc, role=StatmechCalculationRole.freq)
+    _apply(db_session, world, _scale(db_session, world, kind), calc, role)
+    facts = load_legacy_facts(db_session)[row.id]
+    assert facts.applied_scale_kinds == frozenset(applied) and facts.scale_evidence_unmatched is unmatched
+
+
+def test_a_fundamental_factor_in_a_zero_point_correction_does_not_evidence_a_fundamental_scaling(db_session, seeded):
+    """The wrong way round was the defect: ``vibrational_component`` must not read present from a ZPE correction."""
+    _, _, world = seeded
+    calc = world.freq("wrong_way", frequencies=(100.0, 200.0, 300.0))
+    row = make_statmech(db_session, species_entry=world.entry, optical_isomers=1)
+    row.rigid_rotor_kind = RigidRotorKind.asymmetric_top
+    row.uses_projected_frequencies = False
+    attach_statmech_source_calculation(db_session, statmech=row, calculation=calc, role=StatmechCalculationRole.freq)
+    _apply(db_session, world, _scale(db_session, world, FrequencyScaleKind.fundamental), calc)  # role: zpe
+    facts = load_legacy_facts(db_session)[row.id]
+    assert classify("vibrational_component", facts)[1]["scale_application"] == "ambiguous"
+    assert classify("zpe_component", facts)[1]["scale_application"] == "ambiguous"
+    assert classify("vibrational_component", facts)[0].value == "represented_but_ambiguous"
+
+
+def test_application_evidence_belongs_to_the_record_whose_source_calculation_carries_it(db_session, seeded):
+    """Two records of one entry, each linked to a different frequency job, a correction on only one job."""
+    _, _, world = seeded
+    corrected = world.freq("corrected", frequencies=(100.0, 200.0, 300.0))
+    plain = world.freq("plain", frequencies=(100.0, 200.0, 300.0))
+    with_evidence = make_statmech(db_session, species_entry=world.entry)
+    without = make_statmech(db_session, species_entry=world.entry)
+    attach_statmech_source_calculation(db_session, statmech=with_evidence, calculation=corrected, role=StatmechCalculationRole.freq)
+    attach_statmech_source_calculation(db_session, statmech=without, calculation=plain, role=StatmechCalculationRole.freq)
+    _apply(db_session, world, _scale(db_session, world, FrequencyScaleKind.zpe), corrected)
+    mismatched_job = world.freq("mismatched", frequencies=(100.0, 200.0, 300.0))
+    mismatched = make_statmech(db_session, species_entry=world.entry)
+    attach_statmech_source_calculation(db_session, statmech=mismatched, calculation=mismatched_job, role=StatmechCalculationRole.freq)
+    _apply(db_session, world, _scale(db_session, world, FrequencyScaleKind.fundamental), mismatched_job)  # role zpe
+    facts = load_legacy_facts(db_session)
+    assert facts[with_evidence.id].applied_scale_kinds == frozenset({"zpe"})
+    assert facts[without.id].applied_scale_kinds == frozenset() and facts[without.id].scale_evidence_unmatched is False
+    assert facts[with_evidence.id].scale_evidence_unmatched is False  # its own evidence matched
+    assert facts[mismatched.id].applied_scale_kinds == frozenset() and facts[mismatched.id].scale_evidence_unmatched is True
 
 
 def test_an_opt_or_composite_source_with_a_hessian_is_curvature_evidence(db_session, seeded):
