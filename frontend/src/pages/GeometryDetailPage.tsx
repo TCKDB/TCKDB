@@ -11,6 +11,7 @@ import { RecordStatus } from "../components/RecordStatus"
 import { SectionErrorBoundary } from "../components/SectionErrorBoundary"
 import { CopyButton } from "../components/RefsDisclosure"
 import type { GeometryProvenanceCalcLink, GeometryRecord } from "../api/geometryApi"
+import { hasIsotopeLabel, isotopeHillFormula, isotopeLabel } from "../domain/isotopeLabel"
 import { identityFormula, identityFromGeometry } from "../domain/recordIdentity"
 import { useGeometry } from "../hooks/useGeometry"
 import {
@@ -44,10 +45,14 @@ function formatCoordinate(valueAngstrom: number, unit: CoordinateUnitMode): stri
     return angstromToBohr(valueAngstrom).toFixed(6)
 }
 
-function elementDisplayValue(symbol: string, mode: ElementDisplayMode): string {
-    if (mode === "symbol") return symbol
-    const atomicNumber = atomicNumberForSymbol(symbol)
-    return atomicNumber === null ? `unknown (${symbol})` : String(atomicNumber)
+function elementDisplayValue(
+    atom: { element: string; isotope_mass_number?: number | null },
+    mode: ElementDisplayMode,
+): string {
+    if (mode === "symbol") return isotopeLabel(atom)
+    const atomicNumber = atomicNumberForSymbol(atom.element)
+    if (atomicNumber === null) return `unknown (${atom.element})`
+    return atom.isotope_mass_number == null ? String(atomicNumber) : `${atomicNumber} (mass ${atom.isotope_mass_number})`
 }
 
 // ---------------------------------------------------------------------------
@@ -145,8 +150,11 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
     // as if the archive had served it.
     const identity = identityFromGeometry(geometry.identity)
     const servedFormula = identityFormula(identity)
-    const displayFormula = servedFormula ?? clientFormula
-    const formulaIsFallback = servedFormula === null && clientFormula !== ""
+    // An isotope-labelled geometry shows the formula of its own atoms: the
+    // entry's served formula is element-only and would read H2O for D2O.
+    const isotopeLabelled = hasIsotopeLabel(atoms)
+    const displayFormula = isotopeLabelled ? isotopeHillFormula(atoms) : (servedFormula ?? clientFormula)
+    const formulaIsFallback = !isotopeLabelled && servedFormula === null && clientFormula !== ""
 
     // Lifted out of `CoordinateTableSection` (where it lived alone until
     // now) so `GeometryViewer`'s atom-picking measurements can follow the
@@ -210,6 +218,13 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                             submissionRef={geometry.submission_ref}
                             ownRef={{ label: "Geometry ref", value: geometry.geometry_ref }}
                         />
+                        {isotopeLabelled && (
+                            <p className="note">
+                                Formula and element labels include the isotope mass numbers stored on this
+                                geometry's atoms (superscript prefix, e.g. ²H). The owning entry's formula
+                                lists elements only, so it is not used here.
+                            </p>
+                        )}
                         {formulaIsFallback && (
                             // Only reachable when the archive's own identity is absent
                             // or ambiguous — the honest label the brief asks for,
@@ -500,7 +515,7 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
                             {atoms.map((atom) => (
                                 <tr key={atom.atom_index}>
                                     <td data-label="Atom">{atom.atom_index}</td>
-                                    <td data-label="Element">{elementDisplayValue(atom.element, elementDisplay)}</td>
+                                    <td data-label="Element">{elementDisplayValue(atom, elementDisplay)}</td>
                                     {/* `data-label` here carries the ACTIVE UNIT
                                         (`x (Å)` / `x (bohr)`), not a bare axis
                                         letter — this is what the mobile stacked
