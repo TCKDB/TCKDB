@@ -30,6 +30,7 @@ from app.chemistry.kinetics_rules.xyg3_barrier_manifest import (
     XYG3BarrierManifest,
     load_xyg3_barrier_manifest,
 )
+from app.chemistry.manifest_attestation import is_attested
 from app.services.kinetics_selection.models import KineticsRequest, KineticsSubject, NormalizedKinetics, SpeciesFact
 from app.services.selection_kernel import RuleMatch, Tri
 
@@ -193,6 +194,12 @@ class XYG3B3LYPBarrierRule(KineticsRule):
             raise ManifestError(
                 "XYG3 barrier manifest content does not match its pinned digest "
                 f"(expected {XYG3_MANIFEST_SHA256}, got {manifest.sha256})"
+            )
+        elif not is_attested(manifest):
+            # The digest field survives dataclasses.replace, so it proves nothing about the content in hand: compare
+            # the content with what the pinned bytes parsed to.
+            raise ManifestError(
+                "XYG3 barrier manifest is not what the pinned file parses to: its content was edited after loading"
             )
         self._manifest = manifest
         facts = self._manifest.protocol_facts
