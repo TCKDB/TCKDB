@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.112.1 - 2026-10-11
+
+A network state energy stated as `electronic_plus_zpe` can now be held against an sp electronic energy plus a scaled
+frequency ZPE, not only against a composite that stores an E0 (#693).
+
+- `solve.state_energies[].source_calculation_keys[].zpe_calculation_key` (new, optional): the participant's own `freq`
+  calculation whose zero-point energy is added to the energy of `calculation_key`. A non-`freq` calculation is refused
+  with `network_energy_source_type_mismatch`; another species' freq with `network_energy_source_subject_mismatch`. A key
+  that no calculation declares is refused like any undeclared calculation key.
+- `solve.state_energies[].zpe_scale_factor` (new, optional, positive and finite): the factor the producer scaled the ZPEs
+  with, to at least 4 decimals. The energy compared is `sum(stoichiometry * (E_sp + s * ZPE))`. Both fields are accepted
+  only with `correction_convention: electronic_plus_zpe`.
+- An atom's sp or opt counts as its E0 (no ZPE cited), read from the stored one-atom geometry of the cited calculation.
+- With no `zpe_scale_factor` the state is stored as not compared (`zpe_scaling_unstated`): unity is never assumed, even
+  when the unscaled sum agrees. A freq that stores no ZPE is `zpe_not_stated`; an sp and freq not at one geometry are
+  `geometry_not_paired`; no ZPE is borrowed from a sibling calculation. A contradicted sum is refused with the existing
+  `network_state_energy_sum_mismatch`, whose context gains `zpe_scale_factor`. No new refusal code.
+- Reads gain `zpe_calculation_ref` per state-energy source and `zpe_scale_factor` per state energy.
+
 ## 0.112.0 - 2026-10-11
 
 New extrapolation formula `exponential_sqrt` for composite scheme terms: ORCA's SCF form

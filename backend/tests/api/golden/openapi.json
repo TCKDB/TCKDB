@@ -35197,6 +35197,17 @@
           "state_id": {
             "title": "State Id",
             "type": "integer"
+          },
+          "zpe_scale_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zpe Scale Factor"
           }
         },
         "required": [
@@ -35237,6 +35248,17 @@
               }
             ],
             "title": "Stoichiometry"
+          },
+          "zpe_calculation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zpe Calculation Id"
           }
         },
         "required": [
@@ -35273,6 +35295,17 @@
               }
             ],
             "title": "Stoichiometry"
+          },
+          "zpe_calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zpe Calculation Ref"
           }
         },
         "required": [
@@ -35368,6 +35401,17 @@
           "state_composition_hash": {
             "title": "State Composition Hash",
             "type": "string"
+          },
+          "zpe_scale_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zpe Scale Factor"
           }
         },
         "required": [
@@ -48475,6 +48519,19 @@
             "minLength": 1,
             "title": "State Key",
             "type": "string"
+          },
+          "zpe_scale_factor": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "electronic_plus_zpe only. The factor s the producer scaled the harmonic zero-point energies with, stated to at least 4 decimals (or exactly as used). The energy compared is sum(stoichiometry * (E_sp + s * ZPE)) over the participants that cite a zpe_calculation_key. TCKDB stores the unscaled ZPE, so without this factor the sum is not compared (zpe_scaling_unstated): one is never assumed.",
+            "title": "Zpe Scale Factor"
           }
         },
         "required": [
@@ -48488,7 +48545,7 @@
       },
       "StateEnergySourceIn": {
         "additionalProperties": false,
-        "description": "The calculation one participant of a state contributes to the state's energy.\n\n:param species_key: Local key of the participant species. It must be a participant of the\n    state the energy is stated for.\n:param calculation_key: Local key of that species' own calculation (an sp, an opt or a\n    composite for ``electronic_only``). It must belong to exactly that species; a calculation\n    of another species is refused with ``network_energy_source_subject_mismatch``.",
+        "description": "The calculation one participant of a state contributes to the state's energy.\n\n:param species_key: Local key of the participant species. It must be a participant of the\n    state the energy is stated for.\n:param calculation_key: Local key of that species' own calculation (an sp, an opt or a\n    composite for ``electronic_only``). It must belong to exactly that species; a calculation\n    of another species is refused with ``network_energy_source_subject_mismatch``.\n:param zpe_calculation_key: ``electronic_plus_zpe`` only. Local key of the species' own\n    ``freq`` calculation whose zero-point energy is added to the energy of ``calculation_key``\n    (scaled by the state's ``zpe_scale_factor``). The freq must be at the same geometry as the\n    sp or opt, or the pair is stored as not compared. Leave it out for an atom (its single\n    point is its E0) and when ``calculation_key`` is a composite that stores its E0.",
         "properties": {
           "calculation_key": {
             "minLength": 1,
@@ -48499,6 +48556,18 @@
             "minLength": 1,
             "title": "Species Key",
             "type": "string"
+          },
+          "zpe_calculation_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zpe Calculation Key"
           }
         },
         "required": [

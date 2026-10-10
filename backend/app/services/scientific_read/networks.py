@@ -25,7 +25,7 @@ See ``backend/docs/specs/scientific_network_reads.md``.
 from __future__ import annotations
 
 from sqlalchemy import and_, exists, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.api.config import settings
 from app.api.errors import not_found
@@ -1385,14 +1385,17 @@ def _build_state_energies_for_solve(
                 participant.species_entry_id
             ] = (participant.public_ref, participant.stoichiometry)
 
-    listed_by_state: dict[int, list[tuple[int, str]]] = {}
+    listed_by_state: dict[int, list[tuple[int, str, str | None]]] = {}
+    zpe_calculation = aliased(Calculation)
     for source in session.execute(
         select(
             NetworkSolveStateEnergySource.state_id,
             NetworkSolveStateEnergySource.species_entry_id,
             Calculation.public_ref,
+            zpe_calculation.public_ref.label("zpe_public_ref"),
         )
         .join(Calculation, Calculation.id == NetworkSolveStateEnergySource.calculation_id)
+        .outerjoin(zpe_calculation, zpe_calculation.id == NetworkSolveStateEnergySource.zpe_calculation_id)
         .where(NetworkSolveStateEnergySource.solve_id == solve_id)
         .order_by(
             NetworkSolveStateEnergySource.state_id,
@@ -1400,7 +1403,7 @@ def _build_state_energies_for_solve(
         )
     ).all():
         listed_by_state.setdefault(source.state_id, []).append(
-            (source.species_entry_id, source.public_ref)
+            (source.species_entry_id, source.public_ref, source.zpe_public_ref)
         )
 
     summaries: list[NetworkSolveStateEnergySummary] = []
@@ -1409,7 +1412,7 @@ def _build_state_energies_for_solve(
         participants = participants_by_state.get(energy.state_id, {})
         sources: list[NetworkSolveStateEnergySourceSummary] = []
         covered: set[int] = set()
-        for species_entry_id, calculation_ref in listed_by_state.get(energy.state_id, []):
+        for species_entry_id, calculation_ref, zpe_calculation_ref in listed_by_state.get(energy.state_id, []):
             ref, stoichiometry = participants[species_entry_id]
             covered.add(species_entry_id)
             sources.append(
@@ -1417,6 +1420,7 @@ def _build_state_energies_for_solve(
                     species_entry_ref=ref,
                     stoichiometry=stoichiometry,
                     calculation_ref=calculation_ref,
+                    zpe_calculation_ref=zpe_calculation_ref,
                 )
             )
         if not sources and row.source_calculation_ref is not None:
@@ -1450,6 +1454,7 @@ def _build_state_energies_for_solve(
                 source_sum_comparison=energy.source_sum_comparison,
                 source_sum_not_compared_reason=energy.source_sum_not_compared_reason,
                 energy_precision_kj_mol=energy.energy_precision_kj_mol,
+                zpe_scale_factor=energy.zpe_scale_factor,
             )
         )
     return summaries

@@ -813,10 +813,25 @@ class StateEnergySourceIn(SchemaBase):
     :param calculation_key: Local key of that species' own calculation (an sp, an opt or a
         composite for ``electronic_only``). It must belong to exactly that species; a calculation
         of another species is refused with ``network_energy_source_subject_mismatch``.
+    :param zpe_calculation_key: ``electronic_plus_zpe`` only. Local key of the species' own
+        ``freq`` calculation whose zero-point energy is added to the energy of ``calculation_key``
+        (scaled by the state's ``zpe_scale_factor``). The freq must be at the same geometry as the
+        sp or opt, or the pair is stored as not compared. Leave it out for an atom (its single
+        point is its E0) and when ``calculation_key`` is a composite that stores its E0.
     """
 
     species_key: str = Field(min_length=1)
     calculation_key: str = Field(min_length=1)
+    zpe_calculation_key: str | None = Field(default=None, min_length=1)
+
+
+_ZPE_SCALE_FACTOR_DESCRIPTION = (
+    "electronic_plus_zpe only. The factor s the producer scaled the harmonic zero-point energies "
+    "with, stated to at least 4 decimals (or exactly as used). The energy compared is "
+    "sum(stoichiometry * (E_sp + s * ZPE)) over the participants that cite a zpe_calculation_key. "
+    "TCKDB stores the unscaled ZPE, so without this factor the sum is not compared "
+    "(zpe_scaling_unstated): one is never assumed."
+)
 
 
 class StateEnergyIn(ConventionBlock):
@@ -845,6 +860,30 @@ class StateEnergyIn(ConventionBlock):
         allow_inf_nan=False,
         description=_ENERGY_PRECISION_DESCRIPTION,
     )
+    zpe_scale_factor: float | None = Field(
+        default=None,
+        gt=0,
+        allow_inf_nan=False,
+        description=_ZPE_SCALE_FACTOR_DESCRIPTION,
+    )
+
+    @model_validator(mode="after")
+    def validate_zpe_is_for_electronic_plus_zpe(self) -> Self:
+        """A ZPE calculation and its scale factor only mean something on an ``electronic_plus_zpe`` energy."""
+        if self.correction_convention == EnergyCorrectionConvention.electronic_plus_zpe:
+            return self
+        if self.zpe_scale_factor is not None:
+            raise ValueError(
+                "zpe_scale_factor scales the zero-point energy of an electronic_plus_zpe energy "
+                f"and is not accepted with correction_convention '{self.correction_convention.value}'."
+            )
+        if any(source.zpe_calculation_key is not None for source in self.source_calculation_keys or []):
+            raise ValueError(
+                "zpe_calculation_key adds a zero-point energy to the sp or opt energy and is only "
+                "accepted with correction_convention 'electronic_plus_zpe', not "
+                f"'{self.correction_convention.value}'."
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_energy_is_finite(self) -> Self:
@@ -2108,6 +2147,17 @@ class NetworkPDepUploadRequest(SchemaBase):
                                 f"source_calculation_keys[{source_index}].calculation_key"
                             ),
                             key=source.calculation_key,
+                            declared=calc_keys,
+                        )
+                    if source.zpe_calculation_key is not None and source.zpe_calculation_key not in calc_keys:
+                        raise undeclared_key_error(
+                            W_CALCULATION_KEY_UNDECLARED,
+                            "state_energies references undefined zpe_calculation_key.",
+                            field=(
+                                f"solve.state_energies[{energy_index}]."
+                                f"source_calculation_keys[{source_index}].zpe_calculation_key"
+                            ),
+                            key=source.zpe_calculation_key,
                             declared=calc_keys,
                         )
                 if energy.source_calculation_key is not None and energy.source_calculation_key not in calc_keys:

@@ -27,14 +27,17 @@ from tckdb_schemas.upload_warning import UploadWarning
 from app.chemistry.geometry import parse_xyz
 from app.db.models.calculation import (
     Calculation,
+    CalculationInputGeometry,
     CalculationOutputGeometry,
 )
 from app.db.models.common import (
     CalculationGeometryRole,
+    CalculationType,
     EnergyCorrectionConvention,
     NetworkSpeciesRole,
     SubmissionRecordType,
 )
+from app.db.models.geometry import Geometry
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
     NetworkChannel,
@@ -93,6 +96,7 @@ from app.services.local_key_resolution import (
     resolve_species_key,
     resolve_transition_state_key,
 )
+from app.services.monatomic import natoms_are_all_one
 from app.services.network_declaration_resolution import (
     attach_fit,
     persist_network_declarations,
@@ -107,6 +111,7 @@ from app.services.network_energy_sources import (
     assert_network_source_role_type,
     assert_state_energy_source_owner,
     assert_state_participant_source_owner,
+    assert_state_zpe_source_type,
     collect_state_energy_source_warnings,
     compare_state_energy_sums,
     refuse_source_species_outside_state,
@@ -154,6 +159,62 @@ _PDEP_ABSENCE_REMEDY = (
     "reaction, deposit it through the computed-reaction upload, which accepts "
     "'atom_map' (ADR 0011)."
 )
+
+
+def _energy_geometry_ids(session: Session, calculation: Calculation) -> frozenset[int]:
+    """The geometries a calculation's energy (or ZPE) is at, as this route records them.
+
+    An ``opt``'s energy is at its final output geometry. An ``sp`` or ``freq`` is at its input
+    geometry; on this route a calculation's ``geometry_key`` is recorded as its ``final`` output
+    geometry (``_persist_calculation``), so an sp or freq with no input geometry row is at that one.
+    Both are the geometry the producer declared for that very calculation: nothing is taken from
+    another calculation.
+    """
+    final = select(CalculationOutputGeometry.geometry_id).where(
+        CalculationOutputGeometry.calculation_id == calculation.id,
+        CalculationOutputGeometry.role == CalculationGeometryRole.final,
+    )
+    if calculation.type != CalculationType.opt:
+        inputs = session.scalars(
+            select(CalculationInputGeometry.geometry_id).where(
+                CalculationInputGeometry.calculation_id == calculation.id
+            )
+        ).all()
+        if inputs:
+            return frozenset(inputs)
+    return frozenset(session.scalars(final).all())
+
+
+def _geometry_facts(session: Session, calculation: Calculation) -> tuple[frozenset[int], bool]:
+    """The geometries a calculation's energy is at, and whether that geometry is a single atom."""
+    geometry_ids = _energy_geometry_ids(session, calculation)
+    natoms = session.scalars(select(Geometry.natoms).where(Geometry.id.in_(geometry_ids))).all() if geometry_ids else []
+    return geometry_ids, natoms_are_all_one(natoms)
+
+
+def _participant_source(
+    session: Session,
+    *,
+    species_key: str,
+    stoichiometry: int,
+    calculation: Calculation | None,
+    zpe_calculation: Calculation | None,
+    looks_up_geometry: bool,
+) -> ParticipantSource:
+    """A participant with the geometry facts the ``electronic_plus_zpe`` sum pairs its ZPE by."""
+    if calculation is None or not looks_up_geometry:
+        return ParticipantSource(species_key, stoichiometry, calculation, zpe_calculation)
+    electronic_geometry, is_atom = _geometry_facts(session, calculation)
+    zpe_geometry = _energy_geometry_ids(session, zpe_calculation) if zpe_calculation is not None else None
+    return ParticipantSource(
+        species_key,
+        stoichiometry,
+        calculation,
+        zpe_calculation,
+        electronic_geometry_ids=electronic_geometry,
+        zpe_geometry_ids=zpe_geometry,
+        is_atom=is_atom,
+    )
 
 
 def _calculation_row(session: Session, calculation_id: int) -> Calculation:
@@ -1061,7 +1122,7 @@ def persist_network_pdep_upload(
         }
         sum_inputs: list[StateEnergyToCompare] = []
         sum_rows: list[NetworkSolveStateEnergy] = []
-        participant_source_rows: list[tuple[int, int, int]] = []
+        participant_source_rows: list[tuple[int, int, int, int | None]] = []
         for energy_index, energy_in in enumerate(solve_in.state_energies):
             energy_state = resolve_network_state_key(
                 energy_in.state_key,
@@ -1079,6 +1140,7 @@ def persist_network_pdep_upload(
             ).all()
             energy_state_species = {row.species_entry_id for row in participant_rows}
             cited: dict[int, Calculation] = {}
+            cited_zpe: dict[int, Calculation] = {}
             single_source_id: int | None = None
             energy_field = f"solve.state_energies[{energy_index}]"
             if energy_in.source_calculation_key and energy_in.source_calculation_keys:
@@ -1127,6 +1189,25 @@ def persist_network_pdep_upload(
                             f"'{source_in.species_key}' is listed more than once."
                         )
                     cited[source_species] = source_calculation
+                    if source_in.zpe_calculation_key is not None:
+                        zpe_field = f"{source_field}.zpe_calculation_key"
+                        zpe_calculation = _calculation_row(
+                            session,
+                            resolve_calculation_key(
+                                source_in.zpe_calculation_key,
+                                calculation_key_to_id,
+                                field=zpe_field,
+                            ),
+                        )
+                        assert_state_zpe_source_type(zpe_calculation, field=zpe_field)
+                        assert_state_participant_source_owner(
+                            zpe_calculation,
+                            source_species,
+                            species_key=source_in.species_key,
+                            state_key=energy_in.state_key,
+                            field=zpe_field,
+                        )
+                        cited_zpe[source_species] = zpe_calculation
             elif energy_in.source_calculation_key:
                 single_source_id = _resolve_energy_source(
                     session,
@@ -1158,6 +1239,7 @@ def persist_network_pdep_upload(
                 convention_note=energy_in.convention_note,
                 source_calculation_id=single_source_id,
                 energy_precision_kj_mol=energy_in.energy_precision_kj_mol,
+                zpe_scale_factor=energy_in.zpe_scale_factor,
             )
             session.add(energy_row)
             sum_rows.append(energy_row)
@@ -1169,11 +1251,16 @@ def persist_network_pdep_upload(
                     energy_zero_convention=energy_in.energy_zero_convention,
                     correction_convention=energy_in.correction_convention,
                     energy_precision_kj_mol=energy_in.energy_precision_kj_mol,
+                    zpe_scale_factor=energy_in.zpe_scale_factor,
                     participants=tuple(
-                        ParticipantSource(
+                        _participant_source(
+                            session,
                             species_key=species_key_by_entry_id.get(row.species_entry_id, "?"),
                             stoichiometry=row.stoichiometry,
                             calculation=cited.get(row.species_entry_id),
+                            zpe_calculation=cited_zpe.get(row.species_entry_id),
+                            looks_up_geometry=energy_in.correction_convention
+                            == EnergyCorrectionConvention.electronic_plus_zpe,
                         )
                         for row in participant_rows
                     ),
@@ -1182,7 +1269,12 @@ def persist_network_pdep_upload(
             if energy_in.source_calculation_keys:
                 for species_entry_id, source_calculation in cited.items():
                     participant_source_rows.append(
-                        (energy_state.id, species_entry_id, source_calculation.id)
+                        (
+                            energy_state.id,
+                            species_entry_id,
+                            source_calculation.id,
+                            cited_zpe[species_entry_id].id if species_entry_id in cited_zpe else None,
+                        )
                     )
 
         # The sum check needs every state energy of the solve (a shared zero compares states with
@@ -1194,13 +1286,14 @@ def persist_network_pdep_upload(
             energy_row.source_sum_not_compared_reason = comparison.reason
         warning_sink.extend(collect_state_energy_source_warnings(sum_inputs, sum_comparisons))
         session.flush()
-        for state_id, species_entry_id, calculation_id in participant_source_rows:
+        for state_id, species_entry_id, calculation_id, zpe_calculation_id in participant_source_rows:
             session.add(
                 NetworkSolveStateEnergySource(
                     solve_id=solve.id,
                     state_id=state_id,
                     species_entry_id=species_entry_id,
                     calculation_id=calculation_id,
+                    zpe_calculation_id=zpe_calculation_id,
                 )
             )
 

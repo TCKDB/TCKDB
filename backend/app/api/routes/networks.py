@@ -165,6 +165,7 @@ def _state_energy_reads(
                 species_entry_id=source.species_entry_id,
                 stoichiometry=coefficient.get((source.state_id, source.species_entry_id)),
                 calculation_id=source.calculation_id,
+                zpe_calculation_id=source.zpe_calculation_id,
             )
         )
     reads: list[NetworkSolveStateEnergyRead] = []
