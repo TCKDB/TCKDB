@@ -65,6 +65,9 @@ from app.services.scientific_read.profile import current_read_profile
 from app.services.thermo_selection.models import MAX_CANDIDATES, H298Request, H298Selection, Outcome
 from app.services.thermo_selection.service import select_h298
 
+#: ``Session.info`` key a TEST harness sets, explicitly, to be read under whatever isolation it already has.
+SNAPSHOT_OPT_OUT = "tckdb_read_snapshot_opt_out"
+
 
 def ref_only_handle(session: Session, model_cls: type, handle: str, *, kind_label: str, resolver) -> int:
     """Resolve a public ref to a row id, refusing an integer id outright.
@@ -109,6 +112,12 @@ def run_selection(
     ``method_preferred`` applies the shipped registry. The administrative policies apply no rule at
     all: they order by review status and recency exactly as the browse endpoints do, and say so.
     The population cap is the service's fixed 500; it is not a request field.
+
+    The session must be a read-only snapshot (see ``get_snapshot_db``), and this insists on it: a session that is
+    not one (``get_db``'s, say, if a route were wired to it by mistake) raises ``SnapshotNotConsistentError`` instead
+    of quietly answering under READ COMMITTED. Only a session that carries ``SNAPSHOT_OPT_OUT`` in its ``info`` is
+    read as it is; that exists for the test harness, which holds one outer transaction that cannot become a
+    snapshot, and nothing in the application sets it.
     """
     group_id = resolve_group_ref(session, body.target.conformer_group_ref) if body.target.conformer_group_ref else None
     request = H298Request(
@@ -118,7 +127,13 @@ def run_selection(
         admin_policy=_admin_policy(body.policy),
     )
     rules = None if body.policy is ThermoSelectionPolicy.method_preferred else ()
-    selection = select_h298(session, species_entry_id=species_entry_id, request=request, rules=rules)
+    selection = select_h298(
+        session,
+        species_entry_id=species_entry_id,
+        request=request,
+        rules=rules,
+        require_snapshot=not session.info.get(SNAPSHOT_OPT_OUT, False),
+    )
     if selection.outcome is Outcome.bounded_search_exceeded:
         # The service counted only records at or above the effective floor, so this number is about the
         # caller's visible population and says nothing about records the profile hides.
@@ -273,6 +288,7 @@ def _basis(selection: H298Selection, decision: dict[str, Any] | None) -> str:
 
 
 __all__ = [
+    "SNAPSHOT_OPT_OUT",
     "build_response",
     "profile_has_floor",
     "redact_manifest",
