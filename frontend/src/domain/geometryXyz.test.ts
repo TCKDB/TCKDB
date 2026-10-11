@@ -8,10 +8,17 @@ describe("hydrogenSymbolsForViewer (#732)", () => {
         )
     })
 
-    it("returns the identical string when there is nothing to rewrite, and never touches Tc/Ti/Dy", () => {
-        const xyz = "4\n\nC 0 0 0\nTc 1 1 1\nTi 2 2 2\nDy 3 3 3"
-        expect(hydrogenSymbolsForViewer(xyz)).toBe(xyz)
+    it("rewrites lowercase d and t as well", () => {
+        expect(hydrogenSymbolsForViewer("2\n\nd 1 2 3\n\tt 4 5 6")).toBe("2\n\nH 1 2 3\n\tH 4 5 6")
     })
+
+    it.each(["Ti", "Ta", "Tb", "Tc", "Te", "Th", "Tl", "Tm", "Ts", "Db", "Ds", "Dy", "TI", "DY", "D1", "T1"])(
+        "returns the identical string when the only candidate is %s",
+        (symbol) => {
+            const xyz = `2\n\nC 0 0 0\n${symbol} 1 1 1`
+            expect(hydrogenSymbolsForViewer(xyz)).toBe(xyz)
+        },
+    )
 })
 
 describe("buildXyzBlock", () => {
