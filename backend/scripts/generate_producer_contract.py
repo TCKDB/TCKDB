@@ -1442,9 +1442,10 @@ class SharedGroup:
         Groups used to be numbered by size and order, so adding one code that made a new owner set
         renumbered every later group and moved every link to them in the contract diff (#686). The
         owner set is what makes a group one group, so a hash of it is stable under adding or removing
-        codes, and changes only when the set of surfaces that share them does.
+        codes, and changes only when the set of surfaces that share them does. It is a set, so the
+        titles are sorted first: the order the surfaces are listed in does not move it.
         """
-        return hashlib.sha1("\x00".join(self.titles).encode()).hexdigest()[:6]
+        return hashlib.sha1("\x00".join(sorted(self.titles)).encode()).hexdigest()[:6]
 
 
 @dataclasses.dataclass

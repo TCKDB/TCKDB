@@ -313,6 +313,28 @@ def test_a_uniform_scale_just_inside_the_tolerance_is_one_structure(fraction: fl
     assert levels._same_polyatomic_structure(a, b, SearchBudget()) is True
 
 
+@pytest.mark.parametrize("fraction", [1.05, 1.5])
+def test_a_uniform_scale_just_outside_the_tolerance_is_dismissed_by_the_prefilter_alone(
+    monkeypatch, fraction: float
+) -> None:
+    """Here the radius gap *is* the RMSD, so just outside 1x the prefilter must answer: no Kabsch call, no charge.
+
+    Pins the prefilter from above (the cases above pin it from below). Mutation: widen the prefilter to
+    1.1x the tolerance; the 1.05 case is then passed on to ``kabsch_rmsd`` and fails.
+    """
+    calls: list[int] = []
+    real = levels.kabsch_rmsd
+    monkeypatch.setattr(levels, "kabsch_rmsd", lambda *a, **k: calls.append(1) or real(*a, **k))
+    base = [(1.5 * k, 0.4 * (k % 3), 0.3 * (k % 4)) for k in range(8)]
+    radius = levels._gyration_radius(base)
+    a, b = _atoms_from(base), _atoms_from(_breathed(base, 1.0 + fraction * TOL / radius))
+    budget = SearchBudget()
+    assert levels._same_polyatomic_structure(a, b, budget) is False
+    assert calls == []
+    assert budget.same_order_work_left == prm.MAX_SAME_ORDER_WORK_PER_RECORD
+    assert budget.work_left == prm.MAX_WORK_PER_RECORD
+
+
 @pytest.mark.parametrize("fraction", [1.05, 1.5, 10.0])
 def test_a_collinear_stretch_just_outside_the_tolerance_is_a_different_structure(fraction: float) -> None:
     base = _collinear()

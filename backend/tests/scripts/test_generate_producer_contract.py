@@ -970,6 +970,8 @@ def test_a_group_key_depends_only_on_the_surfaces_that_own_it(builder, committed
     ]
     assert same_owners_other_items[0].key == same_owners_other_items[1].key
     assert generator.SharedGroup(("A", "C"), ("x",)).key != same_owners_other_items[0].key
+    # The owner set is a set: listing the same surfaces in another order is the same group.
+    assert generator.SharedGroup(("B", "A"), ("x",)).key == same_owners_other_items[0].key
     for groups, _alone in (builder.code_groups(), builder.model_groups()):
         keys = [group.key for group in groups]
         assert len(set(keys)) == len(keys)

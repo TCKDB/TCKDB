@@ -570,9 +570,9 @@ If your chemistry is legitimate: Deposit no geometry. An explicitly declared *st
 
 A refusal code that two or more surfaces can return is printed once, here, in a group of the codes exactly the same surfaces return. A surface's own "Refusal codes this surface can return" section lists the codes only it can return and links the groups it belongs to: its codes are those plus every code of those groups. `Traced via` is how the code was reached, joined over the group's surfaces. Each code links to its entry in the [refusal code reference](REFUSAL_CODES.md#refusal-code-reference).
 
-<a id="cg-56937b"></a>
+<a id="cg-1f3999"></a>
 
-### Code group 56937b
+### Code group 1f3999
 
 3 codes on 16 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ThermoMLUploadRequest`](#s-thermomluploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0), [`ArtifactsUploadRequest`](#s-artifactsuploadrequest), [`RightsAttestationCreate`](#s-rightsattestationcreate), [`SubmissionSupersedeRequest`](#s-submissionsupersederequest).
 
@@ -582,9 +582,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`tckdb_client_version_missing`](REFUSAL_CODES.md#c-tckdb-client-version-missing) | 426 | route dependency; route handler (only on: ArtifactsUploadRequest, RightsAttestationCreate, SubmissionSupersedeRequest) |
 | [`tckdb_client_version_unsupported`](REFUSAL_CODES.md#c-tckdb-client-version-unsupported) | 426 | route dependency; route handler (only on: ArtifactsUploadRequest, RightsAttestationCreate, SubmissionSupersedeRequest) |
 
-<a id="cg-3b1136"></a>
+<a id="cg-52edeb"></a>
 
-### Code group 3b1136
+### Code group 52edeb
 
 4 codes on 14 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ThermoMLUploadRequest`](#s-thermomluploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0), [`RightsAttestationCreate`](#s-rightsattestationcreate).
 
@@ -595,9 +595,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`rights_license_blank`](REFUSAL_CODES.md#c-rights-license-blank) | 422 | route handler |
 | [`rights_source_terms_required`](REFUSAL_CODES.md#c-rights-source-terms-required) | 422 | route handler |
 
-<a id="cg-46dfc9"></a>
+<a id="cg-9d894c"></a>
 
-### Code group 46dfc9
+### Code group 9d894c
 
 1 code on 13 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0), [`ArtifactsUploadRequest`](#s-artifactsuploadrequest).
 
@@ -605,9 +605,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 |---|---|---|
 | [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict) | 422 | route handler |
 
-<a id="cg-c2c182"></a>
+<a id="cg-9080ca"></a>
 
-### Code group c2c182
+### Code group 9080ca
 
 5 codes on 12 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -619,9 +619,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`species_kind_conflict`](REFUSAL_CODES.md#c-species-kind-conflict) | 422 | route handler |
 | [`species_smiles_charge_mismatch`](REFUSAL_CODES.md#c-species-smiles-charge-mismatch) | 422 | route handler |
 
-<a id="cg-829916"></a>
+<a id="cg-6637b7"></a>
 
-### Code group 829916
+### Code group 6637b7
 
 1 code on 11 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -629,9 +629,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 |---|---|---|
 | [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum) | 422 | payload validation (only on: ComputedReactionUploadRequest, ComputedSpeciesUploadRequest, ConformerUploadRequest, NetworkPDepUploadRequest, StatmechUploadRequest, ThermoUploadRequest, TransportUploadRequest, ContributionBundleV0); route handler (only on: ComputedSpeciesUploadRequest, ConformerUploadRequest, KineticsUploadRequest, ReactionUploadRequest, StatmechUploadRequest, ThermoUploadRequest, TransitionStateUploadRequest, TransportUploadRequest, ContributionBundleV0) |
 
-<a id="cg-f593d7"></a>
+<a id="cg-0bc6ac"></a>
 
-### Code group f593d7
+### Code group 0bc6ac
 
 7 codes on 10 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -645,9 +645,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`level_of_theory_requires_method_or_composite_scheme`](REFUSAL_CODES.md#c-level-of-theory-requires-method-or-composite-scheme) | 422 | payload validation; route handler |
 | [`unknown_calculation_ref`](REFUSAL_CODES.md#c-unknown-calculation-ref) | 404 | route handler |
 
-<a id="cg-ec0fc9"></a>
+<a id="cg-f44899"></a>
 
-### Code group ec0fc9
+### Code group f44899
 
 2 codes on 10 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0), [`ArtifactsUploadRequest`](#s-artifactsuploadrequest).
 
@@ -656,9 +656,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`calculation_geometry_composition_mismatch`](REFUSAL_CODES.md#c-calculation-geometry-composition-mismatch) | 422 | route handler |
 | [`calculation_geometry_isotope_mismatch`](REFUSAL_CODES.md#c-calculation-geometry-isotope-mismatch) | 422 | route handler |
 
-<a id="cg-ccfec0"></a>
+<a id="cg-59233e"></a>
 
-### Code group ccfec0
+### Code group 59233e
 
 32 codes on 9 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -697,9 +697,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`structure_declaration_invalid`](REFUSAL_CODES.md#c-structure-declaration-invalid) | 422 | route handler |
 | [`structure_declaration_version_unsupported`](REFUSAL_CODES.md#c-structure-declaration-version-unsupported) | 422 | payload validation; route handler |
 
-<a id="cg-c5696a"></a>
+<a id="cg-1b4fd4"></a>
 
-### Code group c5696a
+### Code group 1b4fd4
 
 3 codes on 8 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -709,9 +709,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`unknown_conformer_group_ref`](REFUSAL_CODES.md#c-unknown-conformer-group-ref) | 404 | route handler |
 | [`unknown_statmech_ref`](REFUSAL_CODES.md#c-unknown-statmech-ref) | 404 | route handler |
 
-<a id="cg-bb509f"></a>
+<a id="cg-18399d"></a>
 
-### Code group bb509f
+### Code group 18399d
 
 3 codes on 7 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -721,9 +721,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`reaction_mass_balance_failed`](REFUSAL_CODES.md#c-reaction-mass-balance-failed) | 422 | route handler |
 | [`stored_species_smiles_unparseable`](REFUSAL_CODES.md#c-stored-species-smiles-unparseable) | 422 | route handler |
 
-<a id="cg-f957c1"></a>
+<a id="cg-6deb1a"></a>
 
-### Code group f957c1
+### Code group 6deb1a
 
 3 codes on 6 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -755,9 +755,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`statmech_sp_geometry_mismatch`](REFUSAL_CODES.md#c-statmech-sp-geometry-mismatch) | 422 | route handler |
 | [`unknown_structure_determination_ref`](REFUSAL_CODES.md#c-unknown-structure-determination-ref) | 404 | route handler |
 
-<a id="cg-6624c5"></a>
+<a id="cg-3cf09b"></a>
 
-### Code group 6624c5
+### Code group 3cf09b
 
 1 code on 5 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -765,9 +765,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 |---|---|---|
 | [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared) | 422 | payload validation (only on: ComputedReactionUploadRequest, ComputedSpeciesUploadRequest, ThermoUploadRequest, ContributionBundleV0); route handler |
 
-<a id="cg-83f546"></a>
+<a id="cg-27e253"></a>
 
-### Code group 83f546
+### Code group 27e253
 
 1 code on 5 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -786,9 +786,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`structure_determination_invalid`](REFUSAL_CODES.md#c-structure-determination-invalid) | 422 | payload validation; route handler |
 | [`structure_determination_mismatch`](REFUSAL_CODES.md#c-structure-determination-mismatch) | 422 | route handler |
 
-<a id="cg-6758cf"></a>
+<a id="cg-1fa7bb"></a>
 
-### Code group 6758cf
+### Code group 1fa7bb
 
 20 codes on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -835,9 +835,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 |---|---|---|
 | [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch) | 422 | payload validation (only on: ComputedReactionUploadRequest); route handler |
 
-<a id="cg-dc7fbf"></a>
+<a id="cg-e68218"></a>
 
-### Code group dc7fbf
+### Code group e68218
 
 15 codes on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -880,9 +880,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`ts_energy_ordering_stated_energy_mismatch`](REFUSAL_CODES.md#c-ts-energy-ordering-stated-energy-mismatch) | 422 | route handler |
 | [`ts_validation_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-ts-validation-source-calculation-owner-mismatch) | 422 | route handler |
 
-<a id="cg-3088ed"></a>
+<a id="cg-e1aa2b"></a>
 
-### Code group 3088ed
+### Code group e1aa2b
 
 1 code on 3 surfaces: [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -928,9 +928,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`atom_map_atoms_unaccounted_for`](REFUSAL_CODES.md#c-atom-map-atoms-unaccounted-for) | 422 | payload validation; route handler |
 | [`atom_map_geometry_unparseable`](REFUSAL_CODES.md#c-atom-map-geometry-unparseable) | 422 | payload validation; route handler |
 
-<a id="cg-38d83e"></a>
+<a id="cg-ec93af"></a>
 
-### Code group 38d83e
+### Code group ec93af
 
 2 codes on 2 surfaces: [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -939,9 +939,9 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`arrhenius_a_units_molecularity_mismatch`](REFUSAL_CODES.md#c-arrhenius-a-units-molecularity-mismatch) | 422 | payload validation; route handler |
 | [`unsupported_reaction_molecularity`](REFUSAL_CODES.md#c-unsupported-reaction-molecularity) | 422 | payload validation; route handler |
 
-<a id="cg-e3a8a3"></a>
+<a id="cg-4d6b34"></a>
 
-### Code group e3a8a3
+### Code group 4d6b34
 
 1 code on 2 surfaces: [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -967,25 +967,25 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 
 A model that two or more surfaces' payloads nest is listed once, here, in a group of the models exactly the same surfaces nest. A surface's "Payload fields" section lists the models only it nests and links the groups it belongs to: its nested models are those plus every model of those groups. Fields and rules of each model are in the [model reference](#model-reference).
 
-<a id="mg-d51cba"></a>
+<a id="mg-56e819"></a>
 
-### Model group d51cba
+### Model group 56e819
 
 1 model nested on 13 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ThermoMLUploadRequest`](#s-thermomluploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
 - [`DepositRights`](#m-depositrights)
 
-<a id="mg-c2c182"></a>
+<a id="mg-9080ca"></a>
 
-### Model group c2c182
+### Model group 9080ca
 
 1 model nested on 12 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
 - [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload)
 
-<a id="mg-8f5930"></a>
+<a id="mg-170bfd"></a>
 
-### Model group 8f5930
+### Model group 170bfd
 
 3 models nested on 11 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -993,9 +993,9 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`SoftwareReleaseRef`](#m-softwarereleaseref)
 - [`WorkflowToolReleaseRef`](#m-workflowtoolreleaseref)
 
-<a id="mg-f593d7"></a>
+<a id="mg-0bc6ac"></a>
 
-### Model group f593d7
+### Model group 0bc6ac
 
 5 models nested on 10 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1005,9 +1005,9 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`CompositeSchemeTermInputIn`](#m-compositeschemeterminputin)
 - [`LevelOfTheoryRef`](#m-leveloftheoryref)
 
-<a id="mg-ccfec0"></a>
+<a id="mg-59233e"></a>
 
-### Model group ccfec0
+### Model group 59233e
 
 30 models nested on 9 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1042,17 +1042,17 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`WavefunctionDiagnosticPayload`](#m-wavefunctiondiagnosticpayload)
 - [`WorkflowToolReleaseIdentity`](#m-workflowtoolreleaseidentity)
 
-<a id="mg-90cc6b"></a>
+<a id="mg-eade25"></a>
 
-### Model group 90cc6b
+### Model group eade25
 
 1 model nested on 8 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
 - [`FreqScaleFactorRef`](#m-freqscalefactorref)
 
-<a id="mg-fdc8b7"></a>
+<a id="mg-145d3c"></a>
 
-### Model group fdc8b7
+### Model group 145d3c
 
 10 models nested on 8 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1067,9 +1067,9 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`PathSearchPointPayload`](#m-pathsearchpointpayload)
 - [`PathSearchResultPayload`](#m-pathsearchresultpayload)
 
-<a id="mg-2b394e"></a>
+<a id="mg-c84d1c"></a>
 
-### Model group 2b394e
+### Model group c84d1c
 
 4 models nested on 7 surfaces: [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1078,9 +1078,9 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`OptResultPayload`](#m-optresultpayload)
 - [`SPResultPayload`](#m-spresultpayload)
 
-<a id="mg-f957c1"></a>
+<a id="mg-6deb1a"></a>
 
-### Model group f957c1
+### Model group 6deb1a
 
 5 models nested on 6 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1090,9 +1090,9 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`SchemeBondParamPayload`](#m-schemebondparampayload)
 - [`SchemeComponentParamPayload`](#m-schemecomponentparampayload)
 
-<a id="mg-83ecaa"></a>
+<a id="mg-d7659c"></a>
 
-### Model group 83ecaa
+### Model group d7659c
 
 1 model nested on 6 surfaces: [`ConformerUploadRequest`](#s-conformeruploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1131,17 +1131,17 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`StructureEvaluatedGeometry`](#m-structureevaluatedgeometry)
 - [`StructureSourceDeclaration`](#m-structuresourcedeclaration)
 
-<a id="mg-361944"></a>
+<a id="mg-f180df"></a>
 
-### Model group 361944
+### Model group f180df
 
 1 model nested on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ArtifactsUploadRequest`](#s-artifactsuploadrequest).
 
 - [`ArtifactIn`](#m-artifactin)
 
-<a id="mg-6758cf"></a>
+<a id="mg-1fa7bb"></a>
 
-### Model group 6758cf
+### Model group 1fa7bb
 
 9 models nested on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1155,17 +1155,17 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`ThermoTargetDeclaration`](#m-thermotargetdeclaration)
 - [`ThermoThermalApproximation`](#m-thermothermalapproximation)
 
-<a id="mg-37fb63"></a>
+<a id="mg-fd1ab4"></a>
 
-### Model group 37fb63
+### Model group fd1ab4
 
 1 model nested on 4 surfaces: [`ConformerUploadRequest`](#s-conformeruploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
 - [`AppliedEnergyCorrectionUploadPayload`](#m-appliedenergycorrectionuploadpayload)
 
-<a id="mg-8367cb"></a>
+<a id="mg-29a5e4"></a>
 
-### Model group 8367cb
+### Model group 29a5e4
 
 1 model nested on 4 surfaces: [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1181,9 +1181,9 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`StatmechInBundle`](#m-statmechinbundle)
 - [`StatmechTorsionInBundle`](#m-statmechtorsioninbundle)
 
-<a id="mg-dc7fbf"></a>
+<a id="mg-e68218"></a>
 
-### Model group dc7fbf
+### Model group e68218
 
 8 models nested on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1206,9 +1206,9 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`TransitionStateComparedEnergy`](#m-transitionstatecomparedenergy)
 - [`TransitionStateValidationEvidenceIn`](#m-transitionstatevalidationevidencein)
 
-<a id="mg-3088ed"></a>
+<a id="mg-e1aa2b"></a>
 
-### Model group 3088ed
+### Model group e1aa2b
 
 2 models nested on 3 surfaces: [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1252,9 +1252,9 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 
 - [`StatmechTorsionIn`](#m-statmechtorsionin)
 
-<a id="mg-38d83e"></a>
+<a id="mg-ec93af"></a>
 
-### Model group 38d83e
+### Model group ec93af
 
 5 models nested on 2 surfaces: [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1264,9 +1264,9 @@ A model that two or more surfaces' payloads nest is listed once, here, in a grou
 - [`PlogEntryUpload`](#m-plogentryupload)
 - [`ThirdBodyEfficiencyUpload`](#m-thirdbodyefficiencyupload)
 
-<a id="mg-e3a8a3"></a>
+<a id="mg-4d6b34"></a>
 
-### Model group e3a8a3
+### Model group 4d6b34
 
 7 models nested on 2 surfaces: [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
@@ -1589,21 +1589,21 @@ Nested models (108; fields and rules in the [model reference](#model-reference))
 - [`BundleStatmechIn`](#m-bundlestatmechin)
 - [`KineticsSourceCalculationIn`](#m-kineticssourcecalculationin)
 - [`BundleStatmechTorsionIn`](#m-bundlestatmechtorsionin)
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
-- [Model group 8f5930](#mg-8f5930): 3 models, nested on 11 surfaces
-- [Model group f593d7](#mg-f593d7): 5 models, nested on 10 surfaces
-- [Model group ccfec0](#mg-ccfec0): 30 models, nested on 9 surfaces
-- [Model group 90cc6b](#mg-90cc6b): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
-- [Model group fdc8b7](#mg-fdc8b7): 10 models, nested on 8 surfaces
-- [Model group f957c1](#mg-f957c1): 5 models, nested on 6 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 170bfd](#mg-170bfd): 3 models, nested on 11 surfaces
+- [Model group 0bc6ac](#mg-0bc6ac): 5 models, nested on 10 surfaces
+- [Model group 59233e](#mg-59233e): 30 models, nested on 9 surfaces
+- [Model group eade25](#mg-eade25): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
+- [Model group 145d3c](#mg-145d3c): 10 models, nested on 8 surfaces
+- [Model group 6deb1a](#mg-6deb1a): 5 models, nested on 6 surfaces
 - [Model group 64b917](#mg-64b917): 7 models, nested on 5 surfaces
 - [Model group 1548d5](#mg-1548d5): [`StatmechSourceCalcIn`](#m-statmechsourcecalcin), nested on 4 surfaces
 - [Model group 1544cf](#mg-1544cf): 4 models, nested on 4 surfaces
-- [Model group 361944](#mg-361944): [`ArtifactIn`](#m-artifactin), nested on 4 surfaces
-- [Model group 6758cf](#mg-6758cf): 9 models, nested on 4 surfaces
+- [Model group f180df](#mg-f180df): [`ArtifactIn`](#m-artifactin), nested on 4 surfaces
+- [Model group 1fa7bb](#mg-1fa7bb): 9 models, nested on 4 surfaces
 - [Model group 1a217e](#mg-1a217e): 3 models, nested on 3 surfaces
-- [Model group dc7fbf](#mg-dc7fbf): 8 models, nested on 3 surfaces
+- [Model group e68218](#mg-e68218): 8 models, nested on 3 surfaces
 - [Model group c8f060](#mg-c8f060): 3 models, nested on 3 surfaces
 - [Model group 6aa675](#mg-6aa675): 5 models, nested on 2 surfaces
 - [Model group ec9c39](#mg-ec9c39): 2 models, nested on 2 surfaces
@@ -1702,25 +1702,25 @@ Nested models (108; fields and rules in the [model reference](#model-reference))
 |---|---|---|
 | [`kinetics_energy_level_contradiction`](REFUSAL_CODES.md#c-kinetics-energy-level-contradiction) | 422 | route handler |
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group 829916](#cg-829916): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
-- [Code group f593d7](#cg-f593d7): 7 codes, returned on 10 surfaces
-- [Code group ec0fc9](#cg-ec0fc9): 2 codes, returned on 10 surfaces
-- [Code group ccfec0](#cg-ccfec0): 32 codes, returned on 9 surfaces
-- [Code group c5696a](#cg-c5696a): 3 codes, returned on 8 surfaces
-- [Code group bb509f](#cg-bb509f): 3 codes, returned on 7 surfaces
-- [Code group f957c1](#cg-f957c1): 3 codes, returned on 6 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 6637b7](#cg-6637b7): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
+- [Code group 0bc6ac](#cg-0bc6ac): 7 codes, returned on 10 surfaces
+- [Code group f44899](#cg-f44899): 2 codes, returned on 10 surfaces
+- [Code group 59233e](#cg-59233e): 32 codes, returned on 9 surfaces
+- [Code group 1b4fd4](#cg-1b4fd4): 3 codes, returned on 8 surfaces
+- [Code group 18399d](#cg-18399d): 3 codes, returned on 7 surfaces
+- [Code group 6deb1a](#cg-6deb1a): 3 codes, returned on 6 surfaces
 - [Code group 64b917](#cg-64b917): 13 codes, returned on 5 surfaces
-- [Code group 6624c5](#cg-6624c5): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
-- [Code group 83f546](#cg-83f546): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
+- [Code group 3cf09b](#cg-3cf09b): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
+- [Code group 27e253](#cg-27e253): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
 - [Code group 1544cf](#cg-1544cf): 2 codes, returned on 4 surfaces
-- [Code group 6758cf](#cg-6758cf): 20 codes, returned on 4 surfaces
+- [Code group 1fa7bb](#cg-1fa7bb): 20 codes, returned on 4 surfaces
 - [Code group 1a217e](#cg-1a217e): [`statmech_torsion_scan_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-torsion-scan-calculation-owner-mismatch), returned on 3 surfaces
 - [Code group 2ac41f](#cg-2ac41f): [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch), returned on 3 surfaces
-- [Code group dc7fbf](#cg-dc7fbf): 15 codes, returned on 3 surfaces
+- [Code group e68218](#cg-e68218): 15 codes, returned on 3 surfaces
 - [Code group c8f060](#cg-c8f060): 12 codes, returned on 3 surfaces
 - [Code group 6aa675](#cg-6aa675): 3 codes, returned on 2 surfaces
 - [Code group 02b23e](#cg-02b23e): 6 codes, returned on 2 surfaces
@@ -1812,20 +1812,20 @@ Nested models (93; fields and rules in the [model reference](#model-reference)):
 - [`ConformerInBundle`](#m-conformerinbundle)
 - [`ThermoInBundle`](#m-thermoinbundle)
 - [`CalculationInBundle`](#m-calculationinbundle)
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
-- [Model group 8f5930](#mg-8f5930): 3 models, nested on 11 surfaces
-- [Model group f593d7](#mg-f593d7): 5 models, nested on 10 surfaces
-- [Model group ccfec0](#mg-ccfec0): 30 models, nested on 9 surfaces
-- [Model group 90cc6b](#mg-90cc6b): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
-- [Model group fdc8b7](#mg-fdc8b7): 10 models, nested on 8 surfaces
-- [Model group 2b394e](#mg-2b394e): 4 models, nested on 7 surfaces
-- [Model group f957c1](#mg-f957c1): 5 models, nested on 6 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 170bfd](#mg-170bfd): 3 models, nested on 11 surfaces
+- [Model group 0bc6ac](#mg-0bc6ac): 5 models, nested on 10 surfaces
+- [Model group 59233e](#mg-59233e): 30 models, nested on 9 surfaces
+- [Model group eade25](#mg-eade25): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
+- [Model group 145d3c](#mg-145d3c): 10 models, nested on 8 surfaces
+- [Model group c84d1c](#mg-c84d1c): 4 models, nested on 7 surfaces
+- [Model group 6deb1a](#mg-6deb1a): 5 models, nested on 6 surfaces
 - [Model group 64b917](#mg-64b917): 7 models, nested on 5 surfaces
 - [Model group 1548d5](#mg-1548d5): [`StatmechSourceCalcIn`](#m-statmechsourcecalcin), nested on 4 surfaces
 - [Model group 1544cf](#mg-1544cf): 4 models, nested on 4 surfaces
-- [Model group 361944](#mg-361944): [`ArtifactIn`](#m-artifactin), nested on 4 surfaces
-- [Model group 6758cf](#mg-6758cf): 9 models, nested on 4 surfaces
+- [Model group f180df](#mg-f180df): [`ArtifactIn`](#m-artifactin), nested on 4 surfaces
+- [Model group 1fa7bb](#mg-1fa7bb): 9 models, nested on 4 surfaces
 - [Model group 1a217e](#mg-1a217e): 3 models, nested on 3 surfaces
 - [Model group 6aa675](#mg-6aa675): 5 models, nested on 2 surfaces
 
@@ -1902,21 +1902,21 @@ Nested models (93; fields and rules in the [model reference](#model-reference)):
 
 ### Refusal codes this surface can return
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group 829916](#cg-829916): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
-- [Code group f593d7](#cg-f593d7): 7 codes, returned on 10 surfaces
-- [Code group ec0fc9](#cg-ec0fc9): 2 codes, returned on 10 surfaces
-- [Code group ccfec0](#cg-ccfec0): 32 codes, returned on 9 surfaces
-- [Code group c5696a](#cg-c5696a): 3 codes, returned on 8 surfaces
-- [Code group f957c1](#cg-f957c1): 3 codes, returned on 6 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 6637b7](#cg-6637b7): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
+- [Code group 0bc6ac](#cg-0bc6ac): 7 codes, returned on 10 surfaces
+- [Code group f44899](#cg-f44899): 2 codes, returned on 10 surfaces
+- [Code group 59233e](#cg-59233e): 32 codes, returned on 9 surfaces
+- [Code group 1b4fd4](#cg-1b4fd4): 3 codes, returned on 8 surfaces
+- [Code group 6deb1a](#cg-6deb1a): 3 codes, returned on 6 surfaces
 - [Code group 64b917](#cg-64b917): 13 codes, returned on 5 surfaces
-- [Code group 6624c5](#cg-6624c5): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
-- [Code group 83f546](#cg-83f546): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
+- [Code group 3cf09b](#cg-3cf09b): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
+- [Code group 27e253](#cg-27e253): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
 - [Code group 1544cf](#cg-1544cf): 2 codes, returned on 4 surfaces
-- [Code group 6758cf](#cg-6758cf): 20 codes, returned on 4 surfaces
+- [Code group 1fa7bb](#cg-1fa7bb): 20 codes, returned on 4 surfaces
 - [Code group 1a217e](#cg-1a217e): [`statmech_torsion_scan_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-torsion-scan-calculation-owner-mismatch), returned on 3 surfaces
 - [Code group 2ac41f](#cg-2ac41f): [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch), returned on 3 surfaces
 - [Code group 6aa675](#cg-6aa675): 3 codes, returned on 2 surfaces
@@ -2005,20 +2005,20 @@ Nested models (78; fields and rules in the [model reference](#model-reference)):
 
 - [`ConformerCalculationIn`](#m-conformercalculationin)
 - [`ConformerUploadStatmechPayload`](#m-conformeruploadstatmechpayload)
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
-- [Model group 8f5930](#mg-8f5930): 3 models, nested on 11 surfaces
-- [Model group f593d7](#mg-f593d7): 5 models, nested on 10 surfaces
-- [Model group ccfec0](#mg-ccfec0): 30 models, nested on 9 surfaces
-- [Model group 90cc6b](#mg-90cc6b): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
-- [Model group fdc8b7](#mg-fdc8b7): 10 models, nested on 8 surfaces
-- [Model group 2b394e](#mg-2b394e): 4 models, nested on 7 surfaces
-- [Model group f957c1](#mg-f957c1): 5 models, nested on 6 surfaces
-- [Model group 83ecaa](#mg-83ecaa): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 170bfd](#mg-170bfd): 3 models, nested on 11 surfaces
+- [Model group 0bc6ac](#mg-0bc6ac): 5 models, nested on 10 surfaces
+- [Model group 59233e](#mg-59233e): 30 models, nested on 9 surfaces
+- [Model group eade25](#mg-eade25): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
+- [Model group 145d3c](#mg-145d3c): 10 models, nested on 8 surfaces
+- [Model group c84d1c](#mg-c84d1c): 4 models, nested on 7 surfaces
+- [Model group 6deb1a](#mg-6deb1a): 5 models, nested on 6 surfaces
+- [Model group d7659c](#mg-d7659c): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
 - [Model group 64b917](#mg-64b917): 7 models, nested on 5 surfaces
 - [Model group 1548d5](#mg-1548d5): [`StatmechSourceCalcIn`](#m-statmechsourcecalcin), nested on 4 surfaces
 - [Model group 1544cf](#mg-1544cf): 4 models, nested on 4 surfaces
-- [Model group 37fb63](#mg-37fb63): [`AppliedEnergyCorrectionUploadPayload`](#m-appliedenergycorrectionuploadpayload), nested on 4 surfaces
+- [Model group fd1ab4](#mg-fd1ab4): [`AppliedEnergyCorrectionUploadPayload`](#m-appliedenergycorrectionuploadpayload), nested on 4 surfaces
 - [Model group 9d5839](#mg-9d5839): [`TransportUploadPayload`](#m-transportuploadpayload), nested on 2 surfaces
 - [Model group 69a361](#mg-69a361): [`StatmechTorsionIn`](#m-statmechtorsionin), nested on 2 surfaces
 
@@ -2071,18 +2071,18 @@ Nested models (78; fields and rules in the [model reference](#model-reference)):
 
 ### Refusal codes this surface can return
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group 829916](#cg-829916): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
-- [Code group f593d7](#cg-f593d7): 7 codes, returned on 10 surfaces
-- [Code group ec0fc9](#cg-ec0fc9): 2 codes, returned on 10 surfaces
-- [Code group ccfec0](#cg-ccfec0): 32 codes, returned on 9 surfaces
-- [Code group c5696a](#cg-c5696a): 3 codes, returned on 8 surfaces
-- [Code group f957c1](#cg-f957c1): 3 codes, returned on 6 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 6637b7](#cg-6637b7): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
+- [Code group 0bc6ac](#cg-0bc6ac): 7 codes, returned on 10 surfaces
+- [Code group f44899](#cg-f44899): 2 codes, returned on 10 surfaces
+- [Code group 59233e](#cg-59233e): 32 codes, returned on 9 surfaces
+- [Code group 1b4fd4](#cg-1b4fd4): 3 codes, returned on 8 surfaces
+- [Code group 6deb1a](#cg-6deb1a): 3 codes, returned on 6 surfaces
 - [Code group 64b917](#cg-64b917): 13 codes, returned on 5 surfaces
-- [Code group 6624c5](#cg-6624c5): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
+- [Code group 3cf09b](#cg-3cf09b): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
 - [Code group 1544cf](#cg-1544cf): 2 codes, returned on 4 surfaces
 
 ### Minimal valid example
@@ -2187,13 +2187,13 @@ Unknown keys are refused.
 
 Nested models (25; fields and rules in the [model reference](#model-reference)):
 
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
-- [Model group 8f5930](#mg-8f5930): 3 models, nested on 11 surfaces
-- [Model group f593d7](#mg-f593d7): 5 models, nested on 10 surfaces
-- [Model group dc7fbf](#mg-dc7fbf): 8 models, nested on 3 surfaces
-- [Model group 3088ed](#mg-3088ed): 2 models, nested on 3 surfaces
-- [Model group 38d83e](#mg-38d83e): 5 models, nested on 2 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 170bfd](#mg-170bfd): 3 models, nested on 11 surfaces
+- [Model group 0bc6ac](#mg-0bc6ac): 5 models, nested on 10 surfaces
+- [Model group e68218](#mg-e68218): 8 models, nested on 3 surfaces
+- [Model group e1aa2b](#mg-e1aa2b): 2 models, nested on 3 surfaces
+- [Model group ec93af](#mg-ec93af): 5 models, nested on 2 surfaces
 
 ### Rules the payload model enforces
 
@@ -2276,17 +2276,17 @@ Nested models (25; fields and rules in the [model reference](#model-reference)):
 
 ### Refusal codes this surface can return
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group 829916](#cg-829916): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
-- [Code group f593d7](#cg-f593d7): 7 codes, returned on 10 surfaces
-- [Code group c5696a](#cg-c5696a): 3 codes, returned on 8 surfaces
-- [Code group bb509f](#cg-bb509f): 3 codes, returned on 7 surfaces
-- [Code group dc7fbf](#cg-dc7fbf): 15 codes, returned on 3 surfaces
-- [Code group 3088ed](#cg-3088ed): [`reaction_reversible_required`](REFUSAL_CODES.md#c-reaction-reversible-required), returned on 3 surfaces
-- [Code group 38d83e](#cg-38d83e): 2 codes, returned on 2 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 6637b7](#cg-6637b7): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
+- [Code group 0bc6ac](#cg-0bc6ac): 7 codes, returned on 10 surfaces
+- [Code group 1b4fd4](#cg-1b4fd4): 3 codes, returned on 8 surfaces
+- [Code group 18399d](#cg-18399d): 3 codes, returned on 7 surfaces
+- [Code group e68218](#cg-e68218): 15 codes, returned on 3 surfaces
+- [Code group e1aa2b](#cg-e1aa2b): [`reaction_reversible_required`](REFUSAL_CODES.md#c-reaction-reversible-required), returned on 3 surfaces
+- [Code group ec93af](#cg-ec93af): 2 codes, returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -2375,10 +2375,10 @@ Nested models (9; fields and rules in the [model reference](#model-reference)):
 
 - [`NetworkUploadSpeciesLinkPayload`](#m-networkuploadspecieslinkpayload)
 - [`NetworkUploadReactionPayload`](#m-networkuploadreactionpayload)
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
-- [Model group 8f5930](#mg-8f5930): 3 models, nested on 11 surfaces
-- [Model group 3088ed](#mg-3088ed): 2 models, nested on 3 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 170bfd](#mg-170bfd): 3 models, nested on 11 surfaces
+- [Model group e1aa2b](#mg-e1aa2b): 2 models, nested on 3 surfaces
 
 ### Rules the payload model enforces
 
@@ -2394,12 +2394,12 @@ Nested models (9; fields and rules in the [model reference](#model-reference)):
 
 ### Refusal codes this surface can return
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group bb509f](#cg-bb509f): 3 codes, returned on 7 surfaces
-- [Code group 3088ed](#cg-3088ed): [`reaction_reversible_required`](REFUSAL_CODES.md#c-reaction-reversible-required), returned on 3 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 18399d](#cg-18399d): 3 codes, returned on 7 surfaces
+- [Code group e1aa2b](#cg-e1aa2b): [`reaction_reversible_required`](REFUSAL_CODES.md#c-reaction-reversible-required), returned on 3 surfaces
 
 ### Minimal valid example
 
@@ -2494,15 +2494,15 @@ Nested models (93; fields and rules in the [model reference](#model-reference)):
 - [`NetworkObservableDeclaration`](#m-networkobservabledeclaration)
 - [`NetworkLump`](#m-networklump)
 - [`NetworkProductSetMember`](#m-networkproductsetmember)
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
-- [Model group 8f5930](#mg-8f5930): 3 models, nested on 11 surfaces
-- [Model group f593d7](#mg-f593d7): 5 models, nested on 10 surfaces
-- [Model group ccfec0](#mg-ccfec0): 30 models, nested on 9 surfaces
-- [Model group 90cc6b](#mg-90cc6b): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 170bfd](#mg-170bfd): 3 models, nested on 11 surfaces
+- [Model group 0bc6ac](#mg-0bc6ac): 5 models, nested on 10 surfaces
+- [Model group 59233e](#mg-59233e): 30 models, nested on 9 surfaces
+- [Model group eade25](#mg-eade25): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
 - [Model group 64b917](#mg-64b917): 7 models, nested on 5 surfaces
 - [Model group 1548d5](#mg-1548d5): [`StatmechSourceCalcIn`](#m-statmechsourcecalcin), nested on 4 surfaces
-- [Model group 361944](#mg-361944): [`ArtifactIn`](#m-artifactin), nested on 4 surfaces
+- [Model group f180df](#mg-f180df): [`ArtifactIn`](#m-artifactin), nested on 4 surfaces
 - [Model group 1a217e](#mg-1a217e): 3 models, nested on 3 surfaces
 - [Model group c8f060](#mg-c8f060): 3 models, nested on 3 surfaces
 - [Model group 9d5839](#mg-9d5839): [`TransportUploadPayload`](#m-transportuploadpayload), nested on 2 surfaces
@@ -2630,18 +2630,18 @@ Nested models (93; fields and rules in the [model reference](#model-reference)):
 | [`transition_state_key_undeclared`](REFUSAL_CODES.md#c-transition-state-key-undeclared) | 422 | payload validation; route handler |
 | [`unknown_network_solve_ref`](REFUSAL_CODES.md#c-unknown-network-solve-ref) | 404 | route handler |
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group 829916](#cg-829916): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
-- [Code group f593d7](#cg-f593d7): 7 codes, returned on 10 surfaces
-- [Code group ec0fc9](#cg-ec0fc9): 2 codes, returned on 10 surfaces
-- [Code group ccfec0](#cg-ccfec0): 32 codes, returned on 9 surfaces
-- [Code group c5696a](#cg-c5696a): 3 codes, returned on 8 surfaces
-- [Code group bb509f](#cg-bb509f): 3 codes, returned on 7 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 6637b7](#cg-6637b7): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
+- [Code group 0bc6ac](#cg-0bc6ac): 7 codes, returned on 10 surfaces
+- [Code group f44899](#cg-f44899): 2 codes, returned on 10 surfaces
+- [Code group 59233e](#cg-59233e): 32 codes, returned on 9 surfaces
+- [Code group 1b4fd4](#cg-1b4fd4): 3 codes, returned on 8 surfaces
+- [Code group 18399d](#cg-18399d): 3 codes, returned on 7 surfaces
 - [Code group 64b917](#cg-64b917): 13 codes, returned on 5 surfaces
-- [Code group 83f546](#cg-83f546): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
+- [Code group 27e253](#cg-27e253): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
 - [Code group 1a217e](#cg-1a217e): [`statmech_torsion_scan_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-torsion-scan-calculation-owner-mismatch), returned on 3 surfaces
 - [Code group c8f060](#cg-c8f060): 12 codes, returned on 3 surfaces
 - [Code group 02b23e](#cg-02b23e): 6 codes, returned on 2 surfaces
@@ -2718,8 +2718,8 @@ Unknown keys are refused.
 Nested models (3; fields and rules in the [model reference](#model-reference)):
 
 - [`ReactionParticipantUpload`](#m-reactionparticipantupload)
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
 
 ### Rules the payload model enforces
 
@@ -2741,12 +2741,12 @@ Nested models (3; fields and rules in the [model reference](#model-reference)):
 
 ### Refusal codes this surface can return
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group 829916](#cg-829916): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
-- [Code group bb509f](#cg-bb509f): 3 codes, returned on 7 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 6637b7](#cg-6637b7): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
+- [Code group 18399d](#cg-18399d): 3 codes, returned on 7 surfaces
 
 ### Minimal valid example
 
@@ -2853,17 +2853,17 @@ Nested models (67; fields and rules in the [model reference](#model-reference)):
 
 - [`StatmechCalculationIn`](#m-statmechcalculationin)
 - [`StatmechSourceCalculationIn`](#m-statmechsourcecalculationin)
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
-- [Model group 8f5930](#mg-8f5930): 3 models, nested on 11 surfaces
-- [Model group f593d7](#mg-f593d7): 5 models, nested on 10 surfaces
-- [Model group ccfec0](#mg-ccfec0): 30 models, nested on 9 surfaces
-- [Model group 90cc6b](#mg-90cc6b): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
-- [Model group fdc8b7](#mg-fdc8b7): 10 models, nested on 8 surfaces
-- [Model group 2b394e](#mg-2b394e): 4 models, nested on 7 surfaces
-- [Model group 83ecaa](#mg-83ecaa): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 170bfd](#mg-170bfd): 3 models, nested on 11 surfaces
+- [Model group 0bc6ac](#mg-0bc6ac): 5 models, nested on 10 surfaces
+- [Model group 59233e](#mg-59233e): 30 models, nested on 9 surfaces
+- [Model group eade25](#mg-eade25): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
+- [Model group 145d3c](#mg-145d3c): 10 models, nested on 8 surfaces
+- [Model group c84d1c](#mg-c84d1c): 4 models, nested on 7 surfaces
+- [Model group d7659c](#mg-d7659c): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
 - [Model group 64b917](#mg-64b917): 7 models, nested on 5 surfaces
-- [Model group 8367cb](#mg-8367cb): [`CalculationWithResultsPayload`](#m-calculationwithresultspayload), nested on 4 surfaces
+- [Model group 29a5e4](#mg-29a5e4): [`CalculationWithResultsPayload`](#m-calculationwithresultspayload), nested on 4 surfaces
 - [Model group 69a361](#mg-69a361): [`StatmechTorsionIn`](#m-statmechtorsionin), nested on 2 surfaces
 
 ### Rules the payload model enforces
@@ -2942,15 +2942,15 @@ Nested models (67; fields and rules in the [model reference](#model-reference)):
 
 ### Refusal codes this surface can return
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group 829916](#cg-829916): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
-- [Code group f593d7](#cg-f593d7): 7 codes, returned on 10 surfaces
-- [Code group ec0fc9](#cg-ec0fc9): 2 codes, returned on 10 surfaces
-- [Code group ccfec0](#cg-ccfec0): 32 codes, returned on 9 surfaces
-- [Code group c5696a](#cg-c5696a): 3 codes, returned on 8 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 6637b7](#cg-6637b7): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
+- [Code group 0bc6ac](#cg-0bc6ac): 7 codes, returned on 10 surfaces
+- [Code group f44899](#cg-f44899): 2 codes, returned on 10 surfaces
+- [Code group 59233e](#cg-59233e): 32 codes, returned on 9 surfaces
+- [Code group 1b4fd4](#cg-1b4fd4): 3 codes, returned on 8 surfaces
 - [Code group 64b917](#cg-64b917): 13 codes, returned on 5 surfaces
 
 ### Minimal valid example
@@ -3036,20 +3036,20 @@ Unknown keys are refused. Non-finite numbers (NaN, Infinity) are refused.
 
 Nested models (79; fields and rules in the [model reference](#model-reference)):
 
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
-- [Model group 8f5930](#mg-8f5930): 3 models, nested on 11 surfaces
-- [Model group f593d7](#mg-f593d7): 5 models, nested on 10 surfaces
-- [Model group ccfec0](#mg-ccfec0): 30 models, nested on 9 surfaces
-- [Model group 90cc6b](#mg-90cc6b): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
-- [Model group fdc8b7](#mg-fdc8b7): 10 models, nested on 8 surfaces
-- [Model group 2b394e](#mg-2b394e): 4 models, nested on 7 surfaces
-- [Model group f957c1](#mg-f957c1): 5 models, nested on 6 surfaces
-- [Model group 83ecaa](#mg-83ecaa): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
-- [Model group 6758cf](#mg-6758cf): 9 models, nested on 4 surfaces
-- [Model group 37fb63](#mg-37fb63): [`AppliedEnergyCorrectionUploadPayload`](#m-appliedenergycorrectionuploadpayload), nested on 4 surfaces
-- [Model group 8367cb](#mg-8367cb): [`CalculationWithResultsPayload`](#m-calculationwithresultspayload), nested on 4 surfaces
-- [Model group e3a8a3](#mg-e3a8a3): 7 models, nested on 2 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 170bfd](#mg-170bfd): 3 models, nested on 11 surfaces
+- [Model group 0bc6ac](#mg-0bc6ac): 5 models, nested on 10 surfaces
+- [Model group 59233e](#mg-59233e): 30 models, nested on 9 surfaces
+- [Model group eade25](#mg-eade25): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
+- [Model group 145d3c](#mg-145d3c): 10 models, nested on 8 surfaces
+- [Model group c84d1c](#mg-c84d1c): 4 models, nested on 7 surfaces
+- [Model group 6deb1a](#mg-6deb1a): 5 models, nested on 6 surfaces
+- [Model group d7659c](#mg-d7659c): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
+- [Model group 1fa7bb](#mg-1fa7bb): 9 models, nested on 4 surfaces
+- [Model group fd1ab4](#mg-fd1ab4): [`AppliedEnergyCorrectionUploadPayload`](#m-appliedenergycorrectionuploadpayload), nested on 4 surfaces
+- [Model group 29a5e4](#mg-29a5e4): [`CalculationWithResultsPayload`](#m-calculationwithresultspayload), nested on 4 surfaces
+- [Model group 4d6b34](#mg-4d6b34): 7 models, nested on 2 surfaces
 
 ### Rules the payload model enforces
 
@@ -3154,20 +3154,20 @@ Nested models (79; fields and rules in the [model reference](#model-reference)):
 
 ### Refusal codes this surface can return
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group 829916](#cg-829916): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
-- [Code group f593d7](#cg-f593d7): 7 codes, returned on 10 surfaces
-- [Code group ec0fc9](#cg-ec0fc9): 2 codes, returned on 10 surfaces
-- [Code group ccfec0](#cg-ccfec0): 32 codes, returned on 9 surfaces
-- [Code group c5696a](#cg-c5696a): 3 codes, returned on 8 surfaces
-- [Code group f957c1](#cg-f957c1): 3 codes, returned on 6 surfaces
-- [Code group 6624c5](#cg-6624c5): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
-- [Code group 83f546](#cg-83f546): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
-- [Code group 6758cf](#cg-6758cf): 20 codes, returned on 4 surfaces
-- [Code group e3a8a3](#cg-e3a8a3): [`thermo_statmech_owner_mismatch`](REFUSAL_CODES.md#c-thermo-statmech-owner-mismatch), returned on 2 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 6637b7](#cg-6637b7): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
+- [Code group 0bc6ac](#cg-0bc6ac): 7 codes, returned on 10 surfaces
+- [Code group f44899](#cg-f44899): 2 codes, returned on 10 surfaces
+- [Code group 59233e](#cg-59233e): 32 codes, returned on 9 surfaces
+- [Code group 1b4fd4](#cg-1b4fd4): 3 codes, returned on 8 surfaces
+- [Code group 6deb1a](#cg-6deb1a): 3 codes, returned on 6 surfaces
+- [Code group 3cf09b](#cg-3cf09b): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
+- [Code group 27e253](#cg-27e253): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
+- [Code group 1fa7bb](#cg-1fa7bb): 20 codes, returned on 4 surfaces
+- [Code group 4d6b34](#cg-4d6b34): [`thermo_statmech_owner_mismatch`](REFUSAL_CODES.md#c-thermo-statmech-owner-mismatch), returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -3267,7 +3267,7 @@ Unknown keys are refused.
 
 Nested models (1; fields and rules in the [model reference](#model-reference)):
 
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
 
 ### Rules the payload model enforces
 
@@ -3287,8 +3287,8 @@ No marked rule or register check is reached from these handlers.
 | [`thermoml_no_supported_content`](REFUSAL_CODES.md#c-thermoml-no-supported-content) | 422 | route handler |
 | [`thermoml_schema_invalid`](REFUSAL_CODES.md#c-thermoml-schema-invalid) | 422 | route handler |
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
 
 ### Minimal valid example
 
@@ -3358,18 +3358,18 @@ Nested models (74; fields and rules in the [model reference](#model-reference)):
 - [`TSReactionUpload`](#m-tsreactionupload)
 - [`TransitionStateCalculationIn`](#m-transitionstatecalculationin)
 - [`TSReactionParticipantUpload`](#m-tsreactionparticipantupload)
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
-- [Model group 8f5930](#mg-8f5930): 3 models, nested on 11 surfaces
-- [Model group f593d7](#mg-f593d7): 5 models, nested on 10 surfaces
-- [Model group ccfec0](#mg-ccfec0): 30 models, nested on 9 surfaces
-- [Model group 90cc6b](#mg-90cc6b): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
-- [Model group fdc8b7](#mg-fdc8b7): 10 models, nested on 8 surfaces
-- [Model group 2b394e](#mg-2b394e): 4 models, nested on 7 surfaces
-- [Model group f957c1](#mg-f957c1): 5 models, nested on 6 surfaces
-- [Model group 83ecaa](#mg-83ecaa): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 170bfd](#mg-170bfd): 3 models, nested on 11 surfaces
+- [Model group 0bc6ac](#mg-0bc6ac): 5 models, nested on 10 surfaces
+- [Model group 59233e](#mg-59233e): 30 models, nested on 9 surfaces
+- [Model group eade25](#mg-eade25): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
+- [Model group 145d3c](#mg-145d3c): 10 models, nested on 8 surfaces
+- [Model group c84d1c](#mg-c84d1c): 4 models, nested on 7 surfaces
+- [Model group 6deb1a](#mg-6deb1a): 5 models, nested on 6 surfaces
+- [Model group d7659c](#mg-d7659c): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
 - [Model group 1544cf](#mg-1544cf): 4 models, nested on 4 surfaces
-- [Model group 37fb63](#mg-37fb63): [`AppliedEnergyCorrectionUploadPayload`](#m-appliedenergycorrectionuploadpayload), nested on 4 surfaces
+- [Model group fd1ab4](#mg-fd1ab4): [`AppliedEnergyCorrectionUploadPayload`](#m-appliedenergycorrectionuploadpayload), nested on 4 surfaces
 - [Model group c8f060](#mg-c8f060): 3 models, nested on 3 surfaces
 - [Model group ec9c39](#mg-ec9c39): 2 models, nested on 2 surfaces
 
@@ -3461,16 +3461,16 @@ Nested models (74; fields and rules in the [model reference](#model-reference)):
 
 ### Refusal codes this surface can return
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group 829916](#cg-829916): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
-- [Code group f593d7](#cg-f593d7): 7 codes, returned on 10 surfaces
-- [Code group ec0fc9](#cg-ec0fc9): 2 codes, returned on 10 surfaces
-- [Code group ccfec0](#cg-ccfec0): 32 codes, returned on 9 surfaces
-- [Code group bb509f](#cg-bb509f): 3 codes, returned on 7 surfaces
-- [Code group f957c1](#cg-f957c1): 3 codes, returned on 6 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 6637b7](#cg-6637b7): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
+- [Code group 0bc6ac](#cg-0bc6ac): 7 codes, returned on 10 surfaces
+- [Code group f44899](#cg-f44899): 2 codes, returned on 10 surfaces
+- [Code group 59233e](#cg-59233e): 32 codes, returned on 9 surfaces
+- [Code group 18399d](#cg-18399d): 3 codes, returned on 7 surfaces
+- [Code group 6deb1a](#cg-6deb1a): 3 codes, returned on 6 surfaces
 - [Code group 1544cf](#cg-1544cf): 2 codes, returned on 4 surfaces
 - [Code group c8f060](#cg-c8f060): 12 codes, returned on 3 surfaces
 - [Code group ec9c39](#cg-ec9c39): 2 codes, returned on 2 surfaces
@@ -3595,15 +3595,15 @@ Nested models (58; fields and rules in the [model reference](#model-reference)):
 
 - [`TransportCalculationIn`](#m-transportcalculationin)
 - [`TransportSourceCalculationIn`](#m-transportsourcecalculationin)
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
-- [Model group 8f5930](#mg-8f5930): 3 models, nested on 11 surfaces
-- [Model group f593d7](#mg-f593d7): 5 models, nested on 10 surfaces
-- [Model group ccfec0](#mg-ccfec0): 30 models, nested on 9 surfaces
-- [Model group fdc8b7](#mg-fdc8b7): 10 models, nested on 8 surfaces
-- [Model group 2b394e](#mg-2b394e): 4 models, nested on 7 surfaces
-- [Model group 83ecaa](#mg-83ecaa): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
-- [Model group 8367cb](#mg-8367cb): [`CalculationWithResultsPayload`](#m-calculationwithresultspayload), nested on 4 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 170bfd](#mg-170bfd): 3 models, nested on 11 surfaces
+- [Model group 0bc6ac](#mg-0bc6ac): 5 models, nested on 10 surfaces
+- [Model group 59233e](#mg-59233e): 30 models, nested on 9 surfaces
+- [Model group 145d3c](#mg-145d3c): 10 models, nested on 8 surfaces
+- [Model group c84d1c](#mg-c84d1c): 4 models, nested on 7 surfaces
+- [Model group d7659c](#mg-d7659c): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
+- [Model group 29a5e4](#mg-29a5e4): [`CalculationWithResultsPayload`](#m-calculationwithresultspayload), nested on 4 surfaces
 
 ### Rules the payload model enforces
 
@@ -3654,14 +3654,14 @@ Nested models (58; fields and rules in the [model reference](#model-reference)):
 
 ### Refusal codes this surface can return
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group 829916](#cg-829916): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
-- [Code group f593d7](#cg-f593d7): 7 codes, returned on 10 surfaces
-- [Code group ec0fc9](#cg-ec0fc9): 2 codes, returned on 10 surfaces
-- [Code group ccfec0](#cg-ccfec0): 32 codes, returned on 9 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 6637b7](#cg-6637b7): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
+- [Code group 0bc6ac](#cg-0bc6ac): 7 codes, returned on 10 surfaces
+- [Code group f44899](#cg-f44899): 2 codes, returned on 10 surfaces
+- [Code group 59233e](#cg-59233e): 32 codes, returned on 9 surfaces
 - [Code group 2ac41f](#cg-2ac41f): [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch), returned on 3 surfaces
 
 ### Minimal valid example
@@ -3786,23 +3786,23 @@ Nested models (103; fields and rules in the [model reference](#model-reference))
 - [`ThermoUploadRequest`](#m-thermouploadrequest)
 - [`KineticsUploadRequest`](#m-kineticsuploadrequest)
 - [`BundleManifestFile`](#m-bundlemanifestfile)
-- [Model group d51cba](#mg-d51cba): [`DepositRights`](#m-depositrights), nested on 13 surfaces
-- [Model group c2c182](#mg-c2c182): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
-- [Model group 8f5930](#mg-8f5930): 3 models, nested on 11 surfaces
-- [Model group f593d7](#mg-f593d7): 5 models, nested on 10 surfaces
-- [Model group ccfec0](#mg-ccfec0): 30 models, nested on 9 surfaces
-- [Model group 90cc6b](#mg-90cc6b): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
-- [Model group fdc8b7](#mg-fdc8b7): 10 models, nested on 8 surfaces
-- [Model group 2b394e](#mg-2b394e): 4 models, nested on 7 surfaces
-- [Model group f957c1](#mg-f957c1): 5 models, nested on 6 surfaces
-- [Model group 83ecaa](#mg-83ecaa): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
-- [Model group 6758cf](#mg-6758cf): 9 models, nested on 4 surfaces
-- [Model group 37fb63](#mg-37fb63): [`AppliedEnergyCorrectionUploadPayload`](#m-appliedenergycorrectionuploadpayload), nested on 4 surfaces
-- [Model group 8367cb](#mg-8367cb): [`CalculationWithResultsPayload`](#m-calculationwithresultspayload), nested on 4 surfaces
-- [Model group dc7fbf](#mg-dc7fbf): 8 models, nested on 3 surfaces
-- [Model group 3088ed](#mg-3088ed): 2 models, nested on 3 surfaces
-- [Model group 38d83e](#mg-38d83e): 5 models, nested on 2 surfaces
-- [Model group e3a8a3](#mg-e3a8a3): 7 models, nested on 2 surfaces
+- [Model group 56e819](#mg-56e819): [`DepositRights`](#m-depositrights), nested on 13 surfaces
+- [Model group 9080ca](#mg-9080ca): [`SpeciesEntryIdentityPayload`](#m-speciesentryidentitypayload), nested on 12 surfaces
+- [Model group 170bfd](#mg-170bfd): 3 models, nested on 11 surfaces
+- [Model group 0bc6ac](#mg-0bc6ac): 5 models, nested on 10 surfaces
+- [Model group 59233e](#mg-59233e): 30 models, nested on 9 surfaces
+- [Model group eade25](#mg-eade25): [`FreqScaleFactorRef`](#m-freqscalefactorref), nested on 8 surfaces
+- [Model group 145d3c](#mg-145d3c): 10 models, nested on 8 surfaces
+- [Model group c84d1c](#mg-c84d1c): 4 models, nested on 7 surfaces
+- [Model group 6deb1a](#mg-6deb1a): 5 models, nested on 6 surfaces
+- [Model group d7659c](#mg-d7659c): [`SCFStabilityPayload`](#m-scfstabilitypayload), nested on 6 surfaces
+- [Model group 1fa7bb](#mg-1fa7bb): 9 models, nested on 4 surfaces
+- [Model group fd1ab4](#mg-fd1ab4): [`AppliedEnergyCorrectionUploadPayload`](#m-appliedenergycorrectionuploadpayload), nested on 4 surfaces
+- [Model group 29a5e4](#mg-29a5e4): [`CalculationWithResultsPayload`](#m-calculationwithresultspayload), nested on 4 surfaces
+- [Model group e68218](#mg-e68218): 8 models, nested on 3 surfaces
+- [Model group e1aa2b](#mg-e1aa2b): 2 models, nested on 3 surfaces
+- [Model group ec93af](#mg-ec93af): 5 models, nested on 2 surfaces
+- [Model group 4d6b34](#mg-4d6b34): 7 models, nested on 2 surfaces
 
 ### Rules the payload model enforces
 
@@ -3837,24 +3837,24 @@ Nested models (103; fields and rules in the [model reference](#model-reference))
 |---|---|---|
 | [`bundle_too_many_records`](REFUSAL_CODES.md#c-bundle-too-many-records) | 422 | route handler |
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group c2c182](#cg-c2c182): 5 codes, returned on 12 surfaces
-- [Code group 829916](#cg-829916): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
-- [Code group f593d7](#cg-f593d7): 7 codes, returned on 10 surfaces
-- [Code group ec0fc9](#cg-ec0fc9): 2 codes, returned on 10 surfaces
-- [Code group ccfec0](#cg-ccfec0): 32 codes, returned on 9 surfaces
-- [Code group c5696a](#cg-c5696a): 3 codes, returned on 8 surfaces
-- [Code group bb509f](#cg-bb509f): 3 codes, returned on 7 surfaces
-- [Code group f957c1](#cg-f957c1): 3 codes, returned on 6 surfaces
-- [Code group 6624c5](#cg-6624c5): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
-- [Code group 83f546](#cg-83f546): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
-- [Code group 6758cf](#cg-6758cf): 20 codes, returned on 4 surfaces
-- [Code group dc7fbf](#cg-dc7fbf): 15 codes, returned on 3 surfaces
-- [Code group 3088ed](#cg-3088ed): [`reaction_reversible_required`](REFUSAL_CODES.md#c-reaction-reversible-required), returned on 3 surfaces
-- [Code group 38d83e](#cg-38d83e): 2 codes, returned on 2 surfaces
-- [Code group e3a8a3](#cg-e3a8a3): [`thermo_statmech_owner_mismatch`](REFUSAL_CODES.md#c-thermo-statmech-owner-mismatch), returned on 2 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group 9080ca](#cg-9080ca): 5 codes, returned on 12 surfaces
+- [Code group 6637b7](#cg-6637b7): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
+- [Code group 0bc6ac](#cg-0bc6ac): 7 codes, returned on 10 surfaces
+- [Code group f44899](#cg-f44899): 2 codes, returned on 10 surfaces
+- [Code group 59233e](#cg-59233e): 32 codes, returned on 9 surfaces
+- [Code group 1b4fd4](#cg-1b4fd4): 3 codes, returned on 8 surfaces
+- [Code group 18399d](#cg-18399d): 3 codes, returned on 7 surfaces
+- [Code group 6deb1a](#cg-6deb1a): 3 codes, returned on 6 surfaces
+- [Code group 3cf09b](#cg-3cf09b): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
+- [Code group 27e253](#cg-27e253): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
+- [Code group 1fa7bb](#cg-1fa7bb): 20 codes, returned on 4 surfaces
+- [Code group e68218](#cg-e68218): 15 codes, returned on 3 surfaces
+- [Code group e1aa2b](#cg-e1aa2b): [`reaction_reversible_required`](REFUSAL_CODES.md#c-reaction-reversible-required), returned on 3 surfaces
+- [Code group ec93af](#cg-ec93af): 2 codes, returned on 2 surfaces
+- [Code group 4d6b34](#cg-4d6b34): [`thermo_statmech_owner_mismatch`](REFUSAL_CODES.md#c-thermo-statmech-owner-mismatch), returned on 2 surfaces
 
 ### Minimal valid example
 
@@ -3964,7 +3964,7 @@ Unknown keys are silently ignored.
 
 Nested models (1; fields and rules in the [model reference](#model-reference)):
 
-- [Model group 361944](#mg-361944): [`ArtifactIn`](#m-artifactin), nested on 4 surfaces
+- [Model group f180df](#mg-f180df): [`ArtifactIn`](#m-artifactin), nested on 4 surfaces
 
 ### Rules the payload model enforces
 
@@ -3979,9 +3979,9 @@ The root model declares no validators.
 
 ### Refusal codes this surface can return
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 46dfc9](#cg-46dfc9): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group ec0fc9](#cg-ec0fc9): 2 codes, returned on 10 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 9d894c](#cg-9d894c): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
+- [Code group f44899](#cg-f44899): 2 codes, returned on 10 surfaces
 - [Code group 4513ab](#cg-4513ab): 3 codes, returned on 2 surfaces
 
 ### Example (shape only)
@@ -4060,8 +4060,8 @@ No marked rule or register check is reached from these handlers.
 
 ### Refusal codes this surface can return
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
-- [Code group 3b1136](#cg-3b1136): 4 codes, returned on 14 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
+- [Code group 52edeb](#cg-52edeb): 4 codes, returned on 14 surfaces
 - [Code group 4513ab](#cg-4513ab): 3 codes, returned on 2 surfaces
 
 ### Example (shape only)
@@ -4133,7 +4133,7 @@ No marked rule or register check is reached from these handlers.
 |---|---|---|
 | [`submission_supersede_not_owner`](REFUSAL_CODES.md#c-submission-supersede-not-owner) | 403 | route handler |
 
-- [Code group 56937b](#cg-56937b): 3 codes, returned on 16 surfaces
+- [Code group 1f3999](#cg-1f3999): 3 codes, returned on 16 surfaces
 
 ### Example (shape only)
 
