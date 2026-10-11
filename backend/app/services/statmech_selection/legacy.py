@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from app.services.statmech_selection.vocabulary import OwnerKind
 
@@ -103,6 +104,20 @@ class LegacyFacts:
     determination_tie: str = "none"
     reaction_coordinate_designated: bool | None = None
     extra: dict[str, int] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            **{k: v for k, v in self.__dict__.items() if k not in ("owner_kind", "applied_scale_kinds", "extra")},
+            "owner_kind": self.owner_kind.value,
+            "applied_scale_kinds": sorted(self.applied_scale_kinds),
+            "extra": dict(self.extra),
+        }
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> LegacyFacts:
+        return cls(
+            **{**raw, "owner_kind": OwnerKind(raw["owner_kind"]), "applied_scale_kinds": frozenset(raw["applied_scale_kinds"])}
+        )
 
     @property
     def is_atom(self) -> bool:

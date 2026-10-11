@@ -2449,6 +2449,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/structure_selection/bounds.py",
             shape=Shape.relationship,
             note="context.reason names what this release does not evaluate."),
+    ApiCode("statmech_selection_bound_exceeded", 422, Surface.coded_exception,
+            "backend/app/services/statmech_selection/vocabulary.py",
+            shape=Shape.relationship,
+            note="context names the bound, the observed size, the limit and the bounds version; nothing was assessed."),
+    ApiCode("statmech_selection_unsupported", 422, Surface.coded_exception,
+            "backend/app/services/statmech_selection/bounds.py",
+            shape=Shape.relationship,
+            note="context.reason names what this release does not evaluate."),
     ApiCode("structure_declaration_invalid", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/structure_declarations.py"),
     ApiCode("structure_declaration_version_unsupported", 422, Surface.coded_exception,
@@ -2811,6 +2819,12 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/common.py"),
     ApiCode("unknown_kinetics_determination_ref", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py"),
+    ApiCode("unknown_statmech_candidate_ref", 404, Surface.coded_exception,
+            "backend/app/services/statmech_selection/loader.py",
+            note=(
+                "One response for a candidate ref that names nothing, names another subject's record, a record the "
+                "read profile hides, or a legacy record that has been given a declared model."
+            )),
     ApiCode("unknown_structure_member_ref", 404, Surface.coded_exception,
             "backend/app/services/structure_selection/loader.py",
             note=(

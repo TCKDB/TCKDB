@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.114.0 - 2026-10-11
+
+The producer contract lists three new statmech-selection rejection codes (`statmech_selection_bound_exceeded`,
+`statmech_selection_unsupported`, `unknown_statmech_candidate_ref`). No wire model changed.
+
 ## 0.113.0 - 2026-10-11
 
 A statmech record can declare the statistical model it supplies (`tckdb_schemas.statmech_declarations`), optional and stored as

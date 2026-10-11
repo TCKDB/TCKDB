@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.141.0 - 2026-10-11
+
+`RejectionCode` gains `statmech_selection_bound_exceeded`, `statmech_selection_unsupported` and `unknown_statmech_candidate_ref` (`tckdb-schemas` 0.114.0).
+No method changed; nothing in the server serves them yet.
+
 ## 0.140.0 - 2026-10-11
 
 `RejectionCode` gains `statmech_model_declaration_invalid`, `statmech_model_declaration_version_unsupported`,
