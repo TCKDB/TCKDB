@@ -39,6 +39,15 @@ so the artifact is stored and the Hessian is simply not.
 **Best-effort and never raises.** Artifact upload is canonical and must not
 be aborted by an extraction failure — the whole body is wrapped so any
 error is logged and swallowed, matching the sibling energy hook.
+
+**Telling the depositor (#691).** When the hook located a Hessian (or was handed
+a file whose whole purpose is to be one) and still stored nothing, it returns a
+warn-tier :class:`UploadWarning` naming why, as the sibling hooks do. These are
+their own codes (``hessian_not_stored_*``), not the geometry-link block codes
+reused as warnings, so the refuse-versus-warn split of ADR 0008 stays clean. A
+log that simply carries no matrix -- most freq logs, every ORCA output log --
+is not a failure and says nothing, and neither does losing a race to a
+concurrent uploader that stored the same Hessian.
 """
 
 from __future__ import annotations
@@ -46,11 +55,14 @@ from __future__ import annotations
 import base64
 import binascii
 import logging
+from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from tckdb_schemas.upload_warning import UploadWarning
 
+from app.api.error_contract import CodedValueError
 from app.db.models.calculation import (
     Calculation,
     CalculationHessian,
@@ -71,6 +83,35 @@ from app.services.hessian_parsing import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: Warn-tier codes for a Hessian the hook found but did not store (#691).
+W_HESSIAN_NOT_STORED_GEOMETRY_MISMATCH = "hessian_not_stored_geometry_mismatch"
+W_HESSIAN_NOT_STORED_NO_UNIQUE_INPUT_GEOMETRY = "hessian_not_stored_no_unique_input_geometry"
+W_HESSIAN_NOT_STORED_UNPARSEABLE = "hessian_not_stored_unparseable"
+W_HESSIAN_NOT_STORED_FAILED = "hessian_not_stored_failed"
+
+_FIELD = "artifacts"
+_TAIL = "The artifact itself is stored; only the Hessian is not."
+
+
+def _not_stored(code: str, filename: str, reason: str) -> UploadWarning:
+    """The warning for a Hessian that was not stored, with a plain-language reason."""
+    return UploadWarning(
+        field=_FIELD,
+        code=code,
+        message=f"No Hessian was stored from artifact '{filename}': {reason} {_TAIL}",
+    )
+
+
+@dataclass(frozen=True)
+class _Outcome:
+    """What a completed extraction attempt concluded.
+
+    Always returned by the work function, so the isolating wrapper's ``None``
+    can only mean the attempt itself failed.
+    """
+
+    warning: UploadWarning | None = None
 
 #: Artifact kinds that can carry a Cartesian Hessian: Gaussian/Molpro output
 #: logs, and the ORCA ``.hess`` file.
@@ -97,14 +138,14 @@ def try_extract_hessian_from_artifact_upload(
     session: Session,
     calculation: Calculation,
     artifact_in: ArtifactIn,
-) -> None:
+) -> UploadWarning | None:
     """Extract and store a Cartesian Hessian from an uploaded artifact.
 
     Runs immediately after the matching ``CalculationArtifact`` row has been
     persisted, decoding bytes from the in-memory base64 payload so no
-    object-storage round-trip is needed. Returns ``None`` always — the hook
-    has no user-facing warning surface in v1; it either fills the
-    ``calc_hessian`` row or silently skips.
+    object-storage round-trip is needed. Returns an :class:`UploadWarning`
+    when a Hessian was found but not stored (see the module docstring), else
+    ``None``; it never raises.
 
     ``kind`` is compared by value across the ``tckdb_schemas`` / ORM enum
     boundary (both are ``(str, Enum)`` with identical members), matching the
@@ -117,25 +158,33 @@ def try_extract_hessian_from_artifact_upload(
     ``COMMIT`` — where it takes the artifact upload with it.
     """
     if artifact_in.kind not in _HESSIAN_ARTIFACT_KINDS:
-        return
+        return None
     if calculation.type not in _HESSIAN_CALC_TYPES:
-        return
+        return None
 
-    isolated_best_effort(
+    outcome = isolated_best_effort(
         session,
         lambda: _extract_and_store(session, calculation, artifact_in),
         what=f"hessian extraction for artifact '{artifact_in.filename}'",
     )
+    if outcome is None:
+        # The attempt itself failed and was rolled back (logged by the wrapper).
+        return _not_stored(
+            W_HESSIAN_NOT_STORED_FAILED,
+            artifact_in.filename,
+            "reading it failed unexpectedly.",
+        )
+    return outcome.warning
 
 
 def _extract_and_store(
     session: Session,
     calculation: Calculation,
     artifact_in: ArtifactIn,
-) -> None:
+) -> _Outcome:
     # Fill-when-absent: never overwrite an existing Hessian.
     if calculation.hessian is not None:
-        return
+        return _Outcome()
 
     try:
         content = base64.b64decode(artifact_in.content_base64, validate=True)
@@ -146,28 +195,39 @@ def _extract_and_store(
             "base64-decoded",
             artifact_in.filename,
         )
-        return
+        return _Outcome()
 
     text = content.decode("utf-8", errors="replace")
 
     from_hess_file = artifact_in.kind == ArtifactKind.hessian
     parsed = parse_hessian_from_artifact(text, from_hess_file=from_hess_file)
     if parsed is None:
-        return
+        if from_hess_file:
+            # A ``.hess`` exists to carry a matrix; an output log usually does not.
+            return _Outcome(
+                _not_stored(
+                    W_HESSIAN_NOT_STORED_UNPARSEABLE,
+                    artifact_in.filename,
+                    "the file was sent as a Hessian but no complete force-constant "
+                    "matrix could be read from it.",
+                )
+            )
+        return _Outcome()
 
-    geometry_id = _resolve_input_geometry_id(session, calculation, parsed)
+    geometry_id, refusal = _resolve_input_geometry_id(session, calculation, parsed, artifact_in.filename)
     if geometry_id is None:
-        return
+        return _Outcome(refusal)
 
-    _insert(session, calculation, geometry_id, parsed)
+    return _Outcome(_insert(session, calculation, geometry_id, parsed, artifact_in.filename))
 
 
 def _resolve_input_geometry_id(
     session: Session,
     calculation: Calculation,
     parsed: ParsedHessian,
-) -> int | None:
-    """Return the geometry_id to bind, or ``None`` if binding is unsafe.
+    filename: str,
+) -> tuple[int | None, UploadWarning | None]:
+    """Return ``(geometry_id, None)`` to bind, or ``(None, warning)`` if binding is unsafe.
 
     Conservative: requires exactly one input geometry for the calculation and
     that its atom count matches the parsed matrix dimension. Queries the rows
@@ -188,13 +248,22 @@ def _resolve_input_geometry_id(
             "geometries (need exactly one to bind unambiguously)",
             len(input_geometry_ids),
         )
-        return None
+        return None, _not_stored(
+            W_HESSIAN_NOT_STORED_NO_UNIQUE_INPUT_GEOMETRY,
+            filename,
+            f"the calculation has {len(input_geometry_ids)} input geometries and exactly one "
+            "is needed to bind the matrix to the structure it was computed at.",
+        )
 
     geometry_id = input_geometry_ids[0]
     geometry = session.get(Geometry, geometry_id)
     if geometry is None:
         logger.info("hessian extraction skipped: input geometry not found")
-        return None
+        return None, _not_stored(
+            W_HESSIAN_NOT_STORED_NO_UNIQUE_INPUT_GEOMETRY,
+            filename,
+            "the calculation's input geometry could not be found.",
+        )
 
     if geometry.natoms != parsed.natoms:
         logger.info(
@@ -203,7 +272,12 @@ def _resolve_input_geometry_id(
             geometry.natoms,
             parsed.natoms,
         )
-        return None
+        return None, _not_stored(
+            W_HESSIAN_NOT_STORED_GEOMETRY_MISMATCH,
+            filename,
+            f"the matrix is for {parsed.natoms} atoms but the calculation's input geometry "
+            f"has {geometry.natoms}.",
+        )
 
     # Decisive orientation check: when the artifact records its own atomic
     # frame (ORCA .hess $atoms), the matrix is only valid for a geometry in
@@ -216,9 +290,14 @@ def _resolve_input_geometry_id(
                 "not match the bound input geometry -- refusing to bind a "
                 "Hessian computed at a different geometry/orientation"
             )
-            return None
+            return None, _not_stored(
+                W_HESSIAN_NOT_STORED_GEOMETRY_MISMATCH,
+                filename,
+                "the atomic frame recorded in the file does not match the calculation's "
+                "input geometry (different atoms, order or orientation).",
+            )
 
-    return geometry_id
+    return geometry_id, None
 
 
 def _frame_matches(
@@ -257,8 +336,9 @@ def _insert(
     calculation: Calculation,
     geometry_id: int,
     parsed: ParsedHessian,
-) -> None:
-    """Insert the ``calc_hessian`` row inside a SAVEPOINT.
+    filename: str,
+) -> UploadWarning | None:
+    """Insert the ``calc_hessian`` row inside a SAVEPOINT; return a warning if it was refused.
 
     A concurrent uploader racing to fill the same calculation (PK is
     ``calculation_id``) cannot poison the outer transaction with a
@@ -295,6 +375,7 @@ def _insert(
             )
         )
         session.flush()
+        return None
     except Exception as exc:
         # Wider than the concurrent-duplicate ``IntegrityError`` this was
         # written for: a savepoint whose failure is not rolled back leaves the
@@ -302,11 +383,20 @@ def _insert(
         # that until COMMIT. Undoing the insert is right regardless of cause.
         savepoint.rollback()
         session.expire(calculation, ["hessian"])
-        if not isinstance(exc, IntegrityError):
-            logger.warning(
-                "hessian insert skipped for calculation id=%s (%s)",
-                calculation.id,
-                type(exc).__name__,
-                exc_info=exc,
+        if isinstance(exc, IntegrityError):
+            # A concurrent uploader stored this calculation's Hessian first.
+            return None
+        logger.warning(
+            "hessian insert skipped for calculation id=%s (%s)",
+            calculation.id,
+            type(exc).__name__,
+            exc_info=exc,
+        )
+        if isinstance(exc, CodedValueError):
+            return _not_stored(
+                W_HESSIAN_NOT_STORED_GEOMETRY_MISMATCH,
+                filename,
+                "the input geometry it would be bound to contradicts the calculation's species "
+                f"({exc.code}), so it was not trusted with a force-constant matrix.",
             )
-        return
+        return _not_stored(W_HESSIAN_NOT_STORED_FAILED, filename, "storing it failed unexpectedly.")
