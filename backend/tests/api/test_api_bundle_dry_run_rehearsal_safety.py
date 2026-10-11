@@ -806,6 +806,22 @@ def test_releasing_or_rolling_back_to_a_unicode_escaped_name_is_refused(
             session.execute(text(statement))
 
 
+def test_a_unicode_escaped_savepoint_is_not_tracked_under_the_name_u_ampersand(sessions) -> None:
+    """``SAVEPOINT U&"x"`` is read as an unquoted name ``u&`` unless it is tracked as unmatchable.
+
+    A real savepoint called ``"u&"`` is opened first, so ``RELEASE "u&"`` is a valid release only
+    of *that* one; with the ``U&`` branch removed the tracker believes the rehearsal's own stack
+    holds ``u&`` and lets it through.
+    Mutation: delete the ``_SAVEPOINT_UNICODE`` branch in ``_guard_sql``; this fails.
+    """
+    session = sessions()
+    session.execute(text('SAVEPOINT "u&"'))
+    with pytest.raises(RehearsalCommitRefused):
+        with rehearsal(session):
+            session.execute(text('SAVEPOINT U&"x"'))
+            session.execute(text('RELEASE "u&"'))
+
+
 def test_a_quoted_savepoint_with_no_space_is_tracked_and_releasable(sessions) -> None:
     """Untracked, ``RELEASE"a"`` would look like a release of something the
     rehearsal never opened, and be refused."""

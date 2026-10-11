@@ -680,6 +680,25 @@ def test_an_exhausted_probe_cap_is_warned_about_once(monkeypatch, caplog) -> Non
     assert calls == []
 
 
+def test_a_second_exhaustion_warns_again_after_a_slot_comes_back(monkeypatch, caplog) -> None:
+    """The cap is not for the life of the process: a slot returns when its thread ends.
+
+    Mutation: delete ``_rearm_probe_cap_warning()``; the second exhaustion is silent.
+    """
+    _serve_quota(monkeypatch, _quota_answers("quota_enforced"))
+    monkeypatch.setattr(seaweedfs, "_cap_warned", False)
+    with caplog.at_level("WARNING", logger=seaweedfs.logger.name):
+        monkeypatch.setattr(seaweedfs, "_PROBE_SLOTS", threading.BoundedSemaphore(0))
+        assert _report() is None
+        monkeypatch.setattr(seaweedfs, "_PROBE_SLOTS", threading.BoundedSemaphore(1))
+        assert _report() is not None  # a slot came back
+        monkeypatch.setattr(seaweedfs, "_PROBE_SLOTS", threading.BoundedSemaphore(0))
+        assert _report() is None
+    cap_warnings = [r for r in caplog.records if r.levelname == "WARNING" and "cap" in r.getMessage()]
+    assert len(cap_warnings) == 2, [r.getMessage() for r in caplog.records]
+    assert all("until the process restarts" not in r.getMessage() for r in cap_warnings)
+
+
 def test_a_probe_with_a_slot_free_does_not_warn_about_the_cap(monkeypatch, caplog) -> None:
     _serve_quota(monkeypatch, _quota_answers("quota_enforced"))
     monkeypatch.setattr(seaweedfs, "_cap_warned", False)
