@@ -482,9 +482,11 @@ def test_a_record_of_many_large_distinct_geometries_costs_a_bounded_amount(monke
     roots = levels._merge_rigidly_equal_geometries(geometries)
     elapsed = time.perf_counter() - started
     assert roots == {g.id: g.id for g in geometries}
-    gate_units = 780 * (200 * 199 // 2)
     budget = spent[0]
-    assert prm.MAX_WORK_PER_RECORD - budget.work_left == gate_units, "only the O(n^2) gate was charged: no pair got past it"
+    # Since #692 the radius of gyration answers each pair first, so neither the O(n^2) gate nor the
+    # same-order Kabsch is reached (tests/services/test_same_order_kabsch_bound.py holds the bound).
+    gate_units = 780 * (200 * 199 // 2)
+    assert prm.MAX_WORK_PER_RECORD - budget.work_left <= gate_units, "at most the O(n^2) gate was charged"
     assert budget.fits_left == prm.MAX_FITS_PER_RECORD
     assert elapsed < 2.0, f"{elapsed:.2f} s for 40 x 200 atoms (main: well under 1 s; before the gate: 8 s)"
 
