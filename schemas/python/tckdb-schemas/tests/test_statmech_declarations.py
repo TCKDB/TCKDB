@@ -113,6 +113,9 @@ def test_a_rotor_names_the_potential_it_integrates_and_only_an_imported_one_does
     )
     assert declared.recipe.rotors[0].potential_source_key == "pot"
     _refused("potential_source_key names a source", recipe={"rotors": rotors})
+    for wrong in ("geometry", "curvature", "parameters", "absolute_energy"):
+        _refused("role is torsional_surface", recipe={"rotors": rotors},
+                 sources=[{"source_key": "pot", "role": wrong, "literature": {"kind": "article", "title": "T"}}])
     _refused("imported_potential", recipe={"rotors": [{"torsion_index": 1, "representation": "free_rotor", "potential_source_key": "p"}]})
     _refused("imported_potential", recipe={"rotors": [{"torsion_index": 1, "representation": "imported_potential"}]})
     _refused("names a torsion_index twice", recipe={"rotors": [rotors[0], {**rotors[0], "potential_source_key": "pot"}]},

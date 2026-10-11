@@ -394,10 +394,14 @@ class StatmechModelDeclaration(SchemaBase):
         for s in self.sources:
             if s.member_key is not None and s.member_key not in member_keys:
                 raise ValueError("A source's member_key names a member of this declaration.")
-        known = set(source_keys)
+        roles = {s.source_key: s.role for s in self.sources}
         for rotor in self.recipe.rotors:
-            if rotor.potential_source_key is not None and rotor.potential_source_key not in known:
+            if rotor.potential_source_key is None:
+                continue
+            if rotor.potential_source_key not in roles:
                 raise ValueError("A rotor's potential_source_key names a source of this declaration.")
+            if roles[rotor.potential_source_key] is not StatmechModelSourceRole.torsional_surface:
+                raise ValueError("A rotor's potential_source_key names a source whose role is torsional_surface.")
         return self
 
 

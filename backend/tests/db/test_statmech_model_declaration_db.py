@@ -74,6 +74,18 @@ def _present(db_session, table: str) -> bool:
     )
 
 
+FUNCTIONS = {
+    "tckdb_statmech_model_declaration_guard",
+    "tckdb_statmech_model_member_guard",
+    "tckdb_statmech_model_source_guard",
+    "tckdb_statmech_model_immutable",
+}
+
+
+def _functions(db_session) -> set[str]:
+    return set(db_session.scalars(text("SELECT proname FROM pg_proc WHERE proname LIKE 'tckdb\\_statmech\\_%'")))
+
+
 def _entry(db_session):
     return make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key()))
 
@@ -141,8 +153,10 @@ def test_the_migration_round_trips_and_leaves_an_existing_record_untouched(db_se
     before = db_session.scalar(text("SELECT count(*) FROM statmech WHERE id = :i"), {"i": legacy.id})
     assert all(_present(db_session, t) for t in TABLES)
 
+    assert _functions(db_session) == FUNCTIONS
     migration.downgrade()
     assert not any(_present(db_session, t) for t in TABLES)
+    assert _functions(db_session) == set(), "a downgrade leaves no tckdb_statmech_* function behind"
     for enum in ENUMS:
         assert not db_session.scalar(text("SELECT count(*) FROM pg_type WHERE typname = :n"), {"n": enum})
     assert db_session.scalar(text("SELECT count(*) FROM statmech WHERE id = :i"), {"i": legacy.id}) == before

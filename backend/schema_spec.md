@@ -2370,11 +2370,12 @@ A statmech row is an interpretation container. A declaration says which model th
 
 ### Lifecycle
 
-A declared model is an immutable revision: its three tables refuse every UPDATE, approved or not
+A declared model is an immutable revision: "immutable" here means UPDATE. Its three tables refuse every UPDATE, approved or not
 (`tckdb_statmech_model_immutable`), so the owner guards, which run on INSERT, cannot be bypassed by an edit and `content_hash`
 cannot go stale. The declaration, its members and its sources are scientific content of the declaring statmech record: the accepted-science
 triggers (`tckdb_guard_accepted_child` / `_via_child`) freeze them with it, and TRUNCATE is refused. Approving a record that is
-only cited as a member does not freeze the ensemble that cites it. Correcting a declared model means a new, superseding statmech
+only cited as a member does not freeze the ensemble that cites it. Children are frozen at approval, not before: until then a child INSERT or DELETE by raw SQL is possible and would leave
+`content_hash` stale (no application path does it; the checksum is computed before the first INSERT). Correcting a declared model means a new, superseding statmech
 record. The reproducibility snapshot of a record gains its declaration only when it has one, so no stored assessment of an
 existing record goes stale. Archives carry the three tables; a release ships them under the statmech record (members cited by
 ref, the calculations they rest on listed as provenance).
