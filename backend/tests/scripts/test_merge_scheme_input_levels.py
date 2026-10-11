@@ -318,3 +318,75 @@ def test_the_dry_run_names_a_blocked_reunite(merge, db_session):
 
     assert preview.reunited == 0
     assert [ref for ref, _ in preview.reunite_blocked] == [declared.public_ref]
+
+
+class _SessionProxy:
+    def __init__(self, session) -> None:
+        self._session = session
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    def __call__(self):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+    def commit(self):
+        self._session.flush()
+
+
+def _run_main(merge, monkeypatch, db_session, argv):
+    import app.api.deps as deps
+    from app.api.config import settings
+
+    monkeypatch.setattr(deps, "SessionLocal", _SessionProxy(db_session))
+    monkeypatch.setattr(settings, "db_name", "tckdb_test_reunite")
+    return merge.main(argv)
+
+
+def test_a_stale_level_cited_by_a_non_approval_reference_is_not_reunited(merge, db_session):
+    """A blocker that is not approved science (a frequency scale factor) must stop the reunite too."""
+    from tests.services.scientific_read._factories import make_frequency_scale_factor
+
+    declared, *_ = _deposit_then_split_qz(db_session)
+    make_frequency_scale_factor(db_session, lot=declared)
+    schemes_before = _scheme_count(db_session)
+
+    result = merge.commit_plan(db_session, merge.build_plan(db_session))
+
+    assert _live_declared_levels(db_session) == [declared.id]
+    assert _scheme_count(db_session) == schemes_before
+    [(ref, why)] = result.reunite_blocked
+    assert ref == declared.public_ref
+    assert "frequency_scale_factor" in why
+
+
+def test_a_current_scheme_with_approved_science_is_not_listed_as_blocked(merge, db_session):
+    """Only a stale scheme is a reunite candidate: a current one with approved science is not reported."""
+    declared = _deposit(db_session)
+    _approved_calculation_on(db_session, declared)
+
+    result = merge.commit_plan(db_session, merge.build_plan(db_session))
+
+    assert result.reunited == 0
+    assert result.reunite_blocked == []
+
+
+def test_the_cli_names_a_level_it_did_not_reunite(merge, monkeypatch, db_session, capsys):
+    declared, *_ = _deposit_then_split_qz(db_session)
+    _approved_calculation_on(db_session, declared)
+
+    assert _run_main(merge, monkeypatch, db_session, ["--commit"]) == 0
+    out = capsys.readouterr().out
+    assert f"NOT reunited, no scheme or level created for it: {declared.public_ref}" in out
+    assert "reunited: 0" in out
+
+    assert _run_main(merge, monkeypatch, db_session, []) == 0
+    out = capsys.readouterr().out
+    assert f"NOT reunited, no scheme or level created for it: {declared.public_ref}" in out
+    assert "would be reunited: 0" in out

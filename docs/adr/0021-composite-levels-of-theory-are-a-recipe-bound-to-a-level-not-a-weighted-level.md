@@ -245,8 +245,10 @@ plan left a choice:
   declared level is skipped; each is alone in its group, so it never merges with a
   plain level that shares its label). No frozen migration copy applies: they ran
   before declared levels existed.
-  *Note, 2026-10-11 (#658, #737):* the two claims above in parentheses no longer
-  hold. A declared level is recomputed from its bound scheme **re-derived from the
+  *Note, 2026-10-11 (#658, #737):* two of the three clauses above no longer
+  hold (that a declared level is recomputed from its bound scheme as stored, and
+  that each is alone in its group); "no declared level is skipped" and "never
+  merges with a plain level that shares its label" still do. A declared level is recomputed from its bound scheme **re-derived from the
   stored terms and input levels, merges followed**, not from the stored
   `definition_hash`, and a declared level is **not** always alone in its group:
   when an input level is merged away the script repoints the scheme's term inputs,

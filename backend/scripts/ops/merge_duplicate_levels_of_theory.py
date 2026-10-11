@@ -58,7 +58,7 @@ input level is merged away (above), two further things follow (#658):
 The reunite pass runs only for a scheme whose stale level could actually be
 merged: each stale level is checked against the same blockers as any merge
 (approved science on its calculations, other references to it) before anything
-is created. A blocked one is reported and nothing is written for it, because
+is created. A blocked one is reported and no scheme or level is created for it, because
 merging is what makes the new level the only live one; creating it anyway would
 leave two live declared levels. The dry run reports the count (and the blocked
 ones) by running the pass in a savepoint and rolling it back.
@@ -105,7 +105,9 @@ approval.
 
 Usage::
 
-    # Plan only -- the default. Writes nothing.
+    # Plan only -- the default. Nothing is left written (it needs a database role
+    # that can write: the reunite preview runs in a savepoint that is rolled back,
+    # and sequences advance).
     python backend/scripts/ops/merge_duplicate_levels_of_theory.py
 
     # Merge the unblocked groups. One transaction.
@@ -579,7 +581,7 @@ def reunite_declared_schemes(session: Session, schema: Schema) -> tuple[int, lis
     is checked with the same blockers the merge applies (accepted science resting on
     its calculations, other references to it). A level that is blocked would be left
     beside the level this pass created -- two live declared levels, both made by this
-    script -- so its scheme is skipped and reported instead, with nothing written.
+    script -- so its scheme is skipped and reported instead, with no scheme or level created for it (its input levels were still merged and its term inputs repointed earlier in the run).
 
     :returns: ``(schemes reunited, [(stale level public_ref, why it was skipped)])``.
     """
@@ -675,7 +677,7 @@ def _describe_duplicate(
 
     ``declared`` yields ``level id -> definition hash`` (:func:`_declared_definition_hashes`);
     it is called only when two different recipes meet, and callers share one so the
-    derivation runs once per run, not once per duplicate.
+    derivation runs once per group on a commit (once per plan on a dry run), not once per duplicate.
     """
     duplicate = Duplicate(row=row)
     if holder is not None and ("level_of_theory_composite", "level_of_theory_id") in schema.lot_references:
@@ -862,7 +864,7 @@ def _print_reunite(result: CommitResult, *, would: bool) -> None:
     verb = "would be reunited" if would else "reunited"
     print(f"\nDeclared composite schemes made stale by a level merge, {verb}: {result.reunited}.")
     for ref, why in result.reunite_blocked:
-        print(f"  NOT reunited, nothing written for it: {ref} -- {why}")
+        print(f"  NOT reunited, no scheme or level created for it: {ref} -- {why}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -900,7 +902,7 @@ def main(argv: list[str] | None = None) -> int:
         _print_plan(plan)
         if not args.commit:
             _print_reunite(preview_commit(session, plan), would=True)
-            print("\nDry run -- nothing was changed. Re-run with --commit to merge.")
+            print("\nDry run -- nothing was changed (the reunite preview ran in a savepoint, rolled back; sequences advanced). Re-run with --commit to merge.")
             return 0
 
         result = commit_plan(session, plan)
