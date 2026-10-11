@@ -663,7 +663,7 @@ def test_simple_third_body_accepts_order3_units() -> None:
 def test_ordinary_bimolecular_rejects_order3_units() -> None:
     """Without the third-body marker a two-reactant reaction stays order-2,
     so order-3 units are still rejected (validator stays strict)."""
-    payload = _kinetics_request().model_dump()
+    payload = _kinetics_request(direction="forward").model_dump()
     payload["is_third_body"] = False
     payload["a_units"] = "cm6_mol2_s"
     with pytest.raises(ValidationError, match="bimolecular"):
@@ -673,7 +673,7 @@ def test_ordinary_bimolecular_rejects_order3_units() -> None:
 def test_third_body_rejects_order2_units() -> None:
     """A simple third-body two-reactant reaction is effectively order-3, so
     order-2 units (cm3_mol_s) must be rejected."""
-    payload = _kinetics_request().model_dump()
+    payload = _kinetics_request(direction="forward").model_dump()
     payload["is_third_body"] = True
     payload["a_units"] = "cm3_mol_s"
     with pytest.raises(ValidationError, match="termolecular"):
@@ -732,7 +732,8 @@ def test_forward_and_reverse_kinetics_persist_distinctly(db_conn, monkeypatch):
             session, _kinetics_request(direction="forward")
         )
         rev = persist_kinetics_upload(
-            session, _kinetics_request(direction="reverse")
+            # The fixture is 2H -> H2; its reverse rate is a rate of the single product, so first order (#695).
+            session, _kinetics_request(direction="reverse", a_units="per_s")
         )
         assert fwd.id != rev.id
         assert fwd.direction == KineticsDirection.forward
@@ -899,7 +900,7 @@ def test_network_bridge_unknown_id_rejected(db_conn, monkeypatch):
 
 
 def _multi_arrhenius_payload(entries: list[dict]) -> dict:
-    payload = _kinetics_request().model_dump()
+    payload = _kinetics_request(direction="forward").model_dump()
     payload["model_kind"] = "multi_arrhenius"
     payload.pop("a")  # scalar A must be unset for a DUPLICATE sum
     payload["arrhenius_entries"] = entries
@@ -996,7 +997,7 @@ def _multi_arrhenius_order_3_payload() -> dict:
 
 
 def _plog_order_3_payload() -> dict:
-    payload = _kinetics_request().model_dump()
+    payload = _kinetics_request(direction="forward").model_dump()
     payload["model_kind"] = "plog"
     payload["plog_entries"] = [
         {"entry_index": 1, "pressure_bar": 0.1, "a": 1.0e10, "a_units": "cm3_mol_s"},
@@ -1042,7 +1043,7 @@ def test_the_falloff_k0_call_site_keeps_its_code_too():
     folding it in would have meant asserting a sentence neither case
     actually produces.
     """
-    payload = _kinetics_request().model_dump()
+    payload = _kinetics_request(direction="forward").model_dump()
     payload["model_kind"] = "troe"
     payload["a_units"] = "cm3_mol_s"
     payload["falloff"] = {
@@ -1077,7 +1078,7 @@ def test_the_second_code_the_wrapper_can_carry_also_survives():
     a fix that special-cased the one code in the bug report would still
     pass every other test here.
     """
-    payload = _kinetics_request().model_dump()
+    payload = _kinetics_request(direction="forward").model_dump()
     payload["reaction"]["reactants"] = payload["reaction"]["reactants"] + [
         payload["reaction"]["reactants"][0]
     ]
@@ -1136,7 +1137,7 @@ def test_the_field_path_is_not_itself_promotable_as_a_code():
 def test_falloff_low_a_units_wrong_order_rejected():
     """k0 is one order higher than k∞; a bimolecular reaction's low-pressure
     limit must be order-3, so order-2 low_a_units is rejected and named."""
-    payload = _kinetics_request().model_dump()
+    payload = _kinetics_request(direction="forward").model_dump()
     payload["model_kind"] = "troe"
     payload["a_units"] = "cm3_mol_s"
     payload["falloff"] = {
@@ -1530,6 +1531,7 @@ def _plog_bimolecular(**overrides) -> dict:
     """A bimolecular PLOG payload; ``a_units`` overridable to probe the order."""
     base: dict = {
         "reaction": _BIMOLECULAR_REACTION,
+        "direction": "forward",
         "scientific_origin": "experimental",
         "model_kind": "plog",
         "plog_entries": [
