@@ -101,7 +101,7 @@ from app.services.public_refs import PREFIXES
 from app.services.scientific_read.handles import (
     canonical_level_of_theory_id,
     handle_type_mismatch_error,
-    parse_handle,
+    is_ref_handle,
 )
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.software_banner_extraction import (
@@ -121,31 +121,25 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-def _calculation_for_handle(session: Session, handle: str) -> Calculation:
-    """The calculation a path handle (integer id or ``calc_`` ref) names, or 404.
+def _calculation_for_ref(session: Session, ref: str) -> Calculation:
+    """The calculation a path names by its ``calc_`` ref, or 404.
 
     Resolves only. The artifact route applies its approval-freeze and
-    ownership checks to the returned row, so both forms meet the same checks.
-    Both forms are a plain primary-key or ``public_ref`` lookup (no read-profile
-    floor: this is a write route), and an unknown one of either is the same
-    404, code ``handle_not_found``.
+    ownership checks to the returned row. A plain ``public_ref`` lookup (no
+    read-profile floor: this is a write route). A row id is refused, 422
+    ``invalid_handle``; an unknown ref is 404 ``handle_not_found``.
     """
-    kind, parsed = parse_handle(handle)
-    if kind == "id":
-        calculation = session.get(Calculation, parsed)
-        if calculation is None:
-            logger.info("path_handle_not_found kind=calculation lookup=id row_id=%d", parsed)
-            raise not_found("calculation", code="handle_not_found")
-        return calculation
+    if not is_ref_handle(ref):
+        raise ValueError(f"invalid_handle: {ref!r} is not a <prefix>_<body> public ref")
     expected = PREFIXES["Calculation"]
-    prefix = parsed.split("_", 1)[0]
+    prefix = ref.split("_", 1)[0]
     if prefix != expected:
         raise handle_type_mismatch_error("calculation", expected, prefix, noun="handle")
     calculation = session.scalars(
-        select(Calculation).where(Calculation.public_ref == parsed)
+        select(Calculation).where(Calculation.public_ref == ref)
     ).first()
     if calculation is None:
-        raise not_found("calculation", ref=parsed, code="handle_not_found")
+        raise not_found("calculation", ref=ref, code="handle_not_found")
     return calculation
 
 
@@ -621,7 +615,7 @@ def list_artifacts(
 
 
 # ---------------------------------------------------------------------------
-# Artifact upload — POST /calculations/{calculation_id}/artifacts
+# Artifact upload — POST /calculations/{calculation_ref}/artifacts
 # ---------------------------------------------------------------------------
 
 
@@ -640,7 +634,7 @@ class ArtifactsUploadRequest(BaseModel):
         json_schema_extra={
             "x-tckdb-example-requires": (
                 "a calculation the caller deposited (or owns through a live submission), "
-                "named by the calculation_id in the path; a conformer upload returns one"
+                "named by the calculation_ref in the path; a conformer upload returns one"
             ),
             "examples": [
                 {
@@ -668,19 +662,19 @@ class ArtifactsUploadResult(BaseModel):
 
 
 @router.post(
-    "/{calculation_id}/artifacts",
+    "/{calculation_ref}/artifacts",
     response_model=ArtifactsUploadResult,
     status_code=201,
     dependencies=[Depends(require_supported_tckdb_client)],
 )
 def upload_calculation_artifacts(
-    calculation_id: Annotated[
+    calculation_ref: Annotated[
         str,
         Path(
             description=(
-                "The calculation, by its ``calc_`` ref (preferred; upload "
-                "responses return it as ``calculation_ref``) or, for a "
-                "deprecation window, by its integer id."
+                "The calculation, by its ``calc_`` ref (upload responses "
+                "return it as ``calculation_ref``). A row id is refused: 422 "
+                "``invalid_handle``."
             ),
         ),
     ],
@@ -732,7 +726,7 @@ def upload_calculation_artifacts(
     if (replay := idem.maybe_replay()) is not None:
         return replay
 
-    calculation = _calculation_for_handle(session, calculation_id)
+    calculation = _calculation_for_ref(session, calculation_ref)
     calc_pk = calculation.id
 
     # Approval publishes the exact evidence set attached at review time.

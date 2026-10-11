@@ -78,6 +78,7 @@ from app.db.models.artifact_storage_capacity import ArtifactStorageCapacityEvent
 from app.services import artifact_storage
 from app.services import artifact_storage_capacity as capacity
 from app.services import artifact_storage_seaweedfs as seaweedfs
+from tests.api.artifact_urls import artifacts_url
 
 CONFORMER_PAYLOAD: dict = {
     "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
@@ -267,7 +268,7 @@ def test_a_healthy_store_accepts_the_upload(client, use_store) -> None:
     calc_id = _a_calculation(client)
 
     response = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+        artifacts_url(client, calc_id), json=_artifact_request()
     )
     assert response.status_code == 201, response.text
     body = response.json()
@@ -301,7 +302,7 @@ def test_a_full_store_is_507_and_says_an_operator_must_act(
     calc_id = _a_calculation(client)
 
     response = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+        artifacts_url(client, calc_id), json=_artifact_request()
     )
     assert response.status_code == 507, response.text
     body = response.json()
@@ -335,7 +336,7 @@ def test_an_unreachable_store_is_still_503_and_still_says_retry(
     calc_id = _a_calculation(client)
 
     response = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+        artifacts_url(client, calc_id), json=_artifact_request()
     )
     assert response.status_code == 503, response.text
     body = response.json()
@@ -1237,7 +1238,7 @@ def test_a_seaweedfs_quota_reaches_the_depositor_as_507(
     calc_id = _a_calculation(client)
 
     response = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+        artifacts_url(client, calc_id), json=_artifact_request()
     )
     assert response.status_code == 507, response.text
     assert response.json()["code"] == "artifact_storage_full"
@@ -1277,7 +1278,7 @@ def test_a_full_seaweedfs_reaches_the_depositor_as_507_and_status_as_degraded(
     calc_id = _a_calculation(client)
 
     response = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+        artifacts_url(client, calc_id), json=_artifact_request()
     )
     assert response.status_code == 507, response.text
     assert response.json()["code"] == "artifact_storage_full"

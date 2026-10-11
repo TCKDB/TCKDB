@@ -65,6 +65,7 @@ from app.db.models.common import ArtifactKind, CalculationGeometryRole
 from app.db.models.idempotency import IdempotencyRecord
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from tests.api.artifact_urls import artifacts_url
 
 CORPUS_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "qcschema"
 
@@ -185,7 +186,7 @@ def test_qcschema_corpus_case_accepted_and_persisted(
 
     artifact_key = f"qcschema-corpus-{case}-artifact-v1"
     artifact_resp = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(client, calc_id),
         json={"artifacts": [artifact]},
         headers={"Idempotency-Key": artifact_key},
     )
@@ -301,7 +302,7 @@ def test_qcschema_corpus_case_accepted_and_persisted(
     assert replay_resp.json() == body, f"{case}: conformer replay body differs from the original"
 
     replay_artifact_resp = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(client, calc_id),
         json={"artifacts": [artifact]},
         headers={"Idempotency-Key": artifact_key},
     )
@@ -343,7 +344,7 @@ def test_no_duplicate_software_rows_across_the_whole_corpus(client, db_session: 
         assert resp.status_code == 201, f"{case}: {resp.status_code}\n{resp.text[:500]}"
         calc_id = resp.json()["primary_calculation"]["calculation_id"]
         artifact_resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [artifact]},
             headers={"Idempotency-Key": f"qcschema-corpus-{case}-artifact-dedupe"},
         )

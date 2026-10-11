@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.116.0 - 2026-10-11
+
+Breaking: the two producer write routes that took a row id in the path take the public ref only (#578).
+`POST /api/v1/submissions/{submission_ref}/rights-attestations` takes the `sub_` ref (every upload, job and bundle
+response returns it as `submission_ref`), and `POST /api/v1/calculations/{calculation_ref}/artifacts` takes the `calc_` ref
+(`calculation_ref` beside `calculation_id`, or `calculation_key_refs` on a computed reaction). An integer id, in any spelling,
+is refused with 422 `invalid_handle`; a ref of the wrong kind is still 422 `handle_type_mismatch` and an unknown ref 404
+`handle_not_found`. The server's minimum supported `tckdb-client` is now 0.97.0, the first release that addresses a
+calculation by its ref. No wire model changed; the route paths in the producer contract did.
+
 ## 0.114.0 - 2026-10-11
 
 The producer contract lists three new statmech-selection rejection codes (`statmech_selection_bound_exceeded`,

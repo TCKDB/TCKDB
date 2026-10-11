@@ -350,7 +350,7 @@ def test_every_write_route_of_the_live_app_is_in_the_contract(committed_markdown
         "POST /api/v1/uploads/thermo",
         "POST /api/v1/uploads/networks",
         "POST /api/v1/bundles/submit",
-        "POST /api/v1/calculations/{calculation_id}/artifacts",
+        "POST /api/v1/calculations/{calculation_ref}/artifacts",
         "POST /api/v1/releases",
     ):
         assert expected in labels, expected

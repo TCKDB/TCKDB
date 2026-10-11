@@ -71,6 +71,7 @@ from app.db.models.calculation import ArtifactIntegrityEvent
 from app.services.scientific_read import thermo_search as thermo_search_mod
 from app.services.scientific_read.export import iter_export_ndjson
 from app.services.scientific_read.ml_dataset import iter_ml_species_ndjson
+from tests.api.artifact_urls import artifacts_url
 from tests.api.test_api_scientific_rejection_codes import (
     _XYZ_CH3,
     _XYZ_CH4,
@@ -804,7 +805,7 @@ def test_uploading_over_a_corrupt_content_addressed_object_is_refused(
 
     body = _assert_code(
         client.post(
-            f"/api/v1/calculations/{calculation_id}/artifacts",
+            artifacts_url(client, calculation_id),
             json=_artifact_request(),
         ),
         "artifact_integrity_failed",
@@ -838,7 +839,7 @@ def test_the_same_upload_into_an_intact_store_is_accepted(
     _use_object_store(monkeypatch, db_session, _InMemoryObjectStore())
 
     response = client.post(
-        f"/api/v1/calculations/{calculation_id}/artifacts",
+        artifacts_url(client, calculation_id),
         json=_artifact_request(),
     )
     assert response.status_code == 201, response.text
@@ -860,7 +861,7 @@ def test_a_second_upload_of_the_same_bytes_verifies_the_stored_object(
     _use_object_store(monkeypatch, db_session, store)
 
     first = client.post(
-        f"/api/v1/calculations/{calculation_id}/artifacts", json=_artifact_request()
+        artifacts_url(client, calculation_id), json=_artifact_request()
     )
     assert first.status_code == 201, first.text
 
@@ -868,7 +869,7 @@ def test_a_second_upload_of_the_same_bytes_verifies_the_stored_object(
 
     _assert_code(
         client.post(
-            f"/api/v1/calculations/{calculation_id}/artifacts",
+            artifacts_url(client, calculation_id),
             json=_artifact_request(),
         ),
         "artifact_integrity_failed",

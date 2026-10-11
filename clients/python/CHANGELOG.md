@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.142.0 - 2026-10-11
+
+Breaking: artifact uploads take the calculation's `calc_` ref only (#578). `upload_artifact(calculation_ref, ...)` raises
+`ValueError` for anything that is not a `calc_` ref (an integer included), and `upload_artifacts` checks every plan item
+for a `calculation_ref` before sending any request. The integer fallback is gone, along with the server's integer path
+form; the server's minimum supported `tckdb-client` is now 0.97.0, the first release that addresses a calculation by its
+ref. The client never called `POST /submissions/{submission_ref}/rights-attestations`, which now takes the `sub_` ref
+only. Requires `tckdb-schemas` 0.116.0.
+
+Retry caveat, narrowed: idempotency keys are scoped by URL path, so a lost-response retry sent through a different path
+form is not a replay. An upload committed by 0.96 through the integer path before this change can still be retried with
+the same key on the same integer path until its receipt expires (it replays, `Idempotency-Replayed: true`); a new key on
+the integer path is refused (422 `invalid_handle`) and a client below 0.97.0 gets 426.
+
 ## 0.141.0 - 2026-10-11
 
 `RejectionCode` gains `statmech_selection_bound_exceeded`, `statmech_selection_unsupported` and `unknown_statmech_candidate_ref` (`tckdb-schemas` 0.114.0).

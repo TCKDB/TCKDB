@@ -1,15 +1,16 @@
-"""Producer responses name their records by public ref; the two path routes accept it.
+"""Producer responses name their records by public ref; the two path routes take it only.
 
-#578: ``POST /submissions/{id}/rights-attestations`` and
-``POST /calculations/{id}/artifacts`` used to take only a row id, and no upload
-response returned the ``sub_`` / ``calc_`` ref a caller would need instead.
+#578: ``POST /submissions/{submission_ref}/rights-attestations`` and
+``POST /calculations/{calculation_ref}/artifacts`` used to take a row id. Every
+upload response now returns the ``sub_`` / ``calc_`` ref, and the routes take
+that ref only: a row id is refused with 422 ``invalid_handle``.
 
 Two halves, both of which must fail when the fix is reverted:
 
 * every producer response that carries a ``submission_id`` or a calculation id
   carries the ref beside it, and the ref is the row's real ``public_ref``;
-* both routes accept the integer or the ref and apply *identical* checks to
-  either -- a ref is not a way around an ownership or freeze check.
+* both routes refuse a row id (in any spelling) and apply the ownership,
+  approval-freeze and role checks to a ref.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from app.db.models.common import (
 )
 from app.db.models.record_review import RecordReview, RecordReviewEvent
 from app.db.models.submission import Submission
+from app.db.models.submission_rights import SubmissionRightsAttestation
 from tests.api.test_api_bundle_submit import ENDPOINT as BUNDLE_ENDPOINT
 from tests.api.test_api_bundle_submit import _load_bundle
 from tests.api.test_api_kfir_rxn import _BUNDLE as COMPUTED_REACTION_BUNDLE
@@ -258,7 +260,7 @@ def test_every_producer_response_model_pairs_its_ids_with_refs() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2. Both routes accept the integer or the ref, with identical checks
+# 2. Both routes take the ref only
 # ---------------------------------------------------------------------------
 
 
@@ -269,24 +271,33 @@ def _attest(client, handle, basis="depositor_agreement"):
     )
 
 
-def test_rights_attestation_accepts_integer_and_ref_alike(client, db_session) -> None:
+def test_rights_attestation_takes_the_ref(client, db_session) -> None:
     dep = client.post("/api/v1/uploads/thermo", json=THERMO).json()
-    by_ref = _attest(client, dep["submission_ref"])
-    assert by_ref.status_code == 201, by_ref.text
-    by_int = _attest(client, dep["submission_id"])
-    assert by_int.status_code == 201, by_int.text
-    assert by_ref.json()["submission_ref"] == dep["submission_ref"]
-    assert by_int.json()["submission_ref"] == dep["submission_ref"]
+    first = _attest(client, dep["submission_ref"])
+    assert first.status_code == 201, first.text
+    second = _attest(client, dep["submission_ref"])
+    assert second.status_code == 201, second.text
+    assert first.json()["submission_ref"] == dep["submission_ref"]
     # The second supersedes the first: they hit the one submission.
-    assert by_int.json()["supersedes_attestation_ref"] == by_ref.json()["attestation_ref"]
+    assert second.json()["supersedes_attestation_ref"] == first.json()["attestation_ref"]
 
 
-@pytest.mark.parametrize("form", ["ref", "id"])
-def test_rights_attestation_checks_are_the_same_for_both_forms(
-    client, login_as, _api_curator_user, _api_other_user, form
+@pytest.mark.parametrize("spelling", ["{id}", "0{id}", "+{id}", " {id}"])
+def test_rights_attestation_refuses_a_row_id(client, db_session, spelling) -> None:
+    dep = client.post("/api/v1/uploads/thermo", json=THERMO).json()
+    refused = _attest(client, spelling.format(id=dep["submission_id"]))
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["code"] == "invalid_handle"
+    # Nothing was recorded, and the ref still works.
+    assert db_session.scalars(select(SubmissionRightsAttestation)).first() is None
+    assert _attest(client, dep["submission_ref"]).status_code == 201
+
+
+def test_rights_attestation_checks_apply_to_the_ref(
+    client, login_as, _api_curator_user, _api_other_user
 ) -> None:
     dep = client.post("/api/v1/uploads/thermo", json=THERMO).json()
-    handle = dep["submission_ref"] if form == "ref" else dep["submission_id"]
+    handle = dep["submission_ref"]
 
     # A depositor may not make a curator-basis attestation.
     r = _attest(client, handle, basis="historical_review")
@@ -308,7 +319,7 @@ def test_rights_attestation_checks_are_the_same_for_both_forms(
     assert stranger.json()["detail"] == "Not authorized to view this submission."
 
 
-def test_rights_attestation_rejects_unknown_and_mistyped_handles(client) -> None:
+def test_rights_attestation_rejects_unknown_and_mistyped_refs(client) -> None:
     unknown = _attest(client, "sub_" + "a" * 26)
     assert unknown.status_code == 404
     wrong = _attest(client, "calc_" + "a" * 26)
@@ -317,18 +328,15 @@ def test_rights_attestation_rejects_unknown_and_mistyped_handles(client) -> None
     assert _attest(client, "not a handle").status_code == 422
 
 
-def _handle_for(client, form):
+def _ref_for(client):
     conf = client.post("/api/v1/uploads/conformers", json=CONFORMER).json()
     primary = conf["primary_calculation"]
-    handle = primary["calculation_ref"] if form == "ref" else primary["calculation_id"]
-    return primary["calculation_id"], f"/api/v1/calculations/{handle}/artifacts"
+    return primary["calculation_id"], primary["calculation_ref"]
 
 
-@pytest.mark.parametrize("form", ["ref", "id"])
-def test_artifact_upload_ownership_is_the_same_for_both_forms(
-    client, login_as, _api_other_user, form
-) -> None:
-    calc_id, url = _handle_for(client, form)
+def test_artifact_upload_ownership_applies_to_the_ref(client, login_as, _api_other_user) -> None:
+    calc_id, ref = _ref_for(client)
+    url = f"/api/v1/calculations/{ref}/artifacts"
     ok = client.post(url, json=ARTIFACT)
     assert ok.status_code == 201, ok.text
     assert ok.json()["calculation_id"] == calc_id
@@ -338,11 +346,9 @@ def test_artifact_upload_ownership_is_the_same_for_both_forms(
     assert refused.status_code == 403, refused.text
 
 
-@pytest.mark.parametrize("form", ["ref", "id"])
-def test_artifact_upload_freeze_is_the_same_for_both_forms(
-    client, db_session, form
-) -> None:
-    calc_id, url = _handle_for(client, form)
+def test_artifact_upload_freeze_applies_to_the_ref(client, db_session) -> None:
+    calc_id, ref = _ref_for(client)
+    url = f"/api/v1/calculations/{ref}/artifacts"
     calculation = db_session.get(Calculation, calc_id)
     review = db_session.scalar(
         select(RecordReview).where(
@@ -368,28 +374,71 @@ def test_artifact_upload_freeze_is_the_same_for_both_forms(
     assert "frozen after calculation approval" in frozen.json()["detail"]
 
 
-def test_artifact_upload_rejects_unknown_and_mistyped_handles(client) -> None:
+@pytest.mark.parametrize("spelling", ["{id}", "0{id}", "+{id}", "999999999"])
+def test_artifact_upload_refuses_a_row_id(client, db_session, spelling) -> None:
+    calc_id, ref = _ref_for(client)
+    url = f"/api/v1/calculations/{spelling.format(id=calc_id)}/artifacts"
+    refused = client.post(url, json=ARTIFACT)
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["code"] == "invalid_handle"
+    # Nothing was attached, and the ref still works.
+    assert client.get(f"/api/v1/calculations/{calc_id}/artifacts").json() == []
+    assert client.post(f"/api/v1/calculations/{ref}/artifacts", json=ARTIFACT).status_code == 201
+
+
+def test_a_same_key_retry_on_the_old_integer_path_still_replays(
+    client, db_session, monkeypatch
+) -> None:
+    """An upload committed through the integer path before #578 can still be replayed.
+
+    ``idem.maybe_replay()`` runs before the ref lookup, so a same-key retry on
+    the same integer path returns the stored response (201,
+    ``Idempotency-Replayed: true``) until the receipt expires. A *new* key on
+    that path is refused (422 ``invalid_handle``). The old server is simulated
+    by letting the ref resolver accept a digit string for the first request.
+    """
+    from app.api.routes import calculations as routes
+
+    calc_id, ref = _ref_for(client)
+    integer_url = f"/api/v1/calculations/{calc_id}/artifacts"
+    real = routes._calculation_for_ref
+
+    def old_server(session, handle):
+        return session.get(Calculation, int(handle)) if handle.isdigit() else real(session, handle)
+
+    monkeypatch.setattr(routes, "_calculation_for_ref", old_server)
+    first = client.post(integer_url, json=ARTIFACT, headers={"Idempotency-Key": "old-int-path-key-0001"})
+    assert first.status_code == 201, first.text
+    monkeypatch.setattr(routes, "_calculation_for_ref", real)
+
+    replay = client.post(integer_url, json=ARTIFACT, headers={"Idempotency-Key": "old-int-path-key-0001"})
+    assert replay.status_code == 201, replay.text
+    assert replay.headers["Idempotency-Replayed"] == "true"
+    assert replay.json() == first.json()
+
+    fresh = client.post(integer_url, json=ARTIFACT, headers={"Idempotency-Key": "old-int-path-key-0002"})
+    assert fresh.status_code == 422, fresh.text
+    assert fresh.json()["code"] == "invalid_handle"
+    # The ref path with the old key is a different path scope: a new request.
+    assert client.get(f"/api/v1/calculations/{calc_id}/artifacts").json().__len__() == 1
+
+
+def test_artifact_upload_rejects_unknown_and_mistyped_refs(client) -> None:
     unknown = client.post(f"/api/v1/calculations/calc_{'a' * 26}/artifacts", json=ARTIFACT)
     assert unknown.status_code == 404
     wrong = client.post(f"/api/v1/calculations/sub_{'a' * 26}/artifacts", json=ARTIFACT)
     assert wrong.status_code == 422
     assert wrong.json()["code"] == "handle_type_mismatch"
-    missing_int = client.post("/api/v1/calculations/999999999/artifacts", json=ARTIFACT)
-    assert missing_int.status_code == 404
 
 
 @pytest.mark.parametrize(
     "url",
     [
         "/api/v1/submissions/sub_" + "a" * 26 + "/rights-attestations",
-        "/api/v1/submissions/999999999/rights-attestations",
         "/api/v1/calculations/calc_" + "a" * 26 + "/artifacts",
-        "/api/v1/calculations/999999999/artifacts",
     ],
 )
-def test_an_unknown_handle_is_the_same_404_code_on_both_routes_and_forms(
-    client, url
-) -> None:
+def test_an_unknown_ref_is_the_same_404_code_on_both_routes(client, url) -> None:
     body = (
         {"license": "CC-BY-4.0", "basis": "depositor_agreement"}
         if "rights" in url

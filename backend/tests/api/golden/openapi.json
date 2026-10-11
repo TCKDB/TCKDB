@@ -2397,7 +2397,7 @@
         ],
         "title": "ArtifactsUploadRequest",
         "type": "object",
-        "x-tckdb-example-requires": "a calculation the caller deposited (or owns through a live submission), named by the calculation_id in the path; a conformer upload returns one"
+        "x-tckdb-example-requires": "a calculation the caller deposited (or owns through a live submission), named by the calculation_ref in the path; a conformer upload returns one"
       },
       "ArtifactsUploadResult": {
         "properties": {
@@ -69193,139 +69193,6 @@
         "tags": [
           "calculations"
         ]
-      },
-      "post": {
-        "description": "Attach one or more artifacts (logs, inputs, checkpoints) to a\ncalculation.\n\nSecond-phase upload: the calculation must already exist (typically\ncreated via ``POST /uploads/conformers`` or a contribution bundle).\nThe upload is batch-atomic — any per-artifact validation failure in\nthe request rejects the entire batch with 422 and no DB rows or S3\nwrites are produced. If a storage write fails partway through pass-2,\npending rows roll back and content-addressed objects are retained for\nreference-aware garbage collection; deleting a digest key eagerly could\nremove bytes shared with an existing record.\n\nA storage failure returns 503 (`artifact_storage_unavailable`) when the\nobject store did not answer, and **507** (`artifact_storage_full`) when\nit answered and refused the write for want of room. The second is not\ntransient from a depositor's side: an operator must free space or raise\nthe store's quota, so retrying is futile until they do.\n\nAuthorization (any one of):\n\n- the caller created the calculation (``calculation.created_by ==\n  current_user.id``);\n- the caller owns a live submission linked to this calculation\n  through ``submission_record_link`` (rejected/superseded\n  submissions do not qualify);\n- the caller has the ``curator`` or ``admin`` role.\n\nNotes for future maintainers:\n\n- This endpoint assumes calculations are non-deletable. There is no\n  ``DELETE /calculations/{id}`` route today; if one is added later\n  it must hold a row lock on the calculation before deletion to\n  avoid a TOCTOU race against in-flight artifact uploads.\n- ``CalculationArtifact`` rows are append-only artifact-metadata\n  records. They intentionally do not deduplicate rows by content\n  hash; same-bytes uploads from different events produce two rows\n  pointing at one content-addressed object. Each row records\n  ``filename`` and ``created_by`` so the audit trail is meaningful\n  even when the bytes are opaque (e.g. binary checkpoints).",
-        "operationId": "upload_calculation_artifacts_api_v1_calculations__calculation_id__artifacts_post",
-        "parameters": [
-          {
-            "description": "The calculation, by its ``calc_`` ref (preferred; upload responses return it as ``calculation_ref``) or, for a deprecation window, by its integer id.",
-            "in": "path",
-            "name": "calculation_id",
-            "required": true,
-            "schema": {
-              "description": "The calculation, by its ``calc_`` ref (preferred; upload responses return it as ``calculation_ref``) or, for a deprecation window, by its integer id.",
-              "title": "Calculation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-API-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-TCKDB-Client-Name",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Tckdb-Client-Name"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-TCKDB-Client-Version",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Tckdb-Client-Version"
-            }
-          },
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "tckdb_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tckdb Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ArtifactsUploadRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ArtifactsUploadResult"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Upload Calculation Artifacts",
-        "tags": [
-          "calculations"
-        ]
       }
     },
     "/api/v1/calculations/{calculation_id}/constraints": {
@@ -70769,6 +70636,141 @@
           }
         },
         "summary": "Get Wavefunction Diagnostic",
+        "tags": [
+          "calculations"
+        ]
+      }
+    },
+    "/api/v1/calculations/{calculation_ref}/artifacts": {
+      "post": {
+        "description": "Attach one or more artifacts (logs, inputs, checkpoints) to a\ncalculation.\n\nSecond-phase upload: the calculation must already exist (typically\ncreated via ``POST /uploads/conformers`` or a contribution bundle).\nThe upload is batch-atomic — any per-artifact validation failure in\nthe request rejects the entire batch with 422 and no DB rows or S3\nwrites are produced. If a storage write fails partway through pass-2,\npending rows roll back and content-addressed objects are retained for\nreference-aware garbage collection; deleting a digest key eagerly could\nremove bytes shared with an existing record.\n\nA storage failure returns 503 (`artifact_storage_unavailable`) when the\nobject store did not answer, and **507** (`artifact_storage_full`) when\nit answered and refused the write for want of room. The second is not\ntransient from a depositor's side: an operator must free space or raise\nthe store's quota, so retrying is futile until they do.\n\nAuthorization (any one of):\n\n- the caller created the calculation (``calculation.created_by ==\n  current_user.id``);\n- the caller owns a live submission linked to this calculation\n  through ``submission_record_link`` (rejected/superseded\n  submissions do not qualify);\n- the caller has the ``curator`` or ``admin`` role.\n\nNotes for future maintainers:\n\n- This endpoint assumes calculations are non-deletable. There is no\n  ``DELETE /calculations/{id}`` route today; if one is added later\n  it must hold a row lock on the calculation before deletion to\n  avoid a TOCTOU race against in-flight artifact uploads.\n- ``CalculationArtifact`` rows are append-only artifact-metadata\n  records. They intentionally do not deduplicate rows by content\n  hash; same-bytes uploads from different events produce two rows\n  pointing at one content-addressed object. Each row records\n  ``filename`` and ``created_by`` so the audit trail is meaningful\n  even when the bytes are opaque (e.g. binary checkpoints).",
+        "operationId": "upload_calculation_artifacts_api_v1_calculations__calculation_ref__artifacts_post",
+        "parameters": [
+          {
+            "description": "The calculation, by its ``calc_`` ref (upload responses return it as ``calculation_ref``). A row id is refused: 422 ``invalid_handle``.",
+            "in": "path",
+            "name": "calculation_ref",
+            "required": true,
+            "schema": {
+              "description": "The calculation, by its ``calc_`` ref (upload responses return it as ``calculation_ref``). A row id is refused: 422 ``invalid_handle``.",
+              "title": "Calculation Ref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtifactsUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactsUploadResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Calculation Artifacts",
         "tags": [
           "calculations"
         ]
@@ -100033,19 +100035,21 @@
         "tags": [
           "submissions"
         ]
-      },
+      }
+    },
+    "/api/v1/submissions/{submission_ref}/rights-attestations": {
       "post": {
         "description": "Record who agrees to license this submission, and on what basis.\n\nA ``depositor_agreement`` is the depositor's own statement and is accepted\nonly from the submission's creator; ``operator_own_data``,\n``historical_review`` and ``source_terms`` record a curator's judgement\nand need the curator or admin role. Appending never edits: a new row\nsupersedes the one that stood before.\n\n:raises HTTPException: 403 when the caller may not make this attestation;\n    422 for a body the caller can correct (blank license, missing\n    ``source_terms``).",
-        "operationId": "create_rights_attestation_api_v1_submissions__submission_id__rights_attestations_post",
+        "operationId": "create_rights_attestation_api_v1_submissions__submission_ref__rights_attestations_post",
         "parameters": [
           {
-            "description": "The submission, by its ``sub_`` ref (preferred; every upload, job and bundle response returns it as ``submission_ref``) or, for a deprecation window, by its integer id.",
+            "description": "The submission, by its ``sub_`` ref (every upload, job and bundle response returns it as ``submission_ref``). A row id is refused: 422 ``invalid_handle``.",
             "in": "path",
-            "name": "submission_id",
+            "name": "submission_ref",
             "required": true,
             "schema": {
-              "description": "The submission, by its ``sub_`` ref (preferred; every upload, job and bundle response returns it as ``submission_ref``) or, for a deprecation window, by its integer id.",
-              "title": "Submission Id",
+              "description": "The submission, by its ``sub_`` ref (every upload, job and bundle response returns it as ``submission_ref``). A row id is refused: 422 ``invalid_handle``.",
+              "title": "Submission Ref",
               "type": "string"
             }
           },

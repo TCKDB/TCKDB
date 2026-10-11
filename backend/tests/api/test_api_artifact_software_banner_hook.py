@@ -26,6 +26,7 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import SoftwareReconciliationStatus
 from app.db.models.execution_environment import ExecutionEnvironmentManifest
 from app.db.models.software import Software, SoftwareRelease
+from tests.api.artifact_urls import artifacts_url
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -93,7 +94,7 @@ def _create_calc(client, **kwargs) -> int:
 
 def _post_artifacts(client, calc_id: int, *artifacts: dict):
     resp = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(client, calc_id),
         json={"artifacts": list(artifacts)},
     )
     assert resp.status_code == 201, resp.text
