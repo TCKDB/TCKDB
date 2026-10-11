@@ -34,7 +34,7 @@ of the three new reasons: dropping them would discard the only statement of how 
 formed. It deletes nothing. Otherwise it restores the previous token check and drops the columns.
 
 Revision ID: e5b2c8a1d7f3
-Revises: d3a8f6c1b952
+Revises: a7d2c9e5b413
 Create Date: 2026-10-11
 """
 
@@ -47,7 +47,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e5b2c8a1d7f3"
-down_revision: Union[str, Sequence[str], None] = "d3a8f6c1b952"
+down_revision: Union[str, Sequence[str], None] = "a7d2c9e5b413"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
