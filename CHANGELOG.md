@@ -22,6 +22,20 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Statmech decision and replay (2026-10-11)
+
+**Chunk 4 of the statmech selection programme: decision and replay, no public surface yet.** Migration: none. New
+environment variable: none. No wire, contract or client change (so no version bump).
+
+- An internal decision stage over the qualification: `qualify` selects nothing; `protocol_preferred` compares only a decided
+  population, through the shared graph kernel (rule supersession before opposition, conflicts, fronts) over whole models,
+  and ships **zero** rules, so every comparison ends `incomparable_alternatives` (or `sole_eligible_candidate`) until an
+  audited rule is activated. A pair a rule might rank but cannot (unknown prerequisite) is `unresolved_comparability`.
+- A replayable manifest (no database ids) with three offline operations: reproduce the recorded ordering, reassess the
+  captured inputs, or replay the whole decision; a self-inconsistent manifest or an unsupported version is refused.
+- Replacing a statmech record now needs the same subject (a transition-state record was compared by its empty species
+  column only) and, where both declare a model, the same declared scope.
+
 ## Export: transport linearity from a linked witness (2026-10-11)
 
 **Changes the bulk-export output (NDJSON and CHEMKIN), no wire-version bump.** Migration: none. New environment variable: none.

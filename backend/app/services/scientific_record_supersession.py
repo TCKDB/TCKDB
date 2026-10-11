@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,6 +14,8 @@ from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionReco
 from app.db.models.kinetics import KineticsDetermination
 from app.db.models.record_review import RecordReview
 from app.db.models.scientific_record_supersession import ScientificRecordSupersession
+from app.db.models.statmech_declaration import StatmechModelDeclaration
+from app.db.models.structure_determination import StructureDetermination
 from app.services.accepted_science import (
     is_accepted_science_type,
     lock_scientific_records,
@@ -51,6 +54,33 @@ def _assert_kinetics_targets_compatible(session: Session, old_root, new_root) ->
         new.target_network_channel_id,
     ):
         raise DomainError("Supersession records must describe the same determination target")
+
+
+def _assert_statmech_targets_compatible(session: Session, old_root, new_root) -> None:
+    """A replacement of a statmech record is a replacement of the same declared model scope.
+
+    Where both records declare a model, the two must declare the same scope: both an atom, both the same basin, both
+    an equilibrium ensemble, or both a transition-state determination of the same kind. A re-derived model or a
+    corrected recipe is a different revision of the same scope, so the recipe, members and sources are not compared,
+    only what the model is a model of. Where either record declares none, nothing can be compared and the replacement
+    is allowed; the absence is not hidden, because a record's read states no declared model and never "standalone".
+    """
+    old, new = (
+        session.scalar(select(StatmechModelDeclaration).where(StatmechModelDeclaration.statmech_id == root.id))
+        for root in (old_root, new_root)
+    )
+    if old is None or new is None:
+        return
+
+    def target(declaration: StatmechModelDeclaration) -> tuple[Any, ...]:
+        determination_kind = None
+        if declaration.structure_determination_id is not None:
+            determination = session.get(StructureDetermination, declaration.structure_determination_id)
+            determination_kind = determination.target_kind if determination is not None else None
+        return (declaration.scope_kind, declaration.conformer_group_id, determination_kind)
+
+    if target(old) != target(new):
+        raise DomainError("Supersession records must declare the same model scope")
 
 
 @dataclass(frozen=True)
@@ -149,6 +179,8 @@ def supersede_scientific_record(
         raise DomainError("Supersession records must describe the same subject")
     if record_type is SubmissionRecordType.kinetics:
         _assert_kinetics_targets_compatible(session, old_root, new_root)
+    elif record_type is SubmissionRecordType.statmech:
+        _assert_statmech_targets_compatible(session, old_root, new_root)
 
     if old_review.status is RecordReviewStatus.approved:
         set_record_review_status(

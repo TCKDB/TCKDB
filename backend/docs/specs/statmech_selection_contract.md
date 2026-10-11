@@ -137,6 +137,50 @@ figures are provisional and are revised from measured payloads when the loader l
 Zero active literature preference rules ship. Synthetic rules exist only in tests. A rule is inactive until an
 audited manifest pinned by content says otherwise, and no council example is activated by being written down.
 
+## Decision
+
+Qualification is the floor. `qualify` returns the qualification summary and no selection reference. `protocol_preferred`
+compares only a decided population: if the summary is anything but `qualified_models` (an unsupported request, no
+candidates, nothing qualifying, or qualified models alongside undecided alternatives under a request for the entire
+domain) that outcome is the answer, every selection reference is null and the qualified subset stays visible.
+
+Preference runs on whole models that are each `applicable`, through the shared graph kernel: rule supersession is settled
+before any opposition is judged; a surviving opposing pair or a cycle is a `policy_conflict` with no selection; fronts and
+the administrative order come out. A rule applies only when its task, observable and objective (and, for `model_fidelity`,
+its pinned reference model) are the request's, its scope contains the request and its audited coverage contains the
+*entire* requested scope. An edge needs the preferred side, the yielding side and the pair's compatibility all true.
+
+A pair for which a rule might give an edge, with a prerequisite unknown on one side (or an unknown scope or coverage), is
+listed under `undecided` and the outcome is `unresolved_comparability`: nothing is selected, and an administrative
+reference cannot rescue it. A refuted prerequisite is a clean "no", not undecided.
+
+Precedence among preference outcomes: `unresolved_comparability`, `policy_conflict`, `sole_eligible_candidate`,
+`policy_preferred`, `incomparable_alternatives`. The selection block carries three mutually exclusive references, each with
+its basis and population limit: `scientific_ref` (supported dominance over every eligible alternative), `sole_eligible_ref`
+(noncomparative), `administrative_ref` (only `result_mode=first`, among incomparable first-front alternatives, never over a
+conflict, an unresolved comparability or an incomplete population). Administrative key, versioned: own review rank
+ascending, creation time descending, public ordinal descending; `latest` is time and ordinal descending only.
+
+Per-candidate advisories travel with the decision: `advisories` maps each candidate to its advisory codes, and `notices`
+says in words what `imported_parameters_not_revalidated:<role>` and `source_literature_unidentified:<role>` mean. Both are
+part of the response contract of the decision, not only of the assessment.
+
+Replacing a statmech record requires the same subject (species entry or transition-state entry) and, where both records
+declare a model, the same declared scope: both an atom, the same basin, both an ensemble, or both a transition-state
+determination. A record that declares nothing can be replaced, and the absence is not hidden.
+
+## Manifest and replay
+
+The manifest carries the normalised request, profile and effective statuses, subject, population counts, every candidate's
+facts and every source calculation (no database id), each assessment, the registry entries consulted and the decision.
+Three offline operations: `reproduce_statmech_ordering` runs the decision over the *recorded* assessments (`reassessed:
+false`; a manifest made under an older supported semantics is labelled `historical`); `reassess_statmech_captured_inputs`
+recomputes every assessment from the captured facts and refuses any difference, never trusting a recorded flag even when
+coordinated edits agree; `replay_statmech_decision` reassesses and then re-decides over the recomputed assessments. A
+version, semantics or rule this release does not carry is refused, never substituted; a historical manifest is never
+reassessed under today's rubric. Digests are checksums, not signatures; replay verifies the consequences of captured
+inputs, not scientific truth, provenance or completeness of the captured population.
+
 ## Surface behavior, old and new
 
 | Surface | Today | Changes in |

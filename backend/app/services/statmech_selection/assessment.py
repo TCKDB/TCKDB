@@ -134,6 +134,22 @@ class Reason:
     def to_dict(self) -> dict[str, str]:
         return {"code": self.code, "applicability": self.applicability.value, "category": self.category.value}
 
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> Reason:
+        """Read a recorded reason back. It must be a registered one with the applicability and category the registry gives.
+
+        :raises ValueError: an unregistered code, or a recorded applicability or category the registry does not give it.
+        """
+        code = raw["code"]
+        try:
+            spec = REASONS[base(code)]
+        except KeyError as exc:
+            raise ValueError(f"unregistered reason {code!r}") from exc
+        recorded = (Applicability(raw["applicability"]), Category(raw["category"]))
+        if recorded != (spec.applicability, spec.category):
+            raise ValueError(f"reason {code!r} is recorded with a verdict the registry does not give it")
+        return cls(code, spec.applicability, spec.category)
+
 
 @dataclass(frozen=True)
 class RecipeFact:
@@ -155,6 +171,14 @@ class NormalizedRecipe:
 
     def to_dict(self) -> dict[str, Any]:
         return {"facts": [f.to_dict() for f in self.facts], "unestablished": list(self.unestablished), "cohort_key": self.cohort_key}
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> NormalizedRecipe:
+        return cls(
+            facts=tuple(RecipeFact(f["name"], f["state"], f["value"]) for f in raw["facts"]),
+            unestablished=tuple(raw["unestablished"]),
+            cohort_key=raw["cohort_key"],
+        )
 
 
 @dataclass(frozen=True)
@@ -201,6 +225,43 @@ class StatmechAssessment:
             "supersession": dict(self.supersession) if self.supersession is not None else None,
             "eligible": self.eligible,
         }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> StatmechAssessment:
+        """Read a *recorded* assessment back, refusing one that contradicts itself.
+
+        The recorded ``eligible`` flag and ``applicability`` must agree, and the applicability must be what the
+        recorded reasons give (the strictest of them; ``applicable`` with none). This reads what a manifest says; it
+        does not reassess anything.
+
+        :raises ValueError: an unregistered reason, a verdict its reasons do not give, or an eligible flag that
+            disagrees with the applicability.
+        """
+        reasons = tuple(Reason.from_dict(r) for r in raw["reasons"])
+        for note in raw["advisory"]:
+            if not is_registered_advisory(note):
+                raise ValueError(f"unregistered advisory {note!r}")
+        recorded = Applicability(raw["applicability"])
+        present = {r.applicability for r in reasons}
+        expected = next(
+            (level for level in (Applicability.incompatible, Applicability.unsupported, Applicability.unresolved) if level in present),
+            Applicability.applicable,
+        )
+        if recorded is not expected:
+            raise ValueError(f"{raw['candidate_ref']} is recorded {recorded.value} but its reasons give {expected.value}")
+        if raw["eligible"] is not (recorded is Applicability.applicable):
+            raise ValueError(f"{raw['candidate_ref']} has an eligible flag its applicability does not give")
+        return cls(
+            candidate_ref=raw["candidate_ref"],
+            kind=CandidateKind(raw["kind"]),
+            applicability=recorded,
+            reasons=reasons,
+            advisory=tuple(raw["advisory"]),
+            comparative_unknown=tuple(raw["comparative_unknown"]),
+            evidence={k: tuple(v) for k, v in raw["evidence"].items()},
+            recipe=NormalizedRecipe.from_dict(raw["recipe"]) if raw["recipe"] is not None else None,
+            supersession=raw["supersession"],
+        )
 
 
 class Collector:

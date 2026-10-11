@@ -211,3 +211,91 @@ def test_review_with_approval_history_can_be_restored_at_any_status(db_session, 
     db_session.add(review)
     db_session.flush()
     assert review.first_approved_at == approved_at
+
+
+# --- statmech: the same subject, and the same declared model scope ---------------------------------------------------------
+
+
+def _statmech_pair(db_session, *, scope_old=None, scope_new=None, same_entry=True, actor=None):
+    """Two approved statmech records of one species entry, each declaring the given scope (``None`` declares nothing)."""
+    from app.db.models.common import StatmechModelScopeKind
+    from tests.db.test_statmech_model_declaration_db import _declaration, _entry
+    from tests.services.scientific_read._factories import make_conformer_group, make_statmech
+
+    actor = actor or _curator(db_session)
+    entry = _entry(db_session)
+    other_entry = entry if same_entry else _entry(db_session)
+    groups = {"a": make_conformer_group(db_session, entry), "b": make_conformer_group(db_session, entry)}
+    rows = []
+    for host_entry, scope in ((entry, scope_old), (other_entry, scope_new)):
+        host = make_statmech(db_session, species_entry=host_entry)
+        if scope is not None:
+            kind, group = scope
+            kwargs = {"conformer_group_id": groups[group].id} if group else {}
+            _declaration(db_session, host, StatmechModelScopeKind(kind), **kwargs)
+        ensure_record_review(db_session, record_type=SubmissionRecordType.statmech, record_id=host.id)
+        set_record_review_status(
+            db_session, record_type=SubmissionRecordType.statmech, record_id=host.id, status=RecordReviewStatus.approved, actor=actor
+        )
+        rows.append(host)
+    return actor, rows
+
+
+def _supersede_statmech(db_session, actor, old, new):
+    return supersede_scientific_record(
+        db_session,
+        record_type=SubmissionRecordType.statmech,
+        superseded_record_id=old.id,
+        superseding_record_id=new.id,
+        actor=actor,
+        reason="a better model of the same thing",
+    )
+
+
+def test_a_statmech_revision_of_the_same_declared_scope_supersedes(db_session) -> None:
+    actor, (old, new) = _statmech_pair(db_session, scope_old=("basin", "a"), scope_new=("basin", "a"))
+    assert _supersede_statmech(db_session, actor, old, new).superseding_record_id == new.id
+
+
+def test_a_statmech_record_may_be_replaced_when_either_side_declares_no_model(db_session) -> None:
+    actor = _curator(db_session)
+    for old_scope, new_scope in ((None, ("basin", "a")), (("basin", "a"), None), (None, None)):
+        _, (old, new) = _statmech_pair(db_session, scope_old=old_scope, scope_new=new_scope, actor=actor)
+        assert _supersede_statmech(db_session, actor, old, new).id
+
+
+@pytest.mark.parametrize(
+    "old_scope, new_scope",
+    [(("basin", "a"), ("basin", "b")), (("basin", "a"), ("atom", None)), (("atom", None), ("explicit_equilibrium_ensemble", None))],
+    ids=["another basin", "basin to atom", "atom to ensemble"],
+)
+def test_a_statmech_replacement_must_declare_the_same_model_scope(db_session, old_scope, new_scope) -> None:
+    actor, (old, new) = _statmech_pair(db_session, scope_old=old_scope, scope_new=new_scope)
+    with pytest.raises(DomainError, match="same model scope"):
+        _supersede_statmech(db_session, actor, old, new)
+
+
+def test_a_statmech_replacement_must_be_of_the_same_subject_species_or_transition_state(db_session) -> None:
+    actor, (old, new) = _statmech_pair(db_session, same_entry=False)
+    with pytest.raises(DomainError, match="same subject"):
+        _supersede_statmech(db_session, actor, old, new)
+
+
+def test_two_transition_state_records_of_different_entries_are_not_the_same_subject(db_session) -> None:
+    """The subject of a TS-owned record is its TS entry; the species column alone is None for both."""
+    from app.db.models.statmech import Statmech
+    from tests.db.test_statmech_model_declaration_db import _ts_entry
+
+    actor = _curator(db_session)
+    hosts = []
+    for _ in range(2):
+        host = Statmech(transition_state_entry_id=_ts_entry(db_session).id, scientific_origin="computed")
+        db_session.add(host)
+        db_session.flush()
+        ensure_record_review(db_session, record_type=SubmissionRecordType.statmech, record_id=host.id)
+        set_record_review_status(
+            db_session, record_type=SubmissionRecordType.statmech, record_id=host.id, status=RecordReviewStatus.approved, actor=actor
+        )
+        hosts.append(host)
+    with pytest.raises(DomainError, match="same subject"):
+        _supersede_statmech(db_session, actor, *hosts)
