@@ -96,6 +96,9 @@ PREFIXES: dict[str, str] = {
     # An appended, scoped finding about a geometry, calculation or determination. Opaque: a finding is an
     # event by an author, and a correction is a new finding that supersedes it.
     "StructureEvidenceFinding": "sfnd",
+    # A declared statistical model of a statmech record (statmech selection). Opaque: a declaration is an event by
+    # an author, scoped to one record of this instance.
+    "StatmechModelDeclaration": "smd",
     "Submission": "sub",
     "RecordReproducibilityAssessment": "rpa",
     # Append-only upload log (see CalculationArtifact docstring). Opaque:

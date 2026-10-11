@@ -61,10 +61,10 @@ Three things are deliberately absent:
 | Kind of token | Count | Read from |
 | --- | --- | --- |
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
-| Identifier prefixes | 42 | `backend/app/services/public_refs.py` |
+| Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 146 | `backend/app/services/trust/rubrics.py` |
 | Refusal codes a caller can receive | 296 | `backend/app/api/code_catalogue.py` |
-| **total** | **602** | |
+| **total** | **603** | |
 
 ## How a record is named
 
@@ -95,7 +95,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `wfr_` | workflow tool release | yes |
 | `wft_` | workflow tool | yes |
 
-### Opaque prefixes (29)
+### Opaque prefixes (30)
 
 | Prefix | Names a | Same on every instance? |
 | --- | --- | --- |
@@ -121,6 +121,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `sdet_` | structure determination | no — one row, one database |
 | `sfnd_` | structure evidence finding | no — one row, one database |
 | `sm_` | statmech | no — one row, one database |
+| `smd_` | statmech model declaration | no — one row, one database |
 | `spe_` | species entry | no — one row, one database |
 | `sra_` | submission rights attestation | no — one row, one database |
 | `sub_` | submission | no — one row, one database |
