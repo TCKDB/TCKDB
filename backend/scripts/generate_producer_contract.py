@@ -154,6 +154,8 @@ CHANGELOG = PACKAGE_ROOT / "CHANGELOG.md"
 CONTRACT_DIR = PACKAGE_ROOT / "tckdb_schemas" / "contract"
 MARKDOWN_NAME = "PRODUCER_CONTRACT.md"
 CHANGELOG_NAME = "CHANGELOG.md"
+#: The refusal code reference, shipped beside the contract (it was a 104 KB section of it).
+CODES_NAME = "REFUSAL_CODES.md"
 SCHEMA_SUBDIR = "schemas"
 SCHEMA_SUFFIX = ".schema.json"
 
@@ -1900,7 +1902,7 @@ class ContractBuilder:
             said = _first_sentence(facts.check.asserts)
         else:
             said = "see the code reference"
-        return f"- [`{code}`](#{_anchor('c', code)}) ({statuses}): {said}"
+        return f"- {self.code_ref(code)} ({statuses}): {said}"
 
     def rule_anchor(self, key: str) -> str:
         """The anchor of a shared rule's entry: its function name, or the whole key where two share a name."""
@@ -1921,7 +1923,7 @@ class ContractBuilder:
         if len(self._surfaces_by_code().get(code, [])) <= 1:
             return self._refusal_line(code)
         statuses = "/".join(str(s) for s in self.code_facts(code).statuses)
-        return f"- [`{code}`](#{_anchor('c', code)}) ({statuses})"
+        return f"- {self.code_ref(code)} ({statuses})"
 
     # -- rendering ----------------------------------------------------------
 
@@ -1948,7 +1950,8 @@ class ContractBuilder:
             f" {len(self.models)} models). No source commit is stamped: one version names one contract.",
             "",
             "Read it in pieces: `python -m tckdb_schemas.contract --print` for all of it,"
-            " `--since <version>` for what changed, `--schemas` for the JSON Schema files.",
+            " `--since <version>` for what changed, `--schemas` for the JSON Schema files, `--codes` for the path of the"
+            f" refusal code reference (`{CODES_NAME}`, shipped beside this file).",
             "",
         ]
         out += self._render_glance()
@@ -1966,7 +1969,7 @@ class ContractBuilder:
             *[f"- [Surface `{surface.title}`](#{surface.anchor})" for surface in self.surfaces],
             "- [Model reference](#model-reference)",
             "- [Enums](#enums)",
-            "- [Refusal code reference](#refusal-code-reference)",
+            "- [Refusal code reference](#refusal-code-reference) (its own file, `REFUSAL_CODES.md`)",
             "- [Write routes that are not producer surfaces](#write-routes-that-are-not-producer-surfaces)",
             "",
             PREAMBLE,
@@ -1980,7 +1983,7 @@ class ContractBuilder:
             out += self._render_surface(surface)
         out += self._render_model_reference()
         out += self._render_enums()
-        out += self._render_code_reference()
+        out += self._render_code_reference_pointer()
         out += self._render_route_classification()
         text = "\n".join(out)
         text = re.sub(r"\n{3,}", "\n\n", text)
@@ -2130,7 +2133,7 @@ class ContractBuilder:
             " root model's own validators, then the rest; within a rank, a code fewer surfaces can return comes first."
             " Codes every request can receive are left out. A code only this surface can return says what it refuses"
             " on the line; one that several surfaces can return is described once, in its entry in the"
-            " [refusal code reference](#refusal-code-reference).",
+            f" [refusal code reference]({CODES_NAME}#refusal-code-reference).",
             "- **Rules the workflow applies.** Found by tracing each route's handler through its direct calls: every"
             " function reached that is marked `@producer_rule` or declared in the scientific check register. A rule"
             " several surfaces reach is linked to its entry in [checks several surfaces apply]"
@@ -2172,14 +2175,14 @@ class ContractBuilder:
             out += [f'<a id="{self.rule_anchor(key)}"></a>', "", f"### `{key.split(':', 1)[1]}`", ""]
             if len(func_checks) == 1:
                 (check,) = func_checks
-                codes = ", ".join(f"[`{code}`](#{_anchor('c', code)})" for code in check.codes) or "none"
+                codes = ", ".join(self.code_ref(code) for code in check.codes) or "none"
                 out += [f"`{key}`. {check.tier.value}; codes {codes}. {applied}", ""]
                 for line in body(check, key):
                     out += [line, ""]
                 continue
             out += [f"`{key}` enforces {len(func_checks)} checks. {applied}", ""]
             for check in func_checks:
-                codes = ", ".join(f"[`{code}`](#{_anchor('c', code)})" for code in check.codes) or "none"
+                codes = ", ".join(self.code_ref(code) for code in check.codes) or "none"
                 first, *rest = body(check, key)
                 out += [f"- **{check.tier.value}; codes {codes}.** {first}", *[f"  {line}" for line in rest]]
             out.append("")
@@ -2215,7 +2218,7 @@ class ContractBuilder:
             " exactly the same surfaces return. A surface's own \"Refusal codes this surface can return\" section lists"
             " the codes only it can return and links the groups it belongs to: its codes are those plus every code"
             " of those groups. `Traced via` is how the code was reached, joined over the group's surfaces. Each code"
-            " links to its entry in the [refusal code reference](#refusal-code-reference).",
+            f" links to its entry in the [refusal code reference]({CODES_NAME}#refusal-code-reference).",
             "",
         ]
         for group in groups:
@@ -2232,7 +2235,7 @@ class ContractBuilder:
             for code in group.items:
                 statuses = ", ".join(str(s) for s in sorted({e.status for e in self.catalogue[code]}))
                 how = sorted({h for title in group.titles for h in self.surface_codes(by_title[title]).get(code, [])})
-                out.append(f"| [`{code}`](#{_anchor('c', code)}) | {statuses} | {_cell('; '.join(how))} |")
+                out.append(f"| {self.code_ref(code)} | {statuses} | {_cell('; '.join(how))} |")
             out.append("")
         return out
 
@@ -2389,7 +2392,7 @@ class ContractBuilder:
             for code in specific:
                 statuses = ", ".join(str(s) for s in sorted({e.status for e in self.catalogue[code]}))
                 how = "; ".join(sorted(set(traced[code])))
-                out.append(f"| [`{code}`](#{_anchor('c', code)}) | {statuses} | {_cell(how)} |")
+                out.append(f"| {self.code_ref(code)} | {statuses} | {_cell(how)} |")
             out.append("")
         if belongs:
             out += [
@@ -2467,6 +2470,42 @@ class ContractBuilder:
             out += [f'<a id="{enum_anchor(used[name])}"></a>', "", f"### `{name}`", "", values, ""]
         return out
 
+    def render_codes_markdown(self) -> str:
+        text = "\n".join(self._render_code_reference())
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.rstrip("\n") + "\n"
+
+    def _render_code_reference_pointer(self) -> list[str]:
+        return [
+            '<a id="refusal-code-reference"></a>',
+            "",
+            "## Refusal code reference",
+            "",
+            f"The per-code reference ({len(self._documented_codes())} codes) is its own file, `{CODES_NAME}`, beside this one"
+            f" in the installed package. Every code in a table above links to its entry there. Each entry gives the"
+            " code's HTTP status, how it arrives, where it is defined, the sentence written beside it at its raise"
+            " site, and the scientific check behind it; the file ends with the client-facing codes no producer route"
+            " was traced to. Find it with `python -m tckdb_schemas.contract --codes` (prints the path) or"
+            " `tckdb_schemas.contract.refusal_codes_path()`; read it with `refusal_codes_markdown()`.",
+            "",
+        ]
+
+    def _documented_codes(self) -> list[str]:
+        return sorted(set(self.traced_codes()) | set(self.global_trace.code_sites))
+
+    def code_ref(self, code: str) -> str:
+        """A code as it is named in the contract: a link to its entry in ``REFUSAL_CODES.md`` when it has one.
+
+        A scientific check can name a code no producer route was traced to (an advisory flag, not a
+        refusal). The reference has no entry for it, so it is named without a link rather than linked to
+        an anchor that is not there.
+        """
+        if not hasattr(self, "_documented_code_set"):
+            self._documented_code_set = set(self._documented_codes())
+        if code in self._documented_code_set:
+            return f"[`{code}`]({CODES_NAME}#{_anchor('c', code)})"
+        return f"`{code}`"
+
     def _render_code_reference(self) -> list[str]:
         traced = self.traced_codes()
         global_codes = set(self.global_trace.code_sites)
@@ -2474,6 +2513,19 @@ class ContractBuilder:
         documented = sorted(set(traced) | global_codes)
         shared = self.shared_checks()
         out = [
+            "# TCKDB refusal code reference",
+            "",
+            "<!-- GENERATED FILE. Do not edit. Regenerate with:",
+            f"     {REGENERATE}",
+            "     and verify with --check. -->",
+            "",
+            f"Generated by `{GENERATOR}` from the refusal-code catalogue, beside `{MARKDOWN_NAME}` (the producer"
+            f" contract), which links here for every code's entry. **tckdb-schemas version `{_package_version()}`.**"
+            " Read an entry with `python -m tckdb_schemas.contract --codes`, or open the file at"
+            " `tckdb_schemas.contract.refusal_codes_path()`.",
+            "",
+            '<a id="refusal-code-reference"></a>',
+            "",
             "## Refusal code reference",
             "",
             "Every code a producer route was traced to. `Message` is the sentence written beside the"
@@ -2507,7 +2559,8 @@ class ContractBuilder:
                 out.append(f"- Note: {_first_sentence(note)}")
             shared_key = next((key for key, (checks, _) in shared.items() if facts.check in checks), None)
             if shared_key is not None:
-                out.append(f"- Scientific check: [`{shared_key.split(':', 1)[1]}`](#{self.rule_anchor(shared_key)}).")
+                out.append(f"- Scientific check: [`{shared_key.split(':', 1)[1]}`]({MARKDOWN_NAME}#{self.rule_anchor(shared_key)})."
+                )
             elif facts.check is not None:
                 out.append(f"- Scientific check ({facts.check.tier.value}): {_one_line(facts.check.asserts)}")
                 if facts.check.escape_hatch:
@@ -2549,7 +2602,11 @@ class ContractBuilder:
     # -- files ---------------------------------------------------------------
 
     def render_files(self) -> dict[str, str]:
-        files = {MARKDOWN_NAME: self.render_markdown(), CHANGELOG_NAME: CHANGELOG.read_text()}
+        files = {
+            MARKDOWN_NAME: self.render_markdown(),
+            CODES_NAME: self.render_codes_markdown(),
+            CHANGELOG_NAME: CHANGELOG.read_text(),
+        }
         for surface in self.surfaces:
             files[surface.schema_file] = json_schema_text(surface.model)
         return files
@@ -2565,6 +2622,9 @@ def committed_files() -> dict[str, str]:
     markdown = CONTRACT_DIR / MARKDOWN_NAME
     if markdown.exists():
         files[MARKDOWN_NAME] = markdown.read_text()
+    codes = CONTRACT_DIR / CODES_NAME
+    if codes.exists():
+        files[CODES_NAME] = codes.read_text()
     changelog = CONTRACT_DIR / CHANGELOG_NAME
     if changelog.exists():
         files[CHANGELOG_NAME] = changelog.read_text()

@@ -69,6 +69,12 @@ def committed_markdown() -> str:
     return (generator.CONTRACT_DIR / generator.MARKDOWN_NAME).read_text()
 
 
+@pytest.fixture(scope="module")
+def committed_codes() -> str:
+    """The refusal code reference, shipped as its own file beside the contract."""
+    return (generator.CONTRACT_DIR / generator.CODES_NAME).read_text()
+
+
 # ---------------------------------------------------------------------------
 # Helpers the tests assert with. Each is also run against a mutated input
 # below, which is what makes its green mean something.
@@ -374,26 +380,26 @@ def test_a_route_the_generator_stops_seeing_turns_the_check_red(monkeypatch) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_every_client_facing_code_is_in_the_contract(committed_markdown: str) -> None:
-    """Each client-facing code has an entry: traced to a surface, or listed as untraced."""
+def test_every_client_facing_code_is_in_the_contract(committed_codes: str) -> None:
+    """Each client-facing code has an entry in the code reference: traced to a surface, or listed as untraced."""
     codes = sorted({entry.code for entry in CATALOGUE if entry.is_client_facing})
     assert len(codes) >= 100, len(codes)
-    assert missing_codes(committed_markdown, codes) == []
-    untraced = committed_markdown.split("### Client-facing codes not traced to any producer route", 1)
+    assert missing_codes(committed_codes, codes) == []
+    untraced = committed_codes.split("### Client-facing codes not traced to any producer route", 1)
     assert len(untraced) == 2, "the untraced-codes list is missing"
 
 
-def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown: str) -> None:
+def test_a_code_dropped_from_the_contract_is_reported_missing(committed_codes: str) -> None:
     """Mutation: remove one traced code's entry, and one untraced code's line."""
     code = "enthalpy_declaration_absent"
-    start = committed_markdown.index(f"#### `{code}`")
-    end = committed_markdown.index("\n#### ", start + 1)
-    mutated = committed_markdown[:start] + committed_markdown[end + 1 :]
+    start = committed_codes.index(f"#### `{code}`")
+    end = committed_codes.index("\n#### ", start + 1)
+    mutated = committed_codes[:start] + committed_codes[end + 1 :]
     assert missing_codes(mutated, [code]) == [code]
 
     untraced = "email_taken"
-    assert f"\n- `{untraced}` (" in committed_markdown, "pick a code that is still untraced"
-    mutated = re.sub(rf"\n- `{untraced}` \([^\n]*", "", committed_markdown)
+    assert f"\n- `{untraced}` (" in committed_codes, "pick a code that is still untraced"
+    mutated = re.sub(rf"\n- `{untraced}` \([^\n]*", "", committed_codes)
     assert missing_codes(mutated, [untraced]) == [untraced]
 
 
@@ -417,6 +423,12 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 #: At 0.98.0 "What changed" stopped copying every changelog entry (69 KB, a tenth of the file and growing
 #: each release) and prints the newest few; the full changelog ships beside the contract. 696_926 to
 #: 634_736 bytes, with the ceiling left where it was.
+#:
+#: At 0.112.2 (2026-10-11) the refusal code reference (104 KB, a sixth of the file) moved out of it into
+#: ``REFUSAL_CODES.md``, shipped beside the contract the way the changelog is, because the next
+#: statmech pull request would have brought it to 699_942 bytes and the one after would have crossed.
+#: Each surface keeps its own code table and its one-line meanings; only the long per-code entries moved.
+#: 686_228 to 588_151 bytes, with the ceiling left at 700_000.
 MARKDOWN_BYTE_CEILING = 700_000
 
 
@@ -614,13 +626,81 @@ def dangling_links(markdown: str) -> set[str]:
 def test_every_link_to_a_shared_block_resolves(committed_markdown: str) -> None:
     """A surface that links a group or a rule is only as good as the entry the link reaches.
 
-    Links to a refusal code (``#c-...``) are left out: a check's code that no producer route was traced to
-    has no entry in the reference, and the shared check entries have always linked it regardless.
+    Links to a refusal code point into ``REFUSAL_CODES.md`` and are checked by their own test below.
     """
-    unresolved = {link for link in dangling_links(committed_markdown) if not link.startswith("c-")}
+    unresolved = dangling_links(committed_markdown)
     assert unresolved == set()
     links = re.findall(r"\]\(#((?:k|cg|mg|s|m)-[^)]+)\)", committed_markdown)
     assert len(links) > 800, len(links)
+
+
+CODE_LINK = re.compile(r"\]\(REFUSAL_CODES\.md#([^)]+)\)")
+
+
+def unresolved_code_links(markdown: str, codes: str) -> set[str]:
+    """``REFUSAL_CODES.md#anchor`` links in ``markdown`` whose anchor is not in ``codes``."""
+    anchors = set(re.findall(r'<a id="([^"]+)"', codes))
+    return {link for link in CODE_LINK.findall(markdown) if link not in anchors}
+
+
+def test_every_link_into_the_code_reference_resolves(committed_markdown: str, committed_codes: str) -> None:
+    links = CODE_LINK.findall(committed_markdown)
+    assert len(links) > 150, len(links)
+    assert unresolved_code_links(committed_markdown, committed_codes) == set()
+    # A bare ``#c-...`` would resolve in no viewer: the entry is in another file.
+    assert re.findall(r"\]\(#c-[^)]*\)", committed_markdown) == []
+    assert "](REFUSAL_CODES.md#refusal-code-reference)" in committed_markdown
+
+
+def test_a_code_link_to_a_dropped_entry_is_caught(committed_markdown: str, committed_codes: str) -> None:
+    """Mutation: one entry's anchor is removed from the code file; the links to it dangle."""
+    anchor = CODE_LINK.search(committed_markdown).group(1)
+    mutated = committed_codes.replace(f'<a id="{anchor}"></a>', "", 1)
+    assert anchor in unresolved_code_links(committed_markdown, mutated)
+
+
+def test_a_code_link_left_as_a_bare_anchor_is_caught(committed_markdown: str) -> None:
+    """Mutation: a link into the code file loses its file name; it must no longer count as a code link."""
+    mutated = committed_markdown.replace("](REFUSAL_CODES.md#c-", "](#c-", 1)
+    assert re.findall(r"\]\(#c-[^)]*\)", mutated) != []
+
+
+def code_occurrences(codes: str, code: str) -> int:
+    """How many times ``code`` has an entry (an anchor) or an untraced line in the code reference."""
+    return codes.count(f'<a id="{generator._anchor("c", code)}"></a>') + codes.count(f"\n- `{code}` (")
+
+
+def test_every_catalogue_code_is_in_the_code_file_exactly_once(committed_codes: str) -> None:
+    catalogue = sorted({entry.code for entry in CATALOGUE})
+    client_facing = {entry.code for entry in CATALOGUE if entry.is_client_facing}
+    assert len(catalogue) >= 100, len(catalogue)
+    counts = {code: code_occurrences(committed_codes, code) for code in catalogue}
+    assert [c for c in client_facing if counts[c] != 1] == []
+    # A code that is not client-facing has an entry only if a producer route was traced to it; never two.
+    assert [c for c, n in counts.items() if n > 1] == []
+
+
+def test_a_code_listed_twice_in_the_code_file_is_caught(committed_codes: str) -> None:
+    """Mutation: one entry is printed twice, and one is dropped; the exactly-once count sees both."""
+    code = "enthalpy_declaration_absent"
+    start = committed_codes.index(f'<a id="{generator._anchor("c", code)}"></a>')
+    end = committed_codes.index("\n<a id=", start + 1)
+    assert code_occurrences(committed_codes, code) == 1
+    assert code_occurrences(committed_codes[:end] + committed_codes[start:end] + committed_codes[end:], code) == 2
+    assert code_occurrences(committed_codes[:start] + committed_codes[end:], code) == 0
+
+
+def test_the_code_file_is_part_of_what_check_covers(builder) -> None:
+    """``--check`` compares every rendered file with the committed one; a file left out of either is unguarded."""
+    assert generator.CODES_NAME == shipped.REFUSAL_CODES_FILENAME
+    assert generator.CODES_NAME in builder.render_files()
+    assert generator.CODES_NAME in generator.committed_files()
+
+
+def test_a_missing_code_file_turns_check_red(builder) -> None:
+    committed = generator.committed_files()
+    without = {name: text for name, text in committed.items() if name != generator.CODES_NAME}
+    assert generator.diff_files(builder.render_files(), without) != ""
 
 
 def test_a_link_to_a_missing_group_is_caught(committed_markdown: str) -> None:
@@ -836,4 +916,4 @@ def test_a_function_that_enforces_several_checks_keeps_every_one(builder, commit
     section = committed_markdown.split("### `persist_transition_state_validation_evidence`", 1)[1].split("\n### ", 1)[0]
     assert f"enforces {len(checks)} checks" in section
     for code in codes:
-        assert f"(#{generator._anchor('c', code)})" in section, code
+        assert f"`{code}`" in section, code
