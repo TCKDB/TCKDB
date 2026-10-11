@@ -1680,6 +1680,18 @@
           ],
           "default": null
         },
+        "model_declaration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatmechModelDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The statistical model this record supplies: scope, attribution, recipe, ensemble members and the sources each part rests on. Optional; a record deposited without one is read as it is, and nothing is inferred from the other fields."
+        },
         "note": {
           "anyOf": [
             {
@@ -1937,6 +1949,16 @@
       "title": "CoreTreatmentFact",
       "type": "object"
     },
+    "CountedState": {
+      "description": "Whether a statistical factor is already counted in the supplied model.",
+      "enum": [
+        "counted",
+        "not_counted",
+        "unknown"
+      ],
+      "title": "CountedState",
+      "type": "string"
+    },
     "DeclarationOrigin": {
       "description": "Who produced the declaration: the depositor, or a parser reading the program output.",
       "enum": [
@@ -2070,6 +2092,15 @@
       ],
       "title": "DescribedRuntime",
       "type": "object"
+    },
+    "DividingSurface": {
+      "description": "The dividing surface of a transition-state model. ``variational`` is recognised and not evaluated.",
+      "enum": [
+        "conventional_saddle_point",
+        "variational"
+      ],
+      "title": "DividingSurface",
+      "type": "string"
     },
     "ElectronicLevelIn": {
       "additionalProperties": false,
@@ -3119,6 +3150,15 @@
       "title": "IncludedCorrection",
       "type": "string"
     },
+    "IsotopeMasses": {
+      "description": "The mass convention the model's rotational constants and frequencies were computed with.",
+      "enum": [
+        "entry_documented_masses",
+        "natural_abundance_average"
+      ],
+      "title": "IsotopeMasses",
+      "type": "string"
+    },
     "LevelOfTheoryRef": {
       "additionalProperties": false,
       "description": "Upload-facing reference to a level of theory: a program's method, or your own recipe.\n\nSend exactly one of ``method`` and ``composite_scheme``. ``method`` is a\nmethod a program ran (including a named composite method such as CBS-QB3,\nsent by name alone). ``composite_scheme`` defines a recipe of your own\n(a CCSD(T)/CBS extrapolation, a focal-point sum) from ordinary levels of\ntheory; the server names the resulting level of theory and binds it to the\nrecipe. Both, or neither, is refused. With ``composite_scheme`` the other\nlevel fields (basis, dispersion, ...) are not sent: they belong to the\nscheme's input levels.",
@@ -3436,6 +3476,593 @@
       "title": "MeliusBacComponentKind",
       "type": "string"
     },
+    "ModelEnergyZero": {
+      "description": "The zero the model's energies are measured from.",
+      "enum": [
+        "electronic",
+        "e0"
+      ],
+      "title": "ModelEnergyZero",
+      "type": "string"
+    },
+    "ModelMember": {
+      "additionalProperties": false,
+      "description": "One member of an explicit equilibrium ensemble: an existing statmech record, in a basin.\n\n:param statmech_ref: The member's own statistical interpretation (an existing record of the same species entry).\n:param conformer_group_ref: The basin the member is assigned to.\n:param counting_multiplicity: The depositor's attributed multiplicity; omitted means not stated, never one.\n:param relative_energy_kj_mol: The member's energy relative to the ensemble's reference, in kJ/mol.\n:param region_key: The configurational region the member covers, to diagnose overlap with a rotor's integral.",
+      "properties": {
+        "conformer_group_ref": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "pattern": "^cg_[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conformer Group Ref"
+        },
+        "counting_multiplicity": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Counting Multiplicity"
+        },
+        "member_key": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Member Key",
+          "type": "string"
+        },
+        "region_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region Key"
+        },
+        "relative_energy_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Energy Kj Mol"
+        },
+        "statmech_ref": {
+          "maxLength": 40,
+          "pattern": "^sm_[A-Za-z0-9]+$",
+          "title": "Statmech Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "member_key",
+        "statmech_ref"
+      ],
+      "title": "ModelMember",
+      "type": "object"
+    },
+    "ModelRecipe": {
+      "additionalProperties": false,
+      "description": "The statistical recipe. Every field is a claim; an omitted one is not stated.\n\n:param scale_application: Whether a frequency scale factor was applied; the factor itself is a ``scale_factor`` source.\n:param scale_contributions: What it was applied to (required when ``applied``, refused otherwise).\n:param projected_mode_indices: Modes projected out. A flag alone is not a mode map.\n:param excluded_mode_indices: Modes left out of the vibrational sum, other than projected ones.\n:param optical_multiplier: The optical-isomer factor the model applies; ``optical_state`` says if it is counted.\n:param electronic_spin_multiplier: A spin multiplier applied on top of any electronic levels.\n:param validity_min_k: Lower bound of the temperatures the model is stated to be valid for.\n:param validity_max_k: Upper bound of the same.\n:param translation_included: Whether the model is a full partition function (translation included) or an internal one.\n:param translational_normalization: How the translational part is normalised; goes with the matching reference value.\n:param reference_volume_m3: The fixed volume, in cubic metres.\n:param reference_pressure_pa: The standard-state pressure, in pascal.\n:param reference_concentration_mol_m3: The standard-state concentration, in mol per cubic metre.\n:param dividing_surface: A transition-state model's dividing surface.\n:param reaction_coordinate_excluded: Whether the reaction coordinate is left out of the transverse partition function.\n:param reaction_coordinate_mode_index: The one-based mode that is the reaction coordinate.",
+      "properties": {
+        "dividing_surface": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DividingSurface"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "electronic_levels_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CountedState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "electronic_spin_multiplier": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Electronic Spin Multiplier"
+        },
+        "energy_zero": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelEnergyZero"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "excluded_mode_indices": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 4096,
+          "title": "Excluded Mode Indices",
+          "type": "array"
+        },
+        "external_symmetry_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CountedState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "isotope_masses": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IsotopeMasses"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "low_frequency_cutoff_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Low Frequency Cutoff Cm1"
+        },
+        "nuclear_spin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NuclearSpin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "optical_multiplier": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Optical Multiplier"
+        },
+        "optical_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CountedState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "projected_mode_indices": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 4096,
+          "title": "Projected Mode Indices",
+          "type": "array"
+        },
+        "projection_prescription": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projection Prescription"
+        },
+        "reaction_coordinate_excluded": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reaction Coordinate Excluded"
+        },
+        "reaction_coordinate_mode_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reaction Coordinate Mode Index"
+        },
+        "reference_concentration_mol_m3": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Concentration Mol M3"
+        },
+        "reference_pressure_pa": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Pressure Pa"
+        },
+        "reference_volume_m3": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Volume M3"
+        },
+        "rotors": {
+          "items": {
+            "$ref": "#/$defs/ModelRotor"
+          },
+          "maxItems": 64,
+          "title": "Rotors",
+          "type": "array"
+        },
+        "scale_application": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScaleApplication"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale_contributions": {
+          "items": {
+            "$ref": "#/$defs/ScaleContribution"
+          },
+          "maxItems": 8,
+          "title": "Scale Contributions",
+          "type": "array"
+        },
+        "translation_included": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Translation Included"
+        },
+        "translational_normalization": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TranslationalNormalization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "validity_max_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validity Max K"
+        },
+        "validity_min_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validity Min K"
+        },
+        "vibrational_scheme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VibrationalScheme"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "zpe_included_in_energies": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zpe Included In Energies"
+        }
+      },
+      "title": "ModelRecipe",
+      "type": "object"
+    },
+    "ModelRotor": {
+      "additionalProperties": false,
+      "description": "One internal rotor and the harmonic modes it replaces.\n\n:param torsion_index: The ``torsion_index`` of the statmech record's torsion this describes.\n:param replaces_mode_indices: Harmonic modes this rotor replaces (so they are not counted twice).\n:param potential_source_key: The ``source_key`` of the ``torsional_surface`` source holding an imported potential.\n:param region_key: The configurational region the rotor integrates over, to diagnose overlap with explicit members.",
+      "properties": {
+        "coupling_group": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Coupling Group"
+        },
+        "dimension": {
+          "default": 1,
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "potential_source_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Potential Source Key"
+        },
+        "region_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region Key"
+        },
+        "replaces_mode_indices": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 64,
+          "title": "Replaces Mode Indices",
+          "type": "array"
+        },
+        "representation": {
+          "$ref": "#/$defs/RotorRepresentation"
+        },
+        "torsion_index": {
+          "minimum": 1,
+          "title": "Torsion Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "torsion_index",
+        "representation"
+      ],
+      "title": "ModelRotor",
+      "type": "object"
+    },
+    "ModelSource": {
+      "additionalProperties": false,
+      "description": "What one part of the model rests on: a calculation, literature, or a frequency scale factor.\n\n:param calculation_key: A calculation of this upload (by its local ``key``).\n:param calculation_ref: A calculation already deposited (public ref).\n:param geometry_ref: With a calculation: the one geometry its result describes.\n:param literature: Imported or experimental parameters, with their provenance, instead of a calculation.\n:param freq_scale_factor: The scale factor (role ``scale_factor`` only).\n:param member_key: The ensemble member this source is for (omit for the model as a whole).",
+      "properties": {
+        "calculation_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Key"
+        },
+        "calculation_ref": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "pattern": "^calc_[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Ref"
+        },
+        "freq_scale_factor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FreqScaleFactorRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "geometry_ref": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "pattern": "^geom_[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Geometry Ref"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "member_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Member Key"
+        },
+        "role": {
+          "$ref": "#/$defs/StatmechModelSourceRole"
+        },
+        "source_key": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Source Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_key",
+        "role"
+      ],
+      "title": "ModelSource",
+      "type": "object"
+    },
     "ModuleDescription": {
       "additionalProperties": false,
       "description": "Descriptive HPC module identity; never sufficient closure evidence.",
@@ -3467,6 +4094,15 @@
         "electron"
       ],
       "title": "MoleculeKind",
+      "type": "string"
+    },
+    "NuclearSpin": {
+      "description": "The nuclear-spin convention of the partition function.",
+      "enum": [
+        "included",
+        "not_included"
+      ],
+      "title": "NuclearSpin",
       "type": "string"
     },
     "NumericalApproximation": {
@@ -3890,6 +4526,16 @@
       "title": "RigidRotorKind",
       "type": "string"
     },
+    "RotorRepresentation": {
+      "description": "Where a rotor's potential comes from: a local scan, an imported potential, or none (a free rotor).",
+      "enum": [
+        "local_scan",
+        "imported_potential",
+        "free_rotor"
+      ],
+      "title": "RotorRepresentation",
+      "type": "string"
+    },
     "SCFStabilityPayload": {
       "additionalProperties": false,
       "description": "SCF stability evidence that may cite rows outside its own record.\n\nThe primitive upload routes take this shape. They already accept\ndatabase ids as a deliberate programmatic-chaining mechanism, so\nnaming the calculation or artifact that carries the stability log is\nthe same kind of claim they already support.\n\nBundle roots take :class:`SCFStabilityContent` instead, which names the\nmeasuring job by local key rather than by id. Both share\n:class:`SCFStabilityBase`, so neither route publishes the other's\ncitation field.\n\n:param source_calculation_id: Optional FK to the calculation whose\n    log carries the stability evidence (when separate from the\n    owning calculation).\n:param source_artifact_id: Optional FK to a ``calculation_artifact``\n    row holding the stability log bytes (e.g. an ``ancillary`` or\n    ``output_log`` artifact).",
@@ -4037,6 +4683,28 @@
       },
       "title": "SPResultPayload",
       "type": "object"
+    },
+    "ScaleApplication": {
+      "description": "Whether a frequency scale factor was applied to the frequencies this model uses.",
+      "enum": [
+        "applied",
+        "not_applied",
+        "unknown"
+      ],
+      "title": "ScaleApplication",
+      "type": "string"
+    },
+    "ScaleContribution": {
+      "description": "A contribution a scale factor was applied to.",
+      "enum": [
+        "fundamental",
+        "zero_point_energy",
+        "vibrational_entropy",
+        "vibrational_heat_capacity",
+        "vibrational_enthalpy"
+      ],
+      "title": "ScaleContribution",
+      "type": "string"
     },
     "SchemeAtomParamPayload": {
       "additionalProperties": false,
@@ -4530,6 +5198,135 @@
       "title": "StatmechCalculationRole",
       "type": "string"
     },
+    "StatmechModelDeclaration": {
+      "additionalProperties": false,
+      "description": "The model a statmech record supplies. Optional; a record deposited without one is read as it is.\n\n:param version: The declaration schema version (1).\n:param scope_kind: ``atom``, ``basin``, ``explicit_equilibrium_ensemble`` or (a transition-state record)\n    ``ts_determination``.\n:param conformer_group_ref: The basin, for ``basin`` scope. Omitted inside a conformer deposit it is that\n    conformer's own group.\n:param determination_ref: The saddle determination (public ref) of the record's own transition state entry, for\n    ``ts_determination`` scope.\n:param determination_key: Or the ``key`` of a structure determination declared in the same transition-state deposit.\n:param literature: Who stands behind the declaration (a paper) ...\n:param workflow_tool_release: ... or the tool that produced it. At least one is required.",
+      "properties": {
+        "conformer_group_ref": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "pattern": "^cg_[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conformer Group Ref"
+        },
+        "determination_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Determination Key"
+        },
+        "determination_ref": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "pattern": "^sdet_[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Determination Ref"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/ModelMember"
+          },
+          "maxItems": 64,
+          "title": "Members",
+          "type": "array"
+        },
+        "recipe": {
+          "$ref": "#/$defs/ModelRecipe"
+        },
+        "scope_kind": {
+          "$ref": "#/$defs/StatmechModelScopeKind"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/ModelSource"
+          },
+          "maxItems": 128,
+          "title": "Sources",
+          "type": "array"
+        },
+        "version": {
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "scope_kind"
+      ],
+      "title": "StatmechModelDeclaration",
+      "type": "object"
+    },
+    "StatmechModelScopeKind": {
+      "description": "What a declared statistical model covers: one atom, one basin, an explicit ensemble, or a TS surface.",
+      "enum": [
+        "atom",
+        "basin",
+        "explicit_equilibrium_ensemble",
+        "ts_determination"
+      ],
+      "title": "StatmechModelScopeKind",
+      "type": "string"
+    },
+    "StatmechModelSourceRole": {
+      "description": "The part of a declared model that a source supports.",
+      "enum": [
+        "geometry",
+        "curvature",
+        "absolute_energy",
+        "relative_energy",
+        "electronic_levels",
+        "torsional_surface",
+        "scale_factor",
+        "parameters"
+      ],
+      "title": "StatmechModelSourceRole",
+      "type": "string"
+    },
     "StatmechSourceCalcIn": {
       "additionalProperties": false,
       "description": "Statmech → calculation link, by local calculation key.\n\nOnly a key is accepted (DR-0029 Requirement 1). The key resolves\nagainst whichever calc-key namespace the enclosing request defines —\nthe bundle's global namespace, the standalone statmech upload's\ninline ``calculations`` list, or the keys a conformer upload put on\nits own primary/additional calculations — and the resolved row is\nattached as a ``statmech_source_calculation`` row with this role.\n\n:param calculation_key: Local key of a calculation declared in the\n    same request.\n:param role: Scientific role the calculation plays for this statmech.",
@@ -4983,6 +5780,16 @@
       "title": "TorsionTreatmentKind",
       "type": "string"
     },
+    "TranslationalNormalization": {
+      "description": "How a full partition function's translational part is normalised.",
+      "enum": [
+        "fixed_volume",
+        "standard_state_pressure",
+        "standard_state_concentration"
+      ],
+      "title": "TranslationalNormalization",
+      "type": "string"
+    },
     "TransportUploadPayload": {
       "additionalProperties": false,
       "description": "Upload payload for species-level transport properties.\n\nThe backend resolves provenance refs and creates a ``Transport`` row\nattached to the resolved species entry.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param sigma_angstrom: Lennard-Jones collision diameter in Å.\n:param epsilon_over_k_k: Lennard-Jones well depth ε/k_B in K.\n:param dipole_debye: Dipole moment in Debye.\n:param polarizability_angstrom3: Polarizability in Å³.\n:param rotational_relaxation: Rotational relaxation collision number (Z_rot).\n:param note: Optional free-text note.",
@@ -5102,6 +5909,16 @@
       },
       "title": "TransportUploadPayload",
       "type": "object"
+    },
+    "VibrationalScheme": {
+      "description": "How the vibrational contribution is evaluated. ``anharmonic`` is recognised and not evaluated.",
+      "enum": [
+        "harmonic",
+        "quasi_harmonic",
+        "anharmonic"
+      ],
+      "title": "VibrationalScheme",
+      "type": "string"
     },
     "WavefunctionDiagnosticPayload": {
       "additionalProperties": false,

@@ -948,6 +948,28 @@ class StructureSourceRole(str, Enum):
     alternative_characterization = "alternative_characterization"
 
 
+class StatmechModelScopeKind(str, Enum):
+    """What a declared statistical model covers: one atom, one basin, an explicit ensemble, or a TS surface."""
+
+    atom = "atom"
+    basin = "basin"
+    explicit_equilibrium_ensemble = "explicit_equilibrium_ensemble"
+    ts_determination = "ts_determination"
+
+
+class StatmechModelSourceRole(str, Enum):
+    """The part of a declared model that a source supports."""
+
+    geometry = "geometry"
+    curvature = "curvature"
+    absolute_energy = "absolute_energy"
+    relative_energy = "relative_energy"
+    electronic_levels = "electronic_levels"
+    torsional_surface = "torsional_surface"
+    scale_factor = "scale_factor"
+    parameters = "parameters"
+
+
 class StructureFindingKind(str, Enum):
     """What a scoped structure-evidence finding records."""
 

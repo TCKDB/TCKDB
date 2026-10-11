@@ -100,6 +100,18 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
             children=(ChildTable("statmech_torsion_definition", "torsion_id"),),
         ),
         ChildTable("statmech_source_calculation", "statmech_id"),
+        # The model this record declares it supplies: scope, attribution, recipe, ensemble members and the sources each
+        # part rests on. It is scientific content of the record, so a released record without it would read as one that
+        # never stated its model. Members are cited by ref: a member is another statmech record of the same species
+        # entry, shipped as its own candidate, and citing it here does not select or endorse it.
+        ChildTable(
+            "statmech_model_declaration",
+            "statmech_id",
+            children=(
+                ChildTable("statmech_model_member", "declaration_id"),
+                ChildTable("statmech_model_source", "declaration_id"),
+            ),
+        ),
     ),
     SubmissionRecordType.transport: (
         ChildTable("transport_source_calculation", "transport_id"),
@@ -262,6 +274,13 @@ RECORD_CHILD_EXCLUSIONS: dict[tuple[str, str], str] = {
     ),
     ("transition_state_entry", "transition_state_validation_evidence"): (
         "shipped under transition_state_entry itself"
+    ),
+    ("statmech", "statmech_model_member"): (
+        "shipped nested under statmech_model_declaration; its member_statmech_id cites another record by ref"
+    ),
+    ("statmech_model_member", "statmech_model_source"): "shipped nested under statmech_model_declaration itself",
+    ("structure_determination", "statmech_model_declaration"): (
+        "a declaration is a child of its statmech record; a ts_determination scope only cites the determination by ref"
     ),
     ("structure_evidence_finding", "structure_evidence_finding"): (
         "a superseding finding is a row of the same list, naming the finding it supersedes by ref"
@@ -880,8 +899,8 @@ def cited_calculation_ids(
     record_type: SubmissionRecordType,
     record_ids: list[int],
 ) -> dict[int, list[int]]:
-    """Calculation ids each record cites: through its ``*_source_calculation`` and, for a transition state entry,
-    through the sources of its structure determinations."""
+    """Calculation ids each record cites: through its ``*_source_calculation``, for a transition state entry through
+    the sources of its structure determinations, and for a statmech record through its declared model's sources."""
     if not record_ids:
         return {}
     out: dict[int, list[int]] = {}
@@ -907,6 +926,18 @@ def cited_calculation_ids(
             select(determination.c.transition_state_entry_id, source.c.calculation_id)
             .select_from(source.join(determination, source.c.determination_id == determination.c.id))
             .where(determination.c.transition_state_entry_id.in_(sorted(set(record_ids))))
+        ).all()
+        for parent_id, calculation_id in rows:
+            out.setdefault(parent_id, []).append(calculation_id)
+    if record_type is SubmissionRecordType.statmech:
+        # The calculations a declared model rests on are cited provenance too; they sit under the declaration, so the
+        # ``*_source_calculation`` naming above does not reach them.
+        declaration = _table("statmech_model_declaration")
+        model_source = _table("statmech_model_source")
+        rows = session.execute(
+            select(declaration.c.statmech_id, model_source.c.calculation_id)
+            .select_from(model_source.join(declaration, model_source.c.declaration_id == declaration.c.id))
+            .where(declaration.c.statmech_id.in_(sorted(set(record_ids))), model_source.c.calculation_id.is_not(None))
         ).all()
         for parent_id, calculation_id in rows:
             out.setdefault(parent_id, []).append(calculation_id)

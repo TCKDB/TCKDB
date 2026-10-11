@@ -72,6 +72,10 @@ _STATE_ENERGY_SOURCE_REVISION = _VERSIONS / "d7a1c4e9b258_network_state_energy_p
 #: an ownership child of ``network_solve`` guarded on ``solve_id``, with the TRUNCATE refusal.
 _NETWORK_DETERMINATION_REVISION = _VERSIONS / "e5b9c2a7d4f1_declare_network_kinetics_determination.py"
 
+#: ``e6b3a9d1f742`` adds the declared statmech model (``statmech_model_declaration`` and its members and sources):
+#: scientific content of the declaring statmech record, frozen with it, with the TRUNCATE refusal.
+_STATMECH_MODEL_REVISION = _VERSIONS / "e6b3a9d1f742_declare_statmech_models.py"
+
 _EXTENSION_REVISIONS = (
     _ATOM_MAP_REVISION,
     _EVIDENCE_REVISION,
@@ -82,6 +86,7 @@ _EXTENSION_REVISIONS = (
     _COMPOSITE_LOG_CHECK_REVISION,
     _STATE_ENERGY_SOURCE_REVISION,
     _NETWORK_DETERMINATION_REVISION,
+    _STATMECH_MODEL_REVISION,
 )
 
 #: ``d4e9b1c7a253`` narrows the regime instead of extending it: it removes one

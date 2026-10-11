@@ -72,6 +72,7 @@ from tckdb_schemas.fragments.scan import CalculationScanResultCreate
 from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 from tckdb_schemas.rights import DepositRights
+from tckdb_schemas.statmech_declarations import StatmechModelDeclaration, assert_model_pin_keys_declared
 from tckdb_schemas.statmech_bits import (
     StatmechSourceCalcIn,
     StatmechTorsionCoordinateIn,
@@ -808,6 +809,14 @@ class StatmechInBundle(SchemaBase):
     # for the exact rule. Stored as declared once it passes, and read back as
     # ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
+    model_declaration: StatmechModelDeclaration | None = Field(
+        default=None,
+        description=(
+            "The statistical model this record supplies: scope, attribution, recipe, ensemble members and the "
+            "sources each part rests on. Optional; a record deposited without one is read as it is, and nothing "
+            "is inferred from the other fields."
+        ),
+    )
 
     note: str | None = None
 
@@ -1160,6 +1169,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                     key=sc.calculation_key,
                     declared=defined,
                 )
+        assert_model_pin_keys_declared(self.statmech.model_declaration, set(defined))
         return self
 
     @model_validator(mode="after")

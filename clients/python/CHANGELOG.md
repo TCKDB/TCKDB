@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.140.0 - 2026-10-11
+
+`RejectionCode` gains `statmech_model_declaration_invalid`, `statmech_model_declaration_version_unsupported`,
+`statmech_model_declaration_mismatch` and `unknown_structure_determination_ref` (`tckdb-schemas` 0.113.0). No method changed:
+the statmech blocks the client builds pass a `model_declaration` through untouched.
+
 ## 0.139.0 - 2026-10-06
 
 Structure selection: `select_species_calculations`, `select_conformer_basins`, `select_transition_state_evidence` and

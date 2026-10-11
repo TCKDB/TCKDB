@@ -2872,6 +2872,84 @@ the gap.
 - `ck_statmech_electronic_level_energy_cm1_ge_0`: `energy_cm1 >= 0`
 - `ck_statmech_electronic_level_level_index_ge_1`: `level_index >= 1`
 
+### `statmech_model_declaration`
+
+**Role:** role not stated on the model
+
+**Purpose:** The model one statmech record supplies. Frozen with its statmech record once that is accepted.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `statmech_id` | BIGINT | no | — | statmech.id | — | not documented |
+| `schema_version` | SMALLINT | no | — | — | — | not documented |
+| `scope_kind` | StatmechModelScopeKind (enum) | no | — | — | `atom`, `basin`, `explicit_equilibrium_ensemble`, `ts_determination` | not documented |
+| `conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | not documented |
+| `structure_determination_id` | BIGINT | yes | — | structure_determination.id | — | not documented |
+| `literature_id` | BIGINT | yes | — | literature.id | — | not documented |
+| `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |
+| `recipe` | JSONB | no | — | — | — | not documented |
+| `content_hash` | VARCHAR(64) | no | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
+| `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_statmech_model_declaration_attribution_required`: `literature_id IS NOT NULL OR workflow_tool_release_id IS NOT NULL`
+- `ck_statmech_model_declaration_content_hash_sha256_hex`: `content_hash ~ '^[0-9a-f]{64}$'`
+- `ck_statmech_model_declaration_recipe_object`: `jsonb_typeof(recipe) = 'object'`
+- `ck_statmech_model_declaration_schema_version_positive`: `schema_version >= 1`
+- `ck_statmech_model_declaration_scope_matches_pointers`: `(scope_kind = 'basin') = (conformer_group_id IS NOT NULL) AND (scope_kind = 'ts_determination') = (structure_determination_id IS NOT NULL)`
+
+### `statmech_model_member`
+
+**Role:** role not stated on the model
+
+**Purpose:** One member of an explicit equilibrium ensemble.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `declaration_id` | BIGINT | no | — | statmech_model_declaration.id | — | not documented |
+| `member_key` | TEXT | no | — | — | — | not documented |
+| `member_statmech_id` | BIGINT | no | — | statmech.id | — | not documented |
+| `conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | not documented |
+| `counting_multiplicity` | SMALLINT | yes | — | — | — | not documented |
+| `relative_energy_kj_mol` | DOUBLE PRECISION | yes | — | — | — | not documented |
+| `region_key` | TEXT | yes | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_statmech_model_member_counting_multiplicity_ge_1`: `counting_multiplicity IS NULL OR counting_multiplicity >= 1`
+- `ck_statmech_model_member_member_key_bounded`: `length(btrim(member_key)) > 0 AND length(member_key) <= 64`
+- `ck_statmech_model_member_relative_energy_finite`: `relative_energy_kj_mol IS NULL OR (relative_energy_kj_mol <> 'NaN' AND abs(relative_energy_kj_mol) < 'Infinity')`
+
+### `statmech_model_source`
+
+**Role:** role not stated on the model
+
+**Purpose:** What one part of a declared model rests on.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `declaration_id` | BIGINT | no | — | statmech_model_declaration.id | — | not documented |
+| `source_key` | TEXT | no | — | — | — | not documented |
+| `role` | StatmechModelSourceRole (enum) | no | — | — | `geometry`, `curvature`, `absolute_energy`, `relative_energy`, `electronic_levels`, `torsional_surface`, `scale_factor`, `parameters` | not documented |
+| `calculation_id` | BIGINT | yes | — | calculation.id | — | not documented |
+| `geometry_id` | BIGINT | yes | — | geometry.id | — | not documented |
+| `literature_id` | BIGINT | yes | — | literature.id | — | not documented |
+| `frequency_scale_factor_id` | BIGINT | yes | — | frequency_scale_factor.id | — | not documented |
+| `member_key` | TEXT | yes | — | statmech_model_member.member_key | — | not documented |
+
+**Check constraints:**
+
+- `ck_statmech_model_source_exactly_one_locator`: `num_nonnulls(calculation_id, literature_id, frequency_scale_factor_id) = 1`
+- `ck_statmech_model_source_geometry_needs_calculation`: `geometry_id IS NULL OR calculation_id IS NOT NULL`
+- `ck_statmech_model_source_scale_factor_role_matches_locator`: `(role = 'scale_factor') = (frequency_scale_factor_id IS NOT NULL)`
+- `ck_statmech_model_source_source_key_bounded`: `length(btrim(source_key)) > 0 AND length(source_key) <= 64`
+
 ### `statmech_source_calculation`
 
 **Role:** role not stated on the model

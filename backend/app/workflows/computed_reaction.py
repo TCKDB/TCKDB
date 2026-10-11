@@ -32,6 +32,7 @@ from app.db.models.statmech import (
     StatmechTorsion,
     StatmechTorsionDefinition,
 )
+from app.db.models.structure_determination import StructureDetermination
 from app.db.models.thermo import (
     Thermo,
     ThermoNASA,
@@ -151,6 +152,7 @@ from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
 from app.services.species_resolution import resolve_species_entry
+from app.services.statmech_declaration_resolution import persist_statmech_model_declaration
 from app.services.statmech_resolution import (
     assert_statmech_role_compatible,
     collect_frequency_scale_factor_software_mismatch_warnings,
@@ -915,6 +917,8 @@ def persist_computed_reaction_upload(
                 warnings=sp_energy_warnings,
                 literature_field_prefix="transition_state.statmech.literature.",
                 content_warning_field="transition_state.statmech",
+                # A ts_determination scope names a determination of this deposit, which does not exist yet.
+                defer_model_declaration=True,
             )
             if ts_statmech_row is not None:
                 ts_statmech_id = ts_statmech_row.id
@@ -954,13 +958,27 @@ def persist_computed_reaction_upload(
         )
 
         # Structure determinations of the saddle point, pinned to this bundle's own calculations by key.
+        determination_rows: dict[str, StructureDetermination] = {}
         if ts_in.structure_determinations:
-            persist_structure_determinations(
+            persisted = persist_structure_determinations(
                 session,
                 list(ts_in.structure_determinations),
                 owner=DeterminationOwner(transition_state_entry_id=ts_entry.id),
                 calculations_by_key=_calculation_rows(session, calculation_key_to_id),
                 created_by=created_by,
+            )
+            determination_rows = {
+                declaration.key: row for declaration, row in zip(ts_in.structure_determinations, persisted, strict=True)
+            }
+        if ts_in.statmech is not None and ts_statmech_row is not None:
+            persist_statmech_model_declaration(
+                session,
+                ts_statmech_row,
+                ts_in.statmech.model_declaration,
+                calculations_by_key=_calculation_rows(session, calculation_key_to_id),
+                determinations_by_key=determination_rows,
+                created_by=created_by,
+                warnings_out=sp_energy_warnings,
             )
 
     session.flush()
@@ -1688,6 +1706,16 @@ def persist_computed_reaction_upload(
                                 atom4_index=coord.atom4_index,
                             )
                         )
+
+            session.flush()
+            persist_statmech_model_declaration(
+                session,
+                statmech,
+                s.model_declaration,
+                calculations_by_key=calculation_key_to_id,
+                created_by=created_by,
+                warnings_out=sp_energy_warnings,
+            )
 
     session.flush()
 

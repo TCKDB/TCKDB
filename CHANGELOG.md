@@ -22,6 +22,19 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Declared statistical models for statmech records (2026-10-11)
+
+**Chunk 2 of the statmech selection programme: durable declarations.** Migration: `e6b3a9d1f742` (additive; chains from
+`d3a8f6c1b952`). New environment variable: none.
+
+- A statmech record can declare the model it supplies: scope (atom, basin, explicit equilibrium ensemble, or a transition-state
+  determination), attribution, recipe, ensemble members and sources. New tables `statmech_model_declaration`,
+  `statmech_model_member`, `statmech_model_source`, one declaration per record. Optional on every statmech upload path; a record
+  deposited without one reads as it always did, nothing is inferred and nothing is backfilled.
+- The declaring record's accepted-science freeze covers its declaration, members and sources. Owner rules (basin, determination,
+  member, source calculation and geometry) are database facts. Archive and release carry the new tables.
+- `tckdb-schemas` 0.113.0, `tckdb-client` 0.140.0 (new rejection codes).
+
 ## Trust-contract correction, inspection-filter correction and the structure coverage inventory (2026-10-06)
 
 **Chunk 6 of 6 of calculation, conformer and transition-state energy selection: legacy corrections.** This changes live answers

@@ -4,6 +4,7 @@ from typing import Self
 
 from pydantic import ConfigDict, Field, model_validator
 
+from tckdb_schemas.statmech_declarations import StatmechModelDeclaration, assert_model_pin_keys_declared
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.energy_correction import AppliedEnergyCorrectionUploadPayload
 from tckdb_schemas.enums import (
@@ -102,6 +103,15 @@ class ConformerUploadStatmechPayload(SchemaBase):
     # ``app.services.calculation_levels`` on the backend. Stored as declared
     # once it passes, and read back as ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
+
+    model_declaration: StatmechModelDeclaration | None = Field(
+        default=None,
+        description=(
+            "The statistical model this record supplies: scope, attribution, recipe, ensemble members and the "
+            "sources each part rests on. Optional; a record deposited without one is read as it is, and nothing "
+            "is inferred from the other fields."
+        ),
+    )
 
     @model_validator(mode="after")
     def normalize_optional_text_fields(self) -> Self:
@@ -396,6 +406,7 @@ class ConformerUploadRequest(SchemaBase):
                     key=key,
                     declared=declared,
                 )
+        assert_model_pin_keys_declared(self.statmech.model_declaration, declared)
         return self
 
     @model_validator(mode="after")

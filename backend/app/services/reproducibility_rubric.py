@@ -419,6 +419,15 @@ def _target_snapshot(target: Any, record_type: SubmissionRecordType) -> dict[str
             }
             for torsion in sorted(target.torsions, key=lambda row: row.torsion_index)
         ]
+    if isinstance(target, Statmech) and target.model_declaration is not None:
+        # Added only when present: a record with no declaration keeps the snapshot it had. The declaration,
+        # its members and its sources are scientific content of the record, so they are part of its digest.
+        declaration = target.model_declaration
+        relationships["model_declaration"] = {
+            "columns": _mapped_columns(declaration),
+            "members": _rows(declaration.members),
+            "sources": _rows(declaration.sources),
+        }
     if isinstance(target, Network):
         relationships["states"] = [
             {

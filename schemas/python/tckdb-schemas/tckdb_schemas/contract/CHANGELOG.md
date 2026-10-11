@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.113.0 - 2026-10-11
+
+A statmech record can declare the statistical model it supplies (`tckdb_schemas.statmech_declarations`), optional and stored as
+made.
+
+- `model_declaration` on `ConformerUploadStatmechPayload`, `StatmechInBundle`, `BundleStatmechIn` and the standalone
+  `StatmechUploadRequest`: the scope (`atom`, `basin`, `explicit_equilibrium_ensemble`, or `ts_determination` for a
+  transition-state record), who stands behind it (`literature` or `workflow_tool_release`), a recipe (energy zero, scale
+  application and its contributions, vibrational scheme, projected and excluded modes, rotors and the modes they replace,
+  symmetry, optical and electronic factors already counted, translational normalization, dividing surface, validity range), ensemble `members` (existing statmech records of
+  the same species entry) and `sources` (a calculation by key or ref, imported literature parameters, or a frequency scale
+  factor). A field left out is not stated: never unity, never projected, never counted. Version `1` only.
+- New enums `StatmechModelScopeKind` and `StatmechModelSourceRole`; new refusal codes `statmech_model_declaration_invalid`,
+  `statmech_model_declaration_version_unsupported`, `statmech_model_declaration_mismatch` and
+  `unknown_structure_determination_ref`.
+
 ## 0.112.2 - 2026-10-11
 
 Contract layout only: the refusal code reference now ships as its own file, `contract/REFUSAL_CODES.md`, beside
