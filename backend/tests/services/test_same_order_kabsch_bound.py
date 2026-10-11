@@ -218,7 +218,9 @@ def _same_radius_distinct_shapes(n: int, count: int):
 
 def test_pairs_the_cheap_test_cannot_separate_are_charged_and_stop_at_the_budget(monkeypatch) -> None:
     n, comparisons = 100, 400
-    monkeypatch.setattr(prm, "MAX_SAME_ORDER_WORK_PER_RECORD", levels._KABSCH_UNITS_PER_ATOM * n * comparisons)
+    monkeypatch.setattr(
+        prm, "MAX_SAME_ORDER_WORK_PER_RECORD", (levels._KABSCH_UNITS_PER_CALL + levels._KABSCH_UNITS_PER_ATOM * n) * comparisons
+    )
     kabsch_calls = []
     real_kabsch = levels.kabsch_rmsd
     monkeypatch.setattr(levels, "kabsch_rmsd", lambda *a, **k: kabsch_calls.append(1) or real_kabsch(*a, **k))
@@ -290,6 +292,27 @@ def test_a_collinear_stretch_just_inside_the_tolerance_is_still_one_structure(fr
     assert _reference_same_structure(a, b, SearchBudget()) is True
 
 
+def _breathed(points, factor: float):
+    """``points`` scaled about their centroid: the radius gap equals the Kabsch RMSD exactly."""
+    n = len(points)
+    cx, cy, cz = (sum(p[i] for p in points) / n for i in range(3))
+    return [(cx + factor * (x - cx), cy + factor * (y - cy), cz + factor * (z - cz)) for x, y, z in points]
+
+
+@pytest.mark.parametrize("fraction", [0.5, 0.95, 0.99])
+def test_a_uniform_scale_just_inside_the_tolerance_is_one_structure(fraction: float) -> None:
+    """Here the radius gap *is* the RMSD, so the prefilter must sit at exactly 1x the tolerance: a
+    prefilter at 0.9x refuses these (the collinear stretches above open a gap of only ~0.5-0.6x)."""
+    base = [(1.5 * k, 0.4 * (k % 3), 0.3 * (k % 4)) for k in range(8)]
+    radius = levels._gyration_radius(base)
+    moved = _breathed(base, 1.0 + fraction * TOL / radius)
+    a, b = _atoms_from(base), _atoms_from(moved)
+    assert kabsch_rmsd(a.coordinates, b.coordinates) == pytest.approx(fraction * TOL, rel=1e-3)
+    gap = abs(levels._gyration_radius(a.coordinates) - levels._gyration_radius(b.coordinates))
+    assert gap == pytest.approx(fraction * TOL, rel=1e-3)
+    assert levels._same_polyatomic_structure(a, b, SearchBudget()) is True
+
+
 @pytest.mark.parametrize("fraction", [1.05, 1.5, 10.0])
 def test_a_collinear_stretch_just_outside_the_tolerance_is_a_different_structure(fraction: float) -> None:
     base = _collinear()
@@ -314,13 +337,29 @@ def _exhausted() -> SearchBudget:
     return SearchBudget(fits_left=0, work_left=0, same_order_work_left=0)
 
 
-def test_a_same_order_comparison_is_charged_thirty_units_per_atom_to_its_own_allowance() -> None:
+def test_a_same_order_comparison_is_charged_per_atom_and_per_call_to_its_own_allowance() -> None:
     a, b = _moved_copy_pair(12)
     budget = SearchBudget()
     assert levels._same_polyatomic_structure(a, b, budget) is True
     assert levels._KABSCH_UNITS_PER_ATOM == 30
-    assert prm.MAX_SAME_ORDER_WORK_PER_RECORD - budget.same_order_work_left == 30 * 12
+    assert levels._KABSCH_UNITS_PER_CALL == 800
+    assert prm.MAX_SAME_ORDER_WORK_PER_RECORD - budget.same_order_work_left == 800 + 30 * 12
     assert budget.work_left == prm.MAX_WORK_PER_RECORD and budget.fits_left == prm.MAX_FITS_PER_RECORD
+
+
+def test_the_fixed_cost_bounds_the_comparisons_a_record_can_make_at_small_sizes(monkeypatch) -> None:
+    """Three-atom shapes cost mostly the call overhead, so the allowance must stop them sooner than
+    ``30 * n`` alone would (#745): with it, 50 M units allow at most ``50e6 / 890`` comparisons."""
+    calls = []
+    real_kabsch = levels.kabsch_rmsd
+    monkeypatch.setattr(levels, "kabsch_rmsd", lambda *a, **k: calls.append(1) or real_kabsch(*a, **k))
+    monkeypatch.setattr(prm, "MAX_SAME_ORDER_WORK_PER_RECORD", 890 * 10)
+    a, b = _moved_copy_pair(3)
+    budget = SearchBudget()
+    for _ in range(50):
+        levels._same_polyatomic_structure(a, b, budget)
+    # A moved copy is accepted on the first Kabsch call; every call is charged 800 + 90.
+    assert len(calls) == 10, len(calls)
 
 
 def test_a_pair_the_prefilter_dismisses_is_charged_nothing() -> None:

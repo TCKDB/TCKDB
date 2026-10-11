@@ -468,7 +468,7 @@ def listed_by_surface(markdown: str, title: str) -> dict[str, list[str]]:
 
     codes_text = _subsection(section, "Refusal codes this surface can return")
     codes = re.findall(r"(?m)^\| \[`([^`]+)`\]", codes_text)
-    for anchor in re.findall(r"\]\(#(cg-\d+)\)", codes_text):
+    for anchor in re.findall(r"\]\(#(cg-[0-9a-f]+)\)", codes_text):
         codes += re.findall(r"(?m)^\| \[`([^`]+)`\]", code_groups[anchor])
 
     rules_text = _subsection(section, "Rules the workflow applies")
@@ -481,7 +481,7 @@ def listed_by_surface(markdown: str, title: str) -> dict[str, list[str]]:
     if "Nested models (" in fields_text:
         nested = fields_text[fields_text.index("Nested models (") :]
         models = re.findall(r"(?m)^- \[`([^`]+)`\]\(#m-", nested)
-        for anchor in re.findall(r"\]\(#(mg-\d+)\)", nested):
+        for anchor in re.findall(r"\]\(#(mg-[0-9a-f]+)\)", nested):
             models += re.findall(r"(?m)^- \[`([^`]+)`\]", model_groups[anchor])
     return {"codes": codes, "rules": rules, "models": models}
 
@@ -547,8 +547,8 @@ def _drop_first_line_matching(markdown: str, title: str, subsection: str, patter
     ("subsection", "pattern"),
     [
         ("Rules the workflow applies", r"^- \[`[^`]+`\]\(#k-"),
-        ("Refusal codes this surface can return", r"\]\(#cg-\d+\)"),
-        ("Payload fields", r"\]\(#mg-\d+\)"),
+        ("Refusal codes this surface can return", r"\]\(#cg-[0-9a-f]+\)"),
+        ("Payload fields", r"\]\(#mg-[0-9a-f]+\)"),
     ],
     ids=["shared rule", "code group", "model group"],
 )
@@ -566,7 +566,7 @@ def test_a_code_listed_twice_on_a_surface_is_caught(builder, committed_markdown:
     title = "ThermoUploadRequest"
     groups = shared_entries(committed_markdown, "Refusal codes several surfaces share")
     codes_text = _subsection(surface_section(committed_markdown, title), "Refusal codes this surface can return")
-    anchor = re.search(r"\]\(#(cg-\d+)\)", codes_text).group(1)
+    anchor = re.search(r"\]\(#(cg-[0-9a-f]+)\)", codes_text).group(1)
     row = re.search(r"(?m)^\| \[`[^`]+`\].*$", groups[anchor]).group(0)
     mutated = committed_markdown.replace(codes_text, codes_text.rstrip("\n") + "\n" + row + "\n", 1)
     assert any("listed twice" in gap for gap in listing_gaps(builder, mutated))
@@ -739,8 +739,9 @@ def test_a_missing_code_file_turns_check_red(builder) -> None:
 
 def test_a_link_to_a_missing_group_is_caught(committed_markdown: str) -> None:
     """Mutation: a group entry is renamed away; the links to it dangle."""
-    mutated = committed_markdown.replace('<a id="cg-1"></a>', "", 1)
-    assert "cg-1" in dangling_links(mutated)
+    anchor = re.search(r'<a id="(cg-[0-9a-f]+)"></a>', committed_markdown).group(1)
+    mutated = committed_markdown.replace(f'<a id="{anchor}"></a>', "", 1)
+    assert anchor in dangling_links(mutated)
 
 
 def test_a_repeated_body_would_breach_the_ceiling(committed_markdown: str) -> None:
@@ -951,3 +952,85 @@ def test_a_function_that_enforces_several_checks_keeps_every_one(builder, commit
     assert f"enforces {len(checks)} checks" in section
     for code in codes:
         assert f"`{code}`" in section, code
+
+
+# ---------------------------------------------------------------------------
+# Readability of the shared blocks (#686)
+# ---------------------------------------------------------------------------
+
+
+def test_a_group_key_depends_only_on_the_surfaces_that_own_it(builder, committed_markdown: str) -> None:
+    """Numbered by size and order, adding one code renumbered later groups and made contract diffs noisy.
+
+    Mutation: build the key from the group's items, or its position; the first assertion fails.
+    """
+    same_owners_other_items = [
+        generator.SharedGroup(("A", "B"), ("x",)),
+        generator.SharedGroup(("A", "B"), ("y", "z")),
+    ]
+    assert same_owners_other_items[0].key == same_owners_other_items[1].key
+    assert generator.SharedGroup(("A", "C"), ("x",)).key != same_owners_other_items[0].key
+    for groups, _alone in (builder.code_groups(), builder.model_groups()):
+        keys = [group.key for group in groups]
+        assert len(set(keys)) == len(keys)
+    for group in builder.code_groups()[0]:
+        assert f'<a id="cg-{group.key}"></a>' in committed_markdown
+        assert f"### Code group {group.key}\n" in committed_markdown
+
+
+def test_a_link_to_a_group_of_one_names_its_member(builder, committed_markdown: str) -> None:
+    """A group holding one item is pure indirection, so the link line names the item.
+
+    Mutation: make ``_group_what`` always return the count; the first loop fails.
+    """
+    singles = [g for g in builder.code_groups()[0] if len(g.items) == 1]
+    assert len(singles) > 5, "the contract no longer has groups of one; this test proves nothing"
+    for group in singles:
+        (code,) = group.items
+        assert f"`{code}`" in builder._group_what(group, "code")
+        for title in group.titles:
+            section = _subsection(surface_section(committed_markdown, title), "Refusal codes this surface can return")
+            (line,) = [ln for ln in section.splitlines() if f"(#cg-{group.key})" in ln]
+            assert f"`{code}`" in line, line
+    multi = next(g for g in builder.code_groups()[0] if len(g.items) > 1)
+    section = _subsection(surface_section(committed_markdown, multi.titles[0]), "Refusal codes this surface can return")
+    (line,) = [ln for ln in section.splitlines() if f"(#cg-{multi.key})" in ln]
+    assert f"{len(multi.items)} codes" in line
+
+
+def test_a_shared_code_in_will_be_refused_if_keeps_a_one_line_gloss(builder, committed_markdown: str) -> None:
+    """Thermo's refusals were bare names; the adapter-critical ones need their meaning on the line.
+
+    A code with a sentence written beside it at its raise site is glossed; one without stays bare
+    (a check's own text is printed once elsewhere and is not repeated here).
+    Mutation: make ``_gloss`` return ``""``; every line is bare and this fails.
+    """
+    section = surface_section(committed_markdown, "ThermoUploadRequest")
+    block = _subsection(section, "Will be refused if")
+    lines = [ln for ln in block.splitlines() if ln.startswith("- ")]
+    assert lines
+    glossed = 0
+    for line in lines:
+        code = re.match(r"- \[`([^`]+)`\]", line).group(1)
+        shared = len(builder._surfaces_by_code().get(code, [])) > 1
+        if shared and builder._gloss(code):
+            glossed += 1
+            assert re.match(r"- \[`[^`]+`\]\([^)]*\) \([\d/]+\): \S", line), line
+        assert len(line) < 420
+    assert glossed >= 4, "\n".join(lines)
+
+
+def test_traced_via_names_the_surfaces_that_differ_from_the_rest(builder, committed_markdown: str) -> None:
+    """The column was a union over the group's surfaces, which reads as "every surface, every way".
+
+    Mutation: join the union without the ``(only on: ...)`` qualifier; this fails.
+    """
+    assert "(only on: " in committed_markdown
+    by_title = {s.title: s for s in builder.surfaces}
+    for group in builder.code_groups()[0]:
+        for code in group.items:
+            per_surface = {t: set(builder.surface_codes(by_title[t]).get(code, [])) for t in group.titles}
+            text = builder._traced_via(group, code, by_title)
+            common = set.intersection(*per_surface.values())
+            for way in set().union(*per_surface.values()):
+                assert (f"{way} (only on:" in text) == (way not in common), (code, way, text)

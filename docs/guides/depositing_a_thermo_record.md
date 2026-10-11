@@ -206,10 +206,12 @@ polyatomic species whose only linked calculations are `sp`s.
     symmetric, chiral cluster) is undecided; and a record has a fixed budget of
     4,096 alignments and 50 million work units over all its pairs for the
     relabelling search (a pair of different shapes is dismissed first by its
-    radius of gyration at no cost, else by a gate of about n^2/2 units). The
+    radius of gyration at no cost when those radii differ by more than the
+    rounding tolerance, else by a gate of about n^2/2 units). The
     comparison of two geometries listed in the same order has its own allowance
-    of 50 million units (30 per atom per pair). In those cases a duplicate energy
-    on a moved copy is not caught; ordinary molecules need one alignment and a
+    of 50 million units (800 per pair plus 30 per atom). In those cases a duplicate energy
+    on a moved copy may not be caught (the relabelling search can still catch a
+    pair that is past the in-order allowance); ordinary molecules need one alignment and a
     few milliseconds.
   - A moved copy written to three or fewer decimals may not be recognised (such
     coordinates are held to the four-decimal tolerance).
