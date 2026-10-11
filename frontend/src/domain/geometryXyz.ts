@@ -41,6 +41,31 @@ export function buildXyzBlock(atoms: GeometryAtom[]): string {
 }
 
 /**
+ * Rewrites a `D` / `T` element token to `H` on every atom line of an XYZ
+ * block, for the 3D viewer only.
+ *
+ * Decision #672: in a geometry, `D`/`T` mean the hydrogen isotopes (2H/3H).
+ * 3Dmol knows only element symbols, so it draws a literal `D` as an unknown
+ * element in its pink fallback colour. The first two XYZ lines (atom count,
+ * comment) are never touched. A block with no `D`/`T` atom line is returned as
+ * the same string, so the viewer still hands 3Dmol the archive's text
+ * unmodified in the normal case. The isotope label shown next to an atom comes
+ * from the atom rows (`isotopeLabel`), not from this text, so nothing is lost.
+ */
+export function hydrogenSymbolsForViewer(xyz: string): string {
+    const lines = xyz.split("\n")
+    let changed = false
+    for (let i = 2; i < lines.length; i++) {
+        const next = lines[i].replace(/^(\s*)[DT](?=\s)/, "$1H")
+        if (next !== lines[i]) {
+            lines[i] = next
+            changed = true
+        }
+    }
+    return changed ? lines.join("\n") : xyz
+}
+
+/**
  * CODATA 2018 recommended value for the Bohr radius, in ångström
  * (https://physics.nist.gov/cgi-bin/cuu/Value?bohrrada0 — 0.529177210903 Å).
  * `ANGSTROM_TO_BOHR` is derived from this as its reciprocal, rather than
