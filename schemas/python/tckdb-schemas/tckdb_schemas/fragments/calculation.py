@@ -280,7 +280,8 @@ class FreqResultPayload(SchemaBase):
 
     :param n_imag: Number of imaginary frequencies.
     :param imag_freq_cm1: Value of the imaginary frequency in cm⁻¹.
-    :param zpe_hartree: Zero-point energy in hartree.
+    :param zpe_hartree: Unscaled harmonic zero-point energy in hartree, as the program printed it.
+        Any scale factor is stated where the energy is used, never applied here.
     :param modes: Optional per-mode frequency rows. When supplied,
         ``mode_index`` values must be unique within the payload, and
         the count of imaginary modes must agree with ``n_imag`` if both

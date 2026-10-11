@@ -629,6 +629,10 @@ class NetworkSolveStateEnergy(Base):
     #: The rounding unit of ``energy_kj_mol`` the producer stated, when it stated one. NULL is
     #: "not stated" (never inferred from the digits of the number).
     energy_precision_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    #: The factor ``s`` the producer scaled the zero-point energies of an ``electronic_plus_zpe``
+    #: state with (#693): the sum compared is ``sum(nu * (E + s * ZPE))``. NULL is "not stated",
+    #: never one; the stored ZPE is the producer's unscaled one.
+    zpe_scale_factor: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
     solve: Mapped["NetworkSolve"] = relationship(back_populates="state_energies")
     state: Mapped["NetworkState"] = relationship()
@@ -659,8 +663,13 @@ class NetworkSolveStateEnergy(Base):
             "source_sum_not_compared_reason IS NULL OR source_sum_not_compared_reason IN ("
             "'no_source_stated', 'sources_incomplete', 'convention_not_summable', "
             "'energy_zero_not_comparable', 'stored_energy_not_stated', 'zpe_not_in_source', "
-            "'no_second_state_on_the_same_zero', 'stated_precision_unknown')",
+            "'no_second_state_on_the_same_zero', 'stated_precision_unknown', "
+            "'zpe_not_stated', 'geometry_not_paired', 'zpe_scaling_unstated')",
             name="sum_reason_token",
+        ),
+        CheckConstraint(
+            "zpe_scale_factor IS NULL OR (zpe_scale_factor > 0 AND zpe_scale_factor < 'Infinity'::float8)",
+            name="zpe_scale_factor_positive",
         ),
         CheckConstraint(
             "energy_precision_kj_mol IS NULL OR "
@@ -719,12 +728,26 @@ class NetworkSolveStateEnergySource(Base):
         ),
         nullable=False,
     )
+    #: The ``freq`` calculation whose zero-point energy this participant adds to the energy of
+    #: ``calculation_id`` (#693); NULL when none was cited (an atom, a composite's E0, an
+    #: ``electronic_only`` state). It is the participant's own, checked at upload.
+    zpe_calculation_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "calculation.id",
+            name="fk_nsse_source_zpe_calculation_id_calculation",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=True,
+    )
 
     state_energy: Mapped["NetworkSolveStateEnergy"] = relationship(
         back_populates="participant_sources",
         viewonly=True,
     )
-    calculation: Mapped["Calculation"] = relationship()
+    calculation: Mapped["Calculation"] = relationship(foreign_keys=[calculation_id])
+    zpe_calculation: Mapped[Optional["Calculation"]] = relationship(foreign_keys=[zpe_calculation_id])
 
     __table_args__ = (
         PrimaryKeyConstraint("solve_id", "state_id", "species_entry_id"),

@@ -144,6 +144,9 @@ class NetworkSolveStateEnergySourceRead(BaseModel):
     species_entry_id: int | None = None
     stoichiometry: int | None = None
     calculation_id: int
+    #: The participant's own ``freq`` whose zero-point energy is added to ``calculation_id``
+    #: (``electronic_plus_zpe``); null when none was cited.
+    zpe_calculation_id: int | None = None
 
 
 class NetworkSolveStateEnergyRead(ORMBaseSchema):
@@ -166,6 +169,8 @@ class NetworkSolveStateEnergyRead(ORMBaseSchema):
     source_sum_comparison: str | None = None
     source_sum_not_compared_reason: str | None = None
     energy_precision_kj_mol: float | None = None
+    #: The factor the ZPEs were scaled with, as stated; null is "not stated", never one.
+    zpe_scale_factor: float | None = None
 
 
 class NetworkSolveSourceCalculationRead(ORMBaseSchema):

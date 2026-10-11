@@ -93,10 +93,22 @@ energies, ``sum(stoichiometry * stored energy)``, and refuses a contradiction
 
 * ``electronic_only``: the sum of the sources' electronic energies (``sp`` energy, ``opt`` final
   energy, ``composite`` electronic energy).
-* ``electronic_plus_zpe``: only when every source is a ``composite`` that stores an ``e0``. An
-  ``sp`` or ``opt`` carries no zero-point energy, a ``freq`` no electronic energy, and the one
-  slot per participant cannot hold both, so those are *not compared* (``zpe_not_in_source``),
-  never guessed from another calculation.
+* ``electronic_plus_zpe``, per participant, one of:
+
+  - a ``composite`` that stores an ``e0`` (its E0);
+  - an ``sp`` (or ``opt``) electronic energy plus the zero-point energy of the participant's own
+    ``freq``, named as ``zpe_calculation_key`` (#693): ``E + s * ZPE`` with the state's declared
+    ``zpe_scale_factor`` ``s``. The two must be at one geometry (an sp's or freq's input, an opt's
+    final), each declared exactly once, as #677 pairs a transition state's. TCKDB stores the
+    producer's unscaled ZPE, so with no factor stated the state is *not compared*
+    (``zpe_scaling_unstated``) whatever the numbers are: unity is never assumed, even when the
+    unscaled sum happens to agree. A freq with no stored ZPE is ``zpe_not_stated``; an sp and a freq
+    not at one geometry are ``geometry_not_paired``, and no ZPE is ever borrowed from a sibling;
+  - a single atom's ``sp``/``opt``: it has no vibrations, so its electronic energy is its E0. An
+    atom is read from the cited calculation's own stored geometry (one atom), never inferred.
+
+  Any other participant (an ``sp``/``opt`` with no ZPE cited, a bare ``freq``) cannot form the sum:
+  the state is *not compared* (``zpe_not_in_source``), never guessed from another calculation.
 * ``atom_and_bond_corrected``, ``thermal_enthalpy_298k``, ``other``: not compared
   (``convention_not_summable``): the corrections and thermal terms are not stored per source.
 
@@ -146,7 +158,10 @@ import logging
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
-from tckdb_schemas.fragments.calculation import composite_arithmetic_tolerance_hartree
+from tckdb_schemas.fragments.calculation import (
+    COMPOSITE_PRINTED_ROUNDING_HARTREE,
+    composite_arithmetic_tolerance_hartree,
+)
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.api.error_contract import CodedValueError
@@ -193,6 +208,14 @@ NOT_COMPARED_STORED_ENERGY_NOT_STATED = "stored_energy_not_stated"
 NOT_COMPARED_ZPE_NOT_IN_SOURCE = "zpe_not_in_source"
 NOT_COMPARED_NO_SECOND_STATE = "no_second_state_on_the_same_zero"
 NOT_COMPARED_STATED_PRECISION_UNKNOWN = "stated_precision_unknown"
+NOT_COMPARED_ZPE_NOT_STATED = "zpe_not_stated"
+NOT_COMPARED_GEOMETRY_NOT_PAIRED = "geometry_not_paired"
+NOT_COMPARED_ZPE_SCALING_UNSTATED = "zpe_scaling_unstated"
+
+#: A stated ``zpe_scale_factor`` is expected to carry at least four decimals (or be exactly the
+#: multiplier used), so its rounding error is at most half a unit of the fourth place, 5e-5. The
+#: same bound the transition-state energy check uses for its ``zpe_scale_factor``.
+_ZPE_SCALE_FACTOR_PRINTED_ERROR = 5e-5
 
 #: The rounding unit assumed for a stated energy whose producer states none: 1 kcal/mol, the
 #: coarsest unit energies are routinely reported in. Half of it (about 2.09 kJ/mol) is the
@@ -308,6 +331,24 @@ def assert_network_energy_source_type(
         field=field,
         stated="correction_convention",
         stated_value=correction_convention.value,
+    )
+
+
+def assert_state_zpe_source_type(calculation: Calculation, *, field: str) -> None:
+    """Refuse a ``zpe_calculation_key`` that is not a ``freq`` calculation (#693).
+
+    Only a frequency calculation stores a zero-point energy.
+
+    :raises CodedValueError: ``network_energy_source_type_mismatch``.
+    """
+    if calculation.type == CalculationType.freq:
+        return
+    _refuse(
+        calculation,
+        frozenset({CalculationType.freq}),
+        field=field,
+        stated="zpe_calculation_key",
+        stated_value="freq",
     )
 
 
@@ -564,11 +605,22 @@ def refuse_source_species_outside_state(
 
 @dataclass(frozen=True)
 class ParticipantSource:
-    """One participant of a state, and the calculation cited for it (None: none cited)."""
+    """One participant of a state, and the calculation cited for it (None: none cited).
+
+    ``zpe_calculation`` is the participant's own ``freq`` whose zero-point energy is added to the
+    energy of ``calculation`` (``electronic_plus_zpe``, #693). ``electronic_geometry_ids`` and
+    ``zpe_geometry_ids`` are the geometries the two calculations' energies are at, read from the
+    persisted rows by the caller; ``None`` means not looked up, which pairs nothing. ``is_atom`` is
+    true only when the cited calculation's stored geometry is a single atom.
+    """
 
     species_key: str
     stoichiometry: int
     calculation: Calculation | None
+    zpe_calculation: Calculation | None = None
+    electronic_geometry_ids: frozenset[int] | None = None
+    zpe_geometry_ids: frozenset[int] | None = None
+    is_atom: bool = False
 
 
 @dataclass(frozen=True)
@@ -582,6 +634,7 @@ class StateEnergyToCompare:
     correction_convention: EnergyCorrectionConvention
     participants: tuple[ParticipantSource, ...]
     energy_precision_kj_mol: float | None = None
+    zpe_scale_factor: float | None = None
 
     @property
     def field(self) -> str:
@@ -603,29 +656,69 @@ _AGREES = SumComparison(COMPARISON_AGREES)
 _SHARED_OFFSET_ZEROS = frozenset({EnergyZeroConvention.lowest_state, EnergyZeroConvention.entrance_channel})
 
 
+def _electronic_energy_hartree(calculation: Calculation) -> float | None:
+    """The bare electronic energy a calculation stores (sp energy, opt final, composite electronic)."""
+    if calculation.type == CalculationType.sp:
+        sp = calculation.sp_result
+        return None if sp is None else sp.electronic_energy_hartree
+    if calculation.type == CalculationType.opt:
+        opt = calculation.opt_result
+        return None if opt is None else opt.final_energy_hartree
+    if calculation.type == CalculationType.composite:
+        composite = calculation.composite_result
+        return None if composite is None else composite.electronic_energy_hartree
+    return None
+
+
 def _stored_energy_hartree(
-    calculation: Calculation, correction: EnergyCorrectionConvention
-) -> tuple[float | None, str | None]:
-    """``(energy, None)`` or ``(None, reason)``: the stored energy of the kind the state states."""
-    if correction == EnergyCorrectionConvention.electronic_plus_zpe:
-        if calculation.type != CalculationType.composite:
-            return None, NOT_COMPARED_ZPE_NOT_IN_SOURCE
+    participant: ParticipantSource,
+    correction: EnergyCorrectionConvention,
+    zpe_scale_factor: float | None,
+) -> tuple[float | None, float, str | None]:
+    """``(energy, rounded_weight, None)`` or ``(None, 0, reason)``: the stored energy of the kind stated.
+
+    ``rounded_weight`` is how many rounded printed quantities one unit of the participant's
+    stoichiometry contributes to the comparison (1 for a bare energy; ``1 + s`` plus the effect of
+    the factor's own rounding for an sp plus a scaled ZPE).
+    """
+    calculation = participant.calculation
+    assert calculation is not None
+    if correction != EnergyCorrectionConvention.electronic_plus_zpe:
+        value = _electronic_energy_hartree(calculation)
+        return (value, 1.0, None) if value is not None else (None, 0.0, NOT_COMPARED_STORED_ENERGY_NOT_STATED)
+
+    zpe_calculation = participant.zpe_calculation
+    if zpe_calculation is not None:
+        # An electronic energy plus the zero-point energy of the participant's own freq.
+        electronic = _electronic_energy_hartree(calculation)
+        if electronic is None:
+            return None, 0.0, NOT_COMPARED_STORED_ENERGY_NOT_STATED
+        freq = zpe_calculation.freq_result
+        zpe = None if freq is None else freq.zpe_hartree
+        if zpe is None:
+            return None, 0.0, NOT_COMPARED_ZPE_NOT_STATED
+        electronic_geometry = participant.electronic_geometry_ids
+        if (
+            electronic_geometry is None
+            or len(electronic_geometry) != 1
+            or electronic_geometry != participant.zpe_geometry_ids
+        ):
+            return None, 0.0, NOT_COMPARED_GEOMETRY_NOT_PAIRED
+        if zpe_scale_factor is None:
+            return None, 0.0, NOT_COMPARED_ZPE_SCALING_UNSTATED
+        # E, ZPE (weight s) and the factor itself, stated to at least four decimals: a relative
+        # error of at most 5e-5 moves the term by 5e-5 * zpe.
+        weight = 1.0 + zpe_scale_factor + abs(zpe) * _ZPE_SCALE_FACTOR_PRINTED_ERROR / COMPOSITE_PRINTED_ROUNDING_HARTREE
+        return electronic + zpe_scale_factor * zpe, weight, None
+    if calculation.type == CalculationType.composite:
         composite = calculation.composite_result
         value = None if composite is None else composite.e0_hartree
-    elif calculation.type == CalculationType.sp:
-        sp = calculation.sp_result
-        value = None if sp is None else sp.electronic_energy_hartree
-    elif calculation.type == CalculationType.opt:
-        opt = calculation.opt_result
-        value = None if opt is None else opt.final_energy_hartree
-    elif calculation.type == CalculationType.composite:
-        composite = calculation.composite_result
-        value = None if composite is None else composite.electronic_energy_hartree
-    else:
-        value = None
-    if value is None:
-        return None, NOT_COMPARED_STORED_ENERGY_NOT_STATED
-    return value, None
+        return (value, 1.0, None) if value is not None else (None, 0.0, NOT_COMPARED_STORED_ENERGY_NOT_STATED)
+    if participant.is_atom and calculation.type in (CalculationType.sp, CalculationType.opt):
+        # An atom has no vibrations: its zero-point energy is 0 and its electronic energy is its E0.
+        value = _electronic_energy_hartree(calculation)
+        return (value, 1.0, None) if value is not None else (None, 0.0, NOT_COMPARED_STORED_ENERGY_NOT_STATED)
+    return None, 0.0, NOT_COMPARED_ZPE_NOT_IN_SOURCE
 
 
 @dataclass(frozen=True)
@@ -633,7 +726,7 @@ class _Prepared:
     energy: StateEnergyToCompare
     stated_hartree: float
     stored_hartree: float
-    weight: int  # sum of the stoichiometric coefficients: each source enters nu times
+    weight: float  # rounded printed quantities of the weighted sum: each source enters nu times
 
 
 def _prepare(energy: StateEnergyToCompare) -> SumComparison | _Prepared:
@@ -652,14 +745,13 @@ def _prepare(energy: StateEnergyToCompare) -> SumComparison | _Prepared:
     if len(cited) != len(energy.participants):
         return SumComparison(COMPARISON_NOT_COMPARED, NOT_COMPARED_SOURCES_INCOMPLETE)
     total = 0.0
-    weight = 0
+    weight = 0.0
     for participant in energy.participants:
-        assert participant.calculation is not None
-        value, reason = _stored_energy_hartree(participant.calculation, correction)
+        value, term_weight, reason = _stored_energy_hartree(participant, correction, energy.zpe_scale_factor)
         if value is None:
             return SumComparison(COMPARISON_NOT_COMPARED, reason)
         total += participant.stoichiometry * value
-        weight += participant.stoichiometry
+        weight += participant.stoichiometry * term_weight
     return _Prepared(energy, energy.energy_kj_mol / HARTREE_TO_KJ_MOL, total, weight)
 
 
@@ -717,6 +809,8 @@ def _sum_mismatch(
         "tolerance_kj_mol": tolerance_hartree * HARTREE_TO_KJ_MOL,
         "allowance_kj_mol": allowance_kj_mol,
     }
+    if energy.zpe_scale_factor is not None:
+        context["zpe_scale_factor"] = energy.zpe_scale_factor
     if against is None:
         message = (
             f"{energy.field} states {energy.energy_kj_mol!r} kJ/mol for the state "
@@ -888,6 +982,13 @@ def collect_state_energy_source_warnings(
         elif comparison.status == COMPARISON_NOT_COMPARED and comparison.reason != NOT_COMPARED_NO_SOURCE_STATED:
             skipped.append(f"'{energy.state_key}' ({comparison.reason})")
     if skipped:
+        scaling_hint = (
+            " A 'zpe_scaling_unstated' energy cites a frequency ZPE but states no zpe_scale_factor: "
+            "TCKDB stores the unscaled ZPE and never assumes the scale is one, so state the factor "
+            "(to at least 4 decimals) and it is compared."
+            if any("zpe_scaling_unstated" in item for item in skipped)
+            else ""
+        )
         precision_hint = (
             " A 'stated_precision_unknown' energy differs from the stored sum by more than "
             "printed precision but by no more than honest rounding of the stated number could "
@@ -904,7 +1005,7 @@ def collect_state_energy_source_warnings(
                     "State energies that could not be held against the sum of the energies stored "
                     f"for the calculations they cite: {'; '.join(skipped)}. They are stored as not "
                     "compared with their reason, and each rests on the stated number alone."
-                    f"{precision_hint}"
+                    f"{precision_hint}{scaling_hint}"
                 ),
             )
         )
