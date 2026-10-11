@@ -214,3 +214,179 @@ def test_two_merged_inputs_derive_through_the_holder(merge, db_session):
         db_session.add(LevelOfTheoryMerge(merged_lot_id=lid, into_lot_id=holder.id))
     db_session.flush()
     assert stored_scheme_definition_hash(db_session, scheme) != before
+
+
+# --- #737 follow-up: a stale level that cannot be merged is not reunited -------------------
+
+
+def _approved_calculation_on(session, lot: LevelOfTheory):
+    from datetime import datetime
+
+    from app.db.models.app_user import AppUser
+    from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
+    from app.db.models.record_review import RecordReview
+    from tests.services.scientific_read._factories import (
+        make_calculation,
+        make_species,
+        make_species_entry,
+        next_inchi_key,
+        unique_smiles,
+    )
+
+    entry = make_species_entry(session, make_species(session, smiles=unique_smiles(), inchi_key=next_inchi_key("RUNI")))
+    calc = make_calculation(session, species_entry_id=entry.id, lot_id=lot.id)
+    curator = AppUser(username=f"reunite-curator-{calc.id}", role=AppUserRole.curator)
+    session.add(curator)
+    session.flush()
+    when = datetime(2026, 9, 1)
+    session.add(
+        RecordReview(
+            record_type=SubmissionRecordType.calculation,
+            record_id=calc.id,
+            status=RecordReviewStatus.approved,
+            reviewed_by=curator.id,
+            reviewed_at=when,
+            first_approved_at=when,
+        )
+    )
+    session.flush()
+    return calc
+
+
+def test_a_stale_level_with_approved_science_is_not_reunited(merge, db_session):
+    """An approved calculation blocks the stale-level merge, so no second live level may be made."""
+    declared, scheme, qz, holder = _deposit_then_split_qz(db_session)
+    _approved_calculation_on(db_session, declared)
+    schemes_before = _scheme_count(db_session)
+
+    result = merge.commit_plan(db_session, merge.build_plan(db_session))
+
+    assert _live_declared_levels(db_session) == [declared.id], "the script made a second live declared level"
+    assert _scheme_count(db_session) == schemes_before, "a new scheme was created for a level that cannot merge"
+    assert result.reunited == 0
+    [(ref, why)] = result.reunite_blocked
+    assert ref == declared.public_ref
+    assert "approved" in why
+
+
+def test_a_blocked_reunite_is_reported_again_and_stays_unwritten_on_a_second_run(merge, db_session):
+    declared, *_ = _deposit_then_split_qz(db_session)
+    _approved_calculation_on(db_session, declared)
+    merge.commit_plan(db_session, merge.build_plan(db_session))
+    schemes = _scheme_count(db_session)
+
+    second = merge.commit_plan(db_session, merge.build_plan(db_session))
+    assert second.reunited == 0 and len(second.reunite_blocked) == 1
+    assert _scheme_count(db_session) == schemes
+    assert _live_declared_levels(db_session) == [declared.id]
+
+
+def test_the_reunited_scheme_keeps_the_stale_schemes_literature(merge, db_session):
+    from tests.services.scientific_read._factories import make_literature
+
+    declared, scheme, qz, holder = _deposit_then_split_qz(db_session)
+    literature = make_literature(db_session)
+    scheme.source_literature_id = literature.id
+    db_session.flush()
+
+    result = merge.commit_plan(db_session, merge.build_plan(db_session))
+
+    [live] = _live_declared_levels(db_session)
+    new_scheme = db_session.get(LevelOfTheoryComposite, live).scheme
+    assert new_scheme.id != scheme.id
+    assert new_scheme.source_literature_id == literature.id
+    assert result.reunited == 1 and result.reunite_blocked == []
+
+
+def test_the_dry_run_previews_the_reunite_and_writes_nothing(merge, db_session):
+    declared, scheme, qz, holder = _deposit_then_split_qz(db_session)
+    schemes_before = _scheme_count(db_session)
+
+    preview = merge.preview_commit(db_session, merge.build_plan(db_session))
+
+    assert preview.reunited == 1
+    assert _scheme_count(db_session) == schemes_before
+    assert _live_declared_levels(db_session) == [declared.id]
+    assert db_session.scalar(select(LevelOfTheoryMerge.into_lot_id).where(LevelOfTheoryMerge.merged_lot_id == qz.id)) is None
+
+
+def test_the_dry_run_names_a_blocked_reunite(merge, db_session):
+    declared, *_ = _deposit_then_split_qz(db_session)
+    _approved_calculation_on(db_session, declared)
+
+    preview = merge.preview_commit(db_session, merge.build_plan(db_session))
+
+    assert preview.reunited == 0
+    assert [ref for ref, _ in preview.reunite_blocked] == [declared.public_ref]
+
+
+class _SessionProxy:
+    def __init__(self, session) -> None:
+        self._session = session
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    def __call__(self):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+    def commit(self):
+        self._session.flush()
+
+
+def _run_main(merge, monkeypatch, db_session, argv):
+    import app.api.deps as deps
+    from app.api.config import settings
+
+    monkeypatch.setattr(deps, "SessionLocal", _SessionProxy(db_session))
+    monkeypatch.setattr(settings, "db_name", "tckdb_test_reunite")
+    return merge.main(argv)
+
+
+def test_a_stale_level_cited_by_a_non_approval_reference_is_not_reunited(merge, db_session):
+    """A blocker that is not approved science (a frequency scale factor) must stop the reunite too."""
+    from tests.services.scientific_read._factories import make_frequency_scale_factor
+
+    declared, *_ = _deposit_then_split_qz(db_session)
+    make_frequency_scale_factor(db_session, lot=declared)
+    schemes_before = _scheme_count(db_session)
+
+    result = merge.commit_plan(db_session, merge.build_plan(db_session))
+
+    assert _live_declared_levels(db_session) == [declared.id]
+    assert _scheme_count(db_session) == schemes_before
+    [(ref, why)] = result.reunite_blocked
+    assert ref == declared.public_ref
+    assert "frequency_scale_factor" in why
+
+
+def test_a_current_scheme_with_approved_science_is_not_listed_as_blocked(merge, db_session):
+    """Only a stale scheme is a reunite candidate: a current one with approved science is not reported."""
+    declared = _deposit(db_session)
+    _approved_calculation_on(db_session, declared)
+
+    result = merge.commit_plan(db_session, merge.build_plan(db_session))
+
+    assert result.reunited == 0
+    assert result.reunite_blocked == []
+
+
+def test_the_cli_names_a_level_it_did_not_reunite(merge, monkeypatch, db_session, capsys):
+    declared, *_ = _deposit_then_split_qz(db_session)
+    _approved_calculation_on(db_session, declared)
+
+    assert _run_main(merge, monkeypatch, db_session, ["--commit"]) == 0
+    out = capsys.readouterr().out
+    assert f"NOT reunited, no scheme or level created for it: {declared.public_ref}" in out
+    assert "reunited: 0" in out
+
+    assert _run_main(merge, monkeypatch, db_session, []) == 0
+    out = capsys.readouterr().out
+    assert f"NOT reunited, no scheme or level created for it: {declared.public_ref}" in out
+    assert "would be reunited: 0" in out

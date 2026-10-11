@@ -661,7 +661,9 @@ def reunite_stale_scheme(session: Session, scheme: CompositeScheme) -> LevelOfTh
     with the same literature), and so is the level of theory that names it; that
     level is returned. The stale scheme and its level are left untouched: identity
     rows are never rewritten, and a release may have frozen their refs. The caller
-    merges the stale level into the returned one.
+    merges the stale level into the returned one. The operator script calls this only
+    for a scheme whose stale level can be merged (otherwise the new level would sit
+    beside a stale one that cannot go, two live levels for one recipe).
     """
     derived = stored_scheme_definition_hash(session, scheme)
     if derived == scheme.definition_hash.strip():
