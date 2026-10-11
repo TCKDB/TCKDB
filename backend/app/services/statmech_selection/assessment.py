@@ -669,8 +669,12 @@ def _check_rotors(candidate: CandidateFacts, decl: DeclarationFacts, world: _Wor
         elif representation == "imported_potential":
             key = rotor.get("potential_source_key")
             source = next((s for s in decl.sources if s.source_key == key and s.role == "torsional_surface"), None)
-            # An unidentified literature potential is already unusable: _declared_evidence reports it for its role.
-            if source is None or (source.locator == "calculation" and world.usable(source.calculation_ref) is None):
+            # A member-scoped source is skipped by _declared_evidence (it is the member's evidence), so an unidentified
+            # literature potential is checked here as well as there.
+            unidentified = source is not None and source.locator == "literature" and source.literature_identified is not True
+            if source is None or (source.locator == "calculation" and world.usable(source.calculation_ref) is None) or unidentified:
+                if unidentified:
+                    f.note("source_literature_unidentified:torsional_surface")
                 f.add("required_source_unusable:torsional_surface")
         for mode in rotor.get("replaces_mode_indices") or []:
             if mode in projected:

@@ -399,6 +399,34 @@ def test_a_rotor_potential_must_be_a_torsional_surface_source_and_identified():
     assert "source_literature_unidentified:torsional_surface" in unidentified_result.advisory
 
 
+def test_a_member_scoped_literature_potential_is_checked_for_an_identifier_too():
+    """Member-scoped sources are skipped by the model-level evidence walk, so the rotor check must look at them itself."""
+
+    def ensemble_with(identified: bool):
+        potential = src(
+            "pot", "torsional_surface", None, locator="literature", literature_ref="lit_m", member_key="a",
+            literature_identified=identified,
+        )
+        return canonical(
+            scope="explicit_equilibrium_ensemble",
+            recipe={
+                "energy_zero": "e0",
+                "zpe_included_in_energies": True,
+                "rotors": [rotor(representation="imported_potential", potential_source_key="pot")],
+            },
+            sources=(*sources_with(fsf("fundamental")), potential),
+            members=(member("a"), member("b", relative_energy_kj_mol=2.5)),
+            record=record(torsions=(TORSION,), statmech_treatment="rrho_1d"),
+        )
+
+    ok = assess(ensemble_with(True), req(ENSEMBLE_REQ))
+    assert "required_source_unusable:torsional_surface" not in codes(ok), codes(ok)
+    bad = assess(ensemble_with(False), req(ENSEMBLE_REQ))
+    assert bad.applicability is not A
+    assert "required_source_unusable:torsional_surface" in codes(bad)
+    assert "source_literature_unidentified:torsional_surface" in bad.advisory
+
+
 def test_an_imported_free_rotor_and_a_tabulated_potential_need_no_scan_job():
     free = with_torsion(sources=IMPORTED)
     assert assess(free, calcs={}).applicability is A, codes(assess(free, calcs={}))
