@@ -124,6 +124,9 @@ _REPOINTED = {
     # (or dropped when the holder is bound already), so a merged level is never
     # bound. Absent on a database older than ``d7a3f1b9c284``.
     ("level_of_theory_composite", "level_of_theory_id"),
+    # #658: a scheme input follows a merge, so no scheme input points at a merged
+    # row and the scheme's hash (taken over its canonical input levels) is re-derived.
+    ("composite_scheme_term_input", "level_of_theory_id"),
 }
 
 #: Ownership columns that are also citations. ``calculation_dependency`` is
@@ -506,18 +509,65 @@ def _lot_columns_present(session: Session) -> tuple[str, ...]:
 def _declared_definition_hashes(session: Session, schema: Schema) -> dict[int, str]:
     """``level id -> definition_hash`` for every level bound to a declared scheme.
 
-    Empty on a database older than ``d7a3f1b9c284`` (no binding table).
+    The hash is **re-derived** from the scheme's stored terms and input levels,
+    merges followed (#658), not read from ``composite_scheme.definition_hash``: a
+    stored hash is exactly what goes stale when an input level is merged away, and
+    reading it back would vouch for itself. Empty on a database older than
+    ``d7a3f1b9c284`` (no binding table).
     """
     if ("level_of_theory_composite", "level_of_theory_id") not in schema.lot_references:
         return {}
+    from app.db.models.composite_scheme import CompositeScheme
+    from app.services.composite_scheme_resolution import stored_scheme_definition_hash
+
     rows = session.execute(
         text(
-            "SELECT c.level_of_theory_id, s.definition_hash "
-            "FROM level_of_theory_composite c JOIN composite_scheme s ON s.id = c.scheme_id "
-            "WHERE c.binding_source = 'declared'"
+            "SELECT level_of_theory_id, scheme_id FROM level_of_theory_composite "
+            "WHERE binding_source = 'declared' ORDER BY level_of_theory_id"
         )
     ).all()
-    return {level_id: definition_hash.strip() for level_id, definition_hash in rows}
+    derived: dict[int, str] = {}
+    by_scheme: dict[int, str] = {}
+    for level_id, scheme_id in rows:
+        if scheme_id not in by_scheme:
+            scheme = session.get(CompositeScheme, scheme_id)
+            assert scheme is not None
+            by_scheme[scheme_id] = stored_scheme_definition_hash(session, scheme)
+        derived[level_id] = by_scheme[scheme_id]
+    return derived
+
+
+def reunite_declared_schemes(session: Session, schema: Schema) -> int:
+    """Create the scheme and level a stale declared scheme should have had (#658).
+
+    For every level still bound to a declared scheme whose re-derived hash differs
+    from the stored one (an input level was merged away), get or create the scheme
+    the derived hash names and the level that names it
+    (``composite_scheme_resolution.reunite_stale_scheme``). The stale level and the
+    new one then share an identity hash, so :func:`build_plan` groups them and the
+    ordinary merge folds the stale level, with its calculations, into the new one.
+    Returns how many stale schemes were reunited. Writes nothing for a scheme whose
+    inputs are unmerged.
+    """
+    if ("level_of_theory_composite", "level_of_theory_id") not in schema.lot_references:
+        return 0
+    from app.db.models.composite_scheme import CompositeScheme
+    from app.services.composite_scheme_resolution import reunite_stale_scheme
+
+    scheme_ids = session.scalars(
+        text(
+            "SELECT DISTINCT c.scheme_id FROM level_of_theory_composite c "
+            "WHERE c.binding_source = 'declared' AND c.level_of_theory_id NOT IN "
+            "(SELECT merged_lot_id FROM level_of_theory_merge) ORDER BY c.scheme_id"
+        )
+    ).all()
+    reunited = 0
+    for scheme_id in scheme_ids:
+        scheme = session.get(CompositeScheme, scheme_id)
+        assert scheme is not None
+        if reunite_stale_scheme(session, scheme) is not None:
+            reunited += 1
+    return reunited
 
 
 def build_plan(session: Session, schema: Schema | None = None) -> Plan:
@@ -559,8 +609,8 @@ def _describe_duplicate(
     duplicate = Duplicate(row=row)
     if holder is not None and ("level_of_theory_composite", "level_of_theory_id") in schema.lot_references:
         # Two levels the merge would join are bound to different recipes: moving
-        # or dropping one binding would pick a recipe silently. Named methods
-        # cannot do this today (one key, one scheme); a declared scheme can.
+        # or dropping one binding would pick a recipe silently. Two schemes that
+        # re-derive to one hash (#658) are one recipe, not a conflict.
         differs = session.scalar(
             text(
                 "SELECT count(*) FROM level_of_theory_composite d "
@@ -570,7 +620,9 @@ def _describe_duplicate(
             {"holder": holder.row_id, "dup": row.row_id},
         )
         if differs:
-            duplicate.other_references["level_of_theory_composite.scheme_id (differs from the kept row)"] = differs
+            derived = _declared_definition_hashes(session, schema)
+            if derived.get(row.row_id) != derived.get(holder.row_id) or row.row_id not in derived:
+                duplicate.other_references["level_of_theory_composite.scheme_id (differs from the kept row)"] = differs
     for table, column in schema.lot_references:
         count = session.scalar(
             text(
@@ -595,7 +647,21 @@ def _describe_duplicate(
 
 
 def commit_plan(session: Session, plan: Plan) -> CommitResult:
-    """Merge every unblocked group, each in its own savepoint. The caller commits."""
+    """Merge every unblocked group, each in its own savepoint. The caller commits.
+
+    Then, for a declared composite scheme whose input level was just merged away,
+    create the scheme and level its re-derived hash names and merge the stale level
+    into it (#658). That second pass re-plans, so it sees the new level.
+    """
+    result = _commit_groups(session, plan)
+    if reunite_declared_schemes(session, plan.schema):
+        follow = _commit_groups(session, build_plan(session, plan.schema))
+        result.merged.extend(follow.merged)
+        result.kept.extend(follow.kept)
+    return result
+
+
+def _commit_groups(session: Session, plan: Plan) -> CommitResult:
     result = CommitResult()
     for group in plan.mergeable():
         assert group.holder is not None
@@ -628,6 +694,14 @@ def commit_plan(session: Session, plan: Plan) -> CommitResult:
                         ),
                         {"holder": holder_id, "dup": dup_id},
                     )
+                    if ("composite_scheme_term_input", "level_of_theory_id") in plan.schema.lot_references:
+                        session.execute(
+                            text(
+                                "UPDATE composite_scheme_term_input SET level_of_theory_id = :holder "
+                                "WHERE level_of_theory_id = :dup"
+                            ),
+                            {"holder": holder_id, "dup": dup_id},
+                        )
                     session.execute(
                         text(
                             "INSERT INTO level_of_theory_merge (merged_lot_id, into_lot_id) "
