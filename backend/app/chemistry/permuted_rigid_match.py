@@ -88,6 +88,11 @@ _PREFERRED_ANCHOR_SINE = 0.1
 #: the largest geometries searched at all and for thousands of gate comparisons.
 MAX_WORK_PER_RECORD = 50_000_000
 
+#: Work units a whole record may spend on same-order Kabsch comparisons, kept apart from the
+#: relabelling search's budget so that a record full of mirror-image searches cannot starve the
+#: cheap test that catches a moved copy listed in the same order (#692).
+MAX_SAME_ORDER_WORK_PER_RECORD = 50_000_000
+
 
 @dataclass
 class SearchBudget:
@@ -100,6 +105,16 @@ class SearchBudget:
 
     fits_left: int = field(default_factory=lambda: MAX_FITS_PER_RECORD)
     work_left: int = field(default_factory=lambda: MAX_WORK_PER_RECORD)
+    #: The separate allowance for same-order Kabsch comparisons (see ``MAX_SAME_ORDER_WORK_PER_RECORD``).
+    same_order_work_left: int = field(default_factory=lambda: MAX_SAME_ORDER_WORK_PER_RECORD)
+
+    def charge_same_order(self, units: int) -> bool:
+        """Spend ``units`` of the same-order allowance; ``False`` (and nothing left) when they are not there."""
+        if units > self.same_order_work_left:
+            self.same_order_work_left = 0
+            return False
+        self.same_order_work_left -= units
+        return True
 
     def charge(self, units: int) -> bool:
         """Spend ``units``; ``False`` (and nothing left) when they are not there."""

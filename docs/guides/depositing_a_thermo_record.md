@@ -204,10 +204,13 @@ polyatomic species whose only linked calculations are `sp`s.
     searched; a pair needing more than 256 trial alignments or examining more
     than 50,000 candidate placements (for example a very large, highly
     symmetric, chiral cluster) is undecided; and a record has a fixed budget of
-    4,096 alignments and 50 million work units over all its pairs (a pair of
-    different shapes costs about n^2/2 units and is dismissed at once). In those
-    cases a duplicate energy on a reordered copy is not caught; ordinary
-    molecules need one alignment and a few milliseconds.
+    4,096 alignments and 50 million work units over all its pairs for the
+    relabelling search (a pair of different shapes is dismissed first by its
+    radius of gyration at no cost, else by a gate of about n^2/2 units). The
+    comparison of two geometries listed in the same order has its own allowance
+    of 50 million units (30 per atom per pair). In those cases a duplicate energy
+    on a moved copy is not caught; ordinary molecules need one alignment and a
+    few milliseconds.
   - A moved copy written to three or fewer decimals may not be recognised (such
     coordinates are held to the four-decimal tolerance).
 - **A single atom.** An atom has no geometry to differ in, so "one
