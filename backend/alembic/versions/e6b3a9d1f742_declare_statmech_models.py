@@ -21,7 +21,7 @@ DELETE once that statmech record has ever been approved, and TRUNCATE is refused
 declared model means a new, superseding statmech record.
 
 Revision ID: e6b3a9d1f742
-Revises: a7c3e9d1f5b2
+Revises: e5b2c8a1d7f3
 Create Date: 2026-10-11
 """
 
@@ -33,7 +33,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "e6b3a9d1f742"
-down_revision: Union[str, Sequence[str], None] = "a7c3e9d1f5b2"
+down_revision: Union[str, Sequence[str], None] = "e5b2c8a1d7f3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

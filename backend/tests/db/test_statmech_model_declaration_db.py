@@ -132,7 +132,7 @@ def _determination(db_session, ts_entry, *, kind=StructureDeterminationTargetKin
 
 
 def test_the_revision_chains_from_the_revision_before_it_in_the_chain():
-    assert _REVISION.parent == "a7c3e9d1f5b2"
+    assert _REVISION.parent == "e5b2c8a1d7f3"
 
 
 def test_the_migration_round_trips_and_leaves_an_existing_record_untouched(db_session, migration):
