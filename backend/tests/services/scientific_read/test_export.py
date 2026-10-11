@@ -9,6 +9,7 @@ import pytest
 
 from app.db.models.common import (
     ArrheniusAUnits,
+    CalculationGeometryRole,
     CalculationType,
     KineticsDegeneracyConvention,
     KineticsModelKind,
@@ -959,6 +960,76 @@ def test_atom_count_decides_one_and_two_atom_species_without_a_gap(db_session, s
     assert _transport_gaps(result) == []
 
 
+@pytest.mark.parametrize(
+    ("smiles", "stated", "index", "gap"),
+    [
+        ("[Ar]", False, 0, True),
+        ("[Ar]", True, 0, True),
+        ("[H][H]", False, 1, True),
+        ("[H][H]", True, 1, False),
+    ],
+)
+def test_atom_count_beats_a_linked_statmech_and_a_contradiction_is_named(
+    db_session, smiles, stated, index, gap
+):
+    entry, tr = _species_with_transport(db_session, smiles)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    sm = make_statmech(db_session, species_entry=entry, is_linear=stated)
+    attach_statmech_source_calculation(db_session, statmech=sm, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    _rs, result = _export_species(db_session, entry)
+
+    assert _tran_dat_geometry_index(result) == index
+    gaps = _transport_gaps(result)
+    if gap:
+        assert len(gaps) == 1
+        assert sm.public_ref in gaps[0].detail and "not used" in gaps[0].detail
+        assert f"contradicted by {sm.public_ref}" in _tran_dat_row(result)
+    else:
+        assert gaps == []
+
+
+def test_atom_count_beats_a_conflict_between_linked_records_and_names_it(db_session):
+    entry, tr = _species_with_transport(db_session, "[H][H]")
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    for flag in (True, False):
+        sm = make_statmech(db_session, species_entry=entry, is_linear=flag)
+        attach_statmech_source_calculation(db_session, statmech=sm, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    _rs, result = _export_species(db_session, entry)
+
+    assert _tran_dat_geometry_index(result) == 1
+    gaps = _transport_gaps(result)
+    assert len(gaps) == 1 and "disagree" in gaps[0].detail
+
+
+def test_an_opt_is_judged_by_its_final_output_not_an_initial_output(db_session):
+    """Depositors set the output role themselves, so only ``final`` counts."""
+    entry, tr = _species_with_transport(db_session, "O")
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    final = make_geometry(db_session, natoms=3, xyz_text=BENT_H2O_XYZ)
+    attach_output_geometry(
+        db_session, calculation=calc, geometry=final,
+        role=CalculationGeometryRole.final, output_order=2,
+    )
+    initial = make_geometry(db_session, natoms=3, xyz_text=CO2_XYZ)
+    attach_output_geometry(
+        db_session, calculation=calc, geometry=initial,
+        role=CalculationGeometryRole.initial, output_order=1,
+    )
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    rs, _result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].linearity_conflict is None
+    assert rs.species_records[0].is_linear is False
+
+
 def test_unparseable_smiles_drops_the_line_with_a_gap(db_session):
     entry, tr = _species_with_transport(db_session, "not a smiles")
     _approve_transport(db_session, tr)
@@ -1029,7 +1100,13 @@ def test_an_opt_is_judged_by_its_final_geometry_not_its_guess(db_session):
 
 @pytest.mark.parametrize(
     "calc_type",
-    [CalculationType.scan, CalculationType.irc, CalculationType.path_search, CalculationType.composite],
+    [
+        CalculationType.scan,
+        CalculationType.irc,
+        CalculationType.path_search,
+        CalculationType.composite,
+        CalculationType.conf,
+    ],
 )
 def test_scan_irc_path_search_and_composite_are_not_witnesses(db_session, calc_type):
     entry, tr = _species_with_transport(db_session, "O")

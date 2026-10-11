@@ -22,6 +22,20 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Export: transport linearity from a linked witness (2026-10-11)
+
+**Changes the bulk-export output (NDJSON and CHEMKIN), no wire-version bump.** Migration: none. New environment variable: none.
+
+- The geometry index of a CHEMKIN `tran.dat` line (and NDJSON `is_linear`) no longer comes from the lowest-id statmech record of the
+  species. It comes from a record the selected transport links to: the geometry of a calculation it cites (an `opt`'s final output,
+  or a `freq`/`sp` input), then a linked `opt`/`freq` statmech. The atom count is decisive for one and two atoms (0 and 1).
+- NDJSON species rows gain `is_linear_source` (`{kind, ref}` or null) and `is_linear_conflict` (`{kind, refs}` or null).
+  `is_linear` is null when the species has no selected transport.
+- `tran.dat` lines gain a trailing `linearity=<kind>:<ref>` comment. Three or more atoms with no witness are written as nonlinear
+  (2) with `linearity=assumed nonlinear from atom count`; disagreeing witnesses are written the same way and name the refs. Each
+  assumed value, each disagreement and each witness the atom count overrode is an export gap of kind `transport`.
+- A species whose SMILES cannot be parsed has its `tran.dat` line dropped, with a gap; it is never written as 0.
+
 ## Statmech qualification (2026-10-11)
 
 **Chunk 3 of the statmech selection programme: bounded qualification, no public surface yet.** Migration: none. New
