@@ -336,7 +336,7 @@ def _post_anchored(client, corpus, **extra):
     "second_body",
     [
         {"determination": _determination("set-B")},
-        {"direction": "reverse", "determination": _determination("set-A")},
+        {"direction": "reverse", "a_units": "per_s", "determination": _determination("set-A")},
         {"workflow_tool_release": OTHER_TOOL, "determination": _determination("set-A")},
     ],
     ids=["different_key", "different_direction", "different_source"],
@@ -362,7 +362,7 @@ def test_identical_content_on_one_reaction_entry_resolves_to_the_one_determinati
 @pytest.mark.parametrize(
     "patch,reason",
     [
-        ({"direction": "reverse"}, "direction"),
+        ({"direction": "reverse", "a_units": "per_s"}, "direction"),  # the reverse of 2H -> H2 is first order
         ({"workflow_tool_release": OTHER_TOOL}, "source"),
         (
             {
@@ -740,9 +740,9 @@ DISSOCIATION = {
     ],
 )
 def test_the_declared_order_is_the_order_of_the_side_the_direction_names(client, db_session, direction, order, accepted):
-    # per_s whatever the direction: the A-units molecularity check reads the reactant count only (a
-    # separate, pre-existing blindness this change does not touch).
-    body = _standalone(direction=direction, a_units="per_s", applicability=_applicability(reaction_order=order))
+    # The A units follow the same side the order does (#695): H2 -> 2 H is first order forward, second order reverse.
+    units = "cm3_mol_s" if direction == "reverse" else "per_s"
+    body = _standalone(direction=direction, a_units=units, applicability=_applicability(reaction_order=order))
     body["reaction"] = DISSOCIATION
     response = client.post(KINETICS, json=body)
     if accepted:

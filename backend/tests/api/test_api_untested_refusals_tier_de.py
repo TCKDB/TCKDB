@@ -344,13 +344,14 @@ def test_a_rate_coefficient_for_a_four_body_reaction_has_no_a_units(client) -> N
     deliberately balanced in mass and charge, so the conservation rules
     that guard this endpoint have nothing to say, and the A-factor and
     activation energy are ordinary numbers. The only thing wrong is that
-    a fourth-order rate constant has no declared dimensionality.
+    a fourth-order rate constant has no declared dimensionality. The direction is stated
+    forward: with none stated the 2-product side could carry the units (#695).
     """
     body = _assert_code(
         client.post(
             _KINETICS_URL,
             json=_kinetics_payload(
-                [_H_ATOM] * 4, [_H2, _H2], a_units="cm3_mol_s"
+                [_H_ATOM] * 4, [_H2, _H2], a_units="cm3_mol_s", direction="forward"
             ),
         ),
         "unsupported_reaction_molecularity",
@@ -389,6 +390,7 @@ def test_a_third_body_raises_the_order_into_the_same_refusal(client) -> None:
                 [_H2, _H_ATOM],
                 a_units="cm6_mol2_s",
                 is_third_body=True,
+                direction="forward",
             ),
         ),
         "unsupported_reaction_molecularity",

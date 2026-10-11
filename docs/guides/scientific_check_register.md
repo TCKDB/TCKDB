@@ -791,9 +791,9 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `validate_a_units_for_molecularity` — `backend/app/chemistry/units.py::validate_a_units_for_molecularity`
-  *Called from the kinetics upload schema, so it refuses at the wire boundary. The order is not simply `len(reactants)`: a simple `+M` third-body reaction carries a `[M]` term on the main line and validates one order higher, while a falloff reaction's main line is the high-pressure limit k-infinity and keeps `len(reactants)`, its low-pressure limit k0 being validated separately one order up.*
+  *Called from the kinetics upload schema, so it refuses at the wire boundary. The order is not simply `len(reactants)`: it counts the side the coefficient is a rate of (reactants for a forward record, products for a reverse one; a `net` record is not checked). A record that states no direction is checked against both sides and refused only when the units match neither (`validate_a_units_for_unstated_direction`), so no direction is assumed. A simple `+M` third-body reaction carries a `[M]` term on the main line and validates one order higher, while a falloff reaction's main line is the high-pressure limit k-infinity, whose order is the side's count, its low-pressure limit k0 being validated separately one order up.*
 
-**Escape hatch.** None, and the refinements are the reason it can block without firing on correct science: PLOG and Chebyshev are refused the `is_third_body` flag outright, because both already encode the full pressure dependence and the flag would otherwise inflate the expected order by one — rejecting a PLOG entry carrying the *correct* units and accepting one carrying the units of the next order up.
+**Escape hatch.** None, and the refinements are the reason it can block without firing on correct science: PLOG and Chebyshev are refused the `is_third_body` flag outright, because both already encode the full pressure dependence and the flag would otherwise inflate the expected order by one — rejecting a PLOG entry carrying the *correct* units and accepting one carrying the units of the next order up. A record whose sides differ in size and which states no direction is accepted with units of either side's order; stating `direction` makes the check exact.
 
 ## Statistical mechanics
 

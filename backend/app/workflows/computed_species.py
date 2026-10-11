@@ -773,9 +773,11 @@ def persist_computed_species_upload(
                     )
                     # Input geometries for this calc were attached in an
                     # earlier pass, so the Hessian can bind to them here.
-                    try_extract_hessian_from_artifact_upload(
+                    hessian_warning = try_extract_hessian_from_artifact_upload(
                         session, calc_row, art_in
                     )
+                    if hessian_warning is not None:
+                        upload_warnings.append(hessian_warning)
                     # Fill-when-absent-or-degenerate: an opt calc's own
                     # input deck / log yields its true starting geometry
                     # when none is on file yet, or the one on file only
