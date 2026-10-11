@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.calculation import CalculationHessian
 from app.db.models.common import HessianSource
+from tests.api.artifact_urls import artifacts_url
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -178,7 +179,7 @@ class TestHessianHook:
         assert _stored(db_session, calc_id) is None
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")]},
         )
         assert resp.status_code == 201, resp.text
@@ -202,7 +203,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, natoms=MOLPRO_NATOMS)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(MOLPRO_LOG, kind="output_log", filename="freq.out")]},
         )
         assert resp.status_code == 201, resp.text
@@ -221,7 +222,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, xyz=_orca_frame_xyz())
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(ORCA_HESS, kind="hessian", filename="ts.hess")]},
         )
         assert resp.status_code == 201, resp.text
@@ -241,7 +242,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, natoms=ORCA_NATOMS)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(ORCA_HESS, kind="hessian", filename="ts.hess")]},
         )
         assert resp.status_code == 201, resp.text
@@ -254,7 +255,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, natoms=MOLPRO_NATOMS)  # 5, not 12
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")]},
         )
         assert resp.status_code == 201, resp.text
@@ -268,7 +269,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, natoms=GAUSSIAN_NATOMS, calc_type="sp")
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")]},
         )
         assert resp.status_code == 201, resp.text
@@ -289,7 +290,7 @@ class TestHessianHook:
         )
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")]},
         )
         assert resp.status_code == 201, resp.text
@@ -303,7 +304,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, natoms=GAUSSIAN_NATOMS)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="input", filename="freq.in")]},
         )
         assert resp.status_code == 201, resp.text
@@ -314,7 +315,7 @@ class TestHessianHook:
     ):
         calc_id = _create_calc(client, natoms=GAUSSIAN_NATOMS)
         r1 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="a.log")]},
         )
         assert r1.status_code == 201
@@ -325,7 +326,7 @@ class TestHessianHook:
         # A second upload (even a different program's matrix) must not replace
         # the existing row.
         r2 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="b.log")]},
         )
         assert r2.status_code == 201, r2.text
@@ -343,7 +344,7 @@ class TestHessianHook:
         body = b"***  PROGRAM SYSTEM MOLPRO  ***\nno matrix here\n"
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(body, kind="output_log", filename="nohess.out")]},
         )
         assert resp.status_code == 201, resp.text
@@ -428,7 +429,7 @@ class TestHessianNotStoredWarnings:
 
     def _post(self, client, calc_id: int, artifact: dict):
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [artifact]}
+            artifacts_url(client, calc_id), json={"artifacts": [artifact]}
         )
         assert resp.status_code == 201, resp.text
         return resp.json()

@@ -94,5 +94,5 @@
   ],
   "title": "ArtifactsUploadRequest",
   "type": "object",
-  "x-tckdb-example-requires": "a calculation the caller deposited (or owns through a live submission), named by the calculation_id in the path; a conformer upload returns one"
+  "x-tckdb-example-requires": "a calculation the caller deposited (or owns through a live submission), named by the calculation_ref in the path; a conformer upload returns one"
 }

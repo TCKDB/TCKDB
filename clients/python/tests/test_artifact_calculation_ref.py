@@ -1,8 +1,9 @@
-"""The client addresses a calculation by its ``calc_`` ref when it has one (#578).
+"""The client addresses a calculation by its ``calc_`` ref, and only by it (#578).
 
-Upload responses now return ``calculation_ref`` beside ``calculation_id``. The
-plan carries it through, and ``upload_artifacts`` / ``upload_artifact`` put it
-in the path, falling back to the integer against a server that predates it.
+Upload responses return ``calculation_ref`` beside ``calculation_id``. The plan
+carries it through, and ``upload_artifacts`` / ``upload_artifact`` put it in the
+path. The server takes no row id there, so a plan item without a ref, or an
+integer passed to ``upload_artifact``, is refused before any request is made.
 """
 
 from __future__ import annotations
@@ -64,11 +65,32 @@ def test_upload_artifacts_sends_the_ref_when_the_plan_has_one(log, batch) -> Non
 
 
 @pytest.mark.parametrize("batch", [True, False])
-def test_upload_artifacts_falls_back_to_the_integer_without_a_ref(log, batch) -> None:
+def test_upload_artifacts_refuses_a_plan_item_without_a_ref(log, batch) -> None:
     captured: list[str] = []
     client, _ = make_client(_handler(captured))
-    client.upload_artifacts([_item(log, ref=None)], batch_by_calculation=batch)
-    assert captured == ["/api/v1/calculations/42/artifacts"]
+    with pytest.raises(ValueError, match="calc_"):
+        client.upload_artifacts([_item(log, ref=None)], batch_by_calculation=batch)
+    assert captured == []
+
+
+@pytest.mark.parametrize("batch", [True, False])
+def test_upload_artifacts_checks_every_item_before_sending_any(log, batch) -> None:
+    captured: list[str] = []
+    client, _ = make_client(_handler(captured))
+    with pytest.raises(ValueError, match=r"plan\[1\]"):
+        client.upload_artifacts(
+            [_item(log, ref=REF), _item(log, ref="42")], batch_by_calculation=batch
+        )
+    assert captured == []
+
+
+@pytest.mark.parametrize("handle", [42, "42", "sub_" + "a" * 26, "calc_", ""])
+def test_upload_artifact_refuses_anything_but_a_calc_ref(log, handle) -> None:
+    captured: list[str] = []
+    client, _ = make_client(_handler(captured))
+    with pytest.raises(ValueError, match="calc_"):
+        client.upload_artifact(handle, log, "output_log")
+    assert captured == []
 
 
 def test_upload_artifact_accepts_a_ref(log) -> None:
@@ -103,7 +125,8 @@ def test_the_plan_is_filled_from_the_upload_response() -> None:
         }
 
     assert [p.calculation_ref for p in upload.artifact_plan(response(True))] == [REF]
-    # A server that predates the ref: the plan still resolves, on the integer.
+    # A server that predates the ref: the plan still resolves (the ref is None),
+    # but upload_artifacts refuses to execute it.
     older = upload.artifact_plan(response(False))
     assert [p.calculation_ref for p in older] == [None]
     assert [p.calculation_id for p in older] == [42]
@@ -139,6 +162,6 @@ def test_computed_reaction_plan_is_filled_from_calculation_key_refs() -> None:
     assert by_key["ch4_opt"].calculation_ref == ch4_ref
     assert by_key["ts_opt"].calculation_id == 11
 
-    # A server without calculation_key_refs: the plan resolves on integers.
+    # A server without calculation_key_refs: the plan resolves with no refs.
     older = {p.calculation_key: p for p in upload.artifact_plan({"calculation_keys": {"ts_opt": 11, "ch4_opt": 22}})}
     assert {p.calculation_ref for p in older.values()} == {None}

@@ -131,6 +131,21 @@ CLIENT_NAME = "tckdb-client"
 _ScientificSearchMethod = Literal["GET", "POST"]
 
 
+def _require_calculation_ref(value: object, *, where: str) -> None:
+    """Refuse anything but a ``calc_`` ref before an artifact request is made.
+
+    ``POST /calculations/{calculation_ref}/artifacts`` takes the ref only (a row
+    id is a 422 ``invalid_handle``), so a plan item or call that holds just the
+    integer fails here with the reason instead of after a round trip.
+    """
+    if not isinstance(value, str) or not value.startswith("calc_") or len(value) <= len("calc_"):
+        raise ValueError(
+            f"{where} must be the calculation's public 'calc_' ref (the "
+            "calculation_ref an upload response returns); the server takes no "
+            f"row id for an artifact upload. Got {value!r}."
+        )
+
+
 def _selection_path(species_entry_ref: str) -> str:
     """Path of the thermo-selection endpoint for a public ``spe_`` ref (integer ids are refused)."""
     if not isinstance(species_entry_ref, str) or not species_entry_ref.startswith("spe_"):
@@ -1103,7 +1118,7 @@ class TCKDBClient:
 
     def upload_artifact(
         self,
-        calculation_id: "int | str",
+        calculation_ref: str,
         path: "str | Path",
         kind: str,
         *,
@@ -1116,13 +1131,13 @@ class TCKDBClient:
 
         Reads the local file at ``path``, base64-encodes its contents,
         and posts the resulting ``ArtifactIn`` payload to
-        ``/api/v1/calculations/{calculation_id}/artifacts``. The
+        ``/api/v1/calculations/{calculation_ref}/artifacts``. The
         endpoint accepts an inline batch wrapper — this helper sends a
         single-item batch.
 
-        ``calculation_id`` is the calculation's ``calc_`` ref (what upload
-        responses return as ``calculation_ref``) or, during the server's
-        deprecation window, its integer id. Prefer the ref.
+        ``calculation_ref`` is the calculation's ``calc_`` ref (what upload
+        responses return as ``calculation_ref``). The server takes no row id
+        there, so anything else raises ``ValueError`` before a request is made.
 
         ``filename`` defaults to the path's basename; supply an
         explicit value when uploading from a temp file with a synthetic
@@ -1132,6 +1147,7 @@ class TCKDBClient:
         import base64
         import pathlib
 
+        _require_calculation_ref(calculation_ref, where="upload_artifact")
         src = pathlib.Path(path)
         if not src.exists():
             raise ValueError(f"artifact file does not exist: {src}")
@@ -1149,7 +1165,7 @@ class TCKDBClient:
             artifact_in["bytes"] = bytes
 
         return self.post_json(
-            f"/calculations/{calculation_id}/artifacts",
+            f"/calculations/{calculation_ref}/artifacts",
             {"artifacts": [artifact_in]},
             idempotency_key=idempotency_key,
         )
@@ -1225,8 +1241,8 @@ class TCKDBClient:
     ) -> "list[Any] | list[ArtifactUploadBatchResult]":
         """Execute a builder-produced artifact plan.
 
-        Each entry in ``plan`` must expose ``calculation_id``,
-        ``path``, ``kind``, and the optional ``sha256``, ``bytes``,
+        Each entry in ``plan`` must expose ``calculation_id``, the
+        calculation's ``calculation_ref`` (``calc_`` ref), ``path``, ``kind``, and the optional ``sha256``, ``bytes``,
         ``label``, ``calculation_key`` fields — i.e. the shape of
         :class:`tckdb_client.builders.PlannedArtifactUpload`.
 
@@ -1240,7 +1256,7 @@ class TCKDBClient:
         - **``batch_by_calculation=True``.** Items are grouped by
           ``calculation_id`` (insertion-order-preserving) and each
           group is sent in a single POST to
-          ``/calculations/{calculation_id}/artifacts``. The
+          ``/calculations/{calculation_ref}/artifacts``. The
           per-calculation request is **atomic** server-side: any
           per-artifact validation failure in the batch rejects the
           whole batch with 422 and no DB rows or S3 writes survive,
@@ -1252,7 +1268,8 @@ class TCKDBClient:
 
         **Pre-dispatch validation** (both modes): every plan item
         must be a ``PlannedArtifactUpload``-like object with a
-        non-empty string ``kind``, an int ``calculation_id``, and a
+        non-empty string ``kind``, an int ``calculation_id``, a ``calc_``
+        ``calculation_ref`` (the server takes no row id in the path), and a
         local ``path`` that exists and is a regular file. Any failure
         raises ``TypeError`` / ``ValueError`` *before* the first HTTP
         request is issued so a malformed plan cannot leave the
@@ -1271,7 +1288,7 @@ class TCKDBClient:
 
         Server-side atomicity is the load-bearing premise for batch
         mode. See the backend route
-        ``POST /api/v1/calculations/{calculation_id}/artifacts`` and
+        ``POST /api/v1/calculations/{calculation_ref}/artifacts`` and
         its tests in
         ``backend/tests/api/test_api_calculation_artifacts.py``
         (``TestBatchAtomicity`` + ``TestStorageFailure``).
@@ -1315,6 +1332,10 @@ class TCKDBClient:
                     f"upload_artifacts: plan[{i}] artifact path is "
                     f"not a regular file: {src}"
                 )
+            _require_calculation_ref(
+                getattr(item, "calculation_ref", None),
+                where=f"upload_artifacts: plan[{i}].calculation_ref",
+            )
 
         if not batch_by_calculation:
             return self._upload_artifacts_sequential(
@@ -1328,15 +1349,11 @@ class TCKDBClient:
         groups: dict[int, list[Any]] = {}
         for item in items:
             groups.setdefault(item.calculation_id, []).append(item)
-        # Address each calculation by its ``calc_`` ref when the plan has one
-        # (every item in a group names the same calculation, so the first
-        # ref found stands for the group); fall back to the integer.
-        group_ref: dict[int, str | None] = {
-            cid: next(
-                (r for r in (getattr(i, "calculation_ref", None) for i in grp) if r),
-                None,
-            )
-            for cid, grp in groups.items()
+        # Address each calculation by its ``calc_`` ref (every item in a group
+        # names the same calculation, so the first item's ref stands for the
+        # group; pre-dispatch validation has checked each one).
+        group_ref: dict[int, str] = {
+            cid: grp[0].calculation_ref for cid, grp in groups.items()
         }
 
         results: list[ArtifactUploadBatchResult] = []
@@ -1373,7 +1390,7 @@ class TCKDBClient:
 
             http = self.request_json(
                 "POST",
-                f"/calculations/{group_ref[calc_id] or calc_id}/artifacts",
+                f"/calculations/{group_ref[calc_id]}/artifacts",
                 json={"artifacts": artifact_payloads},
                 idempotency_key=idem,
             )
@@ -1422,7 +1439,7 @@ class TCKDBClient:
                 )
             results.append(
                 self.upload_artifact(
-                    getattr(item, "calculation_ref", None) or calc_id,
+                    item.calculation_ref,
                     item.path,
                     item.kind,
                     sha256=getattr(item, "sha256", None),

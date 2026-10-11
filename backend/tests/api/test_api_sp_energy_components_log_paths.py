@@ -22,6 +22,7 @@ from tckdb_schemas.fragments.calculation import CalculationWithResultsPayload, S
 
 from app.db.models.calculation import CalculationSPEnergyComponent
 from app.services.calculation_resolution import resolve_and_persist_calculation_with_results
+from tests.api.artifact_urls import artifacts_url
 from tests.api.test_api_artifact_sp_energy_hook import (  # noqa: F401  (fixture is used by name)
     CH4_ENERGY,
     _computed_species_bundle,
@@ -73,7 +74,7 @@ def test_the_artifact_route_fills_the_energy_but_never_attaches_components(
     before = _component_rows(db_session)
 
     resp = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [_molpro_output_log()]}
+        artifacts_url(client, calc_id), json={"artifacts": [_molpro_output_log()]}
     )
 
     assert resp.status_code == 201, resp.text[:800]
@@ -87,7 +88,7 @@ def test_components_smuggled_into_an_artifact_request_are_ignored_not_stored(
     """The route's body model has no such field; whatever it ignores it does not store."""
     calc_id = _create_calc(client, sp_energy=None)
     resp = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(client, calc_id),
         json={"artifacts": [_molpro_output_log()], "sp_energy_components": PARTS},
     )
     assert resp.status_code == 201, resp.text[:800]

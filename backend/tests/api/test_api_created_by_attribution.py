@@ -41,6 +41,7 @@ from app.db.models.transition_state import (
     TransitionState,
     TransitionStateEntry,
 )
+from tests.api.artifact_urls import artifacts_url
 from tests.api.test_api_kfir_rxn import _BUNDLE as _COMPUTED_REACTION_BUNDLE
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
@@ -263,7 +264,7 @@ class TestCalculationArtifactUploadAttribution:
         # Step 2: post an artifact to that calculation.
         log_bytes = GAUSSIAN_OPT_LOG.read_bytes()
         artifact_resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={
                 "artifacts": [
                     {

@@ -318,24 +318,30 @@ during the transition window.
 ### Producer write routes (#578)
 
 The two producer write routes that named a record by row id in the path,
-`POST /submissions/{submission_id}/rights-attestations` and
-`POST /calculations/{calculation_id}/artifacts`, accept a handle: the integer
-or the `sub_` / `calc_` ref. Ownership, approval-freeze and role checks run on
-the resolved row, so both forms meet the same checks. Every upload, job and
-bundle response, and the polled job result, returns `submission_ref` beside
-`submission_id`, and `calculation_ref` (or `calculation_key_refs` on a
-computed reaction) beside each calculation id. The integer form is deprecated;
-it is removed, and the guard's `DEFERRED_PARAM_LEAKS` entries with it, once no
-supported `tckdb-client`, in-repo `tckdb-qcschema` adapter, or out-of-repo ARC
-adapter release still sends it. An unknown handle of either form, on either
-route, is a 404 with code `handle_not_found`.
+`POST /submissions/{submission_ref}/rights-attestations` and
+`POST /calculations/{calculation_ref}/artifacts`, take the public ref only:
+the `sub_` or `calc_` ref. Every upload, job and bundle response, and the
+polled job result, returns `submission_ref` beside `submission_id`, and
+`calculation_ref` (or `calculation_key_refs` on a computed reaction) beside
+each calculation id, so a caller always holds the ref. An integer id, in any
+spelling, is refused with 422 `invalid_handle`; a ref of the wrong kind is 422
+`handle_type_mismatch`; an unknown ref is 404 `handle_not_found`. Ownership,
+approval-freeze and role checks run on the resolved row.
 
-Retry caveat: idempotency keys are scoped by the concrete URL path. A request
-committed by an older client through the integer path whose response was lost,
-then retried by a newer client with the same key through the `calc_` path, is
-not recognised as a replay, so the route runs again and attaches duplicate
-artifacts. Finish or abandon in-flight artifact uploads before upgrading a
-client, or keep sending the form you started with.
+The deprecation window ended with the server's minimum supported
+`tckdb-client` moving to 0.97.0, the first release that addresses a
+calculation by its ref (`MIN_SUPPORTED_TCKDB_CLIENT_VERSION`, default
+`0.97.0`; the client never called the rights-attestation route). The in-repo
+`tckdb-qcschema` adapter (0.8.0) sends the ref and refuses a response without
+one. An out-of-repo producer that still sends the integer gets the 422 above;
+it conforms to TCKDB, not the reverse. The guard's `DEFERRED_PARAM_LEAKS`
+entries for both routes are gone.
+
+Idempotency keys are scoped by the concrete URL path. A request committed
+before this change through the integer path whose response was lost cannot be
+retried: the integer is refused, and the same key through the ref path is a
+new request, so finish or abandon in-flight artifact uploads rather than
+replaying them.
 
 ### Query-param refs
 

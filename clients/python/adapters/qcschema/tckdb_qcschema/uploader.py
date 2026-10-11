@@ -65,6 +65,7 @@ from dataclasses import dataclass
 from .errors import (
     E_ALREADY_IMPORTED,
     E_ARTIFACT_TOO_LARGE,
+    E_CALCULATION_REF_MISSING,
     E_SCAN_PARENT_ALREADY_IMPORTED,
     QCSchemaAdapterError,
 )
@@ -85,9 +86,9 @@ _ARTIFACT_SEARCH_PATH = "/scientific/artifacts/search"
 _CONFORMERS_PATH = "/uploads/conformers"
 
 
-def _artifact_path(calculation: "int | str") -> str:
-    """The artifact route for a calculation, named by ``calc_`` ref or integer id."""
-    return f"/calculations/{calculation}/artifacts"
+def _artifact_path(calculation_ref: str) -> str:
+    """The artifact route for a calculation, named by its ``calc_`` ref (no row id)."""
+    return f"/calculations/{calculation_ref}/artifacts"
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -198,9 +199,17 @@ def upload_record(
 
     primary = conformer_data["primary_calculation"]
     calculation_id = primary["calculation_id"]
-    # Address the calculation by its public ref when the server returned one
-    # (#578); the integer is the fallback against an older server.
-    calculation_handle = primary.get("calculation_ref") or calculation_id
+    # The artifact route takes the calculation's public ref only (#578).
+    calculation_ref = primary.get("calculation_ref")
+    if not isinstance(calculation_ref, str) or not calculation_ref.startswith("calc_"):
+        raise QCSchemaAdapterError(
+            E_CALCULATION_REF_MISSING,
+            "the conformer upload response carries no calculation_ref for the "
+            "primary calculation, and the artifact route takes the ref only. "
+            "The conformer upload was stored; the server is older than this "
+            "adapter supports.",
+            calculation_id=calculation_id,
+        )
 
     artifact_payload = {
         "artifacts": [
@@ -215,7 +224,7 @@ def upload_record(
     }
     artifact_response = client.request_json(
         "POST",
-        _artifact_path(calculation_handle),
+        _artifact_path(calculation_ref),
         json=artifact_payload,
         idempotency_key=artifact_key,
     )

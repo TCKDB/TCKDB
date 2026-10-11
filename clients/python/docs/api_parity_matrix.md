@@ -25,8 +25,8 @@ A first-class client method exists for these operations.
 | `GET /api/v1/auth/me` | yes | `me` | — | — | `tests/test_client.py` |
 | `POST /api/v1/bundles/dry-run` | yes | `bundle_dry_run` | — | `examples/submit_bundle.py` | `tests/test_client.py` |
 | `POST /api/v1/bundles/submit` | yes | `bundle_submit` | — | `examples/submit_bundle.py` | `tests/test_client.py` |
-| `POST /api/v1/calculations/{calculation_id}/artifacts` | yes | `upload_artifacts` | — | — | `tests/test_upload_artifacts_batch.py` |
 | `GET /api/v1/calculations/{calculation_id}/hessian` | yes | `get_calculation_hessian` | — | — | `tests/test_typed_parity_methods.py` |
+| `POST /api/v1/calculations/{calculation_ref}/artifacts` | yes | `upload_artifacts` | — | — | `tests/test_upload_artifacts_batch.py` |
 | `GET /api/v1/health` | yes | `health` | — | — | `tests/test_client.py` |
 | `POST /api/v1/jobs/computed-reaction` | yes | `enqueue_job` | — | — | `tests/test_typed_parity_methods.py` |
 | `POST /api/v1/jobs/conformer` | yes | `enqueue_job` | — | — | `tests/test_typed_parity_methods.py` |
@@ -370,7 +370,7 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `GET /api/v1/submissions/for-review` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/approve` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/reject` | yes | — | — | — | — |
-| `POST /api/v1/submissions/{submission_id}/rights-attestations` | yes | — | — | — | — |
+| `POST /api/v1/submissions/{submission_ref}/rights-attestations` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_ref}/supersede` | yes | — | — | — | — |
 
 > Interactive credential and session management. The client only ever carries a pre-minted API key; issuing or revoking one is an out-of-band operator action.
