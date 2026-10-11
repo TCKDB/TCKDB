@@ -33,6 +33,8 @@ SNAPSHOT_SUFFIXES = (
     "/conformers/select/manifest",
     "/evidence/select",
     "/evidence/select/manifest",
+    "/statmech/select",
+    "/statmech/select/manifest",
 )
 
 
@@ -76,6 +78,11 @@ def test_every_selection_and_export_route_uses_the_snapshot_dependency(api_route
         "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select",
         "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select/manifest",
     } <= paths
+    # The statmech selection (one typed target union) and its manifest.
+    assert {
+        "/api/v1/scientific/statmech/select",
+        "/api/v1/scientific/statmech/select/manifest",
+    } <= paths
     # The H298 thermo selection and its manifest.
     assert {
         "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select",
@@ -89,6 +96,6 @@ def test_every_selection_and_export_route_uses_the_snapshot_dependency(api_route
 def test_no_selection_route_reads_through_the_shared_session(api_routes):
     """A route that selects is never on ``get_db``, whatever its path ends with, so a new one cannot slip past the suffix list."""
     selecting = [r for r in api_routes if re.search(r"/select(/manifest)?$", r.path)]
-    assert len(selecting) >= 12, "the walk found too few selection routes to be checking anything"
+    assert len(selecting) >= 14, "the walk found too few selection routes to be checking anything"
     assert [r.path for r in selecting if get_db in _direct(r)] == []
     assert [r.path for r in selecting if get_snapshot_db not in _direct(r)] == []

@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 146 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 306 | `backend/app/api/code_catalogue.py` |
-| **total** | **613** | |
+| Refusal codes a caller can receive | 307 | `backend/app/api/code_catalogue.py` |
+| **total** | **614** | |
 
 ## How a record is named
 
@@ -760,7 +760,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (246 codes)
+### HTTP 422 (247 codes)
 
 | Code | Names |
 | --- | --- |
@@ -949,6 +949,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `statmech_model_declaration_version_unsupported` | a thing |
 | `statmech_role_duplicate` | a relationship — read `context` |
 | `statmech_selection_bound_exceeded` | a relationship — read `context` |
+| `statmech_selection_scope_owner_mismatch` | a relationship — read `context` |
 | `statmech_selection_unsupported` | a relationship — read `context` |
 | `statmech_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `statmech_source_role_type_mismatch` | a relationship — read `context` |

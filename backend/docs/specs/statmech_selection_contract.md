@@ -194,7 +194,9 @@ inputs, not scientific truth, provenance or completeness of the captured populat
 | trust badge | species-owner rubric | stage 6 (separate PR): TS-owned records no longer penalised |
 | release candidate map | species owner only | stage 6: discriminated owner |
 | MCP statmech tools | narrower filter set | stage 6: backend-valid filters, `electronic_levels`, explicit `trust` |
-| new `select` operation | absent | stage 5 |
+| detail-with-task, parent-with-task and trust-with-task surfaces | absent | not built in stage 5: they would repeat this decision per page of another endpoint, and the plan lists them only as consumers of the same normalised result; a follow-up when a named consumer needs one |
+| selected-model export and release inclusion | absent | not built: no other selector's decision is exported or released (only network kinetics serialises numbers, and statmech returns none); declared models already ship with their statmech record |
+| new `select` operation | absent | stage 5: `POST /api/v1/scientific/statmech/select` (+ `/manifest`), `select_statmech_models` in the client, `tckdb_select_statmech_models` in the MCP, `docs/guides/selecting_statmech_models.md` |
 
 Transport export borrows the lowest-id non-null statmech linearity. That is a separate witness question and this
 programme does not change it.

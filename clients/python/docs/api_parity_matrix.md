@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 121 |
+| typed | 123 |
 | raw_only | 107 |
 | not_applicable | 45 |
-| **total** | **273** |
+| **total** | **275** |
 
 ## Typed coverage
 
@@ -120,6 +120,8 @@ A first-class client method exists for these operations.
 | `POST /api/v1/scientific/species/structure-search` | yes | `search_species_structures` | `iter_species_structures` | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/statmech/search` | yes | `search_statmech` | `iter_statmech` | — | `tests/test_typed_parity_methods.py` |
 | `POST /api/v1/scientific/statmech/search` | yes | `search_statmech` | `iter_statmech` | — | `tests/test_typed_parity_methods.py` |
+| `POST /api/v1/scientific/statmech/select` | yes | `select_statmech_models` | — | — | `tests/test_statmech_selection.py` |
+| `POST /api/v1/scientific/statmech/select/manifest` | yes | `get_statmech_selection_manifest` | — | — | `tests/test_statmech_selection.py` |
 | `GET /api/v1/scientific/thermo/search` | yes | `search_thermo` | `iter_thermo` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |
 | `POST /api/v1/scientific/thermo/search` | yes | `search_thermo` | `iter_thermo` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |
 | `GET /api/v1/scientific/transition-state-entries/{transition_state_entry_ref_or_id}` | yes | `get_transition_state_entry` | — | — | `tests/test_typed_parity_methods.py` |

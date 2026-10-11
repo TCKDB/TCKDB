@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 from dataclasses import dataclass, replace
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -368,7 +369,8 @@ def test_the_service_insists_on_a_read_only_repeatable_read_snapshot_unless_told
 # --- a transition-state owner -----------------------------------------------------------------------------------------------
 
 
-def test_a_ts_owned_declaration_is_qualified_on_a_real_ts_owner(db_session):
+def build_ts_scene(db_session) -> SimpleNamespace:
+    """A transition state entry with one approved TS-owned declared model; ``.body`` is a valid wire request for it."""
     ts = make_ts_world(db_session)
     freq = ts.freq("tf", frequencies=(-1500.0, 100.0), reaction_coordinate_mode_index=1, structural_flag=False)
     opt = ts.opt("topt", -76.0)
@@ -378,7 +380,7 @@ def test_a_ts_owned_declaration_is_qualified_on_a_real_ts_owner(db_session):
     host = Statmech(transition_state_entry_id=ts.entry.id, scientific_origin=ScientificOriginKind.computed, external_symmetry=1, optical_isomers=1)
     db_session.add(host)
     db_session.flush()
-    fsf = scale_factor(db_session, ts, FrequencyScaleKind.fundamental, 0.97)
+    fsf = scale_factor(db_session, ts, FrequencyScaleKind.fundamental, 0.9 + next(_VALUES) / 10000)
     attach_statmech_electronic_level(db_session, statmech=host, level_index=1, energy_cm1=0.0, degeneracy=1)
     declaration = StatmechModelDeclaration(
         statmech_id=host.id,
@@ -405,15 +407,20 @@ def test_a_ts_owned_declaration_is_qualified_on_a_real_ts_owner(db_session):
     db_session.flush()
     ts.settle()
     set_review(db_session, record_type=SubmissionRecordType.statmech, record_id=host.id, status=APPROVED)
-    request = req(
-        make(
-            TS,
-            target__transition_state_entry_ref=ts.entry.public_ref,
-            target__scope__determination_ref=determination.public_ref,
-        )
+    body = make(
+        TS,
+        target__transition_state_entry_ref=ts.entry.public_ref,
+        target__scope__determination_ref=determination.public_ref,
     )
-    result = qualify_target(db_session, request=request, owner_id=ts.entry.id, require_snapshot=False)
+    return SimpleNamespace(world=ts, entry=ts.entry, determination=determination, host=host, declaration=declaration, body=body)
+
+
+def test_a_ts_owned_declaration_is_qualified_on_a_real_ts_owner(db_session):
+    scene = build_ts_scene(db_session)
+    request = req(scene.body)
+    result = qualify_target(db_session, request=request, owner_id=scene.entry.id, require_snapshot=False)
     assert result.subject.kind.value == "transition_state_entry" and result.subject.is_atom is False
     (assessment,) = result.assessments
     assert assessment.applicability.value == "applicable", [r.code for r in assessment.reasons]
     assert result.summary.outcome == "qualified_models"
+

@@ -301,6 +301,7 @@ class RejectionCode(str, Enum):
     STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED = "statmech_model_declaration_version_unsupported"
     STATMECH_ROLE_DUPLICATE = "statmech_role_duplicate"
     STATMECH_SELECTION_BOUND_EXCEEDED = "statmech_selection_bound_exceeded"
+    STATMECH_SELECTION_SCOPE_OWNER_MISMATCH = "statmech_selection_scope_owner_mismatch"
     STATMECH_SELECTION_UNSUPPORTED = "statmech_selection_unsupported"
     STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = "statmech_source_calculation_owner_mismatch"
     STATMECH_SOURCE_ROLE_TYPE_MISMATCH = "statmech_source_role_type_mismatch"
@@ -579,6 +580,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED,
         RejectionCode.STATMECH_ROLE_DUPLICATE,
         RejectionCode.STATMECH_SELECTION_BOUND_EXCEEDED,
+        RejectionCode.STATMECH_SELECTION_SCOPE_OWNER_MISMATCH,
         RejectionCode.STATMECH_SELECTION_UNSUPPORTED,
         RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH,
@@ -909,6 +911,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.STATMECH_ROLE_DUPLICATE: frozenset({422}),
     RejectionCode.STATMECH_SELECTION_BOUND_EXCEEDED: frozenset({422}),
+    RejectionCode.STATMECH_SELECTION_SCOPE_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.STATMECH_SELECTION_UNSUPPORTED: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),

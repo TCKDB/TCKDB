@@ -37,6 +37,7 @@ committed backend OpenAPI golden snapshot at
 | `tckdb_select_species_entry_calculations` | `POST /api/v1/scientific/species-entries/{spe_ref}/calculations/select` | Lowest comparable recorded energy among an entry's calculations |
 | `tckdb_select_species_entry_conformers` | `POST /api/v1/scientific/species-entries/{spe_ref}/conformers/select` | Validated conformer basins: lowest, claim support, protocol preference |
 | `tckdb_select_transition_state_entry_evidence` | `POST /api/v1/scientific/transition-state-entries/{tse_ref}/evidence/select` | Saddle determinations of one transition state entry |
+| `tckdb_select_statmech_models` | `POST /api/v1/scientific/statmech/select` | Which supplied statistical-mechanics models of an entry support a stated use; no computed value |
 | `tckdb_export_selected_network_kinetics` | `POST /api/v1/scientific/networks/{net_ref}/kinetics/export-selected` | Serialise a verified network selection (native or CHEMKIN) |
 | `tckdb_get_geometry` | `GET /api/v1/scientific/geometries/{geom_ref}` | Geometry detail |
 | `tckdb_get_reaction_entry_full` | `GET /api/v1/scientific/reaction-entries/{rxe_ref}/full` | Composite reaction record |
@@ -714,6 +715,31 @@ and any paging, sort or rule field are refused here; the engineering bounds are 
 a coded 422 (`structure_selection_population_too_large`, `..._evidence_too_large`, `..._traversal_too_deep`,
 `..._manifest_too_large`). A deferred quantity (enthalpy, Gibbs energy, barrier, rate) is
 `structure_selection_unsupported`. See `docs/guides/selecting_structures.md`.
+
+### `tckdb_select_statmech_models`
+
+Statmech selection: which supplied statistical-mechanics model of ONE species entry or transition state entry supports a
+stated use, and, only where an audited rule says so, which whole model is preferred. Read-only; browse orders are
+unchanged; no computed value is returned.
+
+```text
+intent: "qualify" | "protocol_preferred"          # REQUIRED
+task: string                                      # REQUIRED: within_basin_thermal, canonical_model, zpe_component, ...
+target: object                                    # REQUIRED: {kind: species_entry|transition_state_entry,
+                                                  #   species_entry_ref ("spe_") | transition_state_entry_ref ("tse_"),
+                                                  #   scope: {...}, isotope_convention, electronic_scope, stereochemical_scope}
+observable?, conditions?, population?             # population.model_refs are "sm_" / "smd_" refs
+coverage_requirement?, comparison_objective?, reference_model_ref? ("smd_"), administrative_policy?, result_mode?,
+min_review_status?, profile?: "exploratory" | "curated"
+```
+
+Output: the server response, unchanged. Quote its `outcome` and `basis` verbatim and read each candidate's `advisory` and the
+response `notices`: `imported_parameters_not_revalidated:<role>` and `source_literature_unidentified:<role>` are disclosed
+there. This server ships no active preference rule, so the answer is the qualified models, a sole eligible model or
+`incomparable_alternatives` (unranked, not equally accurate); `unresolved_comparability`, `policy_conflict` and every
+unresolved outcome mean nothing was selected. Integer ids, `bounds`, `max_candidates`, `manifest_bytes` and any paging,
+sort or rule field are refused here; above the server's bounds it refuses with the coded 422
+`statmech_selection_bound_exceeded`; a ref that belongs to another entry than the target is the coded 422 `statmech_selection_scope_owner_mismatch`, and a hidden ref is the same 404 as an unknown one. See `docs/guides/selecting_statmech_models.md`.
 
 ### `tckdb_get_geometry`
 

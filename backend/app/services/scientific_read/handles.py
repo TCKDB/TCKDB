@@ -242,7 +242,7 @@ def _resolve_review_target(
 
 
 def _enforce_curated_floor(
-    session: Session, model_cls: type, row_id: int, kind_label: str
+    session: Session, model_cls: type, row_id: int, kind_label: str, ref: str | None = None
 ) -> None:
     """Under ``profile=curated``, hide a record below the approval floor.
 
@@ -258,7 +258,9 @@ def _enforce_curated_floor(
     on a parent are gated by that parent — see
     :data:`_PARENT_DERIVED_HANDLE_TYPES`.
 
-    The response is the same 404 ``handle_not_found`` an unknown ref produces.
+    The response is the same 404 ``handle_not_found`` an unknown ref produces,
+    including the ref the caller supplied (``ref``), so the two cannot be told
+    apart by their detail text either.
     That is deliberate and matches the existing posture elsewhere in this
     module: under the curated contract the record is simply not part of the
     addressable surface, and a distinguishable "exists but is not approved"
@@ -292,7 +294,7 @@ def _enforce_curated_floor(
         row_id,
         status.value,
     )
-    raise not_found(kind_label, code="handle_not_found")
+    raise not_found(kind_label, ref=ref, code="handle_not_found")
 
 
 def resolve_path_handle(
@@ -366,7 +368,7 @@ def resolve_path_handle(
         # above already carries more than the helper would, and the ref
         # is the half a 404 may echo.
         raise not_found(kind_label, ref=ref, code="handle_not_found")
-    _enforce_curated_floor(session, model_cls, row_id, kind_label)
+    _enforce_curated_floor(session, model_cls, row_id, kind_label, ref=ref)
     return row_id
 
 
