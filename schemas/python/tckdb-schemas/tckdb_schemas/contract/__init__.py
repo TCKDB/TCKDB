@@ -29,11 +29,14 @@ from typing import Any
 __all__ = [
     "CHANGELOG_FILENAME",
     "CONTRACT_FILENAME",
+    "REFUSAL_CODES_FILENAME",
     "changelog_path",
     "changes_since",
     "json_schema",
     "markdown",
     "path",
+    "refusal_codes_markdown",
+    "refusal_codes_path",
     "schema_names",
     "schema_path",
 ]
@@ -42,6 +45,8 @@ __all__ = [
 CONTRACT_FILENAME = "PRODUCER_CONTRACT.md"
 #: The full package changelog, shipped beside the contract.
 CHANGELOG_FILENAME = "CHANGELOG.md"
+#: The refusal code reference (one entry per code), shipped beside the contract.
+REFUSAL_CODES_FILENAME = "REFUSAL_CODES.md"
 _SCHEMA_DIR = "schemas"
 _SCHEMA_SUFFIX = ".schema.json"
 
@@ -61,6 +66,16 @@ def path() -> Path:
 def markdown() -> str:
     """The contract's markdown text."""
     return path().read_text(encoding="utf-8")
+
+
+def refusal_codes_path() -> Path:
+    """Filesystem path of ``REFUSAL_CODES.md``, the per-code reference the contract's tables link to."""
+    return _root() / REFUSAL_CODES_FILENAME
+
+
+def refusal_codes_markdown() -> str:
+    """The refusal code reference's markdown text."""
+    return refusal_codes_path().read_text(encoding="utf-8")
 
 
 def schema_names() -> list[str]:

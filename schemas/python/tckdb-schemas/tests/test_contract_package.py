@@ -120,6 +120,18 @@ def test_the_contract_prints_only_the_newest_entries_and_the_changelog_keeps_eve
     assert contract.changelog_path().read_text(encoding="utf-8").startswith("# Changelog\n")
 
 
+def test_the_refusal_code_reference_ships_beside_the_contract() -> None:
+    """The contract's code tables link ``REFUSAL_CODES.md#c-...``; the file must be where the links point."""
+    codes = contract.refusal_codes_path()
+    assert codes.is_file()
+    assert codes.name == contract.REFUSAL_CODES_FILENAME == "REFUSAL_CODES.md"
+    assert codes.parent == contract.path().parent
+    text = contract.refusal_codes_markdown()
+    assert text.startswith("# TCKDB refusal code reference\n")
+    assert text.count('<a id="c-') > 100
+    assert "](REFUSAL_CODES.md#c-" in contract.markdown()
+
+
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "tckdb_schemas.contract", *args],
@@ -141,6 +153,10 @@ def test_the_command_prints_changes_since_a_version() -> None:
     out = _run("--since", "0.50.0").stdout
     assert "### 0.51.0" in out
     assert "### 0.50.0" not in out
+
+
+def test_the_command_prints_the_refusal_code_reference_path() -> None:
+    assert _run("--codes").stdout.strip() == str(contract.refusal_codes_path())
 
 
 def test_the_command_lists_the_schemas() -> None:
@@ -188,6 +204,7 @@ def test_the_wheel_ships_the_contract(tmp_path: pathlib.Path) -> None:
     assert "tckdb_schemas/contract/__main__.py" in names
     assert "tckdb_schemas/contract/PRODUCER_CONTRACT.md" in names
     assert "tckdb_schemas/contract/CHANGELOG.md" in names
+    assert "tckdb_schemas/contract/REFUSAL_CODES.md" in names
     shipped_schemas = {name for name in names if name.startswith("tckdb_schemas/contract/schemas/")}
     expected = {f"tckdb_schemas/contract/schemas/{name}.schema.json" for name in contract.schema_names()}
     assert shipped_schemas == expected

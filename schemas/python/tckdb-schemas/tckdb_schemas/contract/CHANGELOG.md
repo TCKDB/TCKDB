@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.112.2 - 2026-10-11
+
+Contract layout only: the refusal code reference now ships as its own file, `contract/REFUSAL_CODES.md`, beside
+`PRODUCER_CONTRACT.md`, so the contract stays under its size ceiling (the reference was 104 KB of 686 KB).
+
+- `PRODUCER_CONTRACT.md` keeps a short "Refusal code reference" pointer section, and every code link in it now reads
+  `REFUSAL_CODES.md#c-<code>`. Each surface still lists its own refusal codes with the same one-line meanings; only the
+  long per-code entries moved. Anchors are unchanged. A scientific check that names a code no producer route was
+  traced to (an advisory flag, not a refusal) used to link an anchor that was never there; it is now named without a
+  link.
+- New `tckdb_schemas.contract.refusal_codes_path()` and `refusal_codes_markdown()`, and
+  `python -m tckdb_schemas.contract --codes` (prints the path), mirroring `changelog_path()`.
+- No model, enum, refusal code or rule changed.
+
 ## 0.112.1 - 2026-10-11
 
 A network state energy stated as `electronic_plus_zpe` can now be held against an sp electronic energy plus a scaled

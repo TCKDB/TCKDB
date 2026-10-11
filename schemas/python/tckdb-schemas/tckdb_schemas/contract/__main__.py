@@ -7,7 +7,7 @@ import os
 import sys
 
 from tckdb_schemas import __version__
-from tckdb_schemas.contract import changes_since, markdown, path, schema_names, schema_path
+from tckdb_schemas.contract import changes_since, markdown, path, refusal_codes_path, schema_names, schema_path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,6 +25,7 @@ def main(argv: list[str] | None = None) -> int:
         metavar="VERSION",
         help="print only the changelog entries newer than VERSION (the tckdb-schemas version you target)",
     )
+    group.add_argument("--codes", action="store_true", help="print the path of REFUSAL_CODES.md, the per-code reference")
     group.add_argument("--schemas", action="store_true", help="list the JSON Schema files, one per upload payload")
     args = parser.parse_args(argv)
 
@@ -36,6 +37,8 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.write(changes)
         else:
             print(f"No changes recorded after {args.since} (installed tckdb-schemas {__version__}).")
+    elif args.codes:
+        print(refusal_codes_path())
     elif args.schemas:
         for name in schema_names():
             print(f"{name}\t{schema_path(name)}")
