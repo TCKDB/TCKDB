@@ -2174,9 +2174,7 @@ class ComputedReactionUploadRequest(SchemaBase):
         # coded one the workflow raises (ADR 0017).
         owner_of_calc: dict[str, str] = {}
         anchor_of_calc: dict[str, str | None] = {}
-        conformer_count_of_owner: dict[str, int] = {}
         for sp in self.species:
-            conformer_count_of_owner[f"species[{sp.key!r}]"] = len(sp.conformers)
             geometry_to_conformer = {c.geometry.key: c.key for c in sp.conformers}
             for conf in sp.conformers:
                 owner_of_calc[conf.calculation.key] = f"species[{sp.key!r}]"
@@ -2276,18 +2274,17 @@ class ComputedReactionUploadRequest(SchemaBase):
             carrier_anchor = anchor_of_calc.get(calc.key)
             source_anchor = anchor_of_calc.get(src_key)
             # A species calculation tied to no conformer cannot be placed on the carrier's
-            # conformer. One side unanchored is refused whatever the species (the workflow
-            # would refuse it later, with the wrong sentence); both unanchored is refused only
-            # where a second conformer exists for them to differ on. A transition state has no
-            # conformers, so it is exempt.
+            # conformer. Exactly one side unanchored is refused (the workflow already refused it,
+            # late and under the wrong name). Both unanchored is an absence, not a contradiction:
+            # the rule cannot be checked, which ADR 0008 makes a warning, and the workflow
+            # (``link_scf_stability_sources``) says so. A transition state has no conformers, so
+            # it is exempt from both.
             unanchored = [
                 key
                 for key, anchor in ((calc.key, carrier_anchor), (src_key, source_anchor))
                 if anchor is None
             ]
-            if owner != "transition_state" and unanchored and (
-                len(unanchored) == 1 or conformer_count_of_owner.get(owner, 0) > 1
-            ):
+            if owner != "transition_state" and len(unanchored) == 1:
                 raise scf_source_unanchored_error(
                     field=field_path,
                     key=src_key,
