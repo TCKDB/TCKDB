@@ -103,6 +103,7 @@ from app.services.network_declaration_resolution import (
     resolve_determinations,
 )
 from app.services.network_energy_sources import (
+    COMPOSED_CONVENTIONS,
     ParticipantSource,
     StateEnergyToCompare,
     assert_barrier_source_owner,
@@ -113,6 +114,7 @@ from app.services.network_energy_sources import (
     assert_state_participant_source_owner,
     assert_state_zpe_source_type,
     collect_state_energy_source_warnings,
+    collect_zpe_source_absent_warnings,
     compare_state_energy_sums,
     refuse_source_species_outside_state,
 )
@@ -1260,8 +1262,7 @@ def persist_network_pdep_upload(
                             stoichiometry=row.stoichiometry,
                             calculation=cited.get(row.species_entry_id),
                             zpe_calculation=cited_zpe.get(row.species_entry_id),
-                            looks_up_geometry=energy_in.correction_convention
-                            == EnergyCorrectionConvention.electronic_plus_zpe,
+                            looks_up_geometry=energy_in.correction_convention in COMPOSED_CONVENTIONS,
                         )
                         for row in participant_rows
                     ),
@@ -1286,6 +1287,18 @@ def persist_network_pdep_upload(
             energy_row.source_sum_comparison = comparison.status
             energy_row.source_sum_not_compared_reason = comparison.reason
         warning_sink.extend(collect_state_energy_source_warnings(sum_inputs, sum_comparisons))
+        # Which subjects the upload gives a ``freq``, for the "composed energy with no ZPE source" warning (#669).
+        species_entries_with_freq: set[int] = set()
+        ts_entries_with_freq: set[int] = set()
+        for payload_calculation_id in calculation_key_to_id.values():
+            payload_calculation = _calculation_row(session, payload_calculation_id)
+            if payload_calculation.type != CalculationType.freq:
+                continue
+            if payload_calculation.species_entry_id is not None:
+                species_entries_with_freq.add(payload_calculation.species_entry_id)
+            if payload_calculation.transition_state_entry_id is not None:
+                ts_entries_with_freq.add(payload_calculation.transition_state_entry_id)
+        barrier_zpe_inputs: list[tuple[int, str, EnergyCorrectionConvention, Calculation | None]] = []
         session.flush()
         for state_id, species_entry_id, calculation_id, zpe_calculation_id in participant_source_rows:
             session.add(
@@ -1306,6 +1319,32 @@ def persist_network_pdep_upload(
                     f"solve.channel_barriers[{barrier_index}]."
                     f"transition_state_key"
                 ),
+            )
+            barrier_source_id = _resolve_energy_source(
+                session,
+                barrier_in.source_calculation_key,
+                calculation_key_to_id,
+                field=(
+                    f"solve.channel_barriers[{barrier_index}]."
+                    f"source_calculation_key"
+                ),
+                correction_convention=barrier_in.correction_convention,
+                assert_owner=_barrier_owner_check(
+                    barrier_ts_entry.id,
+                    transition_state_key=barrier_in.transition_state_key,
+                    field=(
+                        f"solve.channel_barriers[{barrier_index}]."
+                        f"source_calculation_key"
+                    ),
+                ),
+            )
+            barrier_zpe_inputs.append(
+                (
+                    barrier_index,
+                    barrier_in.transition_state_key,
+                    barrier_in.correction_convention,
+                    _calculation_row(session, barrier_source_id) if barrier_source_id is not None else None,
+                )
             )
             session.add(NetworkSolveChannelBarrier(
                 solve_id=solve.id,
@@ -1328,25 +1367,17 @@ def persist_network_pdep_upload(
                 energy_zero_convention=barrier_in.energy_zero_convention,
                 correction_convention=barrier_in.correction_convention,
                 convention_note=barrier_in.convention_note,
-                source_calculation_id=_resolve_energy_source(
-                    session,
-                    barrier_in.source_calculation_key,
-                    calculation_key_to_id,
-                    field=(
-                        f"solve.channel_barriers[{barrier_index}]."
-                        f"source_calculation_key"
-                    ),
-                    correction_convention=barrier_in.correction_convention,
-                    assert_owner=_barrier_owner_check(
-                        barrier_ts_entry.id,
-                        transition_state_key=barrier_in.transition_state_key,
-                        field=(
-                            f"solve.channel_barriers[{barrier_index}]."
-                            f"source_calculation_key"
-                        ),
-                    ),
-                ),
+                source_calculation_id=barrier_source_id,
             ))
+
+        warning_sink.extend(
+            collect_zpe_source_absent_warnings(
+                sum_inputs,
+                barrier_zpe_inputs,
+                species_entries_with_freq=species_entries_with_freq,
+                transition_state_entries_with_freq=ts_entries_with_freq,
+            )
+        )
 
         # The subjects an energy-role link may belong to: the species taking
         # part in this network's states and the transition states it declares.

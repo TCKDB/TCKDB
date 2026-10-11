@@ -23,7 +23,9 @@ from tckdb_schemas.bundle_source_rules import (
     W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
     find_scf_source_cycle,
     owner_mismatch_error,
+    scf_source_cycle_error,
     scf_source_geometry_error,
+    scf_source_unanchored_error,
 )
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
@@ -2172,7 +2174,9 @@ class ComputedReactionUploadRequest(SchemaBase):
         # coded one the workflow raises (ADR 0017).
         owner_of_calc: dict[str, str] = {}
         anchor_of_calc: dict[str, str | None] = {}
+        conformer_count_of_owner: dict[str, int] = {}
         for sp in self.species:
+            conformer_count_of_owner[f"species[{sp.key!r}]"] = len(sp.conformers)
             geometry_to_conformer = {c.geometry.key: c.key for c in sp.conformers}
             for conf in sp.conformers:
                 owner_of_calc[conf.calculation.key] = f"species[{sp.key!r}]"
@@ -2271,6 +2275,25 @@ class ComputedReactionUploadRequest(SchemaBase):
                 )
             carrier_anchor = anchor_of_calc.get(calc.key)
             source_anchor = anchor_of_calc.get(src_key)
+            # A species calculation tied to no conformer cannot be placed on the carrier's
+            # conformer. One side unanchored is refused whatever the species (the workflow
+            # would refuse it later, with the wrong sentence); both unanchored is refused only
+            # where a second conformer exists for them to differ on. A transition state has no
+            # conformers, so it is exempt.
+            unanchored = [
+                key
+                for key, anchor in ((calc.key, carrier_anchor), (src_key, source_anchor))
+                if anchor is None
+            ]
+            if owner != "transition_state" and unanchored and (
+                len(unanchored) == 1 or conformer_count_of_owner.get(owner, 0) > 1
+            ):
+                raise scf_source_unanchored_error(
+                    field=field_path,
+                    key=src_key,
+                    carrier_key=calc.key,
+                    unanchored_key=unanchored[0],
+                )
             if (
                 carrier_anchor is not None
                 and source_anchor is not None
@@ -2282,12 +2305,7 @@ class ComputedReactionUploadRequest(SchemaBase):
             scf_links[calc.key] = src_key
         scf_cycle = find_scf_source_cycle(scf_links)
         if scf_cycle is not None:
-            raise ValueError(
-                "scf_stability.source_calculation_key forms a cycle: "
-                + " -> ".join([*scf_cycle, scf_cycle[0]])
-                + ". A stability verdict cannot be measured by a job whose "
-                "own verdict it measures."
-            )
+            raise scf_source_cycle_error(scf_cycle)
 
         # Applied-correction source_calculation_key references must
         # resolve into the bundle's calc namespace. The workflow layer

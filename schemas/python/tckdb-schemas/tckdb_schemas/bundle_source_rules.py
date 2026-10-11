@@ -28,13 +28,17 @@ from tckdb_schemas.coded_error import CodedValidationError
 
 __all__ = [
     "W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH",
+    "W_SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED",
+    "W_SCF_STABILITY_SOURCE_CYCLE",
     "W_SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH",
     "W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH",
     "find_scf_source_cycle",
     "owner_mismatch_context",
     "owner_mismatch_detail",
     "owner_mismatch_error",
+    "scf_source_cycle_error",
     "scf_source_geometry_error",
+    "scf_source_unanchored_error",
 ]
 
 #: An SCF stability verdict names, as the job that measured it, a calculation
@@ -50,6 +54,17 @@ W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH = (
 #: conformer says nothing about this one. The sibling of
 #: ``thermo_sp_geometry_mismatch`` and ``statmech_sp_geometry_mismatch``.
 W_SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH = "scf_stability_source_geometry_mismatch"
+
+#: Stability verdicts that cite one another in a ring: ``a`` says ``b`` measured
+#: it and ``b`` says ``a`` did. No job measured either.
+W_SCF_STABILITY_SOURCE_CYCLE = "scf_stability_source_cycle"
+
+#: A stability verdict and the job named as having measured it cannot be shown
+#: to be on one conformer because at least one of them is not tied to any
+#: conformer (no ``conformer_key``, and no ``geometry_key`` naming a conformer's
+#: geometry). Distinct from ``scf_stability_source_geometry_mismatch``, which
+#: says both are anchored and the anchors differ.
+W_SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED = "scf_stability_source_conformer_unanchored"
 
 #: A transport source link cites a calculation owned by another subject.
 W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH = (
@@ -129,6 +144,48 @@ def scf_source_geometry_error(
         f"one geometry, so the job that measured a verdict must be on the "
         f"same conformer as the calculation that carries it.",
         context={"field": field, "key": key, "carrier_key": carrier_key},
+        message_prefix=False,
+    )
+
+
+def scf_source_cycle_error(cycle: list[str]) -> CodedValidationError:
+    """The refusal for stability verdicts that cite one another in a ring.
+
+    ``context`` is ``{"cycle": [...]}``: the depositor's own calculation keys in
+    the order they cite one another, never a row id.
+    """
+    ring = " -> ".join([*cycle, cycle[0]])
+    return CodedValidationError(
+        W_SCF_STABILITY_SOURCE_CYCLE,
+        f"scf_stability.source_calculation_key forms a cycle: {ring}. A "
+        f"stability verdict cannot be measured by a job whose own verdict it "
+        f"measures.",
+        context={"cycle": list(cycle)},
+        message_prefix=False,
+    )
+
+
+def scf_source_unanchored_error(
+    *, field: str, key: str, carrier_key: str, unanchored_key: str
+) -> CodedValidationError:
+    """The refusal for a stability source that cannot be placed on the carrier's conformer.
+
+    ``context`` is ``{"field", "key", "carrier_key", "unanchored_key"}``, all of
+    them the depositor's own local keys.
+    """
+    return CodedValidationError(
+        W_SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED,
+        f"{field}='{key}': '{unanchored_key}' is not tied to any conformer (it "
+        f"has no conformer_key, and no geometry_key naming a conformer's "
+        f"geometry), so whether the job that measured the verdict is on the "
+        f"same conformer as '{carrier_key}' cannot be checked. Give both "
+        f"calculations a conformer_key.",
+        context={
+            "field": field,
+            "key": key,
+            "carrier_key": carrier_key,
+            "unanchored_key": unanchored_key,
+        },
         message_prefix=False,
     )
 

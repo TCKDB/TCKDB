@@ -55,6 +55,7 @@ from app.schemas.reaction_family import find_canonical_reaction_family
 __all__ = ("ArtifactIn",)
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import CalculationType as PayloadCalculationType
+from tckdb_schemas.fragments.calculation import SCFStabilityBase
 from tckdb_schemas.fragments.kinetics_evidence import (
     ENERGY_CORRECTION_CONVENTION_DESCRIPTION,
     ENERGY_ZERO_CONVENTION_DESCRIPTION,
@@ -132,6 +133,20 @@ _ZPE_INCLUDING_CONVENTIONS = frozenset(
 # ---------------------------------------------------------------------------
 
 
+class NetworkCalculationIn(CalculationIn):
+    """A calculation on the pressure-dependent network route.
+
+    The shared calculation payload minus the one field this route cannot honour:
+    ``scf_stability`` here is :class:`SCFStabilityBase`, with no
+    ``source_calculation_key``. The route persists the block but has no pass that
+    links the measuring job, so advertising the key (the contract is rendered from
+    this model) would be a promise it breaks; a payload that sends it is refused
+    as an unknown field.
+    """
+
+    scf_stability: SCFStabilityBase | None = None  # type: ignore[assignment]
+
+
 class ConformerIn(SchemaBase):
     """A conformer for a species, with its geometry and optimization calculation.
 
@@ -164,7 +179,7 @@ class ConformerIn(SchemaBase):
 
     key: str = Field(min_length=1)
     geometry: GeometryIn
-    calculation: CalculationIn
+    calculation: NetworkCalculationIn
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
     label: str | None = None
     note: str | None = None
@@ -223,7 +238,7 @@ class NetworkSpeciesIn(SchemaBase):
     species_entry: SpeciesEntryIdentityPayload
     label: str | None = None
     conformers: list[ConformerIn] = Field(default_factory=list)
-    calculations: list[CalculationIn] = Field(default_factory=list)
+    calculations: list[NetworkCalculationIn] = Field(default_factory=list)
     transport: TransportUploadPayload | None = None
     statmech: StatmechInBundle | None = None
 
@@ -371,8 +386,8 @@ class TransitionStateIn(SchemaBase):
     charge: int
     multiplicity: int = Field(ge=1)
     geometry: GeometryIn
-    calculation: CalculationIn
-    calculations: list[CalculationIn] = Field(default_factory=list)
+    calculation: NetworkCalculationIn
+    calculations: list[NetworkCalculationIn] = Field(default_factory=list)
     statmech: StatmechInBundle | None = None
     validation_evidence: list["TransitionStateValidationEvidenceIn"] = Field(
         default_factory=list,
@@ -1724,7 +1739,7 @@ class NetworkPDepUploadRequest(SchemaBase):
             )
 
         # Calculation geometry_key references must point to defined geometries
-        all_calcs: list[tuple[str, CalculationIn]] = []
+        all_calcs: list[tuple[str, NetworkCalculationIn]] = []
         for sp in self.species:
             for calc in sp.calculations:
                 all_calcs.append((f"species '{sp.key}'", calc))
@@ -1747,20 +1762,10 @@ class NetworkPDepUploadRequest(SchemaBase):
                 )
 
         # ``scf_stability.source_calculation_key`` is a bundle feature of the
-        # computed-species and computed-reaction routes. This route persists
-        # the block but has no pass that links the measuring job, so the key
-        # would be accepted and dropped. Refuse it instead of answering 201.
-        for context, calc in all_calcs:
-            if (
-                calc.scf_stability is not None
-                and calc.scf_stability.source_calculation_key is not None
-            ):
-                raise ValueError(
-                    f"Calculation '{calc.key}' in {context}: "
-                    f"scf_stability.source_calculation_key is not supported "
-                    f"on the pressure-dependent network route; send it on "
-                    f"computed-species or computed-reaction, or omit it."
-                )
+        # computed-species and computed-reaction routes. This route has no pass
+        # that links the measuring job, so :class:`NetworkCalculationIn` does not
+        # declare the field at all: it is neither advertised in the contract nor
+        # accepted (``extra_forbidden``), instead of being accepted and dropped.
 
         # Species statmech references must resolve against that species's OWN
         # calculations only. A species statmech can only be sourced from that

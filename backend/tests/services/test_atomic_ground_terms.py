@@ -82,7 +82,20 @@ def test_electronic_partition_function_and_free_energy_error_for_o_and_cl():
 
 @pytest.mark.parametrize(
     "element,kj",
-    [("O", -0.93), ("C", -0.35), ("F", -1.61), ("S", -2.34), ("Cl", -3.52), ("Br", -14.7), ("I", -30.3)],
+    [
+        ("O", -0.93),
+        ("C", -0.35),
+        ("F", -1.61),
+        ("S", -2.34),
+        ("Cl", -3.52),
+        ("Br", -14.7),
+        ("I", -30.3),
+        # Weighted by hand from NIST ASD: B -(4/6)*15.287 cm-1, Al -(4/6)*112.061 cm-1,
+        # Si -(3*77.115 + 5*223.157)/9 cm-1, at 0.011962656 kJ/mol per cm-1.
+        ("B", -0.12),
+        ("Al", -0.89),
+        ("Si", -1.79),
+    ],
 )
 def test_spin_orbit_shift_matches_the_reference_values(element, kj):
     assert ATOMIC_GROUND_TERMS[element].spin_orbit_shift_kj_mol == pytest.approx(kj, abs=0.06)

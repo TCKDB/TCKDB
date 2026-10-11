@@ -280,6 +280,33 @@ def test_a_scan_in_a_later_source_link_is_refused(client) -> None:
     )
 
 
+@pytest.mark.parametrize("calc_type", _ALL_TYPES)
+@pytest.mark.parametrize("role", ["well_freq", "barrier_freq"])
+def test_frequency_role_takes_a_freq_and_nothing_else(client, db_session, role: str, calc_type: str) -> None:
+    """The master equation reads modes; a composite stores only a ZPE (#669).
+
+    Mutation: drop ``_FREQUENCY_ROLES`` from ``assert_network_source_role_type``; every
+    non-freq type is then accepted.
+    """
+    payload = _payload()
+    keys = _KEY_BY_TYPE if role == "well_freq" else _TS_KEY_BY_TYPE
+    payload["solve"]["source_calculations"] = [{"calculation_key": keys[calc_type], "role": role}]
+    resp = client.post(_PDEP_URL, json=payload)
+    if calc_type == "freq":
+        assert resp.status_code == 201, resp.text
+        row = db_session.scalars(select(NetworkSolveSourceCalculation)).one()
+        assert row.role.value == role
+        assert db_session.get(Calculation, row.calculation_id).type.value == "freq"
+    else:
+        body = _refused(
+            resp,
+            field="solve.source_calculations[0].calculation_key",
+            calc_type=calc_type,
+        )
+        assert body["context"]["stated_value"] == role, body
+        assert body["context"]["accepted_calculation_types"] == ["freq"], body
+
+
 def test_roles_that_are_not_energy_roles_are_not_constrained(client) -> None:
     """The floor is for the two energy roles only; a fit or run role names another job."""
     payload = _payload()

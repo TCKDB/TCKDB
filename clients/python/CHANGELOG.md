@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.144.0 - 2026-10-11
+
+`RejectionCode` gains `scf_stability_source_cycle`, `scf_stability_source_conformer_unanchored` and
+`ts_energy_ordering_source_type_mismatch` (`tckdb-schemas` 0.119.0). No method changed.
+
 ## 0.142.0 - 2026-10-11
 
 Breaking: artifact uploads take the calculation's `calc_` ref only (#578). `upload_artifact(calculation_ref, ...)` raises

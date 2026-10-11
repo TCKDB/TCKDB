@@ -30,7 +30,9 @@ from collections.abc import Iterable, Mapping
 from sqlalchemy.orm import Session
 from tckdb_schemas.bundle_source_rules import (
     find_scf_source_cycle,
+    scf_source_cycle_error,
     scf_source_geometry_error,
+    scf_source_unanchored_error,
 )
 from tckdb_schemas.fragments.calculation import SCFStabilityContent
 from tckdb_schemas.upload_warning import UploadWarning
@@ -71,11 +73,13 @@ def link_scf_stability_sources(
     :returns: How many stability rows were linked.
     :raises CodedValueError: a key names no declared calculation; the named
         job belongs to another species entry or transition state
-        (``scf_stability_source_calculation_owner_mismatch``); or it is on
-        another conformer (``scf_stability_source_geometry_mismatch``). The
-        request schemas refuse these first; this is the layer that knows which
-        entry and conformer each key resolved to.
-    :raises ValueError: the keys form a cycle.
+        (``scf_stability_source_calculation_owner_mismatch``); it is on
+        another conformer (``scf_stability_source_geometry_mismatch``); one of
+        the two is not tied to any conformer
+        (``scf_stability_source_conformer_unanchored``); or the keys form a
+        cycle (``scf_stability_source_cycle``). The request schemas refuse
+        these first; this is the layer that knows which entry and conformer
+        each key resolved to.
     """
     pairs = [
         (owner_key, stability)
@@ -86,9 +90,9 @@ def link_scf_stability_sources(
         {key: stab.source_calculation_key for key, stab in pairs if stab.source_calculation_key}
     )
     if cycle is not None:
-        raise ValueError(
-            "scf_stability.source_calculation_key forms a cycle: "
-            + " -> ".join([*cycle, cycle[0]])
+        wire = scf_source_cycle_error(cycle)
+        raise CodedValueError(
+            wire.code, wire.detail, context=wire.context, message_prefix=False
         )
 
     linked = 0
@@ -109,9 +113,20 @@ def link_scf_stability_sources(
             transition_state_entry_id=owner.transition_state_entry_id,
         )
         if source.conformer_observation_id != owner.conformer_observation_id:
-            wire = scf_source_geometry_error(
-                field=field, key=source_key, carrier_key=owner_key
-            )
+            if source.conformer_observation_id is None or owner.conformer_observation_id is None:
+                # Not "a different conformer": one of them is not tied to any.
+                wire = scf_source_unanchored_error(
+                    field=field,
+                    key=source_key,
+                    carrier_key=owner_key,
+                    unanchored_key=(
+                        source_key if source.conformer_observation_id is None else owner_key
+                    ),
+                )
+            else:
+                wire = scf_source_geometry_error(
+                    field=field, key=source_key, carrier_key=owner_key
+                )
             raise CodedValueError(
                 wire.code, wire.detail, context=wire.context, message_prefix=False
             )

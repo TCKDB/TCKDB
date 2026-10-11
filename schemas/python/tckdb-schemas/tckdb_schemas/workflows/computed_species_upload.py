@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tckdb_schemas.bundle_source_rules import (
     find_scf_source_cycle,
+    scf_source_cycle_error,
     scf_source_geometry_error,
 )
 from tckdb_schemas.coded_error import CodedValidationError
@@ -1238,12 +1239,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                 links[calc.key] = key
         cycle = find_scf_source_cycle(links)
         if cycle is not None:
-            raise ValueError(
-                "scf_stability.source_calculation_key forms a cycle: "
-                + " -> ".join([*cycle, cycle[0]])
-                + ". A stability verdict cannot be measured by a job whose "
-                "own verdict it measures."
-            )
+            raise scf_source_cycle_error(cycle)
         return self
 
     @model_validator(mode="after")

@@ -270,6 +270,8 @@ class RejectionCode(str, Enum):
     RIGHTS_SOURCE_TERMS_REQUIRED = "rights_source_terms_required"
     SCAN_RESULT_NOT_FOUND = "scan_result_not_found"
     SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH = "scf_stability_source_calculation_owner_mismatch"
+    SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED = "scf_stability_source_conformer_unanchored"
+    SCF_STABILITY_SOURCE_CYCLE = "scf_stability_source_cycle"
     SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH = "scf_stability_source_geometry_mismatch"
     SELECTION_ALREADY_STANDS = "selection_already_stands"
     SELECTION_ALREADY_SUPERSEDED = "selection_already_superseded"
@@ -353,6 +355,7 @@ class RejectionCode(str, Enum):
     TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS = "transition_state_reaction_coordinate_ambiguous"
     TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED = "transition_state_reaction_coordinate_not_designated"
     TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH = "transport_source_calculation_owner_mismatch"
+    TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH = "ts_energy_ordering_source_type_mismatch"
     TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH = "ts_energy_ordering_stated_energy_mismatch"
     UNIQUE_CONFLICT = "unique_conflict"
     UNKNOWN_CALCULATION_ARTIFACT_REF = "unknown_calculation_artifact_ref"
@@ -548,6 +551,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.RIGHTS_LICENSE_BLANK,
         RejectionCode.RIGHTS_SOURCE_TERMS_REQUIRED,
         RejectionCode.SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
+        RejectionCode.SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED,
+        RejectionCode.SCF_STABILITY_SOURCE_CYCLE,
         RejectionCode.SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH,
         RejectionCode.SELECTION_NO_LONGER_APPROVED,
         RejectionCode.SMILES_TOO_LONG,
@@ -623,6 +628,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED,
         RejectionCode.TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+        RejectionCode.TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH,
         RejectionCode.TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH,
         RejectionCode.UNKNOWN_ELEMENT_SYMBOL,
         RejectionCode.UNKNOWN_INCLUDE_TOKEN,
@@ -872,6 +878,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.RIGHTS_SOURCE_TERMS_REQUIRED: frozenset({422}),
     RejectionCode.SCAN_RESULT_NOT_FOUND: frozenset({404}),
     RejectionCode.SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED: frozenset({422}),
+    RejectionCode.SCF_STABILITY_SOURCE_CYCLE: frozenset({422}),
     RejectionCode.SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH: frozenset({422}),
     RejectionCode.SELECTION_ALREADY_STANDS: frozenset({409}),
     RejectionCode.SELECTION_ALREADY_SUPERSEDED: frozenset({409}),
@@ -955,6 +963,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS: frozenset({422}),
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED: frozenset({422}),
     RejectionCode.TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH: frozenset({422}),
     RejectionCode.UNIQUE_CONFLICT: frozenset({409}),
     RejectionCode.UNKNOWN_CALCULATION_ARTIFACT_REF: frozenset({404}),
