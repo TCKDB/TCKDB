@@ -3425,6 +3425,7 @@ the gap.
 | `lease_expires_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
 | `heartbeat_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
 | `result` | JSONB | yes | — | — | — | not documented |
+| `request_warnings` | JSONB | yes | — | — | — | not documented |
 | `error` | TEXT | yes | — | — | — | not documented |
 | `attempts` | INTEGER | no | 0 | — | — | not documented |
 | `max_attempts` | INTEGER | no | 3 | — | — | not documented |
