@@ -139,14 +139,23 @@ def _owner_record_type(kind: OwnerKind) -> SubmissionRecordType:
     )
 
 
-def assert_subject_visible(session: Session, kind: OwnerKind, owner_id: int, *, profile: frozenset[RecordReviewStatus]) -> None:
-    """A target the read profile hides behaves exactly like one that does not exist."""
-    label = kind.value
+def entry_visible(session: Session, kind: OwnerKind, owner_id: int, *, profile: frozenset[RecordReviewStatus]) -> bool:
+    """Whether the read profile shows this entry (an entry that does not exist is not shown)."""
     if session.get(_owner_model(kind), owner_id) is None:
-        raise not_found(label, row_id=owner_id)
-    status = fetch_review_badges(session, record_type=_owner_record_type(kind), record_ids=[owner_id])[owner_id].status
-    if status not in profile:
-        raise not_found(label, row_id=owner_id)
+        return False
+    return fetch_review_badges(session, record_type=_owner_record_type(kind), record_ids=[owner_id])[owner_id].status in profile
+
+
+def assert_subject_visible(
+    session: Session, kind: OwnerKind, owner_id: int, *, profile: frozenset[RecordReviewStatus], ref: str | None = None
+) -> None:
+    """A target the read profile hides behaves exactly like one that does not exist: the same ``handle_not_found``.
+
+    ``ref`` is the public ref the caller supplied; it is echoed back, as an unknown ref's 404 echoes it, so the two
+    bodies are identical.
+    """
+    if not entry_visible(session, kind, owner_id, profile=profile):
+        raise not_found(kind.value, ref=ref, code="handle_not_found", row_id=None if ref else owner_id)
 
 
 def _owner_column(kind: OwnerKind):
@@ -241,7 +250,7 @@ def scan_population(session: Session, *, request: StatmechRequest, owner_id: int
     """
     kind = request.target.owner_kind
     effective, profile = _statuses(request)
-    assert_subject_visible(session, kind, owner_id, profile=profile)
+    assert_subject_visible(session, kind, owner_id, profile=profile, ref=request.target.owner_ref)
     owner_status = fetch_review_badges(session, record_type=_owner_record_type(kind), record_ids=[owner_id])[owner_id].status
     if request.population.kind is PopulationKind.release:
         raise unsupported("release_population", "a pinned release population is not evaluated by this release")

@@ -739,7 +739,7 @@ there. This server ships no active preference rule, so the answer is the qualifi
 `incomparable_alternatives` (unranked, not equally accurate); `unresolved_comparability`, `policy_conflict` and every
 unresolved outcome mean nothing was selected. Integer ids, `bounds`, `max_candidates`, `manifest_bytes` and any paging,
 sort or rule field are refused here; above the server's bounds it refuses with the coded 422
-`statmech_selection_bound_exceeded`. See `docs/guides/selecting_statmech_models.md`.
+`statmech_selection_bound_exceeded`; a ref that belongs to another entry than the target is the coded 422 `statmech_selection_scope_owner_mismatch`, and a hidden ref is the same 404 as an unknown one. See `docs/guides/selecting_statmech_models.md`.
 
 ### `tckdb_get_geometry`
 

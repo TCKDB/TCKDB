@@ -69,6 +69,9 @@ needs a `comparison_objective`). The tasks are `rotational_component`, `vibratio
   `source_literature_unidentified:<role>` (a cited source has no DOI or ISBN, so it is kept but meets no role).
 - **`fronts`, `edges`, `conflicts`, `undecided`** are the comparison, over public refs. With no active rule there are no
   edges and one front: the alternatives are unranked, **not equally accurate**.
+- **`request`** echoes the **normalised** request the decision was made under, with the read profile and the server's own
+  `bounds`. Its `target` is `kind` plus `owner_ref` with every scope key present (absent ones `null`); it is not the shape
+  you posted and **cannot be re-posted as a request body**. Build the next request from your own, not from the echo.
 - **`coverage`** says what the answer is a statement about: the authorized population, with `physical_search` always
   `not_established`.
 
@@ -89,8 +92,17 @@ outcome is returned and the qualified subset stays visible.
 
 A population over a bound (500 candidates, 25,000 nested rows, a dependency traversal past depth 8, a 10 MiB manifest) is a
 422 `statmech_selection_bound_exceeded`; nothing is chosen from a prefix. A population this release does not evaluate (a
-pinned release) is `statmech_selection_unsupported`. An unknown, hidden or foreign target, basin, determination or
-candidate is a 404 (`unknown_statmech_candidate_ref` for a candidate); the answer is the same whichever it is.
+pinned release) is `statmech_selection_unsupported`.
+
+A ref that names nothing and a ref the read profile hides are **the same 404**, with the same status, code and body (the
+ref you supplied is echoed back): `handle_not_found` for the target, a basin, a determination, an ensemble declaration or a
+reference model, and `unknown_statmech_candidate_ref` for a candidate. That includes a ref whose owning entry or statmech
+record is hidden, so the answer never reveals a record you could not otherwise see.
+
+A ref you *may* see but that belongs to another entry than the target is a contradictory question, not an empty answer: it
+is a 422 `statmech_selection_scope_owner_mismatch` whose `context.field` names the ref (`conformer_group_ref`,
+`determination_ref`, `ensemble_declaration_ref` or `reference_model_ref`). The 404 equivalence is applied first, so this
+never discloses a hidden record, and the other owner is never named.
 
 ## The manifest
 

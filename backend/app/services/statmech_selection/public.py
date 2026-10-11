@@ -26,8 +26,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models.common import RecordReviewStatus
+from app.api.error_contract import CodedValueError
+from app.api.errors import NotFoundError, not_found
+from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.species import ConformerGroup
+from app.db.models.statmech import Statmech
 from app.db.models.statmech_declaration import StatmechModelDeclaration
 from app.db.models.structure_determination import StructureDetermination
 from app.schemas.reads.scientific_common import REVIEW_RANK
@@ -43,6 +46,9 @@ from app.schemas.reads.scientific_statmech_selection import (
     StatmechSelectionReview,
     StatmechSelectionSelection,
 )
+from app.services.scientific_read.common import fetch_review_badges
+from app.services.statmech_selection.loader import _statuses as statuses_for
+from app.services.statmech_selection.loader import assert_subject_visible, entry_visible
 from app.services.statmech_selection.manifest import MANIFEST_FORMAT_VERSION, canonical
 from app.services.statmech_selection.models import StatmechRequest
 from app.services.statmech_selection.selection import StatmechSelection, select_statmech
@@ -62,6 +68,9 @@ MANIFEST_NOTE = (
 )
 
 
+CODE_SCOPE_OWNER_MISMATCH = "statmech_selection_scope_owner_mismatch"
+
+
 def resolve_target(session: Session, request: StatmechRequest) -> int:
     """The id of the species or transition-state entry the request names (404 when absent or hidden)."""
     if request.target.owner_kind is OwnerKind.species_entry:
@@ -69,20 +78,96 @@ def resolve_target(session: Session, request: StatmechRequest) -> int:
     return resolve_transition_state_entry_ref(session, request.target.owner_ref)
 
 
-def check_request_refs(session: Session, body: StatmechSelectionRequest) -> None:
-    """Every public ref the request names, other than candidates and a release, must exist and be visible (404 otherwise)."""
+def _unknown(kind_label: str, ref: str) -> NotFoundError:
+    """The one 404 an unknown ref and a ref the read profile hides both answer with (the ref is the caller's own)."""
+    return not_found(kind_label, ref=ref, code="handle_not_found")
+
+
+def _mismatch(field: str) -> CodedValueError:
+    """A visible ref that belongs to another entry: a contradictory question. Names the field, never the other owner."""
+    return CodedValueError(
+        CODE_SCOPE_OWNER_MISMATCH,
+        f"{field} names a record that belongs to another entry than the target; nothing was assessed.",
+        context={"field": field},
+        message_prefix=False,
+    )
+
+
+def _owner_of(row: Any) -> tuple[OwnerKind, int] | None:
+    if getattr(row, "species_entry_id", None) is not None:
+        return OwnerKind.species_entry, row.species_entry_id
+    if getattr(row, "transition_state_entry_id", None) is not None:
+        return OwnerKind.transition_state_entry, row.transition_state_entry_id
+    return None
+
+
+def _check_owned(
+    session: Session,
+    *,
+    field: str,
+    kind_label: str,
+    ref: str,
+    owner: tuple[OwnerKind, int] | None,
+    target: tuple[OwnerKind, int],
+    statmech_id: int | None,
+    profile: frozenset[RecordReviewStatus],
+) -> None:
+    """Hidden is unknown first; only a ref the caller may see and that is not the target's own is a 422.
+
+    A record is hidden when the read profile hides its owning entry, or (for a declaration) its statmech record.
+    """
+    if owner is None or not entry_visible(session, owner[0], owner[1], profile=profile):
+        raise _unknown(kind_label, ref)
+    if statmech_id is not None:
+        status = fetch_review_badges(session, record_type=SubmissionRecordType.statmech, record_ids=[statmech_id])[statmech_id].status
+        if status not in profile:
+            raise _unknown(kind_label, ref)
+    if owner != target:
+        raise _mismatch(field)
+
+
+def check_request_refs(
+    session: Session, body: StatmechSelectionRequest, *, owner_kind: OwnerKind, owner_id: int, profile: frozenset[RecordReviewStatus]
+) -> None:
+    """Every public ref the request names, other than candidates and a release, must exist, be visible and be the target's.
+
+    Candidates are checked by the service against the target's own authorized population (one answer for unknown,
+    another target's, hidden and a declared record's own ref). For every other ref the order is fixed: a ref that
+    names nothing or that the read profile hides is the same 404 ``handle_not_found``; a ref the caller may see but that
+    belongs to another entry is the coded 422 ``statmech_selection_scope_owner_mismatch``; and so the 422 can never
+    reveal a record the caller could not otherwise see.
+    """
+    target = (owner_kind, owner_id)
     scope = body.target.scope
     basin = getattr(scope, "conformer_group_ref", None)
     if basin is not None:
-        _ref_only(session, ConformerGroup, basin, kind_label="conformer_group")
+        group_id = _ref_only(session, ConformerGroup, basin, kind_label="conformer_group")
+        group = session.get(ConformerGroup, group_id)
+        _check_owned(
+            session, field="conformer_group_ref", kind_label="conformer_group", ref=basin,
+            owner=_owner_of(group), target=target, statmech_id=None, profile=profile,
+        )
     determination = getattr(scope, "determination_ref", None)
     if determination is not None:
-        _ref_only(session, StructureDetermination, determination, kind_label="structure_determination")
-    ensemble = getattr(scope, "ensemble_declaration_ref", None)
-    if ensemble is not None:
-        _ref_only(session, StatmechModelDeclaration, ensemble, kind_label="statmech_model_declaration")
-    if body.reference_model_ref is not None:
-        _ref_only(session, StatmechModelDeclaration, body.reference_model_ref, kind_label="statmech_model_declaration")
+        det_id = _ref_only(session, StructureDetermination, determination, kind_label="structure_determination")
+        saddle = session.get(StructureDetermination, det_id)
+        _check_owned(
+            session, field="determination_ref", kind_label="structure_determination", ref=determination,
+            owner=_owner_of(saddle), target=target, statmech_id=None, profile=profile,
+        )
+    for field, ref in (
+        ("ensemble_declaration_ref", getattr(scope, "ensemble_declaration_ref", None)),
+        ("reference_model_ref", body.reference_model_ref),
+    ):
+        if ref is None:
+            continue
+        declaration_id = _ref_only(session, StatmechModelDeclaration, ref, kind_label="statmech_model_declaration")
+        declaration = session.get(StatmechModelDeclaration, declaration_id)
+        host = session.get(Statmech, declaration.statmech_id) if declaration is not None else None
+        _check_owned(
+            session, field=field, kind_label="statmech_model_declaration", ref=ref,
+            owner=_owner_of(host), target=target, statmech_id=host.id if host is not None else None, profile=profile,
+        )
 
 
 def run_selection(session: Session, *, body: StatmechSelectionRequest) -> StatmechSelection:
@@ -94,11 +179,16 @@ def run_selection(session: Session, *, body: StatmechSelectionRequest) -> Statme
     cannot become a snapshot); nothing in the application sets it.
     """
     request = body.service_request()
-    check_request_refs(session, body)
+    owner_id = resolve_target(session, request)
+    _, profile = statuses_for(request)
+    # The target first: a target the profile hides is the same 404 as an unknown one, and every other ref is judged
+    # against a target the caller may see.
+    assert_subject_visible(session, request.target.owner_kind, owner_id, profile=profile, ref=request.target.owner_ref)
+    check_request_refs(session, body, owner_kind=request.target.owner_kind, owner_id=owner_id, profile=profile)
     return select_statmech(
         session,
         request=request,
-        owner_id=resolve_target(session, request),
+        owner_id=owner_id,
         require_snapshot=not session.info.get(SNAPSHOT_OPT_OUT, False),
     )
 
@@ -172,6 +262,7 @@ def build_response(selection: StatmechSelection) -> StatmechSelectionResponse:
 
 
 __all__ = [
+    "CODE_SCOPE_OWNER_MISMATCH",
     "MANIFEST_PATH",
     "SNAPSHOT_OPT_OUT",
     "build_response",

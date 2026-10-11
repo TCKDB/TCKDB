@@ -380,7 +380,7 @@ def build_ts_scene(db_session) -> SimpleNamespace:
     host = Statmech(transition_state_entry_id=ts.entry.id, scientific_origin=ScientificOriginKind.computed, external_symmetry=1, optical_isomers=1)
     db_session.add(host)
     db_session.flush()
-    fsf = scale_factor(db_session, ts, FrequencyScaleKind.fundamental, 0.97)
+    fsf = scale_factor(db_session, ts, FrequencyScaleKind.fundamental, 0.9 + next(_VALUES) / 10000)
     attach_statmech_electronic_level(db_session, statmech=host, level_index=1, energy_cm1=0.0, degeneracy=1)
     declaration = StatmechModelDeclaration(
         statmech_id=host.id,

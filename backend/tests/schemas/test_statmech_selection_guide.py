@@ -29,6 +29,18 @@ def test_every_outcome_is_named_in_the_guide():
     assert missing == []
 
 
+def test_every_refusal_code_the_surface_returns_is_named_in_the_guide():
+    codes = (
+        "statmech_selection_bound_exceeded",
+        "statmech_selection_unsupported",
+        "statmech_selection_scope_owner_mismatch",
+        "unknown_statmech_candidate_ref",
+        "handle_not_found",
+    )
+    assert [c for c in codes if c not in TEXT] == []
+    assert "cannot be re-posted" in TEXT  # the echoed target is the normalised form
+
+
 def test_every_surfaced_advisory_is_explained_in_the_guide():
     missing = [prefix for prefix in SURFACED_ADVISORIES if prefix not in TEXT]
     assert missing == []

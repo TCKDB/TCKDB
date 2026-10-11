@@ -225,7 +225,7 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 ### 0.120.0 - 2026-10-11
 
 The producer contract lists the two read routes of statmech selection (`POST .../scientific/statmech/select` and
-`.../select/manifest`). No wire model changed.
+`.../select/manifest`) and the refusal code `statmech_selection_scope_owner_mismatch` (422). No wire model changed.
 
 ### 0.119.0 - 2026-10-11
 

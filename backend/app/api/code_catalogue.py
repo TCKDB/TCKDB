@@ -2483,6 +2483,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/statmech_selection/vocabulary.py",
             shape=Shape.relationship,
             note="context names the bound, the observed size, the limit and the bounds version; nothing was assessed."),
+    ApiCode("statmech_selection_scope_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/statmech_selection/public.py",
+            shape=Shape.relationship,
+            note=(
+                "context.field names the scope ref (conformer_group_ref, determination_ref, ensemble_declaration_ref or "
+                "reference_model_ref) that the caller may see but that belongs to another entry than the target. A ref the "
+                "read profile hides, or that names nothing, is the 404 handle_not_found instead; the owner is never named."
+            )),
     ApiCode("statmech_selection_unsupported", 422, Surface.coded_exception,
             "backend/app/services/statmech_selection/bounds.py",
             shape=Shape.relationship,

@@ -32,6 +32,11 @@ dataset must never require a code release.
   exceeded is the coded 422 `statmech_selection_bound_exceeded`, never a prefix; an unknown, hidden or foreign ref is one 404.
   Public refs only (`smd_`/`sm_` for candidates), no database id in a response or an error. The response surfaces each
   candidate's `advisory` and the decision `notices`. No computed value is returned, and this release ships no active rule.
+- Disclosure: a ref the read profile hides (a target, basin, determination, ensemble declaration, reference model or candidate)
+  answers exactly as a ref that names nothing (`handle_not_found` / `unknown_statmech_candidate_ref`, same body up to the ref the
+  caller supplied); a ref the caller may see but that belongs to another entry is the coded 422
+  `statmech_selection_scope_owner_mismatch` (`context.field` names the ref, the other owner is never named). The shared
+  curated-floor 404 now echoes the supplied ref like an unknown ref's, on every route that uses it.
 - `TCKDBClient.select_statmech_models` / `get_statmech_selection_manifest` and the MCP tool `tckdb_select_statmech_models`
   mirror the other selectors (refuse an id, a wrong-kind ref, a bound, a page, a sort or a rule before any request).
 - Selected export and releases: the other selectors' decisions are not part of a release or an export (only network

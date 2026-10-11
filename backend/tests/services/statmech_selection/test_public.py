@@ -64,3 +64,22 @@ def test_a_session_that_is_not_a_snapshot_is_refused_unless_a_test_harness_says_
         run_selection(db_session, body=body)
     db_session.info[SNAPSHOT_OPT_OUT] = True
     assert run_selection(db_session, body=body).outcome.value == "qualified_models"
+
+
+def test_an_owner_is_compared_by_kind_as_well_as_id_because_two_tables_can_share_a_number(monkeypatch):
+    """A species entry and a transition-state entry may both have id 5; they are not the same owner."""
+    from app.api.error_contract import CodedValueError
+    from app.services.statmech_selection import public
+    from app.services.statmech_selection.vocabulary import OwnerKind
+
+    monkeypatch.setattr(public, "entry_visible", lambda *a, **k: True)
+    with pytest.raises(CodedValueError) as caught:
+        public._check_owned(
+            None, field="conformer_group_ref", kind_label="conformer_group", ref="cg_x",
+            owner=(OwnerKind.species_entry, 5), target=(OwnerKind.transition_state_entry, 5), statmech_id=None, profile=frozenset(),
+        )
+    assert caught.value.code == public.CODE_SCOPE_OWNER_MISMATCH and caught.value.context == {"field": "conformer_group_ref"}
+    public._check_owned(  # the same kind and id is the target's own
+        None, field="conformer_group_ref", kind_label="conformer_group", ref="cg_x",
+        owner=(OwnerKind.species_entry, 5), target=(OwnerKind.species_entry, 5), statmech_id=None, profile=frozenset(),
+    )

@@ -1730,6 +1730,7 @@ Refusals a client can receive that no producer route's code path was traced to: 
 - `species_handle_conflict` (422)
 - `state_conflict` (409)
 - `statmech_selection_bound_exceeded` (422)
+- `statmech_selection_scope_owner_mismatch` (422)
 - `statmech_selection_unsupported` (422)
 - `structure_selection_evidence_too_large` (422)
 - `structure_selection_manifest_too_large` (422)
