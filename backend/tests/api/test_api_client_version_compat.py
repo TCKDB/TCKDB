@@ -55,6 +55,7 @@ def test_write_rejects_old_tckdb_client_version(client, too_old_version):
 
 
 ARTIFACT_URL = "/api/v1/calculations/calc_" + "a" * 26 + "/artifacts"
+ARTIFACT_BODY = {"artifacts": [{"kind": "ancillary", "filename": "n.txt", "content_base64": "aGk="}]}
 
 
 def test_the_default_minimum_is_the_first_client_that_sends_calc_refs():
@@ -72,15 +73,18 @@ def test_a_client_that_still_sends_integers_is_stopped_at_the_artifact_route(cli
     old = client.post(
         ARTIFACT_URL,
         headers={NAME_HEADER: CLIENT_NAME, VERSION_HEADER: "0.96.0"},
-        json={"artifacts": []},
+        json=ARTIFACT_BODY,
     )
     assert old.status_code == 426
     current = client.post(
         ARTIFACT_URL,
         headers={NAME_HEADER: CLIENT_NAME, VERSION_HEADER: "0.97.0"},
-        json={"artifacts": []},
+        json=ARTIFACT_BODY,
     )
-    assert current.status_code != 426
+    # Not stopped by the version gate: the request reaches the route, which
+    # finds no such calculation.
+    assert current.status_code == 404, current.text
+    assert current.json()["code"] == "handle_not_found"
 
 
 def test_write_rejects_missing_version_when_client_identifies(client):

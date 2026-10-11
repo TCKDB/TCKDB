@@ -337,11 +337,13 @@ one. An out-of-repo producer that still sends the integer gets the 422 above;
 it conforms to TCKDB, not the reverse. The guard's `DEFERRED_PARAM_LEAKS`
 entries for both routes are gone.
 
-Idempotency keys are scoped by the concrete URL path. A request committed
-before this change through the integer path whose response was lost cannot be
-retried: the integer is refused, and the same key through the ref path is a
-new request, so finish or abandon in-flight artifact uploads rather than
-replaying them.
+Idempotency keys are scoped by the concrete URL path, and the replay check runs
+before the ref lookup. A request committed before this change through the
+integer path whose response was lost can therefore still be retried with the
+same key on the same integer path: it replays (201, `Idempotency-Replayed:
+true`) until the receipt expires. A new key on the integer path is refused (422
+`invalid_handle`), a `tckdb-client` below 0.97.0 gets 426, and the same key
+through the ref path is a different path scope, so a new request.
 
 ### Query-param refs
 

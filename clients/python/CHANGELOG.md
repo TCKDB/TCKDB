@@ -10,8 +10,9 @@ ref. The client never called `POST /submissions/{submission_ref}/rights-attestat
 only. Requires `tckdb-schemas` 0.116.0.
 
 Retry caveat, narrowed: idempotency keys are scoped by URL path, so a lost-response retry sent through a different path
-form is not a replay. With one path form left there is nothing to cross, but an upload committed by 0.96 through the
-integer path before this change cannot be retried at all (the integer is refused).
+form is not a replay. An upload committed by 0.96 through the integer path before this change can still be retried with
+the same key on the same integer path until its receipt expires (it replays, `Idempotency-Replayed: true`); a new key on
+the integer path is refused (422 `invalid_handle`) and a client below 0.97.0 gets 426.
 
 ## 0.141.0 - 2026-10-11
 

@@ -386,6 +386,43 @@ def test_artifact_upload_refuses_a_row_id(client, db_session, spelling) -> None:
     assert client.post(f"/api/v1/calculations/{ref}/artifacts", json=ARTIFACT).status_code == 201
 
 
+def test_a_same_key_retry_on_the_old_integer_path_still_replays(
+    client, db_session, monkeypatch
+) -> None:
+    """An upload committed through the integer path before #578 can still be replayed.
+
+    ``idem.maybe_replay()`` runs before the ref lookup, so a same-key retry on
+    the same integer path returns the stored response (201,
+    ``Idempotency-Replayed: true``) until the receipt expires. A *new* key on
+    that path is refused (422 ``invalid_handle``). The old server is simulated
+    by letting the ref resolver accept a digit string for the first request.
+    """
+    from app.api.routes import calculations as routes
+
+    calc_id, ref = _ref_for(client)
+    integer_url = f"/api/v1/calculations/{calc_id}/artifacts"
+    real = routes._calculation_for_ref
+
+    def old_server(session, handle):
+        return session.get(Calculation, int(handle)) if handle.isdigit() else real(session, handle)
+
+    monkeypatch.setattr(routes, "_calculation_for_ref", old_server)
+    first = client.post(integer_url, json=ARTIFACT, headers={"Idempotency-Key": "old-int-path-key-0001"})
+    assert first.status_code == 201, first.text
+    monkeypatch.setattr(routes, "_calculation_for_ref", real)
+
+    replay = client.post(integer_url, json=ARTIFACT, headers={"Idempotency-Key": "old-int-path-key-0001"})
+    assert replay.status_code == 201, replay.text
+    assert replay.headers["Idempotency-Replayed"] == "true"
+    assert replay.json() == first.json()
+
+    fresh = client.post(integer_url, json=ARTIFACT, headers={"Idempotency-Key": "old-int-path-key-0002"})
+    assert fresh.status_code == 422, fresh.text
+    assert fresh.json()["code"] == "invalid_handle"
+    # The ref path with the old key is a different path scope: a new request.
+    assert client.get(f"/api/v1/calculations/{calc_id}/artifacts").json().__len__() == 1
+
+
 def test_artifact_upload_rejects_unknown_and_mistyped_refs(client) -> None:
     unknown = client.post(f"/api/v1/calculations/calc_{'a' * 26}/artifacts", json=ARTIFACT)
     assert unknown.status_code == 404
