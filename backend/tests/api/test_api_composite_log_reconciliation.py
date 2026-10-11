@@ -24,6 +24,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db.models.calculation import CalculationCompositeResult, CalculationSPResult
+from tests.api.artifact_urls import artifacts_url
 from tests.api.test_api_bundle_monatomic_sp_primary import _h_species
 from tests.api.test_api_composite_reaction_primary import _composite_atom_payload
 
@@ -83,7 +84,7 @@ def _deposit(client, calc: dict) -> int:
 
 
 def _attach(client, calc_id: int):
-    resp = client.post(f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [_output_log()]})
+    resp = client.post(artifacts_url(client, calc_id), json={"artifacts": [_output_log()]})
     assert resp.status_code == 201, resp.text
     return resp
 
@@ -129,7 +130,7 @@ def test_a_composite_log_attached_as_input_is_not_reconciled(client, db_session)
     wrong_e0 = _E0 + 0.01
     calc_id = _deposit(client, _composite(e0_hartree=wrong_e0, electronic_energy_hartree=None))
     as_input = {**_output_log("cbs-qb3.gjf"), "kind": "input"}
-    resp = client.post(f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [as_input]})
+    resp = client.post(artifacts_url(client, calc_id), json={"artifacts": [as_input]})
     assert resp.status_code == 201, resp.text
     assert not (_COMPOSITE_WARNING_CODES | {"composite_energy_log_available"}) & set(_codes(resp))
     # Control: the identical deposit warns when the kind is output_log.

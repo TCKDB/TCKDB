@@ -155,7 +155,7 @@ targets, so it applies uniformly to every upload path (sync and async).
 Artifacts are evidence, **not** reviewable scientific results: they receive a
 record link but **never** a `record_review` row.
 
-**Artifacts deposited later** (`POST /calculations/{id}/artifacts`) do not open a
+**Artifacts deposited later** (`POST /calculations/{calculation_ref}/artifacts`) do not open a
 submission of their own. They are linked, by `link_artifacts_to_deposit_submission`,
 to the submission that already owns the calculation, with the same
 `record_type = artifact`, `role = "artifact"` link. The submission is the review
@@ -304,7 +304,7 @@ accepts deposits from anyone but its operator.
   correction is an insert that supersedes, and the standing attestation is the
   head of the chain.
 - **Curator path.** `POST` / `GET
-  /api/v1/submissions/{id}/rights-attestations`. A `depositor_agreement` is
+  /api/v1/submissions/{submission_ref}/rights-attestations`. A `depositor_agreement` is
   accepted only from the submission's creator; the other kinds need the
   curator or admin role. Historical coverage is a curator action with an
   actor: for records deposited before rights capture, a `migration`

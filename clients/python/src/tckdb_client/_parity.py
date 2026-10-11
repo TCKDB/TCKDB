@@ -195,7 +195,7 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "tests/test_client_upload_dispatch.py",
     ),
     (
-        "POST", "/api/v1/calculations/{calculation_id}/artifacts",
+        "POST", "/api/v1/calculations/{calculation_ref}/artifacts",
         "upload_artifacts", None, None, "tests/test_upload_artifacts_batch.py",
     ),
     (
@@ -935,7 +935,7 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
         ("POST", "/api/v1/conformer-groups/{conformer_group_id}/selections"),
         ("GET", "/api/v1/submissions/for-review"),
         ("POST", "/api/v1/submissions/{submission_id}/approve"),
-        ("POST", "/api/v1/submissions/{submission_id}/rights-attestations"),
+        ("POST", "/api/v1/submissions/{submission_ref}/rights-attestations"),
         ("POST", "/api/v1/submissions/{submission_id}/reject"),
         ("POST", "/api/v1/submissions/{submission_ref}/supersede"),
         ("POST", "/api/v1/releases"),

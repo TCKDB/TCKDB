@@ -8,7 +8,7 @@ The artifact subsystem is intentionally two-phase:
    artifact to its server-assigned ``calculation.id`` and produces a
    list of :class:`PlannedArtifactUpload` records.
 3. ``client.upload_artifacts(plan)`` posts each file to
-   ``POST /api/v1/calculations/{calculation_id}/artifacts``.
+   ``POST /api/v1/calculations/{calculation_ref}/artifacts``.
 
 Artifacts are **never** embedded in the scientific upload payload —
 the bundle endpoints don't accept inline artifact bytes today, and
@@ -135,9 +135,10 @@ class PlannedArtifactUpload:
     builder minted (kept for diagnostics and logging).
 
     ``calculation_ref`` is the calculation's public ``calc_`` ref from the
-    same response, when the server returned one. :meth:`TCKDBClient.upload_artifacts`
-    addresses the calculation by it in preference to the integer; it is
-    ``None`` against a server that predates the ref.
+    same response. :meth:`TCKDBClient.upload_artifacts` addresses the
+    calculation by it and refuses an item without one: the server takes no row
+    id for an artifact upload. It is ``None`` only for a plan built against a
+    server that predates the ref, or an offline preview.
     """
 
     calculation_key: str

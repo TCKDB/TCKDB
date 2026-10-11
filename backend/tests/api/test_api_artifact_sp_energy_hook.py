@@ -22,6 +22,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import CalculationSPResult
+from tests.api.artifact_urls import artifacts_url
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -163,7 +164,7 @@ class TestSpEnergyHook:
         assert _stored_energy(db_session, calc_id) is None
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_molpro_output_log()]},
         )
         assert resp.status_code == 201, resp.text
@@ -177,7 +178,7 @@ class TestSpEnergyHook:
         calc_id = _create_calc(client, sp_energy=wrong)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_molpro_output_log()]},
         )
         assert resp.status_code == 201, resp.text
@@ -191,7 +192,7 @@ class TestSpEnergyHook:
         calc_id = _create_calc(client, sp_energy=CH4_ENERGY)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_molpro_output_log()]},
         )
         assert resp.status_code == 201, resp.text
@@ -206,7 +207,7 @@ class TestSpEnergyHook:
         calc_id = _create_calc(client, sp_energy=None)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_molpro_log_as_input()]},
         )
         assert resp.status_code == 201, resp.text
@@ -219,7 +220,7 @@ class TestSpEnergyHook:
         calc_id = _create_calc(client, sp_energy=None, calc_type="opt")
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_molpro_output_log()]},
         )
         assert resp.status_code == 201, resp.text
@@ -237,7 +238,7 @@ class TestSpEnergyHook:
         assert _stored_energy(db_session, calc_id) is None
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_molpro_output_log()]},
         )
         assert resp.status_code == 201, resp.text
@@ -252,7 +253,7 @@ class TestSpEnergyHook:
         calc_id = _create_calc(client, sp_energy=None)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_garbage_molpro_log()]},
         )
         assert resp.status_code == 201, resp.text
@@ -265,7 +266,7 @@ class TestSpEnergyHook:
         calc_id = _create_calc(client, sp_energy=None)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={
                 "artifacts": [
                     _molpro_output_log("a.out"),
@@ -283,14 +284,14 @@ class TestSpEnergyHook:
     ):
         calc_id = _create_calc(client, sp_energy=None)
         r1 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_molpro_output_log("first.out")]},
         )
         assert r1.status_code == 201
         assert "sp_energy_filled_from_log" in _warning_codes(r1)
 
         r2 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_molpro_output_log("second.out")]},
         )
         assert r2.status_code == 201, r2.text

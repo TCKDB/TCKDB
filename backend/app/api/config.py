@@ -224,8 +224,10 @@ class Settings(BaseSettings):
     # tckdb-client`` and a lower ``X-TCKDB-Client-Version`` are rejected
     # with ``426 Upgrade Required``. Raw HTTP callers that omit the
     # client-name header are not blocked. Bump this when a coordinated
-    # client/server change makes older clients incompatible.
-    min_supported_tckdb_client_version: str = "0.11.0"
+    # client/server change makes older clients incompatible. 0.97.0 is the
+    # first client that addresses a calculation by its ``calc_`` ref; the
+    # artifact-upload and rights-attestation routes take refs only (#578).
+    min_supported_tckdb_client_version: str = "0.97.0"
     enforce_tckdb_client_version_on_writes: bool = True
 
     # Optional AI Review Assistant / LLM precheck. Default is fully off:

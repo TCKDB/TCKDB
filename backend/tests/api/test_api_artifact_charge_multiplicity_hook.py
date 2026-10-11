@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.api.artifact_urls import artifacts_url
+
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
 # A real Gaussian UB3LYP log whose header states ``Charge = 0 Multiplicity = 3``.
@@ -134,7 +136,7 @@ def _create_calc(client, *, smiles: str, charge: int, multiplicity: int) -> int:
 
 def _post_artifact(client, calc_id: int, artifact: dict):
     return client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(client, calc_id),
         json={"artifacts": [artifact]},
     )
 

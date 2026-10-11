@@ -45,6 +45,7 @@ from app.db.models.common import (
 from app.db.models.idempotency import IdempotencyRecord
 from app.db.models.record_review import RecordReview, RecordReviewEvent
 from app.db.models.submission import Submission, SubmissionRecordLink
+from tests.api.artifact_urls import artifacts_url
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 GAUSSIAN_OPT_LOG = FIXTURES / "gaussian" / "opt_g09.log"
@@ -241,7 +242,7 @@ class TestHappyPath:
         calc_id = _create_calc_via_conformer_upload(client)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_output_log_artifact(declare_sha=True, declare_bytes=True)]},
         )
         assert resp.status_code == 201, resp.text
@@ -297,7 +298,7 @@ class TestHappyPath:
         }
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [opt_log, freq_log]},
         )
         assert resp.status_code == 201, resp.text
@@ -322,7 +323,7 @@ class TestBatchAtomicity:
         another_good = _output_log_artifact()
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [good, bad, another_good]},
         )
         assert resp.status_code == 422, resp.text
@@ -343,7 +344,7 @@ class TestBatchAtomicity:
         }
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [good, ancillary, bad_log]},
         )
         assert resp.status_code == 422
@@ -365,14 +366,14 @@ class TestBatchAtomicity:
         bad["sha256"] = "0" * 64
 
         r1 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [good, bad]},
         )
         assert r1.status_code == 422
         assert _artifact_count_for(db_session, calc_id) == 0
 
         r2 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [good]},
         )
         assert r2.status_code == 201
@@ -385,7 +386,7 @@ class TestBatchAtomicity:
             "content_base64": _b64(freq_content),
         }
         r3 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [freq_log]},
         )
         assert r3.status_code == 201
@@ -427,7 +428,7 @@ class TestStorageFailure:
             "content_base64": _b64(freq_content),
         }
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [opt_log, freq_log]},
         )
         assert resp.status_code == 503, resp.text
@@ -502,7 +503,7 @@ class TestStorageFailure:
         # IntegrityErrors to a 409 with code=integrity_conflict. The
         # exact status mapping is the existing handler's choice.
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [opt_log, freq_log]},
         )
         assert resp.status_code == 409, resp.text
@@ -543,7 +544,7 @@ class TestAuthorization:
     ) -> None:
         calc_id = _create_calc_via_conformer_upload(client)
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert resp.status_code == 201
@@ -561,7 +562,7 @@ class TestAuthorization:
         # An unrelated user cannot attach artifacts.
         other_client, _ = make_user_client(username="other-art-user")
         resp = other_client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(other_client, calc_id),
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert resp.status_code == 403, resp.text
@@ -578,7 +579,7 @@ class TestAuthorization:
             username="art-curator", role=AppUserRole.curator
         )
         resp = curator_client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(curator_client, calc_id),
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert resp.status_code == 201
@@ -591,7 +592,7 @@ class TestAuthorization:
             username="art-admin", role=AppUserRole.admin
         )
         resp = admin_client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(admin_client, calc_id),
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert resp.status_code == 201
@@ -625,7 +626,7 @@ class TestAuthorization:
         db_session.flush()
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert resp.status_code == 409
@@ -662,7 +663,7 @@ class TestAuthorization:
         db_session.flush()
 
         resp = other_client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(other_client, calc_id),
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert resp.status_code == 201, resp.text
@@ -702,7 +703,7 @@ class TestAuthorization:
         db_session.flush()
 
         resp = other_client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(other_client, calc_id),
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert resp.status_code == 403
@@ -742,7 +743,7 @@ class TestAuthorization:
         db_session.flush()
 
         resp = other_client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(other_client, calc_id),
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert resp.status_code == 201
@@ -767,7 +768,7 @@ class TestAuthorization:
         # No SubmissionRecordLink for this calc.
 
         resp = other_client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(other_client, calc_id),
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert resp.status_code == 403
@@ -922,7 +923,7 @@ class TestValidation:
             "content_base64": _b64(b"hello"),
         }
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [bad]}
+            artifacts_url(client, calc_id), json={"artifacts": [bad]}
         )
         assert resp.status_code == 422
 
@@ -933,7 +934,7 @@ class TestValidation:
         bad = _ancillary_artifact()
         bad["bytes"] = 0
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [bad]}
+            artifacts_url(client, calc_id), json={"artifacts": [bad]}
         )
         assert resp.status_code == 422
 
@@ -944,7 +945,7 @@ class TestValidation:
         bad = _ancillary_artifact()
         bad["sha256"] = "A" * 64
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [bad]}
+            artifacts_url(client, calc_id), json={"artifacts": [bad]}
         )
         assert resp.status_code == 422
 
@@ -955,7 +956,7 @@ class TestValidation:
         bad = _ancillary_artifact()
         del bad["filename"]
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [bad]}
+            artifacts_url(client, calc_id), json={"artifacts": [bad]}
         )
         assert resp.status_code == 422
 
@@ -966,7 +967,7 @@ class TestValidation:
         bad = _output_log_artifact()
         bad["sha256"] = "0" * 64
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [bad]}
+            artifacts_url(client, calc_id), json={"artifacts": [bad]}
         )
         assert resp.status_code == 422
 
@@ -977,7 +978,7 @@ class TestValidation:
         bad = _output_log_artifact()
         bad["bytes"] = 1
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [bad]}
+            artifacts_url(client, calc_id), json={"artifacts": [bad]}
         )
         assert resp.status_code == 422
 
@@ -991,7 +992,7 @@ class TestValidation:
             "content_base64": _b64(b"this is not a real ESS log file\n" * 10),
         }
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [bad]}
+            artifacts_url(client, calc_id), json={"artifacts": [bad]}
         )
         assert resp.status_code == 422
 
@@ -999,7 +1000,7 @@ class TestValidation:
         self, client, db_session, stub_store_artifact
     ) -> None:
         resp = client.post(
-            "/api/v1/calculations/99999999/artifacts",
+            f"/api/v1/calculations/calc_{'a' * 26}/artifacts",
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert resp.status_code == 404
@@ -1009,7 +1010,7 @@ class TestValidation:
     ) -> None:
         calc_id = _create_calc_via_conformer_upload(client)
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": []}
+            artifacts_url(client, calc_id), json={"artifacts": []}
         )
         assert resp.status_code == 422
 
@@ -1033,7 +1034,7 @@ class TestIdempotency:
         payload = {"artifacts": [_ancillary_artifact()]}
         key = "art-idem-replay-aaaaaaaa"
         r1 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json=payload,
             headers={KEY_HEADER: key},
         )
@@ -1042,7 +1043,7 @@ class TestIdempotency:
         before_idem = _idempotency_count(db_session)
 
         r2 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json=payload,
             headers={KEY_HEADER: key},
         )
@@ -1074,7 +1075,7 @@ class TestIdempotency:
         key = "art-idem-xcalc-bbbbbbbb"
 
         r_a = client.post(
-            f"/api/v1/calculations/{calc_a}/artifacts",
+            artifacts_url(client, calc_a),
             json=payload,
             headers={KEY_HEADER: key},
         )
@@ -1083,7 +1084,7 @@ class TestIdempotency:
         assert body_a["calculation_id"] == calc_a
 
         r_b = client.post(
-            f"/api/v1/calculations/{calc_b}/artifacts",
+            artifacts_url(client, calc_b),
             json=payload,
             headers={KEY_HEADER: key},
         )
@@ -1102,12 +1103,12 @@ class TestIdempotency:
         payload = {"artifacts": [_ancillary_artifact(b"identical-bytes")]}
 
         r1 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json=payload,
             headers={KEY_HEADER: "art-content-key1-aaaaaaa"},
         )
         r2 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json=payload,
             headers={KEY_HEADER: "art-content-key2-bbbbbbb"},
         )
@@ -1165,7 +1166,7 @@ class TestConformerUploadResultShape:
         # The IDs returned can be used to upload an artifact.
         primary_id = body["primary_calculation"]["calculation_id"]
         art_resp = client.post(
-            f"/api/v1/calculations/{primary_id}/artifacts",
+            artifacts_url(client, primary_id),
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert art_resp.status_code == 201
@@ -1225,7 +1226,7 @@ def test_artifacts_are_linked_to_the_calculations_submission(
     submissions_before = _submission_count(db_session)
 
     resp = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(client, calc_id),
         json={
             "artifacts": [
                 _ancillary_artifact(b"first"),
@@ -1257,7 +1258,7 @@ def test_a_second_batch_adds_links_and_keeps_the_first(
     calc_id = _create_calc_via_conformer_upload(client)
     for content in (b"batch-one", b"batch-two"):
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_ancillary_artifact(content)]},
         )
         assert resp.status_code == 201, resp.text
@@ -1277,7 +1278,7 @@ def test_curator_attachment_lands_on_the_originating_submission(
     before = _submission_count(db_session)
 
     resp = curator_client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(curator_client, calc_id),
         json={"artifacts": [_ancillary_artifact(b"curator-added")]},
     )
     assert resp.status_code == 201, resp.text
@@ -1306,7 +1307,7 @@ def test_callers_own_live_submission_is_preferred(
     db_session.flush()
 
     resp = other_client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(other_client, calc_id),
         json={"artifacts": [_ancillary_artifact(b"second-owner")]},
     )
     assert resp.status_code == 201, resp.text
@@ -1330,7 +1331,7 @@ def test_a_calculation_with_no_submission_gets_no_invented_one(
     before = _submission_count(db_session)
 
     resp = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(client, calc_id),
         json={"artifacts": [_ancillary_artifact(b"orphan-calc")]},
     )
     assert resp.status_code == 201, resp.text
@@ -1365,7 +1366,7 @@ def test_a_creator_whose_submission_failed_does_not_land_in_a_third_partys(
     _link_calc(db_session, c_sub, calc_id)
 
     resp = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(client, calc_id),
         json={"artifacts": [_ancillary_artifact(b"creator-failed-sub")]},
     )
     assert resp.status_code == 201, resp.text
@@ -1406,7 +1407,7 @@ def test_dead_submissions_are_not_linked_to(
     _link_calc(db_session, live, calc_id)
 
     resp = curator_client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(curator_client, calc_id),
         json={"artifacts": [_ancillary_artifact(b"dead-skipped")]},
     )
     assert resp.status_code == 201, resp.text
@@ -1426,7 +1427,7 @@ def test_the_latest_of_the_callers_own_submissions_wins(
     assert second.id > first.id
 
     resp = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts",
+        artifacts_url(client, calc_id),
         json={"artifacts": [_ancillary_artifact(b"latest-wins")]},
     )
     assert resp.status_code == 201, resp.text

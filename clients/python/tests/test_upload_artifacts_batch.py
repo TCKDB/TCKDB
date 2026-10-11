@@ -56,6 +56,7 @@ def _plan_item(*, key: str, calc_id: int, path: Path, kind: str = "output_log"):
         label=None,
         sha256=None,
         bytes=None,
+        calculation_ref=f"calc_c{calc_id}",
     )
 
 
@@ -65,7 +66,7 @@ def _batch_handler(captured: list):
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content.decode())
         url = str(request.url)
-        calc_id = int(url.rsplit("/", 2)[-2])
+        calc_id = int(url.rsplit("/", 2)[-2].removeprefix("calc_c"))
         captured.append({
             "url": url,
             "calc_id": calc_id,

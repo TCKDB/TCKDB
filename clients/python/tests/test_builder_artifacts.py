@@ -444,7 +444,7 @@ def _capture_artifact_request_handler(captured: dict):
         return httpx.Response(
             201,
             json={
-                "calculation_id": int(str(request.url).rsplit("/", 2)[-2]),
+                "calculation_id": int(str(request.url).rsplit("/", 2)[-2].removeprefix("calc_c")),
                 "artifacts": [],
                 "warnings": [],
             },
@@ -459,10 +459,10 @@ def test_client_upload_artifact_hits_calculation_artifacts_endpoint(
     captured: dict = {}
     client, _recorder = make_client(_capture_artifact_request_handler(captured))
     client.upload_artifact(
-        42, real_artifact_file, kind="input",
+        "calc_c42", real_artifact_file, kind="input",
     )
     assert captured["method"] == "POST"
-    assert captured["url"].endswith("/calculations/42/artifacts")
+    assert captured["url"].endswith("/calculations/calc_c42/artifacts")
     body = captured["body"]
     assert "artifacts" in body and len(body["artifacts"]) == 1
     item = body["artifacts"][0]
@@ -481,7 +481,7 @@ def test_client_upload_artifact_passes_optional_hashes_and_sizes(
     captured: dict = {}
     client, _recorder = make_client(_capture_artifact_request_handler(captured))
     client.upload_artifact(
-        7, real_artifact_file, kind="input",
+        "calc_c7", real_artifact_file, kind="input",
         sha256="a" * 64, bytes=23,
     )
     item = captured["body"]["artifacts"][0]
@@ -493,14 +493,14 @@ def test_client_upload_artifact_rejects_missing_file(tmp_path):
     client, _recorder = make_client(_capture_artifact_request_handler({}))
     with pytest.raises(ValueError, match="does not exist"):
         client.upload_artifact(
-            1, tmp_path / "no-such-file.log", kind="output_log",
+            "calc_c1", tmp_path / "no-such-file.log", kind="output_log",
         )
 
 
 def test_client_upload_artifact_rejects_directory(tmp_path):
     client, _recorder = make_client(_capture_artifact_request_handler({}))
     with pytest.raises(ValueError, match="not a file"):
-        client.upload_artifact(1, tmp_path, kind="output_log")
+        client.upload_artifact("calc_c1", tmp_path, kind="output_log")
 
 
 # --- client.upload_artifacts -----------------------------------------
@@ -517,7 +517,7 @@ def test_client_upload_artifacts_uploads_sequentially(tmp_path):
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen_urls.append(str(request.url))
-        calc_id = int(str(request.url).rsplit("/", 2)[-2])
+        calc_id = int(str(request.url).rsplit("/", 2)[-2].removeprefix("calc_c"))
         return httpx.Response(
             201,
             json={
@@ -530,22 +530,22 @@ def test_client_upload_artifacts_uploads_sequentially(tmp_path):
     client, _recorder = make_client(handler)
     plan = [
         PlannedArtifactUpload(
-            calculation_key="a_key", calculation_id=10, path=paths[0],
+            calculation_key="a_key", calculation_id=10, calculation_ref="calc_c10", path=paths[0],
             kind="output_log", label=None, sha256=None, bytes=None,
         ),
         PlannedArtifactUpload(
-            calculation_key="b_key", calculation_id=20, path=paths[1],
+            calculation_key="b_key", calculation_id=20, calculation_ref="calc_c20", path=paths[1],
             kind="output_log", label=None, sha256=None, bytes=None,
         ),
         PlannedArtifactUpload(
-            calculation_key="c_key", calculation_id=30, path=paths[2],
+            calculation_key="c_key", calculation_id=30, calculation_ref="calc_c30", path=paths[2],
             kind="output_log", label=None, sha256=None, bytes=None,
         ),
     ]
     results = client.upload_artifacts(plan)
     assert len(results) == 3
     assert [r["calculation_id"] for r in results] == [10, 20, 30]
-    assert [u.rsplit("/", 2)[-2] for u in seen_urls] == ["10", "20", "30"]
+    assert [u.rsplit("/", 2)[-2] for u in seen_urls] == ["calc_c10", "calc_c20", "calc_c30"]
 
 
 def test_client_upload_artifacts_idempotency_key_prefix(tmp_path):
@@ -563,7 +563,7 @@ def test_client_upload_artifacts_idempotency_key_prefix(tmp_path):
     client, _recorder = make_client(handler)
     plan = [
         PlannedArtifactUpload(
-            calculation_key="my_opt", calculation_id=1, path=p,
+            calculation_key="my_opt", calculation_id=1, calculation_ref="calc_c1", path=p,
             kind="output_log", label=None, sha256=None, bytes=None,
         ),
     ]

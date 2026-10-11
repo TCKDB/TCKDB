@@ -45,6 +45,7 @@ from app.services.input_geometry_extraction import (
     extract_and_link_input_geometry,
 )
 from app.services.record_review import ensure_record_review, set_record_review_status
+from tests.api.artifact_urls import artifacts_url
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 INPUT_GEOMETRY_FIXTURES = FIXTURES / "input_geometry"
@@ -175,7 +176,7 @@ class TestInputGeometryHookFillsAbsent:
         assert _input_links(db_session, calc_id) == []
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_GJF, kind="input", filename="input.gjf")]},
         )
         assert resp.status_code == 201, resp.text
@@ -195,7 +196,7 @@ class TestInputGeometryHookFillsAbsent:
         calc_id = _create_opt_calc(client, smiles="O", software="ORCA")
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(ORCA_INP, kind="input", filename="input.in")]},
         )
         assert resp.status_code == 201, resp.text
@@ -221,7 +222,7 @@ class TestInputGeometryHookFillsAbsent:
         )
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_OPT_LOG, kind="output_log", filename="opt.log")]},
         )
         assert resp.status_code == 201, resp.text
@@ -240,7 +241,7 @@ class TestInputGeometryHookFillsAbsent:
         calc_id = _create_opt_calc(client, smiles="O")
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(ORCA_LOG_HEAD, kind="output_log", filename="opt.out")]},
         )
         assert resp.status_code == 201, resp.text
@@ -272,7 +273,7 @@ class TestInputGeometryHookReplacesDegenerate:
         assert before[0].source is CalculationInputGeometrySource.deposited
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_GJF, kind="input", filename="input.gjf")]},
         )
         assert resp.status_code == 201, resp.text
@@ -305,7 +306,7 @@ class TestInputGeometryHookNeverUpgradesRealInput:
         before_geom_id = before[0].geometry_id
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_GJF, kind="input", filename="input.gjf")]},
         )
         assert resp.status_code == 201, resp.text
@@ -323,7 +324,7 @@ class TestInputGeometryHookRejectsAmbiguousInput:
         calc_id = _create_opt_calc(client, smiles="O")
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_GJF_ZMATRIX, kind="input", filename="input.gjf")]},
         )
         assert resp.status_code == 201, resp.text
@@ -335,7 +336,7 @@ class TestInputGeometryHookRejectsAmbiguousInput:
         calc_id = _create_opt_calc(client, smiles="O", software="ORCA")
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(ORCA_INP_XYZFILE, kind="input", filename="input.in")]},
         )
         assert resp.status_code == 201, resp.text
@@ -350,7 +351,7 @@ class TestInputGeometryHookTypeAndKindGates:
         before = _input_links(db_session, calc_id)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_GJF, kind="input", filename="input.gjf")]},
         )
         assert resp.status_code == 201, resp.text
@@ -363,7 +364,7 @@ class TestInputGeometryHookTypeAndKindGates:
         calc_id = _create_opt_calc(client, smiles="O")
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_GJF, kind="hessian", filename="input.hess")]},
         )
         assert resp.status_code == 201, resp.text
@@ -389,7 +390,7 @@ class TestInputGeometryHookIdenticalToOutput:
         )
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_GJF, kind="input", filename="input.gjf")]},
         )
         assert resp.status_code == 201, resp.text

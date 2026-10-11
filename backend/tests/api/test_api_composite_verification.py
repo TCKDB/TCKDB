@@ -28,6 +28,7 @@ from app.db.models.calculation import (
 )
 from app.db.models.common import CompositeLogOutcome
 from tests import composite_p5_fixtures as f
+from tests.api.artifact_urls import artifacts_url
 from tests.api.test_api_composite_assembled import _calc_by_label, _ok
 from tests.api.test_api_composite_log_reconciliation import (  # noqa: F401  (the fixture applies here too)
     _LOG,
@@ -221,7 +222,7 @@ def _program_run(client, db_session, **result) -> Calculation:
 
 
 def _attach_log(client, calc: Calculation, **kwargs):
-    resp = client.post(f"/api/v1/calculations/{calc.id}/artifacts", json={"artifacts": [_output_log(**kwargs)]})
+    resp = client.post(artifacts_url(client, calc.id), json={"artifacts": [_output_log(**kwargs)]})
     assert resp.status_code == 201, resp.text
     return resp
 
@@ -295,7 +296,7 @@ def test_an_unreadable_log_leaves_it_program_reported_with_a_reason(client, db_s
         "filename": "head.out",
         "content_base64": base64.b64encode(_LOG[:3000]).decode(),
     }
-    resp = client.post(f"/api/v1/calculations/{calc.id}/artifacts", json={"artifacts": [head]})
+    resp = client.post(artifacts_url(client, calc.id), json={"artifacts": [head]})
     assert resp.status_code == 201, resp.text
     assert _verification(client, calc) == {
         "state": "program_reported",
@@ -339,7 +340,7 @@ def test_a_log_attached_to_a_non_composite_calculation_records_nothing(client, d
     )
     assert resp.status_code == 201, resp.text
     calc_id = resp.json()["primary_calculation"]["calculation_id"]
-    resp = client.post(f"/api/v1/calculations/{calc_id}/artifacts", json={"artifacts": [_output_log()]})
+    resp = client.post(artifacts_url(client, calc_id), json={"artifacts": [_output_log()]})
     assert resp.status_code == 201, resp.text
     db_session.expire_all()
     assert db_session.scalar(select(func.count()).select_from(CalculationCompositeLogCheck)) == 0
