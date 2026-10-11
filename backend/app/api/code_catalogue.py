@@ -1364,10 +1364,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "schemas/python/tckdb-schemas/tckdb_schemas/energy_correction.py",
             shape=Shape.relationship,
             note=(
-                "frequency_level_of_theory sent on a scheme kind Arkane does "
-                "not key on an energy//frequency pair (anything but "
-                "bac_petersson and bac_melius). context.scheme_kind names "
-                "the kind."
+                "frequency_level_of_theory sent on a scheme kind that does "
+                "not take one yet: a frequency level is accepted only on "
+                "bac_petersson and bac_melius for now. context.scheme_kind "
+                "names the kind."
             )),
     ApiCode("energy_correction_scheme_frequency_level_without_energy_level", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/energy_correction.py",

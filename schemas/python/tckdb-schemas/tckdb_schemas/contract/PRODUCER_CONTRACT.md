@@ -9548,7 +9548,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/energy_correction.py`.
 - The body's `context` names the things involved.
 - Message: 'frequency_level_of_theory is accepted only on the BAC kinds (bac_petersson, bac_melius) for now; a {self.kind.value} scheme takes its level of theory alone. Send it in level_of_theory and omit the frequency level.'
-- Note: frequency_level_of_theory sent on a scheme kind Arkane does not key on an energy//frequency pair (anything but bac_petersson and bac_melius). context.scheme_kind names the kind.
+- Note: frequency_level_of_theory sent on a scheme kind that does not take one yet: a frequency level is accepted only on bac_petersson and bac_melius for now. context.scheme_kind names the kind.
 
 <a id="c-energy-correction-scheme-frequency-level-without-energy-level"></a>
 
