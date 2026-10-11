@@ -652,17 +652,65 @@ def _build_chem_inp(
 # ---------------------------------------------------------------------------
 
 
-def _geometry_index(sr: SpeciesExportRecord, comp: Counter | None) -> int:
-    if sr.is_linear is True:
-        return 1
-    if sr.is_linear is False:
-        return 2
-    natoms = sum(comp.values()) if comp else 0
-    if natoms <= 1:
-        return 0
-    if natoms == 2:
-        return 1
-    return 2
+def _geometry_index(
+    sr: SpeciesExportRecord, comp: Counter
+) -> tuple[int, str, str | None]:
+    """The ``tran.dat`` geometry index, where it came from, and a gap detail if any.
+
+    The atom count is decisive where it can be: one atom is 0 and two atoms is
+    1, whatever a record says. A stated linearity (or a conflict between stated
+    linearities) that contradicts that is never silently ignored and never
+    wins: the line is written from the atom count and the returned gap detail
+    names the contradicting record(s).
+
+    For three or more atoms the count cannot tell linear from bent (CO2, HCN and
+    C2H2 are linear), so a stated linearity (the transport's own witness, see
+    ``export._transport_linearity_witness``) decides it and is named in the
+    returned source. A conflict, or no witness at all, is written as nonlinear
+    (2), marked ``assumed`` in the source, with a gap detail saying why.
+    """
+    natoms = sum(comp.values())
+    witness = sr.linearity
+    conflict = sr.linearity_conflict
+    if natoms in (1, 2):
+        index = 0 if natoms == 1 else 1
+        detail = None
+        if witness is not None and (natoms == 1 or not witness.is_linear):
+            detail = (
+                f"atom count ({natoms}) decides the geometry index ({index}); "
+                f"{witness.source_kind}:{witness.source_ref} states "
+                f"{'linear' if witness.is_linear else 'nonlinear'} and was not used"
+            )
+        elif conflict is not None:
+            detail = (
+                f"atom count ({natoms}) decides the geometry index ({index}); the "
+                f"{conflict.source_kind.replace('_', ' ')} records "
+                f"({', '.join(conflict.refs)}) disagree and were not used"
+            )
+        source = "atom_count"
+        if detail is not None:
+            ref = witness.source_ref if witness is not None else ",".join(conflict.refs)
+            source = f"atom_count (contradicted by {ref})"
+        return index, source, detail
+    if conflict is not None:
+        # Stated linearity disagrees: not settled by any other source, so the
+        # value is assumed, and the comment and gap name the disagreement.
+        return (
+            2,
+            f"assumed nonlinear: {conflict.source_kind} disagree ({', '.join(conflict.refs)})",
+            f"linearity assumed nonlinear: the linked "
+            f"{conflict.source_kind.replace('_', ' ')} records disagree "
+            f"({', '.join(conflict.refs)})",
+        )
+    if witness is not None:
+        index = 1 if witness.is_linear else 2
+        return index, f"{witness.source_kind}:{witness.source_ref}", None
+    return (
+        2,
+        "assumed nonlinear from atom count",
+        "linearity assumed nonlinear from atom count: neither a geometry of a "
+        "calculation the transport cites nor a linked statmech record states it",
+    )
 
 
 def _build_tran_dat(
@@ -686,7 +734,23 @@ def _build_tran_dat(
                 )
             )
             continue
-        geom = _geometry_index(sr, compositions.get(se_id))
+        comp = compositions.get(se_id)
+        if not comp:
+            # No atom count to decide from and no way to write a truthful
+            # index: drop the line rather than write 0 (a monatomic claim).
+            gaps.append(
+                ExportGap(
+                    kind="transport",
+                    ref=sr.species_entry.public_ref,
+                    detail="unparseable SMILES: no tran.dat line written",
+                )
+            )
+            continue
+        geom, geom_source, gap_detail = _geometry_index(sr, comp)
+        if gap_detail is not None:
+            gaps.append(
+                ExportGap(kind="transport", ref=sr.species_entry.public_ref, detail=gap_detail)
+            )
         dipole = tr.dipole_debye or 0.0
         polar = tr.polarizability_angstrom3 or 0.0
         zrot = tr.rotational_relaxation or 0.0
@@ -695,6 +759,7 @@ def _build_tran_dat(
             f"{tr.epsilon_over_k_k:>10.3f}{tr.sigma_angstrom:>10.3f}"
             f"{dipole:>10.3f}{polar:>10.3f}{zrot:>10.3f}"
             f"    ! SMILES={sr.species.smiles} ref={sr.species.public_ref}"
+            f" linearity={geom_source}"
         )
     return "\n".join(lines) + "\n"
 
