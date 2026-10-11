@@ -444,7 +444,19 @@ def load_population(session: Session, scan: PopulationScan, request: StatmechReq
     group_refs.update(_refs(session, ConformerGroup, declared_group_ids - set(group_refs)))
     fsf_ids = {s.frequency_scale_factor_id for d in declarations for s in d.sources if s.frequency_scale_factor_id is not None}
     fsfs = {f.id: f for f in session.scalars(select(FrequencyScaleFactor).where(FrequencyScaleFactor.id.in_(fsf_ids)))} if fsf_ids else {}
-    literature_refs = _refs(session, Literature, {s.literature_id for d in declarations for s in d.sources if s.literature_id is not None})
+    literature_ids = {s.literature_id for d in declarations for s in d.sources if s.literature_id is not None}
+    literature_refs = _refs(session, Literature, literature_ids)
+    identified_literature = (
+        {
+            lit_id
+            for lit_id, doi, isbn in session.execute(
+                select(Literature.id, Literature.doi, Literature.isbn).where(Literature.id.in_(literature_ids))
+            )
+            if (doi or "").strip() or (isbn or "").strip()
+        }
+        if literature_ids
+        else set()
+    )
     geometry_ref_by_id = _refs(session, Geometry, {s.geometry_id for d in declarations for s in d.sources if s.geometry_id is not None})
     ties = _determination_ties(session, ids) if scan.owner_kind is OwnerKind.transition_state_entry else {}
     determination_ids = {d.structure_determination_id for d in declarations if d.structure_determination_id is not None}
@@ -534,6 +546,7 @@ def load_population(session: Session, scan: PopulationScan, request: StatmechReq
                     calculation_ref=calc_ref_by_id.get(s.calculation_id) if s.calculation_id else None,
                     geometry_ref=geometry_ref_by_id.get(s.geometry_id) if s.geometry_id else None,
                     literature_ref=literature_refs.get(s.literature_id) if s.literature_id else None,
+                    literature_identified=(s.literature_id in identified_literature) if s.literature_id else None,
                     scale_factor=_scale_factor(fsfs.get(s.frequency_scale_factor_id)) if s.frequency_scale_factor_id else None,
                     unavailable_reason=(
                         "required_evidence_unavailable"

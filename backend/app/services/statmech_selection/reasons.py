@@ -112,6 +112,7 @@ ADVISORY_PREFIXES: tuple[str, ...] = (
     "member_energy_not_compared",
     "legacy_record_read_as_stored",
     "imported_parameters_not_revalidated",
+    "source_literature_unidentified",
     "superseded_record",
     "source_not_linked_to_geometry_optimization",
 )

@@ -106,6 +106,8 @@ def src(key: str, role: str, ref: str | None = None, **changes: Any) -> SourceFa
         "scale_factor": None,
     }
     base.update(changes)
+    if base["locator"] == "literature" and "literature_identified" not in changes:
+        base["literature_identified"] = True
     return SourceFacts(**base)
 
 

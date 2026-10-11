@@ -130,6 +130,9 @@ class SourceFacts:
     literature_ref: str | None
     scale_factor: ScaleFactorFacts | None
     unavailable_reason: str | None = None
+    #: For a literature source: whether the cited literature carries a DOI or ISBN (the identifiers the literature policy
+    #: resolves). ``None`` for every other locator. A title-only citation is kept but does not meet a role.
+    literature_identified: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {**self.__dict__, "scale_factor": self.scale_factor.to_dict() if self.scale_factor else None}

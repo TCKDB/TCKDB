@@ -358,6 +358,11 @@ def _declared_evidence(
             ev.scale_factors.append(src.scale_factor)
             continue
         if src.locator == "literature":
+            if src.literature_identified is not True:
+                # Kept, never trusted: a citation with neither DOI nor ISBN cannot be resolved, so it meets no role.
+                f.note(f"source_literature_unidentified:{src.role}")
+                unavailable_roles.add(src.role)
+                continue
             if src.literature_ref:
                 ev.parameters.append(src.literature_ref)
             if src.role == "geometry":
@@ -663,7 +668,8 @@ def _check_rotors(candidate: CandidateFacts, decl: DeclarationFacts, world: _Wor
                 f.add("required_source_unusable:torsional_surface")
         elif representation == "imported_potential":
             key = rotor.get("potential_source_key")
-            source = next((s for s in decl.sources if s.source_key == key), None)
+            source = next((s for s in decl.sources if s.source_key == key and s.role == "torsional_surface"), None)
+            # An unidentified literature potential is already unusable: _declared_evidence reports it for its role.
             if source is None or (source.locator == "calculation" and world.usable(source.calculation_ref) is None):
                 f.add("required_source_unusable:torsional_surface")
         for mode in rotor.get("replaces_mode_indices") or []:

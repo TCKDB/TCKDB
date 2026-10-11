@@ -84,7 +84,9 @@ def restatus(session, record_type, record_id, status) -> None:
     session.flush()
 
 
-def build(db_session, *, declared=True, freq_status=APPROVED, host_status=APPROVED, recipe=None, anchor=False, chain=0) -> Scene:
+def build(
+    db_session, *, declared=True, freq_status=APPROVED, host_status=APPROVED, recipe=None, anchor=False, chain=0, imported=None
+) -> Scene:
     world = make_world(db_session)
     group = make_conformer_group(db_session, world.entry)
     observation = make_conformer_observation(db_session, conformer_group=group) if anchor else None
@@ -116,8 +118,8 @@ def build(db_session, *, declared=True, freq_status=APPROVED, host_status=APPROV
         db_session.add(declaration)
         db_session.flush()
         for key, role, kwargs in (
-            ("geom", StatmechModelSourceRole.geometry, {"calculation_id": opt.id}),
-            ("curv", StatmechModelSourceRole.curvature, {"calculation_id": freq.id}),
+            ("geom", StatmechModelSourceRole.geometry, {"literature_id": imported.id} if imported else {"calculation_id": opt.id}),
+            ("curv", StatmechModelSourceRole.curvature, {"literature_id": imported.id} if imported else {"calculation_id": freq.id}),
             ("fsf", StatmechModelSourceRole.scale_factor, {"frequency_scale_factor_id": fsf.id}),
         ):
             db_session.add(StatmechModelSource(declaration_id=declaration.id, source_key=key, role=role, **kwargs))
@@ -140,6 +142,35 @@ def build(db_session, *, declared=True, freq_status=APPROVED, host_status=APPROV
 
 
 # --- the happy paths -------------------------------------------------------------------------------------------------------
+
+
+def _literature(db_session, **identifiers):
+    from app.db.models.common import LiteratureKind
+    from app.db.models.literature import Literature
+
+    row = Literature(kind=LiteratureKind.article, title="A paper", year=2020, **identifiers)
+    db_session.add(row)
+    db_session.flush()
+    return row
+
+
+@pytest.mark.parametrize("identifiers", [{"doi": "10.1000/xyz123"}, {"isbn": "9780306406157"}], ids=["doi", "isbn"])
+def test_imported_literature_with_a_doi_or_an_isbn_meets_the_role_with_no_local_job(db_session, identifiers):
+    scene = build(db_session, imported=_literature(db_session, **identifiers))
+    (assessment,) = scene.qualify().assessments
+    assert assessment.applicability.value == "applicable", [r.code for r in assessment.reasons]
+    assert "imported_parameters_not_revalidated:geometry" in assessment.advisory
+
+
+def test_imported_literature_without_a_doi_or_an_isbn_is_kept_but_unusable(db_session):
+    scene = build(db_session, imported=_literature(db_session))
+    (assessment,) = scene.qualify().assessments
+    reasons = [r.code for r in assessment.reasons]
+    assert assessment.applicability.value != "applicable"
+    assert "required_source_unusable:geometry" in reasons and "required_source_unusable:curvature" in reasons
+    assert "source_literature_unidentified:geometry" in assessment.advisory
+    blank = build(db_session, imported=_literature(db_session, doi="  ", isbn=""))
+    assert blank.qualify().assessments[0].applicability.value != "applicable"  # whitespace is not an identifier
 
 
 def test_a_declared_basin_model_is_loaded_and_qualified_from_real_rows(db_session):

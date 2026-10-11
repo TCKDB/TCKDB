@@ -367,6 +367,38 @@ def test_imported_parameters_only_stand_in_for_the_roles_they_are_declared_for()
     assert assess(declared(sources=(parameters, IMPORTED[2])), calcs={}).applicability is not A
 
 
+def test_an_imported_source_meets_its_role_only_when_its_literature_is_identified():
+    """A DOI or ISBN identifies the literature (the policy resolves them); a title-only citation is kept but unusable."""
+    ok = assess(declared(sources=IMPORTED), calcs={})
+    assert ok.applicability is A and "source_literature_unidentified:geometry" not in ok.advisory
+    for role, index in (("geometry", 0), ("curvature", 1)):
+        loose = list(IMPORTED)
+        loose[index] = src(loose[index].source_key, role, None, locator="literature", literature_ref="lit_x", literature_identified=False)
+        a = assess(declared(sources=tuple(loose)), calcs={})
+        assert a.applicability is not A
+        assert f"required_source_unusable:{role}" in codes(a)
+        assert f"source_literature_unidentified:{role}" in a.advisory  # the public reason: it has no DOI or ISBN
+        assert "lit_x" not in a.evidence.get("parameters", ())  # kept on the record, never counted as evidence
+
+
+def test_a_rotor_potential_must_be_a_torsional_surface_source_and_identified():
+    """Role isolation: a source of another role never stands in for the potential, whatever its key."""
+    rotor_potential = {"rotors": [rotor(representation="imported_potential", potential_source_key="geom")]}
+    # the reviewer's probes: a geometry-role literature source, and the local geometry optimisation
+    as_geometry_literature = with_torsion(rotor_potential, sources=(src("geom", "geometry", None, locator="literature", literature_ref="lit_a"), IMPORTED[1], IMPORTED[2]))
+    result = assess(as_geometry_literature, calcs={})
+    assert "required_source_unusable:torsional_surface" in codes(result)
+    as_local_optimisation = with_torsion(rotor_potential, sources=sources_with(fsf("entropy")))
+    assert "required_source_unusable:torsional_surface" in codes(assess(as_local_optimisation))
+    unidentified = with_torsion(
+        {"rotors": [rotor(representation="imported_potential", potential_source_key="pot")]},
+        sources=(*IMPORTED, src("pot", "torsional_surface", None, locator="literature", literature_ref="lit_d", literature_identified=False)),
+    )
+    unidentified_result = assess(unidentified, calcs={})
+    assert "required_source_unusable:torsional_surface" in codes(unidentified_result)
+    assert "source_literature_unidentified:torsional_surface" in unidentified_result.advisory
+
+
 def test_an_imported_free_rotor_and_a_tabulated_potential_need_no_scan_job():
     free = with_torsion(sources=IMPORTED)
     assert assess(free, calcs={}).applicability is A, codes(assess(free, calcs={}))
