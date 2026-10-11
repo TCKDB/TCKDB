@@ -25,7 +25,7 @@ dataset must never require a code release.
 ## Statmech selection endpoint, client method and MCP tool (2026-10-11)
 
 **Chunk 5 of the statmech selection programme: the public surface.** Migration: none. New environment variable: none.
-`tckdb-schemas` 0.118.0 (contract route rows), `tckdb-client` 0.143.0, `tckdb-mcp` 0.8.0.
+`tckdb-schemas` 0.120.0 (contract route rows and one refusal code), `tckdb-client` 0.145.0, `tckdb-mcp` 0.8.0.
 
 - `POST /api/v1/scientific/statmech/select` and `.../select/manifest`: one typed target union (a species entry or a
   transition-state entry), both on the read-only REPEATABLE READ snapshot session. A valid negative outcome is a 200; a bound

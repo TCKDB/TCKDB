@@ -5,7 +5,7 @@
 Statmech selection: `select_statmech_models` and `get_statmech_selection_manifest`, with typed `StatmechSelectionRequest` and
 `StatmechSelectionResponse`. The client sends the request as given, refuses an integer id, a ref of the wrong kind and any
 bound, page, sort or rule before a request is made, never chooses a candidate, and returns the server's answer untouched
-(`tckdb-schemas` 0.118.0). `RejectionCode` gains `statmech_selection_scope_owner_mismatch`. Each candidate's `advisory` and the response `notices` disclose
+(`tckdb-schemas` 0.120.0). `RejectionCode` gains `statmech_selection_scope_owner_mismatch`. Each candidate's `advisory` and the response `notices` disclose
 `imported_parameters_not_revalidated:<role>` and `source_literature_unidentified:<role>`.
 
 ## 0.144.0 - 2026-10-11
