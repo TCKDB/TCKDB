@@ -79,6 +79,20 @@ _TRUNCATE_TABLES: tuple[str, ...] = ("statmech_model_declaration", "statmech_mod
 _DECLARATION_GUARD = "tckdb_statmech_model_declaration_guard"
 _MEMBER_GUARD = "tckdb_statmech_model_member_guard"
 _SOURCE_GUARD = "tckdb_statmech_model_source_guard"
+_IMMUTABLE = "tckdb_statmech_model_immutable"
+
+#: A declared model is an immutable revision: its recipe, members and sources are never edited. A correction is a
+#: superseding statmech record. Unconditional, so it holds before approval too and for every column (the owner guards
+#: above run on INSERT and are therefore not bypassable by an UPDATE).
+_IMMUTABLE_SQL = f"""
+CREATE OR REPLACE FUNCTION public.{_IMMUTABLE}()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION '% is an immutable declared model: supersede the statmech record instead of editing %', TG_TABLE_NAME, TG_TABLE_NAME
+        USING ERRCODE = 'integrity_constraint_violation';
+END;
+$$;
+"""
 
 _DECLARATION_GUARD_SQL = f"""
 CREATE OR REPLACE FUNCTION public.{_DECLARATION_GUARD}()
@@ -352,7 +366,6 @@ def upgrade() -> None:
             deferrable=True,
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_statmech_model_member")),
-        sa.UniqueConstraint("declaration_id", "conformer_group_id", name="uq_statmech_model_member_basin"),
         sa.UniqueConstraint("declaration_id", "member_key", name="uq_statmech_model_member_key"),
         sa.UniqueConstraint("declaration_id", "member_statmech_id", name="uq_statmech_model_member_statmech"),
     )
@@ -439,6 +452,12 @@ def upgrade() -> None:
     op.execute(_DECLARATION_GUARD_SQL)
     op.execute(_MEMBER_GUARD_SQL)
     op.execute(_SOURCE_GUARD_SQL)
+    op.execute(_IMMUTABLE_SQL)
+    for table in (_DECLARATION, _MEMBER, _SOURCE):
+        op.execute(
+            f"CREATE TRIGGER trg_{table}_immutable BEFORE UPDATE ON public.{table} "
+            f"FOR EACH ROW EXECUTE FUNCTION public.{_IMMUTABLE}()"
+        )
     for table, function in ((_DECLARATION, _DECLARATION_GUARD), (_MEMBER, _MEMBER_GUARD), (_SOURCE, _SOURCE_GUARD)):
         op.execute(
             f"CREATE TRIGGER trg_{table}_guard BEFORE INSERT ON public.{table} "
@@ -493,6 +512,8 @@ def downgrade() -> None:
         op.execute(f"DROP TRIGGER IF EXISTS {_trigger_name('as_child', table)} ON public.{table}")
     for table in (_SOURCE, _MEMBER, _DECLARATION):
         op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_guard ON public.{table}")
+        op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_immutable ON public.{table}")
+    op.execute(f"DROP FUNCTION IF EXISTS public.{_IMMUTABLE}()")
     for function in (_SOURCE_GUARD, _MEMBER_GUARD, _DECLARATION_GUARD):
         op.execute(f"DROP FUNCTION IF EXISTS public.{function}()")
     op.drop_table(_SOURCE)

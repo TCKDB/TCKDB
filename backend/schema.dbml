@@ -3744,7 +3744,6 @@ Table statmech_model_member {
   indexes {
     declaration_id [name: 'ix_statmech_model_member_declaration_id']
     member_statmech_id [name: 'ix_statmech_model_member_member_statmech_id']
-    (declaration_id, conformer_group_id) [unique, name: 'uq_statmech_model_member_basin']
     (declaration_id, member_key) [unique, name: 'uq_statmech_model_member_key']
     (declaration_id, member_statmech_id) [unique, name: 'uq_statmech_model_member_statmech']
   }

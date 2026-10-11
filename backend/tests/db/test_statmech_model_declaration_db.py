@@ -277,15 +277,15 @@ def test_a_basin_of_another_species_entry_is_not_a_members_basin(db_session, ens
     )
 
 
-def test_a_repeated_record_key_or_basin_is_not_another_state(db_session, ensemble):
+def test_a_repeated_record_or_key_is_not_another_state_but_a_basin_may_repeat(db_session, ensemble):
     entry, _, declaration = ensemble
     a, b = make_statmech(db_session, species_entry=entry), make_statmech(db_session, species_entry=entry)
     group = make_conformer_group(db_session, entry)
     _member(db_session, declaration, a, "m1", conformer_group_id=group.id)
     _refused(db_session, lambda: _member(db_session, declaration, a, "m2"), error=IntegrityError)  # same record
     _refused(db_session, lambda: _member(db_session, declaration, b, "m1"), error=IntegrityError)  # same key
-    _refused(db_session, lambda: _member(db_session, declaration, b, "m3", conformer_group_id=group.id), error=IntegrityError)
-    assert _member(db_session, declaration, b, "m4").id
+    # a second member in the same basin is allowed: one observation per basin is not a chemical uniqueness rule
+    assert _member(db_session, declaration, b, "m3", conformer_group_id=group.id).conformer_group_id == group.id
 
 
 def test_member_numbers_are_bounded_and_finite(db_session, ensemble):
@@ -389,17 +389,24 @@ def test_a_record_with_no_declaration_cannot_gain_one_after_it_is_accepted(db_se
 def test_approving_a_cited_member_does_not_freeze_the_ensemble_that_cites_it(db_session, full):
     host, sibling, declaration, member, source = full
     _approve(db_session, SubmissionRecordType.statmech, sibling.id, _actor(db_session))
-    declaration.recipe = {"still": "editable"}
-    member.counting_multiplicity = 2
-    source.source_key = "renamed"
+    # the ensemble's own record is still unapproved: its rows can still be added to and withdrawn whole
+    late = _source(db_session, declaration, "late", literature_id=make_literature(db_session).id)
+    db_session.delete(late)
+    db_session.delete(member)
     db_session.flush()
-    assert declaration.recipe == {"still": "editable"}
+    assert db_session.get(StatmechModelDeclaration, declaration.id) is not None
 
 
-def test_an_unapproved_declaration_stays_editable_and_truncate_is_refused(db_session, full):
-    _, _, declaration, member, _ = full
-    member.region_key = "r1"
-    db_session.flush()
+def test_an_unapproved_declaration_is_still_never_edited_and_truncate_is_refused(db_session, full):
+    _, _, declaration, member, source = full
+    for edit in (
+        lambda: setattr(declaration, "recipe", {"edited": True}),
+        lambda: setattr(declaration, "content_hash", "f" * 64),
+        lambda: setattr(member, "region_key", "r1"),
+        lambda: setattr(member, "counting_multiplicity", 2),
+        lambda: setattr(source, "source_key", "renamed"),
+    ):
+        _refused(db_session, edit, "immutable declared model")
     for table in TABLES:
         with pytest.raises(DBAPIError), db_session.begin_nested():
             db_session.execute(text(f"TRUNCATE {table} CASCADE"))
@@ -420,8 +427,30 @@ def test_a_declaration_enters_the_reproducibility_snapshot_only_when_there_is_on
     before = _target_snapshot(host, SubmissionRecordType.statmech)["relationships"]["model_declaration"]
     assert before["columns"]["scope_kind"] == "explicit_equilibrium_ensemble"
     assert [m["member_key"] for m in before["members"]] == ["m1"] and [s["source_key"] for s in before["sources"]] == ["s1"]
-    member.counting_multiplicity = 3
+    db_session.delete(member)
     db_session.flush()
+    _member(db_session, declaration, member.member_statmech, "m1", counting_multiplicity=3)
     db_session.refresh(declaration)
     after = _target_snapshot(host, SubmissionRecordType.statmech)["relationships"]["model_declaration"]
     assert after != before  # what the declaration says is part of what the record's digest rests on
+
+
+# --- an edit is refused, not just a bad insert -----------------------------------------------------------------------
+
+
+def test_a_member_cannot_be_repointed_at_another_species_record_by_an_update(db_session, full):
+    """The owner guard runs on INSERT; an UPDATE must not be a way around it, and must not leave a stale checksum."""
+    _, _, declaration, member, _ = full
+    foreign = make_statmech(db_session, species_entry=_entry(db_session))
+    _refused(db_session, lambda: setattr(member, "member_statmech_id", foreign.id), "immutable declared model")
+    db_session.refresh(member)
+    assert member.member_statmech_id != foreign.id
+
+
+def test_a_source_calculation_cannot_be_swapped_by_an_update(db_session):
+    entry = _entry(db_session)
+    declaration = _declaration(db_session, make_statmech(db_session, species_entry=entry))
+    own = make_calculation(db_session, type=CalculationType.opt, species_entry_id=entry.id)
+    foreign = make_calculation(db_session, type=CalculationType.opt, species_entry_id=_entry(db_session).id)
+    source = _source(db_session, declaration, calculation_id=own.id)
+    _refused(db_session, lambda: setattr(source, "calculation_id", foreign.id), "immutable declared model")

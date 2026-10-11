@@ -196,10 +196,10 @@ class StatmechModelMember(Base):
             "(relative_energy_kj_mol <> 'NaN' AND abs(relative_energy_kj_mol) < 'Infinity')",
             name="relative_energy_finite",
         ),
-        # A key names one member, and a statmech record is one state once: a repeated observation is evidence.
+        # A key names one member and a statmech record is a member once. Two members may sit in one basin: nothing here
+        # asserts one observation per basin as a chemical uniqueness rule.
         UniqueConstraint("declaration_id", "member_key", name="uq_statmech_model_member_key"),
         UniqueConstraint("declaration_id", "member_statmech_id", name="uq_statmech_model_member_statmech"),
-        UniqueConstraint("declaration_id", "conformer_group_id", name="uq_statmech_model_member_basin"),
     )
 
 

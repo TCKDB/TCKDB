@@ -2354,8 +2354,9 @@ A statmech row is an interpretation container. A declaration says which model th
 ### `statmech_model_member`
 
 - One member of an explicit equilibrium ensemble: another statmech record of the same species entry, never the declaring
-  record (`tckdb_statmech_model_member_guard`). Unique per declaration on `member_key`, on the member record and on the
-  basin, so a repeated observation is evidence and never another state.
+  record (`tckdb_statmech_model_member_guard`). Unique per declaration on `member_key` and on the member record, so a
+  repeated record is never another state. Several members may sit in one basin: one observation per basin is not a chemical
+  uniqueness rule.
 - `counting_multiplicity` is the depositor's attributed multiplicity; NULL is "not stated", never one.
   `relative_energy_kj_mol` is finite. `region_key` names the configurational region it covers.
 
@@ -2369,7 +2370,9 @@ A statmech row is an interpretation container. A declaration says which model th
 
 ### Lifecycle
 
-The declaration, its members and its sources are scientific content of the declaring statmech record: the accepted-science
+A declared model is an immutable revision: its three tables refuse every UPDATE, approved or not
+(`tckdb_statmech_model_immutable`), so the owner guards, which run on INSERT, cannot be bypassed by an edit and `content_hash`
+cannot go stale. The declaration, its members and its sources are scientific content of the declaring statmech record: the accepted-science
 triggers (`tckdb_guard_accepted_child` / `_via_child`) freeze them with it, and TRUNCATE is refused. Approving a record that is
 only cited as a member does not freeze the ensemble that cites it. Correcting a declared model means a new, superseding statmech
 record. The reproducibility snapshot of a record gains its declaration only when it has one, so no stored assessment of an

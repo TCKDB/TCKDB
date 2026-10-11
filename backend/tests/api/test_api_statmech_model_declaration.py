@@ -307,18 +307,22 @@ def test_the_stored_hash_is_a_recomputable_checksum_of_what_was_stored(client, d
     (row,) = _declarations(db_session)
     db_session.refresh(row)
     assert recompute_content_hash(db_session, row) == row.content_hash
-    # Every part of what was stored is in the checksum: an edit made behind the write path is detectable.
+    # Every part of what was stored is in the checksum: a row edited behind the write path would be detectable. The
+    # database refuses such an edit, so it is made in memory only and never flushed.
     original = row.content_hash
-    row.recipe = {**row.recipe, "energy_zero": "electronic"}
-    assert recompute_content_hash(db_session, row) != original
-    row.recipe = {**row.recipe, "energy_zero": "e0"}
+    with db_session.no_autoflush:
+        row.recipe = {**row.recipe, "energy_zero": "electronic"}
+        assert recompute_content_hash(db_session, row) != original
+        row.recipe = {**row.recipe, "energy_zero": "e0"}
+        assert recompute_content_hash(db_session, row) == original
+        row.members[0].counting_multiplicity = 3
+        assert recompute_content_hash(db_session, row) != original
+        row.members[0].counting_multiplicity = 2
+        row.sources[0].member_key = None
+        row.sources[0].source_key = "renamed"
+        assert recompute_content_hash(db_session, row) != original
+    db_session.expire_all()  # discard the in-memory edits
     assert recompute_content_hash(db_session, row) == original
-    row.members[0].counting_multiplicity = 3
-    assert recompute_content_hash(db_session, row) != original
-    row.members[0].counting_multiplicity = 2
-    row.sources[0].member_key = None
-    row.sources[0].source_key = "renamed"
-    assert recompute_content_hash(db_session, row) != original
 
 
 def test_the_service_refuses_a_ts_scope_whose_determination_it_was_not_given(client, db_session):

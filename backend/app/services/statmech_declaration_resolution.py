@@ -4,8 +4,8 @@ A declaration (``tckdb_schemas.statmech_declarations.StatmechModelDeclaration``)
 record supplies. This module turns it into rows (``statmech_model_declaration``, ``..._member``, ``..._source``):
 
 * **Owner.** The declaring record's own subject. A species-owned record takes an ``atom``, ``basin`` or
-  ``explicit_equilibrium_ensemble`` scope; a transition-state-owned record takes ``ts_determination`` (not yet a
-  deposit scope, so the wire schema refuses it). A mismatch is ``statmech_model_declaration_mismatch`` with a
+  ``explicit_equilibrium_ensemble`` scope; a transition-state-owned record takes ``ts_determination``, naming a
+  determination of the same deposit by ``determination_key`` or an existing one by ``determination_ref``. A mismatch is ``statmech_model_declaration_mismatch`` with a
   ``context.reason``.
 * **Basin.** A ``conformer_group_ref`` of the record's own species entry. Inside a conformer deposit an omitted ref
   is that conformer's own group; anywhere else it must be stated, because nothing else says which basin is meant.
@@ -429,27 +429,8 @@ def persist_statmech_model_declaration(
         source_facts.append({"source_key": src.source_key, "role": src.role.value, "member_key": src.member_key, **locator})
 
     # Every check above has passed: only now does the declaration (and anything that references it) get created.
-    row = StatmechModelDeclaration(
-        statmech_id=statmech.id,
-        schema_version=declaration.version,
-        scope_kind=kind,
-        conformer_group_id=group_id,
-        structure_determination_id=determination_id,
-        literature_id=literature.id if literature is not None else None,
-        workflow_tool_release_id=release.id if release is not None else None,
-        recipe=stored_recipe(declaration),
-        content_hash="0" * 64,
-        created_by=created_by,
-    )
-    session.add(row)
-    session.flush()
-
-    for child in (*member_rows, *source_rows):
-        child.declaration_id = row.id
-        session.add(child)
-    session.flush()
-
-    row.content_hash = declaration_content_hash(
+    # The checksum is complete before the first INSERT: a declared model is immutable, so no row is updated afterwards.
+    content_hash = declaration_content_hash(
         version=declaration.version,
         scope_kind=declaration.scope_kind.value,
         scope_basin_ref=group_ref,
@@ -460,5 +441,23 @@ def persist_statmech_model_declaration(
         literature_ref=literature.public_ref if literature is not None else None,
         workflow_tool_release_ref=release.public_ref if release is not None else None,
     )
+    row = StatmechModelDeclaration(
+        statmech_id=statmech.id,
+        schema_version=declaration.version,
+        scope_kind=kind,
+        conformer_group_id=group_id,
+        structure_determination_id=determination_id,
+        literature_id=literature.id if literature is not None else None,
+        workflow_tool_release_id=release.id if release is not None else None,
+        recipe=stored_recipe(declaration),
+        content_hash=content_hash,
+        created_by=created_by,
+    )
+    session.add(row)
+    session.flush()
+
+    for child in (*member_rows, *source_rows):
+        child.declaration_id = row.id
+        session.add(child)
     session.flush()
     return row
