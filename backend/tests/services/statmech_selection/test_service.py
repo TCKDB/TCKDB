@@ -210,6 +210,10 @@ def test_a_terminal_status_is_excluded_with_its_reason_and_is_never_an_unexplain
     result = scene.qualify()
     assert result.summary.outcome == "no_candidates" and result.excluded_count == 1
     assert result.excluded_by_review[0]["reason"] == "terminal_review_status"
+    # a declared candidate is named by its declaration everywhere, the exclusion list included
+    assert result.excluded_by_review[0]["candidate_ref"].startswith("smd_")
+    legacy = build(db_session, declared=False, host_status=RecordReviewStatus.rejected).qualify()
+    assert legacy.excluded_by_review[0]["candidate_ref"].startswith("sm_")
 
 
 def test_an_entry_below_the_callers_floor_excludes_its_records_at_every_grain(db_session):
@@ -293,10 +297,28 @@ def test_the_nested_row_bound_counts_what_the_population_needs(db_session):
     assert caught.value.context["bound"] == "nested_rows" and caught.value.context["visible"] == needed
 
 
+def test_the_recipes_own_arrays_are_nested_rows(db_session):
+    base = build(db_session).qualify().nested_rows
+    recipe = {
+        "scale_contributions": ["vibrational_entropy", "vibrational_heat_capacity"],
+        "projected_mode_indices": [1, 2, 3],
+        "excluded_mode_indices": [4],
+        "rotors": [
+            {"torsion_index": 1, "representation": "free_rotor", "replaces_mode_indices": [5, 6]},
+            {"torsion_index": 2, "representation": "free_rotor", "replaces_mode_indices": []},
+        ],
+    }
+    scene = build(db_session, recipe=recipe)
+    # base already counts the single default scale contribution; the rest are 1 + 3 + 1 + 2 rotors + 2 replaced modes
+    assert scene.qualify().nested_rows - base == (2 - 1) + 3 + 1 + 2 + 2
+
+
 def test_an_unfinished_dependency_traversal_is_a_refusal_not_a_complete_closure(db_session):
     scene = build(db_session, chain=3)
     with pytest.raises(CodedValueError) as caught:
         scene.qualify(replace(scene.request(), bounds=SelectionBounds(dependency_depth=1)))
+    # this service's own code, not the structure service's that the shared walk raises
+    assert caught.value.code == "statmech_selection_bound_exceeded"
     assert caught.value.context["bound"] == "dependency_depth"
     assert scene.qualify().summary.outcome == "qualified_models"  # the default depth closes the same chain
 

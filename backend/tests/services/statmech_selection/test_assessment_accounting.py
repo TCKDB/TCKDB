@@ -336,15 +336,48 @@ def test_an_atom_is_qualified_without_a_frequency_a_scan_or_a_geometry_job():
     assert rot.applicability is A, codes(rot)
 
 
+IMPORTED = (
+    src("geom", "geometry", None, locator="literature", literature_ref="lit_a"),
+    src("curv", "curvature", None, locator="literature", literature_ref="lit_b"),
+    src("fsf", "scale_factor", None, locator="scale_factor", scale_factor=FSF_ENTROPY),
+)
+
+
 def test_a_model_with_imported_parameters_needs_no_calculation_at_all():
-    sources = (
-        src("geom", "geometry", None, locator="literature", literature_ref="lit_a"),
-        src("curv", "curvature", None, locator="literature", literature_ref="lit_b"),
-        src("fsf", "scale_factor", None, locator="scale_factor", scale_factor=FSF_ENTROPY),
-    )
-    a = assess(declared(sources=sources), {})
-    assert a.applicability is U  # imported curvature has no stationary-point verdict to rest on: not silently certified
+    """Imported geometry and frequencies are supported provenance for their roles, not a local job to fabricate."""
+    a = assess(declared(sources=IMPORTED), calcs={})
+    assert a.applicability is A, codes(a)
     assert a.evidence.get("parameters") == ("lit_a", "lit_b")
+    # disclosed, never silent: the source's own stationary-point statement is not re-validated here
+    assert "imported_parameters_not_revalidated:geometry" in a.advisory
+    assert "imported_parameters_not_revalidated:curvature" in a.advisory
+    # the same models answer the component claims
+    assert assess(declared(sources=IMPORTED), req(ROT), {}).applicability is A
+    zpe = declared(recipe={"scale_contributions": ["zero_point_energy"]}, sources=(*IMPORTED[:2], fsf("zpe")))
+    assert assess(zpe, req(ZPE), {}).applicability is A
+
+
+def test_imported_parameters_only_stand_in_for_the_roles_they_are_declared_for():
+    only_geometry = assess(declared(sources=(IMPORTED[0], IMPORTED[2])), calcs={})
+    assert only_geometry.applicability is not A and "required_evidence_unavailable:curvature" in codes(only_geometry)
+    only_curvature = assess(declared(sources=(IMPORTED[1], IMPORTED[2])), calcs={})
+    assert only_curvature.applicability is not A and "required_evidence_unavailable:geometry" in codes(only_curvature)
+    # a parameters-role source is attribution, not a geometry
+    parameters = src("p", "parameters", None, locator="literature", literature_ref="lit_c")
+    assert assess(declared(sources=(parameters, IMPORTED[2])), calcs={}).applicability is not A
+
+
+def test_an_imported_free_rotor_and_a_tabulated_potential_need_no_scan_job():
+    free = with_torsion(sources=IMPORTED)
+    assert assess(free, calcs={}).applicability is A, codes(assess(free, calcs={}))
+    tabulated = with_torsion(
+        {"rotors": [rotor(representation="imported_potential", potential_source_key="pot")]},
+        sources=(*IMPORTED, src("pot", "torsional_surface", None, locator="literature", literature_ref="lit_d")),
+    )
+    result = assess(tabulated, calcs={})
+    assert result.applicability is A, codes(result)
+    missing = with_torsion({"rotors": [rotor(representation="imported_potential", potential_source_key="nope")]}, sources=IMPORTED)
+    assert "required_source_unusable:torsional_surface" in codes(assess(missing, calcs={}))
 
 
 def test_a_rotational_component_asks_nothing_of_temperature_energy_zero_or_scale():

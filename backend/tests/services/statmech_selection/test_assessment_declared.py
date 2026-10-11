@@ -140,6 +140,24 @@ def test_an_opt_calculation_with_a_hessian_is_a_curvature_witness_without_a_job_
 # --- the stationary-point owner and findings ----------------------------------------------------------------------------
 
 
+def test_an_imported_curvature_source_never_overrides_a_local_witness_that_contradicts_the_claim():
+    from tests.services.statmech_selection._support import FSF_ENTROPY, CurvatureFacts, src
+
+    curvature = CurvatureFacts(
+        has_freq_result=True, n_imag=1, imag_freq_cm1=-500.0, imaginary_modes=((1, -500.0, None),), tau_cm1=50.0, tau_basis="default"
+    )
+    calcs = approved_calcs()
+    calcs["calc_f"] = freq("calc_f", curvature=curvature)
+    sources = (
+        src("geom", "geometry", "calc_o"),
+        src("curv", "curvature", "calc_f"),
+        src("imp", "curvature", None, locator="literature", literature_ref="lit_b"),
+        src("fsf", "scale_factor", None, locator="scale_factor", scale_factor=FSF_ENTROPY),
+    )
+    a = assess(declared(sources=sources), calcs=calcs)
+    assert a.applicability is INC and "curvature_contradicts_claim" in codes(a)
+
+
 def test_an_imaginary_mode_above_tau_contradicts_a_minimum_claim_by_magnitude_not_count():
     from tests.services.statmech_selection._support import CurvatureFacts
 

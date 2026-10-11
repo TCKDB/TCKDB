@@ -30,7 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from app.db.models.common import RecordReviewStatus
@@ -339,6 +339,9 @@ class _Evidence:
     parameters: list[str]
     scale_factors: list[Any]
     surface_unavailable: bool = False
+    #: Roles an imported-parameter (literature) source supports. Parameters taken from the literature are supported
+    #: provenance for the role: they are neither a fabricated local job nor re-validated here.
+    imported: set[str] = field(default_factory=set)
 
 
 def _declared_evidence(
@@ -359,6 +362,8 @@ def _declared_evidence(
                 ev.parameters.append(src.literature_ref)
             if src.role == "geometry":
                 ev.geometry_sources.append(f"literature:{src.literature_ref}")
+            if src.role in ("geometry", "curvature"):
+                ev.imported.add(src.role)
             continue
         calc = world.usable(src.calculation_ref)
         if calc is None:
@@ -851,6 +856,8 @@ def assess_candidate(
             pinned = next(iter(ev.geometry_refs))
         elif len(ev.geometry_refs) > 1:
             f.add("multiple_geometry_alternatives")
+        elif "geometry" in ev.imported:
+            f.note("imported_parameters_not_revalidated:geometry")
         elif decl is not None and not any(r.code.startswith("required_source_unusable:geometry") for r in f.reasons):
             f.add("required_evidence_unavailable:geometry")
     if request.target.scope.kind is ScopeKind.ts_determination and candidate.determination is not None:
@@ -862,7 +869,11 @@ def assess_candidate(
         elif pinned != det.evaluated_geometry_ref:
             f.add("scope_incompatible")
     roles_used = frozenset({"curvature", "alternative_characterization", "energy", "geometry_optimization"})
-    if needs_curvature:
+    if needs_curvature and not ev.curvature and "curvature" in ev.imported:
+        # Imported frequencies are supported parameters for the role, not a local job to fabricate; the stationary-point
+        # character they were computed at is the source's own statement, and is disclosed as such.
+        f.note("imported_parameters_not_revalidated:curvature")
+    elif needs_curvature:
         evidence["curvature"] = _judge_curvature(ev, pinned, request, subject, f, roles_used=roles_used)
     for calc_ref in ev.geometry_sources:
         calc = world.calculations.get(calc_ref)

@@ -29,6 +29,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.api.error_contract import CodedValueError
 from app.api.errors import NotFoundError, not_found
 from app.db.models.calculation import Calculation
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
@@ -63,6 +64,7 @@ from app.services.statmech_selection.facts import (
 from app.services.statmech_selection.inventory import load_legacy_facts
 from app.services.statmech_selection.models import StatmechRequest
 from app.services.statmech_selection.vocabulary import CandidateKind, OwnerKind, PopulationKind
+from app.services.structure_selection.bounds import CODE_TRAVERSAL_TOO_DEEP as STRUCTURE_TRAVERSAL_TOO_DEEP
 from app.services.structure_selection.loader import (
     _CALC_OPTIONS,
     _count_nested,
@@ -201,11 +203,32 @@ def _nested_rows(session: Session, statmech_ids: Collection[int], profile: froze
     declared = select(StatmechModelDeclaration.id).where(StatmechModelDeclaration.statmech_id.in_(ids))
     total += count(select(func.count()).select_from(StatmechModelMember).where(StatmechModelMember.declaration_id.in_(declared)))
     total += count(select(func.count()).select_from(StatmechModelSource).where(StatmechModelSource.declaration_id.in_(declared)))
+    # The recipe's own arrays (scale contributions, projected and excluded modes, rotors and the modes each replaces) are
+    # nested rows too. Only the candidate count has been bounded so far, so reading one JSON object per declaration is bounded.
+    for recipe in session.scalars(select(StatmechModelDeclaration.recipe).where(StatmechModelDeclaration.statmech_id.in_(ids))):
+        total += _recipe_array_items(recipe)
     calc_ids = _calc_ids_of(session, ids)
     if calc_ids:
         badges = fetch_review_badges(session, record_type=SubmissionRecordType.calculation, record_ids=calc_ids)
         visible = {c for c in calc_ids if badges[c].status in profile}
         total += _count_nested(session, visible, set())
+    return total
+
+
+def _recipe_array_items(recipe: Any) -> int:
+    """Items in the recipe's arrays: contributions, projected and excluded modes, rotors and each rotor's replaced modes."""
+    if not isinstance(recipe, dict):
+        return 0
+    total = 0
+    for key in ("scale_contributions", "projected_mode_indices", "excluded_mode_indices"):
+        items = recipe.get(key)
+        total += len(items) if isinstance(items, list) else 0
+    rotors = recipe.get("rotors")
+    if isinstance(rotors, list):
+        total += len(rotors)
+        for rotor in rotors:
+            replaced = rotor.get("replaces_mode_indices") if isinstance(rotor, dict) else None
+            total += len(replaced) if isinstance(replaced, list) else 0
     return total
 
 
@@ -377,17 +400,23 @@ def load_population(session: Session, scan: PopulationScan, request: StatmechReq
         bounds=StructureBounds(dependency_depth=request.bounds.dependency_depth),
     )
     owners = dict.fromkeys((c.id for c in calcs), subject.entry_ref)
-    normalized = _normalize_calculations(
-        session,
-        calcs,
-        {c.id: badges[c.id].status for c in calcs},
-        owners,
-        request=shim,
-        with_lineage=True,
-        findings=findings,
-        geometry_refs=geometry_refs,
-        profile=profile,
-    )
+    try:
+        normalized = _normalize_calculations(
+            session,
+            calcs,
+            {c.id: badges[c.id].status for c in calcs},
+            owners,
+            request=shim,
+            with_lineage=True,
+            findings=findings,
+            geometry_refs=geometry_refs,
+            profile=profile,
+        )
+    except CodedValueError as refusal:
+        # The shared walk reports its own bound; this service answers in its own code.
+        if refusal.code == STRUCTURE_TRAVERSAL_TOO_DEEP:
+            raise traversal_too_deep(request.bounds) from refusal
+        raise
     # A traversal that stops at the bound with parents unexplored is not a complete closure.
     if any(c.lineage_truncated for c in normalized.values()):
         raise traversal_too_deep(request.bounds)

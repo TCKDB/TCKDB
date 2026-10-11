@@ -111,6 +111,7 @@ ADVISORY_PREFIXES: tuple[str, ...] = (
     "rotor_without_torsion_row",
     "member_energy_not_compared",
     "legacy_record_read_as_stored",
+    "imported_parameters_not_revalidated",
     "superseded_record",
     "source_not_linked_to_geometry_optimization",
 )

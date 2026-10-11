@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.common import RecordReviewStatus
 from app.db.models.statmech import Statmech
+from app.db.models.statmech_declaration import StatmechModelDeclaration
 from app.services.read_snapshot import begin_read_snapshot
 from app.services.statmech_selection.assessment import (
     QualificationSummary,
@@ -61,7 +62,17 @@ def _excluded(session: Session, scan_excluded: tuple[tuple[int, RecordReviewStat
     listed = scan_excluded[:MAX_EXCLUDED_LISTED]
     if not listed:
         return ()
-    refs = dict(session.execute(select(Statmech.id, Statmech.public_ref).where(Statmech.id.in_([i for i, _, _ in listed]))).tuples().all())
+    ids = [i for i, _, _ in listed]
+    refs = dict(session.execute(select(Statmech.id, Statmech.public_ref).where(Statmech.id.in_(ids))).tuples().all())
+    # A candidate is named by its declaration when it has one (``smd_``), by its record otherwise (``sm_``): the same name
+    # everywhere else in the answer.
+    refs.update(
+        session.execute(
+            select(StatmechModelDeclaration.statmech_id, StatmechModelDeclaration.public_ref).where(
+                StatmechModelDeclaration.statmech_id.in_(ids)
+            )
+        ).tuples().all()
+    )
     return tuple(
         {"candidate_ref": refs[i], "review_status": status.value if status is not None else "", "reason": reason}
         for i, status, reason in listed
