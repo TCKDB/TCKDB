@@ -769,42 +769,69 @@ def test_no_code_under_rehearsal_can_tell_it_is_rehearsed() -> None:
 #: The ways to reach a raw DBAPI connection or cursor, from which ``COMMIT``
 #: can be sent past every guard the rehearsal has (#592). The goal is to catch
 #: an accidental one in TCKDB's own code, not to defeat a determined author.
-_RAW_DRIVER_ATTRIBUTES = {"dbapi_connection", "driver_connection", "raw_connection", "pgconn"}
-#: ``<x>.connection.cursor`` / ``<x>.connection.execute``: on a SQLAlchemy
-#: pooled-connection proxy these go straight to the driver.
-_RAW_VIA_CONNECTION = {"cursor", "execute"}
+_RAW_DRIVER_ATTRIBUTES = {"dbapi_connection", "driver_connection", "raw_connection", "pgconn", "cursor"}
+#: ``<x>.connection`` read as a value (``fairy = s.connection().connection``) is
+#: the pooled-connection proxy, whose ``cursor()`` and ``execute()`` go straight
+#: to the driver. ``Session.connection()`` -- the *call* -- is SQLAlchemy's own
+#: Connection and is fine. Aliasing the proxy is the ordinary way a driver
+#: ``COPY`` would be written, so the proxy itself is flagged, not only the
+#: ``.connection.cursor`` spelling.
+_RAW_PROXY_ATTRIBUTE = "connection"
+#: Names that, given to ``getattr`` / ``operator.attrgetter`` as a literal,
+#: reach one of the above (``attrgetter('connection.cursor')`` splits on dots).
+_RAW_NAMES = _RAW_DRIVER_ATTRIBUTES | {_RAW_PROXY_ATTRIBUTE}
 #: A ``getattr`` whose first argument mentions one of these, with a computed
 #: name, is treated as a possible way round the attribute scan.
 _CONNECTION_WORDS = ("conn", "session", "engine", "cursor", "raw", "driver", "bind")
 
 
+#: ``.cursor`` expressions that are not a driver cursor: the keyset-pagination
+#: token on the analytics read request (``app/services/scientific_read``). Named
+#: by expression, not by file, so the rest of that file is still scanned.
+_NOT_A_DRIVER_CURSOR = {"request.cursor"}
+
+
+def _names_a_raw_attribute(node: ast.expr) -> bool:
+    return (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and any(part in _RAW_NAMES for part in node.value.split("."))
+    )
+
+
 def _raw_driver_uses(source: str) -> list[int]:
+    tree = ast.parse(source)
+    called = {id(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
     lines = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(tree):
         if isinstance(node, ast.Attribute):
             if node.attr in _RAW_DRIVER_ATTRIBUTES:
+                if ast.unparse(node) not in _NOT_A_DRIVER_CURSOR:
+                    lines.append(node.lineno)
+            elif node.attr == _RAW_PROXY_ATTRIBUTE and id(node) not in called:
+                lines.append(node.lineno)
+        elif isinstance(node, ast.Call) and len(node.args) >= 1:
+            func = node.func
+            is_getattr = isinstance(func, ast.Name) and func.id == "getattr" and len(node.args) >= 2
+            is_attrgetter = (isinstance(func, ast.Name) and func.id == "attrgetter") or (
+                isinstance(func, ast.Attribute) and func.attr == "attrgetter"
+            )
+            if is_attrgetter and any(_names_a_raw_attribute(arg) for arg in node.args):
+                lines.append(node.lineno)
+            elif is_getattr and _names_a_raw_attribute(node.args[1]):
                 lines.append(node.lineno)
             elif (
-                node.attr in _RAW_VIA_CONNECTION
-                and isinstance(node.value, ast.Attribute)
-                and node.value.attr == "connection"
+                is_getattr
+                and not (isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str))
+                and any(word in ast.unparse(node.args[0]).lower() for word in _CONNECTION_WORDS)
             ):
+                # getattr(conn, "dbapi_" + "connection"): the name is built, so no
+                # attribute scan can see it. Only getattr *on something that
+                # looks like a connection* counts: the codebase reads ORM columns
+                # and request fields by variable name in dozens of places, and
+                # that is not a route to a cursor.
                 lines.append(node.lineno)
-        elif (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "getattr"
-            and len(node.args) >= 2
-            and not (isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str))
-            and any(word in ast.unparse(node.args[0]).lower() for word in _CONNECTION_WORDS)
-        ):
-            # getattr(conn, "dbapi_" + "connection"): the name is built, so no
-            # attribute scan can see it. Only getattr *on something that
-            # looks like a connection* counts: the codebase reads ORM columns
-            # and request fields by variable name in dozens of places, and
-            # that is not a route to a cursor.
-            lines.append(node.lineno)
-    return lines
+    return sorted(set(lines))
 
 
 def test_nothing_under_app_reaches_the_raw_driver_connection() -> None:
@@ -840,3 +867,32 @@ def test_the_raw_driver_scan_sees_a_use() -> None:
     # own Connection.execute.
     assert _raw_driver_uses("getattr(obj, 'name', None)\nsession.connection().execute(q)\n") == []
     assert _raw_driver_uses("getattr(row, column.key)\ngetattr(request, name)\n") == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        # Aliasing the pooled-connection proxy, then using it (#606 A).
+        "fairy = s.connection().connection\nfairy.cursor().execute('COMMIT')\n",
+        "fairy = s.connection().connection\nfairy.execute('COMMIT')\n",
+        "fairy = s.connection().connection\n",
+        "cur = fairy.cursor\n",
+        # A literal name that still reaches the driver.
+        "getattr(conn.connection, 'cursor')\n",
+        "getattr(fairy, 'cursor')\n",
+        "getattr(x, 'connection')\n",
+        # attrgetter splits its argument on dots.
+        "import operator\noperator.attrgetter('connection.cursor')(s)\n",
+        "from operator import attrgetter\nattrgetter('connection')(s)\n",
+        # A computed name on something connection-like.
+        "getattr(conn, name)\n",
+    ],
+)
+def test_the_raw_driver_scan_sees_an_aliased_use(source: str) -> None:
+    assert _raw_driver_uses(source), source
+
+
+def test_the_raw_driver_scan_leaves_ordinary_connection_calls_alone() -> None:
+    assert _raw_driver_uses("if request.cursor is not None:\n    pass\n") == []
+    assert _raw_driver_uses("c = session.connection()\nc.execute(q)\nengine.connect()\n") == []
+    assert _raw_driver_uses("getattr(row, 'name')\nattrgetter('created_at')(row)\n") == []

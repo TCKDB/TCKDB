@@ -12,7 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from sqlalchemy.exc import IntegrityError, NoResultFound, OperationalError
+from sqlalchemy.exc import DBAPIError, IntegrityError, NoResultFound, OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.error_contract import (
@@ -691,6 +691,44 @@ def _operational_error_handler(
     )
 
 
+def _database_error_handler(request: Request, exc: DBAPIError) -> JSONResponse:
+    """500 ``database_request_failed``: the database refused, and it is not ours to retry.
+
+    The catch-all for a driver error that is neither an ``IntegrityError``
+    (409) nor an ``OperationalError`` (503): a deferred trigger raising
+    (``P0001``), a ``DataError`` such as ``22023`` at commit, a
+    ``ProgrammingError`` from a schema that has drifted. Starlette dispatches
+    by MRO, so the two handlers above still win for their own classes. Before
+    this, a failure that surfaced at commit (see ``get_write_db``) was an
+    unhandled exception: ``text/plain`` 500 and a traceback in the ASGI log.
+
+    Nothing about the statement, its parameters or the driver's message goes in
+    the body; they stay in the server log with the SQLSTATE. Not a 503: a
+    retry of the same request meets the same refusal.
+    """
+    orig = getattr(exc, "orig", None)
+    sqlstate = getattr(orig, "sqlstate", None)
+    logger.error(
+        "%s on %s %s: sqlstate=%s orig=%r",
+        type(exc).__name__,
+        request.method,
+        request.url.path,
+        sqlstate,
+        orig,
+        exc_info=exc,
+    )
+    return JSONResponse(
+        status_code=500,
+        content=error_envelope(
+            "The database refused this request and nothing from it was saved. "
+            "Retrying the same request is unlikely to help; report it to the "
+            "operator.",
+            code="database_request_failed",
+            fallback_code="database_request_failed",
+        ),
+    )
+
+
 def _idempotency_conflict_handler(
     _request: Request, exc: IdempotencyConflict
 ) -> JSONResponse:
@@ -779,6 +817,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(NoResultFound, _no_result_found_handler)  # type: ignore[arg-type]
     app.add_exception_handler(IntegrityError, _integrity_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(OperationalError, _operational_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(DBAPIError, _database_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(InvalidIdempotencyKey, _invalid_idempotency_key_handler)  # type: ignore[arg-type]
     app.add_exception_handler(IdempotencyConflict, _idempotency_conflict_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ArtifactIntegrityError, _artifact_integrity_handler)  # type: ignore[arg-type]

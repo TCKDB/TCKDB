@@ -109,13 +109,16 @@ def commit_delay(scratch_engine) -> Iterator[dict]:
     """Point the app's session factory at the scratch database.
 
     ``SessionLocal`` is configured in place, so every module that imported it
-    by name (the failed-upload audit, the idempotency writer) follows. The
+    by name (the failed-upload audit, the idempotency writer) follows; the
+    stamp factory and the module ``engine`` move with it. The
     returned dict is the delay switch: ``commit_delay["s"] = 0.6`` makes every
     commit through that factory take that long *before* it happens.
     """
     factory = api_deps.SessionLocal
-    previous = factory.kw.get("bind")
-    factory.configure(bind=scratch_engine)
+    # Rebinds the module ``engine``, ``SessionLocal`` *and* the stamp engine
+    # behind ``StampSessionLocal``; binding the factory alone left the other
+    # two on the pytest database (#628).
+    previous = api_deps.bind_ambient_session_factory(scratch_engine)
     state = {"s": 0.0}
 
     def slow_commit(_session) -> None:
@@ -127,7 +130,7 @@ def commit_delay(scratch_engine) -> Iterator[dict]:
         yield state
     finally:
         event.remove(factory, "before_commit", slow_commit)
-        factory.configure(bind=previous)
+        api_deps.bind_ambient_session_factory(previous)
 
 
 @pytest.fixture
@@ -168,6 +171,24 @@ def _register(base_url: str) -> str:
     )
     assert response.status_code == 201, response.text
     return _session_cookie(response)
+
+
+def test_the_fixture_points_every_ambient_factory_at_the_scratch_database(
+    commit_delay, scratch_engine
+) -> None:
+    """``commit_delay`` used to rebind ``SessionLocal`` only, leaving the module
+    ``engine`` and the stamp factory on the pytest database (#628)."""
+
+    def _database(bind) -> str:
+        with bind.connect() as connection:
+            return connection.scalar(text("SELECT current_database()"))
+
+    scratch = _database(scratch_engine)
+    assert api_deps.engine is scratch_engine
+    assert _database(api_deps.engine) == scratch
+    assert _database(api_deps.stamp_engine) == scratch
+    assert api_deps.StampSessionLocal.kw["bind"] is api_deps.stamp_engine
+    assert _database(api_deps.SessionLocal.kw["bind"]) == scratch
 
 
 # ---------------------------------------------------------------------------
