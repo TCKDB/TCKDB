@@ -175,7 +175,7 @@ function TermBlock({ term }: { term: CompositeSchemeTerm }) {
                 <div><dt>Operation</dt><dd>{operationLabel(term.operation)}</dd></div>
                 <div><dt>Energy component</dt><dd>{componentLabel(term.energy_component)}</dd></div>
                 <div><dt>Formula</dt><dd>{formula ?? "none"}</dd></div>
-                <div><dt>Exponent</dt><dd>{term.exponent ?? "none"}</dd></div>
+                <div><dt>α (exponent)</dt><dd>{term.exponent ?? "none"}</dd></div>
                 <div><dt>Weights</dt><dd>{linearityText(term)}</dd></div>
                 {expression && <div className="kv-list--wide"><dt>As a sum</dt><dd><code className="data">{expression}</code></dd></div>}
             </dl>

@@ -100,6 +100,8 @@ describe("CompositeSchemePage", () => {
         expect(within(inputs).getByText("64/37 (1.729730)")).toBeInTheDocument()
         expect(screen.getByText("−27/37 E(TZ) + 64/37 E(QZ)")).toBeInTheDocument()
         expect(screen.getByText("The total is a fixed weighted sum of the input energies.")).toBeInTheDocument()
+        expect(screen.getAllByText("α (exponent)").length).toBeGreaterThan(0)
+        expect(screen.queryByText("Exponent")).not.toBeInTheDocument()
     })
 
     it("puts the coefficient column right after the input level", async () => {

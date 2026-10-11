@@ -7,7 +7,7 @@ part of the scheme's identity exactly as the exponent of ``inverse_power`` is: n
 table changes, and no data step.
 
 Revision ID: a7d2c9e5b413
-Revises: d3a8f6c1b952
+Revises: a7c3e9d1f5b2
 Create Date: 2026-10-11
 """
 
@@ -17,7 +17,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a7d2c9e5b413"
-down_revision: Union[str, Sequence[str], None] = "d3a8f6c1b952"
+down_revision: Union[str, Sequence[str], None] = "a7c3e9d1f5b2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

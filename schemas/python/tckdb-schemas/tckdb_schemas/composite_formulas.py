@@ -223,7 +223,7 @@ def extrapolation_weights(
 def is_linear_formula(formula: CompositeExtrapolationFormula | str) -> bool:
     """Whether the limit is a fixed linear combination of the input energies.
 
-    ``True`` for the three two-point formulas, ``False`` for
+    ``True`` for the four two-point formulas, ``False`` for
     ``exponential_three_point``.
     """
     kind = formula if isinstance(formula, CompositeExtrapolationFormula) else CompositeExtrapolationFormula(formula)
