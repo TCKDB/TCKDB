@@ -55,7 +55,7 @@ from app.db.models.reaction import (
     ReactionFamily,
 )
 from app.db.models.species import Species, SpeciesEntry
-from app.db.models.statmech import Statmech
+from app.db.models.statmech import Statmech, StatmechSourceCalculation
 from app.db.models.thermo import (
     Thermo,
     ThermoNASA,
@@ -63,7 +63,7 @@ from app.db.models.thermo import (
     ThermoPoint,
     ThermoWilhoit,
 )
-from app.db.models.transport import Transport
+from app.db.models.transport import Transport, TransportSourceCalculation
 from app.schemas.reads.scientific_common import (
     CollapseMode,
     SelectionPolicy,
@@ -810,21 +810,43 @@ def _load_selected_thermos(
     return out
 
 
-def _entry_is_linear(session: Session, species_entry_id: int) -> bool | None:
-    """Best-effort linearity from any statmech row for the entry.
+def _transport_linked_is_linear(
+    session: Session, species_entry_id: int, transport_id: int
+) -> bool | None:
+    """Linearity stated by a statmech record *linked* to this transport record.
 
-    Used for the CHEMKIN transport geometry index. Deterministic (lowest
-    statmech id with a non-null ``is_linear``); ``None`` if no statmech
-    states it, letting the serializer fall back to structure inference.
+    Used for the CHEMKIN transport geometry index. The only link between a
+    transport record and a statmech record is a source calculation they both
+    cite (``transport_source_calculation`` / ``statmech_source_calculation``),
+    so only statmech rows of the same species entry that share one are
+    consulted. A sibling statmech record the transport does not link to is
+    never read: which interpretation supplied the value must be attributable.
+
+    Returns ``None`` (unknown) when no linked record states ``is_linear`` or
+    when the linked records disagree; the serializer then falls back to
+    structure inference and the caller reports the gap.
     """
-    rows = session.execute(
-        select(Statmech.id, Statmech.is_linear)
-        .where(Statmech.species_entry_id == species_entry_id)
-        .order_by(Statmech.id)
-    ).all()
-    for _sid, is_linear in rows:
-        if is_linear is not None:
-            return is_linear
+    values = set(
+        session.scalars(
+            select(Statmech.is_linear)
+            .join(
+                StatmechSourceCalculation,
+                StatmechSourceCalculation.statmech_id == Statmech.id,
+            )
+            .join(
+                TransportSourceCalculation,
+                TransportSourceCalculation.calculation_id
+                == StatmechSourceCalculation.calculation_id,
+            )
+            .where(
+                Statmech.species_entry_id == species_entry_id,
+                TransportSourceCalculation.transport_id == transport_id,
+                Statmech.is_linear.is_not(None),
+            )
+        ).all()
+    )
+    if len(values) == 1:
+        return values.pop()
     return None
 
 
@@ -884,10 +906,28 @@ def _build_species_record(
         if session.get(Transport, tid) is not None
     ]
 
+    is_linear: bool | None = None
+    if transports:
+        is_linear = _transport_linked_is_linear(
+            session, species_entry_id, transports[0].transport.id
+        )
+        if is_linear is None:
+            gaps.append(
+                ExportGap(
+                    kind="transport",
+                    ref=entry.public_ref,
+                    detail=(
+                        "no statmech record linked to the selected transport "
+                        "states linearity; geometry index is inferred from the "
+                        "structure"
+                    ),
+                )
+            )
+
     record = SpeciesExportRecord(
         species_entry=entry,
         species=species,
-        is_linear=_entry_is_linear(session, species_entry_id),
+        is_linear=is_linear,
         thermos=thermos,
         transports=transports,
     )

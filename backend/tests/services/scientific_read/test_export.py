@@ -34,15 +34,19 @@ from tests.services.scientific_read._factories import (
     attach_kinetics_falloff,
     attach_kinetics_plog_entry,
     attach_kinetics_third_body_efficiency,
+    attach_statmech_source_calculation,
     attach_thermo_nasa,
     attach_thermo_nasa9,
     attach_thermo_points,
     attach_thermo_wilhoit,
+    attach_transport_source_calculation,
+    make_calculation,
     make_chem_reaction,
     make_kinetics,
     make_reaction_entry,
     make_species,
     make_species_entry,
+    make_statmech,
     make_thermo_scalar,
     make_transport,
     next_inchi_key,
@@ -720,3 +724,83 @@ def test_falloff_export_emits_block_and_sorted_third_body(db_session):
     # No PLOG/Chebyshev on a falloff record.
     assert d["plog_entries"] is None
     assert d["chebyshev"] is None
+
+
+# ---------------------------------------------------------------------------
+# Transport geometry index: linearity comes only from a LINKED statmech record
+# (issue #730). A sibling statmech record the transport does not link to must
+# never supply it, whatever its id.
+# ---------------------------------------------------------------------------
+
+
+def _tran_dat_geometry_index(result) -> int:
+    row = next(ln for ln in result.files["tran.dat"].splitlines() if ln.strip())
+    return int(row.split()[1])
+
+
+def _one_species_with_transport(session):
+    # Methane-sized (5 atoms) so structure inference would say "nonlinear" (2).
+    _, entry, _ = _species_with_nasa(session, smiles="C")
+    tr = make_transport(session, species_entry=entry)
+    return entry, tr
+
+
+def _approve_transport(session, tr):
+    # Approved transport is immutable, so source calculations attach first.
+    _approve(session, SubmissionRecordType.transport, tr.id)
+
+
+def _export_species(session, entry):
+    rs = build_export_record_set(
+        session, seed=SeedSelection(species_refs=[entry.public_ref])
+    )
+    return rs, serialize_chemkin(rs, options=ChemkinOptions())
+
+
+def test_transport_linearity_comes_from_linked_statmech_not_lowest_id(db_session):
+    entry, tr = _one_species_with_transport(db_session)
+    # Lowest-id statmech says nonlinear but is NOT linked to the transport.
+    make_statmech(db_session, species_entry=entry, is_linear=False)
+    # The linked statmech (higher id) says linear.
+    linked = make_statmech(db_session, species_entry=entry, is_linear=True)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    attach_statmech_source_calculation(db_session, statmech=linked, calculation=calc)
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    rs, result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].is_linear is True
+    assert _tran_dat_geometry_index(result) == 1
+    assert not [g for g in result.gaps if g.kind == "transport"]
+
+
+def test_transport_linearity_is_absent_without_a_link(db_session):
+    entry, tr = _one_species_with_transport(db_session)
+    _approve_transport(db_session, tr)
+    # Two statmech records, neither linked to the transport.
+    make_statmech(db_session, species_entry=entry, is_linear=True)
+    make_statmech(db_session, species_entry=entry, is_linear=False)
+
+    rs, result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].is_linear is None
+    # Falls back to structure inference (5 atoms -> nonlinear), not to a sibling.
+    assert _tran_dat_geometry_index(result) == 2
+    gaps = [g for g in result.gaps if g.kind == "transport"]
+    assert [g.ref for g in gaps] == [entry.public_ref]
+    assert "linked" in gaps[0].detail
+
+
+def test_transport_linearity_is_absent_when_linked_records_disagree(db_session):
+    entry, tr = _one_species_with_transport(db_session)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    for flag in (True, False):
+        sm = make_statmech(db_session, species_entry=entry, is_linear=flag)
+        attach_statmech_source_calculation(db_session, statmech=sm, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    rs, _result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].is_linear is None
