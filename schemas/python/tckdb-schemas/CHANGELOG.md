@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.117.1 - 2026-10-11
+
+Contract layout only (#686), plus a recorded limit.
+
+- Shared blocks are keyed by the surfaces that own them: `Code group` and `Model group` headings and anchors are now a short
+  hash of the owning surface set (`cg-3fa9c2`), independent of the order the surfaces are listed in, instead of a number by
+  size and order, so adding a code no longer renumbers later groups. A link to a group of one names its only member.
+- "Will be refused if" keeps a one-line gloss beside a code several surfaces share, as it already did for a code only one
+  surface returns.
+- A group's "Traced via" column names the surfaces that reach a code a way the rest do not (`(only on: ...)`).
+- Recorded limit (#745): the same-order comparison that stops an energy duplicated on a moved copy has its own allowance of 50
+  million work units per record, now charged 800 units per pair plus 30 per atom (it was 30 per atom, so a record of
+  three-atom shapes could run it for about eleven seconds). Past the allowance a pair is compared only by the relabelling
+  search, and failing that is counted as different.
+
 ## 0.117.0 - 2026-10-11
 
 One new refusal code, `database_request_failed`.

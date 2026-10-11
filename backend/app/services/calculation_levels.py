@@ -542,6 +542,12 @@ _GYRATION_SLACK = 1e-9
 #: residual, about 30 array elements per atom (the unit :class:`SearchBudget` counts in).
 _KABSCH_UNITS_PER_ATOM = 30
 
+#: Work units charged per same-order Kabsch comparison on top of the per-atom term: ``kabsch_rmsd`` has a
+#: fixed cost of about 19 microseconds per call (array construction, the SVD call), which at 3 atoms is
+#: most of its time. Charging only ``30 * n`` let a record run the in-order allowance for ~11 s at n = 3
+#: against ~0.6 s at n = 200. 800 units makes the two comparable (#745).
+_KABSCH_UNITS_PER_CALL = 800
+
 
 def _gyration_radius(coordinates: Sequence[tuple[float, float, float]]) -> float:
     """Root-mean-square distance of the atoms from their centroid (Angstrom).
@@ -616,7 +622,7 @@ def _same_polyatomic_structure(
         # geometries. The allowance is its own (``SearchBudget.same_order_work_left``), so relabelling
         # searches on other pairs cannot starve this cheap test. Past it the pair is not compared in
         # order; the relabelling search below may still find it, and failing that it is *different*.
-        in_allowance = budget is None or budget.charge_same_order(_KABSCH_UNITS_PER_ATOM * len(a.coordinates))
+        in_allowance = budget is None or budget.charge_same_order(_KABSCH_UNITS_PER_CALL + _KABSCH_UNITS_PER_ATOM * len(a.coordinates))
         if in_allowance and kabsch_rmsd(a.coordinates, b.coordinates) <= tolerance:
             return True
     if Counter(a.species) != Counter(b.species):

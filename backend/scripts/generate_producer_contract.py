@@ -95,6 +95,7 @@ import dataclasses
 import datetime as _dt
 import difflib
 import enum
+import hashlib
 import inspect
 import json
 import re
@@ -1431,9 +1432,20 @@ enforces), `docs/guides/api_vocabulary.md` (every code and token).
 class SharedGroup:
     """Items that exactly the same surfaces carry, printed once and linked from each of them."""
 
-    number: int
     titles: tuple[str, ...]
     items: tuple[Any, ...]
+
+    @property
+    def key(self) -> str:
+        """A name that depends only on which surfaces own the group, not on how many groups there are.
+
+        Groups used to be numbered by size and order, so adding one code that made a new owner set
+        renumbered every later group and moved every link to them in the contract diff (#686). The
+        owner set is what makes a group one group, so a hash of it is stable under adding or removing
+        codes, and changes only when the set of surfaces that share them does. It is a set, so the
+        titles are sorted first: the order the surfaces are listed in does not move it.
+        """
+        return hashlib.sha1("\x00".join(sorted(self.titles)).encode()).hexdigest()[:6]
 
 
 @dataclasses.dataclass
@@ -1779,8 +1791,8 @@ class ContractBuilder:
         """Split each surface's items into those only it has and groups several surfaces share.
 
         Items with the same set of owning surfaces form one group, so a surface lists a handful of
-        group links instead of every item. Returns the groups (largest owner set first, numbered
-        from 1) and, per surface, the items that are its alone, in the order it listed them.
+        group links instead of every item. Returns the groups (largest owner set first, each
+        keyed by :attr:`SharedGroup.key`) and, per surface, the items that are its alone, in the order it listed them.
         """
         owners: dict[Any, list[str]] = {}
         for title, items in by_surface.items():
@@ -1793,7 +1805,10 @@ class ContractBuilder:
             if len(titles) >= self.SHARED_MIN_SURFACES:
                 by_owners.setdefault(tuple(titles), []).append(item)
         ranked = sorted(by_owners, key=lambda titles: (-len(titles), [order[t] for t in titles]))
-        groups = [SharedGroup(number, titles, tuple(by_owners[titles])) for number, titles in enumerate(ranked, 1)]
+        groups = [SharedGroup(titles, tuple(by_owners[titles])) for titles in ranked]
+        keys = [group.key for group in groups]
+        if len(set(keys)) != len(keys):
+            raise ValueError("two shared groups hash to one key; lengthen SharedGroup.key")
         alone = {
             title: [item for item in items if len(owners[item]) < self.SHARED_MIN_SURFACES]
             for title, items in by_surface.items()
@@ -1925,7 +1940,27 @@ class ContractBuilder:
         if len(self._surfaces_by_code().get(code, [])) <= 1:
             return self._refusal_line(code)
         statuses = "/".join(str(s) for s in self.code_facts(code).statuses)
-        return f"- {self.code_ref(code)} ({statuses})"
+        gloss = self._gloss(code)
+        return f"- {self.code_ref(code)} ({statuses}){': ' + gloss if gloss else ''}"
+
+    #: The longest one-line gloss printed beside a shared code in "Will be refused if".
+    GLOSS_MAX_CHARS = 140
+
+    def _gloss(self, code: str) -> str:
+        """A code's first sentence, cut to one short line, or ``""`` when it has none.
+
+        The full sentence is in the code's reference entry; a producer reading "Will be refused if"
+        should not have to follow a link to learn what an adapter-critical code means (#686).
+        """
+        # Only the sentence written beside the code at its raise site. A check's ``asserts`` is printed
+        # once in "Checks several surfaces apply" and a gloss must not repeat that body.
+        facts = self.code_facts(code)
+        if not facts.message:
+            return ""
+        said = _first_sentence(facts.message)
+        if len(said) > self.GLOSS_MAX_CHARS:
+            said = said[: self.GLOSS_MAX_CHARS - 1].rsplit(" ", 1)[0].rstrip(",;:") + "\u2026"
+        return said
 
     # -- rendering ----------------------------------------------------------
 
@@ -2205,6 +2240,30 @@ class ContractBuilder:
         out += self._render_shared_models()
         return out
 
+    def _group_what(self, group: SharedGroup, noun: str) -> str:
+        """What a link to a group says it holds: a count, or the item itself for a group of one.
+
+        A link to a group of one is pure indirection, so it names its only member (#686).
+        """
+        if len(group.items) != 1:
+            return _count(len(group.items), noun)
+        (item,) = group.items
+        return self.code_ref(item) if noun == "code" else self.names.link(item)
+
+    def _traced_via(self, group: SharedGroup, code: str, by_title: dict[str, Surface]) -> str:
+        """How the group's surfaces reach a code, naming the surfaces that differ from the rest.
+
+        Where one way is not common to the whole group it is followed by ``(only on: ...)``, so the
+        column is not read as "every surface, every way" (#686).
+        """
+        per_surface = {title: set(self.surface_codes(by_title[title]).get(code, [])) for title in group.titles}
+        ways = sorted(set().union(*per_surface.values()))
+        parts = []
+        for way in ways:
+            on = [title for title in group.titles if way in per_surface[title]]
+            parts.append(way if len(on) == len(group.titles) else f"{way} (only on: {', '.join(on)})")
+        return "; ".join(parts)
+
     def _titles_links(self, titles: Iterable[str]) -> str:
         return ", ".join(f"[`{t}`](#{_anchor('s', t)})" for t in titles)
 
@@ -2225,9 +2284,9 @@ class ContractBuilder:
         ]
         for group in groups:
             out += [
-                f'<a id="{_anchor("cg", str(group.number))}"></a>',
+                f'<a id="{_anchor("cg", group.key)}"></a>',
                 "",
-                f"### Code group {group.number}",
+                f"### Code group {group.key}",
                 "",
                 f"{_count(len(group.items), 'code')} on {len(group.titles)} surfaces: {self._titles_links(group.titles)}.",
                 "",
@@ -2236,8 +2295,7 @@ class ContractBuilder:
             ]
             for code in group.items:
                 statuses = ", ".join(str(s) for s in sorted({e.status for e in self.catalogue[code]}))
-                how = sorted({h for title in group.titles for h in self.surface_codes(by_title[title]).get(code, [])})
-                out.append(f"| {self.code_ref(code)} | {statuses} | {_cell('; '.join(how))} |")
+                out.append(f"| {self.code_ref(code)} | {statuses} | {_cell(self._traced_via(group, code, by_title))} |")
             out.append("")
         return out
 
@@ -2257,9 +2315,9 @@ class ContractBuilder:
         ]
         for group in groups:
             out += [
-                f'<a id="{_anchor("mg", str(group.number))}"></a>',
+                f'<a id="{_anchor("mg", group.key)}"></a>',
                 "",
-                f"### Model group {group.number}",
+                f"### Model group {group.key}",
                 "",
                 f"{_count(len(group.items), 'model')} nested on {len(group.titles)} surfaces: {self._titles_links(group.titles)}.",
                 "",
@@ -2323,8 +2381,8 @@ class ContractBuilder:
                 "",
                 *[f"- {names.link(sub)}" for sub in model_alone[surface.title]],
                 *[
-                    f"- [Model group {group.number}](#{_anchor('mg', str(group.number))}):"
-                    f" {_count(len(group.items), 'model')}, nested on {len(group.titles)} surfaces"
+                    f"- [Model group {group.key}](#{_anchor('mg', group.key)}):"
+                    f" {self._group_what(group, 'model')}, nested on {len(group.titles)} surfaces"
                     for group in model_groups
                     if surface.title in group.titles
                 ],
@@ -2399,8 +2457,8 @@ class ContractBuilder:
         if belongs:
             out += [
                 *[
-                    f"- [Code group {group.number}](#{_anchor('cg', str(group.number))}):"
-                    f" {_count(len(group.items), 'code')}, returned on {len(group.titles)} surfaces"
+                    f"- [Code group {group.key}](#{_anchor('cg', group.key)}):"
+                    f" {self._group_what(group, 'code')}, returned on {len(group.titles)} surfaces"
                     for group in belongs
                 ],
                 "",
