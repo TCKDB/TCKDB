@@ -48,6 +48,7 @@ from app.db.models.calculation import (
 )
 from app.db.models.common import (
     CalculationGeometryRole,
+    CalculationType,
     ReactionRole,
     RecordReviewStatus,
     StatmechCalculationRole,
@@ -460,12 +461,30 @@ class LinearityWitness:
 
 
 @dataclass
+class LinearityConflict:
+    """Linked records that state opposite linearity for one transport.
+
+    ``source_kind`` is as on :class:`LinearityWitness`; ``refs`` names the
+    disagreeing records (``calc_`` refs or statmech refs), sorted. A conflict
+    is not settled by a later source: the export writes the assumed value and
+    says so.
+    """
+
+    source_kind: str
+    refs: tuple[str, ...]
+
+    def to_dict(self) -> dict:
+        return {"kind": self.source_kind, "refs": list(self.refs)}
+
+
+@dataclass
 class SpeciesExportRecord:
     species_entry: SpeciesEntry
     species: Species
     linearity: LinearityWitness | None
     thermos: list[SelectedThermo] = field(default_factory=list)
     transports: list[SelectedTransport] = field(default_factory=list)
+    linearity_conflict: LinearityConflict | None = None
 
     @property
     def is_linear(self) -> bool | None:
@@ -486,6 +505,9 @@ class SpeciesExportRecord:
             "is_linear": self.is_linear,
             "is_linear_source": (
                 None if self.linearity is None else self.linearity.to_dict()
+            ),
+            "is_linear_conflict": (
+                None if self.linearity_conflict is None else self.linearity_conflict.to_dict()
             ),
             "thermos": [t.to_dict() for t in self.thermos],
             "transports": [t.to_dict() for t in self.transports],
@@ -860,44 +882,56 @@ def _load_selected_thermos(
 _STATMECH_GEOMETRY_ROLES = (StatmechCalculationRole.opt, StatmechCalculationRole.freq)
 
 
-def _calculation_geometry_texts(session: Session, calculation_id: int) -> list[str]:
-    """The XYZ text of a calculation's own geometry: final outputs, else inputs."""
-    outputs = list(
-        session.scalars(
-            select(Geometry.xyz_text)
-            .join(
-                CalculationOutputGeometry,
-                CalculationOutputGeometry.geometry_id == Geometry.id,
-            )
-            .where(
-                CalculationOutputGeometry.calculation_id == calculation_id,
-                CalculationOutputGeometry.role == CalculationGeometryRole.final,
-                Geometry.xyz_text.is_not(None),
-            )
-            .order_by(CalculationOutputGeometry.output_order)
-        ).all()
-    )
-    if outputs:
-        return outputs
-    return list(
-        session.scalars(
-            select(Geometry.xyz_text)
-            .join(
-                CalculationInputGeometry,
-                CalculationInputGeometry.geometry_id == Geometry.id,
-            )
-            .where(
-                CalculationInputGeometry.calculation_id == calculation_id,
-                Geometry.xyz_text.is_not(None),
-            )
-            .order_by(CalculationInputGeometry.input_order)
-        ).all()
-    )
+def _calculation_geometry_texts(
+    session: Session, calculation_id: int, calculation_type: CalculationType
+) -> list[str]:
+    """The XYZ text that states the molecule's own structure, by calculation type.
+
+    * ``opt``: its *final output* geometry. Its input is only a guess (a linear
+      starting structure says nothing about where the optimisation ended).
+    * ``freq`` and ``sp``: the *input* geometry, the structure the calculation
+      was run on.
+    * anything else (``scan``, ``irc``, ``path_search``, ``composite``,
+      ``conf``): no text. Those calculations move the geometry or evaluate a
+      composite, so none of their geometries is the equilibrium structure.
+    """
+    if calculation_type is CalculationType.opt:
+        return list(
+            session.scalars(
+                select(Geometry.xyz_text)
+                .join(
+                    CalculationOutputGeometry,
+                    CalculationOutputGeometry.geometry_id == Geometry.id,
+                )
+                .where(
+                    CalculationOutputGeometry.calculation_id == calculation_id,
+                    CalculationOutputGeometry.role == CalculationGeometryRole.final,
+                    Geometry.xyz_text.is_not(None),
+                )
+                .order_by(CalculationOutputGeometry.output_order)
+            ).all()
+        )
+    if calculation_type in (CalculationType.freq, CalculationType.sp):
+        return list(
+            session.scalars(
+                select(Geometry.xyz_text)
+                .join(
+                    CalculationInputGeometry,
+                    CalculationInputGeometry.geometry_id == Geometry.id,
+                )
+                .where(
+                    CalculationInputGeometry.calculation_id == calculation_id,
+                    Geometry.xyz_text.is_not(None),
+                )
+                .order_by(CalculationInputGeometry.input_order)
+            ).all()
+        )
+    return []
 
 
 def _transport_linearity_witness(
     session: Session, species_entry_id: int, transport_id: int
-) -> LinearityWitness | None:
+) -> tuple[LinearityWitness | None, LinearityConflict | None]:
     """The attributed statement of the selected transport's linearity, if any.
 
     Used for the CHEMKIN transport geometry index. A value is only ever taken
@@ -905,20 +939,22 @@ def _transport_linearity_witness(
     record, so the export is the same whatever order records were deposited in.
     Sources, in order:
 
-    1. A calculation the transport cites (``transport_source_calculation``,
-       any role: each one is a calculation on this molecule) whose own geometry
-       :func:`classify_xyz_linearity` sorts as linear or bent. Near-linear
-       (undetermined) geometries say nothing. Calculations that disagree say
+    1. A calculation the transport cites (``transport_source_calculation``, any
+       role) whose own structure :func:`classify_xyz_linearity` sorts as linear
+       or bent (see :func:`_calculation_geometry_texts` for which geometry of
+       which calculation type counts). Near-linear (undetermined) geometries say
        nothing.
-    2. A statmech record of the same species entry that cites one of the same
-       calculations as an ``opt`` or ``freq`` source, and states ``is_linear``.
-       Records that disagree say nothing.
+    2. A statmech record of the same species entry that cites one of those
+       calculations as an ``opt`` or ``freq`` source and states ``is_linear``.
 
-    Never a sibling statmech record the transport does not link to. Returns
-    ``None`` when neither source states it.
+    Within a source, records that disagree are a *conflict*, returned as such
+    and not settled by the next source: a statmech value must not decide a
+    disagreement between the transport's own geometries. Never a sibling
+    statmech record the transport does not link to. Returns ``(None, None)``
+    when neither source states it.
     """
     calc_rows = session.execute(
-        select(Calculation.id, Calculation.public_ref)
+        select(Calculation.id, Calculation.public_ref, Calculation.type)
         .join(
             TransportSourceCalculation,
             TransportSourceCalculation.calculation_id == Calculation.id,
@@ -927,22 +963,27 @@ def _transport_linearity_witness(
         .order_by(Calculation.id)
     ).all()
 
-    from_geometry: dict[str, bool] = {}
-    for calc_id, calc_ref in calc_rows:
-        verdicts = set()
-        for text in _calculation_geometry_texts(session, calc_id):
+    verdicts: dict[str, set[bool]] = {}
+    for calc_id, calc_ref, calc_type in calc_rows:
+        for text in _calculation_geometry_texts(session, calc_id, calc_type):
             verdict = classify_xyz_linearity(text).verdict
             if verdict is GeometryLinearity.linear:
-                verdicts.add(True)
+                verdicts.setdefault(calc_ref, set()).add(True)
             elif verdict is GeometryLinearity.bent:
-                verdicts.add(False)
-        if len(verdicts) == 1:
-            from_geometry[calc_ref] = verdicts.pop()
-    if from_geometry and len(set(from_geometry.values())) == 1:
-        ref = next(iter(from_geometry))
-        return LinearityWitness(
-            is_linear=from_geometry[ref], source_kind="calculation_geometry", source_ref=ref
-        )
+                verdicts.setdefault(calc_ref, set()).add(False)
+    if verdicts:
+        stated = set().union(*verdicts.values())
+        if len(stated) == 1:
+            ref = sorted(verdicts)[0]
+            return (
+                LinearityWitness(
+                    is_linear=stated.pop(),
+                    source_kind="calculation_geometry",
+                    source_ref=ref,
+                ),
+                None,
+            )
+        return None, LinearityConflict("calculation_geometry", tuple(sorted(verdicts)))
 
     stat_rows = session.execute(
         select(Statmech.public_ref, Statmech.is_linear)
@@ -964,12 +1005,17 @@ def _transport_linearity_witness(
         .distinct()
         .order_by(Statmech.public_ref)
     ).all()
-    if stat_rows and len({is_linear for _ref, is_linear in stat_rows}) == 1:
-        ref, is_linear = stat_rows[0]
-        return LinearityWitness(
-            is_linear=is_linear, source_kind="statmech", source_ref=ref
-        )
-    return None
+    if stat_rows:
+        if len({is_linear for _ref, is_linear in stat_rows}) == 1:
+            ref, is_linear = stat_rows[0]
+            return (
+                LinearityWitness(
+                    is_linear=is_linear, source_kind="statmech", source_ref=ref
+                ),
+                None,
+            )
+        return None, LinearityConflict("statmech", tuple(ref for ref, _ in stat_rows))
+    return None, None
 
 
 def _build_species_record(
@@ -1029,8 +1075,9 @@ def _build_species_record(
     ]
 
     linearity: LinearityWitness | None = None
+    linearity_conflict: LinearityConflict | None = None
     if transports:
-        linearity = _transport_linearity_witness(
+        linearity, linearity_conflict = _transport_linearity_witness(
             session, species_entry_id, transports[0].transport.id
         )
 
@@ -1040,6 +1087,7 @@ def _build_species_record(
         linearity=linearity,
         thermos=thermos,
         transports=transports,
+        linearity_conflict=linearity_conflict,
     )
     return record, gaps
 

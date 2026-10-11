@@ -664,6 +664,11 @@ def _geometry_index(
     told linear from bent by counting (CO2, HCN and C2H2 are linear), so the
     index is written as nonlinear (2) and flagged ``assumed``.
     """
+    conflict = sr.linearity_conflict
+    if conflict is not None:
+        # Stated linearity disagrees: not settled by any other source, so the
+        # value is assumed, and the comment and gap name the disagreement.
+        return 2, f"assumed nonlinear: {conflict.source_kind} disagree ({', '.join(conflict.refs)})", True
     witness = sr.linearity
     if witness is not None:
         index = 1 if witness.is_linear else 2
@@ -711,16 +716,21 @@ def _build_tran_dat(
             continue
         geom, geom_source, assumed = _geometry_index(sr, comp)
         if assumed:
-            gaps.append(
-                ExportGap(
-                    kind="transport",
-                    ref=sr.species_entry.public_ref,
-                    detail=(
-                        "linearity assumed nonlinear from atom count: neither a "
-                        "geometry of a calculation the transport cites nor a "
-                        "linked statmech record states it"
-                    ),
+            conflict = sr.linearity_conflict
+            if conflict is not None:
+                detail = (
+                    "linearity assumed nonlinear: the linked "
+                    f"{conflict.source_kind.replace('_', ' ')} records disagree "
+                    f"({', '.join(conflict.refs)})"
                 )
+            else:
+                detail = (
+                    "linearity assumed nonlinear from atom count: neither a "
+                    "geometry of a calculation the transport cites nor a "
+                    "linked statmech record states it"
+                )
+            gaps.append(
+                ExportGap(kind="transport", ref=sr.species_entry.public_ref, detail=detail)
             )
         dipole = tr.dipole_debye or 0.0
         polar = tr.polarizability_angstrom3 or 0.0
