@@ -304,7 +304,7 @@ def _refusal_code(**kwargs) -> str:
 
 @pytest.mark.parametrize("kind", ["atom_energy", "atom_hf", "atom_thermal", "soc", "isodesmic", "other"])
 def test_a_frequency_level_is_refused_on_every_kind_but_the_bacs(kind: str) -> None:
-    """Arkane keys only pbac and mbac on energy//freq; atom energies on the energy level."""
+    """Only the BAC kinds take a frequency level for now (Arkane keys pbac and mbac on energy//freq)."""
     code = _refusal_code(
         kind=kind,
         name="x",
@@ -312,6 +312,32 @@ def test_a_frequency_level_is_refused_on_every_kind_but_the_bacs(kind: str) -> N
         frequency_level_of_theory=dict(_FREQ_A),
     )
     assert code == "energy_correction_scheme_frequency_level_not_applicable"
+
+
+def test_the_refusal_does_not_claim_every_other_kind_is_keyed_on_one_level() -> None:
+    """#649: Arkane's isodesmic reference data is keyed on the freq//energy pair, so the wording is "for now"."""
+    with pytest.raises(ValidationError) as refused:
+        EnergyCorrectionSchemeRef(
+            kind="isodesmic",
+            name="x",
+            level_of_theory=dict(_ENERGY),
+            frequency_level_of_theory=dict(_FREQ_A),
+        )
+    message = str(refused.value)
+    assert "accepted only on the BAC kinds" in message and "for now" in message
+    assert "keyed on its level of theory" not in message
+    doc = EnergyCorrectionSchemeRef.__doc__ or ""
+    assert "every other kind) on the energy level alone" not in doc
+    assert "isodesmic" in doc
+
+
+def test_the_catalogue_note_does_not_claim_arkane_keys_only_the_bacs() -> None:
+    """#649: the catalogue note feeds PRODUCER_CONTRACT.md and must carry the "for now" wording too."""
+    from app.api.code_catalogue import CATALOGUE
+
+    entry = next(c for c in CATALOGUE if c.code == "energy_correction_scheme_frequency_level_not_applicable")
+    assert "Arkane" not in entry.note
+    assert "accepted only on bac_petersson and bac_melius for now" in entry.note
 
 
 @pytest.mark.parametrize("kind", ["bac_petersson", "bac_melius"])
