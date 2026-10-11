@@ -378,7 +378,7 @@ If your chemistry is legitimate: Declare the structure's real composition: give 
 
 ### `reconcile_charge_multiplicity`
 
-`app.services.charge_multiplicity_reconciliation:reconcile_charge_multiplicity`. warn; codes `charge_mismatch`, `multiplicity_mismatch`. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ArtifactsUploadRequest`](#s-artifactsuploadrequest).
+`app.services.charge_multiplicity_reconciliation:reconcile_charge_multiplicity`. warn; codes `charge_mismatch` (advisory check flag, not a refusal code), `multiplicity_mismatch` (advisory check flag, not a refusal code). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ArtifactsUploadRequest`](#s-artifactsuploadrequest).
 
 The charge and spin multiplicity a depositor declares match the ones the electronic-structure log says the calculation was actually run at.
 
@@ -388,7 +388,7 @@ If your chemistry is legitimate: Absence is not contradiction: if the producing 
 
 ### `evaluate_frequency_list_linearity`
 
-`app.services.frequency_geometry_linearity:evaluate_frequency_list_linearity`. warn; codes `freq_list_linear_mode_count_for_bent_geometry`, `freq_list_bent_mode_count_for_linear_geometry`. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
+`app.services.frequency_geometry_linearity:evaluate_frequency_list_linearity`. warn; codes `freq_list_linear_mode_count_for_bent_geometry` (advisory check flag, not a refusal code), `freq_list_bent_mode_count_for_linear_geometry` (advisory check flag, not a refusal code). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundleV0`](#s-contributionbundlev0).
 
 A frequency list's mode count should match the shape of the geometry it is attached to: ``3N - 5`` vibrations for a collinear molecule and ``3N - 6`` for a non-linear one, so a list carrying one count on a geometry of the other shape is one mode wrong in whichever direction it leans.
 
@@ -408,7 +408,7 @@ If your chemistry is legitimate: The whole check is advisory, so there is nothin
 
 ### `_warn_absent`
 
-`app.services.reaction_atom_map:_warn_absent`. warn; codes `reaction_atom_map_absent`. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
+`app.services.reaction_atom_map:_warn_absent`. warn; codes `reaction_atom_map_absent` (advisory check flag, not a refusal code). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
 A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
 
@@ -418,7 +418,7 @@ If your chemistry is legitimate: None is needed — the warning *is* the accommo
 
 ### `_warn_incomplete`
 
-`app.services.reaction_atom_map:_warn_incomplete`. warn; codes `reaction_atom_map_participants_incomplete`, `reaction_atom_map_atoms_incomplete`. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
+`app.services.reaction_atom_map:_warn_incomplete`. warn; codes `reaction_atom_map_participants_incomplete` (advisory check flag, not a refusal code), `reaction_atom_map_atoms_incomplete` (advisory check flag, not a refusal code). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
 A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
 
@@ -509,13 +509,13 @@ If your chemistry is legitimate: Deposit no geometry. An explicitly declared *st
 
 `app.services.transition_state_validation:persist_transition_state_validation_evidence` enforces 4 checks. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest).
 
-- **warn; codes `transition_state_missing_irc_evidence`.** A deposited saddle point should carry passing intrinsic-reaction-coordinate evidence that it connects the declared reactants and products.
+- **warn; codes `transition_state_missing_irc_evidence` (advisory check flag, not a refusal code).** A deposited saddle point should carry passing intrinsic-reaction-coordinate evidence that it connects the declared reactants and products.
   If your chemistry is legitimate: None needed — the warning is the accommodation. Note the warning fires on absence of a *passing* ``irc`` record, so an IRC that was run and failed is stored and still warns, and so does a deposit whose only evidence is an energy ordering or an imaginary mode: neither shows the saddle point connects the declared endpoints.
-- **warn; codes `transition_state_energy_ordering_mixed_levels`.** The energies an energy-ordering record compares should be taken at one level of theory per energy kind.
+- **warn; codes `transition_state_energy_ordering_mixed_levels` (advisory check flag, not a refusal code).** The energies an energy-ordering record compares should be taken at one level of theory per energy kind.
   If your chemistry is legitimate: None needed: the warning is the accommodation. Take every energy of a kind at one level, or accept the warning.
 - **block; codes [`ts_energy_ordering_stated_energy_mismatch`](REFUSAL_CODES.md#c-ts-energy-ordering-stated-energy-mismatch), [`network_state_energy_sum_mismatch`](REFUSAL_CODES.md#c-network-state-energy-sum-mismatch).** A stated energy should be the energy TCKDB stores for the calculation(s) it cites. An energy-ordering energy is the single point's (or optimisation's) energy, or for an E0 the paired electronic energy plus the cited frequency's ZPE, scaled by the stated ``zpe_scale_factor``; an E0 with no stated factor is never refused. A network state energy that cites one calculation per participant is the stoichiometric sum of their stored energies (on a zero shared by the solve's states, the difference between states).
   If your chemistry is legitimate: State the stored energy, or cite the calculation the number came from. An E0 built with a scaled ZPE states ``zpe_scale_factor``. A network state energy states unrounded kJ/mol derived from hartree (x 2625.499639), or ``energy_precision_kj_mol``; sources are optional.
-- **warn; codes `transition_state_energy_ordering_not_compared`, `network_state_energy_sum_not_compared`.** Every energy an energy-ordering record or a network state energy states should be comparable with the energy TCKDB stores for the calculation(s) it cites.
+- **warn; codes `transition_state_energy_ordering_not_compared` (advisory check flag, not a refusal code), `network_state_energy_sum_not_compared` (advisory check flag, not a refusal code).** Every energy an energy-ordering record or a network state energy states should be comparable with the energy TCKDB stores for the calculation(s) it cites.
   If your chemistry is legitimate: None needed: the warning is the accommodation. Deposit the cited energy (and the ZPE, at the electronic energy's geometry) to compare; for a network state energy, cite every participant with an sp, opt or composite calculation and state ``energy_precision_kj_mol``.
 
 <a id="k-evaluate-species-entry-frequency"></a>
@@ -526,7 +526,7 @@ If your chemistry is legitimate: Deposit no geometry. An explicitly declared *st
 
 - **block; codes [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum).** A species entry declared a minimum has no imaginary vibrational modes.
   If your chemistry is legitimate: Declare ``species_entry_kind='vdw_complex'``, which records the same mode with a warning instead, or deposit the structure through a transition-state payload if the single imaginary mode is real.
-- **warn; codes [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state`.** A van der Waals complex is formally a minimum, so an imaginary mode on one is recorded and flagged rather than refused — unless the mode is too stiff to be an intermolecular one, which suggests a genuine reaction coordinate.
+- **warn; codes [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), `n_imag_higher_order_saddle` (advisory check flag, not a refusal code), `n_imag_suggests_transition_state` (advisory check flag, not a refusal code).** A van der Waals complex is formally a minimum, so an imaginary mode on one is recorded and flagged rather than refused — unless the mode is too stiff to be an intermolecular one, which suggests a genuine reaction coordinate.
   If your chemistry is legitimate: This *is* the escape hatch for the blocking minimum rule. Its own cost is that a genuinely mislabelled saddle point deposited as a van der Waals complex is accepted with a warning.
 
 <a id="k-enthalpy-reference-error"></a>

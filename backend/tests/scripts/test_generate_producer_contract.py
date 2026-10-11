@@ -428,7 +428,7 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_codes: s
 #: ``REFUSAL_CODES.md``, shipped beside the contract the way the changelog is, because the next
 #: statmech pull request would have brought it to 699_942 bytes and the one after would have crossed.
 #: Each surface keeps its own code table and its one-line meanings; only the long per-code entries moved.
-#: 686_228 to 588_151 bytes, with the ceiling left at 700_000.
+#: 686_228 to 588_881 bytes, with the ceiling left at 700_000.
 MARKDOWN_BYTE_CEILING = 700_000
 
 
@@ -648,7 +648,7 @@ def test_every_link_into_the_code_reference_resolves(committed_markdown: str, co
     assert len(links) > 150, len(links)
     assert unresolved_code_links(committed_markdown, committed_codes) == set()
     # A bare ``#c-...`` would resolve in no viewer: the entry is in another file.
-    assert re.findall(r"\]\(#c-[^)]*\)", committed_markdown) == []
+    assert bare_code_links(committed_markdown) == []
     assert "](REFUSAL_CODES.md#refusal-code-reference)" in committed_markdown
 
 
@@ -659,10 +659,44 @@ def test_a_code_link_to_a_dropped_entry_is_caught(committed_markdown: str, commi
     assert anchor in unresolved_code_links(committed_markdown, mutated)
 
 
+def bare_code_links(markdown: str) -> list[str]:
+    """Links ``](#c-...)`` in the contract: the entry is in another file, so no viewer resolves them."""
+    return re.findall(r"\]\(#(c-[^)]*)\)", markdown)
+
+
 def test_a_code_link_left_as_a_bare_anchor_is_caught(committed_markdown: str) -> None:
-    """Mutation: a link into the code file loses its file name; it must no longer count as a code link."""
+    """Mutation: a link into the code file loses its file name; the checker must report it."""
+    assert bare_code_links(committed_markdown) == []
     mutated = committed_markdown.replace("](REFUSAL_CODES.md#c-", "](#c-", 1)
-    assert re.findall(r"\]\(#c-[^)]*\)", mutated) != []
+    assert len(bare_code_links(mutated)) == 1
+
+
+CONTRACT_LINK = re.compile(r"\]\(PRODUCER_CONTRACT\.md#([^)]+)\)")
+
+
+def unresolved_back_links(codes: str, markdown: str) -> set[str]:
+    """``PRODUCER_CONTRACT.md#anchor`` links in the code file whose anchor is not in the contract."""
+    anchors = set(re.findall(r'<a id="([^"]+)"', markdown))
+    return {link for link in CONTRACT_LINK.findall(codes) if link not in anchors}
+
+
+def bare_back_links(codes: str) -> list[str]:
+    """Links ``](#k-...)`` in the code file: the shared rule entries are in the contract, not here."""
+    return re.findall(r"\]\(#(k-[^)]*)\)", codes)
+
+
+def test_every_back_link_from_the_code_file_resolves(committed_markdown: str, committed_codes: str) -> None:
+    assert len(CONTRACT_LINK.findall(committed_codes)) >= 10
+    assert unresolved_back_links(committed_codes, committed_markdown) == set()
+    assert bare_back_links(committed_codes) == []
+
+
+def test_a_back_link_made_bare_or_pointed_at_nothing_is_caught(committed_markdown: str, committed_codes: str) -> None:
+    """Mutations: the back-links lose their file name; or point at an anchor the contract does not have."""
+    bare = committed_codes.replace("](PRODUCER_CONTRACT.md#k-", "](#k-", 1)
+    assert len(bare_back_links(bare)) == 1
+    gone = re.sub(r"\]\(PRODUCER_CONTRACT\.md#(k-[^)]*)\)", r"](PRODUCER_CONTRACT.md#\1-gone)", committed_codes, count=1)
+    assert len(unresolved_back_links(gone, committed_markdown)) == 1
 
 
 def code_occurrences(codes: str, code: str) -> int:
