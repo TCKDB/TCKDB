@@ -286,6 +286,14 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "get_species_conformer_selection_manifest", None, None, "tests/test_structure_selection.py",
     ),
     (
+        "POST", "/api/v1/scientific/statmech/select",
+        "select_statmech_models", None, None, "tests/test_statmech_selection.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/statmech/select/manifest",
+        "get_statmech_selection_manifest", None, None, "tests/test_statmech_selection.py",
+    ),
+    (
         "POST", "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select",
         "select_transition_state_evidence", None, None, "tests/test_structure_selection.py",
     ),

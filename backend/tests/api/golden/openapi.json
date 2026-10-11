@@ -2466,6 +2466,36 @@
         "title": "AtomParamApplication",
         "type": "string"
       },
+      "AtomScope": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "atom",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "AtomScope",
+        "type": "object"
+      },
+      "AuthorizedMatchingModels": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "authorized_matching_models",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "AuthorizedMatchingModels",
+        "type": "object"
+      },
       "AvailableArtifactSections": {
         "description": "Boolean map describing which optional artifact-record sections\nhave data. Mirrors the ``available_sections`` pattern used by other\nscientific read shapes; lets clients introspect availability\nwithout fetching the heavy sections.",
         "properties": {
@@ -2964,6 +2994,27 @@
           "has_review"
         ],
         "title": "AvailableTransportSections",
+        "type": "object"
+      },
+      "BasinScope": {
+        "additionalProperties": false,
+        "properties": {
+          "conformer_group_ref": {
+            "pattern": "^cg_[a-z2-7]{26}$",
+            "title": "Conformer Group Ref",
+            "type": "string"
+          },
+          "kind": {
+            "const": "basin",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "conformer_group_ref"
+        ],
+        "title": "BasinScope",
         "type": "object"
       },
       "BathGasIn": {
@@ -9532,7 +9583,7 @@
             "type": "boolean"
           },
           "coverage_requirement": {
-            "$ref": "#/components/schemas/CoverageRequirement",
+            "$ref": "#/components/schemas/app__services__structure_selection__models__CoverageRequirement",
             "default": "known_values",
             "description": "known_values orders what is known, conditional on it; all_requested_members is a complete claim."
           },
@@ -9590,7 +9641,7 @@
           "objective": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Objective"
+                "$ref": "#/components/schemas/app__services__structure_selection__models__Objective"
               },
               {
                 "type": "null"
@@ -12831,6 +12882,90 @@
         "title": "CondaRuntime",
         "type": "object"
       },
+      "ConditionsBody": {
+        "additionalProperties": false,
+        "properties": {
+          "concentration_mol_m3": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concentration Mol M3"
+          },
+          "energy_domain_kj_mol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Domain"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Energy-resolved (deferred) tasks only; states its energy_reference."
+          },
+          "energy_reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnergyReferenceBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentBody"
+          },
+          "normalization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Normalization"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pressure_pa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure Pa"
+          },
+          "temperature_domain_k": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Domain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "volume_m3": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume M3"
+          }
+        },
+        "title": "ConditionsBody",
+        "type": "object"
+      },
       "ConformerAssignmentSchemeSummary": {
         "description": "Compact projection of a ``conformer_assignment_scheme`` row.\n\nUsed by both selection rows (``conformer_selection.assignment_scheme_id``)\nand observation rows (``conformer_observation.assignment_scheme_id``).\nNullable ref so the schema can represent observations / selections\nwithout an attached scheme.",
         "properties": {
@@ -14434,7 +14569,7 @@
             "type": "boolean"
           },
           "coverage_requirement": {
-            "$ref": "#/components/schemas/CoverageRequirement",
+            "$ref": "#/components/schemas/app__services__structure_selection__models__CoverageRequirement",
             "default": "known_values",
             "description": "known_values orders what is known, conditional on it; all_requested_members is a complete claim."
           },
@@ -14493,7 +14628,7 @@
           "objective": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Objective"
+                "$ref": "#/components/schemas/app__services__structure_selection__models__Objective"
               },
               {
                 "type": "null"
@@ -16158,15 +16293,6 @@
         "title": "CountedState",
         "type": "string"
       },
-      "CoverageRequirement": {
-        "description": "``known_values``: an ordering of what is known, conditional on it. ``all_requested_members``: a complete claim.",
-        "enum": [
-          "known_values",
-          "all_requested_members"
-        ],
-        "title": "CoverageRequirement",
-        "type": "string"
-      },
       "CreateReleaseRequest": {
         "description": "Open a draft release.\n\nNo ``doi`` field: a DOI is recorded after a deposit, never asserted up\nfront.\n\n``data_license`` and ``code_license`` are optional and default to the\nhouse pair — ``CC-BY-4.0`` for the corpus, ``MIT`` for the code. A curator\ncutting an ordinary release does not have to restate the licensing of the\nproject on every request, and one who is publishing under different terms\npasses them explicitly and gets exactly what they passed. An empty string\nis still refused: not naming a license and declaring there is none are\ndifferent claims.",
         "properties": {
@@ -16608,6 +16734,21 @@
         "title": "DeclarationSource",
         "type": "object"
       },
+      "DeferredTask": {
+        "description": "Recognised tasks this release does not evaluate. They validate, then answer ``unsupported_task``.",
+        "enum": [
+          "density_of_states",
+          "sum_of_states",
+          "higher_order_ts_model",
+          "prepared_population",
+          "trapped_population",
+          "thermochemical_formation",
+          "numerical_evaluation",
+          "numerical_construction"
+        ],
+        "title": "DeferredTask",
+        "type": "string"
+      },
       "DepositRights": {
         "additionalProperties": false,
         "description": "Deposit-time agreement that the records may be licensed as stated.",
@@ -16732,15 +16873,6 @@
         "title": "DeterministicTrustSummary",
         "type": "object"
       },
-      "DividingSurface": {
-        "description": "The dividing surface of a transition-state model. ``variational`` is recognised and not evaluated.",
-        "enum": [
-          "conventional_saddle_point",
-          "variational"
-        ],
-        "title": "DividingSurface",
-        "type": "string"
-      },
       "DoiRequest": {
         "description": "Record a DOI minted out-of-band for a published release.",
         "properties": {
@@ -16755,6 +16887,25 @@
           "doi"
         ],
         "title": "DoiRequest",
+        "type": "object"
+      },
+      "Domain": {
+        "additionalProperties": false,
+        "properties": {
+          "max": {
+            "title": "Max",
+            "type": "number"
+          },
+          "min": {
+            "title": "Min",
+            "type": "number"
+          }
+        },
+        "required": [
+          "min",
+          "max"
+        ],
+        "title": "Domain",
         "type": "object"
       },
       "DryRunAction": {
@@ -16821,6 +16972,14 @@
         ],
         "title": "ElectronicLevelIn",
         "type": "object"
+      },
+      "ElectronicScope": {
+        "enum": [
+          "entry_state",
+          "declared_levels"
+        ],
+        "title": "ElectronicScope",
+        "type": "string"
       },
       "ElectronicStateFact": {
         "additionalProperties": false,
@@ -17773,6 +17932,23 @@
         "title": "EnergyCorrectionTermSummary",
         "type": "object"
       },
+      "EnergyReferenceBody": {
+        "additionalProperties": false,
+        "properties": {
+          "zero": {
+            "$ref": "#/components/schemas/EnergyZero"
+          },
+          "zpe": {
+            "$ref": "#/components/schemas/ZpeInclusion"
+          }
+        },
+        "required": [
+          "zero",
+          "zpe"
+        ],
+        "title": "EnergyReferenceBody",
+        "type": "object"
+      },
       "EnergyTransferIn": {
         "additionalProperties": false,
         "description": "Energy transfer model parameters for a network solve.\n\n``scope`` declares what the model was specified over. ⟨ΔE⟩down is a\nproperty of a (well, collider) pair, and ``per_well`` — the default —\nrecords it that way. But Arkane, RMG and MESS inputs routinely declare one\nsingle-exponential-down for the entire network, and demanding a per-pair\nentry for such a run would force the depositor to paste one number N\ntimes, fabricating specificity the calculation never had. ``network_wide``\nlets that be said honestly. See ADR 0009.\n\n:param scope: ``per_well`` (names a state and a collider) or\n    ``network_wide`` (names neither, by declaration).\n:param state_key: Local key of the well this applies to. Required for\n    ``per_well``, forbidden for ``network_wide``.\n:param collider_species_key: Local key of the collider species. Required\n    for ``per_well``, forbidden for ``network_wide``.\n:param model: Energy transfer model name (e.g. ``single_exponential_down``).\n:param alpha0_cm_inv: Average downward energy transfer at reference temperature.\n:param t_exponent: Temperature exponent for the energy transfer model.\n:param t_ref_k: Reference temperature in K.\n:param note: Optional note.",
@@ -17864,6 +18040,14 @@
         "title": "EnergyUnit",
         "type": "string"
       },
+      "EnergyZero": {
+        "enum": [
+          "electronic",
+          "e0"
+        ],
+        "title": "EnergyZero",
+        "type": "string"
+      },
       "EnergyZeroConvention": {
         "enum": [
           "lowest_state",
@@ -17875,6 +18059,28 @@
         "title": "EnergyZeroConvention",
         "type": "string"
       },
+      "EnsembleScope": {
+        "additionalProperties": false,
+        "properties": {
+          "ensemble_declaration_ref": {
+            "description": "The immutable model declaration whose members are the ensemble. A filtered context is not one.",
+            "pattern": "^smd_[a-z2-7]{26}$",
+            "title": "Ensemble Declaration Ref",
+            "type": "string"
+          },
+          "kind": {
+            "const": "explicit_equilibrium_ensemble",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "ensemble_declaration_ref"
+        ],
+        "title": "EnsembleScope",
+        "type": "object"
+      },
       "EnthalpyReferenceKind": {
         "description": "Formation zero with elemental reference enthalpies pinned at 298.15 K.\n\nH(T) = formation enthalpy at 298.15 K + the species enthalpy increment\nfrom 298.15 K. The elemental term is not reevaluated at T. Absence is\nnull, never an unspecified enum member. No basis may be inferred.",
         "enum": [
@@ -17882,6 +18088,17 @@
         ],
         "title": "EnthalpyReferenceKind",
         "type": "string"
+      },
+      "EnvironmentBody": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/EnvironmentKind",
+            "default": "gas"
+          }
+        },
+        "title": "EnvironmentBody",
+        "type": "object"
       },
       "EnvironmentClosureEntry": {
         "additionalProperties": false,
@@ -17916,6 +18133,16 @@
         ],
         "title": "EnvironmentClosureEntry",
         "type": "object"
+      },
+      "EnvironmentKind": {
+        "enum": [
+          "gas",
+          "solution",
+          "surface",
+          "condensed"
+        ],
+        "title": "EnvironmentKind",
+        "type": "string"
       },
       "EvidenceCompletenessBreakdown": {
         "additionalProperties": true,
@@ -18117,6 +18344,32 @@
           "environment_ref"
         ],
         "title": "ExecutionEnvironmentManifestSummary",
+        "type": "object"
+      },
+      "ExplicitModelRevisions": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "model_revisions",
+            "title": "Kind",
+            "type": "string"
+          },
+          "model_refs": {
+            "items": {
+              "pattern": "^(?:sm|smd)_[a-z2-7]{26}$",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Model Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "model_refs"
+        ],
+        "title": "ExplicitModelRevisions",
         "type": "object"
       },
       "FactState": {
@@ -20851,6 +21104,22 @@
         ],
         "title": "IntegrityRequestEcho",
         "type": "object"
+      },
+      "Intent": {
+        "enum": [
+          "qualify",
+          "protocol_preferred"
+        ],
+        "title": "Intent",
+        "type": "string"
+      },
+      "IsotopeConvention": {
+        "enum": [
+          "entry_documented_masses",
+          "natural_abundance_average"
+        ],
+        "title": "IsotopeConvention",
+        "type": "string"
       },
       "IsotopeMasses": {
         "description": "The mass convention the model's rotational constants and frequencies were computed with.",
@@ -27983,7 +28252,7 @@
           "dividing_surface": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DividingSurface"
+                "$ref": "#/components/schemas/tckdb_schemas__statmech_declarations__DividingSurface"
               },
               {
                 "type": "null"
@@ -37355,6 +37624,16 @@
         "title": "NetworkZeroBasis",
         "type": "string"
       },
+      "Normalization": {
+        "enum": [
+          "internal_only",
+          "fixed_volume",
+          "standard_state_pressure",
+          "standard_state_concentration"
+        ],
+        "title": "Normalization",
+        "type": "string"
+      },
       "NuclearSpin": {
         "description": "The nuclear-spin convention of the partition function.",
         "enum": [
@@ -37407,14 +37686,26 @@
         "title": "NumericalApproximationKind",
         "type": "string"
       },
-      "Objective": {
-        "description": "What a protocol preference optimises. ``model_fidelity`` is relative to a *pinned* reference model.",
+      "Observable": {
+        "description": "What the request is about. The first group describes a qualification, not an evaluated number.",
         "enum": [
-          "physical_accuracy",
-          "expected_accuracy",
-          "model_fidelity"
+          "rotational_characterization",
+          "vibrational_treatment",
+          "zero_point_energy_interpretation",
+          "entropy",
+          "heat_capacity",
+          "internal_partition",
+          "full_partition",
+          "transverse_partition",
+          "density_of_states",
+          "sum_of_states",
+          "enthalpy",
+          "gibbs_energy",
+          "helmholtz_energy",
+          "formation_enthalpy",
+          "population"
         ],
-        "title": "Objective",
+        "title": "Observable",
         "type": "string"
       },
       "ObservationExternalSource": {
@@ -37651,6 +37942,26 @@
         },
         "title": "OptResultPayload",
         "type": "object"
+      },
+      "Outcome": {
+        "description": "What a selection found. A negative scientific outcome is a valid answer (HTTP 200), not an error.",
+        "enum": [
+          "qualified_models",
+          "no_candidates",
+          "no_applicable_candidate",
+          "unresolved_applicability",
+          "missing_required_data",
+          "unsupported_task",
+          "unsupported_model",
+          "evidence_conflict",
+          "unresolved_comparability",
+          "policy_conflict",
+          "sole_eligible_candidate",
+          "policy_preferred",
+          "incomparable_alternatives"
+        ],
+        "title": "Outcome",
+        "type": "string"
       },
       "OutputGeometryEntry": {
         "additionalProperties": false,
@@ -41211,6 +41522,27 @@
           "document"
         ],
         "title": "ReleaseManifestSummary",
+        "type": "object"
+      },
+      "ReleasePopulation": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "release",
+            "title": "Kind",
+            "type": "string"
+          },
+          "release_ref": {
+            "pattern": "^rel_[a-z2-7]{26}$",
+            "title": "Release Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "release_ref"
+        ],
+        "title": "ReleasePopulation",
         "type": "object"
       },
       "ReleaseSelectionAction": {
@@ -48951,6 +49283,66 @@
         "title": "SpeciesEntryStateKind",
         "type": "string"
       },
+      "SpeciesEntryTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "electronic_scope": {
+            "$ref": "#/components/schemas/ElectronicScope"
+          },
+          "isotope_convention": {
+            "$ref": "#/components/schemas/IsotopeConvention"
+          },
+          "kind": {
+            "const": "species_entry",
+            "title": "Kind",
+            "type": "string"
+          },
+          "scope": {
+            "discriminator": {
+              "mapping": {
+                "atom": "#/components/schemas/AtomScope",
+                "basin": "#/components/schemas/BasinScope",
+                "explicit_equilibrium_ensemble": "#/components/schemas/EnsembleScope",
+                "ts_determination": "#/components/schemas/TsDeterminationScope"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AtomScope"
+              },
+              {
+                "$ref": "#/components/schemas/BasinScope"
+              },
+              {
+                "$ref": "#/components/schemas/EnsembleScope"
+              },
+              {
+                "$ref": "#/components/schemas/TsDeterminationScope"
+              }
+            ],
+            "title": "Scope"
+          },
+          "species_entry_ref": {
+            "pattern": "^spe_[a-z2-7]{26}$",
+            "title": "Species Entry Ref",
+            "type": "string"
+          },
+          "stereochemical_scope": {
+            "$ref": "#/components/schemas/StereochemicalScope"
+          }
+        },
+        "required": [
+          "scope",
+          "isotope_convention",
+          "electronic_scope",
+          "stereochemical_scope",
+          "kind",
+          "species_entry_ref"
+        ],
+        "title": "SpeciesEntryTarget",
+        "type": "object"
+      },
       "SpeciesRead": {
         "properties": {
           "charge": {
@@ -50834,6 +51226,874 @@
         "title": "StatmechSearchRequest",
         "type": "object"
       },
+      "StatmechSelectionCandidate": {
+        "description": "One assessed candidate: a declared model (``smd_``) or a legacy record read as stored (``sm_``).",
+        "properties": {
+          "advisory": {
+            "description": "Disclosed, never excluding: e.g. imported_parameters_not_revalidated:<role>, source_literature_unidentified:<role>.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Advisory",
+            "type": "array"
+          },
+          "applicability": {
+            "title": "Applicability",
+            "type": "string"
+          },
+          "candidate_ref": {
+            "title": "Candidate Ref",
+            "type": "string"
+          },
+          "comparative_unknown": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Comparative Unknown",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "eligible": {
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "evidence": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Evidence",
+            "type": "object"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "owner_ref": {
+            "title": "Owner Ref",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/StatmechSelectionReason"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "supersession": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersession"
+          }
+        },
+        "required": [
+          "candidate_ref",
+          "kind",
+          "owner_ref",
+          "review_status",
+          "created_at",
+          "applicability",
+          "reasons",
+          "advisory",
+          "comparative_unknown",
+          "evidence",
+          "eligible"
+        ],
+        "title": "StatmechSelectionCandidate",
+        "type": "object"
+      },
+      "StatmechSelectionConflicts": {
+        "properties": {
+          "cycles": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Cycles",
+            "type": "array"
+          },
+          "opposing_pairs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Opposing Pairs",
+            "type": "array"
+          },
+          "overridden_edges": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Overridden Edges",
+            "type": "array"
+          }
+        },
+        "required": [
+          "opposing_pairs",
+          "cycles",
+          "overridden_edges"
+        ],
+        "title": "StatmechSelectionConflicts",
+        "type": "object"
+      },
+      "StatmechSelectionIntegrity": {
+        "properties": {
+          "algorithm": {
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "manifest_sha256": {
+            "title": "Manifest Sha256",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "algorithm",
+          "manifest_sha256",
+          "note"
+        ],
+        "title": "StatmechSelectionIntegrity",
+        "type": "object"
+      },
+      "StatmechSelectionManifest": {
+        "additionalProperties": true,
+        "description": "The replayable decision manifest of the ``/manifest`` download.\n\nPublic refs only: the normalised request, read profile, snapshot isolation, subject, every candidate's facts and\nsource calculation, each assessment, the registry entries consulted and the decision. ``reproduce_statmech_ordering``,\n``reassess_statmech_captured_inputs`` and ``replay_statmech_decision`` recompute it offline. The digests in\n``integrity`` are checksums, not signatures: anyone who edits a manifest can recompute them, so replay shows the\nreasoning follows from the captured inputs and proves neither that they are true nor that the population was\ncomplete. The download is a new snapshot of the current data, not a retrieval of an earlier decision.",
+        "properties": {
+          "assessment_semantics": {
+            "additionalProperties": true,
+            "title": "Assessment Semantics",
+            "type": "object"
+          },
+          "assessments": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Assessments",
+            "type": "array"
+          },
+          "calculations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Calculations",
+            "type": "array"
+          },
+          "candidates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "decision": {
+            "additionalProperties": true,
+            "title": "Decision",
+            "type": "object"
+          },
+          "effective_review_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Effective Review Statuses",
+            "type": "array"
+          },
+          "integrity": {
+            "$ref": "#/components/schemas/StatmechSelectionIntegrity"
+          },
+          "manifest_format_version": {
+            "title": "Manifest Format Version",
+            "type": "integer"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/Outcome"
+          },
+          "population": {
+            "additionalProperties": true,
+            "title": "Population",
+            "type": "object"
+          },
+          "read_profile": {
+            "additionalProperties": true,
+            "title": "Read Profile",
+            "type": "object"
+          },
+          "request": {
+            "$ref": "#/components/schemas/StatmechSelectionManifestRequest"
+          },
+          "snapshot_isolation": {
+            "title": "Snapshot Isolation",
+            "type": "string"
+          },
+          "subject": {
+            "additionalProperties": true,
+            "title": "Subject",
+            "type": "object"
+          },
+          "versions": {
+            "additionalProperties": true,
+            "title": "Versions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "manifest_format_version",
+          "versions",
+          "assessment_semantics",
+          "request",
+          "effective_review_statuses",
+          "read_profile",
+          "snapshot_isolation",
+          "subject",
+          "population",
+          "candidates",
+          "calculations",
+          "assessments",
+          "decision",
+          "outcome",
+          "integrity"
+        ],
+        "title": "StatmechSelectionManifest",
+        "type": "object"
+      },
+      "StatmechSelectionManifestDescriptor": {
+        "description": "Where the complete decision manifest is, and what it is: a fresh snapshot, not a stored decision.",
+        "properties": {
+          "canonical_bytes": {
+            "title": "Canonical Bytes",
+            "type": "integer"
+          },
+          "manifest_format_version": {
+            "title": "Manifest Format Version",
+            "type": "integer"
+          },
+          "manifest_sha256": {
+            "title": "Manifest Sha256",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "manifest_format_version",
+          "manifest_sha256",
+          "canonical_bytes",
+          "path",
+          "note"
+        ],
+        "title": "StatmechSelectionManifestDescriptor",
+        "type": "object"
+      },
+      "StatmechSelectionManifestRequest": {
+        "additionalProperties": true,
+        "description": "The manifest's normalised request; every key the decision recorded is kept.",
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          }
+        },
+        "title": "StatmechSelectionManifestRequest",
+        "type": "object"
+      },
+      "StatmechSelectionPopulation": {
+        "properties": {
+          "excluded_by_review": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Excluded By Review",
+            "type": "array"
+          },
+          "excluded_by_review_withheld": {
+            "title": "Excluded By Review Withheld",
+            "type": "boolean"
+          },
+          "excluded_count": {
+            "title": "Excluded Count",
+            "type": "integer"
+          },
+          "nested_rows": {
+            "title": "Nested Rows",
+            "type": "integer"
+          },
+          "visible_candidates": {
+            "title": "Visible Candidates",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "visible_candidates",
+          "nested_rows",
+          "excluded_by_review",
+          "excluded_count",
+          "excluded_by_review_withheld"
+        ],
+        "title": "StatmechSelectionPopulation",
+        "type": "object"
+      },
+      "StatmechSelectionReason": {
+        "properties": {
+          "applicability": {
+            "title": "Applicability",
+            "type": "string"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "applicability",
+          "category"
+        ],
+        "title": "StatmechSelectionReason",
+        "type": "object"
+      },
+      "StatmechSelectionRequest": {
+        "additionalProperties": false,
+        "description": "Qualify a supplied statistical model for a declared use, or compare applicable whole recipes.",
+        "properties": {
+          "administrative_policy": {
+            "$ref": "#/components/schemas/SelectionPolicy",
+            "default": "default"
+          },
+          "comparison_objective": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__services__statmech_selection__vocabulary__Objective"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conditions": {
+            "$ref": "#/components/schemas/ConditionsBody"
+          },
+          "contract_version": {
+            "const": "statmech-selection-v1",
+            "default": "statmech-selection-v1",
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "coverage_requirement": {
+            "$ref": "#/components/schemas/app__services__statmech_selection__vocabulary__CoverageRequirement",
+            "default": "entire_requested_domain"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/Intent"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A stricter record-review floor than the read profile's; it never relaxes it."
+          },
+          "observable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Observable"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted for a component task, whose observable is implied."
+          },
+          "population": {
+            "discriminator": {
+              "mapping": {
+                "authorized_matching_models": "#/components/schemas/AuthorizedMatchingModels",
+                "model_revisions": "#/components/schemas/ExplicitModelRevisions",
+                "release": "#/components/schemas/ReleasePopulation"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AuthorizedMatchingModels"
+              },
+              {
+                "$ref": "#/components/schemas/ExplicitModelRevisions"
+              },
+              {
+                "$ref": "#/components/schemas/ReleasePopulation"
+              }
+            ],
+            "title": "Population"
+          },
+          "reference_model_ref": {
+            "anyOf": [
+              {
+                "pattern": "^smd_[a-z2-7]{26}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Model Ref"
+          },
+          "result_mode": {
+            "$ref": "#/components/schemas/ResultMode",
+            "default": "all"
+          },
+          "target": {
+            "discriminator": {
+              "mapping": {
+                "species_entry": "#/components/schemas/SpeciesEntryTarget",
+                "transition_state_entry": "#/components/schemas/TransitionStateEntryTarget"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SpeciesEntryTarget"
+              },
+              {
+                "$ref": "#/components/schemas/TransitionStateEntryTarget"
+              }
+            ],
+            "title": "Target"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task"
+              },
+              {
+                "$ref": "#/components/schemas/DeferredTask"
+              }
+            ],
+            "title": "Task"
+          }
+        },
+        "required": [
+          "intent",
+          "task",
+          "target"
+        ],
+        "title": "StatmechSelectionRequest",
+        "type": "object"
+      },
+      "StatmechSelectionRequestEcho": {
+        "additionalProperties": true,
+        "description": "The normalised request the decision was made under, with the read profile it was made under.\n\nEvery key the normalised request carries is kept (``extra=allow``), including the server's own ``bounds``: a caller\ncan neither set nor raise one.",
+        "properties": {
+          "administrative_policy": {
+            "title": "Administrative Policy",
+            "type": "string"
+          },
+          "bounds": {
+            "additionalProperties": true,
+            "description": "The server's engineering bounds this decision was made under (never settable by the caller).",
+            "title": "Bounds",
+            "type": "object"
+          },
+          "comparison_objective": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparison Objective"
+          },
+          "conditions": {
+            "additionalProperties": true,
+            "title": "Conditions",
+            "type": "object"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "coverage_requirement": {
+            "title": "Coverage Requirement",
+            "type": "string"
+          },
+          "intent": {
+            "title": "Intent",
+            "type": "string"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observable"
+          },
+          "population": {
+            "additionalProperties": true,
+            "title": "Population",
+            "type": "object"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "reference_model_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Model Ref"
+          },
+          "result_mode": {
+            "title": "Result Mode",
+            "type": "string"
+          },
+          "target": {
+            "additionalProperties": true,
+            "title": "Target",
+            "type": "object"
+          },
+          "task": {
+            "title": "Task",
+            "type": "string"
+          }
+        },
+        "required": [
+          "contract_version",
+          "task",
+          "intent",
+          "target",
+          "conditions",
+          "population",
+          "coverage_requirement",
+          "administrative_policy",
+          "result_mode",
+          "bounds"
+        ],
+        "title": "StatmechSelectionRequestEcho",
+        "type": "object"
+      },
+      "StatmechSelectionResponse": {
+        "description": "The outcome of a statmech selection and everything it rests on, public refs only.\n\n``outcome`` is the scientific outcome (a valid negative answer is HTTP 200). ``selection`` carries at most one\nreference; ``intent=qualify`` and every unresolved outcome carry none. ``coverage`` always says it is the caller's\nauthorized population only, never a physical-search certificate. No computed thermodynamic value is returned.\n``advisories`` and ``notices`` surface the disclosures that do not exclude a candidate. ``integrity`` carries the\nmanifest checksum: a checksum, not a signature.",
+        "properties": {
+          "advisories": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Advisories",
+            "type": "object"
+          },
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/StatmechSelectionCandidate"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "conflicts": {
+            "$ref": "#/components/schemas/StatmechSelectionConflicts"
+          },
+          "coverage": {
+            "additionalProperties": true,
+            "title": "Coverage",
+            "type": "object"
+          },
+          "edges": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "fronts": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Fronts",
+            "type": "array"
+          },
+          "integrity": {
+            "$ref": "#/components/schemas/StatmechSelectionIntegrity"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/StatmechSelectionManifestDescriptor"
+          },
+          "notices": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notices",
+            "type": "array"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/Outcome"
+          },
+          "population": {
+            "$ref": "#/components/schemas/StatmechSelectionPopulation"
+          },
+          "protocol": {
+            "additionalProperties": true,
+            "title": "Protocol",
+            "type": "object"
+          },
+          "request": {
+            "$ref": "#/components/schemas/StatmechSelectionRequestEcho"
+          },
+          "review": {
+            "$ref": "#/components/schemas/StatmechSelectionReview"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/StatmechSelectionSelection"
+          },
+          "snapshot_isolation": {
+            "title": "Snapshot Isolation",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "undecided": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Undecided",
+            "type": "array"
+          },
+          "versions": {
+            "additionalProperties": true,
+            "title": "Versions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "request",
+          "review",
+          "versions",
+          "outcome",
+          "basis",
+          "selection",
+          "population",
+          "coverage",
+          "candidates",
+          "edges",
+          "fronts",
+          "conflicts",
+          "undecided",
+          "advisories",
+          "notices",
+          "protocol",
+          "manifest",
+          "snapshot_isolation",
+          "integrity"
+        ],
+        "title": "StatmechSelectionResponse",
+        "type": "object"
+      },
+      "StatmechSelectionReview": {
+        "properties": {
+          "effective_floor": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "effective_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Effective Statuses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "effective_floor",
+          "effective_statuses"
+        ],
+        "title": "StatmechSelectionReview",
+        "type": "object"
+      },
+      "StatmechSelectionSelection": {
+        "description": "The three mutually exclusive references. At most one is set; each carries its basis and population limit.",
+        "properties": {
+          "administrative_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Administrative Ref"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "limitation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limitation"
+          },
+          "scientific_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scientific Ref"
+          },
+          "sole_eligible_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sole Eligible Ref"
+          }
+        },
+        "title": "StatmechSelectionSelection",
+        "type": "object"
+      },
       "StatmechSourceCalcIn": {
         "additionalProperties": false,
         "description": "Statmech → calculation link, by local calculation key.\n\nOnly a key is accepted (DR-0029 Requirement 1). The key resolves\nagainst whichever calc-key namespace the enclosing request defines —\nthe bundle's global namespace, the standalone statmech upload's\ninline ``calculations`` list, or the keys a conformer upload put on\nits own primary/additional calculations — and the resolved row is\nattached as a ``statmech_source_calculation`` row with this role.\n\n:param calculation_key: Local key of a calculation declared in the\n    same request.\n:param role: Scientific role the calculation plays for this statmech.",
@@ -52055,6 +53315,14 @@
           "ez_isomer"
         ],
         "title": "StereoKind",
+        "type": "string"
+      },
+      "StereochemicalScope": {
+        "enum": [
+          "entry_identity",
+          "declared_stereoisomer_set"
+        ],
+        "title": "StereochemicalScope",
         "type": "string"
       },
       "StorageCapacityClearRequest": {
@@ -54462,6 +55730,19 @@
         ],
         "title": "TSReactionUpload",
         "type": "object"
+      },
+      "Task": {
+        "description": "The supported claims. Each qualifies a *supplied* model; none computes a number.",
+        "enum": [
+          "rotational_component",
+          "vibrational_component",
+          "zpe_component",
+          "within_basin_thermal",
+          "canonical_model",
+          "conventional_ts_transverse_model"
+        ],
+        "title": "Task",
+        "type": "string"
       },
       "TauProtocolParameterEntry": {
         "description": "One recorded parameter ADR 0012's tau is resolved from.\n\nAll three canonical keys are always listed, in a fixed order, with\n``canonical_value = null`` for the ones this record does not carry.\nAn absent key is *why* a record takes a looser row of the protocol\ntable, so reporting only the present ones would hide the term that\ndecided the threshold.",
@@ -60119,6 +61400,66 @@
         "title": "TransitionStateEntryStatus",
         "type": "string"
       },
+      "TransitionStateEntryTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "electronic_scope": {
+            "$ref": "#/components/schemas/ElectronicScope"
+          },
+          "isotope_convention": {
+            "$ref": "#/components/schemas/IsotopeConvention"
+          },
+          "kind": {
+            "const": "transition_state_entry",
+            "title": "Kind",
+            "type": "string"
+          },
+          "scope": {
+            "discriminator": {
+              "mapping": {
+                "atom": "#/components/schemas/AtomScope",
+                "basin": "#/components/schemas/BasinScope",
+                "explicit_equilibrium_ensemble": "#/components/schemas/EnsembleScope",
+                "ts_determination": "#/components/schemas/TsDeterminationScope"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AtomScope"
+              },
+              {
+                "$ref": "#/components/schemas/BasinScope"
+              },
+              {
+                "$ref": "#/components/schemas/EnsembleScope"
+              },
+              {
+                "$ref": "#/components/schemas/TsDeterminationScope"
+              }
+            ],
+            "title": "Scope"
+          },
+          "stereochemical_scope": {
+            "$ref": "#/components/schemas/StereochemicalScope"
+          },
+          "transition_state_entry_ref": {
+            "pattern": "^tse_[a-z2-7]{26}$",
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "isotope_convention",
+          "electronic_scope",
+          "stereochemical_scope",
+          "kind",
+          "transition_state_entry_ref"
+        ],
+        "title": "TransitionStateEntryTarget",
+        "type": "object"
+      },
       "TransitionStateEntryValidationEvidence": {
         "description": "One entry's validation evidence, on a TS-*concept* response.\n\nKeyed by entry ref rather than unioned across the concept's entries.\nA concept is a collection of entries computed at different levels of\ntheory; an OR across them would report \"validated\" for a concept whose\nentries disagree, and would not say which entry carried the evidence.\nThe list is per entry and empty for an entry that deposited none.",
         "properties": {
@@ -60201,7 +61542,7 @@
             "type": "boolean"
           },
           "coverage_requirement": {
-            "$ref": "#/components/schemas/CoverageRequirement",
+            "$ref": "#/components/schemas/app__services__structure_selection__models__CoverageRequirement",
             "default": "known_values",
             "description": "known_values orders what is known, conditional on it; all_requested_members is a complete claim."
           },
@@ -60260,7 +61601,7 @@
           "objective": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Objective"
+                "$ref": "#/components/schemas/app__services__structure_selection__models__Objective"
               },
               {
                 "type": "null"
@@ -63227,6 +64568,49 @@
         "title": "TrustLLMPrecheck",
         "type": "object"
       },
+      "TsDeterminationScope": {
+        "additionalProperties": false,
+        "properties": {
+          "determination_ref": {
+            "pattern": "^sdet_[a-z2-7]{26}$",
+            "title": "Determination Ref",
+            "type": "string"
+          },
+          "dividing_surface": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__services__statmech_selection__vocabulary__DividingSurface"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "const": "ts_determination",
+            "title": "Kind",
+            "type": "string"
+          },
+          "reaction_coordinate_excluded": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "True: the reaction coordinate is excluded from the transverse partition.",
+            "title": "Reaction Coordinate Excluded"
+          }
+        },
+        "required": [
+          "kind",
+          "determination_ref"
+        ],
+        "title": "TsDeterminationScope",
+        "type": "object"
+      },
       "TunnelingModel-Output": {
         "description": "Tunneling correction applied to a rate coefficient (DR-0032).\n\nMachine tokens, per the project enum policy (replaces the former\nfree-text ``kinetics.tunneling_model`` column). ``other`` is the\nescape hatch for anything not yet in this set.",
         "enum": [
@@ -63907,6 +65291,14 @@
           "composite_recipe"
         ],
         "title": "ZeroPointTreatment",
+        "type": "string"
+      },
+      "ZpeInclusion": {
+        "enum": [
+          "included",
+          "excluded"
+        ],
+        "title": "ZpeInclusion",
         "type": "string"
       },
       "_SeedBody": {
@@ -65912,6 +67304,51 @@
         "title": "MachineReviewStatus",
         "type": "string"
       },
+      "app__services__statmech_selection__vocabulary__CoverageRequirement": {
+        "description": "``entire_requested_domain`` is a complete claim and refuses when coverage is missing; ``eligible_population``\nscopes the answer to what is eligible and says so.",
+        "enum": [
+          "entire_requested_domain",
+          "eligible_population"
+        ],
+        "title": "CoverageRequirement",
+        "type": "string"
+      },
+      "app__services__statmech_selection__vocabulary__DividingSurface": {
+        "enum": [
+          "conventional_saddle_point",
+          "variational"
+        ],
+        "title": "DividingSurface",
+        "type": "string"
+      },
+      "app__services__statmech_selection__vocabulary__Objective": {
+        "enum": [
+          "physical_accuracy",
+          "expected_accuracy",
+          "model_fidelity"
+        ],
+        "title": "Objective",
+        "type": "string"
+      },
+      "app__services__structure_selection__models__CoverageRequirement": {
+        "description": "``known_values``: an ordering of what is known, conditional on it. ``all_requested_members``: a complete claim.",
+        "enum": [
+          "known_values",
+          "all_requested_members"
+        ],
+        "title": "CoverageRequirement",
+        "type": "string"
+      },
+      "app__services__structure_selection__models__Objective": {
+        "description": "What a protocol preference optimises. ``model_fidelity`` is relative to a *pinned* reference model.",
+        "enum": [
+          "physical_accuracy",
+          "expected_accuracy",
+          "model_fidelity"
+        ],
+        "title": "Objective",
+        "type": "string"
+      },
       "tckdb_schemas__enums__CalculationDependencyRole": {
         "enum": [
           "optimized_from",
@@ -66001,6 +67438,15 @@
           "other"
         ],
         "title": "TunnelingModel",
+        "type": "string"
+      },
+      "tckdb_schemas__statmech_declarations__DividingSurface": {
+        "description": "The dividing surface of a transition-state model. ``variational`` is recognised and not evaluated.",
+        "enum": [
+          "conventional_saddle_point",
+          "variational"
+        ],
+        "title": "DividingSurface",
         "type": "string"
       },
       "tckdb_schemas__workflows__computed_reaction_upload__ConformerIn": {
@@ -94928,6 +96374,152 @@
           }
         },
         "summary": "Scientific Statmech Search Post",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/statmech/select": {
+      "post": {
+        "description": "Which of one species or transition-state entry's statmech models support the stated claim, or the preferred one.\n\n``intent=qualify`` returns every candidate's assessment and selects nothing. ``intent=protocol_preferred`` also\ncompares whole applicable models, but only where an audited rule says one precedes another for exactly this task,\nobjective and scope; **this release ships no active rule**, so the answer is the qualified models, a sole eligible\nmodel, or incomparable alternatives, never an invented ranking. Alternatives are not equally accurate, only\nunranked. Unknown is never unity: a recipe fact a model does not state is reported as missing.\n\nA valid negative scientific outcome is 200. Refusals are 422: a contradictory request, a deferred bound exceeded\n(``statmech_selection_bound_exceeded``: more than 500 visible candidates, 25,000 nested rows, a dependency traversal\npast depth 8 or a manifest over 10 MiB; nothing is chosen from a prefix), or a population this release does not\nevaluate (``statmech_selection_unsupported``). An unknown, hidden or foreign target or candidate ref is one 404\n(``unknown_statmech_candidate_ref`` for a candidate).",
+        "operationId": "select_statmech_models_api_v1_scientific_statmech_select_post",
+        "parameters": [
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatmechSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatmechSelectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Qualify supplied statistical models for a stated use, and prefer one only where audited rules say so",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/statmech/select/manifest": {
+      "post": {
+        "description": "The same request, answered with the decision manifest as a download (a new snapshot, not a saved decision).",
+        "operationId": "select_statmech_models_manifest_api_v1_scientific_statmech_select_manifest_post",
+        "parameters": [
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatmechSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatmechSelectionManifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download the replayable decision manifest for a statmech selection",
         "tags": [
           "scientific"
         ]

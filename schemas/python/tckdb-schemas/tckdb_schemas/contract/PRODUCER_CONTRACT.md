@@ -9323,6 +9323,8 @@ Every write route of the live application that the rule left out, with the reaso
 | `POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select/manifest` | does not require an authenticated caller (a query, not a deposit) |
 | `POST /api/v1/scientific/species/structure-search` | does not require an authenticated caller (a query, not a deposit) |
 | `POST /api/v1/scientific/statmech/search` | does not require an authenticated caller (a query, not a deposit) |
+| `POST /api/v1/scientific/statmech/select` | does not require an authenticated caller (a query, not a deposit) |
+| `POST /api/v1/scientific/statmech/select/manifest` | does not require an authenticated caller (a query, not a deposit) |
 | `POST /api/v1/scientific/thermo/search` | does not require an authenticated caller (a query, not a deposit) |
 | `POST /api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select` | does not require an authenticated caller (a query, not a deposit) |
 | `POST /api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select/manifest` | does not require an authenticated caller (a query, not a deposit) |

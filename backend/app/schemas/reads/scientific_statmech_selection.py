@@ -14,12 +14,13 @@ disagree.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from datetime import datetime
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.db.models.common import RecordReviewStatus
-from app.schemas.reads.scientific_common import SelectionPolicy
+from app.schemas.reads.scientific_common import ProfiledRequestEcho, SelectionPolicy
 from app.services.public_refs import PREFIXES, PUBLIC_REF_BODY_LEN
 from app.services.statmech_selection.models import (
     Conditions,
@@ -42,6 +43,7 @@ from app.services.statmech_selection.vocabulary import (
     Objective,
     Observable,
     OwnerKind,
+    Outcome,
     PopulationKind,
     ResultMode,
     ScopeKind,
@@ -255,3 +257,175 @@ class StatmechSelectionRequest(_Strict):
             result_mode=self.result_mode,
             min_review_status=self.min_review_status,
         )
+
+
+# ---------------------------------------------------------------------------
+# Response
+# ---------------------------------------------------------------------------
+
+
+class StatmechSelectionRequestEcho(ProfiledRequestEcho):
+    """The normalised request the decision was made under, with the read profile it was made under.
+
+    Every key the normalised request carries is kept (``extra=allow``), including the server's own ``bounds``: a caller
+    can neither set nor raise one.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    contract_version: str
+    task: str
+    intent: str
+    observable: str | None = None
+    target: dict[str, Any]
+    conditions: dict[str, Any]
+    population: dict[str, Any]
+    coverage_requirement: str
+    comparison_objective: str | None = None
+    reference_model_ref: str | None = None
+    administrative_policy: str
+    result_mode: str
+    min_review_status: RecordReviewStatus | None = None
+    bounds: dict[str, Any] = Field(
+        description="The server's engineering bounds this decision was made under (never settable by the caller)."
+    )
+
+
+class StatmechSelectionReview(BaseModel):
+    effective_floor: RecordReviewStatus
+    effective_statuses: list[RecordReviewStatus]
+
+
+class StatmechSelectionReason(BaseModel):
+    code: str
+    applicability: str
+    category: str
+
+
+class StatmechSelectionCandidate(BaseModel):
+    """One assessed candidate: a declared model (``smd_``) or a legacy record read as stored (``sm_``)."""
+
+    candidate_ref: str
+    kind: str
+    owner_ref: str
+    review_status: RecordReviewStatus
+    created_at: datetime
+    applicability: str
+    reasons: list[StatmechSelectionReason]
+    advisory: list[str] = Field(
+        description="Disclosed, never excluding: e.g. imported_parameters_not_revalidated:<role>, "
+        "source_literature_unidentified:<role>."
+    )
+    comparative_unknown: list[str]
+    evidence: dict[str, list[str]]
+    recipe: dict[str, Any] | None = None
+    supersession: dict[str, Any] | None = None
+    eligible: bool
+
+
+class StatmechSelectionSelection(BaseModel):
+    """The three mutually exclusive references. At most one is set; each carries its basis and population limit."""
+
+    scientific_ref: str | None = None
+    sole_eligible_ref: str | None = None
+    administrative_ref: str | None = None
+    basis: str | None = None
+    limitation: str | None = None
+
+
+class StatmechSelectionPopulation(BaseModel):
+    visible_candidates: int
+    nested_rows: int
+    excluded_by_review: list[dict[str, str]]
+    excluded_count: int
+    excluded_by_review_withheld: bool
+
+
+class StatmechSelectionConflicts(BaseModel):
+    opposing_pairs: list[dict[str, Any]]
+    cycles: list[list[str]]
+    overridden_edges: list[dict[str, Any]]
+
+
+class StatmechSelectionManifestDescriptor(BaseModel):
+    """Where the complete decision manifest is, and what it is: a fresh snapshot, not a stored decision."""
+
+    manifest_format_version: int
+    manifest_sha256: str
+    canonical_bytes: int
+    path: str
+    note: str
+
+
+class StatmechSelectionIntegrity(BaseModel):
+    algorithm: str
+    manifest_sha256: str
+    note: str
+
+
+class StatmechSelectionResponse(BaseModel):
+    """The outcome of a statmech selection and everything it rests on, public refs only.
+
+    ``outcome`` is the scientific outcome (a valid negative answer is HTTP 200). ``selection`` carries at most one
+    reference; ``intent=qualify`` and every unresolved outcome carry none. ``coverage`` always says it is the caller's
+    authorized population only, never a physical-search certificate. No computed thermodynamic value is returned.
+    ``advisories`` and ``notices`` surface the disclosures that do not exclude a candidate. ``integrity`` carries the
+    manifest checksum: a checksum, not a signature.
+    """
+
+    request: StatmechSelectionRequestEcho
+    review: StatmechSelectionReview
+    versions: dict[str, Any]
+    outcome: Outcome
+    basis: str
+    selection: StatmechSelectionSelection
+    summary: dict[str, Any] | None = None
+    population: StatmechSelectionPopulation
+    coverage: dict[str, Any]
+    candidates: list[StatmechSelectionCandidate]
+    edges: list[dict[str, Any]]
+    fronts: list[list[str]]
+    conflicts: StatmechSelectionConflicts
+    undecided: list[dict[str, Any]]
+    advisories: dict[str, list[str]]
+    notices: list[str]
+    protocol: dict[str, Any]
+    manifest: StatmechSelectionManifestDescriptor
+    snapshot_isolation: str
+    integrity: StatmechSelectionIntegrity
+
+
+class StatmechSelectionManifestRequest(ProfiledRequestEcho):
+    """The manifest's normalised request; every key the decision recorded is kept."""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class StatmechSelectionManifest(BaseModel):
+    """The replayable decision manifest of the ``/manifest`` download.
+
+    Public refs only: the normalised request, read profile, snapshot isolation, subject, every candidate's facts and
+    source calculation, each assessment, the registry entries consulted and the decision. ``reproduce_statmech_ordering``,
+    ``reassess_statmech_captured_inputs`` and ``replay_statmech_decision`` recompute it offline. The digests in
+    ``integrity`` are checksums, not signatures: anyone who edits a manifest can recompute them, so replay shows the
+    reasoning follows from the captured inputs and proves neither that they are true nor that the population was
+    complete. The download is a new snapshot of the current data, not a retrieval of an earlier decision.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    manifest_format_version: int
+    versions: dict[str, Any]
+    assessment_semantics: dict[str, Any]
+    request: StatmechSelectionManifestRequest
+    effective_review_statuses: list[RecordReviewStatus]
+    read_profile: dict[str, Any]
+    snapshot_isolation: str
+    subject: dict[str, Any]
+    population: dict[str, Any]
+    candidates: list[dict[str, Any]]
+    calculations: list[dict[str, Any]]
+    assessments: list[dict[str, Any]]
+    decision: dict[str, Any]
+    outcome: Outcome
+    integrity: StatmechSelectionIntegrity

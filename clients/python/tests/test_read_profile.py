@@ -108,6 +108,12 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "get_species_conformer_selection_manifest": ("spe_1",),
     "select_transition_state_evidence": ("tse_1",),
     "get_transition_state_evidence_selection_manifest": ("tse_1",),
+    "select_statmech_models": (
+        {"target": {"kind": "species_entry", "species_entry_ref": "spe_1", "scope": {"kind": "atom"}}},
+    ),
+    "get_statmech_selection_manifest": (
+        {"target": {"kind": "species_entry", "species_entry_ref": "spe_1", "scope": {"kind": "atom"}}},
+    ),
 }
 
 #: Methods with required *keyword-only* parameters beyond the handle in

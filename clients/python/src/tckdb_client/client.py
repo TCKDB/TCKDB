@@ -100,6 +100,7 @@ from tckdb_client.scientific_types import (
     ThermoRecord,
     ThermoSearchResponse,
     ThermoSelectionRequest,
+    StatmechSelectionResponse,
     StructureSelectionResponse,
     ThermoSelectionResponse,
     TransitionStateDetailResponse,
@@ -333,6 +334,47 @@ def _structure_selection_body(fields: Mapping[str, Any]) -> dict[str, Any]:
             value = list(value)
         body[key] = value
     return body
+
+
+_STATMECH_SELECTION_PATH = "/scientific/statmech/select"
+_STATMECH_SELECTION_REFUSED = frozenset(
+    {"bounds", "limit", "offset", "page", "page_size", "cursor", "max_candidates", "manifest_bytes", "sort", "rules"}
+)
+_STATMECH_TARGET_REFS = {
+    "species_entry": ("species_entry_ref", "spe_"),
+    "transition_state_entry": ("transition_state_entry_ref", "tse_"),
+}
+
+
+def _statmech_selection_body(request: Mapping[str, Any]) -> dict[str, Any]:
+    """The body: exactly what the caller supplied, after the refusals this client makes before any request.
+
+    The target's ref must be a string public ref of its kind (an integer id is refused), a candidate named in
+    ``population.model_refs`` must be an ``sm_``/``smd_`` ref, and the engineering bounds are the server's: a bound, a
+    page, a sort or a rule is refused. The client invents no default of the question and does not choose a candidate.
+    """
+    refused = sorted(_STATMECH_SELECTION_REFUSED & set(request))
+    if refused:
+        raise ValueError(
+            f"{refused!r} are not request fields: the bounds are the server's, a selection is over the complete "
+            "authorized population (never a page) and a caller cannot author a rule or a sort."
+        )
+    target = request.get("target")
+    if not isinstance(target, Mapping):
+        raise ValueError("a statmech selection request names its target: {'kind': ..., '<kind>_ref': ..., 'scope': ...}.")
+    kind = target.get("kind")
+    if kind not in _STATMECH_TARGET_REFS:
+        raise ValueError(f"target.kind must be one of {sorted(_STATMECH_TARGET_REFS)}; got {kind!r}.")
+    field, prefix = _STATMECH_TARGET_REFS[kind]
+    ref = target.get(field)
+    if not isinstance(ref, str) or not ref.startswith(prefix):
+        raise ValueError(f"target.{field} must be a public ref starting with '{prefix}'; got {ref!r}.")
+    population = request.get("population")
+    if isinstance(population, Mapping):
+        for candidate in population.get("model_refs") or ():
+            if not isinstance(candidate, str) or not candidate.startswith(("sm_", "smd_")):
+                raise ValueError(f"population.model_refs names public refs starting with 'sm_' or 'smd_'; got {candidate!r}.")
+    return dict(request)
 
 
 def _legacy_detail_code(detail: object) -> str | None:
@@ -2193,6 +2235,41 @@ class TCKDBClient:
         path = _structure_selection_path("transition-state-entries", transition_state_entry_ref, "evidence") + "/manifest"
         return self.request_json(
             "POST", path, json=_structure_selection_body(request), params={"profile": profile}, authenticated=False
+        ).data
+
+    def select_statmech_models(
+        self, request: Mapping[str, Any], *, profile: str | None = None
+    ) -> StatmechSelectionResponse:
+        """``POST /scientific/statmech/select``.
+
+        Which supplied statistical models of one species or transition-state entry support a stated use
+        (``intent="qualify"``), and, with ``intent="protocol_preferred"``, which whole applicable model audited rules prefer.
+        ``request`` is the full body (see :class:`~tckdb_client.StatmechSelectionRequest`); the client sends it as given.
+        Read-only; browse orders are unchanged and no computed thermodynamic value is returned.
+
+        This server ships no active preference rule, so the answer is the qualified models, a sole eligible model or
+        incomparable alternatives (unranked, not equally accurate), never an invented ranking. A valid negative outcome is a
+        200; a population over the server's bounds is a coded 422 (``statmech_selection_bound_exceeded``), never a prefix
+        winner, and this client never caps or pages it. Report ``outcome``, ``basis`` and ``notices`` verbatim, and read
+        each candidate's ``advisory``: an imported source whose own stationary-point statement was not re-judged, or a
+        literature citation with no DOI or ISBN, is disclosed there.
+        """
+        return self.request_json(
+            "POST", _STATMECH_SELECTION_PATH, json=_statmech_selection_body(request), params={"profile": profile},
+            authenticated=False,
+        ).data
+
+    def get_statmech_selection_manifest(
+        self, request: Mapping[str, Any], *, profile: str | None = None
+    ) -> JSONDict:
+        """``POST /scientific/statmech/select/manifest``.
+
+        The replayable decision manifest for the same request as :meth:`select_statmech_models`. Public refs only. A new
+        snapshot of the current data, not a saved decision. Its digests are checksums, not signatures.
+        """
+        return self.request_json(
+            "POST", _STATMECH_SELECTION_PATH + "/manifest", json=_statmech_selection_body(request),
+            params={"profile": profile}, authenticated=False,
         ).data
 
     def select_network_kinetics(
