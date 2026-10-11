@@ -35,6 +35,7 @@ from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.schemas.workflows.transition_state_upload import TransitionStateUploadRequest
 from app.schemas.workflows.transport_upload import TransportUploadRequest
+from app.services.upload_request_warnings import request_warnings_for_job_kind
 from app.services.upload_submission import open_job_submission
 
 router = APIRouter()
@@ -59,6 +60,11 @@ def _enqueue(session: Session, kind: UploadJobKind, request, user_id: int) -> Jo
         kind=kind,
         status=UploadJobStatus.queued,
         payload=request.model_dump(mode="json"),
+        # Derived here, from the request as sent: the stored payload has had
+        # any rewritten field normalised, so the worker cannot re-derive these.
+        request_warnings=[
+            w.model_dump(mode="json") for w in request_warnings_for_job_kind(kind, request)
+        ],
         created_by=user_id,
     )
     session.add(job)

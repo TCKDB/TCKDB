@@ -30,6 +30,8 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from app.chemistry.manifest_attestation import attest
+
 MANIFEST_PATH = Path(__file__).with_name("xyg3_b3lyp_barrier_manifest.yaml")
 
 #: Subsets and the number of barrier heights each must hold (two per reaction).
@@ -241,7 +243,7 @@ def parse_xyg3_barrier_manifest_bytes(data: bytes, *, expected_sha256: str | Non
         raise ManifestError(
             f"XYG3 barrier manifest content does not match its pinned digest (expected {expected_sha256}, got {actual})"
         )
-    return dataclasses.replace(parse_xyg3_barrier_manifest(yaml.safe_load(data)), sha256=actual)
+    return attest(dataclasses.replace(parse_xyg3_barrier_manifest(yaml.safe_load(data)), sha256=actual))
 
 
 @lru_cache(maxsize=4)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
+import { isotopeLabel } from "../domain/isotopeLabel"
 import type { GeometryAtom } from "../api/geometryApi"
 import { angstromToBohr, buildXyzBlock, type CoordinateUnitMode } from "../domain/geometryXyz"
 import { angle as angleBetween, dihedral as dihedralOf, distance as distanceBetween } from "../domain/geometryMeasure"
@@ -487,9 +488,9 @@ const LABEL_MODE_OPTIONS: { value: LabelMode; text: string }[] = [
 ]
 
 function labelTextFor(mode: LabelMode, atom: GeometryAtom): string {
-    if (mode === "symbols") return atom.element
+    if (mode === "symbols") return isotopeLabel(atom)
     if (mode === "numbers") return String(atom.atom_index)
-    return `${atom.element}${atom.atom_index}`
+    return `${isotopeLabel(atom)}${atom.atom_index}`
 }
 
 /** The subset of GLViewer's instance API this component actually calls. */
@@ -543,7 +544,7 @@ const MEASUREMENT_KIND_LABEL: Record<MeasurementKind, string> = {
 
 /** `C1`, `H2`, ... — the same "element + atom_index" text `labelTextFor(mode="both", …)` uses. */
 function atomTag(atom: GeometryAtom): string {
-    return `${atom.element}${atom.atom_index}`
+    return `${isotopeLabel(atom)}${atom.atom_index}`
 }
 
 function measurementDescription(m: Measurement): string {

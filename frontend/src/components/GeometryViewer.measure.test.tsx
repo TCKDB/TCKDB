@@ -490,3 +490,27 @@ describe("GeometryViewer — measurements section accessible name (R9 guard)", (
         expect(heading).toHaveTextContent("Measurements")
     })
 })
+
+describe("GeometryViewer — isotope labels (#685)", () => {
+    const WATER = [
+        { atom_index: 1, element: "O", x: 0, y: 0, z: 0, isotope_mass_number: null },
+        { atom_index: 2, element: "H", x: 0.76, y: 0.59, z: 0, isotope_mass_number: 2 },
+        { atom_index: 3, element: "H", x: -0.76, y: 0.59, z: 0, isotope_mass_number: null },
+    ]
+
+    it("atom labels use the isotope label, not the bare element symbol", async () => {
+        render(<GeometryViewer atoms={WATER} formula="H²HO" xyzText={"3\n\nO 0 0 0\nH 0.76 0.59 0\nH -0.76 0.59 0"} />)
+        const group = await screen.findByRole("group", { name: /Display options/ })
+        fireEvent.change(within(group).getByLabelText("Atom labels"), { target: { value: "both" } })
+        await waitFor(() => expect(calls.addLabel).toHaveLength(3))
+        expect(calls.addLabel.map((c) => c[0])).toEqual(["O1", "²H2", "H3"])
+    })
+
+    it("measurement tags use the isotope label", async () => {
+        const onPick = await renderReady({ atoms: WATER })
+        click(onPick, 0)
+        click(onPick, 1)
+        const list = await screen.findByRole("list")
+        expect(within(list).getByText(/Distance O1–²H2/)).toBeInTheDocument()
+    })
+})

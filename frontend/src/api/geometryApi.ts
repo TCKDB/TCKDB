@@ -75,6 +75,9 @@ const geometryAtomSchema = z.object({
     x: z.number(),
     y: z.number(),
     z: z.number(),
+    // Server-stored nuclide mass number (#682: a D/T spelling is stored as H + 2/3).
+    // null/absent = the element's natural isotope. Never derived client-side.
+    isotope_mass_number: z.number().int().nullable().optional(),
 }).passthrough()
 
 const geometryProvenanceCalcLinkSchema = z.object({

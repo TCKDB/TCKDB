@@ -27,6 +27,8 @@ from typing import Any
 import yaml  # type: ignore[import-untyped]
 from tckdb_schemas.network_declarations import NetworkComparisonObjective
 
+from app.chemistry.manifest_attestation import attest
+
 MANIFEST_PATH = Path(__file__).with_name("network_rule_candidates.yaml")
 
 LEVEL_CANDIDATE = "candidate"
@@ -202,7 +204,7 @@ def parse_network_rule_manifest_bytes(data: bytes, *, expected_sha256: str | Non
         raise ManifestError(
             f"network rule manifest content does not match its pinned digest (expected {expected_sha256}, got {actual})"
         )
-    return dataclasses.replace(parse_network_rule_manifest(yaml.safe_load(data)), sha256=actual)
+    return attest(dataclasses.replace(parse_network_rule_manifest(yaml.safe_load(data)), sha256=actual))
 
 
 def load_network_rule_manifest(*, expected_sha256: str) -> NetworkRuleManifest:
