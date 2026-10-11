@@ -2083,7 +2083,8 @@ class ContractBuilder:
             "",
             "What a scheme says. The total is the sum of its terms in order. A `value` or `base` term reads one"
             " input; an `extrapolation` term applies `formula` (`inverse_power` with `exponent`,"
-            " `inverse_power_shifted_half` with `exponent`, `karton_martin_scf`, `exponential_three_point`) to inputs"
+            " `inverse_power_shifted_half` with `exponent`, `exponential_sqrt` with `exponent` = ORCA's alpha,"
+            " `karton_martin_scf`, `exponential_three_point`) to inputs"
             " at declared `cardinal_number`s; a `difference` term is its `high` input minus its `low` input."
             " `energy_component` says which part of the input's energy is read. A `correlation` term means the"
             " whole correlation energy, (T) included: for an input whose stored `correlation` is the CCSD part"

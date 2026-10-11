@@ -1192,6 +1192,7 @@ class CompositeExtrapolationFormula(str, Enum):
     inverse_power_shifted_half = "inverse_power_shifted_half"
     karton_martin_scf = "karton_martin_scf"
     exponential_three_point = "exponential_three_point"
+    exponential_sqrt = "exponential_sqrt"
 
 
 class CompositeInputSlot(str, Enum):

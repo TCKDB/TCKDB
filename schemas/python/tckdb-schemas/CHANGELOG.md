@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.112.0 - 2026-10-11
+
+New extrapolation formula `exponential_sqrt` for composite scheme terms: ORCA's SCF form
+`E_SCF(X) = E_CBS + A exp(-alpha sqrt(X))` (`CompositeExtrapolationFormula.exponential_sqrt`,
+`extrapolate_exponential_sqrt`). The term's `exponent` is ORCA's alpha and is required, so it is part of the scheme's
+identity like an `inverse_power` exponent; the term reads the `reference` (or `total` of an HF level) component, like
+`karton_martin_scf`. ORCA's optimised alpha: cc-pVnZ 4.42 (2/3) and 5.46 (3/4); pc-n 7.02 and 9.78; def2 10.39 and 7.88;
+ano-pVnZ 5.41 and 4.48; saug-ano-pVnZ 5.48 and 4.18; aug-ano-pVnZ 5.12 (2/3). Reproduces the two SCF energies the ORCA
+manuals print for water. Existing schemes and formulas are unchanged.
+
 ## 0.111.1 - 2026-10-11
 
 Wording only: the refusal `energy_correction_scheme_frequency_level_not_applicable` and the `EnergyCorrectionSchemeRef`

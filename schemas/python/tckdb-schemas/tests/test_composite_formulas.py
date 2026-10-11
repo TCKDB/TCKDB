@@ -1,4 +1,4 @@
-"""The four extrapolation formulas against published numbers and against their own models (ADR 0021, P5).
+"""The five extrapolation formulas against published numbers and against their own models (ADR 0021, P5).
 
 Two kinds of evidence, and the module says which each test is:
 
@@ -26,6 +26,7 @@ import pytest
 from tckdb_schemas.composite_formulas import (
     ExtrapolationError,
     extrapolate,
+    extrapolate_exponential_sqrt,
     extrapolate_exponential_three_point,
     extrapolate_inverse_power,
     extrapolate_inverse_power_shifted_half,
@@ -146,3 +147,59 @@ def test_exponential_three_point_hand_computed_case():
 def test_points_that_do_not_fit_the_formula_are_refused_not_guessed(formula, points, exponent):
     with pytest.raises(ExtrapolationError):
         extrapolate(formula, points, exponent)
+
+
+# ---------------------------------------------------------------------------
+# exponential_sqrt: ORCA's SCF form, E_SCF(X) = E_CBS + A * exp(-alpha * sqrt(X))  (#659)
+# ---------------------------------------------------------------------------
+
+#: (X, E_X, Y, E_Y, alpha, printed extrapolated SCF energy, where it is printed). Water, cc-pVnZ SCF energies.
+#: ORCA 6.1 manual, "Automatic extrapolation to the basis set limit" (Alpha(2/3) = 4.420, Alpha(3/4) = 5.460);
+#: the ORCA 5.0.4 manual prints the same numbers. The ``Extrapolate`` table of alpha: cc-pVnZ 4.42 (2/3),
+#: 5.46 (3/4); pc-n 7.02, 9.78; def2 10.39, 7.88; ano-pVnZ 5.41, 4.48; saug-ano-pVnZ 5.48, 4.18; aug-ano-pVnZ 5.12 (2/3).
+ORCA_SCF_PUBLISHED = [
+    (2, -76.026430944, 3, -76.056728252, 4.42, -76.066581429, "ORCA 6.1, Extrapolated CBS SCF energy (2/3)"),
+    (3, -76.056728252, 4, -76.064381269, 5.46, -76.066687152, "ORCA 6.1, Extrapolated CBS SCF energy (3/4)"),
+]
+
+
+@pytest.mark.parametrize(("x", "e_x", "y", "e_y", "alpha", "printed", "source"), ORCA_SCF_PUBLISHED)
+def test_exponential_sqrt_reproduces_the_scf_energies_the_orca_manuals_print(x, e_x, y, e_y, alpha, printed, source):
+    assert extrapolate_exponential_sqrt(x, e_x, y, e_y, alpha) == pytest.approx(printed, abs=2e-9), source
+    assert extrapolate(F.exponential_sqrt, [(y, e_y), (x, e_x)], alpha) == pytest.approx(printed, abs=2e-9)
+
+
+def test_the_orca_scf_numbers_are_not_what_karton_martin_gives():
+    """The issue's premise: on the 3/4 inputs karton_martin_scf lands 1.3 mEh away, so the form is genuinely new."""
+    km = extrapolate_karton_martin_scf(3, -76.056728252, 4, -76.064381269)
+    assert km == pytest.approx(-76.065347, abs=1e-6)
+    assert abs(km - -76.066687152) > 1e-3
+
+
+def test_the_published_scf_numbers_would_not_survive_the_wrong_alpha():
+    """Not vacuous: the 3/4 alpha applied to the 2/3 pair, or the other way round, misses by more than 1e-4 Eh."""
+    assert abs(extrapolate_exponential_sqrt(3, -76.056728252, 4, -76.064381269, 4.42) - -76.066687152) > 1e-4
+    assert abs(extrapolate_exponential_sqrt(2, -76.026430944, 3, -76.056728252, 5.46) - -76.066581429) > 1e-4
+
+
+@pytest.mark.parametrize(("x", "y"), [(2, 3), (3, 4), (4, 5)])
+@pytest.mark.parametrize("alpha", [4.42, 5.46, 10.39])
+def test_exponential_sqrt_recovers_the_limit_of_its_own_model(x, y, alpha):
+    e_x = E_CBS + A * math.exp(-alpha * math.sqrt(x))
+    e_y = E_CBS + A * math.exp(-alpha * math.sqrt(y))
+    assert extrapolate_exponential_sqrt(x, e_x, y, e_y, alpha) == pytest.approx(E_CBS, abs=1e-9)
+
+
+def test_exponential_sqrt_hand_computed_case():
+    """With alpha = ln 2 / (sqrt 4 - sqrt 1) = ln 2, exp(-alpha sqrt 1) = 1/2 and exp(-alpha sqrt 4) = 1/4.
+
+    E_1 = -1.0, E_4 = -1.25: A = (E_1 - E_4) / (1/2 - 1/4) = 1, so E_CBS = E_1 - A/2 = -1.5.
+    """
+    assert extrapolate_exponential_sqrt(1, -1.0, 4, -1.25, math.log(2.0)) == pytest.approx(-1.5, abs=1e-14)
+
+
+def test_exponential_sqrt_needs_an_alpha_and_distinct_cardinals():
+    with pytest.raises(ExtrapolationError):
+        extrapolate(F.exponential_sqrt, [(3, -76.05), (4, -76.06)], None)
+    with pytest.raises(ExtrapolationError):
+        extrapolate(F.exponential_sqrt, [(3, -76.05), (3, -76.06)], 5.46)

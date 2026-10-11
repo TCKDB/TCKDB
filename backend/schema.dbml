@@ -124,6 +124,7 @@ enum CompositeExtrapolationFormula {
   inverse_power_shifted_half
   karton_martin_scf
   exponential_three_point
+  exponential_sqrt
 }
 
 enum CompositeInputSlot {

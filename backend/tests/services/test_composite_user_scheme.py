@@ -261,6 +261,55 @@ def test_a_label_is_a_function_of_the_definition_only():
     assert "//" not in a and a.isascii()
 
 
+def test_exponential_sqrt_is_labelled_with_alpha_not_x():
+    terms = [
+        LabelTerm("extrapolation", EnergyComponentKind.reference, "exponential_sqrt", 5.46,
+                  [LabelInput("cardinal", 3, "HF", "cc-pVTZ"), LabelInput("cardinal", 4, "HF", "cc-pVQZ")])
+    ]
+    assert build_scheme_label(CompositeSchemeKind.extrapolation, terms, "0" * 64) == (
+        "CBS[ref:HF/cc-pV{T,Q}Z; exponential_sqrt alpha=5.46; n=3,4]"
+    )
+
+
+def test_alpha_of_an_exponential_sqrt_term_is_identity(db_session):
+    """#659: alpha 4.42 and 5.46 are two schemes and two levels, the same alpha is one; the term's key is not identity."""
+
+    def scheme(alpha: float, key: str = "scf") -> dict:
+        return {
+            "kind": "extrapolation",
+            "terms": [
+                {
+                    "key": key,
+                    "operation": "extrapolation",
+                    "energy_component": "reference",
+                    "formula": "exponential_sqrt",
+                    "exponent": alpha,
+                    "inputs": [
+                        {"slot": "cardinal", "cardinal_number": 3, "level_of_theory": {"method": "HF", "basis": "cc-pVTZ"}},
+                        {"slot": "cardinal", "cardinal_number": 4, "level_of_theory": {"method": "HF", "basis": "cc-pVQZ"}},
+                    ],
+                }
+            ],
+        }
+
+    a, again, renamed, other = (
+        _resolve(db_session, scheme(5.46)),
+        _resolve(db_session, scheme(5.46)),
+        _resolve(db_session, scheme(5.46, key="hf")),
+        _resolve(db_session, scheme(4.42)),
+    )
+    assert a.id == again.id == renamed.id
+    assert other.id != a.id
+    assert a.method == "CBS[ref:HF/cc-pV{T,Q}Z; exponential_sqrt alpha=5.46; n=3,4]"
+    row = _scheme_row(db_session, a)
+    assert [(t.formula.value, t.exponent) for t in row.terms] == [("exponential_sqrt", 5.46)]
+    # The same pair under a different formula is a different scheme.
+    km = scheme(5.46)
+    km["terms"][0].update(formula="karton_martin_scf")
+    del km["terms"][0]["exponent"]
+    assert _resolve(db_session, km).id != a.id
+
+
 def test_levels_that_share_no_basis_shape_are_listed_in_full():
     terms = [
         LabelTerm("extrapolation", EnergyComponentKind.total, "inverse_power", 3,

@@ -864,7 +864,8 @@
         "inverse_power",
         "inverse_power_shifted_half",
         "karton_martin_scf",
-        "exponential_three_point"
+        "exponential_three_point",
+        "exponential_sqrt"
       ],
       "title": "CompositeExtrapolationFormula",
       "type": "string"
@@ -1171,7 +1172,7 @@
     },
     "CompositeSchemeTermIn": {
       "additionalProperties": false,
-      "description": "One term of a user-built scheme; the scheme's total is the sum of its terms.\n\n:param key: Your name for the term (for example ``\"corr\"``, ``\"dcv\"``).\n    Local to this definition and **not part of the scheme's identity**: the\n    calculation's ``composite_result.inputs`` name terms by it, and two\n    depositors who key the same recipe differently get the same scheme.\n:param operation: ``base`` / ``value`` (one input taken as it is),\n    ``extrapolation``, or ``difference`` (high minus low). ``empirical`` is\n    refused.\n:param energy_component: Which part of the input energy the term reads:\n    ``total``, ``reference``, ``correlation`` (the whole correlation energy,\n    triples included), ``triples``, ``dboc``, ``scalar_relativistic``.\n:param formula: The extrapolation formula (``extrapolation`` terms only).\n:param exponent: The formula's exponent where it has one (``inverse_power``,\n    ``inverse_power_shifted_half``). Part of the identity: exponent 3 and 3.4\n    are two schemes.\n:param inputs: The levels the term reads, each filling a slot.",
+      "description": "One term of a user-built scheme; the scheme's total is the sum of its terms.\n\n:param key: Your name for the term (for example ``\"corr\"``, ``\"dcv\"``).\n    Local to this definition and **not part of the scheme's identity**: the\n    calculation's ``composite_result.inputs`` name terms by it, and two\n    depositors who key the same recipe differently get the same scheme.\n:param operation: ``base`` / ``value`` (one input taken as it is),\n    ``extrapolation``, or ``difference`` (high minus low). ``empirical`` is\n    refused.\n:param energy_component: Which part of the input energy the term reads:\n    ``total``, ``reference``, ``correlation`` (the whole correlation energy,\n    triples included), ``triples``, ``dboc``, ``scalar_relativistic``.\n:param formula: The extrapolation formula (``extrapolation`` terms only).\n:param exponent: The formula's exponent where it has one (``inverse_power``,\n    ``inverse_power_shifted_half``); for ``exponential_sqrt`` it is ORCA's\n    alpha in ``exp(-alpha*sqrt(n))`` (ORCA: 4.42 for cc-pV{D,T}Z, 5.46 for\n    cc-pV{T,Q}Z). Part of the identity: exponent 3 and 3.4 are two schemes.\n:param inputs: The levels the term reads, each filling a slot.",
       "properties": {
         "energy_component": {
           "$ref": "#/$defs/EnergyComponentKind"

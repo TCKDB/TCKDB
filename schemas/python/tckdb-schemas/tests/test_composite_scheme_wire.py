@@ -249,6 +249,22 @@ def _duplicate_key(s):
     _term(s, "corr")["key"] = "ref"
 
 
+def _sqrt_without_alpha(s):
+    corr = _term(s, "corr")
+    corr["formula"], corr["energy_component"] = "exponential_sqrt", "reference"
+    del corr["exponent"]
+
+
+def _sqrt_with_bad_alpha(s):
+    corr = _term(s, "corr")
+    corr["formula"], corr["energy_component"], corr["exponent"] = "exponential_sqrt", "reference", 0
+
+
+def _sqrt_on_correlation(s):
+    _term(s, "corr")["formula"] = "exponential_sqrt"
+    _term(s, "corr")["exponent"] = 5.46
+
+
 def _km_on_correlation(s):
     corr = _term(s, "corr")
     corr["formula"] = "karton_martin_scf"
@@ -269,6 +285,9 @@ MALFORMED = [
     (_kind_mismatch, "kind_operation_mismatch"),
     (_duplicate_key, "term_key_duplicate"),
     (_km_on_correlation, "component_mismatch"),
+    (_sqrt_without_alpha, "exponent_required"),
+    (_sqrt_with_bad_alpha, "exponent_invalid"),
+    (_sqrt_on_correlation, "component_mismatch"),
 ]
 
 

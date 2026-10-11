@@ -104,6 +104,7 @@ const FORMULA_WORDS: Record<string, string> = {
     inverse_power: "inverse power",
     inverse_power_shifted_half: "inverse power, shifted by one half",
     karton_martin_scf: "Karton-Martin (SCF)",
+    exponential_sqrt: "exponential in the square root (SCF, ORCA)",
     exponential_three_point: "three-point exponential",
 }
 
