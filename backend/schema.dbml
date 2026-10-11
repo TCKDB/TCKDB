@@ -4295,6 +4295,7 @@ Table upload_job {
   lease_expires_at timestamp
   heartbeat_at timestamp
   result jsonb
+  request_warnings jsonb
   error text
   attempts int [not null, default: '0']
   max_attempts int [not null, default: '3']
