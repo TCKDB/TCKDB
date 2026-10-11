@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest"
-import { ANGSTROM_TO_BOHR, BOHR_RADIUS_ANGSTROM, angstromToBohr, atomicNumberForSymbol, buildXyzBlock } from "./geometryXyz"
+import { ANGSTROM_TO_BOHR, BOHR_RADIUS_ANGSTROM, angstromToBohr, atomicNumberForSymbol, buildXyzBlock, hydrogenSymbolsForViewer } from "./geometryXyz"
+
+describe("hydrogenSymbolsForViewer (#732)", () => {
+    it("rewrites D and T atom lines to H, keeping coordinates and the header lines", () => {
+        expect(hydrogenSymbolsForViewer("3\nD T comment\nC 0 0 0\nD 1 2 3\n  T 4 5 6")).toBe(
+            "3\nD T comment\nC 0 0 0\nH 1 2 3\n  H 4 5 6",
+        )
+    })
+
+    it("rewrites lowercase d and t as well", () => {
+        expect(hydrogenSymbolsForViewer("2\n\nd 1 2 3\n\tt 4 5 6")).toBe("2\n\nH 1 2 3\n\tH 4 5 6")
+    })
+
+    it.each(["Ti", "Ta", "Tb", "Tc", "Te", "Th", "Tl", "Tm", "Ts", "Db", "Ds", "Dy", "TI", "DY", "D1", "T1"])(
+        "returns the identical string when the only candidate is %s",
+        (symbol) => {
+            const xyz = `2\n\nC 0 0 0\n${symbol} 1 1 1`
+            expect(hydrogenSymbolsForViewer(xyz)).toBe(xyz)
+        },
+    )
+})
 
 describe("buildXyzBlock", () => {
     it("pins the exact XYZ text built from atom rows — catches a swapped field or a dropped atom", () => {

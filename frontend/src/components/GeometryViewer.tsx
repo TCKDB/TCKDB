@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { isotopeLabel } from "../domain/isotopeLabel"
 import type { GeometryAtom } from "../api/geometryApi"
-import { angstromToBohr, buildXyzBlock, type CoordinateUnitMode } from "../domain/geometryXyz"
+import { angstromToBohr, buildXyzBlock, hydrogenSymbolsForViewer, type CoordinateUnitMode } from "../domain/geometryXyz"
 import { angle as angleBetween, dihedral as dihedralOf, distance as distanceBetween } from "../domain/geometryMeasure"
 import "../geometry-measure.css"
 
@@ -707,9 +707,9 @@ export function GeometryViewer({
     }, [])
 
     const xyzForViewer = useMemo(() => {
-        if (xyzText) return xyzText
+        if (xyzText) return hydrogenSymbolsForViewer(xyzText)
         if (atoms.length === 0) return null
-        return buildXyzBlock(atoms)
+        return hydrogenSymbolsForViewer(buildXyzBlock(atoms))
     }, [xyzText, atoms])
 
     useEffect(() => {
