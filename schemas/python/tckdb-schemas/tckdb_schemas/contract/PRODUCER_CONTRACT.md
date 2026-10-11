@@ -222,6 +222,14 @@ enforces), `docs/guides/api_vocabulary.md` (every code and token).
 
 The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verbatim. Every entry ships beside this file as `CHANGELOG.md`; `python -m tckdb_schemas.contract --since <version>` prints the ones newer than the version your adapter targets.
 
+### 0.111.1 - 2026-10-11
+
+Wording only: the refusal `energy_correction_scheme_frequency_level_not_applicable` and the `EnergyCorrectionSchemeRef`
+docstring no longer say every kind other than the BAC kinds is "keyed on the energy level alone". A frequency level is
+accepted only on `bac_petersson` and `bac_melius` for now; Arkane's isodesmic reference data is keyed on the
+frequency//energy pair too, and the `isodesmic` kind will likely need it once it has defined content. No upload model,
+enum or rule changed.
+
 ### 0.111.0 - 2026-10-11
 
 A kinetics record's Arrhenius A-units are held to the order of the side its coefficient is a rate of (#695): the products for
@@ -232,13 +240,6 @@ sides are the same size the check is unchanged. So the correct units of a revers
 (the reverse of H2 -> 2H is bimolecular) are accepted, and the units of the wrong side are refused once `direction` is
 stated. This covers the main line, every `multi_arrhenius` and PLOG entry, and `falloff.low_a_units` (one order above the
 side). No upload model gained or lost a field.
-### 0.111.1 - 2026-10-11
-
-Wording only: the refusal `energy_correction_scheme_frequency_level_not_applicable` and the `EnergyCorrectionSchemeRef`
-docstring no longer say every kind other than the BAC kinds is "keyed on the energy level alone". A frequency level is
-accepted only on `bac_petersson` and `bac_melius` for now; Arkane's isodesmic reference data is keyed on the
-frequency//energy pair too, and the `isodesmic` kind will likely need it once it has defined content. No upload model,
-enum or rule changed.
 
 ### 0.108.1 - 2026-10-10
 
@@ -256,12 +257,6 @@ The producer contract lists the six read routes of structure selection (`POST ..
 
 New refusal code `structure_selection_manifest_too_large` (a structure decision whose replayable manifest exceeds its
 bound is refused whole; service layer only). No upload model changed.
-
-### 0.106.0 - 2026-10-05
-
-New refusal codes `structure_selection_population_too_large`, `structure_selection_evidence_too_large`,
-`structure_selection_traversal_too_deep`, `structure_selection_unsupported` and `unknown_structure_member_ref` (the bounds and
-refusals of a structure assessment, service layer only). No upload model changed.
 
 ## Every producer route
 
