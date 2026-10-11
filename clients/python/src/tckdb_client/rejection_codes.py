@@ -298,6 +298,8 @@ class RejectionCode(str, Enum):
     STATMECH_MODEL_DECLARATION_MISMATCH = "statmech_model_declaration_mismatch"
     STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED = "statmech_model_declaration_version_unsupported"
     STATMECH_ROLE_DUPLICATE = "statmech_role_duplicate"
+    STATMECH_SELECTION_BOUND_EXCEEDED = "statmech_selection_bound_exceeded"
+    STATMECH_SELECTION_UNSUPPORTED = "statmech_selection_unsupported"
     STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = "statmech_source_calculation_owner_mismatch"
     STATMECH_SOURCE_ROLE_TYPE_MISMATCH = "statmech_source_role_type_mismatch"
     STATMECH_SP_GEOMETRY_MISMATCH = "statmech_sp_geometry_mismatch"
@@ -369,6 +371,7 @@ class RejectionCode(str, Enum):
     UNKNOWN_RELEASE = "unknown_release"
     UNKNOWN_RELEASE_ARTIFACT = "unknown_release_artifact"
     UNKNOWN_SELECTION = "unknown_selection"
+    UNKNOWN_STATMECH_CANDIDATE_REF = "unknown_statmech_candidate_ref"
     UNKNOWN_STATMECH_REF = "unknown_statmech_ref"
     UNKNOWN_STRUCTURE_DETERMINATION_REF = "unknown_structure_determination_ref"
     UNKNOWN_STRUCTURE_MEMBER_REF = "unknown_structure_member_ref"
@@ -570,6 +573,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STATMECH_MODEL_DECLARATION_MISMATCH,
         RejectionCode.STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED,
         RejectionCode.STATMECH_ROLE_DUPLICATE,
+        RejectionCode.STATMECH_SELECTION_BOUND_EXCEEDED,
+        RejectionCode.STATMECH_SELECTION_UNSUPPORTED,
         RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH,
         RejectionCode.STATMECH_SP_GEOMETRY_MISMATCH,
@@ -895,6 +900,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STATMECH_MODEL_DECLARATION_MISMATCH: frozenset({422}),
     RejectionCode.STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.STATMECH_ROLE_DUPLICATE: frozenset({422}),
+    RejectionCode.STATMECH_SELECTION_BOUND_EXCEEDED: frozenset({422}),
+    RejectionCode.STATMECH_SELECTION_UNSUPPORTED: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.STATMECH_SP_GEOMETRY_MISMATCH: frozenset({422}),
@@ -966,6 +973,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNKNOWN_RELEASE: frozenset({404}),
     RejectionCode.UNKNOWN_RELEASE_ARTIFACT: frozenset({404}),
     RejectionCode.UNKNOWN_SELECTION: frozenset({404}),
+    RejectionCode.UNKNOWN_STATMECH_CANDIDATE_REF: frozenset({404}),
     RejectionCode.UNKNOWN_STATMECH_REF: frozenset({404}),
     RejectionCode.UNKNOWN_STRUCTURE_DETERMINATION_REF: frozenset({404}),
     RejectionCode.UNKNOWN_STRUCTURE_MEMBER_REF: frozenset({404}),

@@ -107,6 +107,14 @@ read-only repeatable-read transaction). Each record, per claim, is `represented_
   output is its `final` geometry, an initial or intermediate output is not an alternative to it.
 - An atom needs no frequency, scan or constants, and has no vibrational component (that scope is refused, so the
   record is `not_applicable` there). An imported record needs no local geometry job.
+- A declared model whose geometry or curvature rests on imported literature parameters is supported by them: the role is
+  met, no local job is asked for, and the advisory `imported_parameters_not_revalidated:<role>` discloses that the source's
+  own stationary-point statement is not re-judged here. An imported source never overrides a local witness that contradicts
+  the claim, and a source declared for one role does not stand in for another.
+  An imported source meets its role only if its literature carries a DOI or an ISBN (the identifiers the literature policy
+  resolves); a title-only citation is kept but, for a role the claim requires, reported as `required_source_unusable:<role>`; the advisory
+  `source_literature_unidentified:<role>`. A rotor's `potential_source_key` must name a `torsional_surface` source.
+  `imported_parameters_not_revalidated` is part of the decision response (chunk 4).
 - A torsion-bearing record that does not say whether its frequencies were projected is ambiguous, not assumed
   projected. An invalidated rotor is ambiguous here and blocks the claim in an assessment.
 - An unknown optical factor or absent electronic levels keep the thermal claims open; they are not one. A chiral

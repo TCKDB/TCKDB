@@ -22,6 +22,17 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Statmech qualification (2026-10-11)
+
+**Chunk 3 of the statmech selection programme: bounded qualification, no public surface yet.** Migration: none. New
+environment variable: none. `tckdb-client` 0.141.0 (three new rejection codes), `tckdb-schemas` 0.114.0.
+
+- An internal service decides, per candidate model (a declared model or a legacy statmech record read as stored), whether it can
+  answer a stated question about one species or transition state, with a closed reason registry and an outcome precedence
+  (evidence conflict, unsupported model, missing data, unresolved, none applicable). Undecided alternatives stop the whole requested
+  domain being certified. The read runs in one read-only repeatable-read snapshot and is bounded (500 candidates, 25,000 nested
+  rows). Nothing is exposed over HTTP yet.
+
 ## Declared statistical models for statmech records (2026-10-11)
 
 **Chunk 2 of the statmech selection programme: durable declarations.** Migration: `e6b3a9d1f742` (additive; chains from

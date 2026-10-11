@@ -29,6 +29,7 @@ from tests.services.scientific_read._factories import (
     attach_statmech_source_calculation,
     attach_statmech_torsion,
     make_geometry,
+    make_literature,
     make_statmech,
 )
 from tests.services.structure_selection._support import make_ts_world, make_world
@@ -256,7 +257,7 @@ def test_every_record_lands_in_exactly_one_bucket_per_claim(db_session, seeded):
     for profile in PROFILES:
         buckets = report["by_profile"][profile]
         total = sum(v for k, v in buckets.items() if k != "unsupported_declaration_version")
-        assert total == report["records"], profile
+        assert total == report["legacy_records"], profile  # a declared model is not a legacy record
 
 
 def test_the_inventory_and_the_classifier_agree_record_by_record(db_session, seeded):
@@ -278,3 +279,35 @@ def test_the_inventory_writes_nothing_and_says_it_infers_nothing(db_session, see
     assert db_session.execute(select(func.count()).select_from(Statmech)).scalar_one() == before
     assert "Nothing was written, backfilled or inferred" in report["note"]
     assert report["declarations"]["unsupported_declaration_version"] == 0
+
+
+def test_a_declared_model_is_counted_as_one_and_read_through_its_declaration_not_as_a_legacy_record(db_session, seeded):
+    from app.db.models.common import StatmechModelScopeKind
+    from app.db.models.statmech_declaration import StatmechModelDeclaration
+
+    baseline, rows, world = seeded
+    before = statmech_coverage_inventory(db_session)
+    declared = make_statmech(db_session, species_entry=world.entry)
+    unreadable = make_statmech(db_session, species_entry=world.entry)
+    for host, version in ((declared, 1), (unreadable, 2)):
+        db_session.add(
+            StatmechModelDeclaration(
+                statmech_id=host.id,
+                schema_version=version,
+                scope_kind=StatmechModelScopeKind.atom,
+                workflow_tool_release_id=None,
+                literature_id=make_literature(db_session).id,
+                recipe={},
+                content_hash="c" * 64,
+            )
+        )
+    db_session.flush()
+    after = statmech_coverage_inventory(db_session)
+    assert after["records"] == before["records"] + 2 and after["legacy_records"] == before["legacy_records"]
+    assert after["declared_models"] == before["declared_models"] + 2
+    assert after["declarations"]["unsupported_declaration_version"] == before["declarations"]["unsupported_declaration_version"] + 1
+    assert after["declarations"]["by_scope_kind"]["atom"] == before["declarations"]["by_scope_kind"].get("atom", 0) + 2
+    for profile in PROFILES:
+        assert after["by_profile"][profile]["unsupported_declaration_version"] == after["declarations"]["unsupported_declaration_version"]
+        legacy_buckets = {k: v for k, v in after["by_profile"][profile].items() if k != "unsupported_declaration_version"}
+        assert legacy_buckets == {k: v for k, v in before["by_profile"][profile].items() if k != "unsupported_declaration_version"}

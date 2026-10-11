@@ -248,6 +248,13 @@ def test_populations_are_all_authorized_explicit_revisions_or_a_release_never_a_
     assert accepts(make(THERMAL, population={"kind": "release", "release_ref": "rel_abcdefghijklmnopqrstuvwxyz"})).population.release_ref
 
 
+def test_a_population_names_legacy_records_by_their_sm_ref_and_nothing_else():
+    legacy_ref = "sm_abcdefghijklmnopqrstuvwxyz"
+    assert accepts(make(THERMAL, population={"kind": "model_revisions", "model_refs": [legacy_ref, SMD]})).population.model_refs == (legacy_ref, SMD)
+    for bad in (SPE, "cg_abcdefghijklmnopqrstuvwxyz", "sm_short"):
+        refuses(make(THERMAL, population={"kind": "model_revisions", "model_refs": [bad]}), "pattern")
+
+
 @pytest.mark.parametrize("task", [t.value for t in DeferredTask])
 def test_a_recognised_deferred_task_is_a_valid_request_answered_later_with_unsupported_task(task):
     body = make(THERMAL, task=task, observable=_DROP, conditions=_DROP)

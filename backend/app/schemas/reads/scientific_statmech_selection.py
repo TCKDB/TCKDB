@@ -61,6 +61,10 @@ TransitionStateEntryRef = Annotated[str, StringConstraints(pattern=_ref_pattern(
 ConformerGroupRef = Annotated[str, StringConstraints(pattern=_ref_pattern("ConformerGroup"))]
 DeterminationRef = Annotated[str, StringConstraints(pattern=_ref_pattern("StructureDetermination"))]
 ModelRef = Annotated[str, StringConstraints(pattern=_ref_pattern("StatmechModelDeclaration"))]
+CandidateRef = Annotated[
+    str,
+    StringConstraints(pattern=rf"^(?:{PREFIXES['Statmech']}|{PREFIXES['StatmechModelDeclaration']})_[a-z2-7]{{{PUBLIC_REF_BODY_LEN}}}$"),
+]
 ReleaseRef = Annotated[str, StringConstraints(pattern=_ref_pattern("DatasetRelease"))]
 
 
@@ -151,7 +155,7 @@ class AuthorizedMatchingModels(_Strict):
 
 class ExplicitModelRevisions(_Strict):
     kind: Literal["model_revisions"]
-    model_refs: list[ModelRef] = Field(min_length=1, max_length=500)
+    model_refs: list[CandidateRef] = Field(min_length=1, max_length=500)
 
 
 class ReleasePopulation(_Strict):

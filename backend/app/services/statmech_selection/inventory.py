@@ -3,7 +3,7 @@
 Before any declaration schema is decided, this reads the linked content that already exists and reports, for each
 supported claim, how many existing records are ``represented_and_usable``, ``represented_but_ambiguous`` or
 ``absent`` (and how many a claim cannot apply to by owner kind). It also counts ``unsupported_declaration_version``
-(always 0 until declarations exist) and the metadata coverage behind the verdicts.
+(declared models of a version this release cannot read) and the metadata coverage behind the verdicts.
 
 Absence on the statmech row is not proof of absence in the repository: a record whose own columns say nothing may be
 linked to source calculations that do, and those links are read here (curvature results on any source calculation,
@@ -15,9 +15,10 @@ inventory predicts the assessor's facts-level answer rather than a parallel one.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Collection
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, true
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import (
@@ -35,6 +36,7 @@ from app.db.models.statmech import (
     StatmechSourceCalculation,
     StatmechTorsion,
 )
+from app.db.models.statmech_declaration import StatmechModelDeclaration
 from app.db.models.structure_determination import StructureDeterminationSource
 from app.services.statmech_selection.legacy import PROFILES, LegacyFacts, Readiness, classify
 from app.services.statmech_selection.vocabulary import OwnerKind
@@ -50,8 +52,11 @@ CORRECTION_ROLE_PURPOSE = {
 _GEOMETRY_SIDE = {"opt": "output", "composite": "output", "freq": "input"}
 
 
-def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
-    """The stored facts of every statmech record, keyed by row id. Bulk reads; nothing is written."""
+def load_legacy_facts(session: Session, ids: Collection[int] | None = None) -> dict[int, LegacyFacts]:
+    """The stored facts of statmech records (all, or ``ids``), keyed by row id. Bulk reads; nothing is written."""
+    only = None if ids is None else list(ids)
+    if only is not None and not only:
+        return {}
     rows = session.execute(
         select(
             Statmech.id,
@@ -67,7 +72,9 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
             Statmech.statmech_treatment,
             Statmech.uses_projected_frequencies,
             Statmech.frequency_scale_factor_id,
-        ).order_by(Statmech.id)
+        )
+        .where(true() if only is None else Statmech.id.in_(only))
+        .order_by(Statmech.id)
     ).all()
     scale_kind = {
         i: k.value
@@ -76,7 +83,9 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
     levels: dict[int, int] = {
         sid: int(n)
         for sid, n in session.execute(
-            select(StatmechElectronicLevel.statmech_id, func.count()).group_by(StatmechElectronicLevel.statmech_id)
+            select(StatmechElectronicLevel.statmech_id, func.count())
+            .where(true() if only is None else StatmechElectronicLevel.statmech_id.in_(only))
+            .group_by(StatmechElectronicLevel.statmech_id)
         ).all()
     }
     torsions: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -86,7 +95,7 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
             StatmechTorsion.treatment_kind,
             StatmechTorsion.invalidated_reason,
             StatmechTorsion.source_scan_calculation_id,
-        )
+        ).where(true() if only is None else StatmechTorsion.statmech_id.in_(only))
     ):
         t = torsions[sid]
         t["n"] += 1
@@ -100,6 +109,7 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
     links = session.execute(
         select(StatmechSourceCalculation.statmech_id, StatmechSourceCalculation.calculation_id, Calculation.type)
         .join(Calculation, Calculation.id == StatmechSourceCalculation.calculation_id)
+        .where(true() if only is None else StatmechSourceCalculation.statmech_id.in_(only))
     ).all()
     calc_ids = {c for _, c, _ in links}
     curvature = set()
@@ -220,7 +230,23 @@ def load_legacy_facts(session: Session) -> dict[int, LegacyFacts]:
 
 def statmech_coverage_inventory(session: Session) -> dict[str, Any]:
     """Counts of what the stored statmech corpus supports, per claim. Pure reads; see the module docstring."""
-    facts = load_legacy_facts(session)
+    all_facts = load_legacy_facts(session)
+    declared: dict[int, tuple[int, str]] = {
+        sid: (version, scope.value)
+        for sid, version, scope in session.execute(
+            select(
+                StatmechModelDeclaration.statmech_id,
+                StatmechModelDeclaration.schema_version,
+                StatmechModelDeclaration.scope_kind,
+            )
+        )
+    }
+    # A record that declares its model is read through the declaration; only an undeclared record is a legacy record.
+    facts = {sid: f for sid, f in all_facts.items() if sid not in declared}
+    unsupported_versions = sum(version != 1 for version, _ in declared.values())
+    by_scope: dict[str, int] = defaultdict(int)
+    for _, scope in declared.values():
+        by_scope[scope] += 1
     by_profile: dict[str, dict[str, int]] = {}
     gaps: dict[str, dict[str, int]] = {}
     for profile in PROFILES:
@@ -233,14 +259,16 @@ def statmech_coverage_inventory(session: Session) -> dict[str, Any]:
                 for name, state in states.items():
                     if state != "present":
                         missing[f"{name}:{state}"] += 1
-        counts["unsupported_declaration_version"] = 0
+        counts["unsupported_declaration_version"] = unsupported_versions
         by_profile[profile] = counts
         gaps[profile] = dict(sorted(missing.items()))
     owners: dict[str, int] = defaultdict(int)
     for f in facts.values():
         owners[f.owner_kind.value] += 1
     return {
-        "records": len(facts),
+        "records": len(all_facts),
+        "legacy_records": len(facts),
+        "declared_models": len(declared),
         "by_owner_kind": dict(sorted(owners.items())),
         "by_profile": by_profile,
         "ambiguity_breakdown": gaps,
@@ -262,8 +290,13 @@ def statmech_coverage_inventory(session: Session) -> dict[str, Any]:
             ),
         },
         "declarations": {
-            "unsupported_declaration_version": 0,
-            "note": "No declaration schema exists in this release; every claim is read from the legacy record.",
+            "total": len(declared),
+            "by_scope_kind": dict(sorted(by_scope.items())),
+            "unsupported_declaration_version": unsupported_versions,
+            "note": (
+                "A declared model is read through its declaration, not through the legacy facts; a declaration of a "
+                "version this release cannot read is counted here and qualifies for no claim."
+            ),
         },
         "note": (
             "Counts of stored rows only. A verdict is the facts-level readiness of a legacy record for a claim, not an "
