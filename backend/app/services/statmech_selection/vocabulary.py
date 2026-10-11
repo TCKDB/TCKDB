@@ -248,8 +248,8 @@ OUTCOME_PRECEDENCE: tuple[str, ...] = (
     "no_candidates",
     "none_qualified: evidence_conflict, unsupported_model, missing_required_data, unresolved_applicability, "
     "no_applicable_candidate",
-    "preference: unresolved_comparability, policy_conflict, sole_eligible_candidate, policy_preferred, "
-    "incomparable_alternatives",
+    "preference: policy_conflict (unless an undecided rule could supersede a conflicting one), unresolved_comparability, "
+    "sole_eligible_candidate, policy_preferred, incomparable_alternatives",
 )
 
 #: The machine code of a bounded-completeness refusal (HTTP 422). One code; the context names the bound.

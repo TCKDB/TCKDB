@@ -281,3 +281,12 @@ def codes(assessment: StatmechAssessment, applicability=None) -> list[str]:
 
 # kept for tests that build a curvature fact directly
 __all__ += ["APPROVED", "BASE_RECIPE", "EFFECTIVE", "FSF_ENTROPY", "T0", "CurvatureFacts", "TorsionFacts", "record"]
+
+
+#: A declared model whose geometry and curvature rest on imported (identified) literature parameters.
+IMPORTED_SOURCES = (
+    src("geom", "geometry", None, locator="literature", literature_ref="lit_a"),
+    src("curv", "curvature", None, locator="literature", literature_ref="lit_b"),
+    src("fsf", "scale_factor", None, locator="scale_factor", scale_factor=FSF_ENTROPY),
+)
+__all__ += ["IMPORTED_SOURCES"]

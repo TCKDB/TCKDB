@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionReco
 from app.db.models.kinetics import KineticsDetermination
 from app.db.models.record_review import RecordReview
 from app.db.models.scientific_record_supersession import ScientificRecordSupersession
+from app.db.models.statmech_declaration import StatmechModelDeclaration
 from app.services.accepted_science import (
     is_accepted_science_type,
     lock_scientific_records,
@@ -51,6 +53,30 @@ def _assert_kinetics_targets_compatible(session: Session, old_root, new_root) ->
         new.target_network_channel_id,
     ):
         raise DomainError("Supersession records must describe the same determination target")
+
+
+def _assert_statmech_targets_compatible(session: Session, old_root, new_root) -> None:
+    """A replacement of a statmech record is a replacement of the same declared model scope.
+
+    Where both records declare a model, the two must declare the same scope: both an atom, both the same basin, both
+    an equilibrium ensemble, or both the same transition-state determination. A re-derived model or a
+    corrected recipe is a different revision of the same scope, so the recipe, members and sources are not compared,
+    only what the model is a model of. Where either record declares none, nothing can be compared and the replacement
+    is allowed; the absence is not hidden, because a record's read states no declared model and never "standalone".
+    """
+    old, new = (
+        session.scalar(select(StatmechModelDeclaration).where(StatmechModelDeclaration.statmech_id == root.id))
+        for root in (old_root, new_root)
+    )
+    if old is None or new is None:
+        return
+
+    def target(declaration: StatmechModelDeclaration) -> tuple[Any, ...]:
+        # Symmetric: a basin model is of one conformer group and a transition-state model of one determination.
+        return (declaration.scope_kind, declaration.conformer_group_id, declaration.structure_determination_id)
+
+    if target(old) != target(new):
+        raise DomainError("Supersession records must declare the same model scope")
 
 
 @dataclass(frozen=True)
@@ -149,6 +175,8 @@ def supersede_scientific_record(
         raise DomainError("Supersession records must describe the same subject")
     if record_type is SubmissionRecordType.kinetics:
         _assert_kinetics_targets_compatible(session, old_root, new_root)
+    elif record_type is SubmissionRecordType.statmech:
+        _assert_statmech_targets_compatible(session, old_root, new_root)
 
     if old_review.status is RecordReviewStatus.approved:
         set_record_review_status(
