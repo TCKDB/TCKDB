@@ -619,6 +619,33 @@ class TestRoleBasedSessionTtl:
         row = _latest_session(db_session, "rev")
         assert row.revoked_at is not None
 
+    def test_logout_tells_the_browser_to_forget_the_cookie(self, raw_client):
+        """The route clears the cookie on the response it returns (#628).
+
+        It used to clear it on the injected ``response`` stub and then return a
+        fresh ``Response(204)``; FastAPI merges the stub's headers only when
+        the route returns a non-Response value, so no ``Set-Cookie`` was sent
+        and the client kept a stale cookie (the server-side session was
+        revoked either way).
+        """
+        raw_client.post(
+            "/api/v1/auth/register",
+            json={"username": "forget", "password": "password-123"},
+        )
+        assert SESSION_COOKIE_NAME in raw_client.cookies
+
+        resp = raw_client.post("/api/v1/auth/logout")
+
+        assert resp.status_code == 204
+        clearing = [
+            value
+            for value in resp.headers.get_list("set-cookie")
+            if value.startswith(f"{SESSION_COOKIE_NAME}=")
+        ]
+        assert len(clearing) == 1, resp.headers.get_list("set-cookie")
+        assert "Max-Age=0" in clearing[0], clearing[0]
+        assert SESSION_COOKIE_NAME not in raw_client.cookies
+
 
 # ---------------------------------------------------------------------------
 # 8. Registration policy gate

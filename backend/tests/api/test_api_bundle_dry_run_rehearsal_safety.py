@@ -400,6 +400,13 @@ def _sql_commit_behind_a_dollar_quote(session: Session) -> None:
     session.execute(text("SELECT $tag$ -- /* $tag$; COMMIT"))
 
 
+def _sql_commit_behind_an_escape_string(session: Session) -> None:
+    """In ``E'...'`` a backslash escapes the quote, so ``E'\\'--'`` is one
+    string and the COMMIT after it is real. Read as an ordinary string, the
+    literal would end early and the ``--`` would hide the COMMIT."""
+    session.execute(text("SELECT E'\\'--'; COMMIT"))
+
+
 def _raw_dbapi_commit(session: Session) -> None:
     """The driver's own connection, under SQLAlchemy (#592 item 2)."""
     session.connection().connection.dbapi_connection.commit()
@@ -416,6 +423,7 @@ def _raw_dbapi_commit(session: Session) -> None:
         _sql_commit_behind_a_dashed_literal,
         _driver_sql_commit_behind_a_dashed_literal,
         _sql_commit_behind_a_dollar_quote,
+        _sql_commit_behind_an_escape_string,
     ],
     ids=lambda f: f.__name__.lstrip("_"),
 )
@@ -770,6 +778,32 @@ def test_a_quoted_release_with_no_space_cannot_release_the_rehearsal(own_savepoi
     with pytest.raises(RehearsalCommitRefused, match="release a savepoint it did not open"):
         with rehearsal(session):
             session.execute(text(f'RELEASE"{seen[0]}"'))
+
+
+def test_a_unicode_escaped_name_cannot_be_used_to_release_the_rehearsal(own_savepoint) -> None:
+    """``U&"sa_savepoint_1"`` is the rehearsal's own savepoint under another
+    spelling. Read as the unquoted name ``u&``, ``SAVEPOINT U&"x"`` made the
+    later ``RELEASE U&"..."`` look like release of an inner savepoint, and
+    PostgreSQL released the rehearsal's."""
+    session, seen = own_savepoint
+    with pytest.raises(RehearsalCommitRefused, match="U&"):
+        with rehearsal(session):
+            session.execute(text('SAVEPOINT U&"x"'))
+            session.execute(text(f'RELEASE U&"{seen[0]}"'))
+
+
+@pytest.mark.parametrize(
+    "statement",
+    ['RELEASE SAVEPOINT u&"x"', 'ROLLBACK TO SAVEPOINT U&"x"', 'ROLLBACK WORK TO U&"x"'],
+)
+def test_releasing_or_rolling_back_to_a_unicode_escaped_name_is_refused(
+    sessions, statement
+) -> None:
+    session = sessions()
+    with pytest.raises(RehearsalCommitRefused, match="U&"):
+        with rehearsal(session):
+            session.execute(text('SAVEPOINT U&"x"'))
+            session.execute(text(statement))
 
 
 def test_a_quoted_savepoint_with_no_space_is_tracked_and_releasable(sessions) -> None:

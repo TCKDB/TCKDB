@@ -449,7 +449,11 @@ def retry_receipt_after_commit(
     second attempt in a clean transaction rather than leaving idempotency
     permanently broken for that key. A deterministic cause — the incident's
     unstorable body, for instance — fails again here, and that is fine: this
-    runs after the response is sent and never raises into the request path.
+    never raises into the request path. It runs inside the write session's
+    commit (an ``after_commit`` hook), *before* the response is sent, because
+    ``get_write_db`` commits ahead of the response (#616); but after the
+    response object was built, so a retry that succeeds cannot change the
+    ``Idempotency-Receipt: failed`` header the response already carries.
     """
     try:
         with session_factory() as retry_session:

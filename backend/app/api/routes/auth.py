@@ -135,7 +135,12 @@ def _set_session_cookie(response: Response, token: str, ttl: timedelta) -> None:
 
 
 def _clear_session_cookie(response: Response) -> None:
-    response.delete_cookie(key=SESSION_COOKIE_NAME)
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        httponly=settings.session_cookie_httponly,
+        samesite=settings.session_cookie_samesite,
+        secure=settings.session_cookie_secure,
+    )
 
 
 def _to_metadata(row: ApiKey) -> ApiKeyMetadata:
@@ -314,14 +319,18 @@ def login(
 
 @router.post("/logout", status_code=204)
 def logout(
-    response: Response,
     tckdb_session: Optional[str] = Cookie(None, alias=SESSION_COOKIE_NAME),
     session: Session = Depends(get_write_db, scope="function"),
 ) -> Response:
     if tckdb_session:
         revoke_session(session, tckdb_session)
-    _clear_session_cookie(response)
-    return Response(status_code=204)
+    # The cookie is cleared on the Response that is returned. FastAPI merges
+    # an injected ``response`` stub's headers only when the route returns a
+    # non-Response value, so clearing the stub and returning a fresh
+    # ``Response`` sent no ``Set-Cookie`` at all (#628).
+    cleared = Response(status_code=204)
+    _clear_session_cookie(cleared)
+    return cleared
 
 
 @router.get("/me", response_model=MeResponse)

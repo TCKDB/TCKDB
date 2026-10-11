@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.117.0 - 2026-10-11
+
+One new refusal code, `database_request_failed`.
+
+- Any database error that is neither a conflict (`409`) nor an outage (`503`) -- a trigger that raises when a write
+  commits, a malformed value the database refuses, a schema that has drifted -- now answers `500 database_request_failed`
+  with the usual error envelope and no driver text, instead of an unformatted `text/plain` 500. Nothing from the request
+  was saved. A retry of the same request meets the same refusal, so it is not a `503`.
+
 ## 0.116.0 - 2026-10-11
 
 Breaking: the two producer write routes that took a row id in the path take the public ref only (#578).

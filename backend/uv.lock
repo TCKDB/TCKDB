@@ -1673,7 +1673,7 @@ provides-extras = ["dev", "llm", "rdkit", "chemkin", "thermoml"]
 
 [[package]]
 name = "tckdb-schemas"
-version = "0.63.0"
+version = "0.117.0"
 source = { editable = "../schemas/python/tckdb-schemas" }
 dependencies = [
     { name = "email-validator" },

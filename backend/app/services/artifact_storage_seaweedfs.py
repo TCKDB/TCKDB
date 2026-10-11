@@ -374,6 +374,29 @@ _READ_BUDGET_SECONDS = _DEADLINE_SECONDS
 _MAX_PROBE_THREADS = 4
 _PROBE_SLOTS = threading.BoundedSemaphore(_MAX_PROBE_THREADS)
 
+#: Whether the cap above has already been reported. Once it is used up, room
+#: and quota classification stay off for the life of the process, and the only
+#: other trace is a debug line, so the first time is a WARNING (one, not one
+#: per refusal).
+_cap_warned = False
+_cap_warned_lock = threading.Lock()
+
+
+def _warn_probe_cap_once() -> None:
+    global _cap_warned
+    with _cap_warned_lock:
+        if _cap_warned:
+            return
+        _cap_warned = True
+    logger.warning(
+        "SeaweedFS probe-thread cap (%d) is exhausted: probes that the store "
+        "never finished answering hold every slot, so room and quota "
+        "classification of refused writes is off until the process restarts "
+        "(a full store will answer 503 rather than 507 meanwhile). Check that "
+        "the master and volume servers answer promptly.",
+        _MAX_PROBE_THREADS,
+    )
+
 
 def _read_bounded(response, limit_bytes: int) -> bytes:
     """The whole body, or ``ValueError``: too large, or too slow to arrive."""
@@ -405,6 +428,7 @@ def _run_within_deadline(work, name: str, deadline: float):
     callers turn into no opinion.
     """
     if not _PROBE_SLOTS.acquire(blocking=False):
+        _warn_probe_cap_once()
         raise RuntimeError("too many SeaweedFS probes still in flight")
     outcome: dict[str, object] = {}
 

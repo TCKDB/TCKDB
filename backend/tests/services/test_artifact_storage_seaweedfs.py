@@ -665,6 +665,29 @@ def test_probe_threads_are_capped_and_a_full_cap_is_no_opinion(monkeypatch) -> N
     assert calls == [], "a request was made with no probe slot free"
 
 
+def test_an_exhausted_probe_cap_is_warned_about_once(monkeypatch, caplog) -> None:
+    """The cap turns classification off for the life of the process; the
+    operator is told, once, at WARNING -- not once per refusal."""
+    calls = _serve_quota(monkeypatch, _quota_answers("quota_enforced"))
+    monkeypatch.setattr(seaweedfs, "_PROBE_SLOTS", threading.BoundedSemaphore(0))
+    monkeypatch.setattr(seaweedfs, "_cap_warned", False)
+    with caplog.at_level("WARNING", logger=seaweedfs.logger.name):
+        for _ in range(3):
+            assert _report() is None
+            assert seaweedfs.report_capacity(master_url="http://seaweedfs:9333", bucket=BUCKET) is None
+    cap_warnings = [r for r in caplog.records if r.levelname == "WARNING" and "cap" in r.getMessage()]
+    assert len(cap_warnings) == 1, [r.getMessage() for r in caplog.records]
+    assert calls == []
+
+
+def test_a_probe_with_a_slot_free_does_not_warn_about_the_cap(monkeypatch, caplog) -> None:
+    _serve_quota(monkeypatch, _quota_answers("quota_enforced"))
+    monkeypatch.setattr(seaweedfs, "_cap_warned", False)
+    with caplog.at_level("WARNING", logger=seaweedfs.logger.name):
+        assert _report() is not None
+    assert not [r for r in caplog.records if "cap" in r.getMessage()]
+
+
 def test_every_probe_gives_its_slot_back(monkeypatch) -> None:
     """More probes than slots, each finishing: none may leak a slot."""
     _serve_quota(monkeypatch, _quota_answers("quota_enforced"))

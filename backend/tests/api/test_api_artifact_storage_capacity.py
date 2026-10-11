@@ -1361,3 +1361,41 @@ def test_a_refused_copy_whose_size_cannot_be_read_stays_unclassified(
     with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
         artifact_storage.hold_artifact_object(_SHA256, client=store, bucket="b")
     assert caught.value.full is False
+
+
+@pytest.mark.parametrize(
+    ("operation", "source_key"),
+    [
+        (artifact_storage.hold_artifact_object, _KEY),
+        (artifact_storage.restore_held_object, artifact_storage.reclaim_hold_key(_SHA256)),
+    ],
+    ids=["hold", "restore"],
+)
+def test_a_refused_copy_asks_about_the_bucket_that_refused(
+    capacity_db, monkeypatch, operation, source_key
+) -> None:
+    """Both the room probe and the quota probe are pointed at the bucket the
+    copy wrote to, not the configured one: a caller moving objects in another
+    bucket must not be told about the wrong bucket's room or quota."""
+    assert artifact_storage.S3_BUCKET != "b"
+    monkeypatch.setattr(artifact_storage, "S3_SEAWEEDFS_MASTER_URL", _MASTER)
+    room_asked: list[dict] = []
+    quota_asked: list[dict] = []
+
+    def _room(**kwargs):
+        room_asked.append(kwargs)
+        return _ROOMY
+
+    def _quota(**kwargs):
+        quota_asked.append(kwargs)
+        return _QUOTA_EXHAUSTED
+
+    monkeypatch.setattr(seaweedfs, "report_capacity", _room)
+    monkeypatch.setattr(seaweedfs, "report_quota", _quota)
+    store = _InternalErrorOnCopy({source_key: b"z" * _HELD_BYTES})
+    with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
+        operation(_SHA256, client=store, bucket="b")
+
+    assert caught.value.s3_code == seaweedfs.QUOTA_EXCEEDED_CODE
+    assert [call["bucket"] for call in room_asked] == ["b"]
+    assert [call["bucket"] for call in quota_asked] == ["b"]

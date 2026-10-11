@@ -1298,6 +1298,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "reached yet is one that goes stale silently. Found by "
                 "widening the closure scan to *_code keywords."
             )),
+    ApiCode("database_request_failed", 500, Surface.response_literal,
+            "backend/app/api/errors.py",
+            note=(
+                "Any driver error that is neither an IntegrityError (409) nor "
+                "an OperationalError (503): a trigger raising at commit "
+                "(P0001), a DataError, a ProgrammingError. The body carries "
+                "no SQLSTATE, statement or driver text."
+            )),
     ApiCode("database_unavailable", 503, Surface.response_literal,
             "backend/app/api/errors.py"),
     ApiCode("dirty_tree", 422, Surface.message_prefix,

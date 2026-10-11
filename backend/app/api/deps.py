@@ -266,7 +266,12 @@ def get_write_db() -> Iterator[Session]:
     not yet committed (#616). With ``scope="function"`` the teardown runs as
     soon as the route function has returned, before the response is sent, so
     a commit-time failure is an ordinary exception that reaches the
-    application's exception handlers and becomes a coded error response.
+    application's exception handlers. A database error becomes a coded
+    response by class: ``IntegrityError`` a 409, ``OperationalError`` a 503,
+    and any other ``DBAPIError`` (a deferred trigger's ``P0001``, a
+    ``DataError``) a 500 ``database_request_failed``. A failure that is not a
+    database error (a bug in a ``before_commit`` hook, say) has no handler and
+    is a bare 500.
     ``tests/api/test_write_commit_before_response.py`` fails if any route
     declares it without the scope.
 
