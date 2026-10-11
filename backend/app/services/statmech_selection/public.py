@@ -26,8 +26,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models.species import ConformerGroup
 from app.db.models.common import RecordReviewStatus
+from app.db.models.species import ConformerGroup
 from app.db.models.statmech_declaration import StatmechModelDeclaration
 from app.db.models.structure_determination import StructureDetermination
 from app.schemas.reads.scientific_common import REVIEW_RANK
@@ -46,7 +46,7 @@ from app.schemas.reads.scientific_statmech_selection import (
 from app.services.statmech_selection.manifest import MANIFEST_FORMAT_VERSION, canonical
 from app.services.statmech_selection.models import StatmechRequest
 from app.services.statmech_selection.selection import StatmechSelection, select_statmech
-from app.services.statmech_selection.vocabulary import OwnerKind, Outcome
+from app.services.statmech_selection.vocabulary import Outcome, OwnerKind
 from app.services.structure_selection.public import (
     SNAPSHOT_OPT_OUT,
     _ref_only,

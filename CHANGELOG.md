@@ -22,6 +22,23 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Statmech selection endpoint, client method and MCP tool (2026-10-11)
+
+**Chunk 5 of the statmech selection programme: the public surface.** Migration: none. New environment variable: none.
+`tckdb-schemas` 0.118.0 (contract route rows), `tckdb-client` 0.143.0, `tckdb-mcp` 0.8.0.
+
+- `POST /api/v1/scientific/statmech/select` and `.../select/manifest`: one typed target union (a species entry or a
+  transition-state entry), both on the read-only REPEATABLE READ snapshot session. A valid negative outcome is a 200; a bound
+  exceeded is the coded 422 `statmech_selection_bound_exceeded`, never a prefix; an unknown, hidden or foreign ref is one 404.
+  Public refs only (`smd_`/`sm_` for candidates), no database id in a response or an error. The response surfaces each
+  candidate's `advisory` and the decision `notices`. No computed value is returned, and this release ships no active rule.
+- `TCKDBClient.select_statmech_models` / `get_statmech_selection_manifest` and the MCP tool `tckdb_select_statmech_models`
+  mirror the other selectors (refuse an id, a wrong-kind ref, a bound, a page, a sort or a rule before any request).
+- Selected export and releases: the other selectors' decisions are not part of a release or an export (only network
+  kinetics has an `export-selected`, and it serialises numbers; statmech returns none), so statmech decisions follow the
+  thermo, kinetics and structure precedent: select plus manifest. Declared models already ship with their statmech record in
+  releases (chunk 2). See `docs/guides/selecting_statmech_models.md`.
+
 ## Statmech decision and replay (2026-10-11)
 
 **Chunk 4 of the statmech selection programme: decision and replay, no public surface yet.** Migration: none. New

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.120.0 - 2026-10-11
+
+The producer contract lists the two read routes of statmech selection (`POST .../scientific/statmech/select` and
+`.../select/manifest`). No wire model changed.
+
 ## 0.119.0 - 2026-10-11
 
 Review leftovers for stability sources, atomic warnings and network energy sources (#635, #631, #669, #744).
