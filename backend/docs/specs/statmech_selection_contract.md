@@ -152,10 +152,12 @@ its pinned reference model) are the request's, its scope contains the request an
 
 A pair for which a rule might give an edge, with a prerequisite unknown on one side (or an unknown scope or coverage), is
 listed under `undecided` and the outcome is `unresolved_comparability`: nothing is selected, and an administrative
-reference cannot rescue it. A refuted prerequisite is a clean "no", not undecided.
+reference cannot rescue it. A refuted prerequisite is a clean "no", not undecided, and a rule whose scope is unknown but
+which touches neither model leaves nothing undecided.
 
-Precedence among preference outcomes: `unresolved_comparability`, `policy_conflict`, `sole_eligible_candidate`,
-`policy_preferred`, `incomparable_alternatives`. The selection block carries three mutually exclusive references, each with
+Precedence among preference outcomes: `policy_conflict` (an established opposition or cycle stays a conflict however much
+else is undecided, unless an undecided rule declares it supersedes one of the conflicting rules), `unresolved_comparability`,
+`sole_eligible_candidate`, `policy_preferred`, `incomparable_alternatives`. The selection block carries three mutually exclusive references, each with
 its basis and population limit: `scientific_ref` (supported dominance over every eligible alternative), `sole_eligible_ref`
 (noncomparative), `administrative_ref` (only `result_mode=first`, among incomparable first-front alternatives, never over a
 conflict, an unresolved comparability or an incomplete population). Administrative key, versioned: own review rank
@@ -166,8 +168,8 @@ says in words what `imported_parameters_not_revalidated:<role>` and `source_lite
 part of the response contract of the decision, not only of the assessment.
 
 Replacing a statmech record requires the same subject (species entry or transition-state entry) and, where both records
-declare a model, the same declared scope: both an atom, the same basin, both an ensemble, or both a transition-state
-determination. A record that declares nothing can be replaced, and the absence is not hidden.
+declare a model, the same declared scope: both an atom, the same basin, both an ensemble, or both the same
+transition-state determination (a basin is one conformer group, a transition-state model one determination). A record that declares nothing can be replaced, and the absence is not hidden.
 
 ## Manifest and replay
 
@@ -176,7 +178,8 @@ facts and every source calculation (no database id), each assessment, the regist
 Three offline operations: `reproduce_statmech_ordering` runs the decision over the *recorded* assessments (`reassessed:
 false`; a manifest made under an older supported semantics is labelled `historical`); `reassess_statmech_captured_inputs`
 recomputes every assessment from the captured facts and refuses any difference, never trusting a recorded flag even when
-coordinated edits agree; `replay_statmech_decision` reassesses and then re-decides over the recomputed assessments. A
+coordinated edits agree; `replay_statmech_decision` reassesses, re-decides over the recomputed assessments and refuses
+(`decision_mismatch`) a decision that is not the one recorded. A
 version, semantics or rule this release does not carry is refused, never substituted; a historical manifest is never
 reassessed under today's rubric. Digests are checksums, not signatures; replay verifies the consequences of captured
 inputs, not scientific truth, provenance or completeness of the captured population.

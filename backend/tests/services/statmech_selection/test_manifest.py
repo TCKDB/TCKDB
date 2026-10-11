@@ -193,7 +193,8 @@ def test_a_coordinated_edit_of_eligibility_is_caught_by_reassessment_even_when_e
         a.update(applicability="applicable", eligible=True, reasons=[])
 
     tampered = retamper(manifest, make_c_eligible)
-    assert reproduce_statmech_ordering(tampered, rules=[beats("r", "a", "b", "c")])["label"]["reassessed"] is False  # by design
+    # reproducing an ordering never reassesses, but it still refuses a decision that is not what the recorded assessments give
+    refused("decision_mismatch", reproduce_statmech_ordering, tampered, rules=[beats("r", "a", "b", "c")])
     refused("assessment_mismatch", replay_statmech_decision, tampered, rules=[beats("r", "a", "b", "c")])
 
 
@@ -237,6 +238,25 @@ def test_an_edited_outcome_or_decision_does_not_match_a_replay():
     assert replay_matches(manifest, rules=rules) and not replay_matches(swapped, rules=rules)
     relabelled = retamper(manifest, lambda b: (b["decision"].update(outcome="policy_conflict"), b.update(outcome="policy_conflict")))
     assert not replay_matches(relabelled, rules=rules)
+
+
+def test_replay_refuses_a_recorded_decision_it_does_not_reproduce():
+    rule = beats("r", "a", "b")
+    manifest = make_manifest(rules=[rule])
+    assert manifest["outcome"] == "policy_preferred"
+
+    def downgrade_to_incomparable(body):
+        body["decision"]["outcome"] = "incomparable_alternatives"
+        body["outcome"] = "incomparable_alternatives"
+        body["decision"]["selection"] = dict.fromkeys(body["decision"]["selection"])
+
+    tampered = retamper(manifest, downgrade_to_incomparable)  # every checksum recomputed, outcome and decision agree
+    refused("decision_mismatch", replay_statmech_decision, tampered, rules=[rule])
+    refused("decision_mismatch", reproduce_statmech_ordering, tampered, rules=[rule])
+    assert replay_matches(tampered, rules=[rule]) is False and replay_matches(manifest, rules=[rule]) is True
+    # a tampered edge list is caught the same way
+    no_edges = retamper(manifest, lambda b: b["decision"]["protocol"].update(edges=[]))
+    refused("decision_mismatch", replay_statmech_decision, no_edges, rules=[rule])
 
 
 def test_the_population_and_the_review_profile_must_be_self_consistent():

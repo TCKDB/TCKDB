@@ -185,6 +185,33 @@ def test_an_unknown_prerequisite_on_either_side_or_in_compatibility_is_undecided
     assert refuted.outcome is Outcome.incomparable_alternatives  # a refuted prerequisite is a clean "no", not undecided
 
 
+def test_a_rule_with_unknown_scope_that_touches_neither_model_leaves_nothing_undecided():
+    """An unknown scope only matters for the pairs the rule could actually have ranked."""
+    r = beats("r", "a", "b")
+    elsewhere = SyntheticRule("r2", prefer={ref("x"): Tri.true}, yield_={ref("y"): Tri.true}, scope=Tri.unknown)
+    decision, _ = run(population("a", "b"), rules=[r, elsewhere])
+    assert decision.outcome is Outcome.policy_preferred and decision.selection.scientific_ref == ref("a")
+    assert decision.protocol["undecided"] == []
+    unknown_coverage = SyntheticRule("r3", prefer={ref("x"): Tri.true}, yield_={ref("y"): Tri.true}, coverage=Tri.unknown)
+    assert run(population("a", "b"), rules=[r, unknown_coverage])[0].outcome is Outcome.policy_preferred
+    touching = beats("r4", "b", "a", scope=Tri.unknown)  # the same rule touching the models does leave a pair undecided
+    assert run(population("a", "b"), rules=[r, touching])[0].outcome is Outcome.unresolved_comparability
+
+
+def test_an_undecided_rule_does_not_hide_a_known_conflict_unless_it_could_supersede_it():
+    r1, r2 = beats("r1", "a", "b"), beats("r2", "b", "a")
+    undecided = SyntheticRule("r3", prefer={ref("a"): Tri.unknown}, yield_={ref("b"): Tri.true})
+    decision, _ = run(population("a", "b"), rules=[r1, r2, undecided])
+    assert decision.outcome is Outcome.policy_conflict and decision.protocol["undecided"]
+    cycle = [beats(f"c{i}", "abc"[i], "abc"[(i + 1) % 3]) for i in range(3)]
+    assert run(population("a", "b", "c"), rules=[*cycle, undecided])[0].outcome is Outcome.policy_conflict
+    superseding = SyntheticRule("r5", prefer={ref("a"): Tri.unknown}, yield_={ref("b"): Tri.true}, supersedes=("r1",))
+    assert run(population("a", "b"), rules=[r1, r2, superseding])[0].outcome is Outcome.unresolved_comparability
+    unrelated = SyntheticRule("r6", prefer={ref("a"): Tri.unknown}, yield_={ref("b"): Tri.true}, supersedes=("zz",))
+    assert run(population("a", "b"), rules=[r1, r2, unrelated])[0].outcome is Outcome.policy_conflict
+    assert run(population("a", "b", "c"), rules=[*cycle, SyntheticRule("r7", prefer={ref("a"): Tri.unknown}, yield_={ref("b"): Tri.true}, supersedes=("c0",))])[0].outcome is Outcome.unresolved_comparability
+
+
 def test_opposing_rules_are_a_policy_conflict_and_no_fallback_picks_one():
     decision, _ = run(population("a", "b"), rules=[beats("r1", "a", "b"), beats("r2", "b", "a")], body={"result_mode": "first"})
     assert decision.outcome is Outcome.policy_conflict
@@ -212,6 +239,9 @@ def test_a_preference_cycle_of_any_length_is_a_policy_conflict(length):
 def test_an_invalid_active_registry_is_refused_before_it_can_make_an_edge():
     with pytest.raises(ValueError, match="no pinned manifest digest"):
         run(population("a", "b"), rules=[beats("r", "a", "b", digest=None)])
+    for not_a_digest in ("zz" * 32, "AB" * 32, "ab" * 31, "ab" * 33, " " + "ab" * 31 + "a"):
+        with pytest.raises(ValueError, match="no pinned manifest digest"):
+            validate_rules([beats("r", "a", "b", digest=not_a_digest)])
     with pytest.raises(ValueError, match="no objective"):
         validate_rules([beats("r", "a", "b", objective=None)])
     with pytest.raises(ValueError, match="no reference model"):

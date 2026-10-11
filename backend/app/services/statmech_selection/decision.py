@@ -13,9 +13,12 @@ What is specific to statmech and lives here, and not in the shared kernel:
 * **Whole models only.** A rule compares two complete models, each already ``applicable`` for this request. A model is
   never assembled from favourable pieces, a per-member or per-temperature win creates no mixed-model winner, and a
   rule whose audited coverage does not contain the entire requested scope applies to nothing.
-* **Unknown is reported, not dropped.** A pair for which a rule *might* give an edge, but a prerequisite is unknown on
-  one side, is listed as undecided and the outcome is ``unresolved_comparability``: a preference claim over a graph
-  that an unestablished edge could change would be false.
+* **Unknown is reported, not dropped.** A pair for which a rule *might* give an edge, but a prerequisite (a side, the
+  pair's compatibility, or the rule's scope or coverage) is unknown, is listed as undecided and the outcome is
+  ``unresolved_comparability``: a preference claim over a graph that an unestablished edge could change would be false.
+  Only pairs the rule is not refuted for count: a rule with an unknown scope that touches neither model says nothing
+  about this population. A conflict already established stays a ``policy_conflict`` however much else is undecided,
+  unless an undecided rule declares it supersedes one of the conflicting rules.
 * **The graph is the shared kernel's.** Edges built by active rules go to :func:`decide_graph`: supersession of
   rules is settled before any opposition is judged, a surviving opposing pair or a cycle is a ``policy_conflict``
   with no selection, and fronts and the administrative order come out. Every edge in one decision answers one
@@ -221,6 +224,18 @@ def _unranked(rules: Sequence[StatmechRule], request: StatmechRequest) -> dict[s
     }
 
 
+def _conflicting_rule_ids(verdict: Any) -> set[str]:
+    """The ids of the rules whose surviving edges lie on a preference cycle (an opposing pair is a two-node cycle)."""
+    in_cycle = {ref for cycle in verdict.cycles for ref in cycle}
+    return {e.rule_id for e in verdict.edges if e.preferred in in_cycle and e.dispreferred in in_cycle}
+
+
+def _undecided_could_supersede(undecided: Sequence[dict[str, Any]], verdict: Any, supersedes: dict[str, Any]) -> bool:
+    """True when an undecided rule declares it supersedes one of the conflicting rules (so the conflict is not yet known)."""
+    conflicting = _conflicting_rule_ids(verdict)
+    return any(conflicting & set(supersedes.get(u["rule_id"], ())) for u in undecided)
+
+
 def decide_statmech(
     *,
     request: StatmechRequest,
@@ -299,20 +314,17 @@ def decide_statmech(
             rule_matches.append({**header, "applied": False, "why": "objective_or_reference_model_differs"})
             continue
         scope = rule.scope(subject, request)
-        if scope.state is not Tri.true:
-            why = "scope_unknown" if scope.state is Tri.unknown else "outside_rule_scope"
-            rule_matches.append({**header, "applied": False, "why": why, "scope": scope.to_dict()})
-            if scope.state is Tri.unknown:
-                undecided.append({**header, "code": "comparison_prerequisite_unknown", "what": "scope"})
+        if scope.state is Tri.false:
+            rule_matches.append({**header, "applied": False, "why": "outside_rule_scope", "scope": scope.to_dict()})
             continue
         coverage = rule.coverage(request)
-        if coverage.state is not Tri.true:
-            why = "coverage_unknown" if coverage.state is Tri.unknown else "requested_scope_not_covered"
-            rule_matches.append({**header, "applied": False, "why": why, "coverage": coverage.to_dict()})
-            if coverage.state is Tri.unknown:
-                undecided.append({**header, "code": "comparison_prerequisite_unknown", "what": "coverage"})
+        if coverage.state is Tri.false:
+            rule_matches.append({**header, "applied": False, "why": "requested_scope_not_covered", "coverage": coverage.to_dict()})
             continue
-        applied.append(rule)
+        # The rule's sides and compatibility are judged for every pair first. A rule whose scope or coverage is merely
+        # *unknown* leaves undecided only the pairs it could actually have ranked: a rule that touches neither model
+        # (every side refuted) says nothing about this population and cannot make its comparison unresolved.
+        gate = (scope.state, coverage.state)
         sides = {ref: (rule.preferred_side(m), rule.yielding_side(m)) for ref, m in models.items()}
         for a_ref, a in models.items():
             for b_ref, b in models.items():
@@ -324,18 +336,21 @@ def decide_statmech(
                 compatible = rule.compatible(a, b)
                 if compatible.state is Tri.false:
                     continue
-                states = (pref.state, yld.state, compatible.state)
                 record = {**header, "preferred": a_ref, "dispreferred": b_ref, "compatible": compatible.to_dict()}
-                if all(s is Tri.true for s in states):
+                if all(s is Tri.true for s in (*gate, pref.state, yld.state, compatible.state)):
                     pair_checks.append({**record, "result": "edge"})
                     edges.append(Edge(a_ref, b_ref, rule.rule_id, rule.version))
                 else:
                     pair_checks.append({**record, "result": "undecided"})
                     undecided.append({**header, "code": "comparison_prerequisite_unknown", "preferred": a_ref, "dispreferred": b_ref})
+        established = all(g is Tri.true for g in gate)
+        if established:
+            applied.append(rule)
         rule_matches.append(
             {
                 **header,
-                "applied": True,
+                "applied": established,
+                **({} if established else {"why": "scope_unknown" if scope.state is Tri.unknown else "coverage_unknown"}),
                 "scope": scope.to_dict(),
                 "coverage": coverage.to_dict(),
                 "models": [
@@ -378,10 +393,12 @@ def decide_statmech(
             protocol=protocol,
         )
 
+    if verdict.outcome is GraphOutcome.policy_conflict and not _undecided_could_supersede(undecided, verdict, supersedes):
+        # A known conflict stays a conflict: an unestablished rule adds an edge at most, and an edge cannot dissolve an
+        # opposition or a cycle. Only supersession of a conflicting rule by an undecided one could.
+        return result(Outcome.policy_conflict, BASIS_CONFLICT)
     if undecided and len(models) > 1:
         return result(Outcome.unresolved_comparability, BASIS_UNRESOLVED_COMPARABILITY)
-    if verdict.outcome is GraphOutcome.policy_conflict:
-        return result(Outcome.policy_conflict, BASIS_CONFLICT)
     if verdict.outcome is GraphOutcome.sole_eligible_candidate:
         assert verdict.selected_ref is not None
         return result(

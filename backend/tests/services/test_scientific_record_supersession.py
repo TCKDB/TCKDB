@@ -299,3 +299,39 @@ def test_two_transition_state_records_of_different_entries_are_not_the_same_subj
         hosts.append(host)
     with pytest.raises(DomainError, match="same subject"):
         _supersede_statmech(db_session, actor, *hosts)
+
+
+def _ts_statmech_pair(db_session, *, same_determination: bool):
+    """Two approved statmech records of ONE transition-state entry, each declaring a ts_determination scope."""
+    from app.db.models.common import StatmechModelScopeKind
+    from app.db.models.statmech import Statmech
+    from tests.db.test_statmech_model_declaration_db import _declaration, _determination, _ts_entry
+
+    actor = _curator(db_session)
+    ts_entry = _ts_entry(db_session)
+    first = _determination(db_session, ts_entry)
+    second = first if same_determination else _determination(db_session, ts_entry)
+    hosts = []
+    for determination in (first, second):
+        host = Statmech(transition_state_entry_id=ts_entry.id, scientific_origin="computed")
+        db_session.add(host)
+        db_session.flush()
+        _declaration(db_session, host, StatmechModelScopeKind.ts_determination, structure_determination_id=determination.id)
+        ensure_record_review(db_session, record_type=SubmissionRecordType.statmech, record_id=host.id)
+        set_record_review_status(
+            db_session, record_type=SubmissionRecordType.statmech, record_id=host.id, status=RecordReviewStatus.approved, actor=actor
+        )
+        hosts.append(host)
+    return actor, hosts
+
+
+def test_a_transition_state_model_is_replaced_only_by_a_model_of_the_same_determination(db_session) -> None:
+    """Symmetric with a basin, which must be the exact same conformer group."""
+    actor, (old, new) = _ts_statmech_pair(db_session, same_determination=True)
+    assert _supersede_statmech(db_session, actor, old, new).superseding_record_id == new.id
+
+
+def test_a_transition_state_model_of_another_determination_of_the_same_entry_does_not_replace_it(db_session) -> None:
+    actor, (old, new) = _ts_statmech_pair(db_session, same_determination=False)
+    with pytest.raises(DomainError, match="same model scope"):
+        _supersede_statmech(db_session, actor, old, new)

@@ -15,7 +15,6 @@ from app.db.models.kinetics import KineticsDetermination
 from app.db.models.record_review import RecordReview
 from app.db.models.scientific_record_supersession import ScientificRecordSupersession
 from app.db.models.statmech_declaration import StatmechModelDeclaration
-from app.db.models.structure_determination import StructureDetermination
 from app.services.accepted_science import (
     is_accepted_science_type,
     lock_scientific_records,
@@ -60,7 +59,7 @@ def _assert_statmech_targets_compatible(session: Session, old_root, new_root) ->
     """A replacement of a statmech record is a replacement of the same declared model scope.
 
     Where both records declare a model, the two must declare the same scope: both an atom, both the same basin, both
-    an equilibrium ensemble, or both a transition-state determination of the same kind. A re-derived model or a
+    an equilibrium ensemble, or both the same transition-state determination. A re-derived model or a
     corrected recipe is a different revision of the same scope, so the recipe, members and sources are not compared,
     only what the model is a model of. Where either record declares none, nothing can be compared and the replacement
     is allowed; the absence is not hidden, because a record's read states no declared model and never "standalone".
@@ -73,11 +72,8 @@ def _assert_statmech_targets_compatible(session: Session, old_root, new_root) ->
         return
 
     def target(declaration: StatmechModelDeclaration) -> tuple[Any, ...]:
-        determination_kind = None
-        if declaration.structure_determination_id is not None:
-            determination = session.get(StructureDetermination, declaration.structure_determination_id)
-            determination_kind = determination.target_kind if determination is not None else None
-        return (declaration.scope_kind, declaration.conformer_group_id, determination_kind)
+        # Symmetric: a basin model is of one conformer group and a transition-state model of one determination.
+        return (declaration.scope_kind, declaration.conformer_group_id, declaration.structure_determination_id)
 
     if target(old) != target(new):
         raise DomainError("Supersession records must declare the same model scope")

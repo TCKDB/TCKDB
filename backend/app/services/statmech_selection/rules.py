@@ -24,6 +24,7 @@ cannot be assembled into a winner of a different scope, because a rule's coverag
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -34,6 +35,8 @@ from app.services.statmech_selection.assessment import NormalizedRecipe
 from app.services.statmech_selection.facts import SubjectFacts
 from app.services.statmech_selection.models import StatmechRequest
 from app.services.statmech_selection.vocabulary import CandidateKind, Objective
+
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 
 RULE_ACTIVE = "active"
 RULE_INACTIVE = "inactive"
@@ -176,7 +179,7 @@ def validate_rules(rules: Sequence[StatmechRule]) -> None:
             problems.append("no objective")
         if not rule.tasks or not rule.observables:
             problems.append("no task or observable it is about")
-        if not rule.manifest_sha256 or len(rule.manifest_sha256) != 64:
+        if not rule.manifest_sha256 or not _SHA256.fullmatch(rule.manifest_sha256):
             problems.append("no pinned manifest digest")
         if rule.inactive_reasons:
             problems.append("inactive reasons still listed")

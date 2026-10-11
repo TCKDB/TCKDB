@@ -358,17 +358,27 @@ def describe_reassessment(manifest: dict[str, Any], *, recorded: str) -> dict[st
     }
 
 
+def _compare_with_recorded(manifest: dict[str, Any], decision: StatmechDecision) -> None:
+    """Refuse a replay whose recomputed decision is not the one the manifest records (the top-level outcome is tied to it)."""
+    if _canon(decision.to_dict()) != _canon(manifest["decision"]):
+        raise ReplayError(
+            "decision_mismatch", "the decision recomputed from the captured inputs is not the decision the manifest records"
+        )
+
+
 def reproduce_statmech_ordering(manifest: dict[str, Any], *, rules: Sequence[StatmechRule] | None = None) -> dict[str, Any]:
     """Re-run the decision over the manifest's **recorded** assessments. ``reassessed`` is false and says so.
 
     :returns: ``{"label": ..., "decision": StatmechDecision.to_dict()}``.
     :raises ReplayError: unsupported format or version; a failed checksum; a self-inconsistent manifest or recorded
-        assessment (an eligible flag its applicability does not give, an applicability its reasons do not give).
+        assessment (an eligible flag its applicability does not give, an applicability its reasons do not give); a
+        decision that is not what the recorded assessments give (``decision_mismatch``).
     """
     _, request, subject, candidates, _ = _prepare(manifest, reassessing=False)
     recorded = _recorded_assessments(manifest, candidates)
     used = _rules_for(manifest, rules)
     decision = decide_statmech(request=request, subject=subject, candidates=candidates, assessments=recorded, rules=used)
+    _compare_with_recorded(manifest, decision)
     label = semantics.describe_replay(manifest, current=ASSESSMENT_VERSION, supported=SUPPORTED_ASSESSMENT_SEMANTICS)
     return {"label": label, "decision": decision.to_dict()}
 
@@ -407,24 +417,32 @@ def replay_statmech_decision(manifest: dict[str, Any], *, rules: Sequence[Statme
 
     :returns: ``{"label": ..., "decision": StatmechDecision.to_dict()}``.
     :raises ReplayError: as :func:`reassess_statmech_captured_inputs`, plus an unavailable rule or one whose status or
-        audited manifest is not what the decision was made under.
+        audited manifest is not what the decision was made under, and ``decision_mismatch`` when the recomputed decision
+        is not the recorded one.
     """
     assessments = reassess_statmech_captured_inputs(manifest)
     used = _rules_for(manifest, rules)
     _, request, subject, candidates, _ = _prepare(manifest, reassessing=True)
     decision = decide_statmech(request=request, subject=subject, candidates=candidates, assessments=assessments, rules=used)
+    _compare_with_recorded(manifest, decision)
     recorded = semantics.recorded_version(manifest)
     return {"label": describe_reassessment(manifest, recorded=recorded), "decision": decision.to_dict()}
 
 
 def replay_matches(manifest: dict[str, Any], *, rules: Sequence[StatmechRule] | None = None) -> bool:
-    """True when full replay reproduces what the manifest records.
+    """True when full replay reproduces what the manifest records; False when only the recorded decision disagrees.
 
     The top-level ``outcome`` is a summary a reader trusts; it is tied to the recorded decision's by the consistency
-    check every replay runs first, so an edit of it that the decision does not support is refused, not "matched".
+    check every replay runs first, so an edit of it that the decision does not support is refused, not "matched". Every
+    other failure (checksum, version, assessment, rule) still raises :class:`ReplayError`.
     """
-    replayed = replay_statmech_decision(manifest, rules=rules)["decision"]
-    return _canon(replayed) == _canon(manifest["decision"])
+    try:
+        replay_statmech_decision(manifest, rules=rules)
+    except ReplayError as error:
+        if error.code == "decision_mismatch":
+            return False
+        raise
+    return True
 
 
 __all__ = [
