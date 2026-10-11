@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.111.1 - 2026-10-11
+
+Wording only: the refusal `energy_correction_scheme_frequency_level_not_applicable` and the `EnergyCorrectionSchemeRef`
+docstring no longer say every kind other than the BAC kinds is "keyed on the energy level alone". A frequency level is
+accepted only on `bac_petersson` and `bac_melius` for now; Arkane's isodesmic reference data is keyed on the
+frequency//energy pair too, and the `isodesmic` kind will likely need it once it has defined content. No upload model,
+enum or rule changed.
+
 ## 0.111.0 - 2026-10-11
 
 A kinetics record's Arrhenius A-units are held to the order of the side its coefficient is a rate of (#695): the products for
