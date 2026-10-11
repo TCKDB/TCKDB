@@ -116,6 +116,13 @@ def test_a_rotor_names_the_potential_it_integrates_and_only_an_imported_one_does
     for wrong in ("geometry", "curvature", "parameters", "absolute_energy"):
         _refused("role is torsional_surface", recipe={"rotors": rotors},
                  sources=[{"source_key": "pot", "role": wrong, "literature": {"kind": "article", "title": "T"}}])
+    # the role check is not tied to one kind of source: a calculation-locator source with a wrong role is refused too
+    for wrong in ("geometry", "curvature", "absolute_energy"):
+        _refused("role is torsional_surface", recipe={"rotors": rotors},
+                 sources=[{"source_key": "pot", "role": wrong, "calculation_key": "scan"}])
+    assert StatmechModelDeclaration.model_validate(
+        _declaration(recipe={"rotors": rotors}, sources=[{"source_key": "pot", "role": "torsional_surface", "calculation_key": "scan"}])
+    ).recipe.rotors[0].potential_source_key == "pot"
     _refused("imported_potential", recipe={"rotors": [{"torsion_index": 1, "representation": "free_rotor", "potential_source_key": "p"}]})
     _refused("imported_potential", recipe={"rotors": [{"torsion_index": 1, "representation": "imported_potential"}]})
     _refused("names a torsion_index twice", recipe={"rotors": [rotors[0], {**rotors[0], "potential_source_key": "pot"}]},
