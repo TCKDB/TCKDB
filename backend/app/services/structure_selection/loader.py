@@ -145,13 +145,19 @@ def _entry_record_type(grain: Grain) -> SubmissionRecordType:
 
 
 def assert_subject_visible(session: Session, grain: Grain, entry_id: int, *, profile: frozenset[RecordReviewStatus]) -> None:
-    """A target the read profile hides behaves exactly like one that does not exist."""
+    """A target the read profile hides behaves exactly like one that does not exist: the same ``handle_not_found``.
+
+    The ref the caller supplied (the entry's own, as the row is addressed by it) is echoed, as an unknown ref's 404 echoes
+    it, so the two bodies are identical.
+    """
     model = TransitionStateEntry if grain is Grain.transition_state else SpeciesEntry
-    if session.get(model, entry_id) is None:
-        raise not_found("transition_state_entry" if grain is Grain.transition_state else "species_entry", row_id=entry_id)
+    label = "transition_state_entry" if grain is Grain.transition_state else "species_entry"
+    row: Any = session.get(model, entry_id)
+    if row is None:
+        raise not_found(label, row_id=entry_id, code="handle_not_found")
     status = fetch_review_badges(session, record_type=_entry_record_type(grain), record_ids=[entry_id])[entry_id].status
     if status not in profile:
-        raise not_found("transition_state_entry" if grain is Grain.transition_state else "species_entry", row_id=entry_id)
+        raise not_found(label, ref=row.public_ref, code="handle_not_found", row_id=entry_id)
 
 
 def _count_nested(session: Session, calc_ids: set[int], determination_ids: set[int], *, source_rows: int = 0) -> int:

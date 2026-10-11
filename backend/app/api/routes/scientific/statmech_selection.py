@@ -73,9 +73,11 @@ def select_statmech_models(
 
     A valid negative scientific outcome is 200. Refusals are 422: a contradictory request, a deferred bound exceeded
     (``statmech_selection_bound_exceeded``: more than 500 visible candidates, 25,000 nested rows, a dependency traversal
-    past depth 8 or a manifest over 10 MiB; nothing is chosen from a prefix), or a population this release does not
-    evaluate (``statmech_selection_unsupported``). An unknown, hidden or foreign target or candidate ref is one 404
-    (``unknown_statmech_candidate_ref`` for a candidate).
+    past depth 8 or a manifest over 10 MiB; nothing is chosen from a prefix), a population this release does not
+    evaluate (``statmech_selection_unsupported``), or a scope ref the caller may see but that belongs to another entry
+    than the target (``statmech_selection_scope_owner_mismatch``; ``context.field`` names the ref). An unknown or hidden
+    target, basin, determination, declaration or candidate ref is one 404 (``unknown_statmech_candidate_ref`` for a
+    candidate).
     """
     _refuse_unknown_query_keys(request)
     selection = run_selection(session, body=body)

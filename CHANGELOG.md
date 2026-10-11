@@ -29,7 +29,7 @@ dataset must never require a code release.
 
 - `POST /api/v1/scientific/statmech/select` and `.../select/manifest`: one typed target union (a species entry or a
   transition-state entry), both on the read-only REPEATABLE READ snapshot session. A valid negative outcome is a 200; a bound
-  exceeded is the coded 422 `statmech_selection_bound_exceeded`, never a prefix; an unknown, hidden or foreign ref is one 404.
+  exceeded is the coded 422 `statmech_selection_bound_exceeded`, never a prefix; an unknown or hidden ref is one 404, and a visible scope ref that belongs to another entry is the coded 422 `statmech_selection_scope_owner_mismatch`.
   Public refs only (`smd_`/`sm_` for candidates), no database id in a response or an error. The response surfaces each
   candidate's `advisory` and the decision `notices`. No computed value is returned, and this release ships no active rule.
 - Disclosure: a ref the read profile hides (a target, basin, determination, ensemble declaration, reference model or candidate)

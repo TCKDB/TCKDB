@@ -289,9 +289,17 @@ def test_an_entry_the_profile_hides_is_a_404_exactly_like_one_that_does_not_exis
     world.sp("a", -76.4, declared=declaration())
     world.settle()
     assert client.post(calc_url(world.entry), json={}).status_code == 200
-    hidden = client.post(calc_url(world.entry), json={}, params={"profile": "curated"})
-    missing = client.post(f"{API}/species-entries/spe_{'0' * 26}/calculations/select", json={}, params={"profile": "curated"})
-    assert hidden.status_code == missing.status_code == 404
+    ghost = f"spe_{'0' * 26}"
+    for suffix in ("", "/manifest"):
+        hidden = client.post(calc_url(world.entry, manifest=bool(suffix)), json={}, params={"profile": "curated"})
+        missing = client.post(f"{API}/species-entries/{ghost}/calculations/select{suffix}", json={}, params={"profile": "curated"})
+        assert hidden.status_code == missing.status_code == 404
+        # the whole body, not only the status: the caller's own ref is the one thing that may differ
+        assert json.loads(hidden.text.replace(world.entry.public_ref, "<ref>")) == json.loads(missing.text.replace(ghost, "<ref>"))
+        assert hidden.json()["code"] == "handle_not_found"
+    for url in (conformer_url(world.entry), conformer_url(world.entry, manifest=True)):
+        hidden = client.post(url, json={}, params={"profile": "curated"})
+        assert hidden.status_code == 404 and hidden.json()["code"] == "handle_not_found" and world.entry.public_ref in hidden.text
 
 
 # ---------------------------------------------------------------------------
