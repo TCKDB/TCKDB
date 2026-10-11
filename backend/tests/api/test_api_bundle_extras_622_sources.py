@@ -439,10 +439,16 @@ def test_reaction_stability_source_not_tied_to_any_conformer_is_refused_as_such(
     }, body
 
 
-def test_reaction_stability_between_two_unanchored_jobs_needs_a_single_conformer(client):
-    """Both tied to no conformer: unverifiable on a two-conformer species, vacuous on a one-conformer one.
+_UNVERIFIED = "scf_stability_source_conformer_unverified"
 
-    Mutation: drop the ``conformer_count_of_owner`` condition; the one-conformer case is refused too.
+
+def test_reaction_stability_between_two_unanchored_jobs_is_kept_with_a_warning(client):
+    """Both tied to no conformer: the rule cannot be checked, which is an absence (ADR 0008).
+
+    The same on a one-conformer and a two-conformer species. Paired: the same link between two
+    anchored jobs warns nothing.
+
+    Mutation: delete the both-unanchored warning in ``link_scf_stability_sources``; no warning.
     """
     def _link(bundle: dict) -> dict:
         next(c for c in bundle["species"][1]["calculations"] if c["key"] == "h2-preopt")["scf_stability"] = {
@@ -451,15 +457,20 @@ def test_reaction_stability_between_two_unanchored_jobs_needs_a_single_conformer
         }
         return bundle
 
-    single = _link(_with_preopts(_reaction_bundle()))
-    assert client.post("/api/v1/uploads/computed-reaction", json=single).status_code == 201
+    for make in (_reaction_bundle, _two_conformer_h2_bundle):
+        resp = client.post("/api/v1/uploads/computed-reaction", json=_link(_with_preopts(make())))
+        assert resp.status_code == 201, resp.text[:800]
+        (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _UNVERIFIED]
+        assert warning["field"] == "calculations['h2-preopt'].scf_stability.source_calculation_key"
 
-    two = _link(_with_preopts(_two_conformer_h2_bundle()))
-    resp = client.post("/api/v1/uploads/computed-reaction", json=two)
-    assert resp.status_code == 422, resp.text[:800]
-    body = resp.json()
-    assert body["code"] == "scf_stability_source_conformer_unanchored", body
-    assert body["context"]["unanchored_key"] == "h2-preopt", body
+    anchored = _with_preopts(_reaction_bundle())
+    next(c for c in anchored["species"][1]["calculations"] if c["key"] == "h2-sp")["scf_stability"] = {
+        **_STABILITY,
+        "source_calculation_key": "h2-freq",
+    }
+    resp = client.post("/api/v1/uploads/computed-reaction", json=anchored)
+    assert resp.status_code == 201
+    assert _UNVERIFIED not in {w["code"] for w in resp.json()["warnings"]}
 
 
 def test_transition_state_stability_sources_are_exempt_from_the_anchor_rule(client, db_session):
@@ -470,7 +481,9 @@ def test_transition_state_stability_sources_are_exempt_from_the_anchor_rule(clie
     next(c for c in payload["transition_state"]["calculations"] if c["key"] == "ts-freq")[
         "scf_stability"
     ] = {**_STABILITY, "source_calculation_key": "ts-sp"}
-    assert client.post("/api/v1/uploads/computed-reaction", json=payload).status_code == 201
+    resp = client.post("/api/v1/uploads/computed-reaction", json=payload)
+    assert resp.status_code == 201
+    assert _UNVERIFIED not in {w["code"] for w in resp.json()["warnings"]}
 
 
 def test_workflow_names_an_unanchored_stability_source_as_unanchored(db_session):

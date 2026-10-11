@@ -2260,9 +2260,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
             shape=Shape.relationship,
             note=(
-                "The calculation carrying an scf_stability verdict, or the job "
-                "named as having measured it, is not tied to any conformer, so "
-                "the same-conformer rule cannot be checked. Said apart from "
+                "Exactly one of the calculation carrying an scf_stability verdict "
+                "and the job named as having measured it is tied to a conformer, so "
+                "the same-conformer rule cannot hold. (Neither tied is an absence "
+                "and only warns: scf_stability_source_conformer_unverified.) Said apart from "
                 "scf_stability_source_geometry_mismatch, whose truth is that both "
                 "are anchored and the anchors differ. Raised by "
                 "/uploads/computed-reaction's request schema and by "

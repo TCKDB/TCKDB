@@ -52,6 +52,13 @@ from app.services.local_key_resolution import resolve_calculation_key
 #: at a cheaper level and say so, so the record is kept.
 W_SCF_STABILITY_SOURCE_LEVEL_MISMATCH = "scf_stability_source_level_mismatch"
 
+#: Neither the calculation carrying the verdict nor the job named as having measured it is tied to
+#: any conformer, so the same-conformer rule cannot be checked. An absence, so a warning (ADR 0008:
+#: an incomplete record is still a true record); the link is stored as stated. Exactly one side
+#: unanchored is a refusal, ``scf_stability_source_conformer_unanchored``. A transition state has no
+#: conformers and is never flagged.
+W_SCF_STABILITY_SOURCE_CONFORMER_UNVERIFIED = "scf_stability_source_conformer_unverified"
+
 
 def link_scf_stability_sources(
     session: Session,
@@ -129,6 +136,24 @@ def link_scf_stability_sources(
                 )
             raise CodedValueError(
                 wire.code, wire.detail, context=wire.context, message_prefix=False
+            )
+        elif (
+            warnings is not None
+            and owner.conformer_observation_id is None
+            and owner.transition_state_entry_id is None
+        ):
+            warnings.append(
+                UploadWarning(
+                    field=field,
+                    code=W_SCF_STABILITY_SOURCE_CONFORMER_UNVERIFIED,
+                    message=(
+                        f"Neither '{owner_key}' nor '{source_key}', the job named as having "
+                        f"measured its stability verdict, is tied to a conformer (no conformer_key, "
+                        f"and no geometry_key naming a conformer's geometry), so whether they are "
+                        f"on the same conformer cannot be checked. The link is stored as stated; "
+                        f"give both calculations a conformer_key to have it checked."
+                    ),
+                )
             )
         if (
             warnings is not None
