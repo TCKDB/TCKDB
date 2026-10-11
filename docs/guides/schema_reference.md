@@ -221,6 +221,25 @@ the gap.
 - `ck_composite_scheme_term_formula_only_on_extrapolation`: `formula IS NULL OR operation = 'extrapolation'`
 - `ck_composite_scheme_term_position_non_negative`: `position >= 0`
 
+### `composite_scheme_term_input`
+
+**Role:** identity
+
+**Purpose:** One level-of-theory input of a term.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `term_id` | BIGINT | no | — | composite_scheme_term.id | — | not documented |
+| `slot` | CompositeInputSlot (enum) | no | — | — | `value`, `high`, `low`, `cardinal` | not documented |
+| `level_of_theory_id` | BIGINT | no | — | level_of_theory.id | — | not documented |
+| `cardinal_number` | INTEGER | yes | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_composite_scheme_term_input_cardinal_number_positive`: `cardinal_number IS NULL OR cardinal_number >= 1`
+- `ck_composite_scheme_term_input_cardinal_slot_needs_number`: `slot <> 'cardinal' OR cardinal_number IS NOT NULL`
+
 ### `conformer_group`
 
 **Role:** identity
@@ -1553,25 +1572,6 @@ the gap.
 **Check constraints:**
 
 - `ck_chem_reaction_reaction_family_raw_requires_source_note`: `reaction_family_raw IS NULL OR reaction_family_source_note IS NOT NULL`
-
-### `composite_scheme_term_input`
-
-**Role:** role not stated on the model
-
-**Purpose:** One level-of-theory input of a term.
-
-| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
-|---|---|---|---|---|---|---|
-| `id` | BIGINT | no | — | — | — | not documented |
-| `term_id` | BIGINT | no | — | composite_scheme_term.id | — | not documented |
-| `slot` | CompositeInputSlot (enum) | no | — | — | `value`, `high`, `low`, `cardinal` | not documented |
-| `level_of_theory_id` | BIGINT | no | — | level_of_theory.id | — | not documented |
-| `cardinal_number` | INTEGER | yes | — | — | — | not documented |
-
-**Check constraints:**
-
-- `ck_composite_scheme_term_input_cardinal_number_positive`: `cardinal_number IS NULL OR cardinal_number >= 1`
-- `ck_composite_scheme_term_input_cardinal_slot_needs_number`: `slot <> 'cardinal' OR cardinal_number IS NOT NULL`
 
 ### `dataset_release`
 
