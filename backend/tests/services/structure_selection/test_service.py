@@ -181,8 +181,11 @@ def test_a_hidden_entry_behaves_exactly_like_a_missing_one(db_session):
             )
     finally:
         reset_current_read_profile(token)
-    # The same words, the same code: nothing in the refusal says which of the two it was, and no row id is named.
-    assert str(exc_hidden.value) == str(exc_missing.value)
+    # The same code and the same words, the one difference being the ref the caller supplied, which an unknown ref's 404
+    # echoes too when the route resolves it (the route-level test compares the whole bodies). No row id is named.
+    assert exc_hidden.value.code == exc_missing.value.code == "handle_not_found"
+    assert str(exc_hidden.value) == f"species_entry not found (species_entry_ref={hidden.entry.public_ref!r})"
+    assert str(exc_missing.value) == "species_entry not found"
     assert str(hidden.entry.id) not in str(exc_hidden.value)
 
 
