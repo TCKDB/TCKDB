@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.119.0 - 2026-10-11
+
+Review leftovers for stability sources, atomic warnings and network energy sources (#635, #631, #669, #744).
+
+- Three new refusal codes. For an SCF stability `source_calculation_key` (#635): `scf_stability_source_cycle` (two verdicts
+  that cite each other; `context.cycle` lists the keys in order, where it used to be an uncoded validation error) and
+  `scf_stability_source_conformer_unanchored` (exactly one of the carrier and the named job is tied to no conformer, on
+  `/uploads/computed-reaction`; it was already refused, late and as "a different conformer"). If neither is tied to a conformer
+  the same-conformer rule cannot be checked, which is an absence: the link is stored as stated and the upload warns
+  `scf_stability_source_conformer_unverified`. A transition state has no conformers and is never flagged. For `energy_ordering`
+  evidence (#669): `ts_energy_ordering_source_type_mismatch` (an energy cited to a calculation of a type that does not carry it,
+  such as an E0 from a single point; it was an uncoded validation error), sibling of `network_energy_source_type_mismatch`.
+- Narrowing on `/uploads/networks/pdep` (#635): `scf_stability` no longer declares `source_calculation_key` at all, since that
+  route cannot link it. A payload that sends the key, even as `null`, is now refused as an unknown field (`extra_forbidden`);
+  before, `null` was accepted and a non-null key was refused by a custom message. Omit the key.
+- Network energy sources (#669): a `well_freq` or `barrier_freq` source calculation must be a `freq`
+  (`network_energy_source_type_mismatch`). A `composite` is now also a valid source of an `energy_ordering` energy, for
+  an electronic energy and an E0 alike, as it already was for a network energy. A new warning,
+  `network_energy_zpe_source_absent`, when a state or barrier energy stated with `electronic_plus_zpe`,
+  `atom_and_bond_corrected` or `thermal_enthalpy_298k` cites only an `sp` or `opt` and the upload has no `freq` for that
+  species or transition state.
+- Warning codes (#631, #744): a single-atom `term_symbol` whose L or J is not the NIST ground term is now reported as
+  `term_symbol_contradicts_ground_term`; `term_symbol_contradicts_multiplicity` is kept for a leading 2S+1 that disagrees
+  with the declared multiplicity. The spin-orbit warning now says the spin-orbit-free value lies so many kJ/mol above the
+  ground level. New `hessian_not_stored_not_frequency_calculation` (a `.hess` file sent for a calculation that is not a
+  `freq`); an artifact whose log carries a force-constant block that yields no matrix now warns
+  `hessian_not_stored_unparseable`, and inside a bundle every `hessian_not_stored_*` warning's `field` is
+  `calculations['<key>'].artifacts`.
+
 ## 0.117.1 - 2026-10-11
 
 Contract layout only (#686), plus a recorded limit.

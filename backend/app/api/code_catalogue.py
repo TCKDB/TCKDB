@@ -2256,6 +2256,28 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "services/scf_stability_sources.py raise the same code and "
                 "context (ADR 0017)."
             )),
+    ApiCode("scf_stability_source_conformer_unanchored", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "Exactly one of the calculation carrying an scf_stability verdict "
+                "and the job named as having measured it is tied to a conformer, so "
+                "the same-conformer rule cannot hold. (Neither tied is an absence "
+                "and only warns: scf_stability_source_conformer_unverified.) Said apart from "
+                "scf_stability_source_geometry_mismatch, whose truth is that both "
+                "are anchored and the anchors differ. Raised by "
+                "/uploads/computed-reaction's request schema and by "
+                "services/scf_stability_sources.py with the same context."
+            )),
+    ApiCode("scf_stability_source_cycle", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "scf_stability.source_calculation_key links close a ring (a "
+                "says b measured it, b says a did). context.cycle lists the "
+                "depositor's own keys in order. Raised by both bundle request "
+                "schemas and by services/scf_stability_sources.py."
+            )),
     ApiCode("scf_stability_source_geometry_mismatch", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
             shape=Shape.relationship,
@@ -2709,6 +2731,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "to the target, and the computed-species bundle has one "
                 "subject. The request schema and persist_bundle_transport "
                 "raise the same code and context (ADR 0017)."
+            )),
+    ApiCode("ts_energy_ordering_source_type_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/transition_state_validation.py",
+            shape=Shape.relationship,
+            note=(
+                "An energy_ordering energy is taken from a calculation of a "
+                "type that does not carry that kind of energy (an E0 from a "
+                "single point, any energy from an IRC point). Sibling of "
+                "network_energy_source_type_mismatch, and read from the same "
+                "table (app/services/energy_source_types.py). Context carries "
+                "the field, the energy kind and the accepted and actual "
+                "calculation types."
             )),
     ApiCode("ts_energy_ordering_stated_energy_mismatch", 422, Surface.coded_exception,
             "backend/app/services/transition_state_validation.py",

@@ -775,7 +775,10 @@ def persist_computed_species_upload(
                     # Input geometries for this calc were attached in an
                     # earlier pass, so the Hessian can bind to them here.
                     hessian_warning = try_extract_hessian_from_artifact_upload(
-                        session, calc_row, art_in
+                        session,
+                        calc_row,
+                        art_in,
+                        field=f"calculations['{calc_in.key}'].artifacts",
                     )
                     if hessian_warning is not None:
                         upload_warnings.append(hessian_warning)

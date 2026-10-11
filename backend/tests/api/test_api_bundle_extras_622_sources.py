@@ -177,7 +177,7 @@ def test_workflow_refuses_a_stability_source_cycle(db_session):
             CalculationSCFStability(calculation_id=calc.id, status=SCFStabilityStatus.stable)
         )
     db_session.flush()
-    with pytest.raises(ValueError, match="forms a cycle"):
+    with pytest.raises(CodedValueError, match="forms a cycle") as err:
         link_scf_stability_sources(
             db_session,
             [
@@ -186,6 +186,8 @@ def test_workflow_refuses_a_stability_source_cycle(db_session):
             ],
             {"a": a, "b": b},
         )
+    assert err.value.code == "scf_stability_source_cycle"
+    assert err.value.context == {"cycle": ["a", "b"]}
 
 
 def test_stability_source_cycle_is_refused(client):
@@ -205,6 +207,9 @@ def test_stability_source_cycle_is_refused(client):
     }
     resp = client.post("/api/v1/uploads/computed-species", json=payload)
     assert resp.status_code == 422, resp.text[:800]
+    body = resp.json()
+    assert body["code"] == "scf_stability_source_cycle", body
+    assert sorted(body["context"]["cycle"]) == ["opt0", "sp0"], body
     assert "forms a cycle" in resp.text
 
 
@@ -386,6 +391,125 @@ def test_reaction_stability_source_on_another_conformer_is_refused(client):
     assert body["context"]["carrier_key"] == "h2-opt", body
 
 
+def _with_preopts(bundle: dict) -> dict:
+    """Two coarse pre-optimisations on h2: ``opt`` is excused from naming a geometry, so tied to no conformer."""
+    h2 = bundle["species"][1]
+    for key in ("h2-preopt", "h2-preopt2"):
+        h2["calculations"].append(
+            {
+                "key": key,
+                "type": "opt",
+                "software_release": _SOFTWARE,
+                "level_of_theory": _LOT,
+                "opt_converged": True,
+            }
+        )
+    return bundle
+
+
+def test_reaction_stability_source_not_tied_to_any_conformer_is_refused_as_such(client):
+    """h2-sp (on a conformer) cites h2-preopt (on none): "not tied to any conformer", not "a different one".
+
+    Paired: citing h2-freq, also on the conformer, is accepted.
+
+    Mutation: delete the unanchored branch in the reaction schema and the service; this is then
+    reported as ``scf_stability_source_geometry_mismatch`` by the service only, or accepted.
+    """
+    ok = _with_preopts(_reaction_bundle())
+    next(c for c in ok["species"][1]["calculations"] if c["key"] == "h2-sp")["scf_stability"] = {
+        **_STABILITY,
+        "source_calculation_key": "h2-freq",
+    }
+    assert client.post("/api/v1/uploads/computed-reaction", json=ok).status_code == 201
+
+    bad = _with_preopts(_reaction_bundle())
+    next(c for c in bad["species"][1]["calculations"] if c["key"] == "h2-sp")["scf_stability"] = {
+        **_STABILITY,
+        "source_calculation_key": "h2-preopt",
+    }
+    resp = client.post("/api/v1/uploads/computed-reaction", json=bad)
+    assert resp.status_code == 422, resp.text[:800]
+    body = resp.json()
+    assert body["code"] == "scf_stability_source_conformer_unanchored", body
+    assert body["context"] == {
+        "field": "calculations['h2-sp'].scf_stability.source_calculation_key",
+        "key": "h2-preopt",
+        "carrier_key": "h2-sp",
+        "unanchored_key": "h2-preopt",
+    }, body
+
+
+_UNVERIFIED = "scf_stability_source_conformer_unverified"
+
+
+def test_reaction_stability_between_two_unanchored_jobs_is_kept_with_a_warning(client):
+    """Both tied to no conformer: the rule cannot be checked, which is an absence (ADR 0008).
+
+    The same on a one-conformer and a two-conformer species. Paired: the same link between two
+    anchored jobs warns nothing.
+
+    Mutation: delete the both-unanchored warning in ``link_scf_stability_sources``; no warning.
+    """
+    def _link(bundle: dict) -> dict:
+        next(c for c in bundle["species"][1]["calculations"] if c["key"] == "h2-preopt")["scf_stability"] = {
+            **_STABILITY,
+            "source_calculation_key": "h2-preopt2",
+        }
+        return bundle
+
+    for make in (_reaction_bundle, _two_conformer_h2_bundle):
+        resp = client.post("/api/v1/uploads/computed-reaction", json=_link(_with_preopts(make())))
+        assert resp.status_code == 201, resp.text[:800]
+        (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _UNVERIFIED]
+        assert warning["field"] == "calculations['h2-preopt'].scf_stability.source_calculation_key"
+
+    anchored = _with_preopts(_reaction_bundle())
+    next(c for c in anchored["species"][1]["calculations"] if c["key"] == "h2-sp")["scf_stability"] = {
+        **_STABILITY,
+        "source_calculation_key": "h2-freq",
+    }
+    resp = client.post("/api/v1/uploads/computed-reaction", json=anchored)
+    assert resp.status_code == 201
+    assert _UNVERIFIED not in {w["code"] for w in resp.json()["warnings"]}
+
+
+def test_transition_state_stability_sources_are_exempt_from_the_anchor_rule(client, db_session):
+    """A transition state has no conformers, so its calculations are never "unanchored"."""
+    from tests.workflows.test_computed_reaction_upload import _payload_with_aec_carriers
+
+    payload = _payload_with_aec_carriers()
+    next(c for c in payload["transition_state"]["calculations"] if c["key"] == "ts-freq")[
+        "scf_stability"
+    ] = {**_STABILITY, "source_calculation_key": "ts-sp"}
+    resp = client.post("/api/v1/uploads/computed-reaction", json=payload)
+    assert resp.status_code == 201
+    assert _UNVERIFIED not in {w["code"] for w in resp.json()["warnings"]}
+
+
+def test_workflow_names_an_unanchored_stability_source_as_unanchored(db_session):
+    """The service half: one side with no conformer is not "a different conformer".
+
+    Mutation: delete the ``is None`` branch in ``link_scf_stability_sources``.
+    """
+    entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("SCFU")))
+    group = make_conformer_group(db_session, entry)
+    anchored = make_conformer_observation(db_session, conformer_group=group)
+    opt = make_calculation(
+        db_session, type=CalculationType.opt, species_entry_id=entry.id, conformer_observation_id=anchored.id
+    )
+    loose = make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
+    db_session.add(CalculationSCFStability(calculation_id=opt.id, status=SCFStabilityStatus.stable))
+    db_session.flush()
+    with pytest.raises(CodedValueError) as err:
+        link_scf_stability_sources(
+            db_session,
+            [("opt", SCFStabilityContent(status="stable", source_calculation_key="sp"))],
+            {"opt": opt, "sp": loose},
+        )
+    assert err.value.code == "scf_stability_source_conformer_unanchored"
+    assert err.value.context["unanchored_key"] == "sp"
+
+
 def test_reaction_stability_source_cycle_is_refused(client):
     """h2-freq cites h2-sp and h2-sp cites h2-freq.
 
@@ -398,6 +522,9 @@ def test_reaction_stability_source_cycle_is_refused(client):
     calcs[1]["scf_stability"] = {**_STABILITY, "source_calculation_key": "h2-freq"}
     resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
     assert resp.status_code == 422, resp.text[:800]
+    body = resp.json()
+    assert body["code"] == "scf_stability_source_cycle", body
+    assert sorted(body["context"]["cycle"]) == ["h2-freq", "h2-sp"], body
     assert "forms a cycle" in resp.text
 
 
@@ -407,7 +534,8 @@ def test_pdep_route_refuses_the_stability_source_key(client):
     Without the refusal the key would be accepted and dropped with a 201.
     Paired: the same stability block without the key is accepted.
 
-    Mutation: delete the loop in ``NetworkPDepUploadRequest`` that refuses it.
+    Mutation: make ``NetworkCalculationIn.scf_stability`` a ``SCFStabilityContent``; the key is
+    accepted and dropped with a 201, and the contract advertises it again.
     """
     from tests.workflows.test_network_pdep_upload import _full_payload
 
@@ -424,7 +552,8 @@ def test_pdep_route_refuses_the_stability_source_key(client):
     }
     resp = client.post(url, json=bad)
     assert resp.status_code == 422, resp.text[:800]
-    assert "not supported on the pressure-dependent network route" in resp.text
+    # Not declared on this route's calculation model, so refused as an unknown field.
+    assert "source_calculation_key" in resp.text and "extra_forbidden" in resp.text, resp.text[:800]
 
 
 # ---------------------------------------------------------------------------
@@ -486,3 +615,14 @@ def test_reaction_bundle_transport_enters_review_and_is_named_by_ref(client, db_
     for tid, ref in zip(body["transport_ids"], body["transport_refs"], strict=True):
         _assert_not_reviewed_and_linked(db_session, tid, body["submission_id"])
         assert db_session.get(Transport, tid).public_ref == ref
+
+
+def test_the_pdep_contract_does_not_advertise_the_stability_source_key():
+    """The contract is rendered from the model, so a field the route refuses must not be on it (#635)."""
+    from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
+
+    schema = NetworkPDepUploadRequest.model_json_schema()
+    defs = schema["$defs"]
+    stability = [d for name, d in defs.items() if name.startswith("SCFStability")]
+    assert stability, "the network calculation model no longer carries an scf_stability block"
+    assert all("source_calculation_key" not in d.get("properties", {}) for d in stability)

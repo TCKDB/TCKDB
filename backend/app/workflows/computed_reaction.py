@@ -320,7 +320,9 @@ def _persist_calculation(
     # freq log / ORCA .hess yields the Cartesian force-constant matrix, bound
     # to this calc's now-resolved input geometry.
     for artifact_in in calc_in.artifacts:
-        hessian_warning = try_extract_hessian_from_artifact_upload(session, calculation, artifact_in)
+        hessian_warning = try_extract_hessian_from_artifact_upload(
+            session, calculation, artifact_in, field=f"calculations['{calc_in.key}'].artifacts"
+        )
         if hessian_warning is not None and sp_energy_warnings is not None:
             sp_energy_warnings.append(hessian_warning)
         # Fill-when-absent-or-degenerate: an opt calc's own input deck / log

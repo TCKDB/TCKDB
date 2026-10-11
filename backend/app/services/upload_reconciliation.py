@@ -101,6 +101,12 @@ W_TERM_SYMBOL_MISMATCH = "term_symbol_mismatch"
 # against the NIST ground term.
 W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY = "term_symbol_contradicts_multiplicity"
 
+# A single-atom entry's declared term (its L, or its J) is not the NIST ground
+# term of the element, whatever the multiplicity says. Distinct from the code
+# above, which names only the 2S+1 disagreement and so would misdescribe a
+# wrong J (O 3P0) or a wrong L at the right multiplicity (#631).
+W_TERM_SYMBOL_CONTRADICTS_GROUND_TERM = "term_symbol_contradicts_ground_term"
+
 # Charge / multiplicity contradictions are detected against the *output log*
 # by :mod:`app.services.charge_multiplicity_reconciliation`, which is their
 # sole owner (``W_CHARGE_MISMATCH`` / ``W_MULTIPLICITY_MISMATCH``).
@@ -447,7 +453,7 @@ def term_symbol_warnings(payload: SpeciesEntryIdentityPayload) -> list[UploadWar
             warnings.append(
                 UploadWarning(
                     field="species_entry.term_symbol",
-                    code=W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY,
+                    code=W_TERM_SYMBOL_CONTRADICTS_GROUND_TERM,
                     message=(
                         f"Term symbol '{term}' is not the NIST ground level of "
                         f"neutral {element} ({ground.term_symbol}, ground "
@@ -606,6 +612,7 @@ __all__ = [
     "W_N_IMAG_CONTRADICTS_MINIMUM",
     "W_N_IMAG_HIGHER_ORDER_SADDLE",
     "W_N_IMAG_SUGGESTS_TS",
+    "W_TERM_SYMBOL_CONTRADICTS_GROUND_TERM",
     "W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY",
     "W_TERM_SYMBOL_MISMATCH",
     "W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU",

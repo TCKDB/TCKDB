@@ -479,7 +479,9 @@ class TestHessianNotStoredWarnings:
         )
         assert _not_stored_codes(bare["warnings"]) == []
 
-    def test_bundle_inline_natoms_mismatch_warns(self, client, db_session, stub_store_artifact):
+    def test_bundle_inline_two_input_geometries_warns_and_names_the_calculation(
+        self, client, db_session, stub_store_artifact
+    ):
         bundle = _computed_species_bundle(natoms=GAUSSIAN_NATOMS)
         # Two input geometries (same atoms, different coordinates): the matrix
         # cannot be bound to either unambiguously.
@@ -489,6 +491,28 @@ class TestHessianNotStoredWarnings:
         resp = client.post("/api/v1/uploads/computed-species", json=bundle)
         assert resp.status_code == 201, resp.text
         assert _not_stored_codes(resp.json()["warnings"]) == ["hessian_not_stored_no_unique_input_geometry"]
+        (warning,) = [w for w in resp.json()["warnings"] if w["code"].startswith("hessian_not_stored")]
+        # Inside a bundle the field says which calculation's artifact it was, not just "artifacts".
+        assert warning["field"] == "calculations['freq0'].artifacts"
+
+    def test_a_hess_file_sent_to_an_opt_calculation_warns(self, client, db_session, stub_store_artifact):
+        """The calculation-type gate returned before parsing, so this was silent (#744)."""
+        calc_id = _create_calc(client, natoms=ORCA_NATOMS, calc_type="opt")
+        body = self._post(client, calc_id, _artifact(ORCA_HESS, kind="hessian", filename="opt.hess"))
+        assert _stored(db_session, calc_id) is None
+        assert _not_stored_codes(body["warnings"]) == ["hessian_not_stored_not_frequency_calculation"]
+        (warning,) = [w for w in body["warnings"] if w["code"].startswith("hessian_not_stored")]
+        assert "opt.hess" in warning["message"] and "'opt'" in warning["message"]
+        assert len(body["artifacts"]) == 1
+
+    def test_a_matrix_bearing_log_sent_to_an_opt_calculation_stays_silent(
+        self, client, db_session, stub_store_artifact
+    ):
+        """One combined ``opt freq`` log is normally sent for both calculations; the freq copy stores it."""
+        calc_id = _create_calc(client, natoms=GAUSSIAN_NATOMS, calc_type="opt")
+        body = self._post(client, calc_id, _artifact(GAUSSIAN_LOG, kind="output_log", filename="optfreq.log"))
+        assert _stored(db_session, calc_id) is None
+        assert _not_stored_codes(body["warnings"]) == []
 
 
 def test_computed_reaction_bundle_reports_a_hessian_it_did_not_store(client, stub_store_artifact):

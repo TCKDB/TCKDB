@@ -66,11 +66,17 @@ from app.services.calculation_ownership import (
     W_TS_VALIDATION_SOURCE_CALCULATION_OWNER_MISMATCH,
     assert_calculation_owned_by,
 )
+from app.services.energy_source_types import ENERGY_SOURCE_TYPES_BY_KIND
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.network_energy_sources import (
     E_NETWORK_STATE_ENERGY_SUM_MISMATCH,
+    W_NETWORK_ENERGY_SOURCE_TYPE_MISMATCH,
+    W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT,
     W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED,
+    assert_network_energy_source_type,
+    assert_network_source_role_type,
     collect_state_energy_source_warnings,
+    collect_zpe_source_absent_warnings,
     compare_state_energy_sums,
 )
 from app.services.reaction_atom_map import (
@@ -92,6 +98,11 @@ W_TS_ENERGY_ORDERING_MIXED_LEVELS = "transition_state_energy_ordering_mixed_leve
 #: (ADR 0008): the record names a calculation and a number, and the number is
 #: not that calculation's.
 E_TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH = "ts_energy_ordering_stated_energy_mismatch"
+
+#: An ``energy_ordering`` energy is taken from a calculation of a type that does not carry that
+#: kind of energy (an E0 from a single point, an energy from an IRC point). Block tier (ADR 0008):
+#: definitional. Sibling of the network rule's ``network_energy_source_type_mismatch``.
+E_TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH = "ts_energy_ordering_source_type_mismatch"
 
 #: Emitted when some stated energy of an ``energy_ordering`` record could not be
 #: held against a stored one. The record is accepted and each such energy is
@@ -126,17 +137,16 @@ _ROUNDED_QUANTITIES_E0 = 3
 _TOLERANCE_FLOAT_SLACK = 1e-12
 
 #: The calculation types an ``energy_ordering`` energy may be taken from, by
-#: ``energy_kind``. An electronic energy is what an ``sp`` reports or what an
-#: ``opt`` ends on. An E0 includes the zero-point energy, which only a
-#: ``freq`` calculation carries, so the E0 is cited to the ``freq`` it came
-#: from. A record that composes an E0 from an ``sp`` and a ``freq`` cites the
-#: ``freq`` here and the ``sp`` in its ``electronic`` group. ``irc``, ``scan``
-#: and ``path_search`` report the energies of points along a path, not the
-#: energy of a stationary point, so they are never a source.
-_ENERGY_SOURCE_TYPES: dict[str, frozenset[CalculationType]] = {
-    "electronic": frozenset({CalculationType.sp, CalculationType.opt}),
-    "e0": frozenset({CalculationType.freq}),
-}
+#: ``energy_kind``: the table the network energy-source rule reads too
+#: (:mod:`app.services.energy_source_types`, #669). An electronic energy is what an
+#: ``sp`` reports, an ``opt`` ends on or a ``composite`` stores. An E0 includes the
+#: zero-point energy, which a ``freq`` calculation carries (a ``composite`` stores
+#: an E0 of its own), so the E0 is cited to the ``freq`` it came from. A record that
+#: composes an E0 from an ``sp`` and a ``freq`` cites the ``freq`` here and the
+#: ``sp`` in its ``electronic`` group. ``irc``, ``scan`` and ``path_search`` report
+#: the energies of points along a path, not the energy of a stationary point, so
+#: they are never a source.
+_ENERGY_SOURCE_TYPES: dict[str, frozenset[CalculationType]] = ENERGY_SOURCE_TYPES_BY_KIND
 
 #: How far apart, in cm^-1, a record's imaginary frequency and the frequency
 #: result it cites may be before they are taken to disagree. Wider than
@@ -174,13 +184,22 @@ def _assert_energy_sources_are_comparable(
         assert calculation is not None  # resolved and ownership-checked above
         allowed = _ENERGY_SOURCE_TYPES[energy.energy_kind]
         if calculation.type not in allowed:
-            raise ValueError(
+            accepted = sorted(t.value for t in allowed)
+            raise CodedValueError(
+                E_TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH,
                 f"Transition state '{subject_label}' "
                 f"{field_path}[{record_index}].energies[{energy_index}] takes a "
                 f"'{energy.energy_kind}' energy from a "
                 f"'{calculation.type.value}' calculation; a "
                 f"'{energy.energy_kind}' energy comes from a "
-                f"{' or '.join(sorted(t.value for t in allowed))} calculation."
+                f"{' or '.join(accepted)} calculation.",
+                context={
+                    "field": f"{field_path}[{record_index}].energies[{energy_index}]",
+                    "energy_kind": energy.energy_kind,
+                    "accepted_calculation_types": accepted,
+                    "actual_calculation_type": calculation.type.value,
+                },
+                message_prefix=False,
             )
         if calculation.lot_id is not None:
             levels_by_kind.setdefault(energy.energy_kind, set()).add(calculation.lot_id)
@@ -227,6 +246,9 @@ def _stored_electronic_energy(calculation: Calculation) -> float | None:
     if calculation.type == CalculationType.opt:
         opt_result = calculation.opt_result
         return None if opt_result is None else opt_result.final_energy_hartree
+    if calculation.type == CalculationType.composite:
+        composite = calculation.composite_result
+        return None if composite is None else composite.electronic_energy_hartree
     return None
 
 
@@ -264,6 +286,7 @@ def _stated_energy_mismatch(
     tolerance: float,
     stored_zpe: float | None = None,
     zpe_scale_factor: float | None = None,
+    from_composite: bool = False,
 ) -> CodedValueError:
     """The refusal for a stated energy the cited calculation does not store.
 
@@ -271,7 +294,9 @@ def _stated_energy_mismatch(
     """
 
     what = (
-        "the stored electronic energy plus the stored zero-point energy of the "
+        "the E0 stored for the composite calculation it cites"
+        if from_composite
+        else "the stored electronic energy plus the stored zero-point energy of the "
         "frequency calculation it cites, scaled by the stated zpe_scale_factor "
         f"{zpe_scale_factor!r}"
         if energy_kind == "e0" and zpe_scale_factor is not None
@@ -314,7 +339,7 @@ def _compare_stated_energies_with_stored(
     """Hold each stated energy against what TCKDB stores for its calculation.
 
     Runs after the source-type rule, so every ``electronic`` source is an
-    ``sp`` or ``opt`` and every ``e0`` source a ``freq``.
+    ``sp``, ``opt`` or ``composite`` and every ``e0`` source a ``freq`` or ``composite``.
 
     * ``electronic``: the stated value against the cited ``sp``'s
       ``electronic_energy_hartree`` or the cited ``opt``'s final energy.
@@ -369,6 +394,29 @@ def _compare_stated_energies_with_stored(
     for index, (energy, calculation) in enumerate(zip(energies, calculations, strict=True)):
         assert calculation is not None
         if energy.energy_kind != "e0":
+            continue
+        if calculation.type == CalculationType.composite:
+            # A composite stores an E0 of its own: compared directly, with no ZPE to pair and
+            # no scale factor to apply (whatever scaling went into it is the composite's).
+            composite = calculation.composite_result
+            stored_e0 = None if composite is None else composite.e0_hartree
+            if stored_e0 is None:
+                results[index] = StoredEnergyComparison(
+                    COMPARISON_NOT_COMPARED, NOT_COMPARED_STORED_ENERGY_NOT_STATED
+                )
+                continue
+            tolerance = composite_arithmetic_tolerance_hartree(_ROUNDED_QUANTITIES_ELECTRONIC)
+            if abs(energy.energy_hartree - stored_e0) > tolerance + _TOLERANCE_FLOAT_SLACK:
+                raise _stated_energy_mismatch(
+                    field=f"{field_path}[{record_index}].energies[{index}]",
+                    participant=energy.participant,
+                    energy_kind="e0",
+                    stated=energy.energy_hartree,
+                    stored=stored_e0,
+                    tolerance=tolerance,
+                    from_composite=True,
+                )
+            results[index] = _AGREES
             continue
         freq = calculation.freq_result
         zpe = None if freq is None else freq.zpe_hartree
@@ -897,6 +945,67 @@ CHECK_TS_IRC_EVIDENCE = ScientificCheck(
 )
 
 
+CHECK_ENERGY_SOURCE_TYPE = ScientificCheck(
+    group="Stationary points",
+    sort_key=13,
+    code=(E_TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH, W_NETWORK_ENERGY_SOURCE_TYPE_MISMATCH),
+    asserts=(
+        "A calculation cited as the source of a stated energy should be of a "
+        "type that carries that kind of energy: an electronic energy from an "
+        "``sp``, ``opt`` or ``composite``, an E0 from a ``freq`` or "
+        "``composite``, never from an IRC point, scan, path search or "
+        "conformer search; and a network ``well_freq`` or ``barrier_freq`` "
+        "source must be a ``freq``."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional. An energy taken from an IRC point, or from a bare "
+        "single point labelled as an E0, is not the quantity it is labelled "
+        "as, and an ordering or a master equation built on it compares unlike "
+        "things; the master equation reads the modes of its frequency roles, "
+        "which a ``composite`` (a ZPE only) does not store. The table of types "
+        "is one table shared by the transition-state and network rules "
+        "(``app.services.energy_source_types``, #669), so the two cannot "
+        "disagree about what carries an energy; it is a position a referee "
+        "could dispute, which is why it is registered. A network energy on a "
+        "composed convention (``electronic_plus_zpe`` and the like) is held "
+        "only to the floor of stationary-point types, because its one source "
+        "slot cites the electronic part and the frequency goes in the "
+        "frequency role: tightening it would refuse every producer and "
+        "fixture in the repository, a decision recorded here rather than "
+        "hidden."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(
+            _assert_energy_sources_are_comparable,
+            note=(
+                "The transition-state ``energy_ordering`` evidence, at the "
+                "shared evidence seam, so all three deposit paths refuse alike."
+            ),
+        ),
+        PythonCheck(
+            assert_network_energy_source_type,
+            note="Network state and barrier energy sources, read off the persisted row.",
+        ),
+        PythonCheck(
+            assert_network_source_role_type,
+            note=(
+                "The ``well_energy`` / ``barrier_energy`` and the frequency "
+                "roles of the solve's ``source_calculations``."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Cite the calculation that carries the energy: the ``sp``, ``opt`` or "
+        "``composite`` for an electronic energy, the ``freq`` (or a "
+        "``composite``) for an E0, and put the ``freq`` in the "
+        "``well_freq`` / ``barrier_freq`` role."
+    ),
+)
+
+
 CHECK_TS_ENERGY_ORDERING_LEVELS = ScientificCheck(
     group="Stationary points",
     sort_key=10,
@@ -997,7 +1106,11 @@ CHECK_TS_ENERGY_ORDERING_STATED_MISMATCH = ScientificCheck(
 CHECK_TS_ENERGY_ORDERING_NOT_COMPARED = ScientificCheck(
     group="Stationary points",
     sort_key=12,
-    code=(W_TS_ENERGY_ORDERING_NOT_COMPARED, W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED),
+    code=(
+        W_TS_ENERGY_ORDERING_NOT_COMPARED,
+        W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED,
+        W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT,
+    ),
     asserts=(
         "Every energy an energy-ordering record or a network state energy "
         "states should be comparable with the energy TCKDB stores for the "
@@ -1035,6 +1148,18 @@ CHECK_TS_ENERGY_ORDERING_NOT_COMPARED = ScientificCheck(
                 "honest rounding of the stated kJ/mol). Sources on only some "
                 "participants warn separately, with "
                 "``network_state_energy_sources_partial``."
+            ),
+        ),
+        PythonCheck(
+            collect_zpe_source_absent_warnings,
+            note=(
+                "A state or barrier energy on a composed convention "
+                "(``electronic_plus_zpe``, ``atom_and_bond_corrected``, "
+                "``thermal_enthalpy_298k``) that cites only an ``sp`` or "
+                "``opt`` when the upload carries no ``freq`` for that species "
+                "or transition state: ``network_energy_zpe_source_absent`` (#669). "
+                "An absence, so a warning; a ``composite`` and a single atom "
+                "are not flagged."
             ),
         ),
     ),

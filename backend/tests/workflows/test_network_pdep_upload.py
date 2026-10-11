@@ -2445,10 +2445,12 @@ def test_transition_state_without_irc_evidence_succeeds_with_a_warning(
             "reaction_atom_map_absent",
         ]
         # The fixture states each bimolecular state's energy from one species' single point and
-        # on a composed convention, so #678 adds its two warnings about the state energies.
+        # on a composed convention, so #678 adds its two warnings about the state energies, and
+        # several of those species have no freq anywhere in the upload (#669).
         assert {w.code for w in warnings if w not in about_the_saddle_point} == {
             "network_state_energy_sources_partial",
             "network_state_energy_sum_not_compared",
+            "network_energy_zpe_source_absent",
         }
 
 

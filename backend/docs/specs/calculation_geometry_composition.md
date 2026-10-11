@@ -258,7 +258,11 @@ What is true now:
   masses from this geometry, so before #680 a wrong-element or wrong-isotope
   Hessian geometry yielded wrong frequencies with no refusal. In the artifact
   hook a refusal is not an upload failure: it takes the hook's ordinary failure
-  path (savepoint rolled back, warning logged, no `calc_hessian` row).
+  path (savepoint rolled back, warning logged, no `calc_hessian` row). This is
+  the one site where the channel differs: the response is a 2xx carrying the
+  warn-tier `hessian_not_stored_geometry_mismatch`, and the block code (for
+  example `calculation_geometry_composition_mismatch`) appears only in that
+  warning's message text, not as a refusal code (#744).
 * `calc_scan_point.geometry_id` (field `scan_result.points[N].geometry`), for an
   inline geometry and a by-id one alike.
 * `calc_irc_point.geometry_id` (field `irc_result.points[N].geometry`), for

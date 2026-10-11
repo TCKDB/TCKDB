@@ -35,6 +35,7 @@ LEVELS_CODE = "missing_atomic_electronic_levels"
 SOC_CODE = "missing_atomic_spin_orbit_correction"
 DEGENERACY_CODE = "atomic_electronic_degeneracy_contradicts_term"
 TERM_CODE = "term_symbol_contradicts_multiplicity"
+GROUND_TERM_CODE = "term_symbol_contradicts_ground_term"
 FREQ_CODE = "missing_statmech_frequency_source"
 ATOMIC_CODES = {LEVELS_CODE, SOC_CODE, DEGENERACY_CODE}
 
@@ -207,7 +208,9 @@ def test_same_multiplicity_wrong_term_for_the_element_is_flagged(client):
     o = _species(payload, "[O]")
     o["species_entry"]["term_symbol"] = "3S"
     pairs = _pairs(_post(client, payload))
-    assert (f"species['{o['key']}'].species_entry.term_symbol", TERM_CODE) in pairs
+    # Not the multiplicity code: the multiplicity is right, the L is not (#631).
+    assert (f"species['{o['key']}'].species_entry.term_symbol", GROUND_TERM_CODE) in pairs
+    assert (f"species['{o['key']}'].species_entry.term_symbol", TERM_CODE) not in pairs
 
 
 def test_ground_level_degeneracy_contradicting_the_term_is_flagged(client):
@@ -296,6 +299,50 @@ def test_electronic_levels_round_trip_through_the_species_bundle(client, db_sess
         (2, 882.3515, 2),
     ]
     assert LEVELS_CODE not in {w["code"] for w in resp.json()["warnings"]}
+
+
+def _atom_species_bundle(smiles: str, multiplicity: int, levels, term: str | None = None) -> dict:
+    """A one-atom species bundle for any atom, built on the Cl one."""
+    element = smiles.strip("[]")
+    bundle = _cl_species_bundle(levels)
+    bundle["species_entry"] = {"smiles": smiles, "charge": 0, "multiplicity": multiplicity}
+    if term is not None:
+        bundle["species_entry"]["term_symbol"] = term
+    bundle["conformers"][0]["geometry"] = {"xyz_text": f"1\n{element}\n{element} 0.0 0.0 0.0"}
+    return bundle
+
+
+def test_species_bundle_hydrogen_with_its_two_fold_ground_level_is_silent(client):
+    """The reviewer's probe: H 2S, g = 2, on the species-bundle route says nothing (#631)."""
+    bundle = _atom_species_bundle("[H]", 2, [{"level_index": 1, "energy_cm1": 0.0, "degeneracy": 2}], term="2S")
+    resp = client.post("/api/v1/uploads/computed-species", json=bundle)
+    assert resp.status_code == 201, resp.text[:1200]
+    codes = {w["code"] for w in resp.json()["warnings"]}
+    assert codes & {LEVELS_CODE, DEGENERACY_CODE, TERM_CODE, GROUND_TERM_CODE} == set(), codes
+
+
+def test_species_bundle_oxygen_with_carbons_ordering_warns(client):
+    """The reviewer's probe: O with J = 0 lowest (carbon's order) on the species-bundle route."""
+    carbon_order = [
+        {"level_index": 1, "energy_cm1": 0.0, "degeneracy": 1},
+        {"level_index": 2, "energy_cm1": 158.265, "degeneracy": 3},
+        {"level_index": 3, "energy_cm1": 226.977, "degeneracy": 5},
+    ]
+    resp = client.post("/api/v1/uploads/computed-species", json=_atom_species_bundle("[O]", 3, carbon_order, "3P"))
+    assert resp.status_code == 201, resp.text[:1200]
+    assert DEGENERACY_CODE in {w["code"] for w in resp.json()["warnings"]}, resp.json()["warnings"]
+
+
+def test_reaction_bundle_oxygen_with_carbons_ordering_warns(client):
+    payload = _load("rotor_scan_10")
+    o = _species(payload, "[O]")
+    o["statmech"]["electronic_levels"] = [
+        {"level_index": 1, "energy_cm1": 0.0, "degeneracy": 1},
+        {"level_index": 2, "energy_cm1": 158.265, "degeneracy": 3},
+        {"level_index": 3, "energy_cm1": 226.977, "degeneracy": 5},
+    ]
+    pairs = _pairs(_post(client, payload))
+    assert (f"species['{o['key']}'].statmech.electronic_levels", DEGENERACY_CODE) in pairs
 
 
 def test_species_bundle_chlorine_without_levels_warns(client):
@@ -444,8 +491,9 @@ def test_carbon_in_its_own_order_is_accepted(client):
 
 def test_declared_j_is_compared_with_the_nist_ground_j(client):
     """O(3P0) is not oxygen's ground level (J = 2)."""
-    assert TERM_CODE in _standalone(client, "[O]", 3, "3P0", _levels((0.0, 1)))
-    assert TERM_CODE not in _standalone(client, "[O]", 3, "3P2", _levels((0.0, 5)))
+    wrong_j = _standalone(client, "[O]", 3, "3P0", _levels((0.0, 1)))
+    assert GROUND_TERM_CODE in wrong_j and TERM_CODE not in wrong_j  # J is wrong, not 2S+1
+    assert GROUND_TERM_CODE not in _standalone(client, "[O]", 3, "3P2", _levels((0.0, 5)))
 
 
 @pytest.mark.parametrize("term", ["3Po", "3P°", "3P*", "^3P_2", "^3P", "3P_{2}", "³P₂"])
@@ -456,7 +504,8 @@ def test_parity_caret_and_brace_forms_parse_as_atomic_terms(client, term):
 
 @pytest.mark.parametrize("term", ["1Po", "^1D", "3S°", "2P_{3/2}"])
 def test_parity_and_caret_forms_of_the_wrong_atomic_term_are_flagged(client, term):
-    assert TERM_CODE in _standalone(client, "[O]", 3, term, _levels((0.0, 5)))
+    codes = _standalone(client, "[O]", 3, term, _levels((0.0, 5)))
+    assert codes & {TERM_CODE, GROUND_TERM_CODE}, codes
 
 
 @pytest.mark.parametrize("term", ["X2Pi", "3A1", "2Π"])
@@ -489,7 +538,10 @@ def test_spin_orbit_message_carries_the_magnitude(client):
         for w in resp.json()["warnings"]
         if w["code"] == SOC_CODE and w["field"].startswith(f"species['{o['key']}']")
     ]
-    assert "-0.93 kJ/mol" in msg
+    # The shift is how far the ground level lies below the spin-orbit-free value, said as such: a
+    # bare "(-0.93 kJ/mol)" read as if that were the energy (#631).
+    assert "0.93 kJ/mol above the ground level" in msg
+    assert "-0.93" not in msg
 
 
 def test_identity_outranks_a_wrong_atom_claim_without_a_geometry(client):
@@ -530,10 +582,14 @@ def test_network_pdep_species_and_ts_statmech_accept_and_persist_electronic_leve
         "statmech_treatment": "rrho",
         "electronic_levels": _levels((0.0, 2), (100.0, 2)),
     }
+    existing = set(db_session.scalars(select(Statmech.id)))
     resp = client.post("/api/v1/uploads/networks/pdep", json=payload)
     assert resp.status_code == 201, resp.text[:1500]
+    # Only the levels of the statmech rows this request created, not every row in the test database.
     per_statmech = db_session.execute(
-        select(StatmechElectronicLevel.statmech_id, StatmechElectronicLevel.degeneracy)
+        select(StatmechElectronicLevel.statmech_id, StatmechElectronicLevel.degeneracy).where(
+            StatmechElectronicLevel.statmech_id.notin_(existing)
+        )
     ).all()
     counts = sorted({sid: 0 for sid, _ in per_statmech}.keys())
     assert len(per_statmech) == 3 and len(counts) == 2
