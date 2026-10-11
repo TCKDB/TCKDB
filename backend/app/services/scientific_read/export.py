@@ -41,12 +41,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.error_contract import CodedValueError
+from app.db.models.calculation import (
+    Calculation,
+    CalculationInputGeometry,
+    CalculationOutputGeometry,
+)
 from app.db.models.common import (
+    CalculationGeometryRole,
     ReactionRole,
     RecordReviewStatus,
+    StatmechCalculationRole,
     SubmissionRecordType,
     ThermoModelKind,
 )
+from app.db.models.geometry import Geometry
 from app.db.models.kinetics import Kinetics, KineticsThirdBodyEfficiency
 from app.db.models.reaction import (
     ChemReaction,
@@ -68,6 +76,10 @@ from app.schemas.reads.scientific_common import (
     CollapseMode,
     SelectionPolicy,
     simple_selection_sort_key,
+)
+from app.services.frequency_geometry_linearity import (
+    GeometryLinearity,
+    classify_xyz_linearity,
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
@@ -161,7 +173,12 @@ class SeedSelection:
 
 @dataclass
 class ExportGap:
-    """A record dropped from the export for lack of a qualifying value."""
+    """A value the export could not state from a qualifying record.
+
+    Either a record dropped for lack of a qualifying value, or a line that was
+    written with a value assumed in place of one no record states (``kind`` and
+    ``detail`` say which).
+    """
 
     kind: str  # thermo | transport | kinetics | thermo_nasa | composition
     ref: str  # public ref of the species_entry / reaction_entry
@@ -425,12 +442,35 @@ class SelectedKinetics:
 
 
 @dataclass
+class LinearityWitness:
+    """A stated linearity and the record that states it.
+
+    ``source_kind`` is ``calculation_geometry`` (``source_ref`` is the ``calc_``
+    ref of a calculation the transport cites, whose own geometry is collinear
+    or not) or ``statmech`` (``source_ref`` is the ref of a linked statmech
+    record).
+    """
+
+    is_linear: bool
+    source_kind: str
+    source_ref: str
+
+    def to_dict(self) -> dict:
+        return {"kind": self.source_kind, "ref": self.source_ref}
+
+
+@dataclass
 class SpeciesExportRecord:
     species_entry: SpeciesEntry
     species: Species
-    is_linear: bool | None
+    linearity: LinearityWitness | None
     thermos: list[SelectedThermo] = field(default_factory=list)
     transports: list[SelectedTransport] = field(default_factory=list)
+
+    @property
+    def is_linear(self) -> bool | None:
+        """Linearity from the transport's own witness; ``None`` when unstated."""
+        return None if self.linearity is None else self.linearity.is_linear
 
     def to_ndjson(self) -> dict:
         se = self.species_entry
@@ -444,6 +484,9 @@ class SpeciesExportRecord:
             "charge": sp.charge,
             "multiplicity": sp.multiplicity,
             "is_linear": self.is_linear,
+            "is_linear_source": (
+                None if self.linearity is None else self.linearity.to_dict()
+            ),
             "thermos": [t.to_dict() for t in self.thermos],
             "transports": [t.to_dict() for t in self.transports],
         }
@@ -810,43 +853,122 @@ def _load_selected_thermos(
     return out
 
 
-def _transport_linked_is_linear(
-    session: Session, species_entry_id: int, transport_id: int
-) -> bool | None:
-    """Linearity stated by a statmech record *linked* to this transport record.
+#: Statmech source-calculation roles that fix the geometry the record's rigid
+#: rotor is built on. A scan or composite calculation moves the geometry and an
+#: ``sp`` calculation only evaluates one, so none of those states what the
+#: equilibrium structure is.
+_STATMECH_GEOMETRY_ROLES = (StatmechCalculationRole.opt, StatmechCalculationRole.freq)
 
-    Used for the CHEMKIN transport geometry index. The only link between a
-    transport record and a statmech record is a source calculation they both
-    cite (``transport_source_calculation`` / ``statmech_source_calculation``),
-    so only statmech rows of the same species entry that share one are
-    consulted. A sibling statmech record the transport does not link to is
-    never read: which interpretation supplied the value must be attributable.
 
-    Returns ``None`` (unknown) when no linked record states ``is_linear`` or
-    when the linked records disagree; the serializer then falls back to
-    structure inference and the caller reports the gap.
-    """
-    values = set(
+def _calculation_geometry_texts(session: Session, calculation_id: int) -> list[str]:
+    """The XYZ text of a calculation's own geometry: final outputs, else inputs."""
+    outputs = list(
         session.scalars(
-            select(Statmech.is_linear)
+            select(Geometry.xyz_text)
             .join(
-                StatmechSourceCalculation,
-                StatmechSourceCalculation.statmech_id == Statmech.id,
-            )
-            .join(
-                TransportSourceCalculation,
-                TransportSourceCalculation.calculation_id
-                == StatmechSourceCalculation.calculation_id,
+                CalculationOutputGeometry,
+                CalculationOutputGeometry.geometry_id == Geometry.id,
             )
             .where(
-                Statmech.species_entry_id == species_entry_id,
-                TransportSourceCalculation.transport_id == transport_id,
-                Statmech.is_linear.is_not(None),
+                CalculationOutputGeometry.calculation_id == calculation_id,
+                CalculationOutputGeometry.role == CalculationGeometryRole.final,
+                Geometry.xyz_text.is_not(None),
             )
+            .order_by(CalculationOutputGeometry.output_order)
         ).all()
     )
-    if len(values) == 1:
-        return values.pop()
+    if outputs:
+        return outputs
+    return list(
+        session.scalars(
+            select(Geometry.xyz_text)
+            .join(
+                CalculationInputGeometry,
+                CalculationInputGeometry.geometry_id == Geometry.id,
+            )
+            .where(
+                CalculationInputGeometry.calculation_id == calculation_id,
+                Geometry.xyz_text.is_not(None),
+            )
+            .order_by(CalculationInputGeometry.input_order)
+        ).all()
+    )
+
+
+def _transport_linearity_witness(
+    session: Session, species_entry_id: int, transport_id: int
+) -> LinearityWitness | None:
+    """The attributed statement of the selected transport's linearity, if any.
+
+    Used for the CHEMKIN transport geometry index. A value is only ever taken
+    from a record the transport itself links to, and the answer names that
+    record, so the export is the same whatever order records were deposited in.
+    Sources, in order:
+
+    1. A calculation the transport cites (``transport_source_calculation``,
+       any role: each one is a calculation on this molecule) whose own geometry
+       :func:`classify_xyz_linearity` sorts as linear or bent. Near-linear
+       (undetermined) geometries say nothing. Calculations that disagree say
+       nothing.
+    2. A statmech record of the same species entry that cites one of the same
+       calculations as an ``opt`` or ``freq`` source, and states ``is_linear``.
+       Records that disagree say nothing.
+
+    Never a sibling statmech record the transport does not link to. Returns
+    ``None`` when neither source states it.
+    """
+    calc_rows = session.execute(
+        select(Calculation.id, Calculation.public_ref)
+        .join(
+            TransportSourceCalculation,
+            TransportSourceCalculation.calculation_id == Calculation.id,
+        )
+        .where(TransportSourceCalculation.transport_id == transport_id)
+        .order_by(Calculation.id)
+    ).all()
+
+    from_geometry: dict[str, bool] = {}
+    for calc_id, calc_ref in calc_rows:
+        verdicts = set()
+        for text in _calculation_geometry_texts(session, calc_id):
+            verdict = classify_xyz_linearity(text).verdict
+            if verdict is GeometryLinearity.linear:
+                verdicts.add(True)
+            elif verdict is GeometryLinearity.bent:
+                verdicts.add(False)
+        if len(verdicts) == 1:
+            from_geometry[calc_ref] = verdicts.pop()
+    if from_geometry and len(set(from_geometry.values())) == 1:
+        ref = next(iter(from_geometry))
+        return LinearityWitness(
+            is_linear=from_geometry[ref], source_kind="calculation_geometry", source_ref=ref
+        )
+
+    stat_rows = session.execute(
+        select(Statmech.public_ref, Statmech.is_linear)
+        .join(
+            StatmechSourceCalculation,
+            StatmechSourceCalculation.statmech_id == Statmech.id,
+        )
+        .join(
+            TransportSourceCalculation,
+            TransportSourceCalculation.calculation_id
+            == StatmechSourceCalculation.calculation_id,
+        )
+        .where(
+            Statmech.species_entry_id == species_entry_id,
+            TransportSourceCalculation.transport_id == transport_id,
+            StatmechSourceCalculation.role.in_(_STATMECH_GEOMETRY_ROLES),
+            Statmech.is_linear.is_not(None),
+        )
+        .distinct()
+        .order_by(Statmech.public_ref)
+    ).all()
+    if stat_rows and len({is_linear for _ref, is_linear in stat_rows}) == 1:
+        ref, is_linear = stat_rows[0]
+        return LinearityWitness(
+            is_linear=is_linear, source_kind="statmech", source_ref=ref
+        )
     return None
 
 
@@ -906,28 +1028,16 @@ def _build_species_record(
         if session.get(Transport, tid) is not None
     ]
 
-    is_linear: bool | None = None
+    linearity: LinearityWitness | None = None
     if transports:
-        is_linear = _transport_linked_is_linear(
+        linearity = _transport_linearity_witness(
             session, species_entry_id, transports[0].transport.id
         )
-        if is_linear is None:
-            gaps.append(
-                ExportGap(
-                    kind="transport",
-                    ref=entry.public_ref,
-                    detail=(
-                        "no statmech record linked to the selected transport "
-                        "states linearity; geometry index is inferred from the "
-                        "structure"
-                    ),
-                )
-            )
 
     record = SpeciesExportRecord(
         species_entry=entry,
         species=species,
-        is_linear=is_linear,
+        linearity=linearity,
         thermos=thermos,
         transports=transports,
     )

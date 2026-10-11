@@ -652,17 +652,28 @@ def _build_chem_inp(
 # ---------------------------------------------------------------------------
 
 
-def _geometry_index(sr: SpeciesExportRecord, comp: Counter | None) -> int:
-    if sr.is_linear is True:
-        return 1
-    if sr.is_linear is False:
-        return 2
-    natoms = sum(comp.values()) if comp else 0
-    if natoms <= 1:
-        return 0
+def _geometry_index(
+    sr: SpeciesExportRecord, comp: Counter
+) -> tuple[int, str, bool]:
+    """The ``tran.dat`` geometry index, where it came from, and whether it was assumed.
+
+    A stated linearity (the transport's own witness, see
+    ``export._transport_linearity_witness``) decides it and is named in the
+    returned source. Without one, the atom count decides only where it can: one
+    atom is 0, two atoms is 1. Three or more atoms with no witness cannot be
+    told linear from bent by counting (CO2, HCN and C2H2 are linear), so the
+    index is written as nonlinear (2) and flagged ``assumed``.
+    """
+    witness = sr.linearity
+    if witness is not None:
+        index = 1 if witness.is_linear else 2
+        return index, f"{witness.source_kind}:{witness.source_ref}", False
+    natoms = sum(comp.values())
+    if natoms == 1:
+        return 0, "atom_count", False
     if natoms == 2:
-        return 1
-    return 2
+        return 1, "atom_count", False
+    return 2, "assumed nonlinear from atom count", True
 
 
 def _build_tran_dat(
@@ -686,7 +697,31 @@ def _build_tran_dat(
                 )
             )
             continue
-        geom = _geometry_index(sr, compositions.get(se_id))
+        comp = compositions.get(se_id)
+        if not comp:
+            # No atom count to decide from and no way to write a truthful
+            # index: drop the line rather than write 0 (a monatomic claim).
+            gaps.append(
+                ExportGap(
+                    kind="transport",
+                    ref=sr.species_entry.public_ref,
+                    detail="unparseable SMILES: no tran.dat line written",
+                )
+            )
+            continue
+        geom, geom_source, assumed = _geometry_index(sr, comp)
+        if assumed:
+            gaps.append(
+                ExportGap(
+                    kind="transport",
+                    ref=sr.species_entry.public_ref,
+                    detail=(
+                        "linearity assumed nonlinear from atom count: neither a "
+                        "geometry of a calculation the transport cites nor a "
+                        "linked statmech record states it"
+                    ),
+                )
+            )
         dipole = tr.dipole_debye or 0.0
         polar = tr.polarizability_angstrom3 or 0.0
         zrot = tr.rotational_relaxation or 0.0
@@ -695,6 +730,7 @@ def _build_tran_dat(
             f"{tr.epsilon_over_k_k:>10.3f}{tr.sigma_angstrom:>10.3f}"
             f"{dipole:>10.3f}{polar:>10.3f}{zrot:>10.3f}"
             f"    ! SMILES={sr.species.smiles} ref={sr.species.public_ref}"
+            f" linearity={geom_source}"
         )
     return "\n".join(lines) + "\n"
 
