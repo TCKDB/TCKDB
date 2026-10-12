@@ -41,7 +41,7 @@ dataset must never require a code release.
 ## Statmech search refuses a key it does not declare; the statmech MCP tools reach every filter (2026-10-12)
 
 **Narrowing: `/scientific/statmech/search` used to ignore an unrecognised key and now refuses it.** Migration: none. New environment
-variable: none. `tckdb-mcp` 0.9.0. `tckdb-client` and `tckdb-schemas` are unchanged (neither sent an undeclared key).
+variable: none. `tckdb-mcp` 0.9.0. `tckdb-client` 0.148.0 (gains the `UNKNOWN_QUERY_PARAMETER` rejection code) and `tckdb-schemas` 0.122.0 (the refusal-code reference lists it); neither sent an undeclared key.
 
 - POST: a body key the request model does not declare is a 422 `extra_forbidden`. GET: an unrecognised query key is a 422
   `unknown_query_parameter`. Before, both returned 200 and dropped the key, so a misspelled filter (`has_torsion`) silently
