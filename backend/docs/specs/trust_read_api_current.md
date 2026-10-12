@@ -39,7 +39,8 @@ Current implemented deterministic trust rubrics:
 | `computed_calculation_v1` | Calculation detail reads |
 | `computed_kinetics_v1` | Reaction-entry kinetics reads |
 | `computed_thermo_v1` | Species-entry thermo reads |
-| `computed_statmech_v1` | Statmech detail reads and species-entry statmech reads |
+| `computed_statmech_v2` | Statmech detail, search and species-entry reads of a species-owned record |
+| `computed_ts_statmech_v1` | The same reads, for a transition-state-owned record (owner-scoped; PR 6.6) |
 | `computed_transport_v1` | Transport detail reads and species-entry transport reads |
 | `computed_transition_state_v1` | Standalone transition-state-entry detail reads |
 
@@ -138,7 +139,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | --- | --- |
 | Path | `GET /api/v1/scientific/statmech/{statmech_ref_or_id}` |
 | Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
-| Rubric used | `computed_statmech_v1` |
+| Rubric used | `computed_statmech_v2` for a species-owned record, `computed_ts_statmech_v1` for a transition-state-owned one |
 | Default behavior | Without `include=trust`, the response omits `record.trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | `include=all` does not include trust. `GET`/`POST /scientific/statmech/search` also accept `include=trust`, at `records[*].trust`; the search path loads the 19-entry evidence graph once per page. |
@@ -160,7 +161,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | --- | --- |
 | Path | `GET /api/v1/scientific/species-entries/{species_entry_id}/statmech` |
 | Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
-| Rubric used | `computed_statmech_v1` (per returned record) |
+| Rubric used | `computed_statmech_v2` (per returned record; the records are species-owned) |
 | Default behavior | Without `include=trust`, each statmech record omits `trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | `include=all` does not include trust. A species-entry-scoped subresource read (mirrors species-entry thermo), not a broad search; it reuses the statmech record projection and deterministic ordering. `/scientific/statmech/search` exposes trust under the same token. |

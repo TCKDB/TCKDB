@@ -230,6 +230,45 @@ def statmech_page(db_session):
 
 
 @pytest.fixture
+def ts_owned_statmech_page(db_session):
+    """Twenty TS-owned statmech records, each on its OWN transition-state entry.
+
+    One entry per record is the point: a lazy ``Statmech.transition_state_entry`` load is
+    answered from the identity map when many records share an entry, which would hide the
+    per-row query this fixture exists to expose.
+    """
+    from app.db.models.common import ScientificOriginKind, StatmechTreatmentKind
+    from app.db.models.statmech import Statmech
+
+    sp_a = make_species(db_session, inchi_key=next_inchi_key("CSSA"))
+    sp_b = make_species(db_session, inchi_key=next_inchi_key("CSSB"))
+    chem = make_chem_reaction(db_session, reactants=[sp_a], products=[sp_b])
+    rxe = make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=[make_species_entry(db_session, sp_a)],
+        product_entries=[make_species_entry(db_session, sp_b)],
+    )
+    ts = make_transition_state(db_session, reaction_entry=rxe)
+    for _ in range(_LARGE_PAGE):
+        entry = make_transition_state_entry(db_session, transition_state=ts)
+        sm = Statmech(
+            transition_state_entry_id=entry.id,
+            scientific_origin=ScientificOriginKind.computed,
+            statmech_treatment=StatmechTreatmentKind.rrho,
+        )
+        db_session.add(sm)
+        db_session.flush()
+        calc = make_calculation(
+            db_session, type=CalculationType.freq, transition_state_entry_id=entry.id
+        )
+        attach_statmech_source_calculation(
+            db_session, statmech=sm, calculation=calc, role=StatmechCalculationRole.freq
+        )
+    return ts
+
+
+@pytest.fixture
 def transport_page(db_session):
     species = make_species(db_session, inchi_key=next_inchi_key("CSTR"))
     entry = make_species_entry(db_session, species)
@@ -361,6 +400,31 @@ def test_statmech_search_trust_does_not_scale_with_page_size(
         db_session, search=search_statmech, request_for=request_for, limit=_LARGE_PAGE
     )
     _assert_slope_is_flat("/statmech/search", small, large)
+
+
+def test_ts_owned_statmech_search_trust_does_not_scale_with_page_size(
+    db_session, ts_owned_statmech_page
+):
+    """A TS-owned record's rubric reads its transition-state entry; that load must be batched per page.
+
+    ``computed_ts_statmech`` asks ``transition_state_entry_present``, which touches the
+    relationship. Without ``selectinload(Statmech.transition_state_entry)`` in the shared
+    eager-load tuple that is one query per record, and the slope below grows with the page.
+    """
+    def request_for(limit: int, include: list[str]) -> StatmechSearchRequest:
+        return StatmechSearchRequest(
+            model_kind="rrho",
+            include=include,
+            limit=limit,
+        )
+
+    small = _marginal_cost(
+        db_session, search=search_statmech, request_for=request_for, limit=_SMALL_PAGE
+    )
+    large = _marginal_cost(
+        db_session, search=search_statmech, request_for=request_for, limit=_LARGE_PAGE
+    )
+    _assert_slope_is_flat("/statmech/search (TS-owned)", small, large)
 
 
 def test_species_statmech_read_trust_does_not_scale_with_page_size(

@@ -223,7 +223,7 @@ A review is **current** iff *all* of:
 context_schema_version == active recipe version
 context_hash           == hash of the record's current evidence context
 prompt_version         == active machine-review prompt version
-rubric_versions_json   == active rubric versions for this record_type
+rubric_versions_json   == active rubric versions for the rubric that evaluated this record
 ```
 
 `provider`/`model` are **not** part of the hard currency key by default

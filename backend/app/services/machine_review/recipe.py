@@ -35,6 +35,7 @@ from app.services.trust.rubrics import (
     COMPUTED_THERMO_V2,
     COMPUTED_TRANSITION_STATE_V3,
     COMPUTED_TRANSPORT_V2,
+    COMPUTED_TS_STATMECH_V1,
     EXTERNAL_CP_COMPARISON_V2,
     GIBBS_SELF_CONSISTENCY_V1,
     HESS_CONSISTENCY_V1,
@@ -126,11 +127,20 @@ ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"
 # That no existing review is restaled by adding it is pinned by
 # ``test_adding_the_gibbs_rubric_restales_no_stored_review`` in
 # ``tests/services/test_phase_d_persistence.py``.
+#
+# COMPUTED_TS_STATMECH_V1 (PR 6.6) is the owner-scoped statmech rubric for transition-state-owned
+# records. It is one more key, filtered like every other: a species-owned statmech review keeps its
+# ``computed_statmech_v2`` key and reads current; only the latest reviewer-family review of a
+# TS-owned statmech reads stale (its context was hashed under the species rubric). The reviewer
+# recipe for a record comes from the rubric that actually evaluated it
+# (``admin_trigger.active_rubric_versions_for_fragment``), not from the record type alone.
+# ``tests/services/test_trust_ts_statmech_owner_rubric.py`` pins both halves.
 _ACTIVE_RUBRICS: tuple[EvidenceRubric, ...] = (
     COMPUTED_CALCULATION_V2,
     COMPUTED_KINETICS_V2,
     COMPUTED_THERMO_V2,
     COMPUTED_STATMECH_V2,
+    COMPUTED_TS_STATMECH_V1,
     COMPUTED_TRANSPORT_V2,
     COMPUTED_TRANSITION_STATE_V3,
     EXTERNAL_CP_COMPARISON_V2,

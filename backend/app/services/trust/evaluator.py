@@ -67,8 +67,10 @@ from app.services.trust.rubrics import (
     COMPUTED_THERMO_V2,
     COMPUTED_TRANSITION_STATE_V3,
     COMPUTED_TRANSPORT_V2,
+    COMPUTED_TS_STATMECH_V1,
     _ts_source_calculations,
     get_rubric_for_record_type,
+    statmech_rubric_for,
 )
 
 
@@ -321,10 +323,35 @@ def _statmech_has_torsions_or_torsion_treatment(statmech: Statmech) -> bool:
     )
 
 
-def _detect_statmech_hard_fail(statmech: Statmech) -> Optional[HardFailReason]:
-    """Return a hard-fail reason for ``statmech`` if a structural failure is present."""
+def _statmech_subject_hard_fail(
+    statmech: Statmech, rubric: EvidenceRubric
+) -> Optional[HardFailReason]:
+    """Return the missing-owner reason for ``statmech`` under the rubric that is grading it.
+
+    The subject is the one thing the two statmech rubrics disagree about: the species rubric
+    needs a species entry, the transition-state rubric a transition-state entry. Everything
+    after it in :func:`_detect_statmech_hard_fail` is shared.
+    """
+    if rubric is COMPUTED_TS_STATMECH_V1:
+        if statmech.transition_state_entry_id is None or statmech.transition_state_entry is None:
+            return HardFailReason.transition_state_entry_missing
+        return None
     if statmech.species_entry_id is None or statmech.species_entry is None:
         return HardFailReason.species_entry_missing
+    return None
+
+
+def _detect_statmech_hard_fail(
+    statmech: Statmech, rubric: EvidenceRubric = COMPUTED_STATMECH_V2
+) -> Optional[HardFailReason]:
+    """Return a hard-fail reason for ``statmech`` if a structural failure is present.
+
+    ``rubric`` only decides which owner the record must have; every other structural check
+    (external symmetry, torsion dimension, required-role source calculations) is shared.
+    """
+    subject_failure = _statmech_subject_hard_fail(statmech, rubric)
+    if subject_failure is not None:
+        return subject_failure
 
     if statmech.external_symmetry is not None and statmech.external_symmetry < 1:
         return HardFailReason.invalid_external_symmetry
@@ -867,16 +894,33 @@ def evaluate_loaded_statmech(
 ) -> EvidenceEvaluation:
     """Evaluate deterministic evidence completeness for a loaded statmech record.
 
+    The rubric is chosen by the record's owner (:func:`statmech_rubric_for`): a
+    species-owned record is graded by ``computed_statmech``, a transition-state-owned
+    one by ``computed_ts_statmech``.
+
     This entrypoint is pure over the ORM object graph it receives: it
     does not perform a lookup and the check runners must not issue
     their own queries. Callers are responsible for eager-loading the
-    relationships required by ``computed_statmech_v1``.
+    relationships required by the record's computed statmech rubric
+    (the owning species entry or transition-state entry among them).
     """
-    rubric = COMPUTED_STATMECH_V2
     if statmech is None:
-        return _empty_evaluation_for_missing_statmech(None, rubric)
+        return _empty_evaluation_for_missing_statmech(None, COMPUTED_STATMECH_V2)
+    return evaluate_loaded_statmech_under(statmech, statmech_rubric_for(statmech))
 
-    hard_fail = _detect_statmech_hard_fail(statmech)
+
+def evaluate_loaded_statmech_under(
+    statmech: Statmech,
+    rubric: EvidenceRubric,
+) -> EvidenceEvaluation:
+    """Evaluate ``statmech`` under an explicitly named statmech rubric.
+
+    :func:`evaluate_loaded_statmech` is this with the owner's rubric. Naming the rubric lets
+    the operator report (``statmech_owner_report``) reconstruct what a record read before
+    the owner-scoped rubric existed, by running it under ``COMPUTED_STATMECH_V2``. Nothing on
+    a read path should call this directly.
+    """
+    hard_fail = _detect_statmech_hard_fail(statmech, rubric)
 
     check_results: list[EvidenceCheckResult] = []
     for spec in rubric.checks:
@@ -1181,6 +1225,7 @@ def evaluate_computed_statmech(
         .where(Statmech.id == statmech_id)
         .options(
             selectinload(Statmech.species_entry),
+            selectinload(Statmech.transition_state_entry),
             selectinload(Statmech.frequency_scale_factor),
             selectinload(Statmech.torsions).selectinload(StatmechTorsion.coordinates),
             selectinload(Statmech.torsions)
