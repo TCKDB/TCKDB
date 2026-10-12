@@ -50233,6 +50233,38 @@
         "title": "StatmechCoreBlock",
         "type": "object"
       },
+      "StatmechCurvatureWitness": {
+        "description": "One linked calculation that stores a frequency result or a Hessian.\n\nA stored-result presence fact about a calculation this record links under\n``role``. It does not claim the curvature is at the pinned geometry, is\nusable, or is eligible for any task; ``POST /scientific/statmech/select``\nis where that is qualified. Nothing here ranks or picks a witness.",
+        "properties": {
+          "calculation_ref": {
+            "title": "Calculation Ref",
+            "type": "string"
+          },
+          "calculation_type": {
+            "$ref": "#/components/schemas/CalculationType"
+          },
+          "has_frequency_result": {
+            "title": "Has Frequency Result",
+            "type": "boolean"
+          },
+          "has_hessian": {
+            "title": "Has Hessian",
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/StatmechCalculationRole"
+          }
+        },
+        "required": [
+          "calculation_ref",
+          "role",
+          "calculation_type",
+          "has_frequency_result",
+          "has_hessian"
+        ],
+        "title": "StatmechCurvatureWitness",
+        "type": "object"
+      },
       "StatmechElectronicLevelRead": {
         "description": "Read schema for one statmech electronic level.",
         "properties": {
@@ -50344,8 +50376,15 @@
         "type": "object"
       },
       "StatmechFrequenciesSummary": {
-        "description": "Where to fetch the underlying frequency data for this statmech.\n\n``source_freq_calculation_refs`` lists the public refs of every\nfreq calculation linked through ``statmech_source_calculation``.\n``frequency_scale_factor_value`` is the scalar applied on top of\nthose raw frequencies (mirrors the core block's field for\ncallers consuming only this section). Per-mode arrays remain\navailable behind\n``GET /scientific/calculations/{calculation_ref}?include=freq_modes``.",
+        "description": "Where to fetch the underlying frequency data for this statmech.\n\n``source_freq_calculation_refs`` lists the public refs of every\nfreq calculation linked through ``statmech_source_calculation``.\n``curvature_witnesses`` additionally lists every (link role, calculation)\npair whose calculation stores a frequency result or a Hessian, whatever\nthe role or job type (opt and composite jobs included). It is separate\nfrom ``source_freq_calculation_refs``, which keeps its link-role meaning.\n``frequency_scale_factor_value`` is the scalar applied on top of\nthose raw frequencies (mirrors the core block's field for\ncallers consuming only this section). Per-mode arrays remain\navailable behind\n``GET /scientific/calculations/{calculation_ref}?include=freq_modes``.",
         "properties": {
+          "curvature_witnesses": {
+            "items": {
+              "$ref": "#/components/schemas/StatmechCurvatureWitness"
+            },
+            "title": "Curvature Witnesses",
+            "type": "array"
+          },
           "frequency_scale_factor_value": {
             "anyOf": [
               {

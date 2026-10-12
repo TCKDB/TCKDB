@@ -22,6 +22,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.errors import not_found
 from app.db.models.calculation import (
     Calculation,
+    CalculationFreqResult,
+    CalculationHessian,
     CalculationInputGeometry,
     CalculationOutputGeometry,
 )
@@ -63,6 +65,7 @@ from app.schemas.reads.scientific_statmech import (
     ScientificStatmechRecord,
     StatmechConformerContextItem,
     StatmechCoreBlock,
+    StatmechCurvatureWitness,
     StatmechElectronicLevelSummary,
     StatmechEvidenceSummary,
     StatmechFrequenciesSummary,
@@ -1113,6 +1116,7 @@ def _build_frequencies_summary(
     return StatmechFrequenciesSummary(
         source_freq_calculation_refs=refs,
         source_freq_calculation_ids=ids,
+        curvature_witnesses=_curvature_witnesses(session, source_rows),
         frequency_scale_factor_value=fsf_value,
         note=(
             "Per-mode frequency arrays live on the source freq "
@@ -1120,6 +1124,52 @@ def _build_frequencies_summary(
             "/api/v1/scientific/calculations/{calculation_ref}?include=freq_modes."
         ),
     )
+
+
+def _curvature_witnesses(
+    session: Session, source_rows: list[StatmechSourceCalculation]
+) -> list[StatmechCurvatureWitness]:
+    """Linked calculations that store a frequency result or a Hessian.
+
+    One bounded query over the record's own source calculation ids; a
+    calculation the record does not link is never consulted. The same
+    definition of "carries curvature" the selection inventory uses. A
+    presence fact only: no witness is ranked, picked or qualified.
+    """
+    if not source_rows:
+        return []
+    role_order = {role: i for i, role in enumerate(StatmechCalculationRole)}
+    calc_ids = {r.calculation_id for r in source_rows}
+    rows = {
+        row.id: row
+        for row in session.execute(
+            select(
+                Calculation.id,
+                Calculation.public_ref,
+                Calculation.type,
+                CalculationFreqResult.calculation_id.label("freq_id"),
+                CalculationHessian.calculation_id.label("hessian_id"),
+            )
+            .outerjoin(CalculationFreqResult, CalculationFreqResult.calculation_id == Calculation.id)
+            .outerjoin(CalculationHessian, CalculationHessian.calculation_id == Calculation.id)
+            .where(Calculation.id.in_(calc_ids))
+        ).all()
+    }
+    witnesses: list[StatmechCurvatureWitness] = []
+    for link in sorted(source_rows, key=lambda r: (role_order[r.role], r.calculation_id)):
+        row = rows.get(link.calculation_id)
+        if row is None or (row.freq_id is None and row.hessian_id is None):
+            continue
+        witnesses.append(
+            StatmechCurvatureWitness(
+                calculation_ref=row.public_ref,
+                role=link.role,
+                calculation_type=row.type,
+                has_frequency_result=row.freq_id is not None,
+                has_hessian=row.hessian_id is not None,
+            )
+        )
+    return witnesses
 
 
 # ---------------------------------------------------------------------------

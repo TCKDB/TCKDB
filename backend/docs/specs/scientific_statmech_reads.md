@@ -80,6 +80,22 @@ calculation refs plus the scaling factor; the full per-mode arrays
 remain available via
 `GET /scientific/calculations/{ref}?include=results`.
 
+`frequencies.source_freq_calculation_refs` lists the calculations linked under
+the `freq` role, and keeps that meaning (as do `available_sections.has_frequencies`
+and `evidence_summary.has_freq_calculation`: link-presence facts, not eligibility).
+Beside it, `frequencies.curvature_witnesses` lists every (link role, calculation)
+pair whose calculation stores a `calc_freq_result` or a `calc_hessian` row, whatever
+the role or job type, so curvature stored on an optimisation or composite job is
+visible. Each entry is `{calculation_ref, role, calculation_type,
+has_frequency_result, has_hessian}`, ordered by role declaration order then
+calculation id. It is a stored-result presence fact only: it does not say the
+curvature is at the pinned geometry, usable, or eligible for any task (that is
+qualified by `POST /scientific/statmech/select`), and no witness is ranked or
+picked. Only calculations the record itself links are consulted; a calculation of
+the same owner that the record does not link is never borrowed. Like the existing
+source-calculation block and pointer, it lists linked calculations without
+review-status filtering; the calculation read does not hide calculations either.
+
 `statmech` also does **not** link to a conformer directly. The
 linkage is at the `species_entry` level: the `include=conformers`
 token surfaces every `conformer_group` belonging to the same
@@ -102,7 +118,9 @@ include=electronic_levels    — statmech_electronic_level rows (ordered
                                low-lying (energy_cm1, degeneracy) pairs
                                driving q_elec; DR-0033)
 include=frequencies          — pointer block listing source freq
-                               calc refs + resolved scale factor
+                               calc refs, curvature witnesses (any
+                               linked calc with a freq result or
+                               Hessian) + resolved scale factor
 include=conformers           — list of conformer_group refs reachable
                                via the statmech's species_entry
                                (context hint — see §3)
