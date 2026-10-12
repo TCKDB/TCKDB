@@ -719,3 +719,53 @@ def simple_selection_sort_key(
         return (-ts, -record_id)
     rank = REVIEW_RANK[review_status_by_id[record_id]]
     return (rank, -ts, -record_id)
+
+
+class OrderKeyEcho(BaseModel):
+    """One key of the order a read actually applied, with its direction."""
+
+    key: Literal["review_rank", "created_at", "id"]
+    direction: Literal["asc", "desc"]
+
+
+# The orders ``simple_selection_sort_key`` produces, written once as data so
+# the echo cannot be restated by hand. ``test_echoed_order_agrees_with_the_real_sort_key``
+# sorts by both and requires the same sequence, so the two cannot drift.
+_REVIEW_FIRST_ORDER: tuple[tuple[str, str], ...] = (
+    ("review_rank", "asc"),
+    ("created_at", "desc"),
+    ("id", "desc"),
+)
+_RECENCY_ONLY_ORDER: tuple[tuple[str, str], ...] = (
+    ("created_at", "desc"),
+    ("id", "desc"),
+)
+
+
+def effective_order_echo(
+    *, collapse_first: bool, policy: SelectionPolicy | None
+) -> list[OrderKeyEcho]:
+    """Keys and directions the review/recency-only reads actually sort by.
+
+    ``collapse=all`` (and broad search, which passes ``collapse_first=False``)
+    always lists candidates review-rank first; ``selection_policy`` only
+    reorders when a single record is being chosen, and only ``latest`` drops
+    the review rank.
+    """
+    recency_only = collapse_first and policy is SelectionPolicy.latest
+    table = _RECENCY_ONLY_ORDER if recency_only else _REVIEW_FIRST_ORDER
+    return [OrderKeyEcho(key=k, direction=d) for k, d in table]  # type: ignore[arg-type]
+
+
+class ReviewVisibilityEcho(BaseModel):
+    """Review statuses a read actually showed and excluded.
+
+    Computed from the same visibility set the read filtered with, so it
+    reports what was *effective* (the read profile's floor can override a
+    requested ``include_rejected``), whereas ``request.filter`` keeps what the
+    caller *asked for*.
+    """
+
+    visible_statuses: list[str]
+    excluded_statuses: list[str]
+    profile_floor_applied: bool

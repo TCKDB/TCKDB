@@ -37943,6 +37943,34 @@
         "title": "OptResultPayload",
         "type": "object"
       },
+      "OrderKeyEcho": {
+        "description": "One key of the order a read actually applied, with its direction.",
+        "properties": {
+          "direction": {
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "key": {
+            "enum": [
+              "review_rank",
+              "created_at",
+              "id"
+            ],
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "direction"
+        ],
+        "title": "OrderKeyEcho",
+        "type": "object"
+      },
       "Outcome": {
         "description": "What a selection found. A negative scientific outcome is a valid answer (HTTP 200), not an error.",
         "enum": [
@@ -42345,6 +42373,36 @@
           }
         },
         "title": "ReviewStatusSummary",
+        "type": "object"
+      },
+      "ReviewVisibilityEcho": {
+        "description": "Review statuses a read actually showed and excluded.\n\nComputed from the same visibility set the read filtered with, so it\nreports what was *effective* (the read profile's floor can override a\nrequested ``include_rejected``), whereas ``request.filter`` keeps what the\ncaller *asked for*.",
+        "properties": {
+          "excluded_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded Statuses",
+            "type": "array"
+          },
+          "profile_floor_applied": {
+            "title": "Profile Floor Applied",
+            "type": "boolean"
+          },
+          "visible_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Visible Statuses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "visible_statuses",
+          "excluded_statuses",
+          "profile_floor_applied"
+        ],
+        "title": "ReviewVisibilityEcho",
         "type": "object"
       },
       "RightsAttestationActor": {
@@ -66845,6 +66903,13 @@
               }
             ]
           },
+          "effective_order": {
+            "items": {
+              "$ref": "#/components/schemas/OrderKeyEcho"
+            },
+            "title": "Effective Order",
+            "type": "array"
+          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -66876,6 +66941,16 @@
             ],
             "title": "Profile Release Ref"
           },
+          "review_visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewVisibilityEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "selection_policy": {
             "anyOf": [
               {
@@ -66885,6 +66960,17 @@
                 "type": "null"
               }
             ]
+          },
+          "selection_policy_applied": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selection Policy Applied"
           },
           "sort": {
             "title": "Sort",

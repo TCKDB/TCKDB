@@ -30,6 +30,7 @@ from app.schemas.reads.scientific_common import (
     Pagination,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ReviewVisibilityEcho,
     TemperatureCoverage,
     default_visible_statuses,
     status_at_or_above,
@@ -410,6 +411,21 @@ def visible_statuses(
     for threshold in thresholds:
         base = base & status_at_or_above(threshold)
     return base
+
+
+def review_visibility_echo(
+    visible: set[RecordReviewStatus],
+) -> ReviewVisibilityEcho:
+    """Report an *effective* visibility set from :func:`visible_statuses`.
+
+    Takes the set the read already computed and filtered with, so the echo is
+    derived from it and never restated by hand.
+    """
+    return ReviewVisibilityEcho(
+        visible_statuses=sorted(s.value for s in visible),
+        excluded_statuses=sorted(s.value for s in RecordReviewStatus if s not in visible),
+        profile_floor_applied=current_read_profile().review_floor is not None,
+    )
 
 
 def fetch_review_badges(

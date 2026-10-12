@@ -188,7 +188,7 @@ inputs, not scientific truth, provenance or completeness of the captured populat
 
 | Surface | Today | Changes in |
 | --- | --- | --- |
-| statmech search, species-entry statmech, detail, nested lists | administrative browse; unchanged orders | stage 6: honest effective-sort and exclusion echo, supersession notices on the species read, TS-entry filter |
+| statmech search, species-entry statmech, detail, nested lists | administrative browse; unchanged orders | stage 6: honest effective-order and exclusion echo and supersession notices on the species read (PR 6.1, done); TS-entry filter (6.2) |
 | conformer filters on statmech search | owning-entry context | unchanged; exact membership is the declared-member filter of the new operation |
 | frequency pointer | `freq` role links only | stage 6: qualified role witnesses added; the pointer is preserved |
 | trust badge | species-owner rubric | stage 6 (separate PR): TS-owned records no longer penalised |

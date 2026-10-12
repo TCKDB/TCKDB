@@ -34,9 +34,11 @@ from app.schemas.reads._field_bounds import (
 )
 from app.schemas.reads.scientific_common import (
     CollapseMode,
+    OrderKeyEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ReviewVisibilityEcho,
     SelectionPolicy,
 )
 from app.schemas.reads.scientific_statmech import (
@@ -115,6 +117,15 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
     collapse: CollapseMode | None = None
     selection_policy: SelectionPolicy | None = None
+    #: The keys and directions that actually ordered the returned records.
+    #: ``sort`` stays the candidate-list (``collapse=all``) order string.
+    effective_order: list[OrderKeyEcho] = Field(default_factory=list)
+    #: ``true`` only when ``collapse=first`` (the policy chose the record);
+    #: ``false`` on ``collapse=all`` (the policy is echoed but orders nothing);
+    #: ``null`` on broad search, which has no policy.
+    selection_policy_applied: bool | None = None
+    #: Review statuses this read showed and excluded, as computed.
+    review_visibility: ReviewVisibilityEcho | None = None
 
 
 class ScientificStatmechSearchResponse(BaseModel):

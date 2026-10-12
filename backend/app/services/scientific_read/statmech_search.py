@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
+    RecordReviewStatus,
     StatmechCalculationRole,
     SubmissionRecordType,
 )
@@ -51,6 +52,7 @@ from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
+    effective_order_echo,
 )
 from app.schemas.reads.scientific_statmech import (
     ScientificStatmechRecord,
@@ -65,6 +67,7 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
+    review_visibility_echo,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -130,19 +133,19 @@ def search_statmech(
         session, Species, request.species_ref, "species"
     )
     if short_circuit:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     species_entry_id, short_circuit = _resolve_filter_ref(
         session, SpeciesEntry, request.species_entry_ref, "species_entry"
     )
     if short_circuit:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     statmech_id, short_circuit = _resolve_filter_ref(
         session, Statmech, request.statmech_ref, "statmech"
     )
     if short_circuit:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     conformer_group_id, short_circuit = _resolve_filter_ref(
         session,
@@ -151,7 +154,7 @@ def search_statmech(
         "conformer_group",
     )
     if short_circuit:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     conformer_observation_id, short_circuit = _resolve_filter_ref(
         session,
@@ -160,7 +163,7 @@ def search_statmech(
         "conformer_observation",
     )
     if short_circuit:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     # --- candidate query ----------------------------------------------------
     stmt = select(Statmech.id, Statmech.created_at)
@@ -180,21 +183,17 @@ def search_statmech(
     candidate_ids = [row.id for row in rows]
     created_at_by_id = {row.id: row.created_at for row in rows}
     if not candidate_ids:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     badges = fetch_review_badges(
         session,
         record_type=SubmissionRecordType.statmech,
         record_ids=candidate_ids,
     )
-    visible = visible_statuses(
-        min_review_status=request.min_review_status,
-        include_rejected=request.include_rejected,
-        include_deprecated=request.include_deprecated,
-    )
+    visible = _visible(request)
     visible_ids = [cid for cid in candidate_ids if badges[cid].status in visible]
     if not visible_ids:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     summary = review_summary(badges[cid] for cid in visible_ids)
 
@@ -210,11 +209,7 @@ def search_statmech(
     records = _materialize_records(session, page_ids, badges, includes)
 
     return ScientificStatmechSearchResponse(
-        request=RequestEcho(
-            filter=_request_filter_echo(request),
-            sort=_DEFAULT_SORT_ECHO,
-            include=sorted(includes),
-        ),
+        request=_request_echo(request, includes, visible),
         review_summary=summary,
         records=records,
         pagination=build_pagination(
@@ -465,18 +460,40 @@ def _empty_response(
     includes: set[str],
     offset: int,
     limit: int,
+    visible: set[RecordReviewStatus],
 ) -> ScientificStatmechSearchResponse:
     return ScientificStatmechSearchResponse(
-        request=RequestEcho(
-            filter=_request_filter_echo(request),
-            sort=_DEFAULT_SORT_ECHO,
-            include=sorted(includes),
-        ),
+        request=_request_echo(request, includes, visible),
         review_summary=review_summary([]),
         records=[],
         pagination=build_pagination(
             offset=offset, limit=limit, returned=0, total=0
         ),
+    )
+
+
+def _visible(request: StatmechSearchRequest) -> set[RecordReviewStatus]:
+    return visible_statuses(
+        min_review_status=request.min_review_status,
+        include_rejected=request.include_rejected,
+        include_deprecated=request.include_deprecated,
+    )
+
+
+def _request_echo(
+    request: StatmechSearchRequest,
+    includes: set[str],
+    visible: set[RecordReviewStatus],
+) -> RequestEcho:
+    # ``filter`` keeps what was *requested*; ``review_visibility`` is what was
+    # effective (a read-profile floor can override ``include_rejected``).
+    # Search has no selection policy, so ``selection_policy_applied`` stays null.
+    return RequestEcho(
+        filter=_request_filter_echo(request),
+        sort=_DEFAULT_SORT_ECHO,
+        include=sorted(includes),
+        effective_order=effective_order_echo(collapse_first=False, policy=None),
+        review_visibility=review_visibility_echo(visible),
     )
 
 
