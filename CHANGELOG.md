@@ -22,6 +22,18 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curated statmech reads no longer name calculations the curated profile hides (2026-10-12)
+
+**Narrowing under `profile=curated` only.** Migration: none. New environment variable: none. No package version changes; no
+schema change (OpenAPI golden unchanged).
+
+- Under `?profile=curated`, `source_calculations` and `frequencies.source_freq_calculation_refs` omit linked calculations
+  below `approved`, the ones `GET /scientific/calculations/{ref}` already answers 404 for. Before, they listed those refs with
+  their roles, types and review status. Applies to statmech detail, statmech search and the species-entry statmech read.
+- Exploratory (the default) output is unchanged.
+- Deliberately not filtered: record-level facts (`levels`, `evidence_summary` counts, `available_sections` flags, trust), which
+  describe the approved record's own provenance. Release, archive and export copy raw provenance tables and are unchanged.
+
 ## Statmech frequencies block lists curvature witnesses (2026-10-12)
 
 **Additive response field.** Migration: none. New environment variable: none. No package version changes

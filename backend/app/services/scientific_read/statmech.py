@@ -104,6 +104,7 @@ from app.services.scientific_read.handles import resolve_statmech_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
@@ -394,9 +395,15 @@ def build_statmech_record(
         review=badge,
     )
 
+    # The two blocks that *name* a linked calculation (the source-calculations list and the
+    # frequency pointer) only name calculations the active profile lets the caller address.
+    # Record-level facts above (levels, evidence counts, availability flags, trust) describe the
+    # statmech's own provenance and deliberately do not vary by profile.
+    profile_visible_rows = _rows_visible_under_profile(session, source_rows)
+
     source_block: list[StatmechSourceCalculationSummary] | None = None
     if "source_calculations" in includes:
-        source_block = _build_source_calculations(session, source_rows)
+        source_block = _build_source_calculations(session, profile_visible_rows)
 
     torsions_block: list[StatmechTorsionSummary] | None = None
     if "torsions" in includes:
@@ -409,7 +416,7 @@ def build_statmech_record(
     frequencies_block: StatmechFrequenciesSummary | None = None
     if "frequencies" in includes:
         frequencies_block = _build_frequencies_summary(
-            session, source_rows, fsf_value=fsf_value
+            session, profile_visible_rows, fsf_value=fsf_value
         )
 
     conformers_block: list[StatmechConformerContextItem] | None = None
@@ -465,6 +472,26 @@ def build_statmech_trust_fragment(
 # ---------------------------------------------------------------------------
 # Loaders
 # ---------------------------------------------------------------------------
+
+
+def _rows_visible_under_profile(
+    session: Session, source_rows: list[StatmechSourceCalculation]
+) -> list[StatmechSourceCalculation]:
+    """Drop links to calculations the active read profile hides.
+
+    Mirrors the floor ``GET /calculations/{ref}`` applies, so a statmech read never names a
+    calculation that route answers 404 for. Without a review floor (exploratory, or outside a
+    scientific request) the input list is returned as is, so that output is unchanged.
+    """
+    if not source_rows or current_read_profile().review_floor is None:
+        return source_rows
+    visible = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
+    badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids={r.calculation_id for r in source_rows},
+    )
+    return [r for r in source_rows if badges[r.calculation_id].status in visible]
 
 
 def _load_source_rows(
