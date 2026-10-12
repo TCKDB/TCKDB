@@ -976,11 +976,26 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "geometry. Neither key wins; the deposit is refused. Raised by "
                 "the request schemas of /uploads/computed-reaction and "
                 "/uploads/networks/pdep, the only two where a calculation "
-                "can state both keys. context carries the calculation key, "
+                "can state both keys, for a species' calculations and for a "
+                "conformer's own primary calculation (which is filed under its "
+                "conformer and ran on its geometry, so a stated key must say "
+                "so). context carries the calculation key, "
                 "both keys and geometry_conformer_key, the conformer the "
                 "geometry actually belongs to. A geometry_key that names no "
                 "conformer's geometry is not this case "
                 "(geometry_key_unresolved)."
+            )),
+    ApiCode("calculation_input_geometry_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "A freq or sp states the geometry it ran on (its geometry_key, "
+                "or on a computed-species bundle the geometry of its conformer) "
+                "and declares explicit input_geometries that do not include "
+                "it. Compared as the same structure by the rule energies are "
+                "grouped with (a moved copy of an atom, or a rigidly moved "
+                "polyatomic structure, is the same). An opt is exempt: its input is a starting guess. "
+                "Raised by the workflows, where the geometry rows are known."
             )),
     ApiCode("calculation_geometry_composition_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_geometry_composition.py",
@@ -2725,6 +2740,25 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "(app.importers.thermoml.validate.validate_bytes) and was "
                 "never parsed. detail carries the validator's own "
                 "messages."
+            )),
+    ApiCode("transition_state_calculation_conformer_key", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "A calculation of a transition state states a conformer_key. A "
+                "transition state has no conformers, so the key anchored nothing "
+                "and used to be dropped; it is refused instead. Raised by the "
+                "request schemas of /uploads/computed-reaction and "
+                "/uploads/networks/pdep."
+            )),
+    ApiCode("transition_state_calculation_species_geometry", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "A calculation of a transition state has a geometry_key naming a "
+                "species conformer's geometry. A saddle-point job cannot have run "
+                "on a species minimum. Raised by the request schemas of "
+                "/uploads/computed-reaction and /uploads/networks/pdep."
             )),
     ApiCode("transition_state_charge_mismatch", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py",

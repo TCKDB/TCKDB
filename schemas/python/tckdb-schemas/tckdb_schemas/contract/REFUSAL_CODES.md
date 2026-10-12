@@ -208,7 +208,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py`.
 - The body's `context` names the things involved.
-- Message: "calculations['{calculation_key}']: conformer_key='{conformer_key}' and geometry_key='{geometry_key}' describe different conformers (geometry '{geometry_key}' belongs to conformer '{geometry_conformer_key}'). A calculation is evidence for one conformer and ran on that conformer's geometry, so the two keys must name the same conformer; neither overrides the other."
+- Message: not found by the static search.
 - Note: A species-side calculation states a conformer_key and a geometry_key that belong to different conformers: it says it is evidence for one conformer and that it ran on another's geometry.
 
 <a id="c-calculation-geometry-isotope-mismatch"></a>
@@ -219,6 +219,15 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: A calculation geometry's isotope counts differ from its subject's (species entry, or a transition state's reactants).
+
+<a id="c-calculation-input-geometry-mismatch"></a>
+
+#### `calculation_input_geometry_mismatch`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/calculation_resolution.py`.
+- The body's `context` names the things involved.
+- Message: '{context}: input_geometries does not include the geometry this calculation states it ran on ({stated_geometry_label}). A freq or sp runs on one structure, so the stated geometry must be one of its input_geometries; neither overrides the other.'
+- Note: A freq or sp states the geometry it ran on (its geometry_key, or on a computed-species bundle the geometry of its conformer) and declares explicit input_geometries that do not include it.
 
 <a id="c-calculation-key-undeclared"></a>
 
@@ -1434,6 +1443,24 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/api/routes/uploads.py`.
 - Message: not found by the static search.
 - Note: POST /uploads/thermoml (Phase C-E6).
+
+<a id="c-transition-state-calculation-conformer-key"></a>
+
+#### `transition_state_calculation_conformer_key`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py`.
+- The body's `context` names the things involved.
+- Message: "calculations['{calc.key}'].conformer_key='{calc.conformer_key}': a transition state has no conformers, so a calculation of it cannot state a conformer_key. Remove it."
+- Note: A calculation of a transition state states a conformer_key.
+
+<a id="c-transition-state-calculation-species-geometry"></a>
+
+#### `transition_state_calculation_species_geometry`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py`.
+- The body's `context` names the things involved.
+- Message: "calculations['{calc.key}'].geometry_key='{calc.geometry_key}' names a species conformer's geometry. A transition-state calculation ran on the saddle point, not on a species minimum."
+- Note: A calculation of a transition state has a geometry_key naming a species conformer's geometry.
 
 <a id="c-transition-state-charge-mismatch"></a>
 

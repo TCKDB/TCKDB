@@ -22,18 +22,23 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
-## A calculation's two conformer keys must agree (2026-10-12)
+## A geometry and a conformer may not disagree (2026-10-12)
 
 **Narrowing: payloads previously accepted are now refused.** Migration: none. New environment variable: none.
 `tckdb-schemas` 0.121.0, `tckdb-client` 0.146.0. Closes #635 (items 1, 2 and 4 were already done in #756).
 
-- On `/uploads/computed-reaction` and `/uploads/networks/pdep`, a species-side calculation that stated a `conformer_key` for one
-  conformer and a `geometry_key` belonging to another conformer's geometry was accepted, and the anchor silently followed
-  `conformer_key`. It is now a 422 `calculation_geometry_conformer_mismatch` naming both keys and the conformer the geometry
-  belongs to. A geometry and a conformer must never disagree, and neither key wins. These are the only two routes where a
-  calculation can state both keys.
-- Payloads whose keys agree, or that state only one, anchor exactly as before. A `geometry_key` that belongs to no conformer is
-  still refused by `geometry_key_unresolved`.
+Four new 422 codes, on `/uploads/computed-reaction` and `/uploads/networks/pdep` unless noted:
+
+- `calculation_geometry_conformer_mismatch`: a species calculation whose `conformer_key` and `geometry_key` belong to different
+  conformers, and a conformer's own (primary) calculation that states a `conformer_key` or `geometry_key` other than its own
+  conformer's. Both used to be accepted; the first anchored to `conformer_key`, the second stored the output on another
+  conformer's geometry row or ignored the key.
+- `transition_state_calculation_conformer_key`: a `conformer_key` on a transition state's calculation (it was silently dropped).
+- `transition_state_calculation_species_geometry`: a transition-state calculation whose `geometry_key` names a species conformer's geometry.
+- `calculation_input_geometry_mismatch` (also `/uploads/computed-species`): a `freq` or `sp` whose explicit `input_geometries` omit the
+  geometry it states (`geometry_key`, or its conformer's geometry in a computed-species bundle). An `opt` is exempt.
+
+Consistent payloads, a lone key, and a `geometry_key` naming no conformer's geometry (still `geometry_key_unresolved`) are unchanged.
 
 ## Statmech selection endpoint, client method and MCP tool (2026-10-11)
 

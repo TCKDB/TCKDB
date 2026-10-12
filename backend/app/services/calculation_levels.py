@@ -687,6 +687,24 @@ def _merge_rigidly_equal_geometries(geometries: Sequence[Geometry]) -> dict[int,
     return {geometry.id: find(geometry.id) for geometry in geometries}
 
 
+def geometries_are_one_structure(first: Geometry, second: Geometry) -> bool:
+    """Whether two stored geometries are the same structure, by the rule energies are grouped with.
+
+    The same row; or one atom of the same nuclide (position is no part of a
+    single atom's structure, #623); or the same polyatomic structure moved
+    rigidly with atoms in any order (#667, #679). One definition of "the same
+    geometry" for the repository, so a caller does not invent a second.
+    """
+    if first.id == second.id:
+        return True
+    if first.natoms != second.natoms:
+        return False
+    if first.natoms == 1:
+        return _structure_key(first) == _structure_key(second)
+    roots = _merge_rigidly_equal_geometries([first, second])
+    return roots[first.id] == roots[second.id]
+
+
 def _energies_by_structure(
     energies: Sequence[Calculation],
 ) -> dict[tuple[str | int | None, ...], list[Calculation]]:

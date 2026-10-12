@@ -2,20 +2,36 @@
 
 ## 0.121.0 - 2026-10-12
 
-A calculation's `conformer_key` and `geometry_key` must now name the same conformer (#635). One new refusal code,
-`calculation_geometry_conformer_mismatch`.
+A geometry and a conformer may no longer disagree anywhere a calculation can state both (#635). Four new refusal codes:
+`calculation_geometry_conformer_mismatch`, `transition_state_calculation_conformer_key`,
+`transition_state_calculation_species_geometry` and `calculation_input_geometry_mismatch`.
 
-- Narrowing: payloads previously accepted are now refused. On the species of `/uploads/computed-reaction` and
-  `/uploads/networks/pdep`, a calculation that states `conformer_key` for one conformer and a `geometry_key` that belongs to
-  another conformer's geometry used to be accepted, anchored to the `conformer_key`'s conformer, and trusted by the rules that read
-  the anchor (the SCF stability same-conformer rule among them). It is now refused with 422; neither key overrides the other.
-  `context` is `{field, calculation_key, conformer_key, geometry_key, geometry_conformer_key}`, local keys only. These are the
-  only two models where a calculation can state both keys.
-- Unchanged: a payload whose two keys agree anchors exactly as before; a calculation stating one key is not affected; a
-  `geometry_key` that names no conformer's geometry (a free-standing geometry) is still refused by `geometry_key_unresolved`,
-  not by this code.
-- New helpers in `tckdb_schemas.bundle_source_rules`: `assert_calculation_geometry_matches_conformer` and
-  `calculation_geometry_conformer_error`.
+Narrowing: payloads previously accepted are now refused. Exactly what is enforced:
+
+- `calculation_geometry_conformer_mismatch` (422), on `/uploads/computed-reaction` and `/uploads/networks/pdep`:
+  - a species `calculations[*]` entry whose `conformer_key` names one conformer and whose `geometry_key` names a geometry that
+    belongs to another conformer of that species (anchored to the `conformer_key`'s conformer until now);
+  - a conformer's own `calculation` (its primary) that states a `conformer_key` other than its conformer's `key`, or a
+    `geometry_key` other than its conformer's geometry key. Until now the geometry key stored the output geometry on the other
+    conformer's geometry row and the `conformer_key` was ignored. Stating the conformer's own keys, or neither, is unchanged.
+    A key that names nothing keeps its own code (`conformer_key_undeclared`, `geometry_key_unresolved`), which a primary's
+    `conformer_key` never had before.
+  - A geometry key that two conformers both declare is left to the existing "geometry keys must be globally unique" rule.
+  - `context` is `{field, calculation_key, conformer_key, geometry_key, geometry_conformer_key}`, local keys only.
+- `transition_state_calculation_conformer_key` (422), on the same two routes: a `conformer_key` on a transition state's
+  `calculation` or any of its `calculations` (a transition state has no conformers; the key was dropped).
+- `transition_state_calculation_species_geometry` (422), on the same two routes: a transition-state calculation whose `geometry_key`
+  names a species conformer's geometry (a saddle-point job cannot have run on a minimum). On `/uploads/computed-reaction` this
+  was accepted.
+- `calculation_input_geometry_mismatch` (422, raised by the workflow, where geometry rows are known): a `freq` or `sp` that states its
+  geometry (`geometry_key` on `/uploads/computed-reaction`, or the geometry of its conformer for a calculation inside a
+  `/uploads/computed-species` conformer) and also declares `input_geometries` that do not include that geometry, compared as
+  the same structure (the rule energies are grouped by: a moved copy of an atom or a rigidly moved polyatomic structure is the same). An `opt` is exempt (its input is a starting guess). Until now the explicit inputs silently won.
+- Unchanged: payloads whose keys agree, a lone `geometry_key` or `conformer_key`, a `geometry_key` naming no conformer's geometry
+  (still `geometry_key_unresolved`).
+- New helpers in `tckdb_schemas.bundle_source_rules`: `assert_calculation_geometry_matches_conformer`,
+  `assert_conformer_primaries_agree`, `assert_transition_state_calculations_unanchored`,
+  `conformer_key_by_unique_geometry_key` and `calculation_geometry_conformer_error`.
 
 ## 0.120.0 - 2026-10-11
 

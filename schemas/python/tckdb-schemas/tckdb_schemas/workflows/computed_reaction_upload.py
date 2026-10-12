@@ -22,6 +22,9 @@ from tckdb_schemas.bundle_source_rules import (
     W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
     W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
     assert_calculation_geometry_matches_conformer,
+    assert_conformer_primaries_agree,
+    assert_transition_state_calculations_unanchored,
+    conformer_key_by_unique_geometry_key,
     find_scf_source_cycle,
     owner_mismatch_error,
     scf_source_cycle_error,
@@ -911,8 +914,9 @@ class BundleSpeciesIn(SchemaBase):
         known from the payload alone, so the request schema is the only layer
         that checks it; the workflow can no longer be handed the contradiction.
         """
+        assert_conformer_primaries_agree(self.conformers)
         assert_calculation_geometry_matches_conformer(
-            self.calculations, {conf.geometry.key: conf.key for conf in self.conformers}
+            self.calculations, conformer_key_by_unique_geometry_key(self.conformers)
         )
         return self
 
@@ -1860,6 +1864,22 @@ class ComputedReactionUploadRequest(SchemaBase):
                     "reaction_family_source_note is required when reaction_family "
                     "is not a supported canonical family."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_transition_state_calculations_unanchored(self) -> Self:
+        """A transition state's jobs state no conformer and ran on no species minimum.
+
+        A ``conformer_key`` there anchored nothing and was silently dropped; a
+        ``geometry_key`` naming a species conformer's geometry puts a saddle-point
+        job on a minimum. Both are refused.
+        """
+        if self.transition_state is None:
+            return self
+        assert_transition_state_calculations_unanchored(
+            [self.transition_state.calculation, *self.transition_state.calculations],
+            {conf.geometry.key for sp in self.species for conf in sp.conformers},
+        )
         return self
 
     @model_validator(mode="after")

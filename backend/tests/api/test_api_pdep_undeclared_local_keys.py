@@ -267,55 +267,24 @@ def test_a_ts_calculation_naming_its_own_geometry_is_still_accepted(client) -> N
     assert response.status_code == 201, response.text
 
 
-def test_a_ts_calculation_may_still_name_an_already_resolved_geometry(client) -> None:
-    """Species geometries are all resolved before any TS is persisted.
+def test_a_ts_calculation_may_not_name_a_species_geometry(client) -> None:
+    """A TS calculation naming a species conformer's geometry is refused (#635).
 
-    The control for the ``ts_isomer_geom`` test: it proves the refusal
-    there is about resolution order, not a blanket ban on a TS
-    calculation citing a geometry it does not own.
-
-    ``etoo_geom`` is ethylperoxy and ``ts_elim`` is the C2H5O2 saddle
-    point, so the two agree on composition. That is deliberate and it is
-    what isolates *resolution* from the separate composition rule
-    exercised in the next test -- borrowing a geometry of the wrong
-    composition is refused, and this one is not being accepted because
-    the rule was skipped.
+    This used to be accepted when the composition agreed (``etoo_geom`` is
+    ethylperoxy and ``ts_elim`` the C2H5O2 saddle point), as the control that
+    isolated resolution order from the composition rule. The owner's rule is
+    stricter: a saddle-point job cannot have run on a species minimum, whatever
+    the composition. ``transition_state_calculation_species_geometry`` refuses
+    it at the request schema, before resolution or composition is reached.
     """
-    payload = _parallel_path_payload()
-    payload["transition_states"][0]["calculations"][1]["geometry_key"] = "etoo_geom"
-    response = _post(client, payload)
-    assert response.status_code == 201, response.text
-
-
-def test_resolving_a_geometry_key_does_not_bypass_the_composition_rule(
-    client,
-) -> None:
-    """The geometry resolver hands off; it does not launder.
-
-    `calculation_geometry_composition_mismatch` is the existing,
-    scientific guard against a calculation carrying a geometry made of
-    the wrong atoms -- and on `/uploads/computed-reaction` it is what
-    already caught a TS calculation borrowing a reactant's geometry
-    (`tests/services/test_calculation_geometry_composition.py::
-    test_a_ts_calculation_may_not_borrow_a_reactants_geometry_by_key`).
-
-    That guard sits *downstream* of the key lookup, which is exactly why
-    it could not defend the PDep 500 fixed above: a key that never
-    resolves never reaches it. Now that the key resolves or is refused by
-    code, this test pins the other half -- a geometry that resolves and
-    is still the wrong molecule is still refused, by the rule that owns
-    that question, and not silently accepted because a `KeyError` turned
-    into a return value.
-
-    `ethyl_geom` is C2H5; `ts_elim` is the C2H5O2 saddle point.
-    """
-    payload = _parallel_path_payload()
-    payload["transition_states"][0]["calculations"][1]["geometry_key"] = "ethyl_geom"
-    response = _post(client, payload)
-    assert (response.status_code, response.json().get("code")) == (
-        422,
-        "calculation_geometry_composition_mismatch",
-    ), response.text
+    for geometry_key in ("etoo_geom", "ethyl_geom"):
+        payload = _parallel_path_payload()
+        payload["transition_states"][0]["calculations"][1]["geometry_key"] = geometry_key
+        response = _post(client, payload)
+        assert (response.status_code, response.json().get("code")) == (
+            422,
+            "transition_state_calculation_species_geometry",
+        ), response.text
 
 
 def test_a_species_calculation_may_not_borrow_a_sibling_species_geometry(

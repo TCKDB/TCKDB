@@ -53,7 +53,12 @@ from app.schemas.reaction_family import find_canonical_reaction_family
 # Re-exported for backwards compatibility — ArtifactIn now lives in
 # app/schemas/fragments/artifact.py.
 __all__ = ("ArtifactIn",)
-from tckdb_schemas.bundle_source_rules import assert_calculation_geometry_matches_conformer
+from tckdb_schemas.bundle_source_rules import (
+    assert_calculation_geometry_matches_conformer,
+    assert_conformer_primaries_agree,
+    assert_transition_state_calculations_unanchored,
+    conformer_key_by_unique_geometry_key,
+)
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import CalculationType as PayloadCalculationType
 from tckdb_schemas.fragments.calculation import SCFStabilityBase
@@ -317,8 +322,9 @@ class NetworkSpeciesIn(SchemaBase):
         known from the payload alone, so the request schema is the only layer
         that checks it; the workflow can no longer be handed the contradiction.
         """
+        assert_conformer_primaries_agree(self.conformers)
         assert_calculation_geometry_matches_conformer(
-            self.calculations, {conf.geometry.key: conf.key for conf in self.conformers}
+            self.calculations, conformer_key_by_unique_geometry_key(self.conformers)
         )
         return self
 
@@ -1780,6 +1786,17 @@ class NetworkPDepUploadRequest(SchemaBase):
                     key=calc.geometry_key,
                     declared=geometry_keys,
                 )
+
+        # A transition state has no conformers and its jobs ran on the saddle
+        # point: refuse a conformer_key there (it anchored nothing and was
+        # dropped) and a geometry_key naming a species conformer's geometry.
+        species_geometry_keys = {
+            conf.geometry.key for sp in self.species for conf in sp.conformers
+        }
+        for ts in self.transition_states:
+            assert_transition_state_calculations_unanchored(
+                [ts.calculation, *ts.calculations], species_geometry_keys
+            )
 
         # ``scf_stability.source_calculation_key`` is a bundle feature of the
         # computed-species and computed-reaction routes. This route has no pass

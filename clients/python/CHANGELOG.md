@@ -2,8 +2,9 @@
 
 ## 0.146.0 - 2026-10-12
 
-`RejectionCode` gains `calculation_geometry_conformer_mismatch` (`tckdb-schemas` 0.121.0): a calculation whose `conformer_key` and
-`geometry_key` name different conformers is now refused. No method changed.
+`RejectionCode` gains `calculation_geometry_conformer_mismatch`, `calculation_input_geometry_mismatch`,
+`transition_state_calculation_conformer_key` and `transition_state_calculation_species_geometry` (`tckdb-schemas` 0.121.0): a
+calculation whose conformer and geometry keys, or geometry and explicit inputs, disagree is now refused. No method changed.
 
 ## 0.145.0 - 2026-10-11
 
