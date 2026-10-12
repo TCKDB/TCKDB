@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 146 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 307 | `backend/app/api/code_catalogue.py` |
-| **total** | **614** | |
+| Refusal codes a caller can receive | 311 | `backend/app/api/code_catalogue.py` |
+| **total** | **618** | |
 
 ## How a record is named
 
@@ -760,7 +760,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (247 codes)
+### HTTP 422 (251 codes)
 
 | Code | Names |
 | --- | --- |
@@ -780,8 +780,10 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bac_total_requires_components` | a relationship — read `context` |
 | `bundle_too_many_records` | a relationship — read `context` |
 | `calculation_geometry_composition_mismatch` | a relationship — read `context` |
+| `calculation_geometry_conformer_mismatch` | a relationship — read `context` |
 | `calculation_geometry_isotope_mismatch` | a relationship — read `context` |
 | `calculation_handle_conflict` | a relationship — read `context` |
+| `calculation_input_geometry_mismatch` | a relationship — read `context` |
 | `calculation_key_undeclared` | a thing |
 | `calculation_software_is_workflow_tool` | a thing |
 | `calculation_software_release_required` | a thing |
@@ -991,6 +993,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `thermoml_no_supported_content` | a relationship — read `context` |
 | `thermoml_schema_invalid` | a thing |
 | `too_many_element_symbols` | a relationship — read `context` |
+| `transition_state_calculation_conformer_key` | a relationship — read `context` |
+| `transition_state_calculation_species_geometry` | a relationship — read `context` |
 | `transition_state_charge_mismatch` | a relationship — read `context` |
 | `transition_state_composition_mismatch` | a relationship — read `context` |
 | `transition_state_irc_mapping_element_mismatch` | a relationship — read `context` |

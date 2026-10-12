@@ -304,6 +304,9 @@ def _persist_calculation(
         explicit_input_geometries=calc_in.input_geometries,
         fallback_geometry_id=resolved_geom_id,
         context=context,
+        stated_geometry_id=(
+            resolved_geom_id if calc_in.geometry_key is not None else None
+        ),
     )
     attach_calculation_output_geometries(
         session,

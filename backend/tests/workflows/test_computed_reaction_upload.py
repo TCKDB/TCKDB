@@ -3951,16 +3951,8 @@ def test_unanchorable_calculation_is_stored_and_reported(db_conn) -> None:
         assert "conformer_key" in reported[0].message
 
 
-def test_conformer_key_decides_the_anchor_when_both_keys_are_present(
-    db_conn,
-) -> None:
-    """``conformer_key`` is the anchor; ``geometry_key`` is only the fallback.
-
-    Both fields are supplied and they point at *different* conformers of the
-    same species, so the resulting anchor says unambiguously which field the
-    seam consulted. Without a disagreement the precedence is untested and a
-    reordering of the two branches would pass.
-    """
+def _two_conformer_payload_with_coarse(geometry_key: str) -> dict:
+    """CH3 with conformers a (``ch3-geom``) and b (``ch3-geom-b``), and a coarse opt in conformer b by key."""
     payload = _minimal_payload()
     ch3 = payload["species"][0]
     ch3["conformers"].append(
@@ -3984,12 +3976,42 @@ def test_conformer_key_decides_the_anchor_when_both_keys_are_present(
             "level_of_theory": _LOT_DFT,
             "opt_converged": True,
             "parameters_json": {"final_settings": {"optimization_stage": "coarse"}},
-            # Disagreeing on purpose: the geometry names conformer A, the
-            # conformer key names conformer B.
             "conformer_key": "ch3-conf-b",
-            "geometry_key": "ch3-geom",
+            "geometry_key": geometry_key,
         }
     )
+    return payload
+
+
+def test_conformer_and_geometry_keys_that_disagree_are_refused() -> None:
+    """Neither key decides: a geometry of conformer A beside a ``conformer_key`` of B is a 422.
+
+    This used to assert that ``conformer_key`` won. A deposit whose two keys
+    name different conformers is self-contradicting, so it is refused with
+    ``calculation_geometry_conformer_mismatch`` and never reaches the anchor
+    seam (#635).
+    """
+    payload = _two_conformer_payload_with_coarse("ch3-geom")
+    with pytest.raises(ValidationError) as excinfo:
+        ComputedReactionUploadRequest(**payload)
+    errors = [e["ctx"]["error"] for e in excinfo.value.errors() if "ctx" in e]
+    assert [e.code for e in errors] == ["calculation_geometry_conformer_mismatch"]
+    assert errors[0].context == {
+        "field": "calculations['ch3-coarse']",
+        "calculation_key": "ch3-coarse",
+        "conformer_key": "ch3-conf-b",
+        "geometry_key": "ch3-geom",
+        "geometry_conformer_key": next(
+            c["key"] for c in payload["species"][0]["conformers"] if c["geometry"]["key"] == "ch3-geom"
+        ),
+    }
+
+
+def test_agreeing_conformer_and_geometry_keys_anchor_to_that_conformer(
+    db_conn,
+) -> None:
+    """Both keys naming conformer B anchor the calculation to B's observation, not A's."""
+    payload = _two_conformer_payload_with_coarse("ch3-geom-b")
 
     with _isolated_session(db_conn) as session:
         session.add(AppUser(id=533, username="anchor_tester_3"))
@@ -4019,10 +4041,7 @@ def test_conformer_key_decides_the_anchor_when_both_keys_are_present(
         )
         conformer_a, conformer_b = observations
 
-        assert coarse.conformer_observation_id == conformer_b.id, (
-            "the geometry_key won over the conformer_key -- conformer_key is "
-            "the field that means 'which basin', and it must decide"
-        )
+        assert coarse.conformer_observation_id == conformer_b.id
         assert coarse.conformer_observation_id != conformer_a.id
 
 

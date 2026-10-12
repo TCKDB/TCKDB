@@ -100,8 +100,10 @@ class RejectionCode(str, Enum):
     BUNDLE_TOO_LARGE = "bundle_too_large"
     BUNDLE_TOO_MANY_RECORDS = "bundle_too_many_records"
     CALCULATION_GEOMETRY_COMPOSITION_MISMATCH = "calculation_geometry_composition_mismatch"
+    CALCULATION_GEOMETRY_CONFORMER_MISMATCH = "calculation_geometry_conformer_mismatch"
     CALCULATION_GEOMETRY_ISOTOPE_MISMATCH = "calculation_geometry_isotope_mismatch"
     CALCULATION_HANDLE_CONFLICT = "calculation_handle_conflict"
+    CALCULATION_INPUT_GEOMETRY_MISMATCH = "calculation_input_geometry_mismatch"
     CALCULATION_KEY_UNDECLARED = "calculation_key_undeclared"
     CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL = "calculation_software_is_workflow_tool"
     CALCULATION_SOFTWARE_RELEASE_REQUIRED = "calculation_software_release_required"
@@ -348,6 +350,8 @@ class RejectionCode(str, Enum):
     THERMOML_NO_SUPPORTED_CONTENT = "thermoml_no_supported_content"
     THERMOML_SCHEMA_INVALID = "thermoml_schema_invalid"
     TOO_MANY_ELEMENT_SYMBOLS = "too_many_element_symbols"
+    TRANSITION_STATE_CALCULATION_CONFORMER_KEY = "transition_state_calculation_conformer_key"
+    TRANSITION_STATE_CALCULATION_SPECIES_GEOMETRY = "transition_state_calculation_species_geometry"
     TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
     TRANSITION_STATE_COMPOSITION_MISMATCH = "transition_state_composition_mismatch"
     TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH = "transition_state_irc_mapping_element_mismatch"
@@ -411,8 +415,10 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.BAC_TOTAL_REQUIRES_COMPONENTS,
         RejectionCode.BUNDLE_TOO_MANY_RECORDS,
         RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH,
+        RejectionCode.CALCULATION_GEOMETRY_CONFORMER_MISMATCH,
         RejectionCode.CALCULATION_GEOMETRY_ISOTOPE_MISMATCH,
         RejectionCode.CALCULATION_HANDLE_CONFLICT,
+        RejectionCode.CALCULATION_INPUT_GEOMETRY_MISMATCH,
         RejectionCode.CALCULATION_KEY_UNDECLARED,
         RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL,
         RejectionCode.CALCULATION_SOFTWARE_RELEASE_REQUIRED,
@@ -622,6 +628,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.THERMOML_NO_SUPPORTED_CONTENT,
         RejectionCode.THERMOML_SCHEMA_INVALID,
         RejectionCode.TOO_MANY_ELEMENT_SYMBOLS,
+        RejectionCode.TRANSITION_STATE_CALCULATION_CONFORMER_KEY,
+        RejectionCode.TRANSITION_STATE_CALCULATION_SPECIES_GEOMETRY,
         RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH,
         RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH,
         RejectionCode.TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH,
@@ -710,8 +718,10 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.BUNDLE_TOO_LARGE: frozenset({413}),
     RejectionCode.BUNDLE_TOO_MANY_RECORDS: frozenset({422}),
     RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH: frozenset({422}),
+    RejectionCode.CALCULATION_GEOMETRY_CONFORMER_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_GEOMETRY_ISOTOPE_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_HANDLE_CONFLICT: frozenset({422}),
+    RejectionCode.CALCULATION_INPUT_GEOMETRY_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL: frozenset({422}),
     RejectionCode.CALCULATION_SOFTWARE_RELEASE_REQUIRED: frozenset({422}),
@@ -958,6 +968,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.THERMOML_NO_SUPPORTED_CONTENT: frozenset({422}),
     RejectionCode.THERMOML_SCHEMA_INVALID: frozenset({422}),
     RejectionCode.TOO_MANY_ELEMENT_SYMBOLS: frozenset({422}),
+    RejectionCode.TRANSITION_STATE_CALCULATION_CONFORMER_KEY: frozenset({422}),
+    RejectionCode.TRANSITION_STATE_CALCULATION_SPECIES_GEOMETRY: frozenset({422}),
     RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH: frozenset({422}),

@@ -468,6 +468,8 @@ def persist_computed_species_upload(
                 calc=child_calc,
                 explicit_input_geometries=additional_in.input_geometries,
                 fallback_geometry_id=geometry.id,
+                stated_geometry_id=geometry.id,
+                stated_geometry_label="the geometry of the conformer it belongs to",
                 context=(
                     f"calculation '{additional_in.key}' "
                     f"(type='{additional_in.type.value}')"

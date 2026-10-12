@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.121.0 - 2026-10-12
+
+A geometry and a conformer may no longer disagree anywhere a calculation can state both (#635). Four new refusal codes:
+`calculation_geometry_conformer_mismatch`, `transition_state_calculation_conformer_key`,
+`transition_state_calculation_species_geometry` and `calculation_input_geometry_mismatch`.
+
+Narrowing: payloads previously accepted are now refused. Exactly what is enforced:
+
+- `calculation_geometry_conformer_mismatch` (422), on `/uploads/computed-reaction` and `/uploads/networks/pdep`:
+  - a species `calculations[*]` entry whose `conformer_key` names one conformer and whose `geometry_key` names a geometry that
+    belongs to another conformer of that species (anchored to the `conformer_key`'s conformer until now);
+  - a conformer's own `calculation` (its primary) that states a `conformer_key` other than its conformer's `key`, or a
+    `geometry_key` other than its conformer's geometry key. Until now the geometry key stored the output geometry on the other
+    conformer's geometry row and the `conformer_key` was ignored. Stating the conformer's own keys, or neither, is unchanged.
+    A key that names nothing keeps its own code (`conformer_key_undeclared`, `geometry_key_unresolved`), which a primary's
+    `conformer_key` never had before.
+  - A geometry key that two conformers both declare is left to the existing "geometry keys must be globally unique" rule.
+  - `context` is `{field, calculation_key, conformer_key, geometry_key, geometry_conformer_key}`, local keys only.
+- `transition_state_calculation_conformer_key` (422), on the same two routes: a `conformer_key` on a transition state's
+  `calculation` or any of its `calculations` (a transition state has no conformers; the key was dropped).
+- `transition_state_calculation_species_geometry` (422), on the same two routes: a transition-state calculation whose `geometry_key`
+  names a species conformer's geometry (a saddle-point job cannot have run on a minimum). On `/uploads/computed-reaction` this
+  was accepted.
+- `calculation_input_geometry_mismatch` (422, raised by the workflow, where geometry rows are known): a `freq` or `sp` that states its
+  geometry (`geometry_key` on `/uploads/computed-reaction`; the geometry of its conformer for a calculation inside a
+  `/uploads/computed-species` conformer or an additional calculation of `/uploads/conformers`; the saddle point's geometry for an
+  additional calculation of `/uploads/transition-states`) and also declares `input_geometries` that do not include that geometry, compared as
+  the same structure (the rule energies are grouped by: a moved copy of an atom or a rigidly moved polyatomic structure is the same). An `opt` is exempt (its input is a starting guess). Until now the explicit inputs silently won.
+  The comparison forgives only the rounding of the coordinates (about 1.7e-6 Angstrom at 6 decimals) and a rigid move or atom
+  reordering of the same structure. Coordinates a program re-printed or symmetrised are a different structure and are refused:
+  send the conformer's own xyz as the sp/freq input geometry.
+- Unchanged: payloads whose keys agree, a lone `geometry_key` or `conformer_key`, a `geometry_key` naming no conformer's geometry
+  (still `geometry_key_unresolved`).
+- New helpers in `tckdb_schemas.bundle_source_rules`: `assert_calculation_geometry_matches_conformer`,
+  `assert_conformer_primaries_agree`, `assert_transition_state_calculations_unanchored`,
+  `conformer_key_by_unique_geometry_key` and `calculation_geometry_conformer_error`.
+
 ## 0.120.0 - 2026-10-11
 
 The producer contract lists the two read routes of statmech selection (`POST .../scientific/statmech/select` and

@@ -135,6 +135,7 @@ def persist_ts_calculations(
         geometry_id=geometry_id,
         transition_state_entry_id=transition_state_entry_id,
         created_by=created_by,
+        stated_geometry_label="the geometry of the transition state",
     )
 
     return primary_calc, additional_calcs

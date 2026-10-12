@@ -22,6 +22,26 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A geometry and a conformer may not disagree (2026-10-12)
+
+**Narrowing: payloads previously accepted are now refused.** Migration: none. New environment variable: none.
+`tckdb-schemas` 0.121.0, `tckdb-client` 0.146.0. Closes #635 (items 1, 2 and 4 were already done in #756).
+
+Four new 422 codes, on `/uploads/computed-reaction` and `/uploads/networks/pdep` unless noted:
+
+- `calculation_geometry_conformer_mismatch`: a species calculation whose `conformer_key` and `geometry_key` belong to different
+  conformers, and a conformer's own (primary) calculation that states a `conformer_key` or `geometry_key` other than its own
+  conformer's. Both used to be accepted; the first anchored to `conformer_key`, the second stored the output on another
+  conformer's geometry row or ignored the key.
+- `transition_state_calculation_conformer_key`: a `conformer_key` on a transition state's calculation (it was silently dropped).
+- `transition_state_calculation_species_geometry`: a transition-state calculation whose `geometry_key` names a species conformer's geometry.
+- `calculation_input_geometry_mismatch` (also `/uploads/computed-species`, `/uploads/conformers`, `/uploads/transition-states`): a `freq` or `sp`
+  whose explicit `input_geometries` omit the geometry it states (`geometry_key`, or its conformer's or saddle point's geometry). An `opt`
+  is exempt. Only coordinate rounding and a rigid move or reordering of the same structure are forgiven: send the conformer's own xyz as
+  the input geometry, not coordinates a program re-printed or symmetrised.
+
+Consistent payloads, a lone key, and a `geometry_key` naming no conformer's geometry (still `geometry_key_unresolved`) are unchanged.
+
 ## Statmech selection endpoint, client method and MCP tool (2026-10-11)
 
 **Chunk 5 of the statmech selection programme: the public surface.** Migration: none. New environment variable: none.
