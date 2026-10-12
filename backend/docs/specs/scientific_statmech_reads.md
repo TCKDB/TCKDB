@@ -108,8 +108,8 @@ statmech's own provenance and are computed from every link in every profile, so 
 Release, archive and export copy raw provenance tables and are unaffected. Exploratory output is unchanged.
 
 The same rule now applies to the transition-state-entry read's `include=statmech` (`statmech[].source_calculations`), the thermo
-provenance's statmech fallback (calculations taken from the linked statmech), and statmech `include=conformers`
-(`conformer_group_ref`); a thermo's own source calculations are a separate path, not changed.
+provenance's source calculations (the thermo's own and the statmech fallback), and statmech `include=conformers`
+(`conformer_group_ref`).
 
 `statmech` also does **not** link to a conformer directly. The
 linkage is at the `species_entry` level: the `include=conformers`

@@ -29,12 +29,11 @@ variable: none. No package version changes; no schema change (OpenAPI golden unc
 
 - `GET /scientific/transition-state-entries/{ref}?include=statmech`: `statmech[].source_calculations` omits calculations below `approved`.
 - `GET /scientific/species-entries/{ref}/thermo`: the provenance's statmech fallback (`freq_calculation_ref` / `sp_calculation_ref`, the
-  primary calculation and the conformer traced through it, when taken from the linked statmech) no longer names a hidden statmech source
-  calculation.
+  primary calculation and the conformer traced through it) no longer names a hidden source calculation, whether it is the thermo's own
+  source or comes from the linked statmech. Applies to the species thermo list and to thermo search (which reuses the same builder).
 - Statmech `include=conformers` omits conformer groups below `approved`.
 - Exploratory (the default) output is unchanged. Record-level facts (levels, evidence, availability flags such as `has_conformers`) are
   unchanged, as before.
-- Not covered: a thermo's own source calculations (`ThermoSourceCalculation`) are a separate path and are not changed here.
 
 ## Curated statmech reads no longer name calculations the curated profile hides (2026-10-12)
 

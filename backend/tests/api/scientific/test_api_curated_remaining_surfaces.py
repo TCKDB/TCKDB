@@ -21,10 +21,12 @@ from app.db.models.common import (
     StatmechCalculationRole,
     StatmechTreatmentKind,
     SubmissionRecordType,
+    ThermoCalculationRole,
 )
 from app.db.models.statmech import Statmech
 from tests.services.scientific_read._factories import (
     attach_statmech_source_calculation,
+    attach_thermo_source_calculation,
     make_calculation,
     make_chem_reaction,
     make_conformer_group,
@@ -168,6 +170,57 @@ def test_thermo_curated_record_level_levels_do_not_vary(client, db_session):
     assert curated["levels"] == exploratory["levels"]
     # Non-vacuous: the hidden freq calculation's level of theory is still reported as the record's frequency level.
     assert curated["levels"]["frequency"] is not None
+
+
+# --- (b2) thermo's OWN source calculations ----------------------------------------------------------------------
+
+
+def _own_sources_world(db_session):
+    entry = _entry(db_session, "THO")
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    hidden_sp = make_calculation(db_session, type=T.sp, species_entry_id=entry.id, lot_id=make_lot(db_session).id)
+    shown_freq = make_calculation(db_session, type=T.freq, species_entry_id=entry.id)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=hidden_sp, role=ThermoCalculationRole.sp)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=shown_freq, role=ThermoCalculationRole.freq)
+    _review(db_session, SubmissionRecordType.calculation, shown_freq)
+    _review(db_session, SubmissionRecordType.thermo, thermo)
+    return entry, hidden_sp, shown_freq
+
+
+def test_thermo_curated_does_not_name_its_own_hidden_source_calculation(client, db_session):
+    """Kills: filtering only the statmech fallback and not the thermo's own source rows."""
+    entry, hidden_sp, shown_freq = _own_sources_world(db_session)
+    assert client.get(f"{BASE}/calculations/{hidden_sp.public_ref}", params={"profile": "curated"}).status_code == 404
+    prov, rec = _provenance(client, entry, "curated")
+    assert prov["sp_calculation_ref"] is None
+    assert hidden_sp.public_ref not in str(rec)
+    # Non-vacuous: the approved freq source is still named.
+    assert prov["freq_calculation_ref"] == shown_freq.public_ref
+
+
+def test_thermo_own_sources_exploratory_unchanged_and_levels_do_not_vary(client, db_session):
+    """Kills: filtering regardless of profile, or feeding the filter into record-level levels/evidence."""
+    entry, hidden_sp, shown_freq = _own_sources_world(db_session)
+    prov, rec = _provenance(client, entry, "exploratory")
+    assert prov["sp_calculation_ref"] == hidden_sp.public_ref
+    default = client.get(f"{BASE}/species-entries/{entry.public_ref}/thermo").json()["records"][0]
+    assert default["provenance"] == prov
+    _, curated = _provenance(client, entry, "curated")
+    assert curated["levels"] == rec["levels"]
+    assert curated["levels"]["energy"] is not None  # the hidden sp's level still describes the record
+
+
+def test_thermo_search_surface_is_filtered_too(client, db_session):
+    """Kills: filtering only the species thermo list and not the search surface that reuses the builder."""
+    entry, hidden_sp, shown_freq = _own_sources_world(db_session)
+    # Curated search also needs the species and its entry to clear the floor.
+    _review(db_session, SubmissionRecordType.species_entry, entry)
+    _review(db_session, SubmissionRecordType.species, entry.species)
+    r = client.post(f"{BASE}/thermo/search?profile=curated", json={"inchi_key": entry.species.inchi_key})
+    assert r.status_code == 200, r.text
+    assert r.json()["records"], "the approved thermo must be returned"
+    assert hidden_sp.public_ref not in str(r.json()["records"])
+    assert shown_freq.public_ref in str(r.json()["records"])
 
 
 # --- (c) statmech include=conformers ----------------------------------------------------------------------------

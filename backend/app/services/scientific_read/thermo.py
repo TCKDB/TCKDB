@@ -462,13 +462,18 @@ def get_species_thermo(
         ).all():
             target_group_refs[group_id] = group_ref
 
-    # Under a review floor, a statmech source calculation the profile hides (404 on its own detail
-    # route) is not named by the provenance's statmech fallback. Evidence and levels are record-level
-    # facts and keep using every link. No-op (and no query) when there is no floor.
-    _, hidden_statmech_calc_ids = review_hidden_under_profile(
+    # Under a review floor, a source calculation the profile hides (404 on its own detail route) is
+    # not named by the provenance, whether it is the thermo's own source or comes from the statmech
+    # fallback. Evidence and levels are record-level facts and keep using every link. No-op (and no
+    # query) when there is no floor.
+    _, hidden_source_calc_ids = review_hidden_under_profile(
         session,
         record_type=SubmissionRecordType.calculation,
-        record_ids={sc.calculation_id for srcs in statmech_sources_by_id.values() for sc in srcs},
+        record_ids={
+            sc.calculation_id
+            for srcs in (*sources_by_thermo.values(), *statmech_sources_by_id.values())
+            for sc in srcs
+        },
     )
 
     records: list[ThermoRecord] = []
@@ -529,13 +534,13 @@ def get_species_thermo(
 
         # Build provenance.
         provenance = _build_provenance(
-            sources=sources,
+            sources=[sc for sc in sources if sc.calculation_id not in hidden_source_calc_ids],
             calc_meta=calc_meta,
             calc_refs=calc_refs,
             statmech_id=record_statmech_id,
             statmech_refs=statmech_refs,
             statmech_sources=[
-                sc for sc in record_statmech_sources if sc.calculation_id not in hidden_statmech_calc_ids
+                sc for sc in record_statmech_sources if sc.calculation_id not in hidden_source_calc_ids
             ],
             thermo_software=(
                 thermo_software_summaries.get(t.software_release_id)
