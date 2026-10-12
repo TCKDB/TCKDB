@@ -205,7 +205,10 @@ or `declared_conformer_group_ref` is an empty page, never an OR (the calculation
 `declared_conformer_group_ref` keeps records with a `basin`-scope model declaration on exactly that group. It never matches an
 undeclared legacy record, a record only by its owning entry, or an ensemble that lists the basin as a member (owner decision D3:
 "which models include basin A" would be a separately named filter). A malformed or wrong-prefix ref is 422; a well-formed unknown
-ref is an empty page, as for every filter here. Hidden records stay governed by the statmech record's own review floor.
+ref is an empty page, as for every filter here. Hidden records stay governed by the statmech record's own review floor. A filter is not a subject: unlike statmech-select, a
+below-floor transition-state entry or basin named as a filter is not 404-gated, and only the returned records are floored,
+exactly as for `species_entry_ref` and `conformer_group_ref`. Under `profile=curated` a hidden entry or basin with no visible
+statmech gives the same body as an unknown ref (the caller's ref echoed).
 
 ### At-least-one-filter rule
 

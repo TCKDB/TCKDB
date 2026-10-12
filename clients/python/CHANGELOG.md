@@ -5,7 +5,8 @@
 `search_statmech` (and `iter_statmech`) take `transition_state_entry_ref` and `declared_conformer_group_ref`. The server now
 applies the first (it used to ignore it); the second matches only records whose own declaration is that basin. In the typed
 `StatmechRecord`, `species` is optional (`None` on a transition-state-owned record), and `transition_state`, `supersession` and
-`levels` are added. No other method changed.
+`levels` are added. Code that indexes `record["species"]` under a type checker now needs a `None` check, because
+transition-state-owned records always sent `null`. No other method changed.
 
 ## 0.146.0 - 2026-10-12
 

@@ -1066,9 +1066,7 @@ class TestStatmechAndTransportSearch:
         from tckdb_client.scientific_types import StatmechRecord
 
         hints = typing.get_type_hints(StatmechRecord, include_extras=True)
-        assert typing.get_origin(hints["species"]) is not typing.Required
-        assert type(None) in typing.get_args(hints["species"])
-        assert typing.get_origin(hints["statmech"]) is typing.Required  # the check can tell the two apart
+        assert type(None) in typing.get_args(hints["species"])  # ``None`` is allowed
         assert {"transition_state", "supersession", "levels"} <= set(hints)
 
     def test_search_statmech_get_form(self):

@@ -9,9 +9,11 @@ query parameter is ignored), so a caller got unfiltered results.
 from __future__ import annotations
 
 from app.db.models.common import (
+    RecordReviewStatus,
     ScientificOriginKind,
     StatmechModelScopeKind,
     StatmechTreatmentKind,
+    SubmissionRecordType,
 )
 from app.db.models.statmech import Statmech
 from app.db.models.statmech_declaration import StatmechModelDeclaration, StatmechModelMember
@@ -26,6 +28,7 @@ from tests.services.scientific_read._factories import (
     make_transition_state,
     make_transition_state_entry,
     next_inchi_key,
+    set_review,
 )
 
 SEARCH = "/api/v1/scientific/statmech/search"
@@ -188,3 +191,59 @@ def test_get_and_post_agree_for_the_new_filters(client, db_session):
         posted = client.post(SEARCH, json={field: ref}).json()
         assert _refs(got) == _refs(posted)
         assert _refs(got), field
+
+
+# --- curated disclosure: a filter is not a subject ---------------------------
+
+
+def _masked(response, ref: str) -> str:
+    """The whole body with the caller-supplied ref masked (it is echoed by design)."""
+    assert response.status_code == 200, response.text
+    return response.text.replace(ref, "<REF>")
+
+
+def _both_verbs(client, field: str, ref: str):
+    params = {field: ref, "profile": "curated"}
+    return (
+        client.get(SEARCH, params=params),
+        client.post(SEARCH, params={"profile": "curated"}, json={field: ref}),
+    )
+
+
+def test_curated_hidden_ts_entry_is_indistinguishable_from_an_unknown_ref(client, db_session):
+    """Kills: a filter that discloses a hidden TS entry (404/422/differing body) or 404-gates it."""
+    ts = _ts_entry(db_session)
+    _ts_statmech(db_session, ts)  # not reviewed: hidden under curated
+    unknown = "tse_" + "0" * 24
+    for hidden, missing in zip(
+        _both_verbs(client, "transition_state_entry_ref", ts.public_ref),
+        _both_verbs(client, "transition_state_entry_ref", unknown),
+        strict=True,
+    ):
+        assert _masked(hidden, ts.public_ref) == _masked(missing, unknown)
+        assert hidden.json()["records"] == []
+
+
+def test_curated_hidden_basin_is_indistinguishable_from_an_unknown_ref(client, db_session):
+    """Kills: the declared-basin filter disclosing a hidden basin."""
+    _, a, *_ = _basins(db_session)  # declared records exist but are not approved
+    unknown = "cg_" + "0" * 24
+    for hidden, missing in zip(
+        _both_verbs(client, "declared_conformer_group_ref", a.public_ref),
+        _both_verbs(client, "declared_conformer_group_ref", unknown),
+        strict=True,
+    ):
+        assert _masked(hidden, a.public_ref) == _masked(missing, unknown)
+        assert hidden.json()["records"] == []
+
+
+def test_curated_approved_statmech_under_a_not_approved_ts_entry_is_returned(client, db_session):
+    """Kills: gating the filter subject (the TS entry's review) instead of the returned record's own floor."""
+    ts = _ts_entry(db_session)
+    sm = _ts_statmech(db_session, ts)
+    set_review(
+        db_session, record_type=SubmissionRecordType.statmech, record_id=sm.id, status=RecordReviewStatus.approved
+    )
+    for resp in _both_verbs(client, "transition_state_entry_ref", ts.public_ref):
+        assert resp.status_code == 200, resp.text
+        assert _refs(resp.json()) == {sm.public_ref}

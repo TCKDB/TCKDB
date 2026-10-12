@@ -302,8 +302,8 @@ def _apply_identity_filters(
     statmech_id: int | None,
     conformer_group_id: int | None,
     conformer_observation_id: int | None,
-    transition_state_entry_id: int | None = None,
-    declared_conformer_group_id: int | None = None,
+    transition_state_entry_id: int | None,
+    declared_conformer_group_id: int | None,
 ):
     if statmech_id is not None:
         stmt = stmt.where(Statmech.id == statmech_id)
