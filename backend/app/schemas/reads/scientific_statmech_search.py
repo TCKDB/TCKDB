@@ -70,6 +70,16 @@ class StatmechSearchRequest(BaseModel):
     conformer_observation_ref: str | None = Field(
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
     )
+    #: Statmech records owned by this transition-state entry (``tse_...``).
+    transition_state_entry_ref: str | None = Field(
+        default=None, max_length=_MAX_PUBLIC_REF_LENGTH
+    )
+    #: Records whose OWN model declaration is scoped to exactly this basin
+    #: (``cg_...``). Unlike ``conformer_group_ref`` (owning-entry context), it
+    #: never matches by owning entry, undeclared rows, or ensemble members.
+    declared_conformer_group_ref: str | None = Field(
+        default=None, max_length=_MAX_PUBLIC_REF_LENGTH
+    )
 
     # --- statmech scalar filters -----------------------------------------
     model_kind: StatmechTreatmentKind | None = None

@@ -22,6 +22,21 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Statmech search filters by transition-state entry and by declared basin (2026-10-12)
+
+**Fresh behaviour change: a filter that used to be ignored is now applied.** Migration: none. New environment variable: none.
+`tckdb-client` 0.147.0. `tckdb-schemas` and `tckdb-mcp` are unchanged.
+
+- `transition_state_entry_ref` on `/scientific/statmech/search` (GET query or POST body) used to be silently dropped, so a caller
+  already sending it got unfiltered results. It now returns only records owned by that transition-state entry. Alone it is a
+  meaningful filter (it was a 422 `missing_filter`). A species-axis filter beside it ANDs into an empty page. A malformed or
+  wrong-prefix ref is a 422; a well-formed unknown ref is an empty page, like every other filter on this endpoint.
+- New `declared_conformer_group_ref` matches only records whose own model declaration is scoped to exactly that basin. It never
+  matches an undeclared record, a record only by its owning entry, or an ensemble that merely contains the basin as a member.
+- `conformer_group_ref` and `conformer_observation_ref` keep their meaning (every record of the owning species entry).
+- Client: `search_statmech` takes both new arguments; `StatmechRecord.species` is now optional (it is `null` on a
+  transition-state-owned record) and `transition_state`, `supersession` and `levels` are typed.
+
 ## A geometry and a conformer may not disagree (2026-10-12)
 
 **Narrowing: payloads previously accepted are now refused.** Migration: none. New environment variable: none.

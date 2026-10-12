@@ -671,7 +671,11 @@ class NetworkKineticsBatchEvaluateResponse(TypedDict):
 
 class StatmechRecord(TypedDict, total=False):
     statmech: Required[JSONDict]
-    species: Required[JSONDict]
+    # ``None`` on a transition-state-owned record (it has a ``transition_state`` block instead).
+    species: JSONDict | None
+    transition_state: JSONDict | None
+    supersession: SupersessionNotice | None
+    levels: JSONDict
     evidence_summary: Required[JSONDict]
     available_sections: Required[JSONDict]
     frequency_scale_factor: JSONDict | None

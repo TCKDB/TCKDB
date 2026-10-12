@@ -1047,6 +1047,30 @@ class TestStatmechAndTransportSearch:
             "has_torsions": True,
         }
 
+    def test_search_statmech_sends_ts_entry_and_declared_basin_filters(self):
+        """Kills: the new kwargs not reaching the request body."""
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.search_statmech(transition_state_entry_ref="tse_1", declared_conformer_group_ref="cg_1")
+
+        assert json.loads(seen[0].content) == {
+            "transition_state_entry_ref": "tse_1",
+            "declared_conformer_group_ref": "cg_1",
+        }
+
+    def test_statmech_record_allows_a_ts_owned_record_without_a_species(self):
+        """Kills: ``species`` still typed as required (backend sends null for TS owners)."""
+        import typing
+
+        from tckdb_client.scientific_types import StatmechRecord
+
+        hints = typing.get_type_hints(StatmechRecord, include_extras=True)
+        assert typing.get_origin(hints["species"]) is not typing.Required
+        assert type(None) in typing.get_args(hints["species"])
+        assert typing.get_origin(hints["statmech"]) is typing.Required  # the check can tell the two apart
+        assert {"transition_state", "supersession", "levels"} <= set(hints)
+
     def test_search_statmech_get_form(self):
         handler, seen = _capture(_envelope())
         client, _ = make_client(handler)
