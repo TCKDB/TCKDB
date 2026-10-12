@@ -49,8 +49,8 @@ committed backend OpenAPI golden snapshot at
 | `tckdb_conformer_search` | `POST /api/v1/scientific/conformers/search` | Conformer search |
 | `tckdb_conformer_group_detail` | `GET /api/v1/scientific/conformer-groups/{cg_ref}` | Conformer group detail |
 | `tckdb_conformer_observation_detail` | `GET /api/v1/scientific/conformer-observations/{co_ref}` | Conformer observation detail |
-| `tckdb_statmech_search` | `POST /api/v1/scientific/statmech/search` | Statmech search |
-| `tckdb_statmech_detail` | `GET /api/v1/scientific/statmech/{sm_ref}` | Statmech detail |
+| `tckdb_statmech_search` | `POST /api/v1/scientific/statmech/search` | Statmech search. Every backend filter is a discriminator, an explicit `false` included (`has_torsions: false`), plus `transition_state_entry_ref` and `declared_conformer_group_ref`. `include` accepts `electronic_levels` and `trust`; `trust` is forwarded only when named, and `all` never expands to it |
+| `tckdb_statmech_detail` | `GET /api/v1/scientific/statmech/{sm_ref}` | Statmech detail (`include` accepts `electronic_levels` and an explicitly named `trust`) |
 | `tckdb_transport_search` | `POST /api/v1/scientific/transport/search` | Transport search |
 | `tckdb_transport_detail` | `GET /api/v1/scientific/transport/{trn_ref}` | Transport detail |
 | `tckdb_network_search` | `POST /api/v1/scientific/networks/search` | Network/PDep search |

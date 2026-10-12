@@ -2991,6 +2991,15 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "two stay as tripwires against a reordering. context['field'] "
                 "says which ref asked."
             )),
+    ApiCode("unknown_query_parameter", 422, Surface.message_prefix,
+            "backend/app/api/routes/scientific/statmech.py",
+            note=(
+                "GET /scientific/statmech/search refuses a query key that is not a declared "
+                "filter (or a profile key) instead of ignoring it, so a misspelled filter "
+                "cannot quietly broaden the result. The POST analogue is the pydantic "
+                "extra_forbidden on the request body; POST query strings keep "
+                "post_search_fields_must_be_in_body."
+            )),
     ApiCode("unknown_version", 422, Surface.message_prefix,
             "backend/app/services/deposit/build.py",
             reach=Reach.guard,

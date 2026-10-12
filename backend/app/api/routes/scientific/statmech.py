@@ -55,11 +55,16 @@ router = APIRouter(prefix="/statmech")
 # rejected rather than silently ignored.
 _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
+# GET: every declared search field plus the profile keys. Derived from the
+# request model so a new filter cannot be refused here by oversight.
+_GET_ALLOWED_QS_KEYS: set[str] = set(StatmechSearchRequest.model_fields) | set(PROFILE_QUERY_KEYS)
+
 
 @router.get(
     "/search", response_model=ScientificStatmechSearchResponse
 )
 def scientific_statmech_search_get(
+    request: Request,
     session: Session = Depends(get_db),
     species_ref: str | None = Query(None),
     species_entry_ref: str | None = Query(None),
@@ -95,6 +100,16 @@ def scientific_statmech_search_get(
     as meaningful — see
     ``backend/docs/specs/scientific_statmech_reads.md``.
     """
+    unknown = set(request.query_params.keys()) - _GET_ALLOWED_QS_KEYS
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "unknown_query_parameter: query-string keys "
+                f"{sorted(unknown)!r} are not statmech search filters; "
+                "an unrecognised key is refused rather than ignored."
+            ),
+        )
     request_obj = StatmechSearchRequest(
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,

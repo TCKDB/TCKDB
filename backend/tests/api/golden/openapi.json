@@ -51083,7 +51083,8 @@
         "type": "object"
       },
       "StatmechSearchRequest": {
-        "description": "Service-layer request for /scientific/statmech/search.\n\nFilters AND-combine. At least one meaningful filter is required —\nrequests with only pagination / include / review knobs are\nrejected with 422 ``missing_filter``.",
+        "additionalProperties": false,
+        "description": "Service-layer request for /scientific/statmech/search.\n\nFilters AND-combine. At least one meaningful filter is required —\nrequests with only pagination / include / review knobs are\nrejected with 422 ``missing_filter``.\n\nA key the model does not declare is a 422 (``extra_forbidden``), never\nignored: a misspelled filter would otherwise quietly widen the result.",
         "properties": {
           "basis": {
             "anyOf": [
