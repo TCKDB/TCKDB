@@ -772,6 +772,8 @@ def _validate_include(value: Any, legal: frozenset[str]) -> list[str]:
         raise invalid_input(f"include must be a list of strings; got {value!r}")
     if "internal_ids" in value:
         raise invalid_input("include=internal_ids is not exposed by the MCP; the agent-facing surface never returns integer DB ids.")
+    if "assessments" in value:
+        raise invalid_input("include=assessments is not exposed by the MCP; the backend accepts it, but this surface deliberately does not offer it.")
     illegal = [t for t in value if t not in legal]
     if illegal:
         raise invalid_input(f"unknown include token(s): {illegal!r}. Legal tokens: {sorted(legal)!r}")

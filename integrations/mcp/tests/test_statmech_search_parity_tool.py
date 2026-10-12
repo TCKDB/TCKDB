@@ -88,11 +88,14 @@ def test_all_is_never_expanded() -> None:
     assert [v for k, v in detail["query"] if k == "include"] == ["all"]
 
 
-@pytest.mark.parametrize("token", ["internal_ids", "assessments"])
-def test_internal_tokens_stay_refused(token: str) -> None:
+@pytest.mark.parametrize(
+    ("token", "reason"),
+    [("internal_ids", "not exposed by the MCP"), ("assessments", "deliberately does not offer")],
+)
+def test_internal_tokens_stay_refused(token: str, reason: str) -> None:
     for tool, args in (
         ("tckdb_statmech_search", {"statmech_ref": "sm_a"}),
         ("tckdb_statmech_detail", {"statmech_ref": "sm_a"}),
     ):
-        with pytest.raises(MCPToolError):
+        with pytest.raises(MCPToolError, match=f"include={token} is.*{reason}"):
             _run(tool, {**args, "include": [token]})

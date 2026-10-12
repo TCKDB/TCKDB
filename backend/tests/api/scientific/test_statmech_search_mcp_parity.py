@@ -64,11 +64,10 @@ def test_discriminators_equal_the_backend_meaningful_filters():
     assert set(_search_tool().required_one_of) == set(_MEANINGFUL_FILTER_FIELDS)
 
 
-def test_fields_cover_every_request_filter():
-    """Kills: a backend request field the MCP refuses as unknown."""
-    not_filters = {"limit", "offset", "include", "sort", "min_review_status", "include_rejected", "include_deprecated"}
-    request_fields = set(StatmechSearchRequest.model_fields) - not_filters
-    assert request_fields <= set(_search_tool().fields)
+def test_fields_equal_the_request_model_exactly():
+    """Kills: a backend request field the MCP refuses as unknown (including the review fields), and an MCP-only
+    field the backend would reject or ignore."""
+    assert set(_search_tool().fields) == set(StatmechSearchRequest.model_fields)
 
 
 def test_includes_equal_backend_legal_tokens_minus_internal():

@@ -38,6 +38,20 @@ dataset must never require a code release.
   link is never borrowed. Qualification stays with `POST /scientific/statmech/select`.
 - Witnesses follow the read profile's calculation visibility: under `profile=curated` a linked calculation below `approved` is not listed.
 
+## Statmech search refuses a key it does not declare; the statmech MCP tools reach every filter (2026-10-12)
+
+**Narrowing: `/scientific/statmech/search` used to ignore an unrecognised key and now refuses it.** Migration: none. New environment
+variable: none. `tckdb-mcp` 0.9.0. `tckdb-client` and `tckdb-schemas` are unchanged (neither sent an undeclared key).
+
+- POST: a body key the request model does not declare is a 422 `extra_forbidden`. GET: an unrecognised query key is a 422
+  `unknown_query_parameter`. Before, both returned 200 and dropped the key, so a misspelled filter (`has_torsion`) silently
+  broadened the result. A caller that was sending an ignored key must stop sending it. The OpenAPI golden records
+  `additionalProperties: false` on the request.
+- MCP: `tckdb_statmech_search` takes every filter the backend takes, as a discriminator on its own, an explicit `false`
+  included, plus `transition_state_entry_ref` and `declared_conformer_group_ref`. Both statmech MCP tools accept
+  `electronic_levels` and an explicitly named `trust` (`all` never expands to it). `include=assessments` is refused with its own
+  message.
+
 ## Statmech search filters by transition-state entry and by declared basin (2026-10-12)
 
 **Fresh behaviour change: a filter that used to be ignored is now applied.** Migration: none. New environment variable: none.
