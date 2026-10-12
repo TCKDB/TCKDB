@@ -299,42 +299,49 @@ RECORD_CHILD_EXCLUSIONS: dict[tuple[str, str], str] = {
 }
 
 
+@dataclass(frozen=True)
+class CandidateOwner:
+    """One way a record of a type can belong to a subject.
+
+    ``fk_attr`` is the column on ``model`` holding the owner's id and
+    ``subject_type`` is the kind of record that id points at.
+    """
+
+    model: type
+    fk_attr: str
+    subject_type: SubmissionRecordType
+
+
 #: How to enumerate every *candidate* of a record type for one subject.
-#: ``(orm_class, subject_fk_attribute, subject_record_type)``.
+#: A tuple of :class:`CandidateOwner`, one per kind of owner the type can have.
+#:
+#: Almost every type has exactly one owner. ``statmech`` has two: a species
+#: entry or a transition-state entry, exactly one of which is set
+#: (``statmech_exactly_one_subject``). Species comes first, so species-only
+#: releases enumerate exactly as they did before the second owner existed.
 #:
 #: This is what makes "you can still retrieve the underlying candidates" a
 #: property of the release rather than a promise: a release ships not only what
 #: a curator chose but every record it was chosen *from*.
-CANDIDATE_SOURCES: dict[SubmissionRecordType, tuple[type, str, SubmissionRecordType]] = {
+CANDIDATE_SOURCES: dict[SubmissionRecordType, tuple[CandidateOwner, ...]] = {
     SubmissionRecordType.thermo: (
-        Thermo,
-        "species_entry_id",
-        SubmissionRecordType.species_entry,
+        CandidateOwner(Thermo, "species_entry_id", SubmissionRecordType.species_entry),
     ),
     SubmissionRecordType.statmech: (
-        Statmech,
-        "species_entry_id",
-        SubmissionRecordType.species_entry,
+        CandidateOwner(Statmech, "species_entry_id", SubmissionRecordType.species_entry),
+        CandidateOwner(Statmech, "transition_state_entry_id", SubmissionRecordType.transition_state_entry),
     ),
     SubmissionRecordType.transport: (
-        Transport,
-        "species_entry_id",
-        SubmissionRecordType.species_entry,
+        CandidateOwner(Transport, "species_entry_id", SubmissionRecordType.species_entry),
     ),
     SubmissionRecordType.kinetics: (
-        Kinetics,
-        "reaction_entry_id",
-        SubmissionRecordType.reaction_entry,
+        CandidateOwner(Kinetics, "reaction_entry_id", SubmissionRecordType.reaction_entry),
     ),
     SubmissionRecordType.network_solve: (
-        NetworkSolve,
-        "network_id",
-        SubmissionRecordType.network,
+        CandidateOwner(NetworkSolve, "network_id", SubmissionRecordType.network),
     ),
     SubmissionRecordType.transition_state_entry: (
-        TransitionStateEntry,
-        "transition_state_id",
-        SubmissionRecordType.transition_state,
+        CandidateOwner(TransitionStateEntry, "transition_state_id", SubmissionRecordType.transition_state),
     ),
 }
 
@@ -715,6 +722,37 @@ def subject_identities(
     if subject_type is SubmissionRecordType.reaction_entry:
         return _reaction_entry_identities(session, ids)
 
+    if subject_type is SubmissionRecordType.transition_state_entry:
+        tse = _table("transition_state_entry")
+        ts = _table("transition_state")
+        ts_rows = session.execute(
+            select(
+                tse.c.id,
+                tse.c.public_ref,
+                tse.c.charge,
+                tse.c.multiplicity,
+                ts.c.public_ref.label("transition_state_ref"),
+                ts.c.label,
+                ts.c.reaction_entry_id,
+            )
+            .select_from(tse.join(ts, tse.c.transition_state_id == ts.c.id))
+            .where(tse.c.id.in_(ids))
+        ).all()
+        ts_reactions = _reaction_entry_identities(
+            session, sorted({r.reaction_entry_id for r in ts_rows if r.reaction_entry_id})
+        )
+        return {
+            row.id: {
+                "transition_state_entry_ref": row.public_ref,
+                "transition_state_ref": row.transition_state_ref,
+                "label": row.label,
+                "charge": row.charge,
+                "multiplicity": row.multiplicity,
+                "reaction": ts_reactions.get(row.reaction_entry_id),
+            }
+            for row in ts_rows
+        }
+
     if subject_type is SubmissionRecordType.transition_state:
         ts = _table("transition_state")
         rows = session.execute(
@@ -948,9 +986,14 @@ def candidate_ids_for_subjects(
     session: Session,
     *,
     record_type: SubmissionRecordType,
+    subject_type: SubmissionRecordType,
     subject_ids: list[int],
 ) -> dict[int, list[int]]:
-    """Every candidate record id of ``record_type``, grouped by subject id.
+    """Every candidate record id of ``record_type`` owned by a ``subject_type``, grouped by subject id.
+
+    The owner is picked by ``subject_type``; a subject type that does not own
+    the record type has no candidates (an integer id is never read across
+    subject types).
 
     :raises UnsupportedRecordTypeError: ``record_type`` is not selectable.
     """
@@ -958,10 +1001,11 @@ def candidate_ids_for_subjects(
         raise UnsupportedRecordTypeError(
             f"unsupported_release_record_type: {record_type.value}"
         )
-    if not subject_ids:
+    owner = next((o for o in CANDIDATE_SOURCES[record_type] if o.subject_type is subject_type), None)
+    if owner is None or not subject_ids:
         return {}
-    model, fk_attr, _subject_type = CANDIDATE_SOURCES[record_type]
-    fk = getattr(model, fk_attr)
+    model = owner.model
+    fk = getattr(model, owner.fk_attr)
     stmt = select(model.id, fk).where(fk.in_(subject_ids)).order_by(model.id)
     out: dict[int, list[int]] = {}
     for record_id, subject_id in session.execute(stmt):
