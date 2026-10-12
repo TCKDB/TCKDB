@@ -22,6 +22,22 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Statmech frequencies block lists curvature witnesses (2026-10-12)
+
+**Additive response field.** Migration: none. New environment variable: none. No package version changes
+(`tckdb-client`, `tckdb-schemas` and `tckdb-mcp` are unchanged; the client types `frequencies` as a plain dict).
+
+- `GET /scientific/statmech/{ref}?include=frequencies` (and the species and search reads that expand it) gains
+  `frequencies.curvature_witnesses`: one entry per (link role, calculation) pair whose calculation stores a frequency result
+  or a Hessian, whatever the role or job type: `{calculation_ref, role, calculation_type, has_frequency_result, has_hessian}`.
+  Before this, an optimisation or composite job carrying curvature was invisible to a reader.
+- Unchanged, byte for byte: `source_freq_calculation_refs` / `_ids` (still `freq`-role links only),
+  `available_sections.has_frequencies` and `evidence_summary.has_freq_calculation` (link-presence facts, not eligibility),
+  and the `has_freq_calculation` search filter.
+- A presence fact only. No eligibility or "selected" field, no witness ranked or picked, and a calculation the record does not
+  link is never borrowed. Qualification stays with `POST /scientific/statmech/select`.
+- Witnesses follow the read profile's calculation visibility: under `profile=curated` a linked calculation below `approved` is not listed.
+
 ## Statmech search filters by transition-state entry and by declared basin (2026-10-12)
 
 **Fresh behaviour change: a filter that used to be ignored is now applied.** Migration: none. New environment variable: none.
