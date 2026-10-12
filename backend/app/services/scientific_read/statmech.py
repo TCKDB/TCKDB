@@ -104,6 +104,7 @@ from app.services.scientific_read.handles import resolve_statmech_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
@@ -394,13 +395,29 @@ def build_statmech_record(
         review=badge,
     )
 
+    # The two blocks that *name* a linked calculation (the source-calculations list and the
+    # frequency pointer) only name calculations the active profile lets the caller address.
+    # Record-level facts above (levels, evidence counts, availability flags, trust) describe the
+    # statmech's own provenance and deliberately do not vary by profile.
+    # Only computed when a block that names a calculation was asked for, and only under a floor.
+    names_calculations = bool(includes & {"source_calculations", "frequencies", "torsions"})
+    prefetched_badges: dict[int, RecordReviewBadge] = {}
+    hidden_calc_ids: set[int] = set()
+    if names_calculations:
+        prefetched_badges, hidden_calc_ids = _calc_review_under_profile(
+            session,
+            {r.calculation_id for r in source_rows}
+            | {t.source_scan_calculation_id for t in torsion_rows if t.source_scan_calculation_id is not None},
+        )
+    profile_visible_rows = [r for r in source_rows if r.calculation_id not in hidden_calc_ids]
+
     source_block: list[StatmechSourceCalculationSummary] | None = None
     if "source_calculations" in includes:
-        source_block = _build_source_calculations(session, source_rows)
+        source_block = _build_source_calculations(session, profile_visible_rows, badges=prefetched_badges)
 
     torsions_block: list[StatmechTorsionSummary] | None = None
     if "torsions" in includes:
-        torsions_block = _build_torsions(session, torsion_rows)
+        torsions_block = _build_torsions(session, torsion_rows, hidden_calc_ids=hidden_calc_ids)
 
     electronic_levels_block: list[StatmechElectronicLevelSummary] | None = None
     if "electronic_levels" in includes:
@@ -409,7 +426,7 @@ def build_statmech_record(
     frequencies_block: StatmechFrequenciesSummary | None = None
     if "frequencies" in includes:
         frequencies_block = _build_frequencies_summary(
-            session, source_rows, fsf_value=fsf_value
+            session, profile_visible_rows, fsf_value=fsf_value
         )
 
     conformers_block: list[StatmechConformerContextItem] | None = None
@@ -465,6 +482,24 @@ def build_statmech_trust_fragment(
 # ---------------------------------------------------------------------------
 # Loaders
 # ---------------------------------------------------------------------------
+
+
+def _calc_review_under_profile(
+    session: Session, calculation_ids: set[int]
+) -> tuple[dict[int, RecordReviewBadge], set[int]]:
+    """Review badges for ``calculation_ids`` and which of them the active profile hides.
+
+    Mirrors the floor ``GET /calculations/{ref}`` applies, so a statmech read never names a
+    calculation that route answers 404 for. Without a review floor (exploratory, or outside a
+    scientific request) nothing is hidden and no query is made, so that output is unchanged.
+    """
+    if not calculation_ids or current_read_profile().review_floor is None:
+        return {}, set()
+    visible = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
+    badges = fetch_review_badges(
+        session, record_type=SubmissionRecordType.calculation, record_ids=calculation_ids
+    )
+    return badges, {cid for cid, b in badges.items() if b.status not in visible}
 
 
 def _load_source_rows(
@@ -855,7 +890,10 @@ def _build_literature_summary(
 
 
 def _build_source_calculations(
-    session: Session, source_rows: list[StatmechSourceCalculation]
+    session: Session,
+    source_rows: list[StatmechSourceCalculation],
+    *,
+    badges: dict[int, RecordReviewBadge] | None = None,
 ) -> list[StatmechSourceCalculationSummary]:
     if not source_rows:
         return []
@@ -864,11 +902,13 @@ def _build_source_calculations(
         select(Calculation).where(Calculation.id.in_(calc_ids))
     ).all()
     calc_by_id = {c.id: c for c in calcs}
-    badges = fetch_review_badges(
-        session,
-        record_type=SubmissionRecordType.calculation,
-        record_ids=calc_ids,
-    )
+    # Badges prefetched for the profile filter cover these ids; otherwise fetch them.
+    if not badges:
+        badges = fetch_review_badges(
+            session,
+            record_type=SubmissionRecordType.calculation,
+            record_ids=calc_ids,
+        )
     lot_ids = {c.lot_id for c in calcs if c.lot_id is not None}
     sw_ids = {
         c.software_release_id
@@ -1004,7 +1044,10 @@ def _bulk_workflow_summaries(
 
 
 def _build_torsions(
-    session: Session, torsion_rows: list[StatmechTorsion]
+    session: Session,
+    torsion_rows: list[StatmechTorsion],
+    *,
+    hidden_calc_ids: set[int] | frozenset[int] = frozenset(),
 ) -> list[StatmechTorsionSummary]:
     if not torsion_rows:
         return []
@@ -1048,12 +1091,15 @@ def _build_torsions(
                 top_description=t.top_description,
                 invalidated_reason=t.invalidated_reason,
                 note=t.note,
+                # A scan calculation the profile hides is not named (ref or id).
                 source_scan_calculation_ref=(
                     scan_refs_by_id.get(t.source_scan_calculation_id)
-                    if t.source_scan_calculation_id is not None
+                    if t.source_scan_calculation_id is not None and t.source_scan_calculation_id not in hidden_calc_ids
                     else None
                 ),
-                source_scan_calculation_id=t.source_scan_calculation_id,
+                source_scan_calculation_id=(
+                    None if t.source_scan_calculation_id in hidden_calc_ids else t.source_scan_calculation_id
+                ),
                 coordinates=[
                     StatmechTorsionCoordinateSummary(
                         coordinate_index=c.coordinate_index,

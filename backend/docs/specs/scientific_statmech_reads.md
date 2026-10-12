@@ -98,7 +98,19 @@ the read profile's calculation visibility, the same floor
 calculation below `approved` is omitted (so its existence, review state and
 whether it stores a Hessian are not confirmed), under `exploratory` every linked
 calculation with curvature is listed. The existing `source_freq_calculation_refs`
-pointer and source-calculations block are unchanged by this and are not filtered.
+pointer and the `source_calculations` block follow the same rule: under `profile=curated` they omit linked
+calculations below `approved`, so a statmech read never names a calculation that
+`GET /scientific/calculations/{ref}` answers 404 for, and a torsion's `source_scan_calculation_ref` / `_id` is
+null when that scan calculation is hidden. **Scope decision (owner may overrule):** only those
+blocks, which identify a calculation, are filtered. Record-level facts (`levels`, the `evidence_summary`
+counts, the `available_sections` flags including `has_frequencies`, and trust) describe the approved
+statmech's own provenance and are computed from every link in every profile, so they do not vary by profile.
+Release, archive and export copy raw provenance tables and are unaffected. Exploratory output is unchanged.
+
+**Not yet covered (follow-up):** other surfaces that still name a calculation or group hidden under curated:
+the transition-state-entry read's `include=statmech` (`statmech[].source_calculations`), the thermo provenance's
+statmech fallback (`freq_calculation_ref` / `sp_calculation_ref`), and statmech `include=conformers`
+(`conformer_group_ref`).
 
 `statmech` also does **not** link to a conformer directly. The
 linkage is at the `species_entry` level: the `include=conformers`
