@@ -42380,7 +42380,7 @@
         "properties": {
           "excluded_statuses": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/RecordReviewStatus"
             },
             "title": "Excluded Statuses",
             "type": "array"
@@ -42391,7 +42391,7 @@
           },
           "visible_statuses": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/RecordReviewStatus"
             },
             "title": "Visible Statuses",
             "type": "array"

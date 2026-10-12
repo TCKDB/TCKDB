@@ -32,7 +32,6 @@ from app.db.models.common import (
 from app.db.models.species import SpeciesEntry
 from app.db.models.statmech import Statmech
 from app.schemas.reads.scientific_common import (
-    REVIEW_RANK,
     CollapseMode,
     RecordReviewBadge,
     SelectionPolicy,
@@ -148,29 +147,20 @@ def get_species_statmech(
     summary = review_summary(badges[cid] for cid in visible_ids)
     total = len(visible_ids)
     collapse_first = collapse is CollapseMode.first
-    if collapse_first:
-        # Selection policy governs the single selected record only. The
-        # default candidate-list order is unchanged for collapse=all.
-        review_status_by_id = {cid: badges[cid].status for cid in visible_ids}
-        ranked = sorted(
-            visible_ids,
-            key=lambda cid: simple_selection_sort_key(
-                cid,
-                policy=selection_policy,
-                review_status_by_id=review_status_by_id,
-                created_at_by_id=created_at_by_id,
-            ),
-        )
-        ordered_ids = ranked
-    else:
-        visible_ids.sort(
-            key=lambda cid: (
-                REVIEW_RANK[badges[cid].status],
-                -created_at_by_id[cid].timestamp(),
-                -cid,
-            )
-        )
-        ordered_ids = visible_ids
+    # One key function for both modes, so the echoed ``effective_order`` is
+    # derived from the same table. ``collapse=all`` always lists candidates
+    # review-rank first (policy ``default``); the named policy orders only
+    # the single record ``collapse=first`` chooses.
+    review_status_by_id = {cid: badges[cid].status for cid in visible_ids}
+    ordered_ids = sorted(
+        visible_ids,
+        key=lambda cid: simple_selection_sort_key(
+            cid,
+            policy=selection_policy if collapse_first else SelectionPolicy.default,
+            review_status_by_id=review_status_by_id,
+            created_at_by_id=created_at_by_id,
+        ),
+    )
     page_ids = slice_for_pagination(
         ordered_ids,
         offset=offset,

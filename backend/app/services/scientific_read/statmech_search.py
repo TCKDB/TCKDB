@@ -50,9 +50,10 @@ from app.db.models.statmech import (
 )
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
-    REVIEW_RANK,
     RecordReviewBadge,
+    SelectionPolicy,
     effective_order_echo,
+    simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_statmech import (
     ScientificStatmechRecord,
@@ -197,11 +198,15 @@ def search_statmech(
 
     summary = review_summary(badges[cid] for cid in visible_ids)
 
+    # Same key function as the species read, so ``effective_order`` is derived
+    # from one table. Search has no selection policy: always ``default``.
+    review_status_by_id = {cid: badges[cid].status for cid in visible_ids}
     visible_ids.sort(
-        key=lambda cid: (
-            REVIEW_RANK[badges[cid].status],
-            -created_at_by_id[cid].timestamp(),
-            -cid,
+        key=lambda cid: simple_selection_sort_key(
+            cid,
+            policy=SelectionPolicy.default,
+            review_status_by_id=review_status_by_id,
+            created_at_by_id=created_at_by_id,
         )
     )
     total = len(visible_ids)

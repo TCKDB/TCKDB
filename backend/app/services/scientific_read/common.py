@@ -422,8 +422,10 @@ def review_visibility_echo(
     derived from it and never restated by hand.
     """
     return ReviewVisibilityEcho(
-        visible_statuses=sorted(s.value for s in visible),
-        excluded_statuses=sorted(s.value for s in RecordReviewStatus if s not in visible),
+        visible_statuses=sorted(visible, key=lambda s: s.value),
+        excluded_statuses=sorted(
+            (s for s in RecordReviewStatus if s not in visible), key=lambda s: s.value
+        ),
         profile_floor_applied=current_read_profile().review_floor is not None,
     )
 

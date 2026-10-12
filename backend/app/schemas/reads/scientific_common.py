@@ -721,22 +721,26 @@ def simple_selection_sort_key(
     return (rank, -ts, -record_id)
 
 
+OrderKey = Literal["review_rank", "created_at", "id"]
+OrderDirection = Literal["asc", "desc"]
+
+
 class OrderKeyEcho(BaseModel):
     """One key of the order a read actually applied, with its direction."""
 
-    key: Literal["review_rank", "created_at", "id"]
-    direction: Literal["asc", "desc"]
+    key: OrderKey
+    direction: OrderDirection
 
 
 # The orders ``simple_selection_sort_key`` produces, written once as data so
 # the echo cannot be restated by hand. ``test_echoed_order_agrees_with_the_real_sort_key``
 # sorts by both and requires the same sequence, so the two cannot drift.
-_REVIEW_FIRST_ORDER: tuple[tuple[str, str], ...] = (
+_REVIEW_FIRST_ORDER: tuple[tuple[OrderKey, OrderDirection], ...] = (
     ("review_rank", "asc"),
     ("created_at", "desc"),
     ("id", "desc"),
 )
-_RECENCY_ONLY_ORDER: tuple[tuple[str, str], ...] = (
+_RECENCY_ONLY_ORDER: tuple[tuple[OrderKey, OrderDirection], ...] = (
     ("created_at", "desc"),
     ("id", "desc"),
 )
@@ -754,7 +758,7 @@ def effective_order_echo(
     """
     recency_only = collapse_first and policy is SelectionPolicy.latest
     table = _RECENCY_ONLY_ORDER if recency_only else _REVIEW_FIRST_ORDER
-    return [OrderKeyEcho(key=k, direction=d) for k, d in table]  # type: ignore[arg-type]
+    return [OrderKeyEcho(key=k, direction=d) for k, d in table]
 
 
 class ReviewVisibilityEcho(BaseModel):
@@ -766,6 +770,6 @@ class ReviewVisibilityEcho(BaseModel):
     caller *asked for*.
     """
 
-    visible_statuses: list[str]
-    excluded_statuses: list[str]
+    visible_statuses: list[RecordReviewStatus]
+    excluded_statuses: list[RecordReviewStatus]
     profile_floor_applied: bool

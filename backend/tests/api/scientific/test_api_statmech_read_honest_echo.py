@@ -234,3 +234,35 @@ def test_empty_responses_carry_the_full_echo(client, db_session):
     assert empty_entry["request"]["selection_policy_applied"] is True
     assert search_empty["request"]["selection_policy_applied"] is None
     assert search_empty["request"]["effective_order"] == REVIEW_ORDER
+
+
+# --- ties: the returned order follows the echoed order ---------------------
+
+
+def test_collapse_all_and_search_order_follows_the_echoed_order_on_true_ties(client, db_session):
+    """Kills: flipping the id tie-break in the species read or in search.
+
+    Three records share one status and one ``created_at`` exactly, so only the
+    ``id`` key can order them. The returned order must equal a sort by the
+    ``effective_order`` the same response echoed.
+    """
+    entry = _entry(db_session)
+    tied = datetime.now(timezone.utc) - timedelta(days=1)
+    rows = [make_statmech(db_session, species_entry=entry) for _ in range(3)]
+    for row in rows:
+        row.created_at = tied
+    db_session.flush()
+    id_by_ref = {row.public_ref: row.id for row in rows}
+    assert len(set(id_by_ref.values())) == 3
+
+    for body in (
+        client.get(_species_url(entry)).json(),
+        client.get(f"/api/v1/scientific/statmech/search?species_entry_ref={entry.public_ref}").json(),
+    ):
+        returned = [_ref(r) for r in body["records"]]
+        assert sorted(returned) == sorted(id_by_ref)
+        order = body["request"]["effective_order"]
+        assert order[-1]["key"] == "id"
+        # Status and created_at tie, so the only live key is id.
+        sign = -1 if order[-1]["direction"] == "desc" else 1
+        assert returned == sorted(id_by_ref, key=lambda ref: sign * id_by_ref[ref])
