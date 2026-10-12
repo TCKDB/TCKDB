@@ -81,6 +81,7 @@ from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    review_hidden_under_profile,
     review_summary,
     validate_includes,
     visible_statuses,
@@ -104,7 +105,6 @@ from app.services.scientific_read.handles import resolve_statmech_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
@@ -404,9 +404,10 @@ def build_statmech_record(
     prefetched_badges: dict[int, RecordReviewBadge] = {}
     hidden_calc_ids: set[int] = set()
     if names_calculations:
-        prefetched_badges, hidden_calc_ids = _calc_review_under_profile(
+        prefetched_badges, hidden_calc_ids = review_hidden_under_profile(
             session,
-            {r.calculation_id for r in source_rows}
+            record_type=SubmissionRecordType.calculation,
+            record_ids={r.calculation_id for r in source_rows}
             | {t.source_scan_calculation_id for t in torsion_rows if t.source_scan_calculation_id is not None},
         )
     profile_visible_rows = [r for r in source_rows if r.calculation_id not in hidden_calc_ids]
@@ -482,24 +483,6 @@ def build_statmech_trust_fragment(
 # ---------------------------------------------------------------------------
 # Loaders
 # ---------------------------------------------------------------------------
-
-
-def _calc_review_under_profile(
-    session: Session, calculation_ids: set[int]
-) -> tuple[dict[int, RecordReviewBadge], set[int]]:
-    """Review badges for ``calculation_ids`` and which of them the active profile hides.
-
-    Mirrors the floor ``GET /calculations/{ref}`` applies, so a statmech read never names a
-    calculation that route answers 404 for. Without a review floor (exploratory, or outside a
-    scientific request) nothing is hidden and no query is made, so that output is unchanged.
-    """
-    if not calculation_ids or current_read_profile().review_floor is None:
-        return {}, set()
-    visible = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
-    badges = fetch_review_badges(
-        session, record_type=SubmissionRecordType.calculation, record_ids=calculation_ids
-    )
-    return badges, {cid for cid, b in badges.items() if b.status not in visible}
 
 
 def _load_source_rows(
@@ -1244,6 +1227,13 @@ def _build_conformer_context(
         .where(ConformerGroup.species_entry_id == species_entry_id)
         .order_by(ConformerGroup.id.asc())
     ).all()
+    # A conformer group the active profile hides (404 on its own detail route) is not named.
+    # Whether the species entry has conformer context at all (``has_conformers``) is a
+    # record-level fact and is not affected.
+    _, hidden = review_hidden_under_profile(
+        session, record_type=SubmissionRecordType.conformer_group, record_ids=[cg.id for cg in rows]
+    )
+    rows = [cg for cg in rows if cg.id not in hidden]
     return [
         StatmechConformerContextItem(
             conformer_group_id=cg.id,

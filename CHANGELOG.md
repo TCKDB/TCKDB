@@ -22,6 +22,20 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curated reads no longer name more records the curated profile hides (2026-10-12)
+
+**Narrowing under `profile=curated` only; completes the list left open by the previous entry.** Migration: none. New environment
+variable: none. No package version changes; no schema change (OpenAPI golden unchanged).
+
+- `GET /scientific/transition-state-entries/{ref}?include=statmech`: `statmech[].source_calculations` omits calculations below `approved`.
+- `GET /scientific/species-entries/{ref}/thermo`: the provenance's statmech fallback (`freq_calculation_ref` / `sp_calculation_ref`, the
+  primary calculation and the conformer traced through it, when taken from the linked statmech) no longer names a hidden statmech source
+  calculation.
+- Statmech `include=conformers` omits conformer groups below `approved`.
+- Exploratory (the default) output is unchanged. Record-level facts (levels, evidence, availability flags such as `has_conformers`) are
+  unchanged, as before.
+- Not covered: a thermo's own source calculations (`ThermoSourceCalculation`) are a separate path and are not changed here.
+
 ## Curated statmech reads no longer name calculations the curated profile hides (2026-10-12)
 
 **Narrowing under `profile=curated` only.** Migration: none. New environment variable: none. No package version changes; no
@@ -32,9 +46,6 @@ schema change (OpenAPI golden unchanged).
   their roles, types and review status. Applies to statmech detail, statmech search and the species-entry statmech read.
 - Under curated, a torsion's `source_scan_calculation_ref` (and `_id` under `internal_ids`) is null when that scan calculation is hidden.
 - Exploratory (the default) output is unchanged.
-- **Not yet covered, to follow:** the transition-state-entry read's `include=statmech` (`statmech[].source_calculations`), the thermo
-  provenance's statmech fallback (`freq_calculation_ref` / `sp_calculation_ref`), and statmech `include=conformers` (`conformer_group_ref`)
-  still name records the curated profile hides.
 - Deliberately not filtered: record-level facts (`levels`, `evidence_summary` counts, `available_sections` flags, trust), which
   describe the approved record's own provenance. Release, archive and export copy raw provenance tables and are unchanged.
 

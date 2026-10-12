@@ -91,6 +91,7 @@ from app.schemas.reads.scientific_transition_state import (
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    review_hidden_under_profile,
     review_summary,
     validate_includes,
 )
@@ -1363,7 +1364,8 @@ def _build_statmech_summaries(
     """Project the statmech records a transition-state entry owns.
 
     Three statements for the entry, whatever it holds: the records, their
-    source calculations, and their torsion counts. The full record, with its
+    source calculations, and their torsion counts (plus one review lookup under a curated
+    review floor, to leave out calculations that profile hides). The full record, with its
     torsions, electronic levels and scale factor, is the statmech detail read.
     """
     records = session.scalars(
@@ -1376,16 +1378,27 @@ def _build_statmech_summaries(
     record_ids = [record.id for record in records]
 
     sources: dict[int, list[TransitionStateStatmechSourceCalculation]] = {}
-    for statmech_id, role, calculation_ref in session.execute(
+    link_rows = session.execute(
         select(
             StatmechSourceCalculation.statmech_id,
             StatmechSourceCalculation.role,
+            Calculation.id,
             Calculation.public_ref,
         )
         .join(Calculation, Calculation.id == StatmechSourceCalculation.calculation_id)
         .where(StatmechSourceCalculation.statmech_id.in_(record_ids))
         .order_by(Calculation.id.asc(), StatmechSourceCalculation.role.asc())
-    ).all():
+    ).all()
+    # A calculation the active profile hides (404 on its own detail route) is not named. Under
+    # no review floor this is a no-op, so the exploratory list is unchanged.
+    _, hidden = review_hidden_under_profile(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids=[row[2] for row in link_rows],
+    )
+    for statmech_id, role, calculation_id, calculation_ref in link_rows:
+        if calculation_id in hidden:
+            continue
         sources.setdefault(statmech_id, []).append(
             TransitionStateStatmechSourceCalculation(
                 role=role.value, calculation_ref=calculation_ref
