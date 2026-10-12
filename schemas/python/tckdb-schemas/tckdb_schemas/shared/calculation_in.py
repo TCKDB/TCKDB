@@ -83,6 +83,12 @@ class CalculationIn(SchemaBase):
         before this field existed keep anchoring exactly as they did. When
         neither field resolves, the calculation is stored unanchored and the
         upload reports a warning rather than dropping the anchor silently.
+
+        When both ``conformer_key`` and ``geometry_key`` are stated they must
+        name the same conformer (the geometry must be that conformer's own).
+        A deposit whose keys disagree is refused with
+        ``calculation_geometry_conformer_mismatch``; neither key is trusted
+        over the other.
     :param software_release: Software provenance reference. Required, except on an
         ``assembled`` composite (arithmetic over other deposited calculations).
     :param level_of_theory: Required level-of-theory reference.

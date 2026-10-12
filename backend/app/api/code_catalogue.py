@@ -966,6 +966,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "the count is a property of the parsed model, and "
                 "bundle_too_large is what bounds the cost of parsing."
             )),
+    ApiCode("calculation_geometry_conformer_mismatch", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "A species-side calculation states a conformer_key and a "
+                "geometry_key that belong to different conformers: it says it "
+                "is evidence for one conformer and that it ran on another's "
+                "geometry. Neither key wins; the deposit is refused. Raised by "
+                "the request schemas of /uploads/computed-reaction and "
+                "/uploads/networks/pdep, the only two where a calculation "
+                "can state both keys. context carries the calculation key, "
+                "both keys and geometry_conformer_key, the conformer the "
+                "geometry actually belongs to. A geometry_key that names no "
+                "conformer's geometry is not this case "
+                "(geometry_key_unresolved)."
+            )),
     ApiCode("calculation_geometry_composition_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_geometry_composition.py",
             shape=Shape.relationship,

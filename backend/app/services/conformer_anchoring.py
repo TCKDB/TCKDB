@@ -122,10 +122,16 @@ def anchor_species_calculation_to_observation(
 
     Resolution order is ``conformer_key`` then ``geometry_key``, and the
     order encodes which field is the anchor: ``conformer_key`` says which
-    basin this calculation is evidence for, so where a producer has stated
-    that, nothing else gets a vote. ``geometry_key`` is consulted only when
-    ``conformer_key`` is absent, which is what keeps every pre-existing
+    basin this calculation is evidence for. ``geometry_key`` is consulted only
+    when ``conformer_key`` is absent, which is what keeps every pre-existing
     payload anchoring exactly as it did.
+
+    The two keys never disagree by the time they reach here: both request
+    schemas refuse a calculation whose ``geometry_key`` belongs to another
+    conformer than its ``conformer_key``
+    (``calculation_geometry_conformer_mismatch``), so reading
+    ``conformer_key`` first does not decide between two answers, it is just
+    the field that names the anchor directly.
 
     Every outcome is now audible. An unresolvable ``conformer_key`` raises
     (a local key that names nothing is a broken promise about the payload's

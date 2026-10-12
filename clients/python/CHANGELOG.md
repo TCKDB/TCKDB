@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.146.0 - 2026-10-12
+
+`RejectionCode` gains `calculation_geometry_conformer_mismatch` (`tckdb-schemas` 0.121.0): a calculation whose `conformer_key` and
+`geometry_key` name different conformers is now refused. No method changed.
+
 ## 0.145.0 - 2026-10-11
 
 Statmech selection: `select_statmech_models` and `get_statmech_selection_manifest`, with typed `StatmechSelectionRequest` and

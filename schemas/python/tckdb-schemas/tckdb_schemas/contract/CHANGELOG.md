@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.121.0 - 2026-10-12
+
+A calculation's `conformer_key` and `geometry_key` must now name the same conformer (#635). One new refusal code,
+`calculation_geometry_conformer_mismatch`.
+
+- Narrowing: payloads previously accepted are now refused. On the species of `/uploads/computed-reaction` and
+  `/uploads/networks/pdep`, a calculation that states `conformer_key` for one conformer and a `geometry_key` that belongs to
+  another conformer's geometry used to be accepted, anchored to the `conformer_key`'s conformer, and trusted by the rules that read
+  the anchor (the SCF stability same-conformer rule among them). It is now refused with 422; neither key overrides the other.
+  `context` is `{field, calculation_key, conformer_key, geometry_key, geometry_conformer_key}`, local keys only. These are the
+  only two models where a calculation can state both keys.
+- Unchanged: a payload whose two keys agree anchors exactly as before; a calculation stating one key is not affected; a
+  `geometry_key` that names no conformer's geometry (a free-standing geometry) is still refused by `geometry_key_unresolved`,
+  not by this code.
+- New helpers in `tckdb_schemas.bundle_source_rules`: `assert_calculation_geometry_matches_conformer` and
+  `calculation_geometry_conformer_error`.
+
 ## 0.120.0 - 2026-10-11
 
 The producer contract lists the two read routes of statmech selection (`POST .../scientific/statmech/select` and

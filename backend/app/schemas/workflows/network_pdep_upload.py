@@ -53,6 +53,7 @@ from app.schemas.reaction_family import find_canonical_reaction_family
 # Re-exported for backwards compatibility — ArtifactIn now lives in
 # app/schemas/fragments/artifact.py.
 __all__ = ("ArtifactIn",)
+from tckdb_schemas.bundle_source_rules import assert_calculation_geometry_matches_conformer
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import CalculationType as PayloadCalculationType
 from tckdb_schemas.fragments.calculation import SCFStabilityBase
@@ -228,6 +229,11 @@ class NetworkSpeciesIn(SchemaBase):
         whenever ``geometry_key`` was absent. Both said the same wrong thing,
         so neither contradicted the other. See
         ``app.services.conformer_anchoring``.
+
+        When a calculation states both keys they must name the same conformer:
+        a ``geometry_key`` that belongs to another conformer than the
+        ``conformer_key`` is refused (``calculation_geometry_conformer_mismatch``),
+        and neither key is trusted over the other.
     :param statmech: Optional statistical-mechanics interpretation for this
         species (external symmetry, optical isomers, hindered rotors, etc.).
         Reuses the bundle's statmech payload; ``source_calculations`` reference
@@ -300,6 +306,20 @@ class NetworkSpeciesIn(SchemaBase):
                     key=calc.geometry_key,
                     declared=conformer_geometry_keys,
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_species_calc_geometry_agrees_with_conformer(self) -> Self:
+        """Refuse a calculation whose ``conformer_key`` and ``geometry_key`` name different conformers.
+
+        Runs after the two undeclared-key validators above, so by here each key
+        that is set names one of this species's own conformers. The mapping is
+        known from the payload alone, so the request schema is the only layer
+        that checks it; the workflow can no longer be handed the contradiction.
+        """
+        assert_calculation_geometry_matches_conformer(
+            self.calculations, {conf.geometry.key: conf.key for conf in self.conformers}
+        )
         return self
 
     def stationary_point_findings(self) -> list[StationaryPointFinding]:

@@ -21,6 +21,7 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from tckdb_schemas.bundle_source_rules import (
     W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
     W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_geometry_matches_conformer,
     find_scf_source_cycle,
     owner_mismatch_error,
     scf_source_cycle_error,
@@ -746,7 +747,11 @@ class BundleSpeciesIn(SchemaBase):
 
         ``geometry_key`` is still honoured as the anchor when
         ``conformer_key`` is absent, so payloads predating this field are
-        unaffected.
+        unaffected. When both are stated they must name the same conformer: a
+        ``geometry_key`` that belongs to another conformer than the
+        ``conformer_key`` is refused
+        (``calculation_geometry_conformer_mismatch``), and neither key is
+        trusted over the other.
     :param thermo: Optional thermochemistry data.
     :param statmech: Optional statistical-mechanics data.
     :param transport: Optional transport properties (Lennard-Jones
@@ -895,6 +900,20 @@ class BundleSpeciesIn(SchemaBase):
                     key=calc.geometry_key,
                     declared=conformer_geometry_keys,
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_calc_geometry_agrees_with_conformer(self) -> Self:
+        """Refuse a calculation whose ``conformer_key`` and ``geometry_key`` name different conformers.
+
+        Runs after the two undeclared-key validators above, so by here each key
+        that is set names one of this species's own conformers. The mapping is
+        known from the payload alone, so the request schema is the only layer
+        that checks it; the workflow can no longer be handed the contradiction.
+        """
+        assert_calculation_geometry_matches_conformer(
+            self.calculations, {conf.geometry.key: conf.key for conf in self.conformers}
+        )
         return self
 
     def stationary_point_findings(self) -> list[StationaryPointFinding]:
@@ -2181,6 +2200,9 @@ class ComputedReactionUploadRequest(SchemaBase):
                 anchor_of_calc[conf.calculation.key] = conf.key
             for calc in sp.calculations:
                 owner_of_calc[calc.key] = f"species[{sp.key!r}]"
+                # ``validate_calc_geometry_agrees_with_conformer`` has refused a
+                # calculation whose two keys disagree, so when both are stated
+                # either gives the same anchor; ``conformer_key`` is read first.
                 anchor_of_calc[calc.key] = calc.conformer_key or (
                     geometry_to_conformer.get(calc.geometry_key)
                     if calc.geometry_key is not None

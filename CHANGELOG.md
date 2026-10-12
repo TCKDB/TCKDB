@@ -22,6 +22,19 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A calculation's two conformer keys must agree (2026-10-12)
+
+**Narrowing: payloads previously accepted are now refused.** Migration: none. New environment variable: none.
+`tckdb-schemas` 0.121.0, `tckdb-client` 0.146.0. Closes #635 (items 1, 2 and 4 were already done in #756).
+
+- On `/uploads/computed-reaction` and `/uploads/networks/pdep`, a species-side calculation that stated a `conformer_key` for one
+  conformer and a `geometry_key` belonging to another conformer's geometry was accepted, and the anchor silently followed
+  `conformer_key`. It is now a 422 `calculation_geometry_conformer_mismatch` naming both keys and the conformer the geometry
+  belongs to. A geometry and a conformer must never disagree, and neither key wins. These are the only two routes where a
+  calculation can state both keys.
+- Payloads whose keys agree, or that state only one, anchor exactly as before. A `geometry_key` that belongs to no conformer is
+  still refused by `geometry_key_unresolved`.
+
 ## Statmech selection endpoint, client method and MCP tool (2026-10-11)
 
 **Chunk 5 of the statmech selection programme: the public surface.** Migration: none. New environment variable: none.
