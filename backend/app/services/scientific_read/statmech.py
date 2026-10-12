@@ -83,6 +83,7 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     review_summary,
     validate_includes,
+    visible_statuses,
 )
 from app.services.scientific_read.composite_annotations import (
     legacy_composite_shape,
@@ -1155,10 +1156,22 @@ def _curvature_witnesses(
             .where(Calculation.id.in_(calc_ids))
         ).all()
     }
+    # A calculation the active profile hides from ``GET /calculations/{ref}`` must not be
+    # confirmed here either (existence, review state, or having a Hessian). The same floor
+    # detail-by-ref gate applies: no extra restriction when exploratory, approval when curated.
+    visible = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
+    badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids=[i for i, r in rows.items() if r.freq_id is not None or r.hessian_id is not None],
+    )
     witnesses: list[StatmechCurvatureWitness] = []
     for link in sorted(source_rows, key=lambda r: (role_order[r.role], r.calculation_id)):
         row = rows.get(link.calculation_id)
         if row is None or (row.freq_id is None and row.hessian_id is None):
+            continue
+        badge = badges.get(link.calculation_id)
+        if badge is None or badge.status not in visible:
             continue
         witnesses.append(
             StatmechCurvatureWitness(

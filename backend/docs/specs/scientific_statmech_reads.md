@@ -92,9 +92,13 @@ calculation id. It is a stored-result presence fact only: it does not say the
 curvature is at the pinned geometry, usable, or eligible for any task (that is
 qualified by `POST /scientific/statmech/select`), and no witness is ranked or
 picked. Only calculations the record itself links are consulted; a calculation of
-the same owner that the record does not link is never borrowed. Like the existing
-source-calculation block and pointer, it lists linked calculations without
-review-status filtering; the calculation read does not hide calculations either.
+the same owner that the record does not link is never borrowed. Witnesses follow
+the read profile's calculation visibility, the same floor
+`GET /scientific/calculations/{ref}` applies: under `profile=curated` a linked
+calculation below `approved` is omitted (so its existence, review state and
+whether it stores a Hessian are not confirmed), under `exploratory` every linked
+calculation with curvature is listed. The existing `source_freq_calculation_refs`
+pointer and source-calculations block are unchanged by this and are not filtered.
 
 `statmech` also does **not** link to a conformer directly. The
 linkage is at the `species_entry` level: the `include=conformers`

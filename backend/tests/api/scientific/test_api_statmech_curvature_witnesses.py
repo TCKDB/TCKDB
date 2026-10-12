@@ -10,9 +10,11 @@ from __future__ import annotations
 
 from app.db.models.common import (
     CalculationType,
+    RecordReviewStatus,
     ScientificOriginKind,
     StatmechCalculationRole,
     StatmechTreatmentKind,
+    SubmissionRecordType,
 )
 from app.db.models.statmech import Statmech
 from tests.services.scientific_read._factories import (
@@ -29,6 +31,7 @@ from tests.services.scientific_read._factories import (
     make_transition_state,
     make_transition_state_entry,
     next_inchi_key,
+    set_review,
 )
 
 R = StatmechCalculationRole
@@ -185,3 +188,38 @@ def test_witness_carries_no_internal_id_or_verdict_field(client, db_session):
     _link(db_session, sm, entry, role=R.opt, ctype=T.opt, freq=True)
     (w,) = _read(client, sm)["frequencies"]["curvature_witnesses"]
     assert set(w) == {"calculation_ref", "role", "calculation_type", "has_frequency_result", "has_hessian"}
+
+
+def _curated_world(db_session, *, calc_status):
+    entry, sm = _world(db_session)
+    hidden = _link(db_session, sm, entry, role=R.composite, ctype=T.composite, hessian=True)
+    if calc_status is not None:
+        set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=hidden.id, status=calc_status)
+    # Approve last: an approved statmech is immutable, so its links must exist first.
+    set_review(db_session, record_type=SubmissionRecordType.statmech, record_id=sm.id, status=RecordReviewStatus.approved)
+    return sm, hidden
+
+
+def _read_profile(client, sm, profile):
+    r = client.get(
+        f"/api/v1/scientific/statmech/{sm.public_ref}", params={"include": "frequencies", "profile": profile}
+    )
+    assert r.status_code == 200
+    return r.json()["record"]["frequencies"]["curvature_witnesses"]
+
+
+def test_curated_profile_does_not_reveal_a_calculation_it_hides(client, db_session):
+    """Kills: witnesses ignoring the profile's calculation visibility (leaking has_hessian of a 404 calc)."""
+    sm, hidden = _curated_world(db_session, calc_status=None)  # not_reviewed
+    # The calculation read itself hides it under curated; the witness list must agree.
+    assert client.get(f"/api/v1/scientific/calculations/{hidden.public_ref}", params={"profile": "curated"}).status_code == 404
+    assert _read_profile(client, sm, "curated") == []
+    # Exploratory still lists it (the non-vacuous side of the same fixture).
+    (w,) = _read_profile(client, sm, "exploratory")
+    assert w["calculation_ref"] == hidden.public_ref and w["has_hessian"] is True
+
+
+def test_curated_profile_lists_an_approved_calculation(client, db_session):
+    """Kills: dropping every witness under curated."""
+    sm, hidden = _curated_world(db_session, calc_status=RecordReviewStatus.approved)
+    assert [w["calculation_ref"] for w in _read_profile(client, sm, "curated")] == [hidden.public_ref]

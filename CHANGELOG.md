@@ -36,6 +36,7 @@ dataset must never require a code release.
   and the `has_freq_calculation` search filter.
 - A presence fact only. No eligibility or "selected" field, no witness ranked or picked, and a calculation the record does not
   link is never borrowed. Qualification stays with `POST /scientific/statmech/select`.
+- Witnesses follow the read profile's calculation visibility: under `profile=curated` a linked calculation below `approved` is not listed.
 
 ## Statmech search filters by transition-state entry and by declared basin (2026-10-12)
 
