@@ -455,12 +455,17 @@ def get_species_thermo(
     }
     target_group_refs: dict[int, str] = {}
     if target_group_ids:
+        # A conformer group the profile hides (404 on its own detail route) is not named.
+        _, hidden_target_groups = review_hidden_under_profile(
+            session, record_type=SubmissionRecordType.conformer_group, record_ids=target_group_ids
+        )
         for group_id, group_ref in session.execute(
             select(ConformerGroup.id, ConformerGroup.public_ref).where(
                 ConformerGroup.id.in_(target_group_ids)
             )
         ).all():
-            target_group_refs[group_id] = group_ref
+            if group_id not in hidden_target_groups:
+                target_group_refs[group_id] = group_ref
 
     # Under a review floor, a source calculation the profile hides (404 on its own detail route) is
     # not named by the provenance, whether it is the thermo's own source or comes from the statmech
@@ -475,6 +480,31 @@ def get_species_thermo(
             for sc in srcs
         },
     )
+
+    # Likewise the statmech the record links to, and the conformer observation / group traced
+    # through the primary calculation: a review-gated record the profile hides is not named.
+    _, hidden_statmech_ids = review_hidden_under_profile(
+        session, record_type=SubmissionRecordType.statmech, record_ids=linked_statmech_ids
+    )
+    _, hidden_observation_ids = review_hidden_under_profile(
+        session,
+        record_type=SubmissionRecordType.conformer_observation,
+        record_ids={link[0] for link in conformer_links.values()},
+    )
+    _, hidden_group_ids = review_hidden_under_profile(
+        session,
+        record_type=SubmissionRecordType.conformer_group,
+        record_ids={link[2] for link in conformer_links.values()},
+    )
+    visible_conformer_links = {
+        calc_id: (
+            None if obs_id in hidden_observation_ids else obs_id,
+            None if obs_id in hidden_observation_ids else obs_ref,
+            None if group_id in hidden_group_ids else group_id,
+            None if group_id in hidden_group_ids else group_ref,
+        )
+        for calc_id, (obs_id, obs_ref, group_id, group_ref) in conformer_links.items()
+    }
 
     records: list[ThermoRecord] = []
     for t, model_kind in classified:
@@ -537,7 +567,7 @@ def get_species_thermo(
             sources=[sc for sc in sources if sc.calculation_id not in hidden_source_calc_ids],
             calc_meta=calc_meta,
             calc_refs=calc_refs,
-            statmech_id=record_statmech_id,
+            statmech_id=None if record_statmech_id in hidden_statmech_ids else record_statmech_id,
             statmech_refs=statmech_refs,
             statmech_sources=[
                 sc for sc in record_statmech_sources if sc.calculation_id not in hidden_source_calc_ids
@@ -552,7 +582,7 @@ def get_species_thermo(
                 if t.workflow_tool_release_id is not None
                 else None
             ),
-            conformer_links=conformer_links,
+            conformer_links=visible_conformer_links,
         )
         # Derived levels (#636): the record's own source calculations, then
         # (per role) the statmech it is LINKED to by ``thermo.statmech_id``.
@@ -1267,7 +1297,7 @@ def _build_provenance(
     statmech_sources: list[StatmechSourceCalculation],
     thermo_software: SoftwareReleaseSummary | None,
     thermo_workflow_tool: WorkflowToolReleaseSummary | None,
-    conformer_links: dict[int, tuple[int, str, int, str]],
+    conformer_links: dict[int, tuple[int | None, str | None, int | None, str | None]],
 ) -> ThermoProvenance:
     """Build a ``ThermoProvenance`` block for one thermo record.
 

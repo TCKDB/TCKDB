@@ -22,6 +22,7 @@ from app.db.models.common import (
     StatmechTreatmentKind,
     SubmissionRecordType,
     ThermoCalculationRole,
+    ThermoTargetKind,
 )
 from app.db.models.statmech import Statmech
 from tests.services.scientific_read._factories import (
@@ -30,6 +31,7 @@ from tests.services.scientific_read._factories import (
     make_calculation,
     make_chem_reaction,
     make_conformer_group,
+    make_conformer_observation,
     make_lot,
     make_reaction_entry,
     make_species,
@@ -221,6 +223,72 @@ def test_thermo_search_surface_is_filtered_too(client, db_session):
     assert r.json()["records"], "the approved thermo must be returned"
     assert hidden_sp.public_ref not in str(r.json()["records"])
     assert shown_freq.public_ref in str(r.json()["records"])
+
+
+# --- (b3) thermo's other review-gated refs: target group, statmech, traced conformer ----------------------------
+
+
+def _gated_refs_world(db_session, *, group_status=None, observation_status=None, statmech_status=None):
+    entry = _entry(db_session, "THG")
+    sm = make_statmech(db_session, species_entry=entry)
+    group = make_conformer_group(db_session, entry, label="g")
+    obs = make_conformer_observation(db_session, conformer_group=group)
+    calc = make_calculation(db_session, type=T.sp, species_entry_id=entry.id, conformer_observation_id=obs.id)
+    thermo = make_thermo_scalar(db_session, species_entry=entry, statmech_id=sm.id)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=calc, role=ThermoCalculationRole.sp)
+    thermo.thermodynamic_target_kind = ThermoTargetKind.single_conformer
+    thermo.target_conformer_group_id = group.id
+    db_session.flush()
+    _review(db_session, SubmissionRecordType.calculation, calc)
+    for kind, row, status in (
+        (SubmissionRecordType.conformer_group, group, group_status),
+        (SubmissionRecordType.conformer_observation, obs, observation_status),
+        (SubmissionRecordType.statmech, sm, statmech_status),
+    ):
+        if status is not None:
+            _review(db_session, kind, row, status)
+    _review(db_session, SubmissionRecordType.thermo, thermo)
+    return entry, sm, group, obs
+
+
+def test_thermo_curated_does_not_name_a_hidden_target_group_statmech_or_traced_conformer(client, db_session):
+    """Kills: leaving thermodynamic_target / provenance.statmech_ref / provenance conformer refs unfiltered."""
+    entry, sm, group, obs = _gated_refs_world(db_session)  # none of the three is approved
+    for path, row in (("conformer-groups", group), ("conformer-observations", obs), ("statmech", sm)):
+        assert client.get(f"{BASE}/{path}/{row.public_ref}", params={"profile": "curated"}).status_code == 404
+    prov, rec = _provenance(client, entry, "curated")
+    assert rec["thermodynamic_target"] == {"kind": "single_conformer", "conformer_group_ref": None}
+    assert prov["statmech_ref"] is None
+    assert prov["conformer_observation_ref"] is None
+    assert prov["conformer_group_ref"] is None
+    for hidden in (group.public_ref, obs.public_ref, sm.public_ref):
+        assert hidden not in str(rec)
+
+
+def test_thermo_exploratory_still_names_those_refs(client, db_session):
+    """Kills: filtering regardless of profile; pins default == exploratory."""
+    entry, sm, group, obs = _gated_refs_world(db_session)
+    prov, rec = _provenance(client, entry, "exploratory")
+    assert rec["thermodynamic_target"]["conformer_group_ref"] == group.public_ref
+    assert (prov["statmech_ref"], prov["conformer_observation_ref"], prov["conformer_group_ref"]) == (
+        sm.public_ref,
+        obs.public_ref,
+        group.public_ref,
+    )
+    default = client.get(f"{BASE}/species-entries/{entry.public_ref}/thermo").json()["records"][0]
+    assert default["provenance"] == prov and default["thermodynamic_target"] == rec["thermodynamic_target"]
+
+
+def test_thermo_curated_names_each_approved_ref_independently(client, db_session):
+    """Kills: nulling all gated refs together (an approved group/statmech with an unapproved observation)."""
+    entry, sm, group, obs = _gated_refs_world(
+        db_session, group_status=APPROVED, observation_status=None, statmech_status=APPROVED
+    )
+    prov, rec = _provenance(client, entry, "curated")
+    assert rec["thermodynamic_target"]["conformer_group_ref"] == group.public_ref
+    assert prov["conformer_group_ref"] == group.public_ref
+    assert prov["statmech_ref"] == sm.public_ref
+    assert prov["conformer_observation_ref"] is None  # the one unapproved ref
 
 
 # --- (c) statmech include=conformers ----------------------------------------------------------------------------

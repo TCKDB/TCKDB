@@ -31,6 +31,8 @@ variable: none. No package version changes; no schema change (OpenAPI golden unc
 - `GET /scientific/species-entries/{ref}/thermo`: the provenance's statmech fallback (`freq_calculation_ref` / `sp_calculation_ref`, the
   primary calculation and the conformer traced through it) no longer names a hidden source calculation, whether it is the thermo's own
   source or comes from the linked statmech. Applies to the species thermo list and to thermo search (which reuses the same builder).
+  The same read also leaves out the thermodynamic target's `conformer_group_ref`, `provenance.statmech_ref` and the traced
+  `conformer_observation_ref` / `conformer_group_ref` when the record they name is below `approved`.
 - Statmech `include=conformers` omits conformer groups below `approved`.
 - Exploratory (the default) output is unchanged. Record-level facts (levels, evidence, availability flags such as `has_conformers`) are
   unchanged, as before.

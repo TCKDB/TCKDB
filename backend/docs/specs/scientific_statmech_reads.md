@@ -108,7 +108,8 @@ statmech's own provenance and are computed from every link in every profile, so 
 Release, archive and export copy raw provenance tables and are unaffected. Exploratory output is unchanged.
 
 The same rule now applies to the transition-state-entry read's `include=statmech` (`statmech[].source_calculations`), the thermo
-provenance's source calculations (the thermo's own and the statmech fallback), and statmech `include=conformers`
+provenance's source calculations (the thermo's own and the statmech fallback), its target conformer group, statmech link and traced
+conformer refs, and statmech `include=conformers`
 (`conformer_group_ref`).
 
 `statmech` also does **not** link to a conformer directly. The
