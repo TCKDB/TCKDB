@@ -38,6 +38,19 @@ schema change (OpenAPI golden unchanged).
 - Deliberately not filtered: record-level facts (`levels`, `evidence_summary` counts, `available_sections` flags, trust), which
   describe the approved record's own provenance. Release, archive and export copy raw provenance tables and are unchanged.
 
+## Releases can select and ship transition-state-owned statmech (2026-10-12)
+
+**Release artifact content change; no API schema change.** Migration: none. New environment variable: none. No package
+version changes (`tckdb-client`, `tckdb-schemas` and `tckdb-mcp` are unchanged; admin selection still takes a
+`record_ref`).
+
+- A statmech record owned by a transition-state entry can now be selected into a dataset release. Before, selecting one
+  was refused `record_has_no_subject`; the code stays as an unreachable backstop.
+- Release artifacts may now carry `subject_type: "transition_state_entry"` lines for statmech, with a subject identity
+  that includes the reaction SMILES. The entry's other statmech records ship as candidates only; releasing a TS entry
+  still embeds none of its statmech.
+- Species-only releases render byte-identically, and published manifests are untouched.
+
 ## Statmech frequencies block lists curvature witnesses (2026-10-12)
 
 **Additive response field.** Migration: none. New environment variable: none. No package version changes

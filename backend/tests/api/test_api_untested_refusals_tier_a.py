@@ -616,31 +616,23 @@ def test_selecting_a_record_ref_that_names_nothing_is_refused(
 # ---------------------------------------------------------------------------
 
 
-def test_selecting_a_statmech_owned_by_a_transition_state_is_refused(
+def test_selecting_a_statmech_owned_by_a_transition_state_is_accepted(
     curator, db_session, draft_release, _api_curator_user
 ) -> None:
-    """A release recommends a record *for* a subject, and a TS statmech has none.
+    """A transition-state-owned statmech is selectable, for its transition-state entry.
 
     ``statmech`` has exactly one subject and it may be either a species
     entry or a transition-state entry (``statmech_exactly_one_subject``).
-    The release layer derives a selection's subject through
-    ``CANDIDATE_SOURCES``, which maps statmech to ``species_entry_id``
-    alone — so a transition-state statmech resolves to a real row with no
-    subject, and "the TCKDB statmech for ..." has nothing to complete the
-    sentence with.
+    The release layer used to map statmech to ``species_entry_id`` alone, so
+    a TS-owned record resolved to a real row with no subject and was refused
+    ``record_has_no_subject``. PR 6.5 gave statmech both owners: the subject
+    is derived from whichever owner key is set. ``record_has_no_subject``
+    remains as an unreachable backstop (unit-tested on a transient row in
+    ``tests/services/release/test_release_statmech_ts_owner.py``).
 
-    This is a genuine refusal, not a backend bug: the record exists, the
-    ref is well-formed and selectable, and the caller could reasonably
-    have expected it to work. What it also is, is a boundary worth
-    revisiting — transition-state statmech is first-class everywhere else
-    in the schema, and only the release layer cannot address it. If that
-    changes, this test should be rewritten to assert the new acceptance
-    deliberately, not deleted.
-
-    The transition-state statmech is *approved* before it is offered, so
-    the refusal cannot be the approval guard wearing a different name;
-    and the accepted neighbour is a species-owned statmech, approved and
-    selected, which rules out statmech being unselectable as a type.
+    The transition-state statmech is approved and attested before it is
+    offered, so acceptance cannot be the gates being bypassed; the species
+    statmech beside it is accepted too.
     """
     reactant = make_species_entry(
         db_session, species=make_species(db_session, smiles="CC")
@@ -682,14 +674,19 @@ def test_selecting_a_statmech_owned_by_a_transition_state_is_refused(
         record_id=ts_statmech.id,
     )
 
-    refused = curator.post(
+    deposit_and_attest(
+        db_session,
+        depositor=db_session.get(AppUser, _api_curator_user),
+        records=[(SubmissionRecordType.statmech, ts_statmech.id)],
+    )
+    ts_accepted = curator.post(
         f"{_RELEASES}/{draft_release}/selections",
         json={
             "record_ref": ts_statmech.public_ref,
             "rationale": "RRHO treatment at the reported level.",
         },
     )
-    _assert_refusal(refused, status=422, code="record_has_no_subject")
+    assert ts_accepted.status_code == 201, ts_accepted.text
 
     species_statmech = make_statmech(db_session, species_entry=reactant)
     _approve(

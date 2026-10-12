@@ -259,6 +259,18 @@ and better than a stale recommendation.
 constraint). A release recommends scientific product values and the entries
 carrying them — not submissions, artifacts, or raw identity rows.
 
+A record is a candidate **for its own owner**, derived from the record rather
+than supplied. Every type has one owner kind except `statmech`, which is owned
+by a species entry *or* a transition-state entry (exactly one, by
+`statmech_exactly_one_subject`); a TS-owned statmech is selected and shipped
+with `subject_type: "transition_state_entry"` and a subject identity carrying
+the entry, its transition state and label, charge, multiplicity and the
+reaction's reactant and product SMILES. A subject type that is not the
+record's real owner is refused (`subject_type_mismatch`,
+`record_subject_mismatch`). Selecting one TS-owned statmech never selects,
+embeds or endorses its siblings: they appear only in `candidate_records`, and
+releasing a transition-state entry still embeds none of its statmech.
+
 A selection's target must additionally be **at or above the `approved` review
 floor**, checked when the selection is appended and re-checked at publication
 (review moves in between). Two independent reasons: the accepted-science
