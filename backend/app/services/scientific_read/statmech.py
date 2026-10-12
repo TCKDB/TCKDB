@@ -16,7 +16,7 @@ See ``backend/docs/specs/scientific_statmech_reads.md``.
 
 from __future__ import annotations
 
-from sqlalchemy import and_, exists, select
+from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import not_found
@@ -105,6 +105,7 @@ from app.services.scientific_read.handles import resolve_statmech_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
@@ -1222,18 +1223,26 @@ def _curvature_witnesses(
 def _build_conformer_context(
     session: Session, species_entry_id: int
 ) -> list[StatmechConformerContextItem]:
-    rows = session.scalars(
+    stmt = (
         select(ConformerGroup)
         .where(ConformerGroup.species_entry_id == species_entry_id)
         .order_by(ConformerGroup.id.asc())
-    ).all()
-    # A conformer group the active profile hides (404 on its own detail route) is not named.
-    # Whether the species entry has conformer context at all (``has_conformers``) is a
-    # record-level fact and is not affected.
-    _, hidden = review_hidden_under_profile(
-        session, record_type=SubmissionRecordType.conformer_group, record_ids=[cg.id for cg in rows]
     )
-    rows = [cg for cg in rows if cg.id not in hidden]
+    # A conformer group the active profile hides (404 on its own detail route) is not named. The
+    # filter is part of this one query (an outer join to the review row), so a curated read costs the
+    # same number of statements as an exploratory one. With no floor the statement is unchanged.
+    # Whether the species entry has conformer context at all (``has_conformers``) is a record-level
+    # fact and is not affected.
+    if current_read_profile().review_floor is not None:
+        visible = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
+        stmt = stmt.outerjoin(
+            RecordReview,
+            and_(
+                RecordReview.record_type == SubmissionRecordType.conformer_group,
+                RecordReview.record_id == ConformerGroup.id,
+            ),
+        ).where(func.coalesce(RecordReview.status, RecordReviewStatus.not_reviewed).in_(visible))
+    rows = session.scalars(stmt).all()
     return [
         StatmechConformerContextItem(
             conformer_group_id=cg.id,

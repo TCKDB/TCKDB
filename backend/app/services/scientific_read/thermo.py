@@ -564,14 +564,13 @@ def get_species_thermo(
 
         # Build provenance.
         provenance = _build_provenance(
-            sources=[sc for sc in sources if sc.calculation_id not in hidden_source_calc_ids],
+            sources=sources,
+            hidden_calc_ids=hidden_source_calc_ids,
             calc_meta=calc_meta,
             calc_refs=calc_refs,
             statmech_id=None if record_statmech_id in hidden_statmech_ids else record_statmech_id,
             statmech_refs=statmech_refs,
-            statmech_sources=[
-                sc for sc in record_statmech_sources if sc.calculation_id not in hidden_source_calc_ids
-            ],
+            statmech_sources=record_statmech_sources,
             thermo_software=(
                 thermo_software_summaries.get(t.software_release_id)
                 if t.software_release_id is not None
@@ -1298,6 +1297,7 @@ def _build_provenance(
     thermo_software: SoftwareReleaseSummary | None,
     thermo_workflow_tool: WorkflowToolReleaseSummary | None,
     conformer_links: dict[int, tuple[int | None, str | None, int | None, str | None]],
+    hidden_calc_ids: set[int] | frozenset[int] = frozenset(),
 ) -> ThermoProvenance:
     """Build a ``ThermoProvenance`` block for one thermo record.
 
@@ -1328,6 +1328,14 @@ def _build_provenance(
     ``primary_calculation`` / ``level_of_theory`` above — not an
     independent pick — so a record with no resolvable primary calculation
     (population B: no source calcs at all) reports no conformer either.
+
+    ``hidden_calc_ids`` are calculations the active read profile hides (404 on
+    their own detail route). Slots are picked from EVERY link first, so which
+    calculation is the primary / freq / sp never depends on the profile (a
+    hidden pick must not let the picker fall through to a different, visible
+    calculation); only then is a hidden pick left unnamed: its slot is null and
+    ``primary_calculation`` is omitted. ``level_of_theory`` stays the true
+    primary's, a record-level fact.
     """
     primary_calc_id_v = _primary_calc_id(sources)
     # Fall back to a statmech-derived primary when thermo declared none.
@@ -1339,6 +1347,8 @@ def _build_provenance(
     primary_lot: LevelOfTheorySummary | None = None
 
     if primary_meta is not None:
+        primary_lot = _lot_summary(primary_meta)
+    if primary_meta is not None and primary_calc_id_v not in hidden_calc_ids:
         gv = primary_meta["geometry_validation"]
         scf = primary_meta["scf_stability"]
         primary_calc_summary = CalculationEvidenceSummary(
@@ -1351,7 +1361,6 @@ def _build_provenance(
             level_of_theory=_lot_summary(primary_meta),
             software=_sw_summary(primary_meta),
         )
-        primary_lot = _lot_summary(primary_meta)
 
     freq_calc_id = _calc_id_for_role(sources, ThermoCalculationRole.freq)
     if freq_calc_id is None:
@@ -1363,6 +1372,12 @@ def _build_provenance(
         sp_calc_id = _statmech_calc_id_for_role(
             statmech_sources, StatmechCalculationRole.sp
         )
+
+    # A hidden pick is not named (the pick itself was made from every link above).
+    if freq_calc_id in hidden_calc_ids:
+        freq_calc_id = None
+    if sp_calc_id in hidden_calc_ids:
+        sp_calc_id = None
 
     conformer_link = (
         conformer_links.get(primary_calc_id_v)

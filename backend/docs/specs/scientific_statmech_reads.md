@@ -112,6 +112,10 @@ provenance's source calculations (the thermo's own and the statmech fallback), i
 conformer refs, and statmech `include=conformers`
 (`conformer_group_ref`).
 
+**Not yet covered:** curated reads are not yet complete. Other surfaces may still name records the curated profile hides (a
+follow-up lists them), and supersession notices can name a successor that has since become hidden (an owner decision). Do not
+assume a curated read hides every unapproved ref.
+
 `statmech` also does **not** link to a conformer directly. The
 linkage is at the `species_entry` level: the `include=conformers`
 token surfaces every `conformer_group` belonging to the same

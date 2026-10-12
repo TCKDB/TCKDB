@@ -14,6 +14,9 @@ Each test names the mutation it kills.
 
 from __future__ import annotations
 
+import pytest
+from sqlalchemy import event
+
 from app.db.models.common import (
     CalculationType,
     RecordReviewStatus,
@@ -49,6 +52,10 @@ T = CalculationType
 APPROVED = RecordReviewStatus.approved
 BASE = "/api/v1/scientific"
 
+EXPECTED_THERMO_LIST_STATEMENTS = 20  # measured identical on origin/main
+EXPECTED_STATMECH_SEARCH_CONFORMERS_STATEMENTS = 60  # measured identical on origin/main, n=8
+EXPECTED_CURATED_EXTRA_STATEMENTS = 0
+
 
 def _review(db_session, kind, row, status=APPROVED):
     set_review(db_session, record_type=kind, record_id=row.id, status=status)
@@ -81,6 +88,7 @@ def _ts_world(db_session):
     attach_statmech_source_calculation(db_session, statmech=sm, calculation=hidden, role=R.freq)
     _review(db_session, SubmissionRecordType.calculation, shown)
     _review(db_session, SubmissionRecordType.transition_state_entry, ts)
+    _review(db_session, SubmissionRecordType.statmech, sm)  # approved last: its links exist first
     return ts, sm, shown, hidden
 
 
@@ -107,6 +115,47 @@ def test_ts_entry_statmech_exploratory_lists_everything(client, db_session):
     default = client.get(f"{BASE}/transition-state-entries/{ts.public_ref}", params={"include": "statmech"}).json()["record"]["statmech"][0]
     assert explicit == default
     assert {c["calculation_ref"] for c in explicit["source_calculations"]} == {shown.public_ref, hidden.public_ref}
+
+
+def _ts_world_with_hidden_statmech(db_session):
+    ts, sm, shown, hidden = _ts_world(db_session)
+    # A second statmech on the same entry that is not approved; the first (with its calculations) is.
+    hidden_sm = Statmech(
+        transition_state_entry_id=ts.id,
+        scientific_origin=ScientificOriginKind.computed,
+        statmech_treatment=StatmechTreatmentKind.rrho,
+    )
+    db_session.add(hidden_sm)
+    db_session.flush()
+    _review(db_session, SubmissionRecordType.transition_state, ts.transition_state)
+    return ts, sm, hidden_sm
+
+
+def test_ts_entry_include_statmech_omits_hidden_statmech_records(client, db_session):
+    """Kills: listing every owned statmech under a floor (only their source calculations were filtered)."""
+    ts, sm, hidden_sm = _ts_world_with_hidden_statmech(db_session)
+    assert client.get(f"{BASE}/statmech/{hidden_sm.public_ref}", params={"profile": "curated"}).status_code == 404
+    r = client.get(f"{BASE}/transition-state-entries/{ts.public_ref}", params={"include": "statmech", "profile": "curated"})
+    assert r.status_code == 200, r.text
+    assert [x["statmech_ref"] for x in r.json()["record"]["statmech"]] == [sm.public_ref]
+    x = client.get(f"{BASE}/transition-state-entries/{ts.public_ref}", params={"include": "statmech", "profile": "exploratory"})
+    assert sorted(m["statmech_ref"] for m in x.json()["record"]["statmech"]) == sorted([sm.public_ref, hidden_sm.public_ref])
+
+
+def test_ts_concept_include_statmech_omits_hidden_statmech_records(client, db_session):
+    """Kills: the same leak on the transition-state concept route."""
+    ts, sm, hidden_sm = _ts_world_with_hidden_statmech(db_session)
+    r = client.get(
+        f"{BASE}/transition-states/{ts.transition_state.public_ref}", params={"include": "statmech", "profile": "curated"}
+    )
+    assert r.status_code == 200, r.text
+    (entry_block,) = r.json()["record"]["statmech"]
+    assert [m["statmech_ref"] for m in entry_block["statmech"]] == [sm.public_ref]
+    x = client.get(
+        f"{BASE}/transition-states/{ts.transition_state.public_ref}", params={"include": "statmech", "profile": "exploratory"}
+    )
+    (entry_x,) = x.json()["record"]["statmech"]
+    assert len(entry_x["statmech"]) == 2
 
 
 # --- (b) thermo provenance statmech fallback --------------------------------------------------------------------
@@ -177,7 +226,7 @@ def test_thermo_curated_record_level_levels_do_not_vary(client, db_session):
 # --- (b2) thermo's OWN source calculations ----------------------------------------------------------------------
 
 
-def _own_sources_world(db_session):
+def _own_sources_world(db_session, hidden_status=None):
     entry = _entry(db_session, "THO")
     thermo = make_thermo_scalar(db_session, species_entry=entry)
     hidden_sp = make_calculation(db_session, type=T.sp, species_entry_id=entry.id, lot_id=make_lot(db_session).id)
@@ -185,6 +234,8 @@ def _own_sources_world(db_session):
     attach_thermo_source_calculation(db_session, thermo=thermo, calculation=hidden_sp, role=ThermoCalculationRole.sp)
     attach_thermo_source_calculation(db_session, thermo=thermo, calculation=shown_freq, role=ThermoCalculationRole.freq)
     _review(db_session, SubmissionRecordType.calculation, shown_freq)
+    if hidden_status is not None:
+        _review(db_session, SubmissionRecordType.calculation, hidden_sp, hidden_status)
     _review(db_session, SubmissionRecordType.thermo, thermo)
     return entry, hidden_sp, shown_freq
 
@@ -294,12 +345,14 @@ def test_thermo_curated_names_each_approved_ref_independently(client, db_session
 # --- (c) statmech include=conformers ----------------------------------------------------------------------------
 
 
-def _conformer_world(db_session):
+def _conformer_world(db_session, hidden_status=None):
     entry = _entry(db_session, "CNF")
     sm = make_statmech(db_session, species_entry=entry)
     shown = make_conformer_group(db_session, entry, label="shown")
     hidden = make_conformer_group(db_session, entry, label="hidden")
     _review(db_session, SubmissionRecordType.conformer_group, shown)
+    if hidden_status is not None:
+        _review(db_session, SubmissionRecordType.conformer_group, hidden, hidden_status)
     _review(db_session, SubmissionRecordType.statmech, sm)
     return sm, shown, hidden
 
@@ -328,3 +381,121 @@ def test_statmech_conformers_exploratory_lists_every_group(client, db_session):
     assert sorted(refs) == sorted([shown.public_ref, hidden.public_ref])
     default = client.get(f"{BASE}/statmech/{sm.public_ref}", params={"include": "conformers"}).json()["record"]["conformers"]
     assert [c["conformer_group_ref"] for c in default] == refs
+
+
+# --- review statuses: every status below the floor is hidden, not only ``not_reviewed`` -------------------------
+
+BELOW_FLOOR = [RecordReviewStatus.under_review, RecordReviewStatus.rejected, RecordReviewStatus.deprecated]
+
+
+@pytest.mark.parametrize("status", BELOW_FLOOR)
+def test_thermo_own_source_hidden_for_every_status_below_the_floor(client, db_session, status):
+    """Kills: hiding only ``not_reviewed`` (the visibility check must be the floor, not one status)."""
+    entry, hidden_sp, shown_freq = _own_sources_world(db_session, hidden_status=status)
+    assert client.get(f"{BASE}/calculations/{hidden_sp.public_ref}", params={"profile": "curated"}).status_code == 404
+    prov, rec = _provenance(client, entry, "curated")
+    assert prov["sp_calculation_ref"] is None
+    assert hidden_sp.public_ref not in str(rec)
+    assert prov["freq_calculation_ref"] == shown_freq.public_ref
+
+
+@pytest.mark.parametrize("status", BELOW_FLOOR)
+def test_statmech_conformer_group_hidden_for_every_status_below_the_floor(client, db_session, status):
+    """Kills: hiding only ``not_reviewed`` conformer groups."""
+    sm, shown, hidden = _conformer_world(db_session, hidden_status=status)
+    assert client.get(f"{BASE}/conformer-groups/{hidden.public_ref}", params={"profile": "curated"}).status_code == 404
+    refs, _ = _conformer_refs(client, sm, "curated")
+    assert refs == [shown.public_ref]
+
+
+# --- provenance slots are picked from every link, then a hidden pick is left unnamed --------------------------------
+
+
+def _substitution_world(db_session):
+    """Own sp (hidden) at one level, own freq (approved) at another, a linked approved statmech with its own sp."""
+    entry = _entry(db_session, "THS")
+    lot_sp, lot_freq = make_lot(db_session, method="ccsd(t)", basis="cc-pvtz"), make_lot(db_session, method="b3lyp", basis="6-31g")
+    own_sp = make_calculation(db_session, type=T.sp, species_entry_id=entry.id, lot_id=lot_sp.id)
+    own_freq = make_calculation(db_session, type=T.freq, species_entry_id=entry.id, lot_id=lot_freq.id)
+    sm = make_statmech(db_session, species_entry=entry)
+    sm_sp = make_calculation(db_session, type=T.sp, species_entry_id=entry.id, lot_id=lot_sp.id)
+    attach_statmech_source_calculation(db_session, statmech=sm, calculation=sm_sp, role=R.sp)
+    thermo = make_thermo_scalar(db_session, species_entry=entry, statmech_id=sm.id)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=own_sp, role=ThermoCalculationRole.sp)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=own_freq, role=ThermoCalculationRole.freq)
+    for calc in (own_freq, sm_sp):
+        _review(db_session, SubmissionRecordType.calculation, calc)
+    _review(db_session, SubmissionRecordType.statmech, sm)
+    _review(db_session, SubmissionRecordType.thermo, thermo)
+    return entry, own_sp, own_freq, sm_sp
+
+
+def test_thermo_curated_does_not_substitute_another_calculation_for_a_hidden_pick(client, db_session):
+    """Kills: filtering the links BEFORE the picker (it falls through to the next, visible, candidate)."""
+    entry, own_sp, own_freq, sm_sp = _substitution_world(db_session)
+    prov_x, rec_x = _provenance(client, entry, "exploratory")
+    assert prov_x["primary_calculation"]["calculation_ref"] == own_sp.public_ref  # the true primary
+    prov_c, rec_c = _provenance(client, entry, "curated")
+    # The record-level level of theory is the true primary's, whatever the profile.
+    assert prov_c["level_of_theory"] == prov_x["level_of_theory"]
+    assert prov_c["level_of_theory"]["method"] == "ccsd(t)"
+    # The hidden primary and sp are left unnamed, and nothing else is promoted into their place.
+    assert prov_c["primary_calculation"] is None
+    assert prov_c["sp_calculation_ref"] is None
+    assert own_sp.public_ref not in str(rec_c)
+    # The approved freq stays the freq; it is never the primary, and the statmech's sp is never the sp.
+    assert prov_c["freq_calculation_ref"] == own_freq.public_ref
+    assert sm_sp.public_ref not in str(prov_c)
+    assert rec_c["levels"] == rec_x["levels"]
+
+
+# --- statement counts: nothing extra without a floor, and no per-record cost for the conformer filter ------------
+
+
+def _count_statements(db_session, call):
+    seen: list[str] = []
+
+    def hook(conn, cursor, statement, *a):
+        seen.append(statement)
+
+    bind = db_session.get_bind()
+    event.listen(bind, "before_cursor_execute", hook)
+    try:
+        call()
+    finally:
+        event.remove(bind, "before_cursor_execute", hook)
+    return len(seen)
+
+
+def test_thermo_list_statement_count_is_unchanged_without_a_floor(client, db_session):
+    """Kills: running the review lookups when there is no floor (exploratory must cost what it cost before)."""
+    entry, *_ = _substitution_world(db_session)
+    url = f"{BASE}/species-entries/{entry.public_ref}/thermo"
+    client.get(url)  # warm any one-time lookups
+    n = _count_statements(db_session, lambda: client.get(url, params={"profile": "exploratory"}))
+    assert n == EXPECTED_THERMO_LIST_STATEMENTS
+
+
+def _n_statmech_with_groups(db_session, n=8):
+    sms = []
+    for i in range(n):
+        entry = _entry(db_session, f"SC{i}")
+        sm = make_statmech(db_session, species_entry=entry)
+        group = make_conformer_group(db_session, entry, label=f"g{i}")
+        _review(db_session, SubmissionRecordType.conformer_group, group)
+        _review(db_session, SubmissionRecordType.statmech, sm)
+        sms.append(sm)
+    return sms
+
+
+def test_statmech_search_conformers_statement_count(client, db_session):
+    """Kills: a per-record review lookup in the conformer context (curated must cost the same as exploratory),
+    and review lookups with no floor (exploratory pinned to its pre-change count)."""
+    _n_statmech_with_groups(db_session, 8)
+    body = {"model_kind": "rrho", "include": ["conformers"]}
+    url = f"{BASE}/statmech/search"
+    client.post(url, json=body)  # warm
+    exploratory = _count_statements(db_session, lambda: client.post(url + "?profile=exploratory", json=body))
+    curated = _count_statements(db_session, lambda: client.post(url + "?profile=curated", json=body))
+    assert exploratory == EXPECTED_STATMECH_SEARCH_CONFORMERS_STATEMENTS
+    assert curated == exploratory + EXPECTED_CURATED_EXTRA_STATEMENTS

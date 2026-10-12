@@ -36,6 +36,12 @@ variable: none. No package version changes; no schema change (OpenAPI golden unc
 - Statmech `include=conformers` omits conformer groups below `approved`.
 - Exploratory (the default) output is unchanged. Record-level facts (levels, evidence, availability flags such as `has_conformers`) are
   unchanged, as before.
+- Provenance slots are picked from every link first and a hidden pick is then left unnamed: a hidden primary / freq / sp is never
+  replaced by another calculation, and `provenance.level_of_theory` stays the true primary's, so no record-level fact varies by profile.
+- The TS-entry and TS-concept `include=statmech` also omit statmech records below `approved`, in one batch per read.
+- **Not yet covered.** Curated reads are not yet complete: other surfaces may still name records the curated profile hides (a follow-up
+  lists them), and supersession notices can name a successor that has since become hidden (needs an owner decision). Do not assume a
+  curated read hides every unapproved ref.
 
 ## Curated statmech reads no longer name calculations the curated profile hides (2026-10-12)
 
