@@ -374,6 +374,7 @@ class RejectionCode(str, Enum):
     UNKNOWN_NETWORK_CHANNEL = "unknown_network_channel"
     UNKNOWN_NETWORK_KINETICS_REF = "unknown_network_kinetics_ref"
     UNKNOWN_NETWORK_SOLVE_REF = "unknown_network_solve_ref"
+    UNKNOWN_QUERY_PARAMETER = "unknown_query_parameter"
     UNKNOWN_RECORD = "unknown_record"
     UNKNOWN_RECORD_TYPE = "unknown_record_type"
     UNKNOWN_RELEASE = "unknown_release"
@@ -642,6 +643,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH,
         RejectionCode.UNKNOWN_ELEMENT_SYMBOL,
         RejectionCode.UNKNOWN_INCLUDE_TOKEN,
+        RejectionCode.UNKNOWN_QUERY_PARAMETER,
         RejectionCode.UNKNOWN_RECORD_TYPE,
         RejectionCode.UNSAFE_LOWEST_ENERGY_COMPARISON,
         RejectionCode.UNSUPPORTED_DIRECTION,
@@ -992,6 +994,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNKNOWN_NETWORK_CHANNEL: frozenset({404}),
     RejectionCode.UNKNOWN_NETWORK_KINETICS_REF: frozenset({404}),
     RejectionCode.UNKNOWN_NETWORK_SOLVE_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_QUERY_PARAMETER: frozenset({422}),
     RejectionCode.UNKNOWN_RECORD: frozenset({404}),
     RejectionCode.UNKNOWN_RECORD_TYPE: frozenset({422}),
     RejectionCode.UNKNOWN_RELEASE: frozenset({404}),

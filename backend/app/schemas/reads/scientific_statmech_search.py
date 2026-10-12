@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.common import (
     RecordReviewStatus,
@@ -52,7 +52,12 @@ class StatmechSearchRequest(BaseModel):
     Filters AND-combine. At least one meaningful filter is required —
     requests with only pagination / include / review knobs are
     rejected with 422 ``missing_filter``.
+
+    A key the model does not declare is a 422 (``extra_forbidden``), never
+    ignored: a misspelled filter would otherwise quietly widen the result.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # --- identity filters ------------------------------------------------
     species_ref: str | None = Field(

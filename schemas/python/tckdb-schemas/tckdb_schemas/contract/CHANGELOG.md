@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.122.0 - 2026-10-12
+
+One new refusal code, `unknown_query_parameter` (422): `GET /scientific/statmech/search` now refuses a query key that is not a
+declared filter instead of ignoring it. No producer route and no upload payload changes; this release only adds the code to the
+shipped refusal-code reference.
+
 ## 0.121.0 - 2026-10-12
 
 A geometry and a conformer may no longer disagree anywhere a calculation can state both (#635). Four new refusal codes:
