@@ -2094,20 +2094,6 @@ def attach_calculation_input_geometries(
             resolve_geometry_payload(session, payload)
             for payload in explicit_input_geometries
         ]
-        if (
-            stated_geometry_id is not None
-            and calc.type in _INPUT_GEOMETRY_TYPES
-            and not _states_one_of(session, stated_geometry_id, explicit_geometries)
-        ):
-            raise CodedValueError(
-                W_CALCULATION_INPUT_GEOMETRY_MISMATCH,
-                f"{context}: input_geometries does not include the geometry this "
-                f"calculation states it ran on ({stated_geometry_label}). A freq or sp "
-                f"runs on one structure, so the stated geometry must be one of its "
-                f"input_geometries; neither overrides the other.",
-                context={"field": context, "stated_by": stated_geometry_label},
-                message_prefix=False,
-            )
         seen_geometry_ids: set[int] = set()
         for input_order, geom_payload in enumerate(
             explicit_input_geometries, start=1
@@ -2140,6 +2126,22 @@ def attach_calculation_input_geometries(
                     geometry_id=geom.id,
                     input_order=input_order,
                 )
+            )
+        # Last, so the per-geometry composition and isotope guards above speak first:
+        # a geometry of the wrong atoms is that rule's refusal, not this one's.
+        if (
+            stated_geometry_id is not None
+            and calc.type in _INPUT_GEOMETRY_TYPES
+            and not _states_one_of(session, stated_geometry_id, explicit_geometries)
+        ):
+            raise CodedValueError(
+                W_CALCULATION_INPUT_GEOMETRY_MISMATCH,
+                f"{context}: input_geometries does not include the geometry this "
+                f"calculation states it ran on ({stated_geometry_label}). A freq or sp "
+                f"runs on one structure, so the stated geometry must be one of its "
+                f"input_geometries; neither overrides the other.",
+                context={"field": context, "stated_by": stated_geometry_label},
+                message_prefix=False,
             )
         return
 
@@ -2386,6 +2388,7 @@ def persist_additional_calculations(
     transition_state_entry_id: int | None = None,
     created_by: int | None = None,
     warnings: list[UploadWarning] | None = None,
+    stated_geometry_label: str = "the geometry of the conformer it belongs to",
 ) -> list[Calculation]:
     """Persist additional calculations with dependency edges to a primary.
 
@@ -2400,6 +2403,10 @@ def persist_additional_calculations(
     :param species_entry_id: Owner species-entry id (mutually exclusive with TS).
     :param transition_state_entry_id: Owner TS-entry id.
     :param created_by: Optional application user id.
+    :param stated_geometry_label: How a refusal names the geometry every
+        additional freq/sp is taken to have run on (``geometry_id``): a freq or
+        sp whose explicit ``input_geometries`` omit it is refused
+        (``calculation_input_geometry_mismatch``).
     :param warnings: Optional out-list; an :class:`UploadWarning` with code
         ``W_DEPENDENCY_EDGE_NOT_INFERRED`` is appended for each inferred
         edge that was skipped because the primary's type does not fit the
@@ -2444,6 +2451,8 @@ def persist_additional_calculations(
             explicit_input_geometries=calc_upload.input_geometries,
             fallback_geometry_id=geometry_id,
             context=upload_label,
+            stated_geometry_id=geometry_id,
+            stated_geometry_label=stated_geometry_label,
         )
 
         # These edges are inferred by the server, not declared by the

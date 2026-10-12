@@ -373,14 +373,46 @@ def test_an_input_that_is_another_species_calculation_is_refused(client):
     assert body["context"]["target"] == "composite"
 
 
-def test_inputs_declaring_different_geometries_are_refused(client):
+def test_an_sp_declaring_another_geometry_than_its_conformer_is_refused_first(client):
+    """The upload refuses an input sp whose declared geometry is not its conformer's (#635).
+
+    This case used to reach ``composite_input_geometry_mismatch``; the sp now
+    contradicts its own conformer, which is refused before the composite is
+    assembled (``calculation_input_geometry_mismatch``).
+    """
     payload = _replace(
         f.bundle_b(),
         "spt",
         input_geometries=[{"xyz_text": f.OTHER_WATER_XYZ}],
     )
-    body = _refused(client, payload, "composite_input_geometry_mismatch")
-    assert set(body["context"]["inputs"]) >= {"spt", "spq"}
+    _refused(client, payload, "calculation_input_geometry_mismatch")
+
+
+def test_inputs_cited_by_ref_from_different_geometries_are_refused(client):
+    """Two inputs deposited earlier on different conformers: the composite code still speaks.
+
+    Each deposit is self-consistent, so the upload accepts both; only the
+    composite that cites one input from each sees two geometries.
+    """
+    first = _ok(client, f.bundle(f.sps_b()))
+    second = _ok(client, f.bundle(f.sps_b(), xyz=f.OTHER_WATER_XYZ))
+
+    def refs(body):
+        return {
+            c["key"]: c["calculation_ref"]
+            for conf in body["conformers"]
+            for c in [conf["primary_calculation"], *conf["additional_calculations"]]
+            if c.get("key")
+        }
+
+    a, b = refs(first), refs(second)
+    inputs = [
+        {"term_key": "ref", "slot": "value", "calculation_ref": a["spq"]},
+        {"term_key": "corr", "slot": "cardinal", "cardinal_number": 3, "calculation_ref": b["spt"]},
+        {"term_key": "corr", "slot": "cardinal", "cardinal_number": 4, "calculation_ref": a["spq"]},
+    ]
+    composite_only = f.bundle([f.assembled(f.SCHEME_B, inputs, f.TOTAL_B)])
+    _refused(client, composite_only, "composite_input_geometry_mismatch")
 
 
 def test_inputs_at_one_geometry_are_accepted_and_the_composite_declaring_it_too(client):

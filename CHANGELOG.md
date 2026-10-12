@@ -35,8 +35,10 @@ Four new 422 codes, on `/uploads/computed-reaction` and `/uploads/networks/pdep`
   conformer's geometry row or ignored the key.
 - `transition_state_calculation_conformer_key`: a `conformer_key` on a transition state's calculation (it was silently dropped).
 - `transition_state_calculation_species_geometry`: a transition-state calculation whose `geometry_key` names a species conformer's geometry.
-- `calculation_input_geometry_mismatch` (also `/uploads/computed-species`): a `freq` or `sp` whose explicit `input_geometries` omit the
-  geometry it states (`geometry_key`, or its conformer's geometry in a computed-species bundle). An `opt` is exempt.
+- `calculation_input_geometry_mismatch` (also `/uploads/computed-species`, `/uploads/conformers`, `/uploads/transition-states`): a `freq` or `sp`
+  whose explicit `input_geometries` omit the geometry it states (`geometry_key`, or its conformer's or saddle point's geometry). An `opt`
+  is exempt. Only coordinate rounding and a rigid move or reordering of the same structure are forgiven: send the conformer's own xyz as
+  the input geometry, not coordinates a program re-printed or symmetrised.
 
 Consistent payloads, a lone key, and a `geometry_key` naming no conformer's geometry (still `geometry_key_unresolved`) are unchanged.
 

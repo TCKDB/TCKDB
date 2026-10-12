@@ -248,36 +248,44 @@ _COVERED = {
 _EXEMPT: dict[str, str] = {}
 
 
-def _field_sites() -> set[str]:
+def _models():
     import importlib
     import pkgutil
-    import typing
 
     import tckdb_schemas
     from pydantic import BaseModel
-    from tckdb_schemas.shared.calculation_in import CalculationIn
 
     import app.schemas
 
-    def mentions(annotation) -> bool:
-        if isinstance(annotation, type) and issubclass(annotation, CalculationIn):
-            return True
-        return any(mentions(arg) for arg in typing.get_args(annotation))
-
-    sites: set[str] = set()
     for pkg in (app.schemas, tckdb_schemas):
         for info in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
             module = importlib.import_module(info.name)
             for obj in vars(module).values():
-                if (
-                    isinstance(obj, type)
-                    and issubclass(obj, BaseModel)
-                    and obj.__module__ == module.__name__
-                ):
-                    for name, field in obj.model_fields.items():
-                        if mentions(field.annotation):
-                            sites.add(f"{obj.__name__}.{name}")
-    return sites
+                if isinstance(obj, type) and issubclass(obj, BaseModel) and obj.__module__ == module.__name__:
+                    yield obj
+
+
+def _two_key_models() -> set[type]:
+    """Every model that declares both ``conformer_key`` and ``geometry_key``, whatever its base."""
+    return {m for m in _models() if {"conformer_key", "geometry_key"} <= set(m.model_fields)}
+
+
+def _field_sites() -> set[str]:
+    import typing
+
+    two_key = tuple(_two_key_models())
+
+    def mentions(annotation) -> bool:
+        if isinstance(annotation, type) and issubclass(annotation, two_key):
+            return True
+        return any(mentions(arg) for arg in typing.get_args(annotation))
+
+    return {
+        f"{m.__name__}.{name}"
+        for m in _models()
+        for name, field in m.model_fields.items()
+        if mentions(field.annotation)
+    }
 
 
 def test_every_field_that_holds_a_two_key_calculation_is_checked_or_exempt():
@@ -292,6 +300,9 @@ def test_every_field_that_holds_a_two_key_calculation_is_checked_or_exempt():
     Mutation: add ``extra: list[ComputedReactionCalculationIn] = []`` to the
     reaction ``ConformerIn``.
     """
+    assert {m.__name__ for m in _two_key_models()} == {
+        "CalculationIn", "ComputedReactionCalculationIn", "NetworkCalculationIn"
+    }
     sites = _field_sites()
     assert sites, "the walk found no field sites; the guard would pass on nothing"
     assert sites == set(_COVERED) | set(_EXEMPT), sorted(sites ^ (set(_COVERED) | set(_EXEMPT)))
@@ -542,3 +553,102 @@ def test_computed_species_inline_input_geometry_must_be_its_conformers(client):
         {"xyz_text": ok["conformers"][0]["geometry"]["xyz_text"]}
     ]
     assert client.post("/api/v1/uploads/computed-species", json=ok).status_code == 201
+
+
+# ---------------------------------------------------------------------------
+# /uploads/conformers and /uploads/transition-states: additional freq/sp
+# ---------------------------------------------------------------------------
+
+_METHANOL = [
+    ("C", -0.047131, 0.664389, 0.0),
+    ("O", -0.047131, -0.758574, 0.0),
+    ("H", -1.092360, 0.969785, 0.0),
+    ("H", 0.439423, 1.079150, 0.889434),
+    ("H", 0.439423, 1.079150, -0.889434),
+    ("H", 0.866106, -1.058830, 0.0),
+]
+
+
+def _xyz(atoms) -> str:
+    return f"{len(atoms)}\nmethanol\n" + "\n".join(f"{e} {x:.12f} {y:.12f} {z:.12f}" for e, x, y, z in atoms)
+
+
+def _moved_and_reordered(atoms) -> list:
+    """The same structure: rotated 90 degrees about z, translated, atoms in another order."""
+    moved = [(e, -y + 3.0, x - 2.0, z + 1.5) for e, x, y, z in atoms]
+    return [moved[i] for i in (5, 3, 0, 4, 1, 2)]
+
+
+def _conformer_with_sp(input_xyz: str | None) -> dict:
+    sp = {
+        "type": "sp",
+        "software_release": {"name": "Gaussian", "version": "16"},
+        "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+        "sp_result": {"electronic_energy_hartree": -115.7},
+    }
+    if input_xyz is not None:
+        sp["input_geometries"] = [{"xyz_text": input_xyz}]
+    return {
+        "species_entry": {"smiles": "CO", "charge": 0, "multiplicity": 1},
+        "geometry": {"xyz_text": _xyz(_METHANOL)},
+        "calculation": {
+            "type": "opt",
+            "software_release": {"name": "Gaussian", "version": "16"},
+            "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+        },
+        "additional_calculations": [sp],
+        "label": "methanol",
+    }
+
+
+def _other_methanol() -> str:
+    """A different structure of the same atoms (the O-H bond swung round)."""
+    atoms = list(_METHANOL)
+    atoms[5] = ("H", 0.2, -1.2, 0.7)
+    return _xyz(atoms)
+
+
+def test_conformer_upload_additional_sp_must_run_on_the_conformer_geometry(client):
+    """Same route, same rule as the bundles: an sp on another structure is refused.
+
+    Paired: its own xyz is accepted, and so is a rotated, translated,
+    atom-reordered copy (the same structure).
+
+    Mutation: drop ``stated_geometry_id`` in ``persist_additional_calculations``;
+    replace the polyatomic branch of ``geometries_are_one_structure`` with ``False``.
+    """
+    url = "/api/v1/uploads/conformers"
+    resp = client.post(url, json=_conformer_with_sp(_other_methanol()))
+    assert (resp.status_code, resp.json().get("code")) == (422, "calculation_input_geometry_mismatch"), resp.text[:600]
+    assert client.post(url, json=_conformer_with_sp(_xyz(_METHANOL))).status_code == 201
+    moved = _xyz(_moved_and_reordered(_METHANOL))
+    assert moved != _xyz(_METHANOL)
+    resp = client.post(url, json=_conformer_with_sp(moved))
+    assert resp.status_code == 201, resp.text[:600]
+
+
+def test_transition_state_upload_additional_sp_must_run_on_the_saddle_point(client):
+    """The standalone TS upload shares the helper: an sp on a methane geometry is refused.
+
+    Mutation: drop ``stated_geometry_id`` in ``persist_additional_calculations``.
+    """
+    from tests.api.test_api_ts_contract_621 import _XYZ_CH4, _XYZ_TS, _standalone
+
+    def with_sp(xyz: str) -> dict:
+        payload = _standalone()
+        payload["additional_calculations"].append(
+            {
+                "type": "sp",
+                "software_release": {"name": "Gaussian", "version": "16"},
+                "level_of_theory": {"method": "wb97xd", "basis": "def2tzvp"},
+                "sp_result": {"electronic_energy_hartree": -40.1},
+                "input_geometries": [{"xyz_text": xyz}],
+            }
+        )
+        return payload
+
+    url = "/api/v1/uploads/transition-states"
+    resp = client.post(url, json=with_sp(_XYZ_CH4))
+    assert (resp.status_code, resp.json().get("code")) == (422, "calculation_input_geometry_mismatch"), resp.text[:600]
+    assert resp.json()["context"]["stated_by"] == "the geometry of the transition state"
+    assert client.post(url, json=with_sp(_XYZ_TS)).status_code == 201

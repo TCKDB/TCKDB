@@ -24,9 +24,13 @@ Narrowing: payloads previously accepted are now refused. Exactly what is enforce
   names a species conformer's geometry (a saddle-point job cannot have run on a minimum). On `/uploads/computed-reaction` this
   was accepted.
 - `calculation_input_geometry_mismatch` (422, raised by the workflow, where geometry rows are known): a `freq` or `sp` that states its
-  geometry (`geometry_key` on `/uploads/computed-reaction`, or the geometry of its conformer for a calculation inside a
-  `/uploads/computed-species` conformer) and also declares `input_geometries` that do not include that geometry, compared as
+  geometry (`geometry_key` on `/uploads/computed-reaction`; the geometry of its conformer for a calculation inside a
+  `/uploads/computed-species` conformer or an additional calculation of `/uploads/conformers`; the saddle point's geometry for an
+  additional calculation of `/uploads/transition-states`) and also declares `input_geometries` that do not include that geometry, compared as
   the same structure (the rule energies are grouped by: a moved copy of an atom or a rigidly moved polyatomic structure is the same). An `opt` is exempt (its input is a starting guess). Until now the explicit inputs silently won.
+  The comparison forgives only the rounding of the coordinates (about 1.7e-6 Angstrom at 6 decimals) and a rigid move or atom
+  reordering of the same structure. Coordinates a program re-printed or symmetrised are a different structure and are refused:
+  send the conformer's own xyz as the sp/freq input geometry.
 - Unchanged: payloads whose keys agree, a lone `geometry_key` or `conformer_key`, a `geometry_key` naming no conformer's geometry
   (still `geometry_key_unresolved`).
 - New helpers in `tckdb_schemas.bundle_source_rules`: `assert_calculation_geometry_matches_conformer`,
