@@ -51082,6 +51082,18 @@
             ],
             "title": "Conformer Observation Ref"
           },
+          "declared_conformer_group_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Conformer Group Ref"
+          },
           "has_freq_calculation": {
             "anyOf": [
               {
@@ -51255,6 +51267,18 @@
               }
             ],
             "title": "Statmech Ref"
+          },
+          "transition_state_entry_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Entry Ref"
           },
           "workflow_tool": {
             "anyOf": [
@@ -96064,6 +96088,38 @@
                 }
               ],
               "title": "Conformer Observation Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "transition_state_entry_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Transition State Entry Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "declared_conformer_group_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Declared Conformer Group Ref"
             }
           },
           {

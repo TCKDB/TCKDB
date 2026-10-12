@@ -33,6 +33,7 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import (
     RecordReviewStatus,
     StatmechCalculationRole,
+    StatmechModelScopeKind,
     SubmissionRecordType,
 )
 from app.db.models.level_of_theory import LevelOfTheory
@@ -48,6 +49,8 @@ from app.db.models.statmech import (
     StatmechSourceCalculation,
     StatmechTorsion,
 )
+from app.db.models.statmech_declaration import StatmechModelDeclaration
+from app.db.models.transition_state import TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
@@ -92,6 +95,8 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "statmech_ref",
     "conformer_group_ref",
     "conformer_observation_ref",
+    "transition_state_entry_ref",
+    "declared_conformer_group_ref",
     "model_kind",
     "has_source_calculations",
     "has_freq_calculation",
@@ -166,6 +171,24 @@ def search_statmech(
     if short_circuit:
         return _empty_response(request, includes, offset, limit, _visible(request))
 
+    transition_state_entry_id, short_circuit = _resolve_filter_ref(
+        session,
+        TransitionStateEntry,
+        request.transition_state_entry_ref,
+        "transition_state_entry",
+    )
+    if short_circuit:
+        return _empty_response(request, includes, offset, limit, _visible(request))
+
+    declared_conformer_group_id, short_circuit = _resolve_filter_ref(
+        session,
+        ConformerGroup,
+        request.declared_conformer_group_ref,
+        "conformer_group",
+    )
+    if short_circuit:
+        return _empty_response(request, includes, offset, limit, _visible(request))
+
     # --- candidate query ----------------------------------------------------
     stmt = select(Statmech.id, Statmech.created_at)
     stmt = _apply_identity_filters(
@@ -175,6 +198,8 @@ def search_statmech(
         statmech_id=statmech_id,
         conformer_group_id=conformer_group_id,
         conformer_observation_id=conformer_observation_id,
+        transition_state_entry_id=transition_state_entry_id,
+        declared_conformer_group_id=declared_conformer_group_id,
     )
     stmt = _apply_scalar_filters(stmt, request)
     stmt = _apply_evidence_filters(stmt, request)
@@ -277,6 +302,8 @@ def _apply_identity_filters(
     statmech_id: int | None,
     conformer_group_id: int | None,
     conformer_observation_id: int | None,
+    transition_state_entry_id: int | None,
+    declared_conformer_group_id: int | None,
 ):
     if statmech_id is not None:
         stmt = stmt.where(Statmech.id == statmech_id)
@@ -305,6 +332,22 @@ def _apply_identity_filters(
                     ConformerObservation.conformer_group_id == ConformerGroup.id,
                 )
                 .where(ConformerObservation.id == conformer_observation_id)
+            )
+        )
+    if transition_state_entry_id is not None:
+        # Owner filter. ANDs with the species-axis filters above, so a
+        # species-owned filter plus a TS filter is an empty page, never an OR.
+        stmt = stmt.where(Statmech.transition_state_entry_id == transition_state_entry_id)
+    if declared_conformer_group_id is not None:
+        # The record's OWN declaration is scoped to exactly this basin
+        # (owner decision D3): not owning-entry context, not undeclared legacy
+        # rows, not ensemble members.
+        stmt = stmt.where(
+            Statmech.id.in_(
+                select(StatmechModelDeclaration.statmech_id).where(
+                    StatmechModelDeclaration.scope_kind == StatmechModelScopeKind.basin,
+                    StatmechModelDeclaration.conformer_group_id == declared_conformer_group_id,
+                )
             )
         )
     return stmt

@@ -164,8 +164,10 @@ Implemented (MVP):
 species_ref
 species_entry_ref
 statmech_ref
-conformer_group_ref
-conformer_observation_ref
+conformer_group_ref           — owning-entry context: every record of the group's species entry
+conformer_observation_ref     — owning-entry context, likewise
+transition_state_entry_ref    — records owned by that transition-state entry
+declared_conformer_group_ref  — only records whose OWN declaration is scoped to exactly that basin
 model_kind                    — StatmechTreatmentKind enum
 has_source_calculations       — explicit False is meaningful
 has_freq_calculation          — explicit False is meaningful
@@ -196,6 +198,17 @@ sort                          — non-None → 422 client_sort_not_supported
 - Torsion-treatment filter (`treatment_kind`). Same reasoning.
 - Selection-priority sort. v0 ships with the standard
   `review_rank → created_at → id` deterministic ordering.
+
+**Owner and basin filters.** `transition_state_entry_ref` resolves a `tse_` ref and keeps records with
+`transition_state_entry_id` equal to it. Filters AND-combine, so it beside `species_ref`, `species_entry_ref`, `conformer_*`
+or `declared_conformer_group_ref` is an empty page, never an OR (the calculation-search precedent; no new refusal code).
+`declared_conformer_group_ref` keeps records with a `basin`-scope model declaration on exactly that group. It never matches an
+undeclared legacy record, a record only by its owning entry, or an ensemble that lists the basin as a member (owner decision D3:
+"which models include basin A" would be a separately named filter). A malformed or wrong-prefix ref is 422; a well-formed unknown
+ref is an empty page, as for every filter here. Hidden records stay governed by the statmech record's own review floor. A filter is not a subject: unlike statmech-select, a
+below-floor transition-state entry or basin named as a filter is not 404-gated, and only the returned records are floored,
+exactly as for `species_entry_ref` and `conformer_group_ref`. Under `profile=curated` a hidden entry or basin with no visible
+statmech gives the same body as an unknown ref (the caller's ref echoed).
 
 ### At-least-one-filter rule
 

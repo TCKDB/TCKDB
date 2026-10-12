@@ -3240,6 +3240,8 @@ class TCKDBClient:
         statmech_ref: str | None = None,
         conformer_group_ref: str | None = None,
         conformer_observation_ref: str | None = None,
+        transition_state_entry_ref: str | None = None,
+        declared_conformer_group_ref: str | None = None,
         model_kind: str | None = None,
         has_source_calculations: bool | None = None,
         has_freq_calculation: bool | None = None,
@@ -3260,7 +3262,13 @@ class TCKDBClient:
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
     ) -> StatmechSearchResponse:
-        """Search statmech records by species, model, evidence, or provenance."""
+        """Search statmech records by species, model, evidence, or provenance.
+
+        ``transition_state_entry_ref`` selects records owned by that transition-state entry.
+        ``declared_conformer_group_ref`` selects only records whose own model declaration is
+        that basin; ``conformer_group_ref`` keeps its meaning of the group's owning species
+        entry (every record of that entry).
+        """
 
         body = {
             "species_ref": species_ref,
@@ -3268,6 +3276,8 @@ class TCKDBClient:
             "statmech_ref": statmech_ref,
             "conformer_group_ref": conformer_group_ref,
             "conformer_observation_ref": conformer_observation_ref,
+            "transition_state_entry_ref": transition_state_entry_ref,
+            "declared_conformer_group_ref": declared_conformer_group_ref,
             "model_kind": model_kind,
             "has_source_calculations": has_source_calculations,
             "has_freq_calculation": has_freq_calculation,
