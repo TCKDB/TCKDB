@@ -21,6 +21,7 @@ from app.db.models.common import (
 )
 from tests.services.scientific_read._factories import (
     attach_statmech_source_calculation,
+    attach_statmech_torsion,
     make_calculation,
     make_species,
     make_species_entry,
@@ -113,8 +114,6 @@ def test_record_level_facts_do_not_vary_by_profile(client, db_session):
 
 def test_approved_calculations_stay_visible_under_curated(client, db_session):
     """Kills: dropping every calculation under curated."""
-    _, sm, shown, hidden = _world(db_session)
-    # (the freq calculation is approved on a second statmech sharing nothing; here, approve a fresh world)
     entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("CSR2")))
     sm2 = make_statmech(db_session, species_entry=entry)
     calc = make_calculation(db_session, type=CalculationType.freq, species_entry_id=entry.id)
@@ -152,3 +151,71 @@ def test_search_read_is_filtered_too(client, db_session):
     text = str(r.json()["records"])
     assert shown.public_ref in text
     assert hidden.public_ref not in text
+
+
+def _torsion_world(db_session, *, scan_status):
+    entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("CSRT")))
+    sm = make_statmech(db_session, species_entry=entry)
+    scan = make_calculation(db_session, type=CalculationType.scan, species_entry_id=entry.id)
+    attach_statmech_torsion(db_session, statmech=sm, source_scan_calculation=scan)
+    if scan_status is not None:
+        set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=scan.id, status=scan_status)
+    set_review(db_session, record_type=SubmissionRecordType.statmech, record_id=sm.id, status=RecordReviewStatus.approved)
+    return sm, scan
+
+
+def _torsion_scan(client, sm, profile):
+    r = client.get(URL + sm.public_ref, params={"include": "torsions", "profile": profile})
+    assert r.status_code == 200
+    (t,) = r.json()["record"]["torsions"]
+    return t
+
+
+def test_curated_does_not_name_an_unapproved_scan_calculation(client, db_session):
+    """Kills: leaving ``source_scan_calculation_ref`` / ``_id`` unfiltered under a review floor."""
+    sm, scan = _torsion_world(db_session, scan_status=None)
+    assert client.get(f"/api/v1/scientific/calculations/{scan.public_ref}", params={"profile": "curated"}).status_code == 404
+    t = _torsion_scan(client, sm, "curated")
+    assert t["source_scan_calculation_ref"] is None
+    assert t.get("source_scan_calculation_id") is None
+    # The torsion itself is still described; only the hidden calculation is not named.
+    assert t["torsion_index"] == 1
+    assert _torsion_scan(client, sm, "exploratory")["source_scan_calculation_ref"] == scan.public_ref
+
+
+def test_curated_names_an_approved_scan_calculation(client, db_session):
+    """Kills: nulling every scan reference under curated."""
+    sm, scan = _torsion_world(db_session, scan_status=RecordReviewStatus.approved)
+    assert _torsion_scan(client, sm, "curated")["source_scan_calculation_ref"] == scan.public_ref
+
+
+def test_no_calculation_statement_when_no_naming_block_is_requested(client, db_session):
+    """Kills: running the profile filter on every record (it must run only for the blocks that name a calculation)."""
+    from sqlalchemy import event
+
+    _, sm, *_ = _world(db_session)
+    seen = []
+
+    def count(conn, cursor, statement, *a):
+        if "record_review" in statement and "calculation" in str(a):
+            seen.append(statement)
+
+    bind = db_session.get_bind()
+    event.listen(bind, "before_cursor_execute", count)
+    try:
+        r = client.get(URL + sm.public_ref, params={"include": "review", "profile": "curated"})
+    finally:
+        event.remove(bind, "before_cursor_execute", count)
+    assert r.status_code == 200
+    assert seen == []
+
+
+def test_curated_does_not_expose_an_unapproved_scan_calculation_id(client, db_session, allow_internal_ids):
+    """Kills: nulling the ref but leaving ``source_scan_calculation_id`` under ``internal_ids``."""
+    sm, scan = _torsion_world(db_session, scan_status=None)
+    r = client.get(URL + sm.public_ref, params={"include": "torsions,internal_ids", "profile": "curated"})
+    (t,) = r.json()["record"]["torsions"]
+    assert "source_scan_calculation_id" in t  # non-vacuous: the id field is present in this mode
+    assert t["source_scan_calculation_id"] is None
+    r = client.get(URL + sm.public_ref, params={"include": "torsions,internal_ids", "profile": "exploratory"})
+    assert r.json()["record"]["torsions"][0]["source_scan_calculation_id"] == scan.id

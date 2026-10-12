@@ -30,7 +30,11 @@ schema change (OpenAPI golden unchanged).
 - Under `?profile=curated`, `source_calculations` and `frequencies.source_freq_calculation_refs` omit linked calculations
   below `approved`, the ones `GET /scientific/calculations/{ref}` already answers 404 for. Before, they listed those refs with
   their roles, types and review status. Applies to statmech detail, statmech search and the species-entry statmech read.
+- Under curated, a torsion's `source_scan_calculation_ref` (and `_id` under `internal_ids`) is null when that scan calculation is hidden.
 - Exploratory (the default) output is unchanged.
+- **Not yet covered, to follow:** the transition-state-entry read's `include=statmech` (`statmech[].source_calculations`), the thermo
+  provenance's statmech fallback (`freq_calculation_ref` / `sp_calculation_ref`), and statmech `include=conformers` (`conformer_group_ref`)
+  still name records the curated profile hides.
 - Deliberately not filtered: record-level facts (`levels`, `evidence_summary` counts, `available_sections` flags, trust), which
   describe the approved record's own provenance. Release, archive and export copy raw provenance tables and are unchanged.
 
