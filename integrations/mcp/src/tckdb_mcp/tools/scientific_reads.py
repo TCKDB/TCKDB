@@ -69,7 +69,11 @@ STRUCTURE_INCLUDES = frozenset({"review", "all"})
 ARTIFACT_INCLUDES = frozenset({"calculation", "owner", "review", "all"})
 TRANSITION_STATE_INCLUDES = frozenset({"entries", "calculations", "geometries", "review", "all"})
 CONFORMER_INCLUDES = frozenset({"observations", "selections", "calculations", "geometries", "review", "all"})
-STATMECH_INCLUDES = frozenset({"conformers", "frequencies", "source_calculations", "torsions", "review", "all"})
+# The backend's legal tokens minus ``internal_ids`` (refused by ``_validate_include``) and ``assessments`` (out of
+# scope). ``trust`` is forwarded only when the caller names it: ``all`` is never expanded to it here or on the backend.
+STATMECH_INCLUDES = frozenset(
+    {"conformers", "frequencies", "source_calculations", "torsions", "electronic_levels", "trust", "review", "all"}
+)
 TRANSPORT_INCLUDES = frozenset({"source_calculations", "review", "all"})
 NETWORK_INCLUDES = frozenset(
     {"species", "reactions", "states", "channels", "solves", "kinetics", "source_calculations", "review", "all"}
@@ -247,6 +251,8 @@ _register_search(
                 "statmech_ref",
                 "conformer_group_ref",
                 "conformer_observation_ref",
+                "transition_state_entry_ref",
+                "declared_conformer_group_ref",
                 "model_kind",
                 "has_source_calculations",
                 "has_freq_calculation",
@@ -261,8 +267,14 @@ _register_search(
             }
         ),
         include_tokens=STATMECH_INCLUDES,
-        rejected_integer_fields=frozenset({"species_id", "species_entry_id", "statmech_id", "conformer_group_id", "conformer_observation_id"}),
-        required_one_of=("species_ref", "species_entry_ref", "statmech_ref", "conformer_group_ref", "conformer_observation_ref", "model_kind", "method", "basis", "software"),
+        rejected_integer_fields=frozenset({"species_id", "species_entry_id", "statmech_id", "conformer_group_id", "conformer_observation_id", "transition_state_entry_id"}),
+        # Equals the backend's ``_MEANINGFUL_FILTER_FIELDS``; an explicit ``false`` counts (``_present``).
+        required_one_of=(
+            "species_ref", "species_entry_ref", "statmech_ref", "conformer_group_ref", "conformer_observation_ref",
+            "transition_state_entry_ref", "declared_conformer_group_ref", "model_kind", "has_source_calculations",
+            "has_freq_calculation", "has_rotor_scans", "has_torsions", "method", "basis", "software",
+            "software_version", "workflow_tool", "workflow_tool_version",
+        ),
     )
 )
 _register_search(
