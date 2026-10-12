@@ -13,7 +13,12 @@ import pytest
 from sqlalchemy import select
 
 from app.db.models.common import SubmissionRecordType
+from app.db.models.kinetics import Kinetics
+from app.db.models.network_pdep import NetworkSolve
 from app.db.models.statmech import Statmech
+from app.db.models.thermo import Thermo
+from app.db.models.transition_state import TransitionStateEntry
+from app.db.models.transport import Transport
 from app.services.release import artifacts as artifacts_module
 from app.services.release.artifacts import (
     ReleaseRecordUniverse,
@@ -149,7 +154,32 @@ def test_a_ts_statmechs_subject_identity_carries_the_reaction_smiles(db_session,
     assert line["subject"]["reaction"]["products"] == ["C=C"]
 
 
-def test_the_no_subject_backstop_refuses_a_row_with_no_owner():
+def test_a_ts_statmech_for_a_different_ts_entry_is_refused(db_session, draft_release, curator, ts_statmechs, ts_entry):
+    other_entry = make_ts_entry(db_session)
+    assert other_entry.id != ts_entry.id
+    with pytest.raises(ReleaseCurationError, match="record_subject_mismatch"):
+        add_selection(
+            db_session,
+            release=draft_release,
+            record_type=SM,
+            record_id=ts_statmechs[0].id,
+            subject_type=TSE,
+            subject_id=other_entry.id,
+            rationale="Wrong entry.",
+            selected_by=curator.id,
+        )
+
+
+def test_the_no_subject_backstop_refuses_when_no_owner_is_found(db_session, ts_statmechs, monkeypatch):
+    from app.services.release import curation
+
+    # The database makes this unreachable, so force the derivation to find no owner.
+    monkeypatch.setattr(curation, "owner_of", lambda record, owners: None)
+    with pytest.raises(ReleaseCurationError, match="record_has_no_subject"):
+        resolve_selectable_record(db_session, ts_statmechs[0].public_ref)
+
+
+def test_owner_of_finds_the_set_key_and_none_when_neither_is():
     transient = Statmech(species_entry_id=None, transition_state_entry_id=None)
     assert owner_of(transient, CANDIDATE_SOURCES[SM]) is None
     # A row with an owner resolves to it.
@@ -172,9 +202,19 @@ def test_statmech_has_exactly_the_two_owners_in_species_first_order():
 
 
 def _legacy_release_record_universe(session, release):
-    """The enumeration as it was before statmech had a second owner (single owner per type)."""
+    """A faithful transcription of the enumeration before statmech had a second owner."""
+    # Hard-coded transcription of main's CANDIDATE_SOURCES, so this side does not depend on the change.
     legacy_sources = {
-        rt: (owners[0].model, owners[0].fk_attr, owners[0].subject_type) for rt, owners in CANDIDATE_SOURCES.items()
+        SubmissionRecordType.thermo: (Thermo, "species_entry_id", SubmissionRecordType.species_entry),
+        SubmissionRecordType.statmech: (Statmech, "species_entry_id", SubmissionRecordType.species_entry),
+        SubmissionRecordType.transport: (Transport, "species_entry_id", SubmissionRecordType.species_entry),
+        SubmissionRecordType.kinetics: (Kinetics, "reaction_entry_id", SubmissionRecordType.reaction_entry),
+        SubmissionRecordType.network_solve: (NetworkSolve, "network_id", SubmissionRecordType.network),
+        SubmissionRecordType.transition_state_entry: (
+            TransitionStateEntry,
+            "transition_state_id",
+            SubmissionRecordType.transition_state,
+        ),
     }
     state = load_selection_state(session, release)
     selected_pairs = {(row.record_type, row.record_id) for row in state.active}
