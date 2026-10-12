@@ -42,6 +42,20 @@ Four new 422 codes, on `/uploads/computed-reaction` and `/uploads/networks/pdep`
 
 Consistent payloads, a lone key, and a `geometry_key` naming no conformer's geometry (still `geometry_key_unresolved`) are unchanged.
 
+## Honest echo and supersession notice on the statmech reads (2026-10-12)
+
+**Chunk 6.1 of the statmech programme.** Migration: none. New environment variable: none. No package version changes
+(`tckdb-schemas`, `tckdb-client`, `tckdb-mcp` untouched; the client's `ScientificRequestEcho` is a `TypedDict(total=False)` that does not name the new keys, so no client change is needed).
+
+- `GET /scientific/species-entries/{id}/statmech` now carries the `supersession` notice on every record, as detail and
+  search already do. It was `null` for a superseded record.
+- Both that read and `POST|GET /scientific/statmech/search` add `request.effective_order` (keys and directions that
+  actually ordered the result), `request.selection_policy_applied` (`true` for `collapse=first`, `false` for
+  `collapse=all`, `null` on search) and `request.review_visibility` (visible and excluded statuses and whether the
+  read-profile floor applied), including on empty pages. `request.filter` still echoes what was requested.
+- Additive only: `sort` is unchanged and the actual orders are unchanged. `include=trust` on the species read now
+  batches its eager-loads like search.
+
 ## Statmech selection endpoint, client method and MCP tool (2026-10-11)
 
 **Chunk 5 of the statmech selection programme: the public surface.** Migration: none. New environment variable: none.

@@ -212,6 +212,30 @@ created_at DESC
 statmech_id DESC
 ```
 
+### What the response reports about the order and the exclusions
+
+The search response and the species-entry statmech response (`GET
+/scientific/species-entries/{id}/statmech`) carry three additive fields on
+`request`, filled on every response, empty pages included:
+
+- `effective_order`: the keys and directions (`review_rank`/`created_at`/`id`,
+  `asc`/`desc`) that actually ordered the returned records. Search and
+  `collapse=all` give `review_rank asc, created_at desc, id desc`. On the species
+  read, `collapse=first` with `selection_policy=latest` gives `created_at desc,
+  id desc`; `default` and `most_reviewed` keep the review-rank order.
+- `selection_policy_applied`: `true` only when `collapse=first` (the policy chose
+  the record); `false` on `collapse=all`, where the policy is echoed but orders
+  nothing; `null` on search, which has no policy.
+- `review_visibility`: `visible_statuses`, `excluded_statuses` and
+  `profile_floor_applied`, derived from the same visibility set the read filtered
+  with. `request.filter` keeps the flags the caller *sent*; `review_visibility` is
+  what was *effective* (the `curated` profile floor overrides `include_rejected`
+  and `include_deprecated`).
+
+`sort` keeps its string and means the candidate-list (`collapse=all`) order; it
+is not the order that chose a `collapse=first` record. The actual orders are
+unchanged. The thermo and transport species reads still carry the older echo.
+
 ## 6. Review/trust behavior
 
 Detail endpoint:
@@ -230,6 +254,8 @@ Search endpoint:
   `include_deprecated` opt them in.
 - Every record carries the badge.
 - `review_summary` counts the visible candidate set before pagination.
+- Every record carries `supersession`, as on detail. The species-entry statmech
+  read carries it too.
 
 ## 7. Internal-ID behavior
 
