@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.149.0 - 2026-10-13
+
+`RejectionCode` gains `superseded_record_not_approvable` (`tckdb-schemas` 0.123.0): a curator re-approving a record that a correction
+has replaced is refused with 409 on `PATCH /record-reviews/{type}/{id}`. Submission approval does not return it (it leaves a replaced
+member deprecated). No method changed.
+
+## 0.147.0 - 2026-10-12
+
+`search_statmech` (and `iter_statmech`) take `transition_state_entry_ref` and `declared_conformer_group_ref`. The server now
+applies the first (it used to ignore it); the second matches only records whose own declaration is that basin. In the typed
+`StatmechRecord`, `species` is optional (`None` on a transition-state-owned record), and `transition_state`, `supersession` and
+`levels` are added. Code that indexes `record["species"]` under a type checker now needs a `None` check, because
+transition-state-owned records always sent `null`. No other method changed.
+
+## 0.146.0 - 2026-10-12
+
+`RejectionCode` gains `calculation_geometry_conformer_mismatch`, `calculation_input_geometry_mismatch`,
+`transition_state_calculation_conformer_key` and `transition_state_calculation_species_geometry` (`tckdb-schemas` 0.121.0): a
+calculation whose conformer and geometry keys, or geometry and explicit inputs, disagree is now refused. No method changed.
+
+## 0.145.0 - 2026-10-11
+
+Statmech selection: `select_statmech_models` and `get_statmech_selection_manifest`, with typed `StatmechSelectionRequest` and
+`StatmechSelectionResponse`. The client sends the request as given, refuses an integer id, a ref of the wrong kind and any
+bound, page, sort or rule before a request is made, never chooses a candidate, and returns the server's answer untouched
+(`tckdb-schemas` 0.120.0). `RejectionCode` gains `statmech_selection_scope_owner_mismatch`. Each candidate's `advisory` and the response `notices` disclose
+`imported_parameters_not_revalidated:<role>` and `source_literature_unidentified:<role>`.
+
+## 0.144.0 - 2026-10-11
+
+`RejectionCode` gains `scf_stability_source_cycle`, `scf_stability_source_conformer_unanchored` and
+`ts_energy_ordering_source_type_mismatch` (`tckdb-schemas` 0.119.0). No method changed.
+
+## 0.142.0 - 2026-10-11
+
+Breaking: artifact uploads take the calculation's `calc_` ref only (#578). `upload_artifact(calculation_ref, ...)` raises
+`ValueError` for anything that is not a `calc_` ref (an integer included), and `upload_artifacts` checks every plan item
+for a `calculation_ref` before sending any request. The integer fallback is gone, along with the server's integer path
+form; the server's minimum supported `tckdb-client` is now 0.97.0, the first release that addresses a calculation by its
+ref. The client never called `POST /submissions/{submission_ref}/rights-attestations`, which now takes the `sub_` ref
+only. Requires `tckdb-schemas` 0.116.0.
+
+Retry caveat, narrowed: idempotency keys are scoped by URL path, so a lost-response retry sent through a different path
+form is not a replay. An upload committed by 0.96 through the integer path before this change can still be retried with
+the same key on the same integer path until its receipt expires (it replays, `Idempotency-Replayed: true`); a new key on
+the integer path is refused (422 `invalid_handle`) and a client below 0.97.0 gets 426.
+
+## 0.141.0 - 2026-10-11
+
+`RejectionCode` gains `statmech_selection_bound_exceeded`, `statmech_selection_unsupported` and `unknown_statmech_candidate_ref` (`tckdb-schemas` 0.114.0).
+No method changed; nothing in the server serves them yet.
+
+## 0.140.0 - 2026-10-11
+
+`RejectionCode` gains `statmech_model_declaration_invalid`, `statmech_model_declaration_version_unsupported`,
+`statmech_model_declaration_mismatch` and `unknown_structure_determination_ref` (`tckdb-schemas` 0.113.0). No method changed:
+the statmech blocks the client builds pass a `model_declaration` through untouched.
+
 ## 0.139.0 - 2026-10-06
 
 Structure selection: `select_species_calculations`, `select_conformer_basins`, `select_transition_state_evidence` and

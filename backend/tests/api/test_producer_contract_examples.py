@@ -103,10 +103,10 @@ def _conformer_upload(client) -> dict:
 
 def test_the_artifact_example_is_accepted_on_a_calculation_the_caller_deposited(client) -> None:
     deposit = _conformer_upload(client)
-    calculation_id = deposit["primary_calculation"]["calculation_id"]
+    calculation_ref = deposit["primary_calculation"]["calculation_ref"]
     info = next(i for i in ROUTES if i.path.endswith("/artifacts"))
     response = client.post(
-        info.path.format(calculation_id=calculation_id),
+        info.path.format(calculation_ref=calculation_ref),
         json=_example(_body_model(info)),
         headers=_headers(),
     )
@@ -115,11 +115,11 @@ def test_the_artifact_example_is_accepted_on_a_calculation_the_caller_deposited(
 
 def test_the_rights_attestation_example_is_accepted_on_the_callers_submission(client) -> None:
     deposit = _conformer_upload(client)
-    submission_id = deposit["submission_id"]
-    assert submission_id is not None
+    submission_ref = deposit["submission_ref"]
+    assert submission_ref is not None
     info = next(i for i in ROUTES if i.path.endswith("/rights-attestations"))
     response = client.post(
-        info.path.format(submission_id=submission_id),
+        info.path.format(submission_ref=submission_ref),
         json=_example(_body_model(info)),
         headers=_headers(),
     )

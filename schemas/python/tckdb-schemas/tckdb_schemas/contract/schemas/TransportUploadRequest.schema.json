@@ -995,7 +995,8 @@
         "inverse_power",
         "inverse_power_shifted_half",
         "karton_martin_scf",
-        "exponential_three_point"
+        "exponential_three_point",
+        "exponential_sqrt"
       ],
       "title": "CompositeExtrapolationFormula",
       "type": "string"
@@ -1302,7 +1303,7 @@
     },
     "CompositeSchemeTermIn": {
       "additionalProperties": false,
-      "description": "One term of a user-built scheme; the scheme's total is the sum of its terms.\n\n:param key: Your name for the term (for example ``\"corr\"``, ``\"dcv\"``).\n    Local to this definition and **not part of the scheme's identity**: the\n    calculation's ``composite_result.inputs`` name terms by it, and two\n    depositors who key the same recipe differently get the same scheme.\n:param operation: ``base`` / ``value`` (one input taken as it is),\n    ``extrapolation``, or ``difference`` (high minus low). ``empirical`` is\n    refused.\n:param energy_component: Which part of the input energy the term reads:\n    ``total``, ``reference``, ``correlation`` (the whole correlation energy,\n    triples included), ``triples``, ``dboc``, ``scalar_relativistic``.\n:param formula: The extrapolation formula (``extrapolation`` terms only).\n:param exponent: The formula's exponent where it has one (``inverse_power``,\n    ``inverse_power_shifted_half``). Part of the identity: exponent 3 and 3.4\n    are two schemes.\n:param inputs: The levels the term reads, each filling a slot.",
+      "description": "One term of a user-built scheme; the scheme's total is the sum of its terms.\n\n:param key: Your name for the term (for example ``\"corr\"``, ``\"dcv\"``).\n    Local to this definition and **not part of the scheme's identity**: the\n    calculation's ``composite_result.inputs`` name terms by it, and two\n    depositors who key the same recipe differently get the same scheme.\n:param operation: ``base`` / ``value`` (one input taken as it is),\n    ``extrapolation``, or ``difference`` (high minus low). ``empirical`` is\n    refused.\n:param energy_component: Which part of the input energy the term reads:\n    ``total``, ``reference``, ``correlation`` (the whole correlation energy,\n    triples included), ``triples``, ``dboc``, ``scalar_relativistic``.\n:param formula: The extrapolation formula (``extrapolation`` terms only).\n:param exponent: The formula's exponent where it has one (``inverse_power``,\n    ``inverse_power_shifted_half``); for ``exponential_sqrt`` it is ORCA's\n    alpha in ``exp(-alpha*sqrt(n))`` (ORCA: 4.42 for cc-pV{D,T}Z, 5.46 for\n    cc-pV{T,Q}Z). Part of the identity: exponent 3 and 3.4 are two schemes.\n:param inputs: The levels the term reads, each filling a slot.",
       "properties": {
         "energy_component": {
           "$ref": "#/$defs/EnergyComponentKind"
@@ -1892,7 +1893,7 @@
     },
     "FreqResultPayload": {
       "additionalProperties": false,
-      "description": "Optional inline result for a frequency calculation.\n\n:param n_imag: Number of imaginary frequencies.\n:param imag_freq_cm1: Value of the imaginary frequency in cm⁻¹.\n:param zpe_hartree: Zero-point energy in hartree.\n:param modes: Optional per-mode frequency rows. When supplied,\n    ``mode_index`` values must be unique within the payload, and\n    the count of imaginary modes must agree with ``n_imag`` if both\n    are present.\n:param reaction_coordinate_mode_index: ``mode_index`` of the mode the\n    depositor designates the reaction coordinate. ADR 0012 makes this\n    the contract that replaces the old ``n_imag == 1`` gate: a\n    transition state with more than one imaginary mode is accepted\n    only if it says which one is the barrier and is removed from the\n    partition function. Meaningless on a minimum, and refused there.",
+      "description": "Optional inline result for a frequency calculation.\n\n:param n_imag: Number of imaginary frequencies.\n:param imag_freq_cm1: Value of the imaginary frequency in cm⁻¹.\n:param zpe_hartree: Unscaled harmonic zero-point energy in hartree, as the program printed it.\n    Any scale factor is stated where the energy is used, never applied here.\n:param modes: Optional per-mode frequency rows. When supplied,\n    ``mode_index`` values must be unique within the payload, and\n    the count of imaginary modes must agree with ``n_imag`` if both\n    are present.\n:param reaction_coordinate_mode_index: ``mode_index`` of the mode the\n    depositor designates the reaction coordinate. ADR 0012 makes this\n    the contract that replaces the old ``n_imag == 1`` gate: a\n    transition state with more than one imaginary mode is accepted\n    only if it says which one is the barrier and is removed from the\n    partition function. Meaningless on a minimum, and refused there.",
       "properties": {
         "imag_freq_cm1": {
           "anyOf": [

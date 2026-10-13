@@ -91,6 +91,7 @@ from app.schemas.reads.scientific_transition_state import (
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    review_hidden_under_profile,
     review_summary,
     validate_includes,
 )
@@ -397,10 +398,11 @@ def get_transition_state(
 
     ts_statmech_block: list[TransitionStateEntryStatmech] | None = None
     if "statmech" in includes:
+        statmech_by_entry = _build_statmech_summaries_by_entry(session, [e.id for e in entries])
         ts_statmech_block = [
             TransitionStateEntryStatmech(
                 transition_state_entry_ref=e.public_ref,
-                statmech=_build_statmech_summaries(session, e.id),
+                statmech=statmech_by_entry.get(e.id, []),
             )
             for e in entries
         ]
@@ -1360,32 +1362,62 @@ def _build_validation_evidence(
 def _build_statmech_summaries(
     session: Session, entry_id: int
 ) -> list[TransitionStateStatmechSummary]:
-    """Project the statmech records a transition-state entry owns.
+    """Project the statmech records one transition-state entry owns (see the batch form)."""
+    return _build_statmech_summaries_by_entry(session, [entry_id]).get(entry_id, [])
 
-    Three statements for the entry, whatever it holds: the records, their
-    source calculations, and their torsion counts. The full record, with its
-    torsions, electronic levels and scale factor, is the statmech detail read.
+
+def _build_statmech_summaries_by_entry(
+    session: Session, entry_ids: list[int]
+) -> dict[int, list[TransitionStateStatmechSummary]]:
+    """Project the statmech records the given transition-state entries own, in one pass.
+
+    Three statements for the whole set, whatever it holds: the records, their source
+    calculations, and their torsion counts (plus, under a curated review floor, one review
+    lookup for the records and one for the calculations). The full record, with its torsions,
+    electronic levels and scale factor, is the statmech detail read.
+
+    Under a review floor, a statmech record below it (404 on its own detail route) is not listed,
+    and neither is a source calculation below it. With no floor nothing is hidden and no review
+    lookup is made, so the exploratory output is unchanged.
     """
-    records = session.scalars(
-        select(Statmech)
-        .where(Statmech.transition_state_entry_id == entry_id)
-        .order_by(Statmech.id.asc())
-    ).all()
+    if not entry_ids:
+        return {}
+    records = list(
+        session.scalars(
+            select(Statmech)
+            .where(Statmech.transition_state_entry_id.in_(entry_ids))
+            .order_by(Statmech.id.asc())
+        ).all()
+    )
+    _, hidden_records = review_hidden_under_profile(
+        session, record_type=SubmissionRecordType.statmech, record_ids=[r.id for r in records]
+    )
+    records = [r for r in records if r.id not in hidden_records]
     if not records:
-        return []
+        return {}
     record_ids = [record.id for record in records]
 
     sources: dict[int, list[TransitionStateStatmechSourceCalculation]] = {}
-    for statmech_id, role, calculation_ref in session.execute(
+    link_rows = session.execute(
         select(
             StatmechSourceCalculation.statmech_id,
             StatmechSourceCalculation.role,
+            Calculation.id,
             Calculation.public_ref,
         )
         .join(Calculation, Calculation.id == StatmechSourceCalculation.calculation_id)
         .where(StatmechSourceCalculation.statmech_id.in_(record_ids))
         .order_by(Calculation.id.asc(), StatmechSourceCalculation.role.asc())
-    ).all():
+    ).all()
+    # A calculation the active profile hides (404 on its own detail route) is not named.
+    _, hidden = review_hidden_under_profile(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids=[row[2] for row in link_rows],
+    )
+    for statmech_id, role, calculation_id, calculation_ref in link_rows:
+        if calculation_id in hidden:
+            continue
         sources.setdefault(statmech_id, []).append(
             TransitionStateStatmechSourceCalculation(
                 role=role.value, calculation_ref=calculation_ref
@@ -1398,29 +1430,31 @@ def _build_statmech_summaries(
             .group_by(StatmechTorsion.statmech_id)
         ).all()
     )
-    return [
-        TransitionStateStatmechSummary(
-            statmech_ref=record.public_ref,
-            scientific_origin=record.scientific_origin.value,
-            statmech_treatment=(
-                record.statmech_treatment.value if record.statmech_treatment else None
-            ),
-            rigid_rotor_kind=(
-                record.rigid_rotor_kind.value if record.rigid_rotor_kind else None
-            ),
-            point_group=record.point_group,
-            external_symmetry=record.external_symmetry,
-            optical_isomers=record.optical_isomers,
-            is_linear=record.is_linear,
-            uses_projected_frequencies=record.uses_projected_frequencies,
-            rotational_constant_a_cm1=record.rotational_constant_a_cm1,
-            rotational_constant_b_cm1=record.rotational_constant_b_cm1,
-            rotational_constant_c_cm1=record.rotational_constant_c_cm1,
-            source_calculations=sources.get(record.id, []),
-            torsion_count=torsion_counts.get(record.id, 0),
+    out: dict[int, list[TransitionStateStatmechSummary]] = {}
+    for record in records:
+        out.setdefault(record.transition_state_entry_id, []).append(
+            TransitionStateStatmechSummary(
+                statmech_ref=record.public_ref,
+                scientific_origin=record.scientific_origin.value,
+                statmech_treatment=(
+                    record.statmech_treatment.value if record.statmech_treatment else None
+                ),
+                rigid_rotor_kind=(
+                    record.rigid_rotor_kind.value if record.rigid_rotor_kind else None
+                ),
+                point_group=record.point_group,
+                external_symmetry=record.external_symmetry,
+                optical_isomers=record.optical_isomers,
+                is_linear=record.is_linear,
+                uses_projected_frequencies=record.uses_projected_frequencies,
+                rotational_constant_a_cm1=record.rotational_constant_a_cm1,
+                rotational_constant_b_cm1=record.rotational_constant_b_cm1,
+                rotational_constant_c_cm1=record.rotational_constant_c_cm1,
+                source_calculations=sources.get(record.id, []),
+                torsion_count=torsion_counts.get(record.id, 0),
+            )
         )
-        for record in records
-    ]
+    return out
 
 
 def _build_validation_descriptor(

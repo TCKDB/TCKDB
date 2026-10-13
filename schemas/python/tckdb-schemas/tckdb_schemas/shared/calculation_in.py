@@ -83,6 +83,12 @@ class CalculationIn(SchemaBase):
         before this field existed keep anchoring exactly as they did. When
         neither field resolves, the calculation is stored unanchored and the
         upload reports a warning rather than dropping the anchor silently.
+
+        When both ``conformer_key`` and ``geometry_key`` are stated they must
+        name the same conformer (the geometry must be that conformer's own).
+        A deposit whose keys disagree is refused with
+        ``calculation_geometry_conformer_mismatch``; neither key is trusted
+        over the other.
     :param software_release: Software provenance reference. Required, except on an
         ``assembled`` composite (arithmetic over other deposited calculations).
     :param level_of_theory: Required level-of-theory reference.
@@ -104,7 +110,9 @@ class CalculationIn(SchemaBase):
     :param opt_final_energy_hartree: Opt result (if type=opt).
     :param freq_n_imag: Freq result (if type=freq).
     :param freq_imag_freq_cm1: Freq result (if type=freq).
-    :param freq_zpe_hartree: Freq result (if type=freq).
+    :param freq_zpe_hartree: Freq result (if type=freq): the unscaled harmonic zero-point energy
+        in hartree, as the program printed it. Any scale factor is stated where the energy is used
+        (for example a network state energy's zpe_scale_factor), never applied here.
     :param parameters: Optional parsed execution-control parameter observations,
         routed through the shared calculation persistence seam.
     :param parameters_json: Optional JSON snapshot from the parser.

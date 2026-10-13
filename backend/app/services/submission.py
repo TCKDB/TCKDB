@@ -55,10 +55,11 @@ from app.services.public_refs import PREFIXES
 from app.services.record_review import (
     RecordRef,
     bulk_set_record_review_status,
+    split_superseded_targets,
 )
 from app.services.scientific_read.handles import (
     handle_type_mismatch_error,
-    parse_handle,
+    is_ref_handle,
 )
 
 if TYPE_CHECKING:
@@ -127,40 +128,31 @@ def get_submission(session: Session, submission_id: int) -> Submission:
     return _require_submission(session, submission_id)
 
 
-def resolve_submission_handle(session: Session, handle: str) -> Submission:
-    """Return the submission a path *handle* names: its integer id or its ``sub_`` ref.
+def resolve_submission_ref(session: Session, ref: str) -> Submission:
+    """Return the submission a producer path names by its ``sub_`` ref.
 
-    The deprecation-window resolver for the producer routes that used to take
-    only the integer (``docs/specs/public_identifier_policy.md``, "Route
-    behavior"). It resolves and nothing more: both forms return the same
-    :class:`Submission` row, and the caller applies the same permission check
-    to that row whichever way it was named, so a ref is neither a way around a
-    check the integer path makes nor the reverse.
+    Refs only: a row id is refused (``docs/specs/public_identifier_policy.md``,
+    "Producer write routes"). It resolves and nothing more; the caller applies
+    its permission check to the returned row.
 
-    An unknown integer and an unknown ref are the same 404, code
-    ``handle_not_found``.
-
-    :raises ValueError: 422 ``invalid_handle`` for a string that is neither
-        shape; :class:`~app.api.error_contract.CodedValueError`
+    :raises ValueError: 422 ``invalid_handle`` for a string that is not a
+        ``<prefix>_<body>`` ref (an integer id included);
+        :class:`~app.api.error_contract.CodedValueError`
         ``handle_type_mismatch`` for a ref carrying another resource's prefix.
-    :raises NotFoundError: 404 when no such submission exists.
+    :raises NotFoundError: 404 ``handle_not_found`` when no such submission
+        exists.
     """
-    kind, parsed = parse_handle(handle)
-    if kind == "id":
-        submission = session.get(Submission, parsed)
-        if submission is None:
-            logger.info("path_handle_not_found kind=submission lookup=id row_id=%d", parsed)
-            raise not_found("submission", code="handle_not_found")
-        return submission
+    if not is_ref_handle(ref):
+        raise ValueError(f"invalid_handle: {ref!r} is not a <prefix>_<body> public ref")
     expected = PREFIXES["Submission"]
-    prefix = parsed.split("_", 1)[0]
+    prefix = ref.split("_", 1)[0]
     if prefix != expected:
         raise handle_type_mismatch_error("submission", expected, prefix, noun="handle")
     submission = session.scalars(
-        select(Submission).where(Submission.public_ref == parsed)
+        select(Submission).where(Submission.public_ref == ref)
     ).first()
     if submission is None:
-        raise not_found("submission", ref=parsed, code="handle_not_found")
+        raise not_found("submission", ref=ref, code="handle_not_found")
     return submission
 
 
@@ -585,6 +577,10 @@ def approve_submission(
     record it was meant to replace); approval of the replacement is
     when retirement takes effect.
 
+    A linked record that a correction has already replaced (it has an outgoing
+    supersession edge) is left as it is rather than re-approved, and is listed
+    by public ref in the ``curator_approved`` event's ``details_json``.
+
     :raises DomainError: If the actor lacks curator/admin role, if the
         actor is also the uploader (self-approval is disallowed), or if
         the submission is not in an approvable state.
@@ -607,9 +603,15 @@ def approve_submission(
     submission.approved_at = _now_naive_utc()
     session.flush()
 
+    # A member that a correction has already replaced stays deprecated: the
+    # single-record path refuses to approve it again, and refusing the whole
+    # submission would leave it pending forever (the edge cannot be undone).
+    approvable, skipped = split_superseded_targets(
+        session, _record_links_as_targets(submission)
+    )
     bulk_set_record_review_status(
         session,
-        targets=_record_links_as_targets(submission),
+        targets=approvable,
         status=RecordReviewStatus.approved,
         actor=actor,
         submission_id=submission.id,
@@ -638,6 +640,9 @@ def approve_submission(
         from_status=from_status,
         to_status=SubmissionStatus.approved,
         summary=summary,
+        details_json=(
+            {"skipped_superseded_records": skipped} if skipped else None
+        ),
     )
     return submission
 

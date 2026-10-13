@@ -219,13 +219,16 @@ plan left a choice:
   `extrapolation` has only value and extrapolation terms, `additive` has at least
   one difference term. An `empirical` term cannot be user-defined: there is nothing
   to recompute it from.
-- **The four formulas** (`inverse_power`, `inverse_power_shifted_half`,
-  `karton_martin_scf`, `exponential_three_point`) are closed forms in
-  `tckdb_schemas.composite_formulas`, with their sources. The exponent belongs to
-  the first two and is part of identity; the exponential takes three consecutive
-  cardinal numbers. Only `inverse_power` has published worked numbers in the
-  group's sources (five ORCA manual values, reproduced to the printed digits); the
-  others are tested by recovering a known limit from the model they invert.
+- **The five formulas** (`inverse_power`, `inverse_power_shifted_half`,
+  `karton_martin_scf`, `exponential_three_point`, `exponential_sqrt`) are closed
+  forms in `tckdb_schemas.composite_formulas`, with their sources. The exponent
+  belongs to `inverse_power`, `inverse_power_shifted_half` and `exponential_sqrt`
+  (where it is ORCA's SCF alpha in `exp(-alpha*sqrt(n))`) and is part of identity;
+  the three-point exponential takes three consecutive cardinal numbers. Only
+  `inverse_power` (five ORCA manual correlation energies) and `exponential_sqrt`
+  (the two ORCA manual SCF energies, #659) have published worked numbers in the
+  group's sources, reproduced to the printed digits; the others are tested by
+  recovering a known limit from the model they invert.
 - **Identity.** `definition_hash` is a SHA-256 over the canonical JSON of `kind`
   and the terms **in canonical order**, each with operation, component, formula,
   exponent and its inputs (sorted by slot then cardinal number) as slot, declared
@@ -245,6 +248,19 @@ plan left a choice:
   declared level is skipped; each is alone in its group, so it never merges with a
   plain level that shares its label). No frozen migration copy applies: they ran
   before declared levels existed.
+  *Note, 2026-10-11 (#658, #737):* two of the three clauses above no longer
+  hold (that a declared level is recomputed from its bound scheme as stored, and
+  that each is alone in its group); "no declared level is skipped" and "never
+  merges with a plain level that shares its label" still do. A declared level is recomputed from its bound scheme **re-derived from the
+  stored terms and input levels, merges followed**, not from the stored
+  `definition_hash`, and a declared level is **not** always alone in its group:
+  when an input level is merged away the script repoints the scheme's term inputs,
+  then gets or creates the scheme and level the re-derived hash names (the
+  *reunite pass*) so the stale declared level and the new one share a hash and
+  merge. The stale scheme row is kept. The pass runs only for a stale level that
+  could be merged (no approved science resting on it, no other references);
+  otherwise it is reported as blocked and nothing is created, so the script never
+  leaves two live declared levels. The earlier text is left as written.
 - **The label** (`method` of the level, `name` of the scheme) is generated, for
   example `CBS[ref:CCSD(T)/cc-pVQZ + corr:CCSD(T)/cc-pV{T,Q}Z; inverse_power x=3; n=3,4]`
   or `Additive[... + dE:CCSD(T)/cc-pCVTZ ae - CCSD(T)/cc-pCVTZ fc + ...]`: a head by

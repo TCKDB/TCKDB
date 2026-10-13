@@ -108,6 +108,11 @@ def test_an_unchecked_site_in_a_function_that_checks_elsewhere_is_caught() -> No
 #: ``source_calculation_id``, ``reconstruction_calculation_id``), that could
 #: attach a geometry to a calculation but deliberately do not, with the reason.
 _EXEMPT_TABLES = {
+    "statmech_model_source": (
+        "the tckdb_statmech_model_source_guard trigger accepts a stated geometry only when the cited calculation ran on "
+        "or produced it (an input or output link of that calculation), and that link was composition-checked when it was "
+        "made; the source attaches no geometry to the calculation, it cites one the calculation already has"
+    ),
     "calc_geometry_validation": (
         "records a comparison between geometries that are ALREADY linked to the "
         "calculation (it reads them back from the input/output links), so it "

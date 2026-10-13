@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.common import (
     RecordReviewStatus,
@@ -34,9 +34,11 @@ from app.schemas.reads._field_bounds import (
 )
 from app.schemas.reads.scientific_common import (
     CollapseMode,
+    OrderKeyEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ReviewVisibilityEcho,
     SelectionPolicy,
 )
 from app.schemas.reads.scientific_statmech import (
@@ -50,7 +52,12 @@ class StatmechSearchRequest(BaseModel):
     Filters AND-combine. At least one meaningful filter is required —
     requests with only pagination / include / review knobs are
     rejected with 422 ``missing_filter``.
+
+    A key the model does not declare is a 422 (``extra_forbidden``), never
+    ignored: a misspelled filter would otherwise quietly widen the result.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # --- identity filters ------------------------------------------------
     species_ref: str | None = Field(
@@ -66,6 +73,16 @@ class StatmechSearchRequest(BaseModel):
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
     )
     conformer_observation_ref: str | None = Field(
+        default=None, max_length=_MAX_PUBLIC_REF_LENGTH
+    )
+    #: Statmech records owned by this transition-state entry (``tse_...``).
+    transition_state_entry_ref: str | None = Field(
+        default=None, max_length=_MAX_PUBLIC_REF_LENGTH
+    )
+    #: Records whose OWN model declaration is scoped to exactly this basin
+    #: (``cg_...``). Unlike ``conformer_group_ref`` (owning-entry context), it
+    #: never matches by owning entry, undeclared rows, or ensemble members.
+    declared_conformer_group_ref: str | None = Field(
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
     )
 
@@ -115,6 +132,15 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
     collapse: CollapseMode | None = None
     selection_policy: SelectionPolicy | None = None
+    #: The keys and directions that actually ordered the returned records.
+    #: ``sort`` stays the candidate-list (``collapse=all``) order string.
+    effective_order: list[OrderKeyEcho] = Field(default_factory=list)
+    #: ``true`` only when ``collapse=first`` (the policy chose the record);
+    #: ``false`` on ``collapse=all`` (the policy is echoed but orders nothing);
+    #: ``null`` on broad search, which has no policy.
+    selection_policy_applied: bool | None = None
+    #: Review statuses this read showed and excluded, as computed.
+    review_visibility: ReviewVisibilityEcho | None = None
 
 
 class ScientificStatmechSearchResponse(BaseModel):

@@ -96,6 +96,19 @@ _SINGLE_INPUT_OPERATIONS = frozenset({CompositeTermOperation.base, CompositeTerm
 #: Components a Karton-Martin term may extrapolate: it is a Hartree-Fock formula.
 _KARTON_MARTIN_COMPONENTS = frozenset({EnergyComponentKind.reference, EnergyComponentKind.total})
 
+#: Formulas written for the Hartree-Fock energy, and so for the SCF part only: their term reads the
+#: ``reference`` component (or the ``total`` of an HF level).
+_SCF_FORMULAS = frozenset(
+    {CompositeExtrapolationFormula.karton_martin_scf, CompositeExtrapolationFormula.exponential_sqrt}
+)
+
+#: What the ``exponent`` of each exponent-carrying formula is, for the refusal message.
+_EXPONENT_MEANING = {
+    CompositeExtrapolationFormula.inverse_power: "the x in n**-x",
+    CompositeExtrapolationFormula.inverse_power_shifted_half: "the x in (n + 1/2)**-x",
+    CompositeExtrapolationFormula.exponential_sqrt: "alpha in exp(-alpha*sqrt(n)), ORCA's SCF alpha",
+}
+
 
 def _malformed(rule: str, detail: str, **context: Any) -> CodedValidationError:
     return CodedValidationError(
@@ -310,8 +323,8 @@ def _assert_term(term: Any, operation: CompositeTermOperation) -> None:
         if exponent is None:
             raise _malformed(
                 "exponent_required",
-                f"{where}: formula '{formula.value}' needs an exponent (the x in n**-x); the exponent "
-                "is part of the recipe's identity, so there is no default.",
+                f"{where}: formula '{formula.value}' needs an exponent ({_EXPONENT_MEANING[formula]}); the "
+                "exponent is part of the recipe's identity, so there is no default.",
                 term_key=key,
                 formula=formula.value,
             )
@@ -371,12 +384,12 @@ def _assert_term(term: Any, operation: CompositeTermOperation) -> None:
                 term_key=key,
             )
     if (
-        formula is CompositeExtrapolationFormula.karton_martin_scf
+        formula in _SCF_FORMULAS
         and EnergyComponentKind(_value(term.energy_component)) not in _KARTON_MARTIN_COMPONENTS
     ):
         raise _malformed(
             "component_mismatch",
-            f"{where}: 'karton_martin_scf' is a Hartree-Fock formula; its energy_component is "
+            f"{where}: '{formula.value}' is a Hartree-Fock formula; its energy_component is "
             "'reference' (or 'total' of an HF level).",
             term_key=key,
             energy_component=_value(term.energy_component),

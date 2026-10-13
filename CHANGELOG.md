@@ -22,6 +22,226 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curated reads no longer name more records the curated profile hides (2026-10-12)
+
+**Narrowing under `profile=curated` only; completes the list left open by the previous entry.** Migration: none. New environment
+variable: none. No package version changes; no schema change (OpenAPI golden unchanged).
+
+- `GET /scientific/transition-state-entries/{ref}?include=statmech`: `statmech[].source_calculations` omits calculations below `approved`.
+- `GET /scientific/species-entries/{ref}/thermo`: the provenance's statmech fallback (`freq_calculation_ref` / `sp_calculation_ref`, the
+  primary calculation and the conformer traced through it) no longer names a hidden source calculation, whether it is the thermo's own
+  source or comes from the linked statmech. Applies to the species thermo list and to thermo search (which reuses the same builder).
+  The same read also leaves out the thermodynamic target's `conformer_group_ref`, `provenance.statmech_ref` and the traced
+  `conformer_observation_ref` / `conformer_group_ref` when the record they name is below `approved`.
+- Statmech `include=conformers` omits conformer groups below `approved`.
+- Exploratory (the default) output is unchanged. Record-level facts (levels, evidence, availability flags such as `has_conformers`) are
+  unchanged, as before.
+- Provenance slots are picked from every link first and a hidden pick is then left unnamed: a hidden primary / freq / sp is never
+  replaced by another calculation, and `provenance.level_of_theory` stays the true primary's, so no record-level fact varies by profile.
+- The TS-entry and TS-concept `include=statmech` also omit statmech records below `approved`, in one batch per read.
+- **Not yet covered.** Curated reads are not yet complete: other surfaces may still name records the curated profile hides (a follow-up
+  lists them), and supersession notices can name a successor that has since become hidden (needs an owner decision). Do not assume a
+  curated read hides every unapproved ref.
+
+## A superseded record can no longer be approved again (2026-10-13)
+
+**Narrowing: a review transition previously accepted is now refused.** Migration: none. New environment variable: none.
+`tckdb-schemas` 0.123.0, `tckdb-client` 0.149.0.
+
+- `POST /submissions/{id}/approve` is not refused: a submission member that a correction has already replaced is left deprecated
+  (not re-approved) and the other members are approved. The skipped members are listed by public ref
+  (`record_type`, `record_ref`, `superseded_by_ref`) under `skipped_superseded_records` in the `curator_approved` audit event's
+  `details_json`. Refusing the whole submission would have left it pending forever, since the edge cannot be undone.
+- `PATCH /record-reviews/{type}/{id}` answers 409
+  `superseded_record_not_approvable` when the target is `approved` and the record has an outgoing supersession edge, that is,
+  it has been replaced by a correction. Supersession is the correction path: the predecessor stays deprecated and its successor
+  stands. Re-approving the predecessor made it curated-visible again with a notice naming a successor that might be hidden.
+  `context` is `{record_type, record_ref, superseded_by_ref}`, public refs only (the two refs are omitted for a type that has none).
+- Only the `approved` target is refused. `under_review`, `rejected` and `deprecated` on a superseded record behave as before, so a
+  curator can still reopen or reject it; the record just cannot return to `approved`. An `approved -> approved` re-stamp of a legacy
+  approved-and-superseded row is refused too. Approving the superseding record is unaffected, and the supersession call itself
+  (which writes `deprecated`) is unchanged.
+- Existing data is not touched. A superseded record left approved before this guard stays as it is until a curator deprecates it.
+
+## Curated statmech reads no longer name calculations the curated profile hides (2026-10-12)
+
+**Narrowing under `profile=curated` only.** Migration: none. New environment variable: none. No package version changes; no
+schema change (OpenAPI golden unchanged).
+
+- Under `?profile=curated`, `source_calculations` and `frequencies.source_freq_calculation_refs` omit linked calculations
+  below `approved`, the ones `GET /scientific/calculations/{ref}` already answers 404 for. Before, they listed those refs with
+  their roles, types and review status. Applies to statmech detail, statmech search and the species-entry statmech read.
+- Under curated, a torsion's `source_scan_calculation_ref` (and `_id` under `internal_ids`) is null when that scan calculation is hidden.
+- Exploratory (the default) output is unchanged.
+- Deliberately not filtered: record-level facts (`levels`, `evidence_summary` counts, `available_sections` flags, trust), which
+  describe the approved record's own provenance. Release, archive and export copy raw provenance tables and are unchanged.
+
+## Releases can select and ship transition-state-owned statmech (2026-10-12)
+
+**Release artifact content change; no API schema change.** Migration: none. New environment variable: none. No package
+version changes (`tckdb-client`, `tckdb-schemas` and `tckdb-mcp` are unchanged; admin selection still takes a
+`record_ref`).
+
+- A statmech record owned by a transition-state entry can now be selected into a dataset release. Before, selecting one
+  was refused `record_has_no_subject`; the code stays as an unreachable backstop.
+- Release artifacts may now carry `subject_type: "transition_state_entry"` lines for statmech, with a subject identity
+  that includes the reaction SMILES. The entry's other statmech records ship as candidates only; releasing a TS entry
+  still embeds none of its statmech.
+- Species-only releases render byte-identically, and published manifests are untouched.
+
+## Statmech frequencies block lists curvature witnesses (2026-10-12)
+
+**Additive response field.** Migration: none. New environment variable: none. No package version changes
+(`tckdb-client`, `tckdb-schemas` and `tckdb-mcp` are unchanged; the client types `frequencies` as a plain dict).
+
+- `GET /scientific/statmech/{ref}?include=frequencies` (and the species and search reads that expand it) gains
+  `frequencies.curvature_witnesses`: one entry per (link role, calculation) pair whose calculation stores a frequency result
+  or a Hessian, whatever the role or job type: `{calculation_ref, role, calculation_type, has_frequency_result, has_hessian}`.
+  Before this, an optimisation or composite job carrying curvature was invisible to a reader.
+- Unchanged, byte for byte: `source_freq_calculation_refs` / `_ids` (still `freq`-role links only),
+  `available_sections.has_frequencies` and `evidence_summary.has_freq_calculation` (link-presence facts, not eligibility),
+  and the `has_freq_calculation` search filter.
+- A presence fact only. No eligibility or "selected" field, no witness ranked or picked, and a calculation the record does not
+  link is never borrowed. Qualification stays with `POST /scientific/statmech/select`.
+- Witnesses follow the read profile's calculation visibility: under `profile=curated` a linked calculation below `approved` is not listed.
+
+## Statmech search refuses a key it does not declare; the statmech MCP tools reach every filter (2026-10-12)
+
+**Narrowing: `/scientific/statmech/search` used to ignore an unrecognised key and now refuses it.** Migration: none. New environment
+variable: none. `tckdb-mcp` 0.9.0. `tckdb-client` 0.148.0 (gains the `UNKNOWN_QUERY_PARAMETER` rejection code) and `tckdb-schemas` 0.122.0 (the refusal-code reference lists it); neither sent an undeclared key.
+
+- POST: a body key the request model does not declare is a 422 `extra_forbidden`. GET: an unrecognised query key is a 422
+  `unknown_query_parameter`. Before, both returned 200 and dropped the key, so a misspelled filter (`has_torsion`) silently
+  broadened the result. A caller that was sending an ignored key must stop sending it. The OpenAPI golden records
+  `additionalProperties: false` on the request.
+- MCP: `tckdb_statmech_search` takes every filter the backend takes, as a discriminator on its own, an explicit `false`
+  included, plus `transition_state_entry_ref` and `declared_conformer_group_ref`. Both statmech MCP tools accept
+  `electronic_levels` and an explicitly named `trust` (`all` never expands to it). `include=assessments` is refused with its own
+  message.
+
+## Statmech search filters by transition-state entry and by declared basin (2026-10-12)
+
+**Fresh behaviour change: a filter that used to be ignored is now applied.** Migration: none. New environment variable: none.
+`tckdb-client` 0.147.0. `tckdb-schemas` and `tckdb-mcp` are unchanged.
+
+- `transition_state_entry_ref` on `/scientific/statmech/search` (GET query or POST body) used to be silently dropped, so a caller
+  already sending it got unfiltered results. It now returns only records owned by that transition-state entry. Alone it is a
+  meaningful filter (it was a 422 `missing_filter`). A species-axis filter beside it ANDs into an empty page. A malformed or
+  wrong-prefix ref is a 422; a well-formed unknown ref is an empty page, like every other filter on this endpoint.
+- New `declared_conformer_group_ref` matches only records whose own model declaration is scoped to exactly that basin. It never
+  matches an undeclared record, a record only by its owning entry, or an ensemble that merely contains the basin as a member.
+- `conformer_group_ref` and `conformer_observation_ref` keep their meaning (every record of the owning species entry).
+- Client: `search_statmech` takes both new arguments; `StatmechRecord.species` is now optional (it is `null` on a
+  transition-state-owned record) and `transition_state`, `supersession` and `levels` are typed.
+
+## A geometry and a conformer may not disagree (2026-10-12)
+
+**Narrowing: payloads previously accepted are now refused.** Migration: none. New environment variable: none.
+`tckdb-schemas` 0.121.0, `tckdb-client` 0.146.0. Closes #635 (items 1, 2 and 4 were already done in #756).
+
+Four new 422 codes, on `/uploads/computed-reaction` and `/uploads/networks/pdep` unless noted:
+
+- `calculation_geometry_conformer_mismatch`: a species calculation whose `conformer_key` and `geometry_key` belong to different
+  conformers, and a conformer's own (primary) calculation that states a `conformer_key` or `geometry_key` other than its own
+  conformer's. Both used to be accepted; the first anchored to `conformer_key`, the second stored the output on another
+  conformer's geometry row or ignored the key.
+- `transition_state_calculation_conformer_key`: a `conformer_key` on a transition state's calculation (it was silently dropped).
+- `transition_state_calculation_species_geometry`: a transition-state calculation whose `geometry_key` names a species conformer's geometry.
+- `calculation_input_geometry_mismatch` (also `/uploads/computed-species`, `/uploads/conformers`, `/uploads/transition-states`): a `freq` or `sp`
+  whose explicit `input_geometries` omit the geometry it states (`geometry_key`, or its conformer's or saddle point's geometry). An `opt`
+  is exempt. Only coordinate rounding and a rigid move or reordering of the same structure are forgiven: send the conformer's own xyz as
+  the input geometry, not coordinates a program re-printed or symmetrised.
+
+Consistent payloads, a lone key, and a `geometry_key` naming no conformer's geometry (still `geometry_key_unresolved`) are unchanged.
+
+## Honest echo and supersession notice on the statmech reads (2026-10-12)
+
+**Chunk 6.1 of the statmech programme.** Migration: none. New environment variable: none. No package version changes
+(`tckdb-schemas`, `tckdb-client`, `tckdb-mcp` untouched; the client's `ScientificRequestEcho` is a `TypedDict(total=False)` that does not name the new keys, so no client change is needed).
+
+- `GET /scientific/species-entries/{id}/statmech` now carries the `supersession` notice on every record, as detail and
+  search already do. It was `null` for a superseded record.
+- Both that read and `POST|GET /scientific/statmech/search` add `request.effective_order` (keys and directions that
+  actually ordered the result), `request.selection_policy_applied` (`true` for `collapse=first`, `false` for
+  `collapse=all`, `null` on search) and `request.review_visibility` (visible and excluded statuses and whether the
+  read-profile floor applied), including on empty pages. `request.filter` still echoes what was requested.
+- Additive only: `sort` is unchanged and the actual orders are unchanged. `include=trust` on the species read now
+  batches its eager-loads like search.
+
+## Statmech selection endpoint, client method and MCP tool (2026-10-11)
+
+**Chunk 5 of the statmech selection programme: the public surface.** Migration: none. New environment variable: none.
+`tckdb-schemas` 0.120.0 (contract route rows and one refusal code), `tckdb-client` 0.145.0, `tckdb-mcp` 0.8.0.
+
+- `POST /api/v1/scientific/statmech/select` and `.../select/manifest`: one typed target union (a species entry or a
+  transition-state entry), both on the read-only REPEATABLE READ snapshot session. A valid negative outcome is a 200; a bound
+  exceeded is the coded 422 `statmech_selection_bound_exceeded`, never a prefix; an unknown or hidden ref is one 404, and a visible scope ref that belongs to another entry is the coded 422 `statmech_selection_scope_owner_mismatch`.
+  Public refs only (`smd_`/`sm_` for candidates), no database id in a response or an error. The response surfaces each
+  candidate's `advisory` and the decision `notices`. No computed value is returned, and this release ships no active rule.
+- Disclosure: a ref the read profile hides (a target, basin, determination, ensemble declaration, reference model or candidate)
+  answers exactly as a ref that names nothing (`handle_not_found` / `unknown_statmech_candidate_ref`, same body up to the ref the
+  caller supplied); a ref the caller may see but that belongs to another entry is the coded 422
+  `statmech_selection_scope_owner_mismatch` (`context.field` names the ref, the other owner is never named). The shared
+  curated-floor 404 now echoes the supplied ref like an unknown ref's, on every route that uses it.
+- `TCKDBClient.select_statmech_models` / `get_statmech_selection_manifest` and the MCP tool `tckdb_select_statmech_models`
+  mirror the other selectors (refuse an id, a wrong-kind ref, a bound, a page, a sort or a rule before any request).
+- Selected export and releases: the other selectors' decisions are not part of a release or an export (only network
+  kinetics has an `export-selected`, and it serialises numbers; statmech returns none), so statmech decisions follow the
+  thermo, kinetics and structure precedent: select plus manifest. Declared models already ship with their statmech record in
+  releases (chunk 2). See `docs/guides/selecting_statmech_models.md`.
+
+## Statmech decision and replay (2026-10-11)
+
+**Chunk 4 of the statmech selection programme: decision and replay, no public surface yet.** Migration: none. New
+environment variable: none. No wire, contract or client change (so no version bump).
+
+- An internal decision stage over the qualification: `qualify` selects nothing; `protocol_preferred` compares only a decided
+  population, through the shared graph kernel (rule supersession before opposition, conflicts, fronts) over whole models,
+  and ships **zero** rules, so every comparison ends `incomparable_alternatives` (or `sole_eligible_candidate`) until an
+  audited rule is activated. A pair a rule might rank but cannot (unknown prerequisite) is `unresolved_comparability`.
+- A replayable manifest (no database ids) with three offline operations: reproduce the recorded ordering, reassess the
+  captured inputs, or replay the whole decision; a self-inconsistent manifest or an unsupported version is refused.
+- Replacing a statmech record now needs the same subject (a transition-state record was compared by its empty species
+  column only) and, where both declare a model, the same declared scope.
+
+## Export: transport linearity from a linked witness (2026-10-11)
+
+**Changes the bulk-export output (NDJSON and CHEMKIN), no wire-version bump.** Migration: none. New environment variable: none.
+
+- The geometry index of a CHEMKIN `tran.dat` line (and NDJSON `is_linear`) no longer comes from the lowest-id statmech record of the
+  species. It comes from a record the selected transport links to: the geometry of a calculation it cites (an `opt`'s final output,
+  or a `freq`/`sp` input), then a linked `opt`/`freq` statmech. The atom count is decisive for one and two atoms (0 and 1).
+- NDJSON species rows gain `is_linear_source` (`{kind, ref}` or null) and `is_linear_conflict` (`{kind, refs}` or null).
+  `is_linear` is null when the species has no selected transport.
+- `tran.dat` lines gain a trailing `linearity=<kind>:<ref>` comment. Three or more atoms with no witness are written as nonlinear
+  (2) with `linearity=assumed nonlinear from atom count`; disagreeing witnesses are written the same way and name the refs. Each
+  assumed value, each disagreement and each witness the atom count overrode is an export gap of kind `transport`.
+- A species whose SMILES cannot be parsed has its `tran.dat` line dropped, with a gap; it is never written as 0.
+
+## Statmech qualification (2026-10-11)
+
+**Chunk 3 of the statmech selection programme: bounded qualification, no public surface yet.** Migration: none. New
+environment variable: none. `tckdb-client` 0.141.0 (three new rejection codes), `tckdb-schemas` 0.114.0.
+
+- An internal service decides, per candidate model (a declared model or a legacy statmech record read as stored), whether it can
+  answer a stated question about one species or transition state, with a closed reason registry and an outcome precedence
+  (evidence conflict, unsupported model, missing data, unresolved, none applicable). Undecided alternatives stop the whole requested
+  domain being certified. The read runs in one read-only repeatable-read snapshot and is bounded (500 candidates, 25,000 nested
+  rows). Nothing is exposed over HTTP yet.
+
+## Declared statistical models for statmech records (2026-10-11)
+
+**Chunk 2 of the statmech selection programme: durable declarations.** Migration: `e6b3a9d1f742` (additive; chains from
+`d3a8f6c1b952`). New environment variable: none.
+
+- A statmech record can declare the model it supplies: scope (atom, basin, explicit equilibrium ensemble, or a transition-state
+  determination), attribution, recipe, ensemble members and sources. New tables `statmech_model_declaration`,
+  `statmech_model_member`, `statmech_model_source`, one declaration per record. Optional on every statmech upload path; a record
+  deposited without one reads as it always did, nothing is inferred and nothing is backfilled.
+- The declaring record's accepted-science freeze covers its declaration, members and sources. Owner rules (basin, determination,
+  member, source calculation and geometry) are database facts. Archive and release carry the new tables.
+- `tckdb-schemas` 0.113.0, `tckdb-client` 0.140.0 (new rejection codes).
+
 ## Trust-contract correction, inspection-filter correction and the structure coverage inventory (2026-10-06)
 
 **Chunk 6 of 6 of calculation, conformer and transition-state energy selection: legacy corrections.** This changes live answers

@@ -16,8 +16,10 @@ export type CoordinateUnitMode = "angstrom" | "bohr"
  * the same rows the coordinate table renders — for the (expected-rare)
  * case where the archive did not return a ready-made `xyz_text`.
  * `GeometryViewer` only calls this as a fallback: the archive's own
- * `xyz_text` is passed to 3Dmol unmodified whenever it is present, so
- * this function is never on the path a normal deployment takes.
+ * `xyz_text` is what 3Dmol is given whenever it is present (after
+ * `hydrogenSymbolsForViewer` rewrites any `D`/`T` hydrogen-isotope token to
+ * `H`; text with no such token reaches 3Dmol unchanged), so this function is
+ * never on the path a normal deployment takes.
  *
  * Kept as a small, independently-testable pure function in its own
  * (non-component) module rather than inlined in `GeometryViewer.tsx` —
@@ -38,6 +40,35 @@ export type CoordinateUnitMode = "angstrom" | "bohr"
 export function buildXyzBlock(atoms: GeometryAtom[]): string {
     const lines = atoms.map((atom) => `${atom.element} ${atom.x} ${atom.y} ${atom.z}`)
     return `${atoms.length}\n\n${lines.join("\n")}`
+}
+
+/**
+ * Rewrites a `D` / `T` element token (either case) to `H` on every atom line
+ * of an XYZ block, for the 3D viewer only.
+ *
+ * Decision #672: in a geometry, `D`/`T` mean the hydrogen isotopes (2H/3H).
+ * The backend stores lowercase `d`/`t` as 2H/3H too, and 3Dmol upper-cases the
+ * first letter of a symbol, so lowercase is rewritten as well. Only a token that
+ * is exactly one letter followed by whitespace is touched, so Ti, Ta, Tb, Tc,
+ * Te, Th, Tl, Tm, Ts, Db, Ds, Dy, TI, DY, D1 and T1 are left alone.
+ * 3Dmol knows only element symbols, so it draws a literal `D` as an unknown
+ * element in its pink fallback colour. The first two XYZ lines (atom count,
+ * comment) are never touched. A block with no `D`/`T` atom line is returned as
+ * the same string, so the viewer still hands 3Dmol the archive's text
+ * unmodified in the normal case. The isotope label shown next to an atom comes
+ * from the atom rows (`isotopeLabel`), not from this text, so nothing is lost.
+ */
+export function hydrogenSymbolsForViewer(xyz: string): string {
+    const lines = xyz.split("\n")
+    let changed = false
+    for (let i = 2; i < lines.length; i++) {
+        const next = lines[i].replace(/^(\s*)[DdTt](?=\s)/, "$1H")
+        if (next !== lines[i]) {
+            lines[i] = next
+            changed = true
+        }
+    }
+    return changed ? lines.join("\n") : xyz
 }
 
 /**

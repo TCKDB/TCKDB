@@ -78,6 +78,7 @@ from app.db.models.artifact_storage_capacity import ArtifactStorageCapacityEvent
 from app.services import artifact_storage
 from app.services import artifact_storage_capacity as capacity
 from app.services import artifact_storage_seaweedfs as seaweedfs
+from tests.api.artifact_urls import artifacts_url
 
 CONFORMER_PAYLOAD: dict = {
     "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
@@ -267,7 +268,7 @@ def test_a_healthy_store_accepts_the_upload(client, use_store) -> None:
     calc_id = _a_calculation(client)
 
     response = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+        artifacts_url(client, calc_id), json=_artifact_request()
     )
     assert response.status_code == 201, response.text
     body = response.json()
@@ -301,7 +302,7 @@ def test_a_full_store_is_507_and_says_an_operator_must_act(
     calc_id = _a_calculation(client)
 
     response = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+        artifacts_url(client, calc_id), json=_artifact_request()
     )
     assert response.status_code == 507, response.text
     body = response.json()
@@ -335,7 +336,7 @@ def test_an_unreachable_store_is_still_503_and_still_says_retry(
     calc_id = _a_calculation(client)
 
     response = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+        artifacts_url(client, calc_id), json=_artifact_request()
     )
     assert response.status_code == 503, response.text
     body = response.json()
@@ -1237,7 +1238,7 @@ def test_a_seaweedfs_quota_reaches_the_depositor_as_507(
     calc_id = _a_calculation(client)
 
     response = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+        artifacts_url(client, calc_id), json=_artifact_request()
     )
     assert response.status_code == 507, response.text
     assert response.json()["code"] == "artifact_storage_full"
@@ -1277,7 +1278,7 @@ def test_a_full_seaweedfs_reaches_the_depositor_as_507_and_status_as_degraded(
     calc_id = _a_calculation(client)
 
     response = client.post(
-        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+        artifacts_url(client, calc_id), json=_artifact_request()
     )
     assert response.status_code == 507, response.text
     assert response.json()["code"] == "artifact_storage_full"
@@ -1360,3 +1361,41 @@ def test_a_refused_copy_whose_size_cannot_be_read_stays_unclassified(
     with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
         artifact_storage.hold_artifact_object(_SHA256, client=store, bucket="b")
     assert caught.value.full is False
+
+
+@pytest.mark.parametrize(
+    ("operation", "source_key"),
+    [
+        (artifact_storage.hold_artifact_object, _KEY),
+        (artifact_storage.restore_held_object, artifact_storage.reclaim_hold_key(_SHA256)),
+    ],
+    ids=["hold", "restore"],
+)
+def test_a_refused_copy_asks_about_the_bucket_that_refused(
+    capacity_db, monkeypatch, operation, source_key
+) -> None:
+    """Both the room probe and the quota probe are pointed at the bucket the
+    copy wrote to, not the configured one: a caller moving objects in another
+    bucket must not be told about the wrong bucket's room or quota."""
+    assert artifact_storage.S3_BUCKET != "b"
+    monkeypatch.setattr(artifact_storage, "S3_SEAWEEDFS_MASTER_URL", _MASTER)
+    room_asked: list[dict] = []
+    quota_asked: list[dict] = []
+
+    def _room(**kwargs):
+        room_asked.append(kwargs)
+        return _ROOMY
+
+    def _quota(**kwargs):
+        quota_asked.append(kwargs)
+        return _QUOTA_EXHAUSTED
+
+    monkeypatch.setattr(seaweedfs, "report_capacity", _room)
+    monkeypatch.setattr(seaweedfs, "report_quota", _quota)
+    store = _InternalErrorOnCopy({source_key: b"z" * _HELD_BYTES})
+    with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
+        operation(_SHA256, client=store, bucket="b")
+
+    assert caught.value.s3_code == seaweedfs.QUOTA_EXCEEDED_CODE
+    assert [call["bucket"] for call in room_asked] == ["b"]
+    assert [call["bucket"] for call in quota_asked] == ["b"]

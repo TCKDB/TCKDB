@@ -27,6 +27,8 @@ LINEAR_CASES = [
     (F.inverse_power_shifted_half, 4.0, (3, 4)),
     (F.karton_martin_scf, None, (2, 3)),
     (F.karton_martin_scf, None, (4, 5)),
+    (F.exponential_sqrt, 4.42, (2, 3)),
+    (F.exponential_sqrt, 5.46, (3, 4)),
 ]
 
 
@@ -101,3 +103,20 @@ def test_the_exponential_really_is_not_linear():
 def test_coefficients_that_cannot_be_given_are_refused_not_guessed(formula, cardinals, exponent):
     with pytest.raises(ExtrapolationError):
         extrapolation_coefficients(formula, cardinals, exponent)
+
+
+def test_the_exponential_sqrt_coefficients_by_hand():
+    """f(n) = exp(-alpha sqrt n) with alpha = ln 2, cardinals 1 and 4: f = 1/2 and 1/4, so c_1 = (1/4)/(1/4 - 1/2) = -1, c_4 = 2."""
+    import math
+
+    got = extrapolation_coefficients(F.exponential_sqrt, [4, 1], math.log(2.0))
+    assert got == pytest.approx([-1.0, 2.0], abs=1e-14)
+    assert is_linear_formula(F.exponential_sqrt) is True
+
+
+def test_the_exponential_sqrt_coefficients_depend_on_alpha():
+    assert extrapolation_coefficients(F.exponential_sqrt, [3, 4], 5.46) != extrapolation_coefficients(
+        F.exponential_sqrt, [3, 4], 4.42
+    )
+    with pytest.raises(ExtrapolationError):
+        extrapolation_coefficients(F.exponential_sqrt, [3, 4], None)

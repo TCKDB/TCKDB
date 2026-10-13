@@ -267,6 +267,7 @@ def test_dry_run_prints_the_plan_and_changes_nothing(
     assert seeded["gaussian"].public_ref in out
     assert "BLOCKED" in out
     assert "Dry run" in out
+    assert "would be reunited: 0" in out
     db_session.expire_all()
     assert _merged_into(db_session, seeded["gaussian"].id) is None
     rows = db_session.scalars(
@@ -282,6 +283,7 @@ def test_commit_through_main(merge, monkeypatch, db_session, seeded, capsys):
     assert _run_main(merge, monkeypatch, db_session, ["--commit"]) == 0
     out = capsys.readouterr().out
     assert f"into {seeded['psi4'].public_ref}: 2 calculation(s) repointed" in out
+    assert "stale by a level merge, reunited: 0" in out
     db_session.expire_all()
     assert _merged_into(db_session, gaussian_id) == seeded["psi4"].id
 

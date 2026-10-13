@@ -13,7 +13,8 @@ Format
 ``extrapolation`` scheme and ``Additive`` for an ``additive`` one, and a term is:
 
 * a base or value term: ``[base ][<component>:]<level>``;
-* an extrapolation term: ``[<component>:]<levels>; <formula>[ x=<exponent>]; n=<c1>,<c2>``;
+* an extrapolation term: ``[<component>:]<levels>; <formula>[ x=<exponent>]; n=<c1>,<c2>`` (``alpha=`` instead of
+  ``x=`` for ``exponential_sqrt``, whose number is ORCA's alpha);
 * a difference term: ``d<component>:<high level> - <low level>``.
 
 ``<component>`` is omitted when it is ``total`` (``ref`` for ``reference``,
@@ -157,7 +158,8 @@ def _term_text(term: LabelTerm) -> str:
         cardinals = ",".join(str(i.cardinal_number) for i in ordered)
         formula = term.formula or ""
         if term.exponent is not None:
-            formula += f" x={_number(term.exponent)}"
+            # ``exponential_sqrt`` carries ORCA's alpha, not an exponent of n: say which.
+            formula += f" {'alpha' if term.formula == 'exponential_sqrt' else 'x'}={_number(term.exponent)}"
         return f"{_component_prefix(term.energy_component)}{_extrapolation_levels(term.inputs)}; {formula}; n={cardinals}"
     if operation == "difference":
         by_slot = {i.slot: i for i in term.inputs}

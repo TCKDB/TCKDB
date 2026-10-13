@@ -55,17 +55,24 @@ router = APIRouter(prefix="/statmech")
 # rejected rather than silently ignored.
 _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
+# GET: every declared search field plus the profile keys. Derived from the
+# request model so a new filter cannot be refused here by oversight.
+_GET_ALLOWED_QS_KEYS: set[str] = set(StatmechSearchRequest.model_fields) | set(PROFILE_QUERY_KEYS)
+
 
 @router.get(
     "/search", response_model=ScientificStatmechSearchResponse
 )
 def scientific_statmech_search_get(
+    request: Request,
     session: Session = Depends(get_db),
     species_ref: str | None = Query(None),
     species_entry_ref: str | None = Query(None),
     statmech_ref: str | None = Query(None),
     conformer_group_ref: str | None = Query(None),
     conformer_observation_ref: str | None = Query(None),
+    transition_state_entry_ref: str | None = Query(None),
+    declared_conformer_group_ref: str | None = Query(None),
     model_kind: StatmechTreatmentKind | None = Query(None),
     has_source_calculations: bool | None = Query(None),
     has_freq_calculation: bool | None = Query(None),
@@ -93,12 +100,24 @@ def scientific_statmech_search_get(
     as meaningful — see
     ``backend/docs/specs/scientific_statmech_reads.md``.
     """
+    unknown = set(request.query_params.keys()) - _GET_ALLOWED_QS_KEYS
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "unknown_query_parameter: query-string keys "
+                f"{sorted(unknown)!r} are not statmech search filters; "
+                "an unrecognised key is refused rather than ignored."
+            ),
+        )
     request_obj = StatmechSearchRequest(
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
         statmech_ref=statmech_ref,
         conformer_group_ref=conformer_group_ref,
         conformer_observation_ref=conformer_observation_ref,
+        transition_state_entry_ref=transition_state_entry_ref,
+        declared_conformer_group_ref=declared_conformer_group_ref,
         model_kind=model_kind,
         has_source_calculations=has_source_calculations,
         has_freq_calculation=has_freq_calculation,

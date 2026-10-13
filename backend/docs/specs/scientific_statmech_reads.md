@@ -80,6 +80,42 @@ calculation refs plus the scaling factor; the full per-mode arrays
 remain available via
 `GET /scientific/calculations/{ref}?include=results`.
 
+`frequencies.source_freq_calculation_refs` lists the calculations linked under
+the `freq` role, and keeps that meaning (as do `available_sections.has_frequencies`
+and `evidence_summary.has_freq_calculation`: link-presence facts, not eligibility).
+Beside it, `frequencies.curvature_witnesses` lists every (link role, calculation)
+pair whose calculation stores a `calc_freq_result` or a `calc_hessian` row, whatever
+the role or job type, so curvature stored on an optimisation or composite job is
+visible. Each entry is `{calculation_ref, role, calculation_type,
+has_frequency_result, has_hessian}`, ordered by role declaration order then
+calculation id. It is a stored-result presence fact only: it does not say the
+curvature is at the pinned geometry, usable, or eligible for any task (that is
+qualified by `POST /scientific/statmech/select`), and no witness is ranked or
+picked. Only calculations the record itself links are consulted; a calculation of
+the same owner that the record does not link is never borrowed. Witnesses follow
+the read profile's calculation visibility, the same floor
+`GET /scientific/calculations/{ref}` applies: under `profile=curated` a linked
+calculation below `approved` is omitted (so its existence, review state and
+whether it stores a Hessian are not confirmed), under `exploratory` every linked
+calculation with curvature is listed. The existing `source_freq_calculation_refs`
+pointer and the `source_calculations` block follow the same rule: under `profile=curated` they omit linked
+calculations below `approved`, so a statmech read never names a calculation that
+`GET /scientific/calculations/{ref}` answers 404 for, and a torsion's `source_scan_calculation_ref` / `_id` is
+null when that scan calculation is hidden. **Scope decision (owner may overrule):** only those
+blocks, which identify a calculation, are filtered. Record-level facts (`levels`, the `evidence_summary`
+counts, the `available_sections` flags including `has_frequencies`, and trust) describe the approved
+statmech's own provenance and are computed from every link in every profile, so they do not vary by profile.
+Release, archive and export copy raw provenance tables and are unaffected. Exploratory output is unchanged.
+
+The same rule now applies to the transition-state-entry read's `include=statmech` (`statmech[].source_calculations`), the thermo
+provenance's source calculations (the thermo's own and the statmech fallback), its target conformer group, statmech link and traced
+conformer refs, and statmech `include=conformers`
+(`conformer_group_ref`).
+
+**Not yet covered:** curated reads are not yet complete. Other surfaces may still name records the curated profile hides (a
+follow-up lists them), and supersession notices can name a successor that has since become hidden (an owner decision). Do not
+assume a curated read hides every unapproved ref.
+
 `statmech` also does **not** link to a conformer directly. The
 linkage is at the `species_entry` level: the `include=conformers`
 token surfaces every `conformer_group` belonging to the same
@@ -102,7 +138,9 @@ include=electronic_levels    — statmech_electronic_level rows (ordered
                                low-lying (energy_cm1, degeneracy) pairs
                                driving q_elec; DR-0033)
 include=frequencies          — pointer block listing source freq
-                               calc refs + resolved scale factor
+                               calc refs, curvature witnesses (any
+                               linked calc with a freq result or
+                               Hessian) + resolved scale factor
 include=conformers           — list of conformer_group refs reachable
                                via the statmech's species_entry
                                (context hint — see §3)
@@ -164,8 +202,10 @@ Implemented (MVP):
 species_ref
 species_entry_ref
 statmech_ref
-conformer_group_ref
-conformer_observation_ref
+conformer_group_ref           — owning-entry context: every record of the group's species entry
+conformer_observation_ref     — owning-entry context, likewise
+transition_state_entry_ref    — records owned by that transition-state entry
+declared_conformer_group_ref  — only records whose OWN declaration is scoped to exactly that basin
 model_kind                    — StatmechTreatmentKind enum
 has_source_calculations       — explicit False is meaningful
 has_freq_calculation          — explicit False is meaningful
@@ -197,6 +237,17 @@ sort                          — non-None → 422 client_sort_not_supported
 - Selection-priority sort. v0 ships with the standard
   `review_rank → created_at → id` deterministic ordering.
 
+**Owner and basin filters.** `transition_state_entry_ref` resolves a `tse_` ref and keeps records with
+`transition_state_entry_id` equal to it. Filters AND-combine, so it beside `species_ref`, `species_entry_ref`, `conformer_*`
+or `declared_conformer_group_ref` is an empty page, never an OR (the calculation-search precedent; no new refusal code).
+`declared_conformer_group_ref` keeps records with a `basin`-scope model declaration on exactly that group. It never matches an
+undeclared legacy record, a record only by its owning entry, or an ensemble that lists the basin as a member (owner decision D3:
+"which models include basin A" would be a separately named filter). A malformed or wrong-prefix ref is 422; a well-formed unknown
+ref is an empty page, as for every filter here. Hidden records stay governed by the statmech record's own review floor. A filter is not a subject: unlike statmech-select, a
+below-floor transition-state entry or basin named as a filter is not 404-gated, and only the returned records are floored,
+exactly as for `species_entry_ref` and `conformer_group_ref`. Under `profile=curated` a hidden entry or basin with no visible
+statmech gives the same body as an unknown ref (the caller's ref echoed).
+
 ### At-least-one-filter rule
 
 Pure pagination / include / review knobs do not satisfy the gate. A
@@ -211,6 +262,30 @@ review_rank ASC
 created_at DESC
 statmech_id DESC
 ```
+
+### What the response reports about the order and the exclusions
+
+The search response and the species-entry statmech response (`GET
+/scientific/species-entries/{id}/statmech`) carry three additive fields on
+`request`, filled on every response, empty pages included:
+
+- `effective_order`: the keys and directions (`review_rank`/`created_at`/`id`,
+  `asc`/`desc`) that actually ordered the returned records. Search and
+  `collapse=all` give `review_rank asc, created_at desc, id desc`. On the species
+  read, `collapse=first` with `selection_policy=latest` gives `created_at desc,
+  id desc`; `default` and `most_reviewed` keep the review-rank order.
+- `selection_policy_applied`: `true` only when `collapse=first` (the policy chose
+  the record); `false` on `collapse=all`, where the policy is echoed but orders
+  nothing; `null` on search, which has no policy.
+- `review_visibility`: `visible_statuses`, `excluded_statuses` and
+  `profile_floor_applied`, derived from the same visibility set the read filtered
+  with. `request.filter` keeps the flags the caller *sent*; `review_visibility` is
+  what was *effective* (the `curated` profile floor overrides `include_rejected`
+  and `include_deprecated`).
+
+`sort` keeps its string and means the candidate-list (`collapse=all`) order; it
+is not the order that chose a `collapse=first` record. The actual orders are
+unchanged. The thermo and transport species reads still carry the older echo.
 
 ## 6. Review/trust behavior
 
@@ -230,6 +305,8 @@ Search endpoint:
   `include_deprecated` opt them in.
 - Every record carries the badge.
 - `review_summary` counts the visible candidate set before pagination.
+- Every record carries `supersession`, as on detail. The species-entry statmech
+  read carries it too.
 
 ## 7. Internal-ID behavior
 

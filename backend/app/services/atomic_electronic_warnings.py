@@ -160,8 +160,9 @@ def collect_atomic_electronic_warnings(
                     f"{element} atom has a {ground.term_symbol} ground term whose "
                     f"spin-orbit splitting lowers the ground level, but no "
                     f"soc_total energy correction was supplied, so its energy is "
-                    f"the spin-orbit-free value ("
-                    f"{ground.spin_orbit_shift_kj_mol:.2f} kJ/mol)."
+                    f"the spin-orbit-free value, which lies "
+                    f"{abs(ground.spin_orbit_shift_kj_mol):.2f} kJ/mol above the "
+                    f"ground level."
                 ),
             )
         )

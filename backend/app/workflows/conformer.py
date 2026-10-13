@@ -146,6 +146,8 @@ def persist_conformer_upload(
         calc=calculation,
         explicit_input_geometries=request.calculation.input_geometries,
         fallback_geometry_id=geometry.id,
+        stated_geometry_id=geometry.id,
+        stated_geometry_label="the geometry of the conformer it belongs to",
         # No row id: the caller sent one primary calculation and the type
         # is enough to name it. Its ``calculation.id`` is an internal
         # handle they cannot act on, and this label is copied verbatim
@@ -219,6 +221,7 @@ def persist_conformer_upload(
             calculations_by_key=calculations_by_key,
             created_by=created_by,
             warnings_out=provenance_warnings,
+            own_conformer_group_id=observation.conformer_group_id,
         )
 
     transport_row = None

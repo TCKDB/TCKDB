@@ -41,6 +41,7 @@ from app.services.release.record_rights import linked_rights
 from app.services.release.records import (
     CANDIDATE_SOURCES,
     RECORD_TABLES,
+    CandidateOwner,
     public_refs_for,
 )
 from app.services.rights import licenses_match
@@ -413,14 +414,16 @@ def _assert_subject_matches(
     pointing at a record attached to something else entirely — a mistake no
     downstream consumer could detect.
     """
-    model, fk_attr, expected_subject_type = CANDIDATE_SOURCES[record_type]
-    if subject_type is not expected_subject_type:
+    owners = CANDIDATE_SOURCES[record_type]
+    owner = next((o for o in owners if o.subject_type is subject_type), None)
+    if owner is None:
+        allowed = " or ".join(o.subject_type.value for o in owners)
         raise ReleaseCurationError(
             f"subject_type_mismatch: a {record_type.value} selection is about a "
-            f"{expected_subject_type.value}, not a {subject_type.value}."
+            f"{allowed}, not a {subject_type.value}."
         )
     actual = session.scalars(
-        select(getattr(model, fk_attr)).where(model.id == record_id)
+        select(getattr(owner.model, owner.fk_attr)).where(owner.model.id == record_id)
     ).first()
     if actual != subject_id:
         raise ReleaseCurationError(
@@ -449,6 +452,21 @@ class ResolvedCandidate:
     record_id: int
     subject_type: SubmissionRecordType
     subject_id: int
+
+
+def owner_of(record: object, owners: tuple[CandidateOwner, ...]) -> tuple[CandidateOwner, int] | None:
+    """The owner whose foreign key is set on ``record``, with the subject id.
+
+    For a type with two owners the database guarantees exactly one is set
+    (statmech's ``statmech_exactly_one_subject``); ``None`` means none is, which
+    the database makes unreachable and which the caller refuses as
+    ``record_has_no_subject``.
+    """
+    for owner in owners:
+        owner_id = getattr(record, owner.fk_attr)
+        if owner_id is not None:
+            return owner, owner_id
+    return None
 
 
 def resolve_selectable_record(session: Session, record_ref: str) -> ResolvedCandidate:
@@ -480,15 +498,16 @@ def resolve_selectable_record(session: Session, record_ref: str) -> ResolvedCand
         raise ReleaseRecordNotFound(f"unknown_record: no record matches {record_ref!r}.")
     record_id = row[0]
 
-    model, fk_attr, subject_type = CANDIDATE_SOURCES[record_type]
-    subject_id = session.scalars(
-        select(getattr(model, fk_attr)).where(model.id == record_id)
-    ).first()
-    if subject_id is None:
+    owners = CANDIDATE_SOURCES[record_type]
+    record = session.get(owners[0].model, record_id)
+    found = owner_of(record, owners) if record is not None else None
+    if found is None:
+        allowed = " or ".join(o.subject_type.value for o in owners)
         raise ReleaseCurationError(
             f"record_has_no_subject: {record_ref!r} is not attached to a "
-            f"{subject_type.value}, so a release cannot recommend it *for* anything."
+            f"{allowed}, so a release cannot recommend it *for* anything."
         )
+    subject_type, subject_id = found[0].subject_type, found[1]
     return ResolvedCandidate(
         record_type=record_type,
         record_id=record_id,

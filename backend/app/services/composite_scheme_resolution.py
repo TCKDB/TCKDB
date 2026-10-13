@@ -49,6 +49,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import select
@@ -466,6 +467,48 @@ def scheme_definition_hash(definition: Any, resolved: list[list[_ResolvedInput]]
     return hashlib.sha256(scheme_definition_canonical_json(definition, resolved).encode("utf-8")).hexdigest()
 
 
+def stored_scheme_inputs(session: Session, scheme: CompositeScheme) -> tuple[Any, list[list[_ResolvedInput]]]:
+    """A stored scheme's terms and input levels, shaped like a deposited definition (#658).
+
+    Returns ``(definition, resolved)`` for :func:`scheme_definition_hash`. Each input
+    level is the **canonical** one: a level merged into another
+    (``level_of_theory_merge``) is replaced by the level it was merged into, which is
+    what a fresh deposit of the same recipe resolves to. Nothing here reads the
+    scheme's stored ``definition_hash``, so a stale one cannot vouch for itself.
+    """
+    terms = list(session.scalars(select(CompositeSchemeTerm).where(CompositeSchemeTerm.scheme_id == scheme.id)))
+    terms.sort(key=lambda t: t.position)
+    resolved: list[list[_ResolvedInput]] = []
+    for term in terms:
+        inputs = session.scalars(
+            select(CompositeSchemeTermInput)
+            .where(CompositeSchemeTermInput.term_id == term.id)
+            .order_by(CompositeSchemeTermInput.id)
+            .execution_options(populate_existing=True)
+        ).all()
+        row: list[_ResolvedInput] = []
+        for item in inputs:
+            level_id = session.scalar(
+                select(LevelOfTheoryMerge.into_lot_id).where(LevelOfTheoryMerge.merged_lot_id == item.level_of_theory_id)
+            )
+            level = session.get(LevelOfTheory, level_id if level_id is not None else item.level_of_theory_id)
+            assert level is not None
+            row.append(_ResolvedInput(CompositeInputSlot(_enum_value(item.slot)), item.cardinal_number, level))
+        resolved.append(row)
+    return SimpleNamespace(kind=scheme.kind, terms=terms), resolved
+
+
+def stored_scheme_definition_hash(session: Session, scheme: CompositeScheme) -> str:
+    """The ``definition_hash`` a stored user scheme has *now*, merges followed (#658).
+
+    Equal to ``scheme.definition_hash`` while none of its input levels has been
+    merged away; different once one has, which is exactly when a fresh deposit of
+    the recipe would not find the scheme.
+    """
+    definition, resolved = stored_scheme_inputs(session, scheme)
+    return scheme_definition_hash(definition, resolved)
+
+
 def _label_for(definition: Any, resolved: list[list[_ResolvedInput]], definition_hash: str) -> str:
     from app.services.composite_scheme_label import LabelInput, LabelTerm, build_scheme_label
 
@@ -515,11 +558,13 @@ def _get_or_create_user_scheme(
     definition: Any,
     resolved: list[list[_ResolvedInput]],
     definition_hash: str,
+    *,
+    source_literature_id: int | None = None,
 ) -> CompositeScheme:
     scheme = _select_scheme(session, definition_hash)
     if scheme is not None:
         return scheme
-    literature_id = None
+    literature_id = source_literature_id
     if getattr(definition, "literature", None) is not None:
         from app.services.literature_resolution import resolve_or_create_literature
 
@@ -603,6 +648,39 @@ def resolve_declared_scheme_level(session: Session, ref: Any) -> LevelOfTheory:
     definition_hash = scheme_definition_hash(definition, resolved)
     scheme = _get_or_create_user_scheme(session, definition, resolved, definition_hash)
 
+    return _ensure_declared_level(session, scheme, definition_hash)
+
+
+def reunite_stale_scheme(session: Session, scheme: CompositeScheme) -> LevelOfTheory | None:
+    """Give a user scheme whose input levels were merged the scheme and level a fresh deposit would find (#658).
+
+    Re-derives the scheme's hash from its stored terms and inputs, merges followed
+    (:func:`stored_scheme_definition_hash`). If it still equals the stored one the
+    scheme is current and ``None`` is returned. Otherwise the scheme the derived hash
+    names is got or created (a copy of this one's terms, over the canonical levels,
+    with the same literature), and so is the level of theory that names it; that
+    level is returned. The stale scheme and its level are left untouched: identity
+    rows are never rewritten, and a release may have frozen their refs. The caller
+    merges the stale level into the returned one. The operator script calls this only
+    for a scheme whose stale level can be merged (otherwise the new level would sit
+    beside a stale one that cannot go, two live levels for one recipe).
+    """
+    derived = stored_scheme_definition_hash(session, scheme)
+    if derived == scheme.definition_hash.strip():
+        return None
+    definition, resolved = stored_scheme_inputs(session, scheme)
+    current = _get_or_create_user_scheme(
+        session, definition, resolved, derived, source_literature_id=scheme.source_literature_id
+    )
+    return _ensure_declared_level(session, current, derived)
+
+
+def _ensure_declared_level(session: Session, scheme: CompositeScheme, definition_hash: str) -> LevelOfTheory:
+    """Get or create the level of theory that names ``scheme`` and its ``declared`` binding.
+
+    Merges are followed: if the level the hash names was merged away, the level it
+    was merged into is returned (and bound).
+    """
     lot_hash = declared_scheme_lot_hash(definition_hash)
     level = _select_level_by_hash(session, lot_hash)
     if level is None:

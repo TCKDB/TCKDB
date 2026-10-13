@@ -27,19 +27,25 @@ are refused with :class:`RehearsalCommitRefused`:
   string literals (``'...'``, ``E'...'``, ``$$...$$``, ``$tag$...$tag$``) are
   ignored too, so ``SELECT '--'; COMMIT`` is two statements and the second is
   refused. Savepoints are tracked by position on PostgreSQL's own stack, so
-  reusing a name cannot release the rehearsal's;
+  reusing a name cannot release the rehearsal's, and a ``U&"..."`` name
+  (escapes are not decoded) can be opened but not released or rolled back to;
 * ``commit()`` on the driver connection object under that ``Connection``
   (#592): that one instance's ``commit`` is replaced by a refusal while the
   rehearsal runs, and restored afterwards.
 
 Out of scope, and only detected, not stopped, by
 ``tests/api/test_api_bundle_dry_run_submit_parity.py``: a raw driver cursor
-or connection method (``.connection.cursor()``, ``.connection.execute()``,
-``.pgconn``, ``dbapi_connection``, ``driver_connection``, or a ``getattr``
-with a computed name on something connection-like) sending ``COMMIT``
-directly, and any other connection, engine or session the rehearsed code
-opens for itself. That test fails if any module under ``app/`` other than
-this one reaches for them, which is how such a path would be written.
+or connection method sending ``COMMIT`` directly, and any other connection,
+engine or session the rehearsed code opens for itself. That test fails if any
+module under ``app/`` other than this one touches the driver's objects by one
+of the ordinary routes: any ``.cursor`` attribute, any ``.connection``
+attribute that is not the ``Session.connection()`` call (the pooled-connection
+proxy, which is how an alias such as ``fairy = s.connection().connection;
+fairy.execute(...)`` starts), ``.pgconn``, ``dbapi_connection``,
+``driver_connection``, ``raw_connection``, or a ``getattr``/``attrgetter``
+that names one of those or builds the name. It is an AST scan of TCKDB's own
+code, so it catches an accidental path, not code written to hide one:
+indirection through a stored name or another module's helper is not seen.
 
 It also keeps a rehearsal from hurting real writers. Its inserts take the
 same locks a submit's do, so it waits at most ``lock_timeout`` for another
@@ -83,6 +89,21 @@ _ROLLBACK_TO = re.compile(
     rf"^\s*ROLLBACK(?:\s+(?:WORK|TRANSACTION))?\s+TO(?:\s+SAVEPOINT)?{_NAME_GAP}({_IDENT})",
     re.I,
 )
+# ``U&"..."`` is a quoted identifier with Unicode escapes: ``U&"sa_savepoint_1"``
+# and ``sa_savepoint_1`` name the same savepoint, but ``_IDENT`` would read the
+# former as the unquoted name ``u&``. Rather than decode the escapes, a
+# savepoint opened with one is tracked as a name nothing can match, and
+# releasing or rolling back to one is refused outright.
+_UNICODE_IDENT = r'[uU]&"'
+_SAVEPOINT_UNICODE = re.compile(rf"^\s*SAVEPOINT\s+{_UNICODE_IDENT}", re.I)
+_RELEASE_UNICODE = re.compile(rf"^\s*RELEASE(?:\s+SAVEPOINT)?\s+{_UNICODE_IDENT}", re.I)
+_ROLLBACK_TO_UNICODE = re.compile(
+    rf"^\s*ROLLBACK(?:\s+(?:WORK|TRANSACTION))?\s+TO(?:\s+SAVEPOINT)?\s+{_UNICODE_IDENT}",
+    re.I,
+)
+#: The stack entry for a savepoint whose name was written with ``U&"..."``.
+#: PostgreSQL identifiers cannot contain NUL, so no decoded name equals it.
+_UNDECODED_NAME = "\x00"
 _PUBLISHING = re.compile(r"^\s*(COMMIT|END|PREPARE\s+TRANSACTION)\b", re.I)
 _DOLLAR_TAG = re.compile(r"\$(?:[A-Za-z_\x80-\U0010ffff][\w\x80-\U0010ffff]*)?\$")
 
@@ -268,7 +289,17 @@ def rehearsal(session: Session) -> Iterator[None]:
 
     def _guard_sql(_conn, _cursor, statement, _params, _context, _many):
         for stmt in _statements(statement):
-            if match := _SAVEPOINT.match(stmt):
+            if _SAVEPOINT_UNICODE.match(stmt):
+                stack.append(_UNDECODED_NAME)
+            elif _RELEASE_UNICODE.match(stmt) or _ROLLBACK_TO_UNICODE.match(stmt):
+                # It could name the rehearsal's own savepoint (or one the stack
+                # does not know), and the escapes are not decoded here.
+                below_orm.append(True)
+                raise _refuse(
+                    f"address a savepoint by a U&\"...\" name ({stmt.strip()!r}); "
+                    "use a plain name"
+                )
+            elif match := _SAVEPOINT.match(stmt):
                 stack.append(_savepoint_name(match.group(1)))
             elif match := _RELEASE.match(stmt):
                 index = _most_recent(stack, _savepoint_name(match.group(1)))

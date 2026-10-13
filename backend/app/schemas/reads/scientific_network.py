@@ -534,6 +534,9 @@ class NetworkSolveStateEnergySourceSummary(BaseModel):
     species_entry_ref: str | None = None
     stoichiometry: int | None = None
     calculation_ref: str
+    #: The participant's own ``freq`` whose zero-point energy is added to ``calculation_ref``
+    #: (``electronic_plus_zpe``); null when none was cited.
+    zpe_calculation_ref: str | None = None
 
 
 class NetworkSolveStateEnergySummary(BaseModel):
@@ -562,6 +565,8 @@ class NetworkSolveStateEnergySummary(BaseModel):
     source_sum_comparison: Literal["agrees", "not_compared"] | None = None
     source_sum_not_compared_reason: str | None = None
     energy_precision_kj_mol: float | None = None
+    #: The factor the ZPEs were scaled with, as stated; null is "not stated", never one.
+    zpe_scale_factor: float | None = None
 
 
 class NetworkSolveChannelBarrierSummary(BaseModel):

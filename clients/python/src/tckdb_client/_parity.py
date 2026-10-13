@@ -195,7 +195,7 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "tests/test_client_upload_dispatch.py",
     ),
     (
-        "POST", "/api/v1/calculations/{calculation_id}/artifacts",
+        "POST", "/api/v1/calculations/{calculation_ref}/artifacts",
         "upload_artifacts", None, None, "tests/test_upload_artifacts_batch.py",
     ),
     (
@@ -284,6 +284,14 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
     (
         "POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/select/manifest",
         "get_species_conformer_selection_manifest", None, None, "tests/test_structure_selection.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/statmech/select",
+        "select_statmech_models", None, None, "tests/test_statmech_selection.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/statmech/select/manifest",
+        "get_statmech_selection_manifest", None, None, "tests/test_statmech_selection.py",
     ),
     (
         "POST", "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref}/evidence/select",
@@ -935,7 +943,7 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
         ("POST", "/api/v1/conformer-groups/{conformer_group_id}/selections"),
         ("GET", "/api/v1/submissions/for-review"),
         ("POST", "/api/v1/submissions/{submission_id}/approve"),
-        ("POST", "/api/v1/submissions/{submission_id}/rights-attestations"),
+        ("POST", "/api/v1/submissions/{submission_ref}/rights-attestations"),
         ("POST", "/api/v1/submissions/{submission_id}/reject"),
         ("POST", "/api/v1/submissions/{submission_ref}/supersede"),
         ("POST", "/api/v1/releases"),

@@ -74,9 +74,12 @@ def lock_scientific_records(
 def supersession_subject(row: Any, record_type: SubmissionRecordType) -> tuple[Any, ...]:
     """Return the stable subject identity used to validate a replacement."""
 
+    if record_type is SubmissionRecordType.statmech:
+        # A statmech record is owned by a species entry OR a transition-state entry. Comparing the species column alone
+        # would call every two transition-state records "the same subject" (both None).
+        return (row.species_entry_id, row.transition_state_entry_id)
     if record_type in {
         SubmissionRecordType.thermo,
-        SubmissionRecordType.statmech,
         SubmissionRecordType.transport,
     }:
         return (row.species_entry_id,)

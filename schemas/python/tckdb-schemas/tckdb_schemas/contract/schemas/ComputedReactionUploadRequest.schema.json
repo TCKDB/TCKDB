@@ -760,7 +760,7 @@
     },
     "BundleSpeciesIn": {
       "additionalProperties": false,
-      "description": "A species defined within this kinetics bundle.\n\n:param key: Local key for referencing this species in the reaction.\n:param species_entry: Species identity (SMILES, charge, multiplicity).\n:param conformers: Conformer observations (geometry + opt calculation). Each\n    list item creates a distinct observation row, even when multiple items\n    land in the same conformer group.\n:param calculations: Additional calculations (freq, sp at higher LOT).\n    Their ``geometry_key``, when given, must reference one of this\n    species's conformer geometries -- it names the geometry the\n    calculation ran on.\n\n    Anchoring is ``conformer_key``'s job, not ``geometry_key``'s. This\n    docstring used to say the opposite (\"so the backend can anchor them\n    to the correct observation\"), and that sentence was the seam the\n    anchoring defect lived in: it made one field responsible for two\n    questions that come apart whenever a calculation's geometry is not a\n    declared conformer geometry. A coarse pre-optimisation is exactly\n    that case -- ``validate_calc_geometry_keys`` below excuses ``opt``\n    from supplying ``geometry_key`` for precisely this reason -- and the\n    result was a calculation that named no geometry, was excused from\n    naming one, and silently got no anchor either.\n\n    ``geometry_key`` is still honoured as the anchor when\n    ``conformer_key`` is absent, so payloads predating this field are\n    unaffected.\n:param thermo: Optional thermochemistry data.\n:param statmech: Optional statistical-mechanics data.\n:param transport: Optional transport properties (Lennard-Jones\n    parameters, dipole, polarizability, rotational relaxation) for this\n    species's entry: the standalone transport upload's content plus\n    links to this bundle's calculations by local key. Provenance falls\n    back to the bundle's ``analysis_software_release`` and\n    ``workflow_tool_release`` exactly as thermo's does.",
+      "description": "A species defined within this kinetics bundle.\n\n:param key: Local key for referencing this species in the reaction.\n:param species_entry: Species identity (SMILES, charge, multiplicity).\n:param conformers: Conformer observations (geometry + opt calculation). Each\n    list item creates a distinct observation row, even when multiple items\n    land in the same conformer group.\n:param calculations: Additional calculations (freq, sp at higher LOT).\n    Their ``geometry_key``, when given, must reference one of this\n    species's conformer geometries -- it names the geometry the\n    calculation ran on.\n\n    Anchoring is ``conformer_key``'s job, not ``geometry_key``'s. This\n    docstring used to say the opposite (\"so the backend can anchor them\n    to the correct observation\"), and that sentence was the seam the\n    anchoring defect lived in: it made one field responsible for two\n    questions that come apart whenever a calculation's geometry is not a\n    declared conformer geometry. A coarse pre-optimisation is exactly\n    that case -- ``validate_calc_geometry_keys`` below excuses ``opt``\n    from supplying ``geometry_key`` for precisely this reason -- and the\n    result was a calculation that named no geometry, was excused from\n    naming one, and silently got no anchor either.\n\n    ``geometry_key`` is still honoured as the anchor when\n    ``conformer_key`` is absent, so payloads predating this field are\n    unaffected. When both are stated they must name the same conformer: a\n    ``geometry_key`` that belongs to another conformer than the\n    ``conformer_key`` is refused\n    (``calculation_geometry_conformer_mismatch``), and neither key is\n    trusted over the other.\n:param thermo: Optional thermochemistry data.\n:param statmech: Optional statistical-mechanics data.\n:param transport: Optional transport properties (Lennard-Jones\n    parameters, dipole, polarizability, rotational relaxation) for this\n    species's entry: the standalone transport upload's content plus\n    links to this bundle's calculations by local key. Provenance falls\n    back to the bundle's ``analysis_software_release`` and\n    ``workflow_tool_release`` exactly as thermo's does.",
       "properties": {
         "applied_energy_corrections": {
           "description": "Applied energy corrections targeting this species's resolved species_entry. Use for scheme-backed corrections such as AEC totals (application_role=aec_total) and BAC totals (application_role=bac_total). ``source_calculation_key`` resolves against the bundle's global calculation namespace; the workflow rejects 422 when the referenced calc is not owned by this species. ``source_conformer_key`` resolves against this species's own ``conformers[*].key`` — a sibling species's conformer is not in scope and is refused.",
@@ -901,6 +901,18 @@
             }
           ],
           "default": null
+        },
+        "model_declaration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatmechModelDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The statistical model this record supplies: scope, attribution, recipe, ensemble members and the sources each part rests on. Optional; a record deposited without one is read as it is, and nothing is inferred from the other fields."
         },
         "note": {
           "anyOf": [
@@ -2093,7 +2105,8 @@
         "inverse_power",
         "inverse_power_shifted_half",
         "karton_martin_scf",
-        "exponential_three_point"
+        "exponential_three_point",
+        "exponential_sqrt"
       ],
       "title": "CompositeExtrapolationFormula",
       "type": "string"
@@ -2400,7 +2413,7 @@
     },
     "CompositeSchemeTermIn": {
       "additionalProperties": false,
-      "description": "One term of a user-built scheme; the scheme's total is the sum of its terms.\n\n:param key: Your name for the term (for example ``\"corr\"``, ``\"dcv\"``).\n    Local to this definition and **not part of the scheme's identity**: the\n    calculation's ``composite_result.inputs`` name terms by it, and two\n    depositors who key the same recipe differently get the same scheme.\n:param operation: ``base`` / ``value`` (one input taken as it is),\n    ``extrapolation``, or ``difference`` (high minus low). ``empirical`` is\n    refused.\n:param energy_component: Which part of the input energy the term reads:\n    ``total``, ``reference``, ``correlation`` (the whole correlation energy,\n    triples included), ``triples``, ``dboc``, ``scalar_relativistic``.\n:param formula: The extrapolation formula (``extrapolation`` terms only).\n:param exponent: The formula's exponent where it has one (``inverse_power``,\n    ``inverse_power_shifted_half``). Part of the identity: exponent 3 and 3.4\n    are two schemes.\n:param inputs: The levels the term reads, each filling a slot.",
+      "description": "One term of a user-built scheme; the scheme's total is the sum of its terms.\n\n:param key: Your name for the term (for example ``\"corr\"``, ``\"dcv\"``).\n    Local to this definition and **not part of the scheme's identity**: the\n    calculation's ``composite_result.inputs`` name terms by it, and two\n    depositors who key the same recipe differently get the same scheme.\n:param operation: ``base`` / ``value`` (one input taken as it is),\n    ``extrapolation``, or ``difference`` (high minus low). ``empirical`` is\n    refused.\n:param energy_component: Which part of the input energy the term reads:\n    ``total``, ``reference``, ``correlation`` (the whole correlation energy,\n    triples included), ``triples``, ``dboc``, ``scalar_relativistic``.\n:param formula: The extrapolation formula (``extrapolation`` terms only).\n:param exponent: The formula's exponent where it has one (``inverse_power``,\n    ``inverse_power_shifted_half``); for ``exponential_sqrt`` it is ORCA's\n    alpha in ``exp(-alpha*sqrt(n))`` (ORCA: 4.42 for cc-pV{D,T}Z, 5.46 for\n    cc-pV{T,Q}Z). Part of the identity: exponent 3 and 3.4 are two schemes.\n:param inputs: The levels the term reads, each filling a slot.",
       "properties": {
         "energy_component": {
           "$ref": "#/$defs/EnergyComponentKind"
@@ -3198,6 +3211,16 @@
       "title": "CoreTreatmentFact",
       "type": "object"
     },
+    "CountedState": {
+      "description": "Whether a statistical factor is already counted in the supplied model.",
+      "enum": [
+        "counted",
+        "not_counted",
+        "unknown"
+      ],
+      "title": "CountedState",
+      "type": "string"
+    },
     "DeclarationOrigin": {
       "description": "Who produced the declaration: the depositor, or a parser reading the program output.",
       "enum": [
@@ -3332,6 +3355,15 @@
       "title": "DescribedRuntime",
       "type": "object"
     },
+    "DividingSurface": {
+      "description": "The dividing surface of a transition-state model. ``variational`` is recognised and not evaluated.",
+      "enum": [
+        "conventional_saddle_point",
+        "variational"
+      ],
+      "title": "DividingSurface",
+      "type": "string"
+    },
     "ElectronicLevelIn": {
       "additionalProperties": false,
       "description": "One electronic energy level for the electronic partition function.\n\nOrdered (energy, degeneracy) pairs relative to the ground state\n(DR-0033). E.g. OH X²Π: level 1 (0 cm⁻¹, g=2), level 2 (~139 cm⁻¹,\ng=2). ``level_index`` is 1-based and unique within a statmech record.",
@@ -3446,7 +3478,7 @@
     },
     "EnergyCorrectionSchemeRef": {
       "additionalProperties": false,
-      "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists it is reused. Otherwise a new\nscheme is created. Identity has two forms, chosen by ``data_revision``:\n\n* ``data_revision`` **absent**: ``(kind, name, level_of_theory,\n  frequency_level_of_theory, source_literature, software_release,\n  workflow_tool_release)``. This is the original identity plus the\n  frequency level, which is NULL for every scheme deposited before the\n  field existed, so each of those keeps its identity and its public ref.\n* ``data_revision`` **present**: ``(kind, name, level_of_theory,\n  frequency_level_of_theory, source_literature, software_release,\n  data_revision)``. The workflow tool build is *not* part of this\n  identity; see below.\n\n``frequency_level_of_theory`` is part of identity in both forms, and an\nabsent value is a value of its own: a scheme sent without one never\nmatches a scheme that has one, and keeps exactly the identity it had\nbefore the field existed.\n\nA scheme deposited without ``data_revision`` never matches one\ndeposited with it, even when the tables are identical: absence says\nnothing about which revision the numbers came from, so it is not\nguessed.\n\nA citation or software release that differs from an existing\nsame-``(kind, name, level_of_theory)`` scheme is never dropped: it\nmakes this a scientifically distinct scheme (a different citation, or\na different program build's numbers), so it resolves to a\ndifferent row rather than silently overwriting or discarding what was\nsupplied.\n\n:param software: The program *release* that computed this scheme's\n    parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or\n    bond-additivity parameter set is the output of a program's own\n    build-level numerics (integration grid, SCF thresholds, a named\n    basis set's internal definition), which change between releases\n    of the same program -- so the correction is release-specific, not\n    merely program-specific. Only ``name`` is required; a depositor\n    who knows only the program (no version/revision/build) resolves\n    to the version-less release row for it, a complete and honest\n    deposit, not a degraded one. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program build computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param level_of_theory: The level of theory the correction parameters\n    belong to. For a scheme keyed on an ``energy//frequency`` pair this\n    is the **energy** level.\n:param frequency_level_of_theory: The level of theory the frequencies\n    (and so the ZPE and thermal terms) were computed at, for a scheme\n    keyed on both. Only bond-additivity schemes (``bac_petersson`` and\n    ``bac_melius``) are: Arkane keys those on\n    ``CompositeLevelOfTheory(freq=..., energy=...)``, and keys atom\n    energies (and every other kind) on the energy level alone. Send the\n    ``energy`` half in ``level_of_theory`` and the ``freq`` half here.\n    The same energy level with two different frequency levels is two\n    schemes. Resolved exactly like ``level_of_theory`` (a duplicate\n    level that was merged resolves to the one that holds it). Optional:\n    omit it for a scheme keyed on one level, and nothing is assumed. A\n    scheme is never stored with an inferred frequency level.\n\n    Refused, because each is a contradiction and not a preference\n    (ADR 0008): a frequency level without ``level_of_theory``\n    (``energy_correction_scheme_frequency_level_without_energy_level``),\n    and a frequency level on any kind other than the two BAC kinds\n    (``energy_correction_scheme_frequency_level_not_applicable``).\n    A frequency level that resolves to the same level of theory as the\n    energy level is not a second key: it is stored as absent, so the\n    same table cannot become two schemes by spelling the one level\n    twice.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``. When\n    ``data_revision`` is absent this is part of the scheme's identity\n    (each build is its own scheme). When ``data_revision`` is present\n    it is provenance only: it records the build that first deposited\n    the scheme, and a later deposit of the same revision by a different\n    build reuses the row and does not replace it.\n:param data_revision: The revision of the *data* that holds the\n    parameter tables, for example the RMG-database commit that holds\n    Arkane's atom-energy and BAC tables. A tool build (the RMG-Py\n    commit recorded on ``workflow_tool_release``) does not say which\n    tables it read, because the tables live in a separate repository.\n    The same ``data_revision`` with the same tables is the same scheme\n    whichever build read it; a new ``data_revision`` is a new scheme,\n    so a one-parameter change in a new database revision is a new\n    scheme and not a conflict. Free text, at most 200 characters. A\n    value that is 7 to 64 hex digits is treated as a git commit and\n    lower-cased; any other value (a tag, say) is kept exactly as\n    written. Send the full 40-hex commit: a short and a full SHA of\n    the same commit are two revisions and make two schemes. Send it only\n    when the tables really came from that repository revision, not when\n    the values were overridden by the user (Arkane ``atomEnergies`` or\n    BAC overrides in an input file). Optional: omit it when the data\n    revision is not known or the tables were modified.\n\n    On a scheme with a ``data_revision``, the stored\n    ``workflow_tool_release`` is the first depositor's build, not a\n    list of every build that later sent the same revision.\n\n    Send the program name in ``software`` (``{\"name\": \"Gaussian\"}``)\n    rather than the ESS version: a version is part of identity, so each\n    one makes another scheme.\n:param atom_params_applied_as: How ``atom_params`` enter the corrected\n    energy: ``subtracted`` or ``added`` (see ``AtomParamApplication``).\n    Applies to every entry of ``atom_params`` and to nothing else.\n    Optional: omit it when not known, and nothing is assumed. Giving\n    it without ``atom_params`` is refused. Sending a value that\n    differs from the one already stored on the matched scheme is a\n    conflict, as a differing parameter value is.",
+      "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists it is reused. Otherwise a new\nscheme is created. Identity has two forms, chosen by ``data_revision``:\n\n* ``data_revision`` **absent**: ``(kind, name, level_of_theory,\n  frequency_level_of_theory, source_literature, software_release,\n  workflow_tool_release)``. This is the original identity plus the\n  frequency level, which is NULL for every scheme deposited before the\n  field existed, so each of those keeps its identity and its public ref.\n* ``data_revision`` **present**: ``(kind, name, level_of_theory,\n  frequency_level_of_theory, source_literature, software_release,\n  data_revision)``. The workflow tool build is *not* part of this\n  identity; see below.\n\n``frequency_level_of_theory`` is part of identity in both forms, and an\nabsent value is a value of its own: a scheme sent without one never\nmatches a scheme that has one, and keeps exactly the identity it had\nbefore the field existed.\n\nA scheme deposited without ``data_revision`` never matches one\ndeposited with it, even when the tables are identical: absence says\nnothing about which revision the numbers came from, so it is not\nguessed.\n\nA citation or software release that differs from an existing\nsame-``(kind, name, level_of_theory)`` scheme is never dropped: it\nmakes this a scientifically distinct scheme (a different citation, or\na different program build's numbers), so it resolves to a\ndifferent row rather than silently overwriting or discarding what was\nsupplied.\n\n:param software: The program *release* that computed this scheme's\n    parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or\n    bond-additivity parameter set is the output of a program's own\n    build-level numerics (integration grid, SCF thresholds, a named\n    basis set's internal definition), which change between releases\n    of the same program -- so the correction is release-specific, not\n    merely program-specific. Only ``name`` is required; a depositor\n    who knows only the program (no version/revision/build) resolves\n    to the version-less release row for it, a complete and honest\n    deposit, not a degraded one. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program build computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param level_of_theory: The level of theory the correction parameters\n    belong to. For a scheme keyed on an ``energy//frequency`` pair this\n    is the **energy** level.\n:param frequency_level_of_theory: The level of theory the frequencies\n    (and so the ZPE and thermal terms) were computed at, for a scheme\n    keyed on both. Only bond-additivity schemes (``bac_petersson`` and\n    ``bac_melius``) are: Arkane keys those on\n    ``CompositeLevelOfTheory(freq=..., energy=...)``, and keys atom\n    energies on the energy level alone. Arkane's isodesmic reference data\n    is keyed on the pair too, but the ``isodesmic`` kind has no defined\n    content here yet, so a frequency level is accepted only on the BAC\n    kinds for now. Send the\n    ``energy`` half in ``level_of_theory`` and the ``freq`` half here.\n    The same energy level with two different frequency levels is two\n    schemes. Resolved exactly like ``level_of_theory`` (a duplicate\n    level that was merged resolves to the one that holds it). Optional:\n    omit it for a scheme keyed on one level, and nothing is assumed. A\n    scheme is never stored with an inferred frequency level.\n\n    Refused, because each is a contradiction and not a preference\n    (ADR 0008): a frequency level without ``level_of_theory``\n    (``energy_correction_scheme_frequency_level_without_energy_level``),\n    and a frequency level on any kind other than the two BAC kinds, for now\n    (``energy_correction_scheme_frequency_level_not_applicable``).\n    A frequency level that resolves to the same level of theory as the\n    energy level is not a second key: it is stored as absent, so the\n    same table cannot become two schemes by spelling the one level\n    twice.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``. When\n    ``data_revision`` is absent this is part of the scheme's identity\n    (each build is its own scheme). When ``data_revision`` is present\n    it is provenance only: it records the build that first deposited\n    the scheme, and a later deposit of the same revision by a different\n    build reuses the row and does not replace it.\n:param data_revision: The revision of the *data* that holds the\n    parameter tables, for example the RMG-database commit that holds\n    Arkane's atom-energy and BAC tables. A tool build (the RMG-Py\n    commit recorded on ``workflow_tool_release``) does not say which\n    tables it read, because the tables live in a separate repository.\n    The same ``data_revision`` with the same tables is the same scheme\n    whichever build read it; a new ``data_revision`` is a new scheme,\n    so a one-parameter change in a new database revision is a new\n    scheme and not a conflict. Free text, at most 200 characters. A\n    value that is 7 to 64 hex digits is treated as a git commit and\n    lower-cased; any other value (a tag, say) is kept exactly as\n    written. Send the full 40-hex commit: a short and a full SHA of\n    the same commit are two revisions and make two schemes. Send it only\n    when the tables really came from that repository revision, not when\n    the values were overridden by the user (Arkane ``atomEnergies`` or\n    BAC overrides in an input file). Optional: omit it when the data\n    revision is not known or the tables were modified.\n\n    On a scheme with a ``data_revision``, the stored\n    ``workflow_tool_release`` is the first depositor's build, not a\n    list of every build that later sent the same revision.\n\n    Send the program name in ``software`` (``{\"name\": \"Gaussian\"}``)\n    rather than the ESS version: a version is part of identity, so each\n    one makes another scheme.\n:param atom_params_applied_as: How ``atom_params`` enter the corrected\n    energy: ``subtracted`` or ``added`` (see ``AtomParamApplication``).\n    Applies to every entry of ``atom_params`` and to nothing else.\n    Optional: omit it when not known, and nothing is assumed. Giving\n    it without ``atom_params`` is refused. Sending a value that\n    differs from the one already stored on the matched scheme is a\n    conflict, as a differing parameter value is.",
       "properties": {
         "atom_params": {
           "items": {
@@ -4263,6 +4295,15 @@
         "counterpoise"
       ],
       "title": "IncludedCorrection",
+      "type": "string"
+    },
+    "IsotopeMasses": {
+      "description": "The mass convention the model's rotational constants and frequencies were computed with.",
+      "enum": [
+        "entry_documented_masses",
+        "natural_abundance_average"
+      ],
+      "title": "IsotopeMasses",
       "type": "string"
     },
     "KineticsApplicabilityDeclaration": {
@@ -5615,6 +5656,593 @@
       "title": "MeliusBacComponentKind",
       "type": "string"
     },
+    "ModelEnergyZero": {
+      "description": "The zero the model's energies are measured from.",
+      "enum": [
+        "electronic",
+        "e0"
+      ],
+      "title": "ModelEnergyZero",
+      "type": "string"
+    },
+    "ModelMember": {
+      "additionalProperties": false,
+      "description": "One member of an explicit equilibrium ensemble: an existing statmech record, in a basin.\n\n:param statmech_ref: The member's own statistical interpretation (an existing record of the same species entry).\n:param conformer_group_ref: The basin the member is assigned to.\n:param counting_multiplicity: The depositor's attributed multiplicity; omitted means not stated, never one.\n:param relative_energy_kj_mol: The member's energy relative to the ensemble's reference, in kJ/mol.\n:param region_key: The configurational region the member covers, to diagnose overlap with a rotor's integral.",
+      "properties": {
+        "conformer_group_ref": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "pattern": "^cg_[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conformer Group Ref"
+        },
+        "counting_multiplicity": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Counting Multiplicity"
+        },
+        "member_key": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Member Key",
+          "type": "string"
+        },
+        "region_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region Key"
+        },
+        "relative_energy_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Energy Kj Mol"
+        },
+        "statmech_ref": {
+          "maxLength": 40,
+          "pattern": "^sm_[A-Za-z0-9]+$",
+          "title": "Statmech Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "member_key",
+        "statmech_ref"
+      ],
+      "title": "ModelMember",
+      "type": "object"
+    },
+    "ModelRecipe": {
+      "additionalProperties": false,
+      "description": "The statistical recipe. Every field is a claim; an omitted one is not stated.\n\n:param scale_application: Whether a frequency scale factor was applied; the factor itself is a ``scale_factor`` source.\n:param scale_contributions: What it was applied to (required when ``applied``, refused otherwise).\n:param projected_mode_indices: Modes projected out. A flag alone is not a mode map.\n:param excluded_mode_indices: Modes left out of the vibrational sum, other than projected ones.\n:param optical_multiplier: The optical-isomer factor the model applies; ``optical_state`` says if it is counted.\n:param electronic_spin_multiplier: A spin multiplier applied on top of any electronic levels.\n:param validity_min_k: Lower bound of the temperatures the model is stated to be valid for.\n:param validity_max_k: Upper bound of the same.\n:param translation_included: Whether the model is a full partition function (translation included) or an internal one.\n:param translational_normalization: How the translational part is normalised; goes with the matching reference value.\n:param reference_volume_m3: The fixed volume, in cubic metres.\n:param reference_pressure_pa: The standard-state pressure, in pascal.\n:param reference_concentration_mol_m3: The standard-state concentration, in mol per cubic metre.\n:param dividing_surface: A transition-state model's dividing surface.\n:param reaction_coordinate_excluded: Whether the reaction coordinate is left out of the transverse partition function.\n:param reaction_coordinate_mode_index: The one-based mode that is the reaction coordinate.",
+      "properties": {
+        "dividing_surface": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DividingSurface"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "electronic_levels_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CountedState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "electronic_spin_multiplier": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Electronic Spin Multiplier"
+        },
+        "energy_zero": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelEnergyZero"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "excluded_mode_indices": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 4096,
+          "title": "Excluded Mode Indices",
+          "type": "array"
+        },
+        "external_symmetry_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CountedState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "isotope_masses": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IsotopeMasses"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "low_frequency_cutoff_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Low Frequency Cutoff Cm1"
+        },
+        "nuclear_spin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NuclearSpin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "optical_multiplier": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Optical Multiplier"
+        },
+        "optical_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CountedState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "projected_mode_indices": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 4096,
+          "title": "Projected Mode Indices",
+          "type": "array"
+        },
+        "projection_prescription": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projection Prescription"
+        },
+        "reaction_coordinate_excluded": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reaction Coordinate Excluded"
+        },
+        "reaction_coordinate_mode_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reaction Coordinate Mode Index"
+        },
+        "reference_concentration_mol_m3": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Concentration Mol M3"
+        },
+        "reference_pressure_pa": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Pressure Pa"
+        },
+        "reference_volume_m3": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Volume M3"
+        },
+        "rotors": {
+          "items": {
+            "$ref": "#/$defs/ModelRotor"
+          },
+          "maxItems": 64,
+          "title": "Rotors",
+          "type": "array"
+        },
+        "scale_application": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScaleApplication"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale_contributions": {
+          "items": {
+            "$ref": "#/$defs/ScaleContribution"
+          },
+          "maxItems": 8,
+          "title": "Scale Contributions",
+          "type": "array"
+        },
+        "translation_included": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Translation Included"
+        },
+        "translational_normalization": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TranslationalNormalization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "validity_max_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validity Max K"
+        },
+        "validity_min_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validity Min K"
+        },
+        "vibrational_scheme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VibrationalScheme"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "zpe_included_in_energies": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zpe Included In Energies"
+        }
+      },
+      "title": "ModelRecipe",
+      "type": "object"
+    },
+    "ModelRotor": {
+      "additionalProperties": false,
+      "description": "One internal rotor and the harmonic modes it replaces.\n\n:param torsion_index: The ``torsion_index`` of the statmech record's torsion this describes.\n:param replaces_mode_indices: Harmonic modes this rotor replaces (so they are not counted twice).\n:param potential_source_key: The ``source_key`` of the ``torsional_surface`` source holding an imported potential.\n:param region_key: The configurational region the rotor integrates over, to diagnose overlap with explicit members.",
+      "properties": {
+        "coupling_group": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Coupling Group"
+        },
+        "dimension": {
+          "default": 1,
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "potential_source_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Potential Source Key"
+        },
+        "region_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region Key"
+        },
+        "replaces_mode_indices": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 64,
+          "title": "Replaces Mode Indices",
+          "type": "array"
+        },
+        "representation": {
+          "$ref": "#/$defs/RotorRepresentation"
+        },
+        "torsion_index": {
+          "minimum": 1,
+          "title": "Torsion Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "torsion_index",
+        "representation"
+      ],
+      "title": "ModelRotor",
+      "type": "object"
+    },
+    "ModelSource": {
+      "additionalProperties": false,
+      "description": "What one part of the model rests on: a calculation, literature, or a frequency scale factor.\n\n:param calculation_key: A calculation of this upload (by its local ``key``).\n:param calculation_ref: A calculation already deposited (public ref).\n:param geometry_ref: With a calculation: the one geometry its result describes.\n:param literature: Imported or experimental parameters, with their provenance, instead of a calculation.\n:param freq_scale_factor: The scale factor (role ``scale_factor`` only).\n:param member_key: The ensemble member this source is for (omit for the model as a whole).",
+      "properties": {
+        "calculation_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Key"
+        },
+        "calculation_ref": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "pattern": "^calc_[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Ref"
+        },
+        "freq_scale_factor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FreqScaleFactorRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "geometry_ref": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "pattern": "^geom_[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Geometry Ref"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "member_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Member Key"
+        },
+        "role": {
+          "$ref": "#/$defs/StatmechModelSourceRole"
+        },
+        "source_key": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Source Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_key",
+        "role"
+      ],
+      "title": "ModelSource",
+      "type": "object"
+    },
     "ModuleDescription": {
       "additionalProperties": false,
       "description": "Descriptive HPC module identity; never sufficient closure evidence.",
@@ -5646,6 +6274,15 @@
         "electron"
       ],
       "title": "MoleculeKind",
+      "type": "string"
+    },
+    "NuclearSpin": {
+      "description": "The nuclear-spin convention of the partition function.",
+      "enum": [
+        "included",
+        "not_included"
+      ],
+      "title": "NuclearSpin",
       "type": "string"
     },
     "NumericalApproximation": {
@@ -6154,6 +6791,16 @@
       "title": "RigidRotorKind",
       "type": "string"
     },
+    "RotorRepresentation": {
+      "description": "Where a rotor's potential comes from: a local scan, an imported potential, or none (a free rotor).",
+      "enum": [
+        "local_scan",
+        "imported_potential",
+        "free_rotor"
+      ],
+      "title": "RotorRepresentation",
+      "type": "string"
+    },
     "SCFStabilityContent": {
       "additionalProperties": false,
       "description": "SCF stability evidence as a bundle carries it.\n\nThe finding of :class:`SCFStabilityBase` plus, optionally, the local key of\nthe job that measured it.\n\n:param source_calculation_key: Optional local key of the calculation\n    (job) that measured this verdict, when that is a different job from\n    the one this block hangs off. Meaningful only inside a bundle, where\n    it must name a calculation the same bundle declares for the same\n    species entry (or transition state) and on the same conformer as the\n    calculation carrying the block. It may not name the carrier itself\n    or form a cycle with another block's key, and a level of theory that\n    differs from the carrier's is accepted with an upload warning. The\n    job that measured it keeps its own type; there is no separate stability\n    calculation type. The key is resolved after every calculation in the\n    bundle exists, so it may point at a calculation declared later in\n    the payload. Omit it when the calculation carrying the block is the\n    one that measured the stability.",
@@ -6270,6 +6917,28 @@
       ],
       "title": "SPEnergyComponentPayload",
       "type": "object"
+    },
+    "ScaleApplication": {
+      "description": "Whether a frequency scale factor was applied to the frequencies this model uses.",
+      "enum": [
+        "applied",
+        "not_applied",
+        "unknown"
+      ],
+      "title": "ScaleApplication",
+      "type": "string"
+    },
+    "ScaleContribution": {
+      "description": "A contribution a scale factor was applied to.",
+      "enum": [
+        "fundamental",
+        "zero_point_energy",
+        "vibrational_entropy",
+        "vibrational_heat_capacity",
+        "vibrational_enthalpy"
+      ],
+      "title": "ScaleContribution",
+      "type": "string"
     },
     "SchemeAtomParamPayload": {
       "additionalProperties": false,
@@ -6832,6 +7501,18 @@
           ],
           "default": null
         },
+        "model_declaration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatmechModelDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The statistical model this record supplies: scope, attribution, recipe, ensemble members and the sources each part rests on. Optional; a record deposited without one is read as it is, and nothing is inferred from the other fields."
+        },
         "note": {
           "anyOf": [
             {
@@ -6985,6 +7666,135 @@
       },
       "title": "StatmechInBundle",
       "type": "object"
+    },
+    "StatmechModelDeclaration": {
+      "additionalProperties": false,
+      "description": "The model a statmech record supplies. Optional; a record deposited without one is read as it is.\n\n:param version: The declaration schema version (1).\n:param scope_kind: ``atom``, ``basin``, ``explicit_equilibrium_ensemble`` or (a transition-state record)\n    ``ts_determination``.\n:param conformer_group_ref: The basin, for ``basin`` scope. Omitted inside a conformer deposit it is that\n    conformer's own group.\n:param determination_ref: The saddle determination (public ref) of the record's own transition state entry, for\n    ``ts_determination`` scope.\n:param determination_key: Or the ``key`` of a structure determination declared in the same transition-state deposit.\n:param literature: Who stands behind the declaration (a paper) ...\n:param workflow_tool_release: ... or the tool that produced it. At least one is required.",
+      "properties": {
+        "conformer_group_ref": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "pattern": "^cg_[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conformer Group Ref"
+        },
+        "determination_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Determination Key"
+        },
+        "determination_ref": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "pattern": "^sdet_[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Determination Ref"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/ModelMember"
+          },
+          "maxItems": 64,
+          "title": "Members",
+          "type": "array"
+        },
+        "recipe": {
+          "$ref": "#/$defs/ModelRecipe"
+        },
+        "scope_kind": {
+          "$ref": "#/$defs/StatmechModelScopeKind"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/ModelSource"
+          },
+          "maxItems": 128,
+          "title": "Sources",
+          "type": "array"
+        },
+        "version": {
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "scope_kind"
+      ],
+      "title": "StatmechModelDeclaration",
+      "type": "object"
+    },
+    "StatmechModelScopeKind": {
+      "description": "What a declared statistical model covers: one atom, one basin, an explicit ensemble, or a TS surface.",
+      "enum": [
+        "atom",
+        "basin",
+        "explicit_equilibrium_ensemble",
+        "ts_determination"
+      ],
+      "title": "StatmechModelScopeKind",
+      "type": "string"
+    },
+    "StatmechModelSourceRole": {
+      "description": "The part of a declared model that a source supports.",
+      "enum": [
+        "geometry",
+        "curvature",
+        "absolute_energy",
+        "relative_energy",
+        "electronic_levels",
+        "torsional_surface",
+        "scale_factor",
+        "parameters"
+      ],
+      "title": "StatmechModelSourceRole",
+      "type": "string"
     },
     "StatmechSourceCalcIn": {
       "additionalProperties": false,
@@ -8152,6 +8962,16 @@
       "title": "TransitionStateValidationEvidenceIn",
       "type": "object"
     },
+    "TranslationalNormalization": {
+      "description": "How a full partition function's translational part is normalised.",
+      "enum": [
+        "fixed_volume",
+        "standard_state_pressure",
+        "standard_state_concentration"
+      ],
+      "title": "TranslationalNormalization",
+      "type": "string"
+    },
     "TransportCalculationRole": {
       "enum": [
         "full_transport",
@@ -8319,6 +9139,16 @@
         "other"
       ],
       "title": "TunnelingModel",
+      "type": "string"
+    },
+    "VibrationalScheme": {
+      "description": "How the vibrational contribution is evaluated. ``anharmonic`` is recognised and not evaluated.",
+      "enum": [
+        "harmonic",
+        "quasi_harmonic",
+        "anharmonic"
+      ],
+      "title": "VibrationalScheme",
       "type": "string"
     },
     "WavefunctionDiagnosticPayload": {

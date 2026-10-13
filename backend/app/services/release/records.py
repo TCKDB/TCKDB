@@ -100,6 +100,18 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
             children=(ChildTable("statmech_torsion_definition", "torsion_id"),),
         ),
         ChildTable("statmech_source_calculation", "statmech_id"),
+        # The model this record declares it supplies: scope, attribution, recipe, ensemble members and the sources each
+        # part rests on. It is scientific content of the record, so a released record without it would read as one that
+        # never stated its model. Members are cited by ref: a member is another statmech record of the same species
+        # entry, shipped as its own candidate, and citing it here does not select or endorse it.
+        ChildTable(
+            "statmech_model_declaration",
+            "statmech_id",
+            children=(
+                ChildTable("statmech_model_member", "declaration_id"),
+                ChildTable("statmech_model_source", "declaration_id"),
+            ),
+        ),
     ),
     SubmissionRecordType.transport: (
         ChildTable("transport_source_calculation", "transport_id"),
@@ -263,6 +275,13 @@ RECORD_CHILD_EXCLUSIONS: dict[tuple[str, str], str] = {
     ("transition_state_entry", "transition_state_validation_evidence"): (
         "shipped under transition_state_entry itself"
     ),
+    ("statmech", "statmech_model_member"): (
+        "shipped nested under statmech_model_declaration; its member_statmech_id cites another record by ref"
+    ),
+    ("statmech_model_member", "statmech_model_source"): "shipped nested under statmech_model_declaration itself",
+    ("structure_determination", "statmech_model_declaration"): (
+        "a declaration is a child of its statmech record; a ts_determination scope only cites the determination by ref"
+    ),
     ("structure_evidence_finding", "structure_evidence_finding"): (
         "a superseding finding is a row of the same list, naming the finding it supersedes by ref"
     ),
@@ -280,42 +299,49 @@ RECORD_CHILD_EXCLUSIONS: dict[tuple[str, str], str] = {
 }
 
 
+@dataclass(frozen=True)
+class CandidateOwner:
+    """One way a record of a type can belong to a subject.
+
+    ``fk_attr`` is the column on ``model`` holding the owner's id and
+    ``subject_type`` is the kind of record that id points at.
+    """
+
+    model: type
+    fk_attr: str
+    subject_type: SubmissionRecordType
+
+
 #: How to enumerate every *candidate* of a record type for one subject.
-#: ``(orm_class, subject_fk_attribute, subject_record_type)``.
+#: A tuple of :class:`CandidateOwner`, one per kind of owner the type can have.
+#:
+#: Almost every type has exactly one owner. ``statmech`` has two: a species
+#: entry or a transition-state entry, exactly one of which is set
+#: (``statmech_exactly_one_subject``). Species comes first, so species-only
+#: releases enumerate exactly as they did before the second owner existed.
 #:
 #: This is what makes "you can still retrieve the underlying candidates" a
 #: property of the release rather than a promise: a release ships not only what
 #: a curator chose but every record it was chosen *from*.
-CANDIDATE_SOURCES: dict[SubmissionRecordType, tuple[type, str, SubmissionRecordType]] = {
+CANDIDATE_SOURCES: dict[SubmissionRecordType, tuple[CandidateOwner, ...]] = {
     SubmissionRecordType.thermo: (
-        Thermo,
-        "species_entry_id",
-        SubmissionRecordType.species_entry,
+        CandidateOwner(Thermo, "species_entry_id", SubmissionRecordType.species_entry),
     ),
     SubmissionRecordType.statmech: (
-        Statmech,
-        "species_entry_id",
-        SubmissionRecordType.species_entry,
+        CandidateOwner(Statmech, "species_entry_id", SubmissionRecordType.species_entry),
+        CandidateOwner(Statmech, "transition_state_entry_id", SubmissionRecordType.transition_state_entry),
     ),
     SubmissionRecordType.transport: (
-        Transport,
-        "species_entry_id",
-        SubmissionRecordType.species_entry,
+        CandidateOwner(Transport, "species_entry_id", SubmissionRecordType.species_entry),
     ),
     SubmissionRecordType.kinetics: (
-        Kinetics,
-        "reaction_entry_id",
-        SubmissionRecordType.reaction_entry,
+        CandidateOwner(Kinetics, "reaction_entry_id", SubmissionRecordType.reaction_entry),
     ),
     SubmissionRecordType.network_solve: (
-        NetworkSolve,
-        "network_id",
-        SubmissionRecordType.network,
+        CandidateOwner(NetworkSolve, "network_id", SubmissionRecordType.network),
     ),
     SubmissionRecordType.transition_state_entry: (
-        TransitionStateEntry,
-        "transition_state_id",
-        SubmissionRecordType.transition_state,
+        CandidateOwner(TransitionStateEntry, "transition_state_id", SubmissionRecordType.transition_state),
     ),
 }
 
@@ -696,6 +722,37 @@ def subject_identities(
     if subject_type is SubmissionRecordType.reaction_entry:
         return _reaction_entry_identities(session, ids)
 
+    if subject_type is SubmissionRecordType.transition_state_entry:
+        tse = _table("transition_state_entry")
+        ts = _table("transition_state")
+        ts_rows = session.execute(
+            select(
+                tse.c.id,
+                tse.c.public_ref,
+                tse.c.charge,
+                tse.c.multiplicity,
+                ts.c.public_ref.label("transition_state_ref"),
+                ts.c.label,
+                ts.c.reaction_entry_id,
+            )
+            .select_from(tse.join(ts, tse.c.transition_state_id == ts.c.id))
+            .where(tse.c.id.in_(ids))
+        ).all()
+        ts_reactions = _reaction_entry_identities(
+            session, sorted({r.reaction_entry_id for r in ts_rows if r.reaction_entry_id})
+        )
+        return {
+            row.id: {
+                "transition_state_entry_ref": row.public_ref,
+                "transition_state_ref": row.transition_state_ref,
+                "label": row.label,
+                "charge": row.charge,
+                "multiplicity": row.multiplicity,
+                "reaction": ts_reactions.get(row.reaction_entry_id),
+            }
+            for row in ts_rows
+        }
+
     if subject_type is SubmissionRecordType.transition_state:
         ts = _table("transition_state")
         rows = session.execute(
@@ -880,8 +937,8 @@ def cited_calculation_ids(
     record_type: SubmissionRecordType,
     record_ids: list[int],
 ) -> dict[int, list[int]]:
-    """Calculation ids each record cites: through its ``*_source_calculation`` and, for a transition state entry,
-    through the sources of its structure determinations."""
+    """Calculation ids each record cites: through its ``*_source_calculation``, for a transition state entry through
+    the sources of its structure determinations, and for a statmech record through its declared model's sources."""
     if not record_ids:
         return {}
     out: dict[int, list[int]] = {}
@@ -910,6 +967,18 @@ def cited_calculation_ids(
         ).all()
         for parent_id, calculation_id in rows:
             out.setdefault(parent_id, []).append(calculation_id)
+    if record_type is SubmissionRecordType.statmech:
+        # The calculations a declared model rests on are cited provenance too; they sit under the declaration, so the
+        # ``*_source_calculation`` naming above does not reach them.
+        declaration = _table("statmech_model_declaration")
+        model_source = _table("statmech_model_source")
+        rows = session.execute(
+            select(declaration.c.statmech_id, model_source.c.calculation_id)
+            .select_from(model_source.join(declaration, model_source.c.declaration_id == declaration.c.id))
+            .where(declaration.c.statmech_id.in_(sorted(set(record_ids))), model_source.c.calculation_id.is_not(None))
+        ).all()
+        for parent_id, calculation_id in rows:
+            out.setdefault(parent_id, []).append(calculation_id)
     return {k: sorted(set(v)) for k, v in out.items()}
 
 
@@ -917,9 +986,14 @@ def candidate_ids_for_subjects(
     session: Session,
     *,
     record_type: SubmissionRecordType,
+    subject_type: SubmissionRecordType,
     subject_ids: list[int],
 ) -> dict[int, list[int]]:
-    """Every candidate record id of ``record_type``, grouped by subject id.
+    """Every candidate record id of ``record_type`` owned by a ``subject_type``, grouped by subject id.
+
+    The owner is picked by ``subject_type``; a subject type that does not own
+    the record type has no candidates (an integer id is never read across
+    subject types).
 
     :raises UnsupportedRecordTypeError: ``record_type`` is not selectable.
     """
@@ -927,10 +1001,11 @@ def candidate_ids_for_subjects(
         raise UnsupportedRecordTypeError(
             f"unsupported_release_record_type: {record_type.value}"
         )
-    if not subject_ids:
+    owner = next((o for o in CANDIDATE_SOURCES[record_type] if o.subject_type is subject_type), None)
+    if owner is None or not subject_ids:
         return {}
-    model, fk_attr, _subject_type = CANDIDATE_SOURCES[record_type]
-    fk = getattr(model, fk_attr)
+    model = owner.model
+    fk = getattr(model, owner.fk_attr)
     stmt = select(model.id, fk).where(fk.in_(subject_ids)).order_by(model.id)
     out: dict[int, list[int]] = {}
     for record_id, subject_id in session.execute(stmt):

@@ -15,10 +15,11 @@ cite the calculation the number came from:
 Until #642 any calculation type was accepted in all three, so a network could
 say a well's energy came from an IRC point or a rotor scan. The same mistake is
 already refused on the transition-state ``energy_ordering`` evidence
-(``app.services.transition_state_validation._ENERGY_SOURCE_TYPES``, #637); this
-module is that rule for the network route, extended for the ``composite``
-calculation type (ADR 0021), which carries both an electronic energy and an E0
-in ``calc_composite_result``.
+(``app.services.transition_state_validation``, #637); this module is that rule
+for the network route. Both read one table of which types carry which energy
+kind, :mod:`app.services.energy_source_types` (#669), which includes the
+``composite`` calculation type (ADR 0021): it carries both an electronic energy
+and an E0 in ``calc_composite_result``.
 
 What the route's energy kinds map to
 ------------------------------------
@@ -40,15 +41,16 @@ energy claims is its ``correction_convention``:
   the single point, and #637's "an E0 cites its ``freq``" fits a record that
   has separate electronic and E0 groups, not this one-slot route.
 
-The floor, for every kind and for the two energy roles, is #637's electronic
-set union its E0 set, plus ``composite``: ``sp``, ``opt``, ``freq`` or
-``composite``. #637's table (``_ENERGY_SOURCE_TYPES`` in
-``app.services.transition_state_validation``) predates the ``composite``
-calculation type, so it does not list it; the floor is that rule extended, not
-a deviation from it. ``irc``, ``scan`` and ``path_search`` report the energies
-of points along a path, and ``conf`` is a conformer search, so none is ever the
-source of a state or barrier energy. A follow-up will share one table between
-the two rules.
+The floor, for every kind and for the two energy roles, is the shared table's
+electronic set union its E0 set: ``sp``, ``opt``, ``freq`` or ``composite``.
+``irc``, ``scan`` and ``path_search`` report the energies of points along a
+path, and ``conf`` is a conformer search, so none is ever the source of a state
+or barrier energy.
+
+The frequency roles take a ``freq`` and nothing else (#669). ``well_freq`` and
+``barrier_freq`` name the job whose modes the master equation reads, and a
+``composite`` stores only a ZPE, not the modes. Citing an ``sp`` there would
+also be a mistake the energy roles above cannot see.
 
 Whose calculation it is (#668)
 ------------------------------
@@ -93,10 +95,22 @@ energies, ``sum(stoichiometry * stored energy)``, and refuses a contradiction
 
 * ``electronic_only``: the sum of the sources' electronic energies (``sp`` energy, ``opt`` final
   energy, ``composite`` electronic energy).
-* ``electronic_plus_zpe``: only when every source is a ``composite`` that stores an ``e0``. An
-  ``sp`` or ``opt`` carries no zero-point energy, a ``freq`` no electronic energy, and the one
-  slot per participant cannot hold both, so those are *not compared* (``zpe_not_in_source``),
-  never guessed from another calculation.
+* ``electronic_plus_zpe``, per participant, one of:
+
+  - a ``composite`` that stores an ``e0`` (its E0);
+  - an ``sp`` (or ``opt``) electronic energy plus the zero-point energy of the participant's own
+    ``freq``, named as ``zpe_calculation_key`` (#693): ``E + s * ZPE`` with the state's declared
+    ``zpe_scale_factor`` ``s``. The two must be at one geometry (an sp's or freq's input, an opt's
+    final), each declared exactly once, as #677 pairs a transition state's. TCKDB stores the
+    producer's unscaled ZPE, so with no factor stated the state is *not compared*
+    (``zpe_scaling_unstated``) whatever the numbers are: unity is never assumed, even when the
+    unscaled sum happens to agree. A freq with no stored ZPE is ``zpe_not_stated``; an sp and a freq
+    not at one geometry are ``geometry_not_paired``, and no ZPE is ever borrowed from a sibling;
+  - a single atom's ``sp``/``opt``: it has no vibrations, so its electronic energy is its E0. An
+    atom is read from the cited calculation's own stored geometry (one atom), never inferred.
+
+  Any other participant (an ``sp``/``opt`` with no ZPE cited, a bare ``freq``) cannot form the sum:
+  the state is *not compared* (``zpe_not_in_source``), never guessed from another calculation.
 * ``atom_and_bond_corrected``, ``thermal_enthalpy_298k``, ``other``: not compared
   (``convention_not_summable``): the corrections and thermal terms are not stored per source.
 
@@ -146,7 +160,10 @@ import logging
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
-from tckdb_schemas.fragments.calculation import composite_arithmetic_tolerance_hartree
+from tckdb_schemas.fragments.calculation import (
+    COMPOSITE_PRINTED_ROUNDING_HARTREE,
+    composite_arithmetic_tolerance_hartree,
+)
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.api.error_contract import CodedValueError
@@ -157,6 +174,11 @@ from app.db.models.common import (
     EnergyCorrectionConvention,
     EnergyZeroConvention,
     NetworkSolveCalculationRole,
+)
+from app.services.energy_source_types import (
+    ELECTRONIC_ENERGY_SOURCE_TYPES,
+    FREQUENCY_ROLE_TYPES,
+    STATIONARY_POINT_ENERGY_TYPES,
 )
 
 logger = logging.getLogger(__name__)
@@ -180,6 +202,21 @@ W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED = "network_state_energy_sum_not_compared
 #: A state energy cites sources for some but not all of its participants (#678). Warn tier.
 W_NETWORK_STATE_ENERGY_SOURCES_PARTIAL = "network_state_energy_sources_partial"
 
+#: A state or barrier energy states a convention that includes a vibrational term but cites only a
+#: bare electronic energy (an ``sp`` or ``opt``) for it, and the upload carries no ``freq`` of that
+#: subject anywhere. An absence, so a warning (ADR 0008): the energy may well be right.
+W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT = "network_energy_zpe_source_absent"
+
+#: The conventions that add a vibrational (zero-point or thermal) term to an electronic energy.
+#: ``electronic_only`` does not, and ``other`` says nothing about what it includes.
+COMPOSED_CONVENTIONS: frozenset[EnergyCorrectionConvention] = frozenset(
+    {
+        EnergyCorrectionConvention.electronic_plus_zpe,
+        EnergyCorrectionConvention.atom_and_bond_corrected,
+        EnergyCorrectionConvention.thermal_enthalpy_298k,
+    }
+)
+
 #: ``network_solve_state_energy.source_sum_comparison`` values.
 COMPARISON_AGREES = "agrees"
 COMPARISON_NOT_COMPARED = "not_compared"
@@ -193,6 +230,14 @@ NOT_COMPARED_STORED_ENERGY_NOT_STATED = "stored_energy_not_stated"
 NOT_COMPARED_ZPE_NOT_IN_SOURCE = "zpe_not_in_source"
 NOT_COMPARED_NO_SECOND_STATE = "no_second_state_on_the_same_zero"
 NOT_COMPARED_STATED_PRECISION_UNKNOWN = "stated_precision_unknown"
+NOT_COMPARED_ZPE_NOT_STATED = "zpe_not_stated"
+NOT_COMPARED_GEOMETRY_NOT_PAIRED = "geometry_not_paired"
+NOT_COMPARED_ZPE_SCALING_UNSTATED = "zpe_scaling_unstated"
+
+#: A stated ``zpe_scale_factor`` is expected to carry at least four decimals (or be exactly the
+#: multiplier used), so its rounding error is at most half a unit of the fourth place, 5e-5. The
+#: same bound the transition-state energy check uses for its ``zpe_scale_factor``.
+_ZPE_SCALE_FACTOR_PRINTED_ERROR = 5e-5
 
 #: The rounding unit assumed for a stated energy whose producer states none: 1 kcal/mol, the
 #: coarsest unit energies are routinely reported in. Half of it (about 2.09 kJ/mol) is the
@@ -208,24 +253,10 @@ CONVERSION_CONSTANT_SPREAD = 1e-6
 #: ``tckdb_schemas.composite_total`` and the transition-state comparison use.
 _TOLERANCE_FLOAT_SLACK = 1e-12
 
-#: Calculation types that report the energy of a stationary point at all.
-_STATIONARY_POINT_ENERGY_TYPES: frozenset[CalculationType] = frozenset(
-    {
-        CalculationType.sp,
-        CalculationType.opt,
-        CalculationType.freq,
-        CalculationType.composite,
-    }
-)
-
-#: The types that carry a bare electronic energy.
-_ELECTRONIC_ENERGY_TYPES: frozenset[CalculationType] = frozenset(
-    {
-        CalculationType.sp,
-        CalculationType.opt,
-        CalculationType.composite,
-    }
-)
+#: Calculation types that report the energy of a stationary point at all, and the
+#: ones that carry a bare electronic energy: the shared table (#669).
+_STATIONARY_POINT_ENERGY_TYPES: frozenset[CalculationType] = STATIONARY_POINT_ENERGY_TYPES
+_ELECTRONIC_ENERGY_TYPES: frozenset[CalculationType] = ELECTRONIC_ENERGY_SOURCE_TYPES
 
 #: Accepted source types by the energy kind a state or barrier states. A kind
 #: absent from this map falls back to the floor (see the module docstring).
@@ -235,7 +266,16 @@ _SOURCE_TYPES_BY_CORRECTION: dict[
     EnergyCorrectionConvention.electronic_only: _ELECTRONIC_ENERGY_TYPES,
 }
 
-#: The ``source_calculations`` roles that name an energy source. The frequency,
+#: The ``source_calculations`` roles that name a frequency job: the modes are read, so
+#: only a ``freq`` will do.
+_FREQUENCY_ROLES: frozenset[NetworkSolveCalculationRole] = frozenset(
+    {
+        NetworkSolveCalculationRole.well_freq,
+        NetworkSolveCalculationRole.barrier_freq,
+    }
+)
+
+#: The ``source_calculations`` roles that name an energy source. The
 #: master-equation and fit roles name other jobs and are not constrained here.
 _ENERGY_ROLES: frozenset[NetworkSolveCalculationRole] = frozenset(
     {
@@ -311,20 +351,49 @@ def assert_network_energy_source_type(
     )
 
 
+def assert_state_zpe_source_type(calculation: Calculation, *, field: str) -> None:
+    """Refuse a ``zpe_calculation_key`` that is not a ``freq`` calculation (#693).
+
+    Only a frequency calculation stores a zero-point energy.
+
+    :raises CodedValueError: ``network_energy_source_type_mismatch``.
+    """
+    if calculation.type == CalculationType.freq:
+        return
+    _refuse(
+        calculation,
+        frozenset({CalculationType.freq}),
+        field=field,
+        stated="zpe_calculation_key",
+        stated_value="freq",
+    )
+
+
 def assert_network_source_role_type(
     calculation: Calculation,
     role: NetworkSolveCalculationRole,
     *,
     field: str,
 ) -> None:
-    """Refuse a ``well_energy`` / ``barrier_energy`` link to a type with no energy.
+    """Refuse a role link to a calculation type that cannot play the role.
 
-    The role states no energy kind, so only the floor applies. Other roles are
-    not constrained here.
+    ``well_energy`` / ``barrier_energy`` state no energy kind, so only the floor
+    applies (a type with no energy is refused). ``well_freq`` / ``barrier_freq``
+    take a ``freq`` only (#669). Other roles are not constrained here.
 
     :raises CodedValueError: ``network_energy_source_type_mismatch``.
     """
     role = NetworkSolveCalculationRole(role)
+    if role in _FREQUENCY_ROLES:
+        if calculation.type not in FREQUENCY_ROLE_TYPES:
+            _refuse(
+                calculation,
+                FREQUENCY_ROLE_TYPES,
+                field=field,
+                stated="role",
+                stated_value=role.value,
+            )
+        return
     if role not in _ENERGY_ROLES:
         return
     if calculation.type in _STATIONARY_POINT_ENERGY_TYPES:
@@ -564,11 +633,22 @@ def refuse_source_species_outside_state(
 
 @dataclass(frozen=True)
 class ParticipantSource:
-    """One participant of a state, and the calculation cited for it (None: none cited)."""
+    """One participant of a state, and the calculation cited for it (None: none cited).
+
+    ``zpe_calculation`` is the participant's own ``freq`` whose zero-point energy is added to the
+    energy of ``calculation`` (``electronic_plus_zpe``, #693). ``electronic_geometry_ids`` and
+    ``zpe_geometry_ids`` are the geometries the two calculations' energies are at, read from the
+    persisted rows by the caller; ``None`` means not looked up, which pairs nothing. ``is_atom`` is
+    true only when the cited calculation's stored geometry is a single atom.
+    """
 
     species_key: str
     stoichiometry: int
     calculation: Calculation | None
+    zpe_calculation: Calculation | None = None
+    electronic_geometry_ids: frozenset[int] | None = None
+    zpe_geometry_ids: frozenset[int] | None = None
+    is_atom: bool = False
 
 
 @dataclass(frozen=True)
@@ -582,6 +662,7 @@ class StateEnergyToCompare:
     correction_convention: EnergyCorrectionConvention
     participants: tuple[ParticipantSource, ...]
     energy_precision_kj_mol: float | None = None
+    zpe_scale_factor: float | None = None
 
     @property
     def field(self) -> str:
@@ -603,29 +684,69 @@ _AGREES = SumComparison(COMPARISON_AGREES)
 _SHARED_OFFSET_ZEROS = frozenset({EnergyZeroConvention.lowest_state, EnergyZeroConvention.entrance_channel})
 
 
+def _electronic_energy_hartree(calculation: Calculation) -> float | None:
+    """The bare electronic energy a calculation stores (sp energy, opt final, composite electronic)."""
+    if calculation.type == CalculationType.sp:
+        sp = calculation.sp_result
+        return None if sp is None else sp.electronic_energy_hartree
+    if calculation.type == CalculationType.opt:
+        opt = calculation.opt_result
+        return None if opt is None else opt.final_energy_hartree
+    if calculation.type == CalculationType.composite:
+        composite = calculation.composite_result
+        return None if composite is None else composite.electronic_energy_hartree
+    return None
+
+
 def _stored_energy_hartree(
-    calculation: Calculation, correction: EnergyCorrectionConvention
-) -> tuple[float | None, str | None]:
-    """``(energy, None)`` or ``(None, reason)``: the stored energy of the kind the state states."""
-    if correction == EnergyCorrectionConvention.electronic_plus_zpe:
-        if calculation.type != CalculationType.composite:
-            return None, NOT_COMPARED_ZPE_NOT_IN_SOURCE
+    participant: ParticipantSource,
+    correction: EnergyCorrectionConvention,
+    zpe_scale_factor: float | None,
+) -> tuple[float | None, float, str | None]:
+    """``(energy, rounded_weight, None)`` or ``(None, 0, reason)``: the stored energy of the kind stated.
+
+    ``rounded_weight`` is how many rounded printed quantities one unit of the participant's
+    stoichiometry contributes to the comparison (1 for a bare energy; ``1 + s`` plus the effect of
+    the factor's own rounding for an sp plus a scaled ZPE).
+    """
+    calculation = participant.calculation
+    assert calculation is not None
+    if correction != EnergyCorrectionConvention.electronic_plus_zpe:
+        value = _electronic_energy_hartree(calculation)
+        return (value, 1.0, None) if value is not None else (None, 0.0, NOT_COMPARED_STORED_ENERGY_NOT_STATED)
+
+    zpe_calculation = participant.zpe_calculation
+    if zpe_calculation is not None:
+        # An electronic energy plus the zero-point energy of the participant's own freq.
+        electronic = _electronic_energy_hartree(calculation)
+        if electronic is None:
+            return None, 0.0, NOT_COMPARED_STORED_ENERGY_NOT_STATED
+        freq = zpe_calculation.freq_result
+        zpe = None if freq is None else freq.zpe_hartree
+        if zpe is None:
+            return None, 0.0, NOT_COMPARED_ZPE_NOT_STATED
+        electronic_geometry = participant.electronic_geometry_ids
+        if (
+            electronic_geometry is None
+            or len(electronic_geometry) != 1
+            or electronic_geometry != participant.zpe_geometry_ids
+        ):
+            return None, 0.0, NOT_COMPARED_GEOMETRY_NOT_PAIRED
+        if zpe_scale_factor is None:
+            return None, 0.0, NOT_COMPARED_ZPE_SCALING_UNSTATED
+        # E, ZPE (weight s) and the factor itself, stated to at least four decimals: a relative
+        # error of at most 5e-5 moves the term by 5e-5 * zpe.
+        weight = 1.0 + zpe_scale_factor + abs(zpe) * _ZPE_SCALE_FACTOR_PRINTED_ERROR / COMPOSITE_PRINTED_ROUNDING_HARTREE
+        return electronic + zpe_scale_factor * zpe, weight, None
+    if calculation.type == CalculationType.composite:
         composite = calculation.composite_result
         value = None if composite is None else composite.e0_hartree
-    elif calculation.type == CalculationType.sp:
-        sp = calculation.sp_result
-        value = None if sp is None else sp.electronic_energy_hartree
-    elif calculation.type == CalculationType.opt:
-        opt = calculation.opt_result
-        value = None if opt is None else opt.final_energy_hartree
-    elif calculation.type == CalculationType.composite:
-        composite = calculation.composite_result
-        value = None if composite is None else composite.electronic_energy_hartree
-    else:
-        value = None
-    if value is None:
-        return None, NOT_COMPARED_STORED_ENERGY_NOT_STATED
-    return value, None
+        return (value, 1.0, None) if value is not None else (None, 0.0, NOT_COMPARED_STORED_ENERGY_NOT_STATED)
+    if participant.is_atom and calculation.type in (CalculationType.sp, CalculationType.opt):
+        # An atom has no vibrations: its zero-point energy is 0 and its electronic energy is its E0.
+        value = _electronic_energy_hartree(calculation)
+        return (value, 1.0, None) if value is not None else (None, 0.0, NOT_COMPARED_STORED_ENERGY_NOT_STATED)
+    return None, 0.0, NOT_COMPARED_ZPE_NOT_IN_SOURCE
 
 
 @dataclass(frozen=True)
@@ -633,7 +754,7 @@ class _Prepared:
     energy: StateEnergyToCompare
     stated_hartree: float
     stored_hartree: float
-    weight: int  # sum of the stoichiometric coefficients: each source enters nu times
+    weight: float  # rounded printed quantities of the weighted sum: each source enters nu times
 
 
 def _prepare(energy: StateEnergyToCompare) -> SumComparison | _Prepared:
@@ -652,14 +773,13 @@ def _prepare(energy: StateEnergyToCompare) -> SumComparison | _Prepared:
     if len(cited) != len(energy.participants):
         return SumComparison(COMPARISON_NOT_COMPARED, NOT_COMPARED_SOURCES_INCOMPLETE)
     total = 0.0
-    weight = 0
+    weight = 0.0
     for participant in energy.participants:
-        assert participant.calculation is not None
-        value, reason = _stored_energy_hartree(participant.calculation, correction)
+        value, term_weight, reason = _stored_energy_hartree(participant, correction, energy.zpe_scale_factor)
         if value is None:
             return SumComparison(COMPARISON_NOT_COMPARED, reason)
         total += participant.stoichiometry * value
-        weight += participant.stoichiometry
+        weight += participant.stoichiometry * term_weight
     return _Prepared(energy, energy.energy_kj_mol / HARTREE_TO_KJ_MOL, total, weight)
 
 
@@ -717,6 +837,8 @@ def _sum_mismatch(
         "tolerance_kj_mol": tolerance_hartree * HARTREE_TO_KJ_MOL,
         "allowance_kj_mol": allowance_kj_mol,
     }
+    if energy.zpe_scale_factor is not None:
+        context["zpe_scale_factor"] = energy.zpe_scale_factor
     if against is None:
         message = (
             f"{energy.field} states {energy.energy_kj_mol!r} kJ/mol for the state "
@@ -888,6 +1010,13 @@ def collect_state_energy_source_warnings(
         elif comparison.status == COMPARISON_NOT_COMPARED and comparison.reason != NOT_COMPARED_NO_SOURCE_STATED:
             skipped.append(f"'{energy.state_key}' ({comparison.reason})")
     if skipped:
+        scaling_hint = (
+            " A 'zpe_scaling_unstated' energy cites a frequency ZPE but states no zpe_scale_factor: "
+            "TCKDB stores the unscaled ZPE and never assumes the scale is one, so state the factor "
+            "(to at least 4 decimals) and it is compared."
+            if any("zpe_scaling_unstated" in item for item in skipped)
+            else ""
+        )
         precision_hint = (
             " A 'stated_precision_unknown' energy differs from the stored sum by more than "
             "printed precision but by no more than honest rounding of the stated number could "
@@ -904,8 +1033,82 @@ def collect_state_energy_source_warnings(
                     "State energies that could not be held against the sum of the energies stored "
                     f"for the calculations they cite: {'; '.join(skipped)}. They are stored as not "
                     "compared with their reason, and each rests on the stated number alone."
-                    f"{precision_hint}"
+                    f"{precision_hint}{scaling_hint}"
                 ),
             )
         )
+    return warnings
+
+
+def collect_zpe_source_absent_warnings(
+    energies: Sequence[StateEnergyToCompare],
+    barriers: Sequence[tuple[int, str, EnergyCorrectionConvention, Calculation | None]],
+    *,
+    species_entries_with_freq: Collection[int],
+    transition_state_entries_with_freq: Collection[int],
+) -> list[UploadWarning]:
+    """Warn when a composed energy cites a bare electronic energy and the upload has no freq for it (#669).
+
+    A composed convention (``electronic_plus_zpe``, ``atom_and_bond_corrected``,
+    ``thermal_enthalpy_298k``) adds a vibrational term to an electronic energy. Citing an ``sp`` or
+    ``opt`` for it with no ``freq`` of that subject anywhere in the upload leaves the vibrational term
+    with no source at all: the energy is stored as stated and nothing says where its ZPE came from.
+    A ``composite`` holds its own E0 and a single atom has no vibrations, so neither is flagged; a
+    ``zpe_calculation_key`` or any ``freq`` the upload declares for the subject counts as a source
+    (whether it is the *right* one is the state-energy sum check's business).
+
+    :param energies: The solve's state energies, as built for the sum check.
+    :param barriers: ``(index, transition_state_key, convention, cited calculation or None)`` per barrier.
+    :param species_entries_with_freq: Species entries that own a ``freq`` calculation in this upload.
+    :param transition_state_entries_with_freq: Transition-state entries that own one.
+    """
+    bare = (CalculationType.sp, CalculationType.opt)
+    warnings: list[UploadWarning] = []
+    for energy in energies:
+        if energy.correction_convention not in COMPOSED_CONVENTIONS:
+            continue
+        missing = [
+            p.species_key
+            for p in energy.participants
+            if p.calculation is not None
+            and p.calculation.type in bare
+            and not p.is_atom
+            and p.zpe_calculation is None
+            and p.calculation.species_entry_id not in species_entries_with_freq
+        ]
+        if missing:
+            warnings.append(
+                UploadWarning(
+                    field=f"solve.state_energies[{energy.index}]",
+                    code=W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT,
+                    message=(
+                        f"The energy of state '{energy.state_key}' states "
+                        f"'{energy.correction_convention.value}', which includes a vibrational term, "
+                        f"but the source for {', '.join(repr(k) for k in missing)} is a bare "
+                        "electronic-energy calculation and the upload carries no freq calculation "
+                        "for it. The energy is stored as stated, with no source for its zero-point "
+                        "energy. Cite the freq (zpe_calculation_key), include it in the upload, or "
+                        "cite a composite that holds the E0."
+                    ),
+                )
+            )
+    for index, ts_key, convention, calculation in barriers:
+        if (
+            convention in COMPOSED_CONVENTIONS
+            and calculation is not None
+            and calculation.type in bare
+            and calculation.transition_state_entry_id not in transition_state_entries_with_freq
+        ):
+            warnings.append(
+                UploadWarning(
+                    field=f"solve.channel_barriers[{index}]",
+                    code=W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT,
+                    message=(
+                        f"The barrier through '{ts_key}' states '{convention.value}', which includes "
+                        "a vibrational term, but its source is a bare electronic-energy calculation "
+                        "and the upload carries no freq calculation for the transition state. The "
+                        "barrier is stored as stated, with no source for its zero-point energy."
+                    ),
+                )
+            )
     return warnings

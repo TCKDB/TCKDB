@@ -474,8 +474,10 @@ def test_selectable_ref_prefixes_match_the_public_ref_registry():
 
     assert set(SELECTABLE_REF_PREFIXES.values()) == SELECTABLE_RECORD_TYPES
     for prefix, record_type in SELECTABLE_REF_PREFIXES.items():
-        model, _fk, _subject = CANDIDATE_SOURCES[record_type]
-        assert PREFIXES[model.__name__] == prefix, record_type
+        owners = CANDIDATE_SOURCES[record_type]
+        assert owners, record_type
+        for owner in owners:
+            assert PREFIXES[owner.model.__name__] == prefix, record_type
 
 
 def test_every_selectable_type_has_a_value_table_map():

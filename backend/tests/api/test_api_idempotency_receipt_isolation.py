@@ -261,8 +261,9 @@ class TestTransientFailureSelfHeals:
         The first attempt fails inside the savepoint; the payload commits
         anyway; the post-commit retry then writes the receipt in its own
         transaction and idempotency for the key is restored. The response
-        header still reads ``failed`` because it is generated before the
-        payload is durable, and claiming success there would be a guess.
+        header still reads ``failed``: it was copied into the response object
+        before the commit that runs the retry, so it can only ever say "not
+        recorded in the request's own transaction" (#628).
         """
         import app.services.idempotency as svc
 

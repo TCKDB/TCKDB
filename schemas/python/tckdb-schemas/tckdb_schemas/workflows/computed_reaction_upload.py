@@ -21,9 +21,15 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from tckdb_schemas.bundle_source_rules import (
     W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
     W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_geometry_matches_conformer,
+    assert_conformer_primaries_agree,
+    assert_transition_state_calculations_unanchored,
+    conformer_key_by_unique_geometry_key,
     find_scf_source_cycle,
     owner_mismatch_error,
+    scf_source_cycle_error,
     scf_source_geometry_error,
+    scf_source_unanchored_error,
 )
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
@@ -114,6 +120,11 @@ from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_species_entry_frequency,
     raise_for_blocking_findings,
+)
+from tckdb_schemas.statmech_declarations import (
+    StatmechModelDeclaration,
+    assert_model_determination_key_declared,
+    assert_model_pin_keys_declared,
 )
 from tckdb_schemas.statmech_bits import StatmechTorsionCoordinateIn
 from tckdb_schemas.structure_declarations import (
@@ -631,6 +642,14 @@ class BundleStatmechIn(SchemaBase):
     # for the exact rule. Stored as declared once it passes, and read back as
     # ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
+    model_declaration: StatmechModelDeclaration | None = Field(
+        default=None,
+        description=(
+            "The statistical model this record supplies: scope, attribution, recipe, ensemble members and the "
+            "sources each part rests on. Optional; a record deposited without one is read as it is, and nothing "
+            "is inferred from the other fields."
+        ),
+    )
     note: str | None = None
 
     @model_validator(mode="after")
@@ -731,7 +750,11 @@ class BundleSpeciesIn(SchemaBase):
 
         ``geometry_key`` is still honoured as the anchor when
         ``conformer_key`` is absent, so payloads predating this field are
-        unaffected.
+        unaffected. When both are stated they must name the same conformer: a
+        ``geometry_key`` that belongs to another conformer than the
+        ``conformer_key`` is refused
+        (``calculation_geometry_conformer_mismatch``), and neither key is
+        trusted over the other.
     :param thermo: Optional thermochemistry data.
     :param statmech: Optional statistical-mechanics data.
     :param transport: Optional transport properties (Lennard-Jones
@@ -880,6 +903,21 @@ class BundleSpeciesIn(SchemaBase):
                     key=calc.geometry_key,
                     declared=conformer_geometry_keys,
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_calc_geometry_agrees_with_conformer(self) -> Self:
+        """Refuse a calculation whose ``conformer_key`` and ``geometry_key`` name different conformers.
+
+        Runs after the two undeclared-key validators above, so by here each key
+        that is set names one of this species's own conformers. The mapping is
+        known from the payload alone, so the request schema is the only layer
+        that checks it; the workflow can no longer be handed the contradiction.
+        """
+        assert_conformer_primaries_agree(self.conformers)
+        assert_calculation_geometry_matches_conformer(
+            self.calculations, conformer_key_by_unique_geometry_key(self.conformers)
+        )
         return self
 
     def stationary_point_findings(self) -> list[StationaryPointFinding]:
@@ -1231,6 +1269,14 @@ class BundleTransitionStateIn(SchemaBase):
                     f"source_scan_calculation_key '{scan_key}' must reference "
                     "a scan-type calculation."
                 )
+        assert_model_pin_keys_declared(
+            self.statmech.model_declaration, set(own_types), field="transition_state.statmech.model_declaration"
+        )
+        assert_model_determination_key_declared(
+            self.statmech.model_declaration,
+            {d.key for d in self.structure_determinations},
+            field="transition_state.statmech.model_declaration",
+        )
         return self
 
 
@@ -1821,6 +1867,22 @@ class ComputedReactionUploadRequest(SchemaBase):
         return self
 
     @model_validator(mode="after")
+    def validate_transition_state_calculations_unanchored(self) -> Self:
+        """A transition state's jobs state no conformer and ran on no species minimum.
+
+        A ``conformer_key`` there anchored nothing and was silently dropped; a
+        ``geometry_key`` naming a species conformer's geometry puts a saddle-point
+        job on a minimum. Both are refused.
+        """
+        if self.transition_state is None:
+            return self
+        assert_transition_state_calculations_unanchored(
+            [self.transition_state.calculation, *self.transition_state.calculations],
+            {conf.geometry.key for sp in self.species for conf in sp.conformers},
+        )
+        return self
+
+    @model_validator(mode="after")
     def validate_unique_keys(self) -> Self:
         species_keys = [s.key for s in self.species]
         if len(set(species_keys)) != len(species_keys):
@@ -2117,6 +2179,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         key=msc.calculation_key,
                         declared=all_calc_keys,
                     )
+            assert_model_pin_keys_declared(sp.statmech.model_declaration, set(all_calc_keys))
             for i, t in enumerate(sp.statmech.torsions):
                 key = t.source_scan_calculation_key
                 if key is None:
@@ -2157,6 +2220,9 @@ class ComputedReactionUploadRequest(SchemaBase):
                 anchor_of_calc[conf.calculation.key] = conf.key
             for calc in sp.calculations:
                 owner_of_calc[calc.key] = f"species[{sp.key!r}]"
+                # ``validate_calc_geometry_agrees_with_conformer`` has refused a
+                # calculation whose two keys disagree, so when both are stated
+                # either gives the same anchor; ``conformer_key`` is read first.
                 anchor_of_calc[calc.key] = calc.conformer_key or (
                     geometry_to_conformer.get(calc.geometry_key)
                     if calc.geometry_key is not None
@@ -2249,6 +2315,24 @@ class ComputedReactionUploadRequest(SchemaBase):
                 )
             carrier_anchor = anchor_of_calc.get(calc.key)
             source_anchor = anchor_of_calc.get(src_key)
+            # A species calculation tied to no conformer cannot be placed on the carrier's
+            # conformer. Exactly one side unanchored is refused (the workflow already refused it,
+            # late and under the wrong name). Both unanchored is an absence, not a contradiction:
+            # the rule cannot be checked, which ADR 0008 makes a warning, and the workflow
+            # (``link_scf_stability_sources``) says so. A transition state has no conformers, so
+            # it is exempt from both.
+            unanchored = [
+                key
+                for key, anchor in ((calc.key, carrier_anchor), (src_key, source_anchor))
+                if anchor is None
+            ]
+            if owner != "transition_state" and len(unanchored) == 1:
+                raise scf_source_unanchored_error(
+                    field=field_path,
+                    key=src_key,
+                    carrier_key=calc.key,
+                    unanchored_key=unanchored[0],
+                )
             if (
                 carrier_anchor is not None
                 and source_anchor is not None
@@ -2260,12 +2344,7 @@ class ComputedReactionUploadRequest(SchemaBase):
             scf_links[calc.key] = src_key
         scf_cycle = find_scf_source_cycle(scf_links)
         if scf_cycle is not None:
-            raise ValueError(
-                "scf_stability.source_calculation_key forms a cycle: "
-                + " -> ".join([*scf_cycle, scf_cycle[0]])
-                + ". A stability verdict cannot be measured by a job whose "
-                "own verdict it measures."
-            )
+            raise scf_source_cycle_error(scf_cycle)
 
         # Applied-correction source_calculation_key references must
         # resolve into the bundle's calc namespace. The workflow layer

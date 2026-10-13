@@ -7,7 +7,12 @@ import json
 
 import pytest
 
-from tckdb_qcschema.errors import E_ALREADY_IMPORTED, E_ARTIFACT_TOO_LARGE, QCSchemaAdapterError
+from tckdb_qcschema.errors import (
+    E_ALREADY_IMPORTED,
+    E_ARTIFACT_TOO_LARGE,
+    E_CALCULATION_REF_MISSING,
+    QCSchemaAdapterError,
+)
 from tckdb_qcschema.mapping import build_conformer_upload_payload
 from tckdb_qcschema.reader import read_document
 from tckdb_qcschema.uploader import (
@@ -28,6 +33,9 @@ class _StubResponse:
         self.idempotency_replayed = replayed
 
 
+_CALC_REF = "calc_" + "b" * 26
+
+
 class _StubClient:
     """Records every call; never touches the network."""
 
@@ -35,7 +43,7 @@ class _StubClient:
         self.calls: list[tuple] = []
         self._search_records = search_records or []
         self._conformer_data = conformer_data or {
-            "primary_calculation": {"calculation_id": 42}
+            "primary_calculation": {"calculation_id": 42, "calculation_ref": _CALC_REF}
         }
         self._fail_first_artifact = fail_first_artifact
         self._artifact_call_count = 0
@@ -135,7 +143,9 @@ class _RealIdempotencyStubClient:
             return _StubResponse(stored_response, replayed=True)
 
         if method == "POST" and path == "/uploads/conformers":
-            response_data = {"primary_calculation": {"calculation_id": 42}}
+            response_data = {
+                "primary_calculation": {"calculation_id": 42, "calculation_ref": _CALC_REF}
+            }
         elif method == "POST" and path.endswith("/artifacts"):
             response_data = {"ok": True}
         else:
@@ -231,9 +241,8 @@ def test_upload_record_full_success(energy_record_and_payload):
         artifact_filename="energy_v1.qcschema.json",
     )
     assert outcome.calculation_id == 42
-    # A server that returns no calculation_ref: the integer is the fallback.
     assert [p for (m, p, *_r) in client.calls if m == "POST" and p.endswith("/artifacts")] == [
-        "/calculations/42/artifacts"
+        f"/calculations/{_CALC_REF}/artifacts"
     ]
     assert outcome.conformer_replayed is False
     assert outcome.artifact_replayed is False
@@ -243,7 +252,7 @@ def test_upload_record_full_success(energy_record_and_payload):
     assert methods_paths == [
         ("GET", "/scientific/artifacts/search"),
         ("POST", "/uploads/conformers"),
-        ("POST", "/calculations/42/artifacts"),
+        ("POST", f"/calculations/{_CALC_REF}/artifacts"),
     ]
 
 
@@ -418,6 +427,21 @@ def test_dry_run_sends_nothing(energy_record_and_payload):
     assert client.calls == []
     assert plan["conformers_idempotency_key"] == conformers_idempotency_key(record.canonical_sha256)
     assert plan["artifact_idempotency_key"] == artifact_idempotency_key(record.canonical_sha256)
+
+
+@pytest.mark.parametrize("primary", [{"calculation_id": 42}, {"calculation_id": 42, "calculation_ref": "42"}])
+def test_a_response_without_a_calc_ref_is_refused_not_addressed_by_integer(
+    energy_record_and_payload, primary
+):
+    raw, sha, record, payload = energy_record_and_payload
+    client = _StubClient(conformer_data={"primary_calculation": primary})
+    with pytest.raises(QCSchemaAdapterError) as excinfo:
+        upload_record(
+            client, record, payload, raw_bytes=raw, raw_sha256=sha,
+            artifact_filename="energy_v1.qcschema.json",
+        )
+    assert excinfo.value.code == E_CALCULATION_REF_MISSING
+    assert not [p for (m, p, *_r) in client.calls if p.endswith("/artifacts")]
 
 
 def test_artifact_post_is_addressed_by_calc_ref_when_the_server_returns_one(

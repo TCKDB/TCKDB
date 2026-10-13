@@ -285,6 +285,7 @@ def test_a_difference_and_a_value_term_are_summed_with_their_signs():
         ("inverse_power", 3.4, (3, 4)),
         ("inverse_power_shifted_half", 4, (3, 4)),
         ("karton_martin_scf", None, (3, 4)),
+        ("exponential_sqrt", 5.46, (3, 4)),
         ("exponential_three_point", None, (2, 3, 4)),
     ],
 )
@@ -298,12 +299,14 @@ def test_every_formula_runs_inside_a_scheme_and_recovers_the_limit_it_was_built_
         shape = lambda n: (n + 0.5) ** -exponent  # noqa: E731
     elif formula == "karton_martin_scf":
         shape = lambda n: (n + 1) * math.exp(-9 * math.sqrt(n))  # noqa: E731
+    elif formula == "exponential_sqrt":
+        shape = lambda n: math.exp(-exponent * math.sqrt(n))  # noqa: E731
     else:
         shape = lambda n: math.exp(-1.1 * n)  # noqa: E731
     term = {
         "key": "x",
         "operation": "extrapolation",
-        "energy_component": "reference" if formula == "karton_martin_scf" else "total",
+        "energy_component": "reference" if formula in ("karton_martin_scf", "exponential_sqrt") else "total",
         "formula": formula,
         "inputs": [
             {"slot": "cardinal", "cardinal_number": n, "level_of_theory": {"method": "HF", "basis": f"b{n}"}}

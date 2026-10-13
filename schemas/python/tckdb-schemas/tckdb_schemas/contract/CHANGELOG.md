@@ -1,5 +1,208 @@
 # Changelog
 
+## 0.123.0 - 2026-10-13
+
+One new refusal code, `superseded_record_not_approvable` (409): `PATCH /record-reviews/{type}/{id}` refuses moving a record that has
+been replaced by a supersession edge back to `approved`. `POST /submissions/{id}/approve` does not return it: it leaves a replaced
+member deprecated and lists it in the audit event. A curator route, so no producer route and no upload payload changes; this
+release only adds the code to the shipped refusal-code reference.
+
+## 0.122.0 - 2026-10-12
+
+One new refusal code, `unknown_query_parameter` (422): `GET /scientific/statmech/search` now refuses a query key that is not a
+declared filter instead of ignoring it. No producer route and no upload payload changes; this release only adds the code to the
+shipped refusal-code reference.
+
+## 0.121.0 - 2026-10-12
+
+A geometry and a conformer may no longer disagree anywhere a calculation can state both (#635). Four new refusal codes:
+`calculation_geometry_conformer_mismatch`, `transition_state_calculation_conformer_key`,
+`transition_state_calculation_species_geometry` and `calculation_input_geometry_mismatch`.
+
+Narrowing: payloads previously accepted are now refused. Exactly what is enforced:
+
+- `calculation_geometry_conformer_mismatch` (422), on `/uploads/computed-reaction` and `/uploads/networks/pdep`:
+  - a species `calculations[*]` entry whose `conformer_key` names one conformer and whose `geometry_key` names a geometry that
+    belongs to another conformer of that species (anchored to the `conformer_key`'s conformer until now);
+  - a conformer's own `calculation` (its primary) that states a `conformer_key` other than its conformer's `key`, or a
+    `geometry_key` other than its conformer's geometry key. Until now the geometry key stored the output geometry on the other
+    conformer's geometry row and the `conformer_key` was ignored. Stating the conformer's own keys, or neither, is unchanged.
+    A key that names nothing keeps its own code (`conformer_key_undeclared`, `geometry_key_unresolved`), which a primary's
+    `conformer_key` never had before.
+  - A geometry key that two conformers both declare is left to the existing "geometry keys must be globally unique" rule.
+  - `context` is `{field, calculation_key, conformer_key, geometry_key, geometry_conformer_key}`, local keys only.
+- `transition_state_calculation_conformer_key` (422), on the same two routes: a `conformer_key` on a transition state's
+  `calculation` or any of its `calculations` (a transition state has no conformers; the key was dropped).
+- `transition_state_calculation_species_geometry` (422), on the same two routes: a transition-state calculation whose `geometry_key`
+  names a species conformer's geometry (a saddle-point job cannot have run on a minimum). On `/uploads/computed-reaction` this
+  was accepted.
+- `calculation_input_geometry_mismatch` (422, raised by the workflow, where geometry rows are known): a `freq` or `sp` that states its
+  geometry (`geometry_key` on `/uploads/computed-reaction`; the geometry of its conformer for a calculation inside a
+  `/uploads/computed-species` conformer or an additional calculation of `/uploads/conformers`; the saddle point's geometry for an
+  additional calculation of `/uploads/transition-states`) and also declares `input_geometries` that do not include that geometry, compared as
+  the same structure (the rule energies are grouped by: a moved copy of an atom or a rigidly moved polyatomic structure is the same). An `opt` is exempt (its input is a starting guess). Until now the explicit inputs silently won.
+  The comparison forgives only the rounding of the coordinates (about 1.7e-6 Angstrom at 6 decimals) and a rigid move or atom
+  reordering of the same structure. Coordinates a program re-printed or symmetrised are a different structure and are refused:
+  send the conformer's own xyz as the sp/freq input geometry.
+- Unchanged: payloads whose keys agree, a lone `geometry_key` or `conformer_key`, a `geometry_key` naming no conformer's geometry
+  (still `geometry_key_unresolved`).
+- New helpers in `tckdb_schemas.bundle_source_rules`: `assert_calculation_geometry_matches_conformer`,
+  `assert_conformer_primaries_agree`, `assert_transition_state_calculations_unanchored`,
+  `conformer_key_by_unique_geometry_key` and `calculation_geometry_conformer_error`.
+
+## 0.120.0 - 2026-10-11
+
+The producer contract lists the two read routes of statmech selection (`POST .../scientific/statmech/select` and
+`.../select/manifest`) and the refusal code `statmech_selection_scope_owner_mismatch` (422). No wire model changed.
+
+## 0.119.0 - 2026-10-11
+
+Review leftovers for stability sources, atomic warnings and network energy sources (#635, #631, #669, #744).
+
+- Three new refusal codes. For an SCF stability `source_calculation_key` (#635): `scf_stability_source_cycle` (two verdicts
+  that cite each other; `context.cycle` lists the keys in order, where it used to be an uncoded validation error) and
+  `scf_stability_source_conformer_unanchored` (exactly one of the carrier and the named job is tied to no conformer, on
+  `/uploads/computed-reaction`; it was already refused, late and as "a different conformer"). If neither is tied to a conformer
+  the same-conformer rule cannot be checked, which is an absence: the link is stored as stated and the upload warns
+  `scf_stability_source_conformer_unverified`. A transition state has no conformers and is never flagged. For `energy_ordering`
+  evidence (#669): `ts_energy_ordering_source_type_mismatch` (an energy cited to a calculation of a type that does not carry it,
+  such as an E0 from a single point; it was an uncoded validation error), sibling of `network_energy_source_type_mismatch`.
+- Narrowing on `/uploads/networks/pdep` (#635): `scf_stability` no longer declares `source_calculation_key` at all, since that
+  route cannot link it. A payload that sends the key, even as `null`, is now refused as an unknown field (`extra_forbidden`);
+  before, `null` was accepted and a non-null key was refused by a custom message. Omit the key.
+- Network energy sources (#669): a `well_freq` or `barrier_freq` source calculation must be a `freq`
+  (`network_energy_source_type_mismatch`). A `composite` is now also a valid source of an `energy_ordering` energy, for
+  an electronic energy and an E0 alike, as it already was for a network energy. A new warning,
+  `network_energy_zpe_source_absent`, when a state or barrier energy stated with `electronic_plus_zpe`,
+  `atom_and_bond_corrected` or `thermal_enthalpy_298k` cites only an `sp` or `opt` and the upload has no `freq` for that
+  species or transition state.
+- Warning codes (#631, #744): a single-atom `term_symbol` whose L or J is not the NIST ground term is now reported as
+  `term_symbol_contradicts_ground_term`; `term_symbol_contradicts_multiplicity` is kept for a leading 2S+1 that disagrees
+  with the declared multiplicity. The spin-orbit warning now says the spin-orbit-free value lies so many kJ/mol above the
+  ground level. New `hessian_not_stored_not_frequency_calculation` (a `.hess` file sent for a calculation that is not a
+  `freq`); an artifact whose log carries a force-constant block that yields no matrix now warns
+  `hessian_not_stored_unparseable`, and inside a bundle every `hessian_not_stored_*` warning's `field` is
+  `calculations['<key>'].artifacts`.
+
+## 0.117.1 - 2026-10-11
+
+Contract layout only (#686), plus a recorded limit.
+
+- Shared blocks are keyed by the surfaces that own them: `Code group` and `Model group` headings and anchors are now a short
+  hash of the owning surface set (`cg-3fa9c2`), independent of the order the surfaces are listed in, instead of a number by
+  size and order, so adding a code no longer renumbers later groups. A link to a group of one names its only member.
+- "Will be refused if" keeps a one-line gloss beside a code several surfaces share, as it already did for a code only one
+  surface returns.
+- A group's "Traced via" column names the surfaces that reach a code a way the rest do not (`(only on: ...)`).
+- Recorded limit (#745): the same-order comparison that stops an energy duplicated on a moved copy has its own allowance of 50
+  million work units per record, now charged 800 units per pair plus 30 per atom (it was 30 per atom, so a record of
+  three-atom shapes could run it for about eleven seconds). Past the allowance a pair is compared only by the relabelling
+  search, and failing that is counted as different.
+
+## 0.117.0 - 2026-10-11
+
+One new refusal code, `database_request_failed`.
+
+- Any database error that is neither a conflict (`409`) nor an outage (`503`) -- a trigger that raises when a write
+  commits, a malformed value the database refuses, a schema that has drifted -- now answers `500 database_request_failed`
+  with the usual error envelope and no driver text, instead of an unformatted `text/plain` 500. Nothing from the request
+  was saved. A retry of the same request meets the same refusal, so it is not a `503`.
+
+## 0.116.0 - 2026-10-11
+
+Breaking: the two producer write routes that took a row id in the path take the public ref only (#578).
+`POST /api/v1/submissions/{submission_ref}/rights-attestations` takes the `sub_` ref (every upload, job and bundle
+response returns it as `submission_ref`), and `POST /api/v1/calculations/{calculation_ref}/artifacts` takes the `calc_` ref
+(`calculation_ref` beside `calculation_id`, or `calculation_key_refs` on a computed reaction). An integer id, in any spelling,
+is refused with 422 `invalid_handle`; a ref of the wrong kind is still 422 `handle_type_mismatch` and an unknown ref 404
+`handle_not_found`. The server's minimum supported `tckdb-client` is now 0.97.0, the first release that addresses a
+calculation by its ref. No wire model changed; the route paths in the producer contract did.
+
+## 0.114.0 - 2026-10-11
+
+The producer contract lists three new statmech-selection rejection codes (`statmech_selection_bound_exceeded`,
+`statmech_selection_unsupported`, `unknown_statmech_candidate_ref`). No wire model changed.
+
+## 0.113.0 - 2026-10-11
+
+A statmech record can declare the statistical model it supplies (`tckdb_schemas.statmech_declarations`), optional and stored as
+made.
+
+- `model_declaration` on `ConformerUploadStatmechPayload`, `StatmechInBundle`, `BundleStatmechIn` and the standalone
+  `StatmechUploadRequest`: the scope (`atom`, `basin`, `explicit_equilibrium_ensemble`, or `ts_determination` for a
+  transition-state record), who stands behind it (`literature` or `workflow_tool_release`), a recipe (energy zero, scale
+  application and its contributions, vibrational scheme, projected and excluded modes, rotors and the modes they replace,
+  symmetry, optical and electronic factors already counted, translational normalization, dividing surface, validity range), ensemble `members` (existing statmech records of
+  the same species entry) and `sources` (a calculation by key or ref, imported literature parameters, or a frequency scale
+  factor). A field left out is not stated: never unity, never projected, never counted. Version `1` only.
+- New enums `StatmechModelScopeKind` and `StatmechModelSourceRole`; new refusal codes `statmech_model_declaration_invalid`,
+  `statmech_model_declaration_version_unsupported`, `statmech_model_declaration_mismatch` and
+  `unknown_structure_determination_ref`.
+
+## 0.112.2 - 2026-10-11
+
+Contract layout only: the refusal code reference now ships as its own file, `contract/REFUSAL_CODES.md`, beside
+`PRODUCER_CONTRACT.md`, so the contract stays under its size ceiling (the reference was 104 KB of 686 KB).
+
+- `PRODUCER_CONTRACT.md` keeps a short "Refusal code reference" pointer section, and every code link in it now reads
+  `REFUSAL_CODES.md#c-<code>`. Each surface still lists its own refusal codes with the same one-line meanings; only the
+  long per-code entries moved. Anchors are unchanged. A scientific check that names a code no producer route was
+  traced to (an advisory flag, not a refusal) used to link an anchor that was never there; it is now named without a
+  link.
+- New `tckdb_schemas.contract.refusal_codes_path()` and `refusal_codes_markdown()`, and
+  `python -m tckdb_schemas.contract --codes` (prints the path), mirroring `changelog_path()`.
+- No model, enum, refusal code or rule changed.
+
+## 0.112.1 - 2026-10-11
+
+A network state energy stated as `electronic_plus_zpe` can now be held against an sp electronic energy plus a scaled
+frequency ZPE, not only against a composite that stores an E0 (#693).
+
+- `solve.state_energies[].source_calculation_keys[].zpe_calculation_key` (new, optional): the participant's own `freq`
+  calculation whose zero-point energy is added to the energy of `calculation_key`. A non-`freq` calculation is refused
+  with `network_energy_source_type_mismatch`; another species' freq with `network_energy_source_subject_mismatch`. A key
+  that no calculation declares is refused like any undeclared calculation key.
+- `solve.state_energies[].zpe_scale_factor` (new, optional, positive and finite): the factor the producer scaled the ZPEs
+  with, to at least 4 decimals. The energy compared is `sum(stoichiometry * (E_sp + s * ZPE))`. Both fields are accepted
+  only with `correction_convention: electronic_plus_zpe`.
+- An atom's sp or opt counts as its E0 (no ZPE cited), read from the stored one-atom geometry of the cited calculation.
+- With no `zpe_scale_factor` the state is stored as not compared (`zpe_scaling_unstated`): unity is never assumed, even
+  when the unscaled sum agrees. A freq that stores no ZPE is `zpe_not_stated`; an sp and freq not at one geometry are
+  `geometry_not_paired`; no ZPE is borrowed from a sibling calculation. A contradicted sum is refused with the existing
+  `network_state_energy_sum_mismatch`, whose context gains `zpe_scale_factor`. No new refusal code.
+- A `zpe_scale_factor` on a state where no participant cites a `zpe_calculation_key` is refused: it would scale nothing.
+- `freq_zpe_hartree` (and the stored freq ZPE) is documented as the unscaled harmonic zero-point energy.
+- Reads gain `zpe_calculation_ref` per state-energy source and `zpe_scale_factor` per state energy.
+
+## 0.112.0 - 2026-10-11
+
+New extrapolation formula `exponential_sqrt` for composite scheme terms: ORCA's SCF form
+`E_SCF(X) = E_CBS + A exp(-alpha sqrt(X))` (`CompositeExtrapolationFormula.exponential_sqrt`,
+`extrapolate_exponential_sqrt`). The term's `exponent` is ORCA's alpha and is required, so it is part of the scheme's
+identity like an `inverse_power` exponent; the term reads the `reference` (or `total` of an HF level) component, like
+`karton_martin_scf`. ORCA's optimised alpha: cc-pVnZ 4.42 (2/3) and 5.46 (3/4); pc-n 7.02 and 9.78; def2 10.39 and 7.88;
+ano-pVnZ 5.41 and 4.48; saug-ano-pVnZ 5.48 and 4.18; aug-ano-pVnZ 5.12 (2/3). Reproduces the two SCF energies the ORCA
+manuals print for water. Existing schemes and formulas are unchanged.
+
+## 0.111.1 - 2026-10-11
+
+Wording only: the refusal `energy_correction_scheme_frequency_level_not_applicable` and the `EnergyCorrectionSchemeRef`
+docstring no longer say every kind other than the BAC kinds is "keyed on the energy level alone". A frequency level is
+accepted only on `bac_petersson` and `bac_melius` for now; Arkane's isodesmic reference data is keyed on the
+frequency//energy pair too, and the `isodesmic` kind will likely need it once it has defined content. No upload model,
+enum or rule changed.
+
+## 0.111.0 - 2026-10-11
+
+A kinetics record's Arrhenius A-units are held to the order of the side its coefficient is a rate of (#695): the products for
+a `reverse` record, the reactants for a `forward` one. A `net` record is not checked. A record that states no direction
+could be either, and none is assumed: units matching EITHER side's order are accepted, units matching neither are refused
+(`arrhenius_a_units_molecularity_mismatch`, whose message names both orders and asks for `direction`), and when the two
+sides are the same size the check is unchanged. So the correct units of a reverse rate on a reaction with unequal sides
+(the reverse of H2 -> 2H is bimolecular) are accepted, and the units of the wrong side are refused once `direction` is
+stated. This covers the main line, every `multi_arrhenius` and PLOG entry, and `falloff.low_a_units` (one order above the
+side). No upload model gained or lost a field.
+
 ## 0.108.1 - 2026-10-10
 
 The producer contract now lists four models it had left out: `SchemeAtomParamPayload`, `SchemeBondParamPayload` and

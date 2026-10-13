@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.calculation import CalculationHessian
 from app.db.models.common import HessianSource
+from tests.api.artifact_urls import artifacts_url
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -178,7 +179,7 @@ class TestHessianHook:
         assert _stored(db_session, calc_id) is None
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")]},
         )
         assert resp.status_code == 201, resp.text
@@ -202,7 +203,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, natoms=MOLPRO_NATOMS)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(MOLPRO_LOG, kind="output_log", filename="freq.out")]},
         )
         assert resp.status_code == 201, resp.text
@@ -221,7 +222,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, xyz=_orca_frame_xyz())
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(ORCA_HESS, kind="hessian", filename="ts.hess")]},
         )
         assert resp.status_code == 201, resp.text
@@ -241,7 +242,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, natoms=ORCA_NATOMS)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(ORCA_HESS, kind="hessian", filename="ts.hess")]},
         )
         assert resp.status_code == 201, resp.text
@@ -254,7 +255,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, natoms=MOLPRO_NATOMS)  # 5, not 12
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")]},
         )
         assert resp.status_code == 201, resp.text
@@ -268,7 +269,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, natoms=GAUSSIAN_NATOMS, calc_type="sp")
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")]},
         )
         assert resp.status_code == 201, resp.text
@@ -289,7 +290,7 @@ class TestHessianHook:
         )
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")]},
         )
         assert resp.status_code == 201, resp.text
@@ -303,7 +304,7 @@ class TestHessianHook:
         calc_id = _create_calc(client, natoms=GAUSSIAN_NATOMS)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="input", filename="freq.in")]},
         )
         assert resp.status_code == 201, resp.text
@@ -314,7 +315,7 @@ class TestHessianHook:
     ):
         calc_id = _create_calc(client, natoms=GAUSSIAN_NATOMS)
         r1 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="a.log")]},
         )
         assert r1.status_code == 201
@@ -325,7 +326,7 @@ class TestHessianHook:
         # A second upload (even a different program's matrix) must not replace
         # the existing row.
         r2 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="b.log")]},
         )
         assert r2.status_code == 201, r2.text
@@ -343,7 +344,7 @@ class TestHessianHook:
         body = b"***  PROGRAM SYSTEM MOLPRO  ***\nno matrix here\n"
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_artifact(body, kind="output_log", filename="nohess.out")]},
         )
         assert resp.status_code == 201, resp.text
@@ -416,3 +417,121 @@ class TestHessianBundleHook:
         assert row.natoms == GAUSSIAN_NATOMS
         assert row.geometry.natoms == GAUSSIAN_NATOMS
         assert row.lower_triangle_hartree_bohr2[0] == GAUSSIAN_HEAD
+
+
+def _not_stored_codes(warnings: list[dict]) -> list[str]:
+    return [w["code"] for w in warnings if w["code"].startswith("hessian_not_stored")]
+
+
+class TestHessianNotStoredWarnings:
+    """A Hessian the hook found but did not store is reported (#691); the
+    upload still succeeds and the artifact is still stored."""
+
+    def _post(self, client, calc_id: int, artifact: dict):
+        resp = client.post(
+            artifacts_url(client, calc_id), json={"artifacts": [artifact]}
+        )
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    def test_natoms_mismatch_warns(self, client, db_session, stub_store_artifact):
+        calc_id = _create_calc(client, natoms=MOLPRO_NATOMS)
+        body = self._post(
+            client, calc_id, _artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")
+        )
+        assert _stored(db_session, calc_id) is None
+        assert _not_stored_codes(body["warnings"]) == ["hessian_not_stored_geometry_mismatch"]
+        (warning,) = [w for w in body["warnings"] if w["code"].startswith("hessian_not_stored")]
+        assert "freq.log" in warning["message"]
+        assert len(body["artifacts"]) == 1
+
+    def test_wrong_frame_warns(self, client, db_session, stub_store_artifact):
+        calc_id = _create_calc(client, natoms=ORCA_NATOMS)
+        body = self._post(
+            client, calc_id, _artifact(ORCA_HESS, kind="hessian", filename="ts.hess")
+        )
+        assert _stored(db_session, calc_id) is None
+        assert _not_stored_codes(body["warnings"]) == ["hessian_not_stored_geometry_mismatch"]
+
+    def test_unparseable_hess_file_warns(self, client, db_session, stub_store_artifact):
+        calc_id = _create_calc(client, natoms=ORCA_NATOMS)
+        body = self._post(
+            client, calc_id, _artifact(b"$not_a_hessian\n1 2 3\n", kind="hessian", filename="bad.hess")
+        )
+        assert _stored(db_session, calc_id) is None
+        assert _not_stored_codes(body["warnings"]) == ["hessian_not_stored_unparseable"]
+
+    def test_stored_hessian_and_matrixless_log_say_nothing(
+        self, client, db_session, stub_store_artifact
+    ):
+        stored_id = _create_calc(client, natoms=GAUSSIAN_NATOMS)
+        stored = self._post(
+            client, stored_id, _artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")
+        )
+        assert _stored(db_session, stored_id) is not None
+        assert _not_stored_codes(stored["warnings"]) == []
+
+        bare_id = _create_calc(client, natoms=GAUSSIAN_NATOMS)
+        bare = self._post(
+            client,
+            bare_id,
+            _artifact(b"***  PROGRAM SYSTEM MOLPRO  ***\nno matrix here\n", kind="output_log", filename="n.out"),
+        )
+        assert _not_stored_codes(bare["warnings"]) == []
+
+    def test_bundle_inline_two_input_geometries_warns_and_names_the_calculation(
+        self, client, db_session, stub_store_artifact
+    ):
+        bundle = _computed_species_bundle(natoms=GAUSSIAN_NATOMS)
+        # Two input geometries (same atoms, different coordinates): the matrix
+        # cannot be bound to either unambiguously.
+        freq = bundle["conformers"][0]["additional_calculations"][0]
+        other = _xyz(GAUSSIAN_NATOMS).replace("5.0000", "5.5000")
+        freq["input_geometries"] = [{"xyz_text": _xyz(GAUSSIAN_NATOMS)}, {"xyz_text": other}]
+        resp = client.post("/api/v1/uploads/computed-species", json=bundle)
+        assert resp.status_code == 201, resp.text
+        assert _not_stored_codes(resp.json()["warnings"]) == ["hessian_not_stored_no_unique_input_geometry"]
+        (warning,) = [w for w in resp.json()["warnings"] if w["code"].startswith("hessian_not_stored")]
+        # Inside a bundle the field says which calculation's artifact it was, not just "artifacts".
+        assert warning["field"] == "calculations['freq0'].artifacts"
+
+    def test_a_hess_file_sent_to_an_opt_calculation_warns(self, client, db_session, stub_store_artifact):
+        """The calculation-type gate returned before parsing, so this was silent (#744)."""
+        calc_id = _create_calc(client, natoms=ORCA_NATOMS, calc_type="opt")
+        body = self._post(client, calc_id, _artifact(ORCA_HESS, kind="hessian", filename="opt.hess"))
+        assert _stored(db_session, calc_id) is None
+        assert _not_stored_codes(body["warnings"]) == ["hessian_not_stored_not_frequency_calculation"]
+        (warning,) = [w for w in body["warnings"] if w["code"].startswith("hessian_not_stored")]
+        assert "opt.hess" in warning["message"] and "'opt'" in warning["message"]
+        assert len(body["artifacts"]) == 1
+
+    def test_a_matrix_bearing_log_sent_to_an_opt_calculation_stays_silent(
+        self, client, db_session, stub_store_artifact
+    ):
+        """One combined ``opt freq`` log is normally sent for both calculations; the freq copy stores it."""
+        calc_id = _create_calc(client, natoms=GAUSSIAN_NATOMS, calc_type="opt")
+        body = self._post(client, calc_id, _artifact(GAUSSIAN_LOG, kind="output_log", filename="optfreq.log"))
+        assert _stored(db_session, calc_id) is None
+        assert _not_stored_codes(body["warnings"]) == []
+
+
+def test_computed_reaction_bundle_reports_a_hessian_it_did_not_store(client, stub_store_artifact):
+    """The third caller of the hook (the computed-reaction workflow) merges the
+    warning into the bundle's response too."""
+    from tests.api.test_api_scheme_frequency_level import _payload_with_aec_carriers
+
+    payload = _payload_with_aec_carriers()
+    species = payload["species"][0]
+    species["calculations"].append(
+        {
+            "key": "hess-freq",
+            "type": "freq",
+            "geometry_key": species["calculations"][0].get("geometry_key"),
+            "software_release": {"name": "Gaussian", "version": "09"},
+            "level_of_theory": {"method": "wb97xd", "basis": "def2tzvp"},
+            "artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")],
+        }
+    )
+    resp = client.post("/api/v1/uploads/computed-reaction", json=payload)
+    assert resp.status_code == 201, resp.text
+    assert _not_stored_codes(resp.json()["warnings"]) == ["hessian_not_stored_geometry_mismatch"]

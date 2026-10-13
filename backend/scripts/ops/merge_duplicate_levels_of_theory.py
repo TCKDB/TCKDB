@@ -38,10 +38,30 @@ user-built recipe has ``method`` = a server-generated label and every other
 column ``NULL``, so its hash cannot be recomputed from its columns. The script
 recomputes it **from the bound scheme** instead
 (``composite_scheme_resolution.declared_scheme_lot_hash`` of the scheme's
-``definition_hash``): the same function the upload path writes it with, so the
-two cannot disagree. No declared level is skipped. In practice a declared level
-is alone in its group (the scheme is unique on its hash), so it is never merged
-with a plain level that happens to share its label.
+re-derived definition hash): the same function the upload path writes it with.
+No declared level is skipped, and it is never merged with a plain level that
+happens to share its label.
+
+A scheme's definition hash is taken over the hash of each input level. When an
+input level is merged away (above), two further things follow (#658):
+
+* the scheme's term inputs are repointed from the merged level to the holder, so
+  no scheme input points at a merged row;
+* the scheme's re-derived hash (merges followed) no longer equals the stored
+  one, so a fresh deposit of the same recipe would not find it. The *reunite
+  pass* then gets or creates the scheme the re-derived hash names, and the level
+  that names it, and the ordinary merge folds the stale declared level into that
+  new level. So a declared level can be in a group with another declared level,
+  one this very run created. The stale scheme row is kept (a release may have
+  frozen its ref); it is simply no longer anyone's binding.
+
+The reunite pass runs only for a scheme whose stale level could actually be
+merged: each stale level is checked against the same blockers as any merge
+(approved science on its calculations, other references to it) before anything
+is created. A blocked one is reported and no scheme or level is created for it, because
+merging is what makes the new level the only live one; creating it anyway would
+leave two live declared levels. The dry run reports the count (and the blocked
+ones) by running the pass in a savepoint and rolling it back.
 
 **What it refuses.** A group is merged only if every one of these holds, and
 is reported as blocked otherwise:
@@ -75,8 +95,9 @@ is reported as blocked otherwise:
 **What changes on commit.** For each unblocked group, in its own savepoint:
 ``calculation.lot_id`` moves from each duplicate to the holder, any row
 already merged into the duplicate is re-aimed at the holder (so a merge is
-always one hop), and a ``level_of_theory_merge`` row records the duplicate
-as merged into the holder. The holder's verbatim names, ``lot_hash`` and ``public_ref`` are not
+always one hop), scheme term inputs and the declared-scheme binding follow, and
+a ``level_of_theory_merge`` row records the duplicate as merged into the holder.
+Then the reunite pass (above) runs and its new groups are merged the same way. The holder's verbatim names, ``lot_hash`` and ``public_ref`` are not
 touched. The group is re-planned inside the savepoint, so an approval or
 reference that appeared after the plan was printed keeps the group, and the
 accepted-science trigger is the backstop for the calculation's own
@@ -84,7 +105,9 @@ approval.
 
 Usage::
 
-    # Plan only -- the default. Writes nothing.
+    # Plan only -- the default. Nothing is left written (it needs a database role
+    # that can write: the reunite preview runs in a savepoint that is rolled back,
+    # and sequences advance).
     python backend/scripts/ops/merge_duplicate_levels_of_theory.py
 
     # Merge the unblocked groups. One transaction.
@@ -99,9 +122,11 @@ Rows are named by ``public_ref`` and content, never by primary key.
 from __future__ import annotations
 
 import argparse
+import functools
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -124,6 +149,9 @@ _REPOINTED = {
     # (or dropped when the holder is bound already), so a merged level is never
     # bound. Absent on a database older than ``d7a3f1b9c284``.
     ("level_of_theory_composite", "level_of_theory_id"),
+    # #658: a scheme input follows a merge, so no scheme input points at a merged
+    # row and the scheme's hash (taken over its canonical input levels) is re-derived.
+    ("composite_scheme_term_input", "level_of_theory_id"),
 }
 
 #: Ownership columns that are also citations. ``calculation_dependency`` is
@@ -240,6 +268,11 @@ class Plan:
 class CommitResult:
     merged: list[tuple[Group, int]] = field(default_factory=list)
     kept: list[tuple[Group, str]] = field(default_factory=list)
+    #: Stale declared schemes reunited with the scheme their re-derived hash names (#658).
+    reunited: int = 0
+    #: ``(level public_ref, why)`` for a stale declared level that could not be merged into
+    #: the level a reunite would create, so no scheme or level was created for it.
+    reunite_blocked: list[tuple[str, str]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -506,18 +539,98 @@ def _lot_columns_present(session: Session) -> tuple[str, ...]:
 def _declared_definition_hashes(session: Session, schema: Schema) -> dict[int, str]:
     """``level id -> definition_hash`` for every level bound to a declared scheme.
 
-    Empty on a database older than ``d7a3f1b9c284`` (no binding table).
+    The hash is **re-derived** from the scheme's stored terms and input levels,
+    merges followed (#658), not read from ``composite_scheme.definition_hash``: a
+    stored hash is exactly what goes stale when an input level is merged away, and
+    reading it back would vouch for itself. Empty on a database older than
+    ``d7a3f1b9c284`` (no binding table).
     """
     if ("level_of_theory_composite", "level_of_theory_id") not in schema.lot_references:
         return {}
+    from app.db.models.composite_scheme import CompositeScheme
+    from app.services.composite_scheme_resolution import stored_scheme_definition_hash
+
     rows = session.execute(
         text(
-            "SELECT c.level_of_theory_id, s.definition_hash "
-            "FROM level_of_theory_composite c JOIN composite_scheme s ON s.id = c.scheme_id "
-            "WHERE c.binding_source = 'declared'"
+            "SELECT level_of_theory_id, scheme_id FROM level_of_theory_composite "
+            "WHERE binding_source = 'declared' ORDER BY level_of_theory_id"
         )
     ).all()
-    return {level_id: definition_hash.strip() for level_id, definition_hash in rows}
+    derived: dict[int, str] = {}
+    by_scheme: dict[int, str] = {}
+    for level_id, scheme_id in rows:
+        if scheme_id not in by_scheme:
+            scheme = session.get(CompositeScheme, scheme_id)
+            assert scheme is not None
+            by_scheme[scheme_id] = stored_scheme_definition_hash(session, scheme)
+        derived[level_id] = by_scheme[scheme_id]
+    return derived
+
+
+def reunite_declared_schemes(session: Session, schema: Schema) -> tuple[int, list[tuple[str, str]]]:
+    """Create the scheme and level a stale declared scheme should have had (#658).
+
+    For every level still bound to a declared scheme whose re-derived hash differs
+    from the stored one (an input level was merged away), get or create the scheme
+    the derived hash names and the level that names it
+    (``composite_scheme_resolution.reunite_stale_scheme``). The stale level and the
+    new one then share an identity hash, so :func:`build_plan` groups them and the
+    ordinary merge folds the stale level, with its calculations, into the new one.
+
+    **Only when that merge can happen.** Before anything is created, each stale level
+    is checked with the same blockers the merge applies (accepted science resting on
+    its calculations, other references to it). A level that is blocked would be left
+    beside the level this pass created -- two live declared levels, both made by this
+    script -- so its scheme is skipped and reported instead, with no scheme or level created for it (its input levels were still merged and its term inputs repointed earlier in the run).
+
+    :returns: ``(schemes reunited, [(stale level public_ref, why it was skipped)])``.
+    """
+    if ("level_of_theory_composite", "level_of_theory_id") not in schema.lot_references:
+        return 0, []
+    from app.db.models.composite_scheme import CompositeScheme
+    from app.services.composite_scheme_resolution import reunite_stale_scheme, stored_scheme_definition_hash
+
+    scheme_ids = session.scalars(
+        text(
+            "SELECT DISTINCT c.scheme_id FROM level_of_theory_composite c "
+            "WHERE c.binding_source = 'declared' AND c.level_of_theory_id NOT IN "
+            "(SELECT merged_lot_id FROM level_of_theory_merge) ORDER BY c.scheme_id"
+        )
+    ).all()
+    reunited = 0
+    blocked: list[tuple[str, str]] = []
+    for scheme_id in scheme_ids:
+        scheme = session.get(CompositeScheme, scheme_id)
+        assert scheme is not None
+        if stored_scheme_definition_hash(session, scheme) == scheme.definition_hash.strip():
+            continue
+        reasons = _stale_level_blockers(session, schema, scheme_id)
+        if reasons:
+            blocked.extend(reasons)
+            continue
+        if reunite_stale_scheme(session, scheme) is not None:
+            reunited += 1
+    return reunited, blocked
+
+
+def _stale_level_blockers(session: Session, schema: Schema, scheme_id: int) -> list[tuple[str, str]]:
+    """``(public_ref, why)`` for each live level bound to ``scheme_id`` that could not be merged away."""
+    rows = session.execute(
+        text(
+            "SELECT l.id, l.public_ref, l.lot_hash, l.method FROM level_of_theory l "
+            "JOIN level_of_theory_composite c ON c.level_of_theory_id = l.id "
+            "WHERE c.scheme_id = :scheme AND c.binding_source = 'declared' AND l.id NOT IN "
+            "(SELECT merged_lot_id FROM level_of_theory_merge) ORDER BY l.id"
+        ),
+        {"scheme": scheme_id},
+    ).all()
+    out: list[tuple[str, str]] = []
+    for level_id, public_ref, lot_hash, method in rows:
+        duplicate = _describe_duplicate(session, schema, LotRow(level_id, public_ref, lot_hash, f"method={method!r}"))
+        reasons = duplicate.blockers()
+        if reasons:
+            out.append((public_ref, "; ".join(reasons)))
+    return out
 
 
 def build_plan(session: Session, schema: Schema | None = None) -> Plan:
@@ -546,7 +659,7 @@ def build_plan(session: Session, schema: Schema | None = None) -> Plan:
         ]
         holder = next((r for r in lot_rows if r.lot_hash == identity_hash), None)
         duplicates = [
-            _describe_duplicate(session, schema, r, holder) for r in lot_rows if r is not holder
+            _describe_duplicate(session, schema, r, holder, lambda: declared) for r in lot_rows if r is not holder
         ]
         groups.append(Group(identity_hash, holder, duplicates))
     groups.sort(key=lambda g: g.holder.public_ref if g.holder else g.identity_hash)
@@ -554,13 +667,23 @@ def build_plan(session: Session, schema: Schema | None = None) -> Plan:
 
 
 def _describe_duplicate(
-    session: Session, schema: Schema, row: LotRow, holder: LotRow | None = None
+    session: Session,
+    schema: Schema,
+    row: LotRow,
+    holder: LotRow | None = None,
+    declared: Callable[[], dict[int, str]] | None = None,
 ) -> Duplicate:
+    """Everything that would stop ``row`` being merged away.
+
+    ``declared`` yields ``level id -> definition hash`` (:func:`_declared_definition_hashes`);
+    it is called only when two different recipes meet, and callers share one so the
+    derivation runs once per group on a commit (once per plan on a dry run), not once per duplicate.
+    """
     duplicate = Duplicate(row=row)
     if holder is not None and ("level_of_theory_composite", "level_of_theory_id") in schema.lot_references:
         # Two levels the merge would join are bound to different recipes: moving
-        # or dropping one binding would pick a recipe silently. Named methods
-        # cannot do this today (one key, one scheme); a declared scheme can.
+        # or dropping one binding would pick a recipe silently. Two schemes that
+        # re-derive to one hash (#658) are one recipe, not a conflict.
         differs = session.scalar(
             text(
                 "SELECT count(*) FROM level_of_theory_composite d "
@@ -570,7 +693,9 @@ def _describe_duplicate(
             {"holder": holder.row_id, "dup": row.row_id},
         )
         if differs:
-            duplicate.other_references["level_of_theory_composite.scheme_id (differs from the kept row)"] = differs
+            derived = declared() if declared is not None else _declared_definition_hashes(session, schema)
+            if derived.get(row.row_id) != derived.get(holder.row_id) or row.row_id not in derived:
+                duplicate.other_references["level_of_theory_composite.scheme_id (differs from the kept row)"] = differs
     for table, column in schema.lot_references:
         count = session.scalar(
             text(
@@ -595,15 +720,48 @@ def _describe_duplicate(
 
 
 def commit_plan(session: Session, plan: Plan) -> CommitResult:
-    """Merge every unblocked group, each in its own savepoint. The caller commits."""
+    """Merge every unblocked group, each in its own savepoint. The caller commits.
+
+    Then, for a declared composite scheme whose input level was just merged away,
+    create the scheme and level its re-derived hash names and merge the stale level
+    into it (#658). That second pass re-plans, so it sees the new level.
+    """
+    result = _commit_groups(session, plan)
+    reunited, blocked = reunite_declared_schemes(session, plan.schema)
+    result.reunited = reunited
+    result.reunite_blocked = blocked
+    if reunited:
+        follow = _commit_groups(session, build_plan(session, plan.schema))
+        result.merged.extend(follow.merged)
+        result.kept.extend(follow.kept)
+    return result
+
+
+def preview_commit(session: Session, plan: Plan) -> CommitResult:
+    """What :func:`commit_plan` would do, with nothing left written.
+
+    Runs the real commit, the reunite pass included, inside a savepoint and rolls it
+    back, so the dry run reports the same counts and refusals a commit would reach.
+    """
+    savepoint = session.begin_nested()
+    try:
+        return commit_plan(session, plan)
+    finally:
+        savepoint.rollback()
+
+
+def _commit_groups(session: Session, plan: Plan) -> CommitResult:
     result = CommitResult()
     for group in plan.mergeable():
         assert group.holder is not None
         holder_id = group.holder.row_id
         try:
             with session.begin_nested():
+                # One derivation per group, and only if two recipes meet: a bound level
+                # moved by an earlier group would make a run-wide cache stale.
+                derived_once = functools.cache(lambda: _declared_definition_hashes(session, plan.schema))
                 fresh = [
-                    _describe_duplicate(session, plan.schema, d.row, group.holder)
+                    _describe_duplicate(session, plan.schema, d.row, group.holder, derived_once)
                     for d in group.duplicates
                 ]
                 reasons = [r for d in fresh for r in d.blockers()]
@@ -628,6 +786,14 @@ def commit_plan(session: Session, plan: Plan) -> CommitResult:
                         ),
                         {"holder": holder_id, "dup": dup_id},
                     )
+                    if ("composite_scheme_term_input", "level_of_theory_id") in plan.schema.lot_references:
+                        session.execute(
+                            text(
+                                "UPDATE composite_scheme_term_input SET level_of_theory_id = :holder "
+                                "WHERE level_of_theory_id = :dup"
+                            ),
+                            {"holder": holder_id, "dup": dup_id},
+                        )
                     session.execute(
                         text(
                             "INSERT INTO level_of_theory_merge (merged_lot_id, into_lot_id) "
@@ -694,6 +860,13 @@ def _print_plan(plan: Plan) -> None:
     )
 
 
+def _print_reunite(result: CommitResult, *, would: bool) -> None:
+    verb = "would be reunited" if would else "reunited"
+    print(f"\nDeclared composite schemes made stale by a level merge, {verb}: {result.reunited}.")
+    for ref, why in result.reunite_blocked:
+        print(f"  NOT reunited, no scheme or level created for it: {ref} -- {why}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -728,11 +901,13 @@ def main(argv: list[str] | None = None) -> int:
         plan = build_plan(session)
         _print_plan(plan)
         if not args.commit:
-            print("\nDry run -- nothing was changed. Re-run with --commit to merge.")
+            _print_reunite(preview_commit(session, plan), would=True)
+            print("\nDry run -- nothing was changed (the reunite preview ran in a savepoint, rolled back; sequences advanced). Re-run with --commit to merge.")
             return 0
 
         result = commit_plan(session, plan)
         session.commit()
+        _print_reunite(result, would=False)
         print(f"\nMerged {len(result.merged)} group(s):")
         for group, moved in result.merged:
             assert group.holder is not None

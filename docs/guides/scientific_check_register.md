@@ -84,23 +84,23 @@ disagree, this one is right by construction.
 
 | Tier | Entries | Meaning |
 | --- | --- | --- |
-| `block` | 21 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
+| `block` | 22 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
 | `warn` | 12 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `label` | 1 | Labels a stored record at read time without refusing anything — a `HardFailReason` in the trust evaluator. For facts TCKDB observes about a record after it was accepted, which no upload-time check could have refused because they did not exist yet. |
 | `review` | 7 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **46** | |
+| **total** | **47** | |
 
 ## Where a check's code reaches a client
 
 | Channel | Entries | What a consumer can do with it |
 | --- | --- | --- |
-| `error_envelope` | 22 | the `code` field of the 422 error body — a client can branch on it |
+| `error_envelope` | 23 | the `code` field of the 422 error body — a client can branch on it |
 | `upload_warning` | 12 | the `code` field of an `UploadWarning` returned alongside the accepted upload |
 | `trust_label` | 1 | a read-time trust label (`HardFailReason`), not any refusal |
 | `database_constraint` | 1 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
 | `none` | 10 | *nothing carries a code* |
-| **total** | **46** | |
+| **total** | **47** | |
 
 ## Recorded divergences
 
@@ -110,7 +110,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - **[9]** Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants.
 - **[12]** An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
 - **[16]** A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
-- **[35]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+- **[36]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 ## Entries
 
@@ -278,7 +278,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `assert_calculation_geometry_composition` — `backend/app/services/calculation_geometry_composition.py::assert_calculation_geometry_composition`
-  *Called from every site that attaches a geometry to a calculation: the `calculation_input_geometry` and `calculation_output_geometry` inserts, on both the producer-explicit branch and the `geometry_key`/fallback branch, and the geometry-bearing children -- a Hessian's geometry (upload and best-effort artifact hook), scan points and every IRC point (#680). A guard test fails if a construction is unchecked or a site disappears. `calc_isotopes.assert_isotopes` extends the claim to isotopes (own code, by count).*
+  *Called from every site that attaches a geometry to a calculation: the `calculation_input_geometry` and `calculation_output_geometry` inserts, on both the producer-explicit branch and the `geometry_key`/fallback branch, and the geometry-bearing children -- a Hessian's geometry (upload and best-effort artifact hook), scan points and every IRC point (#680). A guard test fails if a construction is unchecked or a site disappears. `calc_isotopes.assert_isotopes` extends the claim to isotopes (own code, by count). The best-effort artifact hook is the one site that does not refuse: it never fails an upload, so a refusal there is the warning `hessian_not_stored_geometry_mismatch` with the block code named only in its message text (#744).*
 
 **Escape hatch.** Declare the structure's real composition: give the calculation the geometry it was run on, or file it under the subject that geometry belongs to. Absence does not block -- a `pseudo` owner, a transition state whose reaction records no reactants or a pseudo reactant, and an unparseable stored SMILES are all left unjudged. Only atom counts are compared, so a scan or IRC point at stretched or rearranged coordinates passes -- scan and IRC points are themselves checked, and a point of a different molecule is refused -- as do constitutional isomers and dissociated optimisations. Isotopologues pass this check; the isotope check (`calculation_geometry_isotope_mismatch`) judges them separately.
 
@@ -595,7 +595,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | Field | Value |
 | --- | --- |
 | **Tier** | `warn` |
-| **Code** | `transition_state_energy_ordering_not_compared`, `network_state_energy_sum_not_compared` |
+| **Code** | `transition_state_energy_ordering_not_compared`, `network_state_energy_sum_not_compared`, `network_energy_zpe_source_absent` |
 | **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload |
 | **Governing ADR** | 0008 |
 
@@ -607,12 +607,36 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   *The outcome of every comparison is stored on the compared energy (`stored_energy_comparison` / `not_compared_reason`), so a reader can tell an energy that agrees with the stored one from one that was never held against it.*
 - `collect_state_energy_source_warnings` — `backend/app/services/network_energy_sources.py::collect_state_energy_source_warnings`
   *The network route: the outcome is stored on the state energy (`source_sum_comparison` / `source_sum_not_compared_reason`). Reasons include a convention with no stored per-source terms, a zero no other state shares, a source with no stored energy of the needed kind, a state alone on its zero and `stated_precision_unknown` (beyond printed precision, inside honest rounding of the stated kJ/mol). Sources on only some participants warn separately, with `network_state_energy_sources_partial`.*
+- `collect_zpe_source_absent_warnings` — `backend/app/services/network_energy_sources.py::collect_zpe_source_absent_warnings`
+  *A state or barrier energy on a composed convention (`electronic_plus_zpe`, `atom_and_bond_corrected`, `thermal_enthalpy_298k`) that cites only an `sp` or `opt` when the upload carries no `freq` for that species or transition state: `network_energy_zpe_source_absent` (#669). An absence, so a warning; a `composite` and a single atom are not flagged.*
 
 **Escape hatch.** None needed: the warning is the accommodation. Deposit the cited energy (and the ZPE, at the electronic energy's geometry) to compare; for a network state energy, cite every participant with an sp, opt or composite calculation and state `energy_precision_kj_mol`.
 
+### 25. A calculation cited as the source of a stated energy should be of a type that carries that kind of energy: an electronic energy from an `sp`, `opt` or `composite`, an E0 from a `freq` or `composite`, never from an IRC point, scan, path search or conformer search; and a network `well_freq` or `barrier_freq` source must be a `freq`.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `ts_energy_ordering_source_type_mismatch`, `network_energy_source_type_mismatch` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Definitional. An energy taken from an IRC point, or from a bare single point labelled as an E0, is not the quantity it is labelled as, and an ordering or a master equation built on it compares unlike things; the master equation reads the modes of its frequency roles, which a `composite` (a ZPE only) does not store. The table of types is one table shared by the transition-state and network rules (`app.services.energy_source_types`, #669), so the two cannot disagree about what carries an energy; it is a position a referee could dispute, which is why it is registered. A network energy on a composed convention (`electronic_plus_zpe` and the like) is held only to the floor of stationary-point types, because its one source slot cites the electronic part and the frequency goes in the frequency role: tightening it would refuse every producer and fixture in the repository, a decision recorded here rather than hidden.
+
+**Enforced at.**
+
+- `_assert_energy_sources_are_comparable` — `backend/app/services/transition_state_validation.py::_assert_energy_sources_are_comparable`
+  *The transition-state `energy_ordering` evidence, at the shared evidence seam, so all three deposit paths refuse alike.*
+- `assert_network_energy_source_type` — `backend/app/services/network_energy_sources.py::assert_network_energy_source_type`
+  *Network state and barrier energy sources, read off the persisted row.*
+- `assert_network_source_role_type` — `backend/app/services/network_energy_sources.py::assert_network_source_role_type`
+  *The `well_energy` / `barrier_energy` and the frequency roles of the solve's `source_calculations`.*
+
+**Escape hatch.** Cite the calculation that carries the energy: the `sp`, `opt` or `composite` for an electronic energy, the `freq` (or a `composite`) for an E0, and put the `freq` in the `well_freq` / `barrier_freq` role.
+
 ## Atom mapping across a reaction
 
-### 25. An atom does not change element on the way across a reaction: carbon does not map onto nitrogen.
+### 26. An atom does not change element on the way across a reaction: carbon does not map onto nitrogen.
 
 | Field | Value |
 | --- | --- |
@@ -633,7 +657,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Case is not load-bearing, and no longer needs a special provision to stop it becoming so. The comparison used to be case-insensitive on both sides, because the two ends quote two different geometries and nothing guaranteed they spelled an element the same way — carbon becoming nitrogen is a contradiction, while `Cl` becoming `CL` is one program shouting where another did not, and refusing the second would have refused correct chemistry. `b4e7c1d20f83` canonicalised the symbol on the way into `geometry_atom.element` and `c5a1f8e3d074` made that a CHECK, so one element now has one spelling in every state the database can be in and both the constraint and the service compare the stored values directly. Isotope mass number is deliberately *not* carried across the same way, because a NULL disables a MATCH SIMPLE foreign key; isotope consistency is checked in the service layer instead.
 
-### 26. One saddle-point atom is claimed by exactly one atom of each leg, and one participant atom maps to exactly one saddle-point atom.
+### 27. One saddle-point atom is claimed by exactly one atom of each leg, and one participant atom maps to exactly one saddle-point atom.
 
 | Field | Value |
 | --- | --- |
@@ -657,7 +681,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Per leg, not globally: the reactant and product legs each claim the whole saddle point, which is the point of storing two maps both pointing at it. A `side` column exists on the pair row purely so this can be a unique constraint, because SQL cannot dereference the participant to find its role.
 
-### 27. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has.
+### 28. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has.
 
 | Field | Value |
 | --- | --- |
@@ -681,7 +705,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None, and the cost is stated in ADR 0011: the map is welded to the geometries it names, so depositing a second conformer or re-optimising at another level of theory does not carry it across. Canonical-order-relative indexing would be portable, and was rejected because its failure mode is a map that looks fine and refers to a different atom order than the depositor intended. Portability can be added later as a derived view; correctness cannot be retrofitted onto records nobody can verify.
 
-### 28. When a map covers every declared participant of an atom-balanced reaction, both legs claim the same saddle-point atoms and no saddle-point atom is left unclaimed.
+### 29. When a map covers every declared participant of an atom-balanced reaction, both legs claim the same saddle-point atoms and no saddle-point atom is left unclaimed.
 
 | Field | Value |
 | --- | --- |
@@ -699,7 +723,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Leave the map incomplete, or deposit an unbalanced reaction — either drops the rule to the warning tier by design rather than by accident.
 
-### 29. Where a deposit carries both an atom map and an IRC participant mapping for the same saddle point, they agree about which saddle-point atoms each participant is made of.
+### 30. Where a deposit carries both an atom map and an IRC participant mapping for the same saddle point, they agree about which saddle-point atoms each participant is made of.
 
 | Field | Value |
 | --- | --- |
@@ -717,7 +741,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Omit one surface, or correct whichever is wrong — the mappings are optional on every path and a partial atom map is always accepted. Three absences are deliberately *not* disagreements: an atom map that omits a participant or leaves atoms unmapped is compared only over what it does claim, a transition state with no passing IRC mapping is not compared at all, and a barrierless channel has neither surface. Two participants on one side that are the same species entry are interchangeable, so a disagreement a permutation within that group would resolve is treated as arbitrary labelling rather than contradiction. A participant with no atoms is not an absence: both surfaces can say it has none -- an empty atom list -- so a reaction releasing a free electron carries a complete partition on both and is compared like any other, with the electron contributing no atoms to either side of the comparison.
 
-### 30. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
+### 31. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
 
 | Field | Value |
 | --- | --- |
@@ -735,7 +759,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None is needed — the warning *is* the accommodation. TCKDB deliberately will not infer a map: several chemically distinct maps are usually consistent with the same reactants and products, so choosing one by algorithm would manufacture provenance.
 
-### 31. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
+### 32. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
 
 | Field | Value |
 | --- | --- |
@@ -753,7 +777,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None.
 
-### 32. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
+### 33. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
 
 | Field | Value |
 | --- | --- |
@@ -777,7 +801,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Rate coefficients
 
-### 33. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
+### 34. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
 
 | Field | Value |
 | --- | --- |
@@ -791,13 +815,13 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `validate_a_units_for_molecularity` — `backend/app/chemistry/units.py::validate_a_units_for_molecularity`
-  *Called from the kinetics upload schema, so it refuses at the wire boundary. The order is not simply `len(reactants)`: a simple `+M` third-body reaction carries a `[M]` term on the main line and validates one order higher, while a falloff reaction's main line is the high-pressure limit k-infinity and keeps `len(reactants)`, its low-pressure limit k0 being validated separately one order up.*
+  *Called from the kinetics upload schema, so it refuses at the wire boundary. The order is not simply `len(reactants)`: it counts the side the coefficient is a rate of (reactants for a forward record, products for a reverse one; a `net` record is not checked). A record that states no direction is checked against both sides and refused only when the units match neither (`validate_a_units_for_unstated_direction`), so no direction is assumed. A simple `+M` third-body reaction carries a `[M]` term on the main line and validates one order higher, while a falloff reaction's main line is the high-pressure limit k-infinity, whose order is the side's count, its low-pressure limit k0 being validated separately one order up.*
 
-**Escape hatch.** None, and the refinements are the reason it can block without firing on correct science: PLOG and Chebyshev are refused the `is_third_body` flag outright, because both already encode the full pressure dependence and the flag would otherwise inflate the expected order by one — rejecting a PLOG entry carrying the *correct* units and accepting one carrying the units of the next order up.
+**Escape hatch.** None, and the refinements are the reason it can block without firing on correct science: PLOG and Chebyshev are refused the `is_third_body` flag outright, because both already encode the full pressure dependence and the flag would otherwise inflate the expected order by one — rejecting a PLOG entry carrying the *correct* units and accepting one carrying the units of the next order up. A record whose sides differ in size and which states no direction is accepted with units of either side's order; stating `direction` makes the check exact.
 
 ## Statistical mechanics
 
-### 34. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
+### 35. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
 
 | Field | Value |
 | --- | --- |
@@ -818,7 +842,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Pressure-dependent networks
 
-### 35. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+### 36. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 | Field | Value |
 | --- | --- |
@@ -841,7 +865,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Recorded divergence.** Existence, not coverage — and the trigger must not be read as the whole contract. The database guarantees a computed solve carries nonzero evidence of each applicable class; the three coverage rules (one energy per state, one energy-transfer model per (well, collider) pair or a network-wide declaration, one barrier per saddle-point path) remain properties of the single wired upload path. A computed solve with four energies out of five passes the database and fails the validator. ADR 0010's amendment states this deliberately: a computed solve with *zero* energies is a contradiction and may block, while an incomplete one is a true record to be graded by the trust and reproducibility layers. Separately, `kind` cannot surface in CHEMKIN export, which has no provenance field; a tripwire test guards the moment network kinetics first reach mechanism output.
 
-### 36. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
+### 37. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
 
 | Field | Value |
 | --- | --- |
@@ -862,7 +886,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Custody of the evidence
 
-### 37. The bytes TCKDB serves for a stored artifact are the bytes it stored, and a record whose evidence is known not to be is labelled as such at read time rather than graded as if it were intact.
+### 38. The bytes TCKDB serves for a stored artifact are the bytes it stored, and a record whose evidence is known not to be is labelled as such at read time rather than graded as if it were intact.
 
 | Field | Value |
 | --- | --- |
@@ -890,7 +914,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Reproducibility
 
-### 38. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
+### 39. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
 
 | Field | Value |
 | --- | --- |
@@ -911,7 +935,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Advisory consistency
 
-### 39. Compare every supplied NASA Cp/entropy fit with exact points, s298 and explicitly named neighbours.
+### 40. Compare every supplied NASA Cp/entropy fit with exact points, s298 and explicitly named neighbours.
 
 | Field | Value |
 | --- | --- |
@@ -931,7 +955,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 40. Compare explicitly supplied opposite elementary rates with equilibrium from explicitly mapped NASA thermo.
+### 41. Compare explicitly supplied opposite elementary rates with equilibrium from explicitly mapped NASA thermo.
 
 | Field | Value |
 | --- | --- |
@@ -951,7 +975,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 41. Compare every stored Gibbs value of one thermo record with H(T) - T*S(T) taken from each of that record's own representations, H and S always from the same one.
+### 42. Compare every stored Gibbs value of one thermo record with H(T) - T*S(T) taken from each of that record's own representations, H and S always from the same one.
 
 | Field | Value |
 | --- | --- |
@@ -971,7 +995,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 42. Compare a thermo record's supplied enthalpies (h298, exact points, NASA-7, NASA-9) at shared temperatures, compare each enthalpy change with the exact interval-local Cp integral of a fit, and report each fit's own boundary jumps -- residuals only.
+### 43. Compare a thermo record's supplied enthalpies (h298, exact points, NASA-7, NASA-9) at shared temperatures, compare each enthalpy change with the exact interval-local Cp integral of a fit, and report each fit's own boundary jumps -- residuals only.
 
 | Field | Value |
 | --- | --- |
@@ -991,7 +1015,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 43. Compare a kinetics record's stated reaction energy (its tunneling row, forward, separated-species zero) with the Hess sum of explicitly mapped formation enthalpies at the matching temperature.
+### 44. Compare a kinetics record's stated reaction energy (its tunneling row, forward, separated-species zero) with the Hess sum of explicitly mapped formation enthalpies at the matching temperature.
 
 | Field | Value |
 | --- | --- |
@@ -1011,7 +1035,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 44. Find, on a protium species entry, calculation geometries that declare a non-standard nuclide of any element -- a D or T element symbol deposited before 2026-10-03, or a stored mass number -- and record each as a finding.
+### 45. Find, on a protium species entry, calculation geometries that declare a non-standard nuclide of any element -- a D or T element symbol deposited before 2026-10-03, or a stored mass number -- and record each as a finding.
 
 | Field | Value |
 | --- | --- |
@@ -1033,7 +1057,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## External reference comparison
 
-### 45. A computed thermo record's heat capacity, evaluated at each temperature an independent external observation reports, is compared against that observation and the residual is recorded -- never judged against a threshold and never fed back into the record's trust or review state.
+### 46. A computed thermo record's heat capacity, evaluated at each temperature an independent external observation reports, is compared against that observation and the residual is recorded -- never judged against a threshold and never fed back into the record's trust or review state.
 
 | Field | Value |
 | --- | --- |
@@ -1055,7 +1079,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Scan coordinates
 
-### 46. A scan point's stored coordinate_value is the internal coordinate at that point's own sampled geometry, in that coordinate's own unit (ADR 0020) -- never a displacement, and never compared against start_value as an anchor.
+### 47. A scan point's stored coordinate_value is the internal coordinate at that point's own sampled geometry, in that coordinate's own unit (ADR 0020) -- never a displacement, and never compared against start_value as an anchor.
 
 | Field | Value |
 | --- | --- |

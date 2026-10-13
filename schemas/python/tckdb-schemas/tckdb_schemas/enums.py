@@ -232,6 +232,9 @@ class CompositeExtrapolationFormula(str, Enum):
     inverse_power_shifted_half = "inverse_power_shifted_half"
     karton_martin_scf = "karton_martin_scf"
     exponential_three_point = "exponential_three_point"
+    # ORCA's SCF form ``E_SCF(X) = E_CBS + A exp(-alpha sqrt(X))``; the term's
+    # ``exponent`` carries alpha.
+    exponential_sqrt = "exponential_sqrt"
 
 
 class CompositeInputSlot(str, Enum):
@@ -406,6 +409,28 @@ class StructureSourceRole(str, Enum):
     correction = "correction"
     connectivity = "connectivity"
     alternative_characterization = "alternative_characterization"
+
+
+class StatmechModelScopeKind(str, Enum):
+    """What a declared statistical model covers: one atom, one basin, an explicit ensemble, or a TS surface."""
+
+    atom = "atom"
+    basin = "basin"
+    explicit_equilibrium_ensemble = "explicit_equilibrium_ensemble"
+    ts_determination = "ts_determination"
+
+
+class StatmechModelSourceRole(str, Enum):
+    """The part of a declared model that a source supports."""
+
+    geometry = "geometry"
+    curvature = "curvature"
+    absolute_energy = "absolute_energy"
+    relative_energy = "relative_energy"
+    electronic_levels = "electronic_levels"
+    torsional_surface = "torsional_surface"
+    scale_factor = "scale_factor"
+    parameters = "parameters"
 
 
 class KineticsDeterminationTargetKind(str, Enum):
@@ -837,6 +862,8 @@ __all__ = (
     "StatmechTreatmentKind",
     "StationaryPointKind",
     "StereoKind",
+    "StatmechModelScopeKind",
+    "StatmechModelSourceRole",
     "StructureDeterminationQuantity",
     "StructureDeterminationTargetKind",
     "StructureSourceRole",

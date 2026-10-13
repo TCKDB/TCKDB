@@ -69,6 +69,12 @@ def committed_markdown() -> str:
     return (generator.CONTRACT_DIR / generator.MARKDOWN_NAME).read_text()
 
 
+@pytest.fixture(scope="module")
+def committed_codes() -> str:
+    """The refusal code reference, shipped as its own file beside the contract."""
+    return (generator.CONTRACT_DIR / generator.CODES_NAME).read_text()
+
+
 # ---------------------------------------------------------------------------
 # Helpers the tests assert with. Each is also run against a mutated input
 # below, which is what makes its green mean something.
@@ -344,7 +350,7 @@ def test_every_write_route_of_the_live_app_is_in_the_contract(committed_markdown
         "POST /api/v1/uploads/thermo",
         "POST /api/v1/uploads/networks",
         "POST /api/v1/bundles/submit",
-        "POST /api/v1/calculations/{calculation_id}/artifacts",
+        "POST /api/v1/calculations/{calculation_ref}/artifacts",
         "POST /api/v1/releases",
     ):
         assert expected in labels, expected
@@ -374,26 +380,26 @@ def test_a_route_the_generator_stops_seeing_turns_the_check_red(monkeypatch) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_every_client_facing_code_is_in_the_contract(committed_markdown: str) -> None:
-    """Each client-facing code has an entry: traced to a surface, or listed as untraced."""
+def test_every_client_facing_code_is_in_the_contract(committed_codes: str) -> None:
+    """Each client-facing code has an entry in the code reference: traced to a surface, or listed as untraced."""
     codes = sorted({entry.code for entry in CATALOGUE if entry.is_client_facing})
     assert len(codes) >= 100, len(codes)
-    assert missing_codes(committed_markdown, codes) == []
-    untraced = committed_markdown.split("### Client-facing codes not traced to any producer route", 1)
+    assert missing_codes(committed_codes, codes) == []
+    untraced = committed_codes.split("### Client-facing codes not traced to any producer route", 1)
     assert len(untraced) == 2, "the untraced-codes list is missing"
 
 
-def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown: str) -> None:
+def test_a_code_dropped_from_the_contract_is_reported_missing(committed_codes: str) -> None:
     """Mutation: remove one traced code's entry, and one untraced code's line."""
     code = "enthalpy_declaration_absent"
-    start = committed_markdown.index(f"#### `{code}`")
-    end = committed_markdown.index("\n#### ", start + 1)
-    mutated = committed_markdown[:start] + committed_markdown[end + 1 :]
+    start = committed_codes.index(f"#### `{code}`")
+    end = committed_codes.index("\n#### ", start + 1)
+    mutated = committed_codes[:start] + committed_codes[end + 1 :]
     assert missing_codes(mutated, [code]) == [code]
 
     untraced = "email_taken"
-    assert f"\n- `{untraced}` (" in committed_markdown, "pick a code that is still untraced"
-    mutated = re.sub(rf"\n- `{untraced}` \([^\n]*", "", committed_markdown)
+    assert f"\n- `{untraced}` (" in committed_codes, "pick a code that is still untraced"
+    mutated = re.sub(rf"\n- `{untraced}` \([^\n]*", "", committed_codes)
     assert missing_codes(mutated, [untraced]) == [untraced]
 
 
@@ -417,6 +423,12 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 #: At 0.98.0 "What changed" stopped copying every changelog entry (69 KB, a tenth of the file and growing
 #: each release) and prints the newest few; the full changelog ships beside the contract. 696_926 to
 #: 634_736 bytes, with the ceiling left where it was.
+#:
+#: At 0.112.2 (2026-10-11) the refusal code reference (104 KB, a sixth of the file) moved out of it into
+#: ``REFUSAL_CODES.md``, shipped beside the contract the way the changelog is, because the next
+#: statmech pull request would have brought it to 699_942 bytes and the one after would have crossed.
+#: Each surface keeps its own code table and its one-line meanings; only the long per-code entries moved.
+#: 686_228 to 588_881 bytes, with the ceiling left at 700_000.
 MARKDOWN_BYTE_CEILING = 700_000
 
 
@@ -456,7 +468,7 @@ def listed_by_surface(markdown: str, title: str) -> dict[str, list[str]]:
 
     codes_text = _subsection(section, "Refusal codes this surface can return")
     codes = re.findall(r"(?m)^\| \[`([^`]+)`\]", codes_text)
-    for anchor in re.findall(r"\]\(#(cg-\d+)\)", codes_text):
+    for anchor in re.findall(r"\]\(#(cg-[0-9a-f]+)\)", codes_text):
         codes += re.findall(r"(?m)^\| \[`([^`]+)`\]", code_groups[anchor])
 
     rules_text = _subsection(section, "Rules the workflow applies")
@@ -469,7 +481,7 @@ def listed_by_surface(markdown: str, title: str) -> dict[str, list[str]]:
     if "Nested models (" in fields_text:
         nested = fields_text[fields_text.index("Nested models (") :]
         models = re.findall(r"(?m)^- \[`([^`]+)`\]\(#m-", nested)
-        for anchor in re.findall(r"\]\(#(mg-\d+)\)", nested):
+        for anchor in re.findall(r"\]\(#(mg-[0-9a-f]+)\)", nested):
             models += re.findall(r"(?m)^- \[`([^`]+)`\]", model_groups[anchor])
     return {"codes": codes, "rules": rules, "models": models}
 
@@ -535,8 +547,8 @@ def _drop_first_line_matching(markdown: str, title: str, subsection: str, patter
     ("subsection", "pattern"),
     [
         ("Rules the workflow applies", r"^- \[`[^`]+`\]\(#k-"),
-        ("Refusal codes this surface can return", r"\]\(#cg-\d+\)"),
-        ("Payload fields", r"\]\(#mg-\d+\)"),
+        ("Refusal codes this surface can return", r"\]\(#cg-[0-9a-f]+\)"),
+        ("Payload fields", r"\]\(#mg-[0-9a-f]+\)"),
     ],
     ids=["shared rule", "code group", "model group"],
 )
@@ -554,7 +566,7 @@ def test_a_code_listed_twice_on_a_surface_is_caught(builder, committed_markdown:
     title = "ThermoUploadRequest"
     groups = shared_entries(committed_markdown, "Refusal codes several surfaces share")
     codes_text = _subsection(surface_section(committed_markdown, title), "Refusal codes this surface can return")
-    anchor = re.search(r"\]\(#(cg-\d+)\)", codes_text).group(1)
+    anchor = re.search(r"\]\(#(cg-[0-9a-f]+)\)", codes_text).group(1)
     row = re.search(r"(?m)^\| \[`[^`]+`\].*$", groups[anchor]).group(0)
     mutated = committed_markdown.replace(codes_text, codes_text.rstrip("\n") + "\n" + row + "\n", 1)
     assert any("listed twice" in gap for gap in listing_gaps(builder, mutated))
@@ -614,19 +626,122 @@ def dangling_links(markdown: str) -> set[str]:
 def test_every_link_to_a_shared_block_resolves(committed_markdown: str) -> None:
     """A surface that links a group or a rule is only as good as the entry the link reaches.
 
-    Links to a refusal code (``#c-...``) are left out: a check's code that no producer route was traced to
-    has no entry in the reference, and the shared check entries have always linked it regardless.
+    Links to a refusal code point into ``REFUSAL_CODES.md`` and are checked by their own test below.
     """
-    unresolved = {link for link in dangling_links(committed_markdown) if not link.startswith("c-")}
+    unresolved = dangling_links(committed_markdown)
     assert unresolved == set()
     links = re.findall(r"\]\(#((?:k|cg|mg|s|m)-[^)]+)\)", committed_markdown)
     assert len(links) > 800, len(links)
 
 
+CODE_LINK = re.compile(r"\]\(REFUSAL_CODES\.md#([^)]+)\)")
+
+
+def unresolved_code_links(markdown: str, codes: str) -> set[str]:
+    """``REFUSAL_CODES.md#anchor`` links in ``markdown`` whose anchor is not in ``codes``."""
+    anchors = set(re.findall(r'<a id="([^"]+)"', codes))
+    return {link for link in CODE_LINK.findall(markdown) if link not in anchors}
+
+
+def test_every_link_into_the_code_reference_resolves(committed_markdown: str, committed_codes: str) -> None:
+    links = CODE_LINK.findall(committed_markdown)
+    assert len(links) > 150, len(links)
+    assert unresolved_code_links(committed_markdown, committed_codes) == set()
+    # A bare ``#c-...`` would resolve in no viewer: the entry is in another file.
+    assert bare_code_links(committed_markdown) == []
+    assert "](REFUSAL_CODES.md#refusal-code-reference)" in committed_markdown
+
+
+def test_a_code_link_to_a_dropped_entry_is_caught(committed_markdown: str, committed_codes: str) -> None:
+    """Mutation: one entry's anchor is removed from the code file; the links to it dangle."""
+    anchor = CODE_LINK.search(committed_markdown).group(1)
+    mutated = committed_codes.replace(f'<a id="{anchor}"></a>', "", 1)
+    assert anchor in unresolved_code_links(committed_markdown, mutated)
+
+
+def bare_code_links(markdown: str) -> list[str]:
+    """Links ``](#c-...)`` in the contract: the entry is in another file, so no viewer resolves them."""
+    return re.findall(r"\]\(#(c-[^)]*)\)", markdown)
+
+
+def test_a_code_link_left_as_a_bare_anchor_is_caught(committed_markdown: str) -> None:
+    """Mutation: a link into the code file loses its file name; the checker must report it."""
+    assert bare_code_links(committed_markdown) == []
+    mutated = committed_markdown.replace("](REFUSAL_CODES.md#c-", "](#c-", 1)
+    assert len(bare_code_links(mutated)) == 1
+
+
+CONTRACT_LINK = re.compile(r"\]\(PRODUCER_CONTRACT\.md#([^)]+)\)")
+
+
+def unresolved_back_links(codes: str, markdown: str) -> set[str]:
+    """``PRODUCER_CONTRACT.md#anchor`` links in the code file whose anchor is not in the contract."""
+    anchors = set(re.findall(r'<a id="([^"]+)"', markdown))
+    return {link for link in CONTRACT_LINK.findall(codes) if link not in anchors}
+
+
+def bare_back_links(codes: str) -> list[str]:
+    """Links ``](#k-...)`` in the code file: the shared rule entries are in the contract, not here."""
+    return re.findall(r"\]\(#(k-[^)]*)\)", codes)
+
+
+def test_every_back_link_from_the_code_file_resolves(committed_markdown: str, committed_codes: str) -> None:
+    assert len(CONTRACT_LINK.findall(committed_codes)) >= 10
+    assert unresolved_back_links(committed_codes, committed_markdown) == set()
+    assert bare_back_links(committed_codes) == []
+
+
+def test_a_back_link_made_bare_or_pointed_at_nothing_is_caught(committed_markdown: str, committed_codes: str) -> None:
+    """Mutations: the back-links lose their file name; or point at an anchor the contract does not have."""
+    bare = committed_codes.replace("](PRODUCER_CONTRACT.md#k-", "](#k-", 1)
+    assert len(bare_back_links(bare)) == 1
+    gone = re.sub(r"\]\(PRODUCER_CONTRACT\.md#(k-[^)]*)\)", r"](PRODUCER_CONTRACT.md#\1-gone)", committed_codes, count=1)
+    assert len(unresolved_back_links(gone, committed_markdown)) == 1
+
+
+def code_occurrences(codes: str, code: str) -> int:
+    """How many times ``code`` has an entry (an anchor) or an untraced line in the code reference."""
+    return codes.count(f'<a id="{generator._anchor("c", code)}"></a>') + codes.count(f"\n- `{code}` (")
+
+
+def test_every_catalogue_code_is_in_the_code_file_exactly_once(committed_codes: str) -> None:
+    catalogue = sorted({entry.code for entry in CATALOGUE})
+    client_facing = {entry.code for entry in CATALOGUE if entry.is_client_facing}
+    assert len(catalogue) >= 100, len(catalogue)
+    counts = {code: code_occurrences(committed_codes, code) for code in catalogue}
+    assert [c for c in client_facing if counts[c] != 1] == []
+    # A code that is not client-facing has an entry only if a producer route was traced to it; never two.
+    assert [c for c, n in counts.items() if n > 1] == []
+
+
+def test_a_code_listed_twice_in_the_code_file_is_caught(committed_codes: str) -> None:
+    """Mutation: one entry is printed twice, and one is dropped; the exactly-once count sees both."""
+    code = "enthalpy_declaration_absent"
+    start = committed_codes.index(f'<a id="{generator._anchor("c", code)}"></a>')
+    end = committed_codes.index("\n<a id=", start + 1)
+    assert code_occurrences(committed_codes, code) == 1
+    assert code_occurrences(committed_codes[:end] + committed_codes[start:end] + committed_codes[end:], code) == 2
+    assert code_occurrences(committed_codes[:start] + committed_codes[end:], code) == 0
+
+
+def test_the_code_file_is_part_of_what_check_covers(builder) -> None:
+    """``--check`` compares every rendered file with the committed one; a file left out of either is unguarded."""
+    assert generator.CODES_NAME == shipped.REFUSAL_CODES_FILENAME
+    assert generator.CODES_NAME in builder.render_files()
+    assert generator.CODES_NAME in generator.committed_files()
+
+
+def test_a_missing_code_file_turns_check_red(builder) -> None:
+    committed = generator.committed_files()
+    without = {name: text for name, text in committed.items() if name != generator.CODES_NAME}
+    assert generator.diff_files(builder.render_files(), without) != ""
+
+
 def test_a_link_to_a_missing_group_is_caught(committed_markdown: str) -> None:
     """Mutation: a group entry is renamed away; the links to it dangle."""
-    mutated = committed_markdown.replace('<a id="cg-1"></a>', "", 1)
-    assert "cg-1" in dangling_links(mutated)
+    anchor = re.search(r'<a id="(cg-[0-9a-f]+)"></a>', committed_markdown).group(1)
+    mutated = committed_markdown.replace(f'<a id="{anchor}"></a>', "", 1)
+    assert anchor in dangling_links(mutated)
 
 
 def test_a_repeated_body_would_breach_the_ceiling(committed_markdown: str) -> None:
@@ -836,4 +951,88 @@ def test_a_function_that_enforces_several_checks_keeps_every_one(builder, commit
     section = committed_markdown.split("### `persist_transition_state_validation_evidence`", 1)[1].split("\n### ", 1)[0]
     assert f"enforces {len(checks)} checks" in section
     for code in codes:
-        assert f"(#{generator._anchor('c', code)})" in section, code
+        assert f"`{code}`" in section, code
+
+
+# ---------------------------------------------------------------------------
+# Readability of the shared blocks (#686)
+# ---------------------------------------------------------------------------
+
+
+def test_a_group_key_depends_only_on_the_surfaces_that_own_it(builder, committed_markdown: str) -> None:
+    """Numbered by size and order, adding one code renumbered later groups and made contract diffs noisy.
+
+    Mutation: build the key from the group's items, or its position; the first assertion fails.
+    """
+    same_owners_other_items = [
+        generator.SharedGroup(("A", "B"), ("x",)),
+        generator.SharedGroup(("A", "B"), ("y", "z")),
+    ]
+    assert same_owners_other_items[0].key == same_owners_other_items[1].key
+    assert generator.SharedGroup(("A", "C"), ("x",)).key != same_owners_other_items[0].key
+    # The owner set is a set: listing the same surfaces in another order is the same group.
+    assert generator.SharedGroup(("B", "A"), ("x",)).key == same_owners_other_items[0].key
+    for groups, _alone in (builder.code_groups(), builder.model_groups()):
+        keys = [group.key for group in groups]
+        assert len(set(keys)) == len(keys)
+    for group in builder.code_groups()[0]:
+        assert f'<a id="cg-{group.key}"></a>' in committed_markdown
+        assert f"### Code group {group.key}\n" in committed_markdown
+
+
+def test_a_link_to_a_group_of_one_names_its_member(builder, committed_markdown: str) -> None:
+    """A group holding one item is pure indirection, so the link line names the item.
+
+    Mutation: make ``_group_what`` always return the count; the first loop fails.
+    """
+    singles = [g for g in builder.code_groups()[0] if len(g.items) == 1]
+    assert len(singles) > 5, "the contract no longer has groups of one; this test proves nothing"
+    for group in singles:
+        (code,) = group.items
+        assert f"`{code}`" in builder._group_what(group, "code")
+        for title in group.titles:
+            section = _subsection(surface_section(committed_markdown, title), "Refusal codes this surface can return")
+            (line,) = [ln for ln in section.splitlines() if f"(#cg-{group.key})" in ln]
+            assert f"`{code}`" in line, line
+    multi = next(g for g in builder.code_groups()[0] if len(g.items) > 1)
+    section = _subsection(surface_section(committed_markdown, multi.titles[0]), "Refusal codes this surface can return")
+    (line,) = [ln for ln in section.splitlines() if f"(#cg-{multi.key})" in ln]
+    assert f"{len(multi.items)} codes" in line
+
+
+def test_a_shared_code_in_will_be_refused_if_keeps_a_one_line_gloss(builder, committed_markdown: str) -> None:
+    """Thermo's refusals were bare names; the adapter-critical ones need their meaning on the line.
+
+    A code with a sentence written beside it at its raise site is glossed; one without stays bare
+    (a check's own text is printed once elsewhere and is not repeated here).
+    Mutation: make ``_gloss`` return ``""``; every line is bare and this fails.
+    """
+    section = surface_section(committed_markdown, "ThermoUploadRequest")
+    block = _subsection(section, "Will be refused if")
+    lines = [ln for ln in block.splitlines() if ln.startswith("- ")]
+    assert lines
+    glossed = 0
+    for line in lines:
+        code = re.match(r"- \[`([^`]+)`\]", line).group(1)
+        shared = len(builder._surfaces_by_code().get(code, [])) > 1
+        if shared and builder._gloss(code):
+            glossed += 1
+            assert re.match(r"- \[`[^`]+`\]\([^)]*\) \([\d/]+\): \S", line), line
+        assert len(line) < 420
+    assert glossed >= 4, "\n".join(lines)
+
+
+def test_traced_via_names_the_surfaces_that_differ_from_the_rest(builder, committed_markdown: str) -> None:
+    """The column was a union over the group's surfaces, which reads as "every surface, every way".
+
+    Mutation: join the union without the ``(only on: ...)`` qualifier; this fails.
+    """
+    assert "(only on: " in committed_markdown
+    by_title = {s.title: s for s in builder.surfaces}
+    for group in builder.code_groups()[0]:
+        for code in group.items:
+            per_surface = {t: set(builder.surface_codes(by_title[t]).get(code, [])) for t in group.titles}
+            text = builder._traced_via(group, code, by_title)
+            common = set.intersection(*per_surface.values())
+            for way in set().union(*per_surface.values()):
+                assert (f"{way} (only on:" in text) == (way not in common), (code, way, text)

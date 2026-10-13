@@ -89,9 +89,16 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # from every blocking entry. ``geometry_isotope_symbol_conflict`` is
     # deliberately NOT an entry: it refuses an input-format contradiction
     # ("D is 2H" is a definition) and lives in the code catalogue.
-    assert 10 <= len(REGISTER) <= 46, (
+    #
+    # Raised 46 -> 47 (2026-10-11) for #669: one entry for the table of calculation
+    # types that may be the source of a stated energy, shared by the
+    # transition-state and network rules. A referee could dispute which types
+    # carry which energy kind, and the table had been two private ones that
+    # disagreed. The new ``network_energy_zpe_source_absent`` warning is NOT a
+    # second entry: it joins the existing "energy not comparable" entry.
+    assert 10 <= len(REGISTER) <= 47, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~46 the inclusion test ('could this check be wrong "
+        "the system; above ~47 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 

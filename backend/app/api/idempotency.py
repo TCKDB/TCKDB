@@ -138,7 +138,15 @@ class IdempotencyContext:
         the upload and duplicates the science. What the client gets instead
         is the truthful status plus an explicit
         ``Idempotency-Receipt: failed`` header naming the reason, so a
-        caller that depends on exactly-once knows this key will not replay.
+        caller that depends on exactly-once knows this key had no receipt when
+        the response was composed. The header is fixed at that moment and is
+        never corrected: ``get_write_db`` commits after the response object
+        exists (#616), and the post-commit retry of the receipt
+        (:meth:`_schedule_retry_after_commit`) runs inside that commit, so a
+        retry that succeeds still ships ``failed``. Read it as "not recorded
+        in the request's own transaction"; the key may well replay. That is
+        the safe side: the worst a client does is repeat a write it did not
+        need to.
         Returning a bare success with no signal is the pre-fix behaviour and
         is exactly what kept the 2026-08-05 incident invisible.
 

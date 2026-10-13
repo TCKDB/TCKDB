@@ -31,7 +31,9 @@ from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
+    RecordReviewStatus,
     StatmechCalculationRole,
+    StatmechModelScopeKind,
     SubmissionRecordType,
 )
 from app.db.models.level_of_theory import LevelOfTheory
@@ -47,10 +49,14 @@ from app.db.models.statmech import (
     StatmechSourceCalculation,
     StatmechTorsion,
 )
+from app.db.models.statmech_declaration import StatmechModelDeclaration
+from app.db.models.transition_state import TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
-    REVIEW_RANK,
     RecordReviewBadge,
+    SelectionPolicy,
+    effective_order_echo,
+    simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_statmech import (
     ScientificStatmechRecord,
@@ -65,6 +71,7 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
+    review_visibility_echo,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -88,6 +95,8 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "statmech_ref",
     "conformer_group_ref",
     "conformer_observation_ref",
+    "transition_state_entry_ref",
+    "declared_conformer_group_ref",
     "model_kind",
     "has_source_calculations",
     "has_freq_calculation",
@@ -130,19 +139,19 @@ def search_statmech(
         session, Species, request.species_ref, "species"
     )
     if short_circuit:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     species_entry_id, short_circuit = _resolve_filter_ref(
         session, SpeciesEntry, request.species_entry_ref, "species_entry"
     )
     if short_circuit:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     statmech_id, short_circuit = _resolve_filter_ref(
         session, Statmech, request.statmech_ref, "statmech"
     )
     if short_circuit:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     conformer_group_id, short_circuit = _resolve_filter_ref(
         session,
@@ -151,7 +160,7 @@ def search_statmech(
         "conformer_group",
     )
     if short_circuit:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     conformer_observation_id, short_circuit = _resolve_filter_ref(
         session,
@@ -160,7 +169,25 @@ def search_statmech(
         "conformer_observation",
     )
     if short_circuit:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
+
+    transition_state_entry_id, short_circuit = _resolve_filter_ref(
+        session,
+        TransitionStateEntry,
+        request.transition_state_entry_ref,
+        "transition_state_entry",
+    )
+    if short_circuit:
+        return _empty_response(request, includes, offset, limit, _visible(request))
+
+    declared_conformer_group_id, short_circuit = _resolve_filter_ref(
+        session,
+        ConformerGroup,
+        request.declared_conformer_group_ref,
+        "conformer_group",
+    )
+    if short_circuit:
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     # --- candidate query ----------------------------------------------------
     stmt = select(Statmech.id, Statmech.created_at)
@@ -171,6 +198,8 @@ def search_statmech(
         statmech_id=statmech_id,
         conformer_group_id=conformer_group_id,
         conformer_observation_id=conformer_observation_id,
+        transition_state_entry_id=transition_state_entry_id,
+        declared_conformer_group_id=declared_conformer_group_id,
     )
     stmt = _apply_scalar_filters(stmt, request)
     stmt = _apply_evidence_filters(stmt, request)
@@ -180,29 +209,29 @@ def search_statmech(
     candidate_ids = [row.id for row in rows]
     created_at_by_id = {row.id: row.created_at for row in rows}
     if not candidate_ids:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     badges = fetch_review_badges(
         session,
         record_type=SubmissionRecordType.statmech,
         record_ids=candidate_ids,
     )
-    visible = visible_statuses(
-        min_review_status=request.min_review_status,
-        include_rejected=request.include_rejected,
-        include_deprecated=request.include_deprecated,
-    )
+    visible = _visible(request)
     visible_ids = [cid for cid in candidate_ids if badges[cid].status in visible]
     if not visible_ids:
-        return _empty_response(request, includes, offset, limit)
+        return _empty_response(request, includes, offset, limit, _visible(request))
 
     summary = review_summary(badges[cid] for cid in visible_ids)
 
+    # Same key function as the species read, so ``effective_order`` is derived
+    # from one table. Search has no selection policy: always ``default``.
+    review_status_by_id = {cid: badges[cid].status for cid in visible_ids}
     visible_ids.sort(
-        key=lambda cid: (
-            REVIEW_RANK[badges[cid].status],
-            -created_at_by_id[cid].timestamp(),
-            -cid,
+        key=lambda cid: simple_selection_sort_key(
+            cid,
+            policy=SelectionPolicy.default,
+            review_status_by_id=review_status_by_id,
+            created_at_by_id=created_at_by_id,
         )
     )
     total = len(visible_ids)
@@ -210,11 +239,7 @@ def search_statmech(
     records = _materialize_records(session, page_ids, badges, includes)
 
     return ScientificStatmechSearchResponse(
-        request=RequestEcho(
-            filter=_request_filter_echo(request),
-            sort=_DEFAULT_SORT_ECHO,
-            include=sorted(includes),
-        ),
+        request=_request_echo(request, includes, visible),
         review_summary=summary,
         records=records,
         pagination=build_pagination(
@@ -277,6 +302,8 @@ def _apply_identity_filters(
     statmech_id: int | None,
     conformer_group_id: int | None,
     conformer_observation_id: int | None,
+    transition_state_entry_id: int | None,
+    declared_conformer_group_id: int | None,
 ):
     if statmech_id is not None:
         stmt = stmt.where(Statmech.id == statmech_id)
@@ -305,6 +332,22 @@ def _apply_identity_filters(
                     ConformerObservation.conformer_group_id == ConformerGroup.id,
                 )
                 .where(ConformerObservation.id == conformer_observation_id)
+            )
+        )
+    if transition_state_entry_id is not None:
+        # Owner filter. ANDs with the species-axis filters above, so a
+        # species-owned filter plus a TS filter is an empty page, never an OR.
+        stmt = stmt.where(Statmech.transition_state_entry_id == transition_state_entry_id)
+    if declared_conformer_group_id is not None:
+        # The record's OWN declaration is scoped to exactly this basin
+        # (owner decision D3): not owning-entry context, not undeclared legacy
+        # rows, not ensemble members.
+        stmt = stmt.where(
+            Statmech.id.in_(
+                select(StatmechModelDeclaration.statmech_id).where(
+                    StatmechModelDeclaration.scope_kind == StatmechModelScopeKind.basin,
+                    StatmechModelDeclaration.conformer_group_id == declared_conformer_group_id,
+                )
             )
         )
     return stmt
@@ -465,18 +508,40 @@ def _empty_response(
     includes: set[str],
     offset: int,
     limit: int,
+    visible: set[RecordReviewStatus],
 ) -> ScientificStatmechSearchResponse:
     return ScientificStatmechSearchResponse(
-        request=RequestEcho(
-            filter=_request_filter_echo(request),
-            sort=_DEFAULT_SORT_ECHO,
-            include=sorted(includes),
-        ),
+        request=_request_echo(request, includes, visible),
         review_summary=review_summary([]),
         records=[],
         pagination=build_pagination(
             offset=offset, limit=limit, returned=0, total=0
         ),
+    )
+
+
+def _visible(request: StatmechSearchRequest) -> set[RecordReviewStatus]:
+    return visible_statuses(
+        min_review_status=request.min_review_status,
+        include_rejected=request.include_rejected,
+        include_deprecated=request.include_deprecated,
+    )
+
+
+def _request_echo(
+    request: StatmechSearchRequest,
+    includes: set[str],
+    visible: set[RecordReviewStatus],
+) -> RequestEcho:
+    # ``filter`` keeps what was *requested*; ``review_visibility`` is what was
+    # effective (a read-profile floor can override ``include_rejected``).
+    # Search has no selection policy, so ``selection_policy_applied`` stays null.
+    return RequestEcho(
+        filter=_request_filter_echo(request),
+        sort=_DEFAULT_SORT_ECHO,
+        include=sorted(includes),
+        effective_order=effective_order_echo(collapse_first=False, policy=None),
+        review_visibility=review_visibility_echo(visible),
     )
 
 

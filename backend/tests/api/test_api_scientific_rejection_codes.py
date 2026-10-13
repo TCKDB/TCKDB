@@ -1184,6 +1184,39 @@ class TestStatedEnergyAgainstStoredEnergy:
 
 
 # ---------------------------------------------------------------------------
+# The type of calculation an energy is cited to (#637, #642, #669)
+# ---------------------------------------------------------------------------
+
+
+class TestEnergySourceType:
+    def test_an_e0_cited_to_a_single_point_names_its_code_in_the_envelope(self, client):
+        from tests.api.test_api_ts_contract_621 import _bundle, _energy_ordering, _post_bundle
+
+        ordering = _energy_ordering()
+        e0_of_ts = next(e for e in ordering["energies"] if e["participant"] == "ts" and e["energy_kind"] == "e0")
+        e0_of_ts["source_calculation_key"] = "ts-sp"
+        body = _assert_code(
+            _post_bundle(client, _bundle([ordering])), "ts_energy_ordering_source_type_mismatch"
+        )
+        context = body["context"]
+        assert context["energy_kind"] == "e0", context
+        assert context["actual_calculation_type"] == "sp", context
+        assert context["accepted_calculation_types"] == ["composite", "freq"], context
+        assert not any(key == "id" or key.endswith(("_id", "_ids")) for key in context), context
+
+    def test_a_network_energy_cited_to_a_scan_names_its_code_in_the_envelope(self, client):
+        from tests.api.test_api_network_pdep_energy_source_types import _PDEP_URL, _payload, _set_state_energy
+
+        payload = _payload()
+        _set_state_energy(payload, "ethyl_scan", "electronic_only")
+        body = _assert_code(client.post(_PDEP_URL, json=payload), "network_energy_source_type_mismatch")
+        context = body["context"]
+        assert context["actual_calculation_type"] == "scan", context
+        assert context["field"] == "solve.state_energies[0].source_calculation_key", context
+        assert not any(key == "id" or key.endswith(("_id", "_ids")) for key in context), context
+
+
+# ---------------------------------------------------------------------------
 # A network state energy against the sum of its per-participant sources (#678)
 # ---------------------------------------------------------------------------
 

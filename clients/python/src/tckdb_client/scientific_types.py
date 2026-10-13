@@ -671,7 +671,11 @@ class NetworkKineticsBatchEvaluateResponse(TypedDict):
 
 class StatmechRecord(TypedDict, total=False):
     statmech: Required[JSONDict]
-    species: Required[JSONDict]
+    # ``None`` on a transition-state-owned record (it has a ``transition_state`` block instead).
+    species: JSONDict | None
+    transition_state: JSONDict | None
+    supersession: SupersessionNotice | None
+    levels: JSONDict
     evidence_summary: Required[JSONDict]
     available_sections: Required[JSONDict]
     frequency_scale_factor: JSONDict | None
@@ -1894,5 +1898,110 @@ class StructureSelectionResponse(TypedDict):
     units: list[StructureSelectionUnit]
     disclosures: StructureSelectionDisclosures
     versions: JSONDict
+    snapshot_isolation: str
+    integrity: JSONDict
+
+
+# ---------------------------------------------------------------------------
+# Statmech selection (qualify supplied statistical models; prefer only where audited rules say so)
+# ---------------------------------------------------------------------------
+
+StatmechSelectionOutcomeToken: TypeAlias = Literal[
+    "qualified_models",
+    "no_candidates",
+    "no_applicable_candidate",
+    "unresolved_applicability",
+    "missing_required_data",
+    "unsupported_task",
+    "unsupported_model",
+    "evidence_conflict",
+    "unresolved_comparability",
+    "policy_conflict",
+    "sole_eligible_candidate",
+    "policy_preferred",
+    "incomparable_alternatives",
+]
+"""The 13 outcomes of a statmech selection. ``incomparable_alternatives`` means more than one applicable whole model and
+no active rule that ranks them: unranked, not equally accurate. A valid negative outcome is an HTTP 200."""
+
+
+class StatmechSelectionRequest(TypedDict, total=False):
+    """Body of ``POST /scientific/statmech/select``: one typed target union (a species or transition-state entry).
+
+    ``target`` is ``{"kind": "species_entry", "species_entry_ref": "spe_...", "scope": {...}, ...}`` or
+    ``{"kind": "transition_state_entry", "transition_state_entry_ref": "tse_...", "scope": {...}, ...}``; every ref is a
+    public ref. Nothing here is a database id, a bound, a page, a sort or a rule.
+    """
+
+    contract_version: Literal["statmech-selection-v1"]
+    intent: Literal["qualify", "protocol_preferred"]
+    task: str
+    observable: str
+    target: JSONDict
+    conditions: JSONDict
+    population: JSONDict
+    coverage_requirement: Literal["entire_requested_domain", "eligible_population"]
+    comparison_objective: Literal["physical_accuracy", "expected_accuracy", "model_fidelity"]
+    reference_model_ref: str
+    administrative_policy: Literal["default", "latest", "most_reviewed"]
+    result_mode: Literal["all", "first"]
+    min_review_status: str
+
+
+class StatmechSelectionCandidate(TypedDict):
+    """One assessed candidate: a declared model (``smd_``) or a legacy record read as stored (``sm_``)."""
+
+    candidate_ref: str
+    kind: Literal["declared_model", "legacy_record"]
+    owner_ref: str
+    review_status: str
+    created_at: str
+    applicability: Literal["applicable", "incompatible", "unresolved", "unsupported"]
+    reasons: list[JSONDict]
+    advisory: list[str]
+    comparative_unknown: list[str]
+    evidence: dict[str, list[str]]
+    recipe: JSONDict | None
+    supersession: JSONDict | None
+    eligible: bool
+
+
+class StatmechSelectionSelection(TypedDict):
+    """The three mutually exclusive references; at most one is set, with its basis and population limit."""
+
+    scientific_ref: str | None
+    sole_eligible_ref: str | None
+    administrative_ref: str | None
+    basis: str | None
+    limitation: str | None
+
+
+class StatmechSelectionResponse(TypedDict):
+    """A statmech selection's outcome and everything it rests on, as public refs only. No computed value.
+
+    Report ``outcome`` and ``basis`` verbatim. ``selection`` carries at most one reference. ``advisories`` and ``notices``
+    surface the disclosures that do not exclude a candidate (``imported_parameters_not_revalidated:<role>``,
+    ``source_literature_unidentified:<role>``). ``coverage`` always says it is the caller's authorized population, never a
+    physical-search certificate. ``integrity`` carries the manifest checksum: a checksum, not a signature.
+    """
+
+    request: JSONDict
+    review: JSONDict
+    versions: JSONDict
+    outcome: StatmechSelectionOutcomeToken
+    basis: str
+    selection: StatmechSelectionSelection
+    summary: JSONDict | None
+    population: JSONDict
+    coverage: JSONDict
+    candidates: list[StatmechSelectionCandidate]
+    edges: list[JSONDict]
+    fronts: list[list[str]]
+    conflicts: JSONDict
+    undecided: list[JSONDict]
+    advisories: dict[str, list[str]]
+    notices: list[str]
+    protocol: JSONDict
+    manifest: JSONDict
     snapshot_isolation: str
     integrity: JSONDict

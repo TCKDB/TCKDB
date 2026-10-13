@@ -342,11 +342,31 @@ class StatmechReviewEntry(BaseModel):
 # heavy include exposes a freq-result summary).
 
 
+class StatmechCurvatureWitness(BaseModel):
+    """One linked calculation that stores a frequency result or a Hessian.
+
+    A stored-result presence fact about a calculation this record links under
+    ``role``. It does not claim the curvature is at the pinned geometry, is
+    usable, or is eligible for any task; ``POST /scientific/statmech/select``
+    is where that is qualified. Nothing here ranks or picks a witness.
+    """
+
+    calculation_ref: str
+    role: StatmechCalculationRole
+    calculation_type: CalculationType
+    has_frequency_result: bool
+    has_hessian: bool
+
+
 class StatmechFrequenciesSummary(BaseModel):
     """Where to fetch the underlying frequency data for this statmech.
 
     ``source_freq_calculation_refs`` lists the public refs of every
     freq calculation linked through ``statmech_source_calculation``.
+    ``curvature_witnesses`` additionally lists every (link role, calculation)
+    pair whose calculation stores a frequency result or a Hessian, whatever
+    the role or job type (opt and composite jobs included). It is separate
+    from ``source_freq_calculation_refs``, which keeps its link-role meaning.
     ``frequency_scale_factor_value`` is the scalar applied on top of
     those raw frequencies (mirrors the core block's field for
     callers consuming only this section). Per-mode arrays remain
@@ -356,6 +376,7 @@ class StatmechFrequenciesSummary(BaseModel):
 
     source_freq_calculation_refs: list[str] = Field(default_factory=list)
     source_freq_calculation_ids: list[int] | None = None
+    curvature_witnesses: list[StatmechCurvatureWitness] = Field(default_factory=list)
     frequency_scale_factor_value: float | None = None
     note: str | None = None
 
@@ -434,6 +455,7 @@ __all__ = [
     "ScientificStatmechRecord",
     "StatmechConformerContextItem",
     "StatmechCoreBlock",
+    "StatmechCurvatureWitness",
     "StatmechDetailRequest",
     "StatmechElectronicLevelSummary",
     "StatmechEvidenceSummary",

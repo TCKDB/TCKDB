@@ -101,7 +101,7 @@ dependencies = [
     # genuinely does not import without it. It lives in this repo rather
     # than on PyPI, hence the [tool.uv.sources] entry below; for the
     # conda+pip path install it first (see the header).
-    "tckdb-schemas>=0.105.0",
+    "tckdb-schemas>=0.123.0",
 ]
 
 [project.optional-dependencies]
@@ -369,6 +369,7 @@ files = [
     "app/schemas",
     "app/chemistry",
     "app/services/network_selection",
+    "app/services/statmech_selection",
     "app/services/structure_selection",
     "../schemas/python/tckdb-schemas/tckdb_schemas",
 ]

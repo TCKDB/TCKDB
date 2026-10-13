@@ -183,6 +183,7 @@ def persist_statmech_upload(
         # R4'/R5 (app.services.calculation_levels): resolved and checked
         # against the resolved role links inside resolve_or_create_statmech.
         energy_level_of_theory=request.energy_level_of_theory,
+        model_declaration=request.model_declaration,
     )
 
     statmech = resolve_or_create_statmech(

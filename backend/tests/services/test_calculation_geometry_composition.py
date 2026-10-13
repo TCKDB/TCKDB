@@ -380,7 +380,6 @@ def test_a_ts_calculation_may_not_borrow_a_reactants_geometry_by_key(
     from app.schemas.workflows.computed_reaction_upload import (
         ComputedReactionUploadRequest,
     )
-    from app.workflows.computed_reaction import persist_computed_reaction_upload
 
     # Anchored to this file, not to the process's working directory: globbing a
     # relative path found nothing when pytest was run from the repository root,
@@ -406,20 +405,18 @@ def test_a_ts_calculation_may_not_borrow_a_reactants_geometry_by_key(
     ts_freq["input_geometries"] = []
     ts_freq["geometry_key"] = "r1_CH4_geom"  # a reactant. The TS is C2H5O.
 
-    with _isolated_session(db_conn) as session:
-        with pytest.raises(CodedValueError) as excinfo:
-            persist_computed_reaction_upload(
-                session,
-                ComputedReactionUploadRequest(**doc),
-                created_by=_USER_ID,
-            )
+    # Since #635 the request schema refuses this earlier than the composition
+    # guard can: a transition state's calculation may not name a species
+    # conformer's geometry at all (``transition_state_calculation_species_geometry``),
+    # whatever its composition. The composition guard keeps the cases the schema
+    # cannot see (a geometry resolved to the wrong atoms through any other route).
+    from pydantic import ValidationError
 
-    error = excinfo.value
-    assert error.code == "calculation_geometry_composition_mismatch"
-    assert error.context["owner_kind"] == "transition_state_entry"
-    assert error.context["geometry_formula"] == "CH4"
-    assert error.context["subject_formula"] == "C2H5O"
-    assert "geometry_key" in error.context["field"]
+    with pytest.raises(ValidationError) as excinfo:
+        ComputedReactionUploadRequest(**doc)
+    errors = [e["ctx"]["error"] for e in excinfo.value.errors() if "ctx" in e]
+    assert [e.code for e in errors] == ["transition_state_calculation_species_geometry"]
+    assert errors[0].context["geometry_key"] == "r1_CH4_geom"
 
 
 def test_the_refusal_carries_no_row_id(db_conn) -> None:

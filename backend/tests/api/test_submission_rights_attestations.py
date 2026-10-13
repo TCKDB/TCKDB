@@ -12,7 +12,9 @@ import re
 
 from sqlalchemy import select
 
+from app.api.deps import get_db
 from app.db.models.app_user import AppUser
+from app.db.models.submission import Submission
 from app.db.models.submission_rights import SubmissionRightsAttestation
 
 _THERMO = {"enthalpy_reference_kind": "formation_298k",
@@ -30,7 +32,16 @@ def _deposit_without_rights(client) -> int:
 
 
 def _url(submission_id: int) -> str:
+    """The read URL: ``GET`` still names the submission by row id."""
     return f"/api/v1/submissions/{submission_id}/rights-attestations"
+
+
+def _post_url(client, submission_id: int) -> str:
+    """The write URL: ``POST`` takes the ``sub_`` ref only (#578)."""
+    session = client.app.dependency_overrides[get_db]()
+    submission = session.get(Submission, submission_id)
+    assert submission is not None, f"no submission with row id {submission_id}"
+    return f"/api/v1/submissions/{submission.public_ref}/rights-attestations"
 
 
 def _assert_no_ids_in(detail: str, *ids: int) -> None:
@@ -45,7 +56,7 @@ def test_a_curator_records_a_historical_review(
     login_as(_api_curator_user)
 
     created = client.post(
-        _url(submission_id),
+        _post_url(client, submission_id),
         json={
             "license": "CC-BY-4.0",
             "basis": "historical_review",
@@ -77,7 +88,7 @@ def test_a_curator_records_a_historical_review(
 def test_a_depositor_cannot_claim_a_historical_review(client, _api_test_user):
     submission_id = _deposit_without_rights(client)
     refused = client.post(
-        _url(submission_id), json={"license": "CC-BY-4.0", "basis": "historical_review"}
+        _post_url(client, submission_id), json={"license": "CC-BY-4.0", "basis": "historical_review"}
     )
     assert refused.status_code == 403, refused.text
     assert refused.json()["code"] == "rights_attestation_requires_curator"
@@ -92,7 +103,7 @@ def test_a_non_owner_cannot_claim_a_depositor_agreement(
     # A curator who did not make the deposit: may see it, may not agree for it.
     login_as(_api_curator_user)
     refused = client.post(
-        _url(submission_id), json={"license": "CC-BY-4.0", "basis": "depositor_agreement"}
+        _post_url(client, submission_id), json={"license": "CC-BY-4.0", "basis": "depositor_agreement"}
     )
     assert refused.status_code == 403, refused.text
     assert refused.json()["code"] == "rights_attestation_not_depositor"
@@ -101,7 +112,7 @@ def test_a_non_owner_cannot_claim_a_depositor_agreement(
     # Another ordinary user: cannot even see the submission.
     login_as(_api_other_user)
     hidden = client.post(
-        _url(submission_id), json={"license": "CC-BY-4.0", "basis": "depositor_agreement"}
+        _post_url(client, submission_id), json={"license": "CC-BY-4.0", "basis": "depositor_agreement"}
     )
     assert hidden.status_code == 403, hidden.text
     _assert_no_ids_in(hidden.json()["detail"], submission_id, _api_test_user, _api_other_user)
@@ -114,12 +125,12 @@ def test_the_list_is_the_chain_oldest_first(
     submission_id = _deposit_without_rights(client)
 
     first = client.post(
-        _url(submission_id), json={"license": "CC0-1.0", "basis": "depositor_agreement"}
+        _post_url(client, submission_id), json={"license": "CC0-1.0", "basis": "depositor_agreement"}
     )
     assert first.status_code == 201, first.text
     login_as(_api_curator_user)
     second = client.post(
-        _url(submission_id),
+        _post_url(client, submission_id),
         json={
             "license": "CC-BY-4.0",
             "basis": "source_terms",
@@ -150,7 +161,7 @@ def test_source_terms_are_required_for_that_basis(client, login_as, _api_curator
     submission_id = _deposit_without_rights(client)
     login_as(_api_curator_user)
     refused = client.post(
-        _url(submission_id), json={"license": "CC-BY-4.0", "basis": "source_terms"}
+        _post_url(client, submission_id), json={"license": "CC-BY-4.0", "basis": "source_terms"}
     )
     assert refused.status_code == 422, refused.text
     assert refused.json()["code"] == "rights_source_terms_required"
@@ -168,7 +179,7 @@ def test_the_curator_label_never_carries_the_user_row(client, login_as, _api_cur
     submission_id = _deposit_without_rights(client)
     login_as(_api_curator_user)
     created = client.post(
-        _url(submission_id), json={"license": "CC-BY-4.0", "basis": "operator_own_data"}
+        _post_url(client, submission_id), json={"license": "CC-BY-4.0", "basis": "operator_own_data"}
     ).json()
     curator = db_session.get(AppUser, _api_curator_user)
     assert created["attested_by"] == {

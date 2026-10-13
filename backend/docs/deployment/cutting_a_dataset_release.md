@@ -34,7 +34,7 @@ You need:
   every unselected candidate the release ships (`candidate_rights_basis_*`).
   Deposits made with the upload's `rights` fragment are attested by the
   depositor automatically; for anything older, a curator records the basis
-  with `POST /api/v1/submissions/{id}/rights-attestations` (`operator_own_data`
+  with `POST /api/v1/submissions/{submission_ref}/rights-attestations` (`operator_own_data`
   or `historical_review`; `source_terms` when the records came from a source
   whose terms permit it). Records with no submission at all need a
   `migration` submission linked first. Nothing is backfilled;

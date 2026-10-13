@@ -48,10 +48,20 @@ from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 _HEX_COMMIT = re.compile(r"[0-9a-fA-F]{7,64}")
 
 
-#: The scheme kinds Arkane keys on ``CompositeLevelOfTheory(freq, energy)``
-#: (RMG-database ``quantum_corrections/data.py``: ``pbac`` and ``mbac``).
-#: Atom energies are keyed on the energy level alone: Arkane's ``corr.py``
-#: strips the frequency half before an AEC lookup.
+#: The scheme kinds that take a frequency level, for now. Arkane keys its
+#: correction tables on ``CompositeLevelOfTheory(freq, energy)`` only for
+#: ``pbac`` and ``mbac`` (RMG-database ``quantum_corrections/data.py``), and keys
+#: atom energies on the energy level alone: Arkane's ``corr.py`` strips the
+#: frequency half before an AEC lookup.
+#:
+#: This is not "every other kind is keyed on the energy level alone".
+#: Arkane's isodesmic reference data is keyed on the composite pair as well
+#: (all 395 files in RMG-database ``input/reference_sets/main`` key
+#: ``calculated_data`` on ``CompositeLevelOfTheory``, and
+#: ``arkane/encorr/reference.py`` looks it up by exact key). TCKDB gives the
+#: ``isodesmic`` kind no meaning yet and nothing deposits it, so it is not in
+#: this set; revisit when it gets defined content, since it likely needs the
+#: frequency level too.
 _FREQUENCY_KEYED_KINDS: frozenset[EnergyCorrectionSchemeKind] = frozenset(
     {
         EnergyCorrectionSchemeKind.bac_petersson,
@@ -123,7 +133,10 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         keyed on both. Only bond-additivity schemes (``bac_petersson`` and
         ``bac_melius``) are: Arkane keys those on
         ``CompositeLevelOfTheory(freq=..., energy=...)``, and keys atom
-        energies (and every other kind) on the energy level alone. Send the
+        energies on the energy level alone. Arkane's isodesmic reference data
+        is keyed on the pair too, but the ``isodesmic`` kind has no defined
+        content here yet, so a frequency level is accepted only on the BAC
+        kinds for now. Send the
         ``energy`` half in ``level_of_theory`` and the ``freq`` half here.
         The same energy level with two different frequency levels is two
         schemes. Resolved exactly like ``level_of_theory`` (a duplicate
@@ -134,7 +147,7 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         Refused, because each is a contradiction and not a preference
         (ADR 0008): a frequency level without ``level_of_theory``
         (``energy_correction_scheme_frequency_level_without_energy_level``),
-        and a frequency level on any kind other than the two BAC kinds
+        and a frequency level on any kind other than the two BAC kinds, for now
         (``energy_correction_scheme_frequency_level_not_applicable``).
         A frequency level that resolves to the same level of theory as the
         energy level is not a second key: it is stored as absent, so the
@@ -235,10 +248,12 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     def validate_frequency_level(self) -> Self:
         """Refuse a frequency level that cannot be half of an Arkane key.
 
-        Arkane keys only Petersson and Melius BAC on an
-        ``energy//frequency`` pair; every other kind is keyed on the energy
-        level alone. And a frequency half is a half: without the energy
-        level there is no pair. Both are contradictions in the payload, not
+        A frequency level is accepted only on the Petersson and Melius BAC
+        kinds for now: those are the correction tables Arkane keys on an
+        ``energy//frequency`` pair. (Arkane's isodesmic reference data is
+        keyed on a pair too; the ``isodesmic`` kind has no defined content
+        yet, so it is revisited when it does.) And a frequency half is a
+        half: without the energy level there is no pair. Both are contradictions in the payload, not
         gaps in it, so they are refused with a code (ADR 0008).
         """
         if self.frequency_level_of_theory is None:
@@ -246,11 +261,10 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         if self.kind not in _FREQUENCY_KEYED_KINDS:
             raise CodedValidationError(
                 CODE_FREQUENCY_LEVEL_NOT_APPLICABLE,
-                f"frequency_level_of_theory is only meaningful on a bond-"
-                f"additivity scheme (bac_petersson, bac_melius); a "
-                f"{self.kind.value} scheme is keyed on its level of theory "
-                "alone. Send it in level_of_theory and omit the frequency "
-                "level.",
+                "frequency_level_of_theory is accepted only on the BAC kinds "
+                f"(bac_petersson, bac_melius) for now; a {self.kind.value} "
+                "scheme takes its level of theory alone. Send it in "
+                "level_of_theory and omit the frequency level.",
                 context={
                     "field": "frequency_level_of_theory",
                     "scheme_kind": self.kind.value,

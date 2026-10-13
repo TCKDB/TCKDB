@@ -100,8 +100,10 @@ class RejectionCode(str, Enum):
     BUNDLE_TOO_LARGE = "bundle_too_large"
     BUNDLE_TOO_MANY_RECORDS = "bundle_too_many_records"
     CALCULATION_GEOMETRY_COMPOSITION_MISMATCH = "calculation_geometry_composition_mismatch"
+    CALCULATION_GEOMETRY_CONFORMER_MISMATCH = "calculation_geometry_conformer_mismatch"
     CALCULATION_GEOMETRY_ISOTOPE_MISMATCH = "calculation_geometry_isotope_mismatch"
     CALCULATION_HANDLE_CONFLICT = "calculation_handle_conflict"
+    CALCULATION_INPUT_GEOMETRY_MISMATCH = "calculation_input_geometry_mismatch"
     CALCULATION_KEY_UNDECLARED = "calculation_key_undeclared"
     CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL = "calculation_software_is_workflow_tool"
     CALCULATION_SOFTWARE_RELEASE_REQUIRED = "calculation_software_release_required"
@@ -270,6 +272,8 @@ class RejectionCode(str, Enum):
     RIGHTS_SOURCE_TERMS_REQUIRED = "rights_source_terms_required"
     SCAN_RESULT_NOT_FOUND = "scan_result_not_found"
     SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH = "scf_stability_source_calculation_owner_mismatch"
+    SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED = "scf_stability_source_conformer_unanchored"
+    SCF_STABILITY_SOURCE_CYCLE = "scf_stability_source_cycle"
     SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH = "scf_stability_source_geometry_mismatch"
     SELECTION_ALREADY_STANDS = "selection_already_stands"
     SELECTION_ALREADY_SUPERSEDED = "selection_already_superseded"
@@ -294,7 +298,13 @@ class RejectionCode(str, Enum):
     STATMECH_ENERGY_LEVEL_CONTRADICTION = "statmech_energy_level_contradiction"
     STATMECH_ENERGY_LEVEL_REQUIRES_SP = "statmech_energy_level_requires_sp"
     STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED = "statmech_energy_sp_and_composite_linked"
+    STATMECH_MODEL_DECLARATION_INVALID = "statmech_model_declaration_invalid"
+    STATMECH_MODEL_DECLARATION_MISMATCH = "statmech_model_declaration_mismatch"
+    STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED = "statmech_model_declaration_version_unsupported"
     STATMECH_ROLE_DUPLICATE = "statmech_role_duplicate"
+    STATMECH_SELECTION_BOUND_EXCEEDED = "statmech_selection_bound_exceeded"
+    STATMECH_SELECTION_SCOPE_OWNER_MISMATCH = "statmech_selection_scope_owner_mismatch"
+    STATMECH_SELECTION_UNSUPPORTED = "statmech_selection_unsupported"
     STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = "statmech_source_calculation_owner_mismatch"
     STATMECH_SOURCE_ROLE_TYPE_MISMATCH = "statmech_source_role_type_mismatch"
     STATMECH_SP_GEOMETRY_MISMATCH = "statmech_sp_geometry_mismatch"
@@ -312,6 +322,7 @@ class RejectionCode(str, Enum):
     STRUCTURE_SELECTION_UNSUPPORTED = "structure_selection_unsupported"
     SUBJECT_TYPE_MISMATCH = "subject_type_mismatch"
     SUBMISSION_SUPERSEDE_NOT_OWNER = "submission_supersede_not_owner"
+    SUPERSEDED_RECORD_NOT_APPROVABLE = "superseded_record_not_approvable"
     SUPERSEDES_SAME_RECORD = "supersedes_same_record"
     TCKDB_CLIENT_VERSION_INVALID = "tckdb_client_version_invalid"
     TCKDB_CLIENT_VERSION_MISSING = "tckdb_client_version_missing"
@@ -340,6 +351,8 @@ class RejectionCode(str, Enum):
     THERMOML_NO_SUPPORTED_CONTENT = "thermoml_no_supported_content"
     THERMOML_SCHEMA_INVALID = "thermoml_schema_invalid"
     TOO_MANY_ELEMENT_SYMBOLS = "too_many_element_symbols"
+    TRANSITION_STATE_CALCULATION_CONFORMER_KEY = "transition_state_calculation_conformer_key"
+    TRANSITION_STATE_CALCULATION_SPECIES_GEOMETRY = "transition_state_calculation_species_geometry"
     TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
     TRANSITION_STATE_COMPOSITION_MISMATCH = "transition_state_composition_mismatch"
     TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH = "transition_state_irc_mapping_element_mismatch"
@@ -348,6 +361,7 @@ class RejectionCode(str, Enum):
     TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS = "transition_state_reaction_coordinate_ambiguous"
     TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED = "transition_state_reaction_coordinate_not_designated"
     TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH = "transport_source_calculation_owner_mismatch"
+    TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH = "ts_energy_ordering_source_type_mismatch"
     TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH = "ts_energy_ordering_stated_energy_mismatch"
     UNIQUE_CONFLICT = "unique_conflict"
     UNKNOWN_CALCULATION_ARTIFACT_REF = "unknown_calculation_artifact_ref"
@@ -361,12 +375,15 @@ class RejectionCode(str, Enum):
     UNKNOWN_NETWORK_CHANNEL = "unknown_network_channel"
     UNKNOWN_NETWORK_KINETICS_REF = "unknown_network_kinetics_ref"
     UNKNOWN_NETWORK_SOLVE_REF = "unknown_network_solve_ref"
+    UNKNOWN_QUERY_PARAMETER = "unknown_query_parameter"
     UNKNOWN_RECORD = "unknown_record"
     UNKNOWN_RECORD_TYPE = "unknown_record_type"
     UNKNOWN_RELEASE = "unknown_release"
     UNKNOWN_RELEASE_ARTIFACT = "unknown_release_artifact"
     UNKNOWN_SELECTION = "unknown_selection"
+    UNKNOWN_STATMECH_CANDIDATE_REF = "unknown_statmech_candidate_ref"
     UNKNOWN_STATMECH_REF = "unknown_statmech_ref"
+    UNKNOWN_STRUCTURE_DETERMINATION_REF = "unknown_structure_determination_ref"
     UNKNOWN_STRUCTURE_MEMBER_REF = "unknown_structure_member_ref"
     UNKNOWN_TRANSITION_STATE_ENTRY_REF = "unknown_transition_state_entry_ref"
     UNSAFE_LOWEST_ENERGY_COMPARISON = "unsafe_lowest_energy_comparison"
@@ -400,8 +417,10 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.BAC_TOTAL_REQUIRES_COMPONENTS,
         RejectionCode.BUNDLE_TOO_MANY_RECORDS,
         RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH,
+        RejectionCode.CALCULATION_GEOMETRY_CONFORMER_MISMATCH,
         RejectionCode.CALCULATION_GEOMETRY_ISOTOPE_MISMATCH,
         RejectionCode.CALCULATION_HANDLE_CONFLICT,
+        RejectionCode.CALCULATION_INPUT_GEOMETRY_MISMATCH,
         RejectionCode.CALCULATION_KEY_UNDECLARED,
         RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL,
         RejectionCode.CALCULATION_SOFTWARE_RELEASE_REQUIRED,
@@ -541,6 +560,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.RIGHTS_LICENSE_BLANK,
         RejectionCode.RIGHTS_SOURCE_TERMS_REQUIRED,
         RejectionCode.SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
+        RejectionCode.SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED,
+        RejectionCode.SCF_STABILITY_SOURCE_CYCLE,
         RejectionCode.SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH,
         RejectionCode.SELECTION_NO_LONGER_APPROVED,
         RejectionCode.SMILES_TOO_LONG,
@@ -562,7 +583,13 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STATMECH_ENERGY_LEVEL_CONTRADICTION,
         RejectionCode.STATMECH_ENERGY_LEVEL_REQUIRES_SP,
         RejectionCode.STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED,
+        RejectionCode.STATMECH_MODEL_DECLARATION_INVALID,
+        RejectionCode.STATMECH_MODEL_DECLARATION_MISMATCH,
+        RejectionCode.STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED,
         RejectionCode.STATMECH_ROLE_DUPLICATE,
+        RejectionCode.STATMECH_SELECTION_BOUND_EXCEEDED,
+        RejectionCode.STATMECH_SELECTION_SCOPE_OWNER_MISMATCH,
+        RejectionCode.STATMECH_SELECTION_UNSUPPORTED,
         RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH,
         RejectionCode.STATMECH_SP_GEOMETRY_MISMATCH,
@@ -603,6 +630,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.THERMOML_NO_SUPPORTED_CONTENT,
         RejectionCode.THERMOML_SCHEMA_INVALID,
         RejectionCode.TOO_MANY_ELEMENT_SYMBOLS,
+        RejectionCode.TRANSITION_STATE_CALCULATION_CONFORMER_KEY,
+        RejectionCode.TRANSITION_STATE_CALCULATION_SPECIES_GEOMETRY,
         RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH,
         RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH,
         RejectionCode.TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH,
@@ -611,9 +640,11 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED,
         RejectionCode.TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+        RejectionCode.TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH,
         RejectionCode.TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH,
         RejectionCode.UNKNOWN_ELEMENT_SYMBOL,
         RejectionCode.UNKNOWN_INCLUDE_TOKEN,
+        RejectionCode.UNKNOWN_QUERY_PARAMETER,
         RejectionCode.UNKNOWN_RECORD_TYPE,
         RejectionCode.UNSAFE_LOWEST_ENERGY_COMPARISON,
         RejectionCode.UNSUPPORTED_DIRECTION,
@@ -656,6 +687,7 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.SELECTION_ALREADY_SUPERSEDED,
         RejectionCode.STATE_CONFLICT,
         RejectionCode.STATMECH_SUBJECT_NOT_EXACTLY_ONE,
+        RejectionCode.SUPERSEDED_RECORD_NOT_APPROVABLE,
         RejectionCode.UNIQUE_CONFLICT,
         RejectionCode.USERNAME_TAKEN,
     }
@@ -690,8 +722,10 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.BUNDLE_TOO_LARGE: frozenset({413}),
     RejectionCode.BUNDLE_TOO_MANY_RECORDS: frozenset({422}),
     RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH: frozenset({422}),
+    RejectionCode.CALCULATION_GEOMETRY_CONFORMER_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_GEOMETRY_ISOTOPE_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_HANDLE_CONFLICT: frozenset({422}),
+    RejectionCode.CALCULATION_INPUT_GEOMETRY_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL: frozenset({422}),
     RejectionCode.CALCULATION_SOFTWARE_RELEASE_REQUIRED: frozenset({422}),
@@ -860,6 +894,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.RIGHTS_SOURCE_TERMS_REQUIRED: frozenset({422}),
     RejectionCode.SCAN_RESULT_NOT_FOUND: frozenset({404}),
     RejectionCode.SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.SCF_STABILITY_SOURCE_CONFORMER_UNANCHORED: frozenset({422}),
+    RejectionCode.SCF_STABILITY_SOURCE_CYCLE: frozenset({422}),
     RejectionCode.SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH: frozenset({422}),
     RejectionCode.SELECTION_ALREADY_STANDS: frozenset({409}),
     RejectionCode.SELECTION_ALREADY_SUPERSEDED: frozenset({409}),
@@ -884,7 +920,13 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STATMECH_ENERGY_LEVEL_CONTRADICTION: frozenset({422}),
     RejectionCode.STATMECH_ENERGY_LEVEL_REQUIRES_SP: frozenset({422}),
     RejectionCode.STATMECH_ENERGY_SP_AND_COMPOSITE_LINKED: frozenset({422}),
+    RejectionCode.STATMECH_MODEL_DECLARATION_INVALID: frozenset({422}),
+    RejectionCode.STATMECH_MODEL_DECLARATION_MISMATCH: frozenset({422}),
+    RejectionCode.STATMECH_MODEL_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.STATMECH_ROLE_DUPLICATE: frozenset({422}),
+    RejectionCode.STATMECH_SELECTION_BOUND_EXCEEDED: frozenset({422}),
+    RejectionCode.STATMECH_SELECTION_SCOPE_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.STATMECH_SELECTION_UNSUPPORTED: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.STATMECH_SP_GEOMETRY_MISMATCH: frozenset({422}),
@@ -902,6 +944,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STRUCTURE_SELECTION_UNSUPPORTED: frozenset({422}),
     RejectionCode.SUBJECT_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.SUBMISSION_SUPERSEDE_NOT_OWNER: frozenset({403}),
+    RejectionCode.SUPERSEDED_RECORD_NOT_APPROVABLE: frozenset({409}),
     RejectionCode.SUPERSEDES_SAME_RECORD: frozenset({422}),
     RejectionCode.TCKDB_CLIENT_VERSION_INVALID: frozenset({426}),
     RejectionCode.TCKDB_CLIENT_VERSION_MISSING: frozenset({426}),
@@ -930,6 +973,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.THERMOML_NO_SUPPORTED_CONTENT: frozenset({422}),
     RejectionCode.THERMOML_SCHEMA_INVALID: frozenset({422}),
     RejectionCode.TOO_MANY_ELEMENT_SYMBOLS: frozenset({422}),
+    RejectionCode.TRANSITION_STATE_CALCULATION_CONFORMER_KEY: frozenset({422}),
+    RejectionCode.TRANSITION_STATE_CALCULATION_SPECIES_GEOMETRY: frozenset({422}),
     RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH: frozenset({422}),
@@ -938,6 +983,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS: frozenset({422}),
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED: frozenset({422}),
     RejectionCode.TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.TS_ENERGY_ORDERING_SOURCE_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.TS_ENERGY_ORDERING_STATED_ENERGY_MISMATCH: frozenset({422}),
     RejectionCode.UNIQUE_CONFLICT: frozenset({409}),
     RejectionCode.UNKNOWN_CALCULATION_ARTIFACT_REF: frozenset({404}),
@@ -951,12 +997,15 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNKNOWN_NETWORK_CHANNEL: frozenset({404}),
     RejectionCode.UNKNOWN_NETWORK_KINETICS_REF: frozenset({404}),
     RejectionCode.UNKNOWN_NETWORK_SOLVE_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_QUERY_PARAMETER: frozenset({422}),
     RejectionCode.UNKNOWN_RECORD: frozenset({404}),
     RejectionCode.UNKNOWN_RECORD_TYPE: frozenset({422}),
     RejectionCode.UNKNOWN_RELEASE: frozenset({404}),
     RejectionCode.UNKNOWN_RELEASE_ARTIFACT: frozenset({404}),
     RejectionCode.UNKNOWN_SELECTION: frozenset({404}),
+    RejectionCode.UNKNOWN_STATMECH_CANDIDATE_REF: frozenset({404}),
     RejectionCode.UNKNOWN_STATMECH_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_STRUCTURE_DETERMINATION_REF: frozenset({404}),
     RejectionCode.UNKNOWN_STRUCTURE_MEMBER_REF: frozenset({404}),
     RejectionCode.UNKNOWN_TRANSITION_STATE_ENTRY_REF: frozenset({404}),
     RejectionCode.UNSAFE_LOWEST_ENERGY_COMPARISON: frozenset({422}),

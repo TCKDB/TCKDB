@@ -456,3 +456,94 @@ def test_the_service_enforces_it_for_a_payload_that_skipped_validation(db_sessio
         )
     assert caught.value.code == _MISMATCH
     assert caught.value.context["stored_hartree"] == _ELECTRONIC["ts"]
+
+
+# ---------------------------------------------------------------------------
+# A composite is a source of both kinds (#669): the table is shared with the network rule
+# ---------------------------------------------------------------------------
+
+
+def _with_composite_ts(db_session, tag: str, *, electronic=-1.0, e0=-0.99):
+    """``_fixture`` whose saddle point's electronic and E0 energies both come from one composite."""
+    from app.db.models.calculation import CalculationCompositeResult
+    from app.db.models.common import CompositeAssembly
+
+    fx = _fixture(db_session, tag)
+    composite = make_calculation(
+        db_session, type=CalculationType.composite, transition_state_entry_id=fx["ts_entry"].id
+    )
+    db_session.add(
+        CalculationCompositeResult(
+            calculation_id=composite.id,
+            assembly=CompositeAssembly.program_run,
+            electronic_energy_hartree=electronic,
+            e0_hartree=e0,
+        )
+    )
+    db_session.flush()
+    return fx, _keys(fx) | {"ts-sp": composite.id, "ts-freq": composite.id}
+
+
+def _persist_with(db_session, fx, keys, record):
+    persist_transition_state_validation_evidence(
+        db_session,
+        [record],
+        transition_state_entry_id=fx["ts_entry"].id,
+        reconstruction_calculation_ids=[None],
+        calculation_ids_by_key=keys,
+        subject_label="ts",
+        field_path="validation_evidence",
+        reaction_entry_id=fx["reaction_entry"].id,
+        transition_state_geometry_id=None,
+    )
+    db_session.flush()
+
+
+def test_a_composite_is_accepted_for_both_kinds_and_compared_with_what_it_stores(db_session) -> None:
+    """Mutation: remove ``composite`` from the shared table (type refusal), or from the comparison
+    readers (the energies come back ``not_compared``)."""
+    fx, keys = _with_composite_ts(db_session, "CMPOK")
+    _persist_with(db_session, fx, keys, _record(e0={}))
+    assert _stored(db_session)[("ts", "electronic")] == ("agrees", None)
+    assert _stored(db_session)[("ts", "e0")] == ("agrees", None)
+
+
+@pytest.mark.parametrize(
+    ("kind", "composite_values", "stated"),
+    [
+        ("electronic", {"electronic": -1.5}, {"electronic": {"ts": -1.0}}),
+        ("e0", {"e0": -0.5}, {"e0": {"ts": -0.99}}),
+    ],
+)
+def test_a_composite_that_stores_another_value_is_refused(db_session, kind, composite_values, stated) -> None:
+    fx, keys = _with_composite_ts(db_session, f"CMP{kind}", **composite_values)
+    with pytest.raises(CodedValueError) as caught:
+        _persist_with(db_session, fx, keys, _record(e0={}, **{k: v for k, v in stated.items() if k == "electronic"}))
+    assert caught.value.code == _MISMATCH
+    assert caught.value.context["energy_kind"] == kind
+    if kind == "e0":
+        assert "composite" in caught.value.detail
+
+
+def test_a_composite_that_states_no_e0_is_not_compared(db_session) -> None:
+    fx, keys = _with_composite_ts(db_session, "CMPNUL", e0=None)
+    _persist_with(db_session, fx, keys, _record(e0={}))
+    assert _stored(db_session)[("ts", "e0")] == ("not_compared", "stored_energy_not_stated")
+
+
+def test_the_two_energy_source_rules_read_one_table() -> None:
+    """Both rules used to keep a table each, and #637's accepted ``composite`` for neither kind.
+
+    Mutation: give either module back a private table; the identity checks fail.
+    """
+    from app.services import energy_source_types as shared
+    from app.services import network_energy_sources as network
+    from app.services import transition_state_validation as ts
+
+    assert ts._ENERGY_SOURCE_TYPES is shared.ENERGY_SOURCE_TYPES_BY_KIND
+    assert network._STATIONARY_POINT_ENERGY_TYPES is shared.STATIONARY_POINT_ENERGY_TYPES
+    assert network._ELECTRONIC_ENERGY_TYPES is shared.ELECTRONIC_ENERGY_SOURCE_TYPES
+    # Written out by hand, not read back from the constants under test.
+    assert {t.value for t in shared.ELECTRONIC_ENERGY_SOURCE_TYPES} == {"sp", "opt", "composite"}
+    assert {t.value for t in shared.E0_ENERGY_SOURCE_TYPES} == {"freq", "composite"}
+    assert {t.value for t in shared.FREQUENCY_ROLE_TYPES} == {"freq"}

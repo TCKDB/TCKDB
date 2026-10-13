@@ -27,6 +27,7 @@ from app.db.models.calculation import (
 from app.db.models.common import ParameterSource
 from app.schemas.fragments.calculation import CalculationParameterObservation
 from app.services.calculation_resolution import persist_calculation_parameters
+from tests.api.artifact_urls import artifacts_url
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -132,7 +133,7 @@ class TestUploadHook:
         calc_id = _create_calc_id(client)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_gaussian_input_artifact()]},
         )
         assert resp.status_code == 201, resp.text
@@ -146,7 +147,7 @@ class TestUploadHook:
         calc_id = _create_calc_id(client)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_gaussian_output_log_artifact()]},
         )
         assert resp.status_code == 201, resp.text
@@ -172,7 +173,7 @@ class TestUploadHook:
         monkeypatch.setattr(cpe, "extract_and_store_calculation_parameters", _boom)
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_gaussian_input_artifact()]},
         )
         assert resp.status_code == 201, resp.text
@@ -218,7 +219,7 @@ class TestUploadHook:
         db_session.flush()
 
         resp = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_gaussian_input_artifact()]},
         )
         assert resp.status_code == 201, resp.text
@@ -240,7 +241,7 @@ class TestUploadHook:
         calc_id = _create_calc_id(client)
 
         r1 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_gaussian_input_artifact("input1.gjf")]},
         )
         assert r1.status_code == 201
@@ -250,7 +251,7 @@ class TestUploadHook:
         assert first_count > 0
 
         r2 = client.post(
-            f"/api/v1/calculations/{calc_id}/artifacts",
+            artifacts_url(client, calc_id),
             json={"artifacts": [_gaussian_input_artifact("input2.gjf")]},
         )
         assert r2.status_code == 201

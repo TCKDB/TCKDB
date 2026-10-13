@@ -9,11 +9,14 @@ import pytest
 
 from app.db.models.common import (
     ArrheniusAUnits,
+    CalculationGeometryRole,
+    CalculationType,
     KineticsDegeneracyConvention,
     KineticsModelKind,
     KineticsUncertaintyKind,
     PressureContext,
     RecordReviewStatus,
+    StatmechCalculationRole,
     SubmissionRecordType,
     ThermoModelKind,
     TunnelingModel,
@@ -29,20 +32,27 @@ from app.services.scientific_read.export import (
     iter_export_ndjson,
 )
 from tests.services.scientific_read._factories import (
+    attach_input_geometry,
     attach_kinetics_arrhenius_entry,
     attach_kinetics_chebyshev,
     attach_kinetics_falloff,
     attach_kinetics_plog_entry,
     attach_kinetics_third_body_efficiency,
+    attach_output_geometry,
+    attach_statmech_source_calculation,
     attach_thermo_nasa,
     attach_thermo_nasa9,
     attach_thermo_points,
     attach_thermo_wilhoit,
+    attach_transport_source_calculation,
+    make_calculation,
     make_chem_reaction,
+    make_geometry,
     make_kinetics,
     make_reaction_entry,
     make_species,
     make_species_entry,
+    make_statmech,
     make_thermo_scalar,
     make_transport,
     next_inchi_key,
@@ -720,3 +730,435 @@ def test_falloff_export_emits_block_and_sorted_third_body(db_session):
     # No PLOG/Chebyshev on a falloff record.
     assert d["plog_entries"] is None
     assert d["chebyshev"] is None
+
+
+# ---------------------------------------------------------------------------
+# Transport geometry index: linearity comes only from a witness the selected
+# transport LINKS to (#730), in this order: the geometry of a calculation it
+# cites, then a linked statmech record, then the atom count where that decides.
+# A sibling statmech record the transport does not link to is never read.
+# ---------------------------------------------------------------------------
+
+CO2_XYZ = "3\n\nC 0 0 0\nO 0 0 1.16\nO 0 0 -1.16"
+C2H2_XYZ = "4\n\nC 0 0 0.60\nC 0 0 -0.60\nH 0 0 1.66\nH 0 0 -1.66"
+BENT_H2O_XYZ = "3\n\nO 0 0 0.12\nH 0 0.76 -0.48\nH 0 -0.76 -0.48"
+
+
+def _tran_dat_row(result) -> str:
+    return next(ln for ln in result.files["tran.dat"].splitlines() if ln.strip())
+
+
+def _tran_dat_geometry_index(result) -> int:
+    return int(_tran_dat_row(result).split()[1])
+
+
+def _species_with_transport(session, smiles="C", *, lj=True):
+    # Default is methane (5 atoms): the atom count alone cannot decide it.
+    _, entry, _ = _species_with_nasa(session, smiles=smiles)
+    tr = make_transport(
+        session,
+        species_entry=entry,
+        **({} if lj else {"sigma_angstrom": None, "epsilon_over_k_k": None}),
+    )
+    return entry, tr
+
+
+def _cite_geometry(session, entry, tr, xyz):
+    """Link the transport to a calculation whose final geometry is ``xyz``."""
+    calc = make_calculation(session, species_entry_id=entry.id)
+    geom = make_geometry(session, natoms=int(xyz.split("\n")[0]), xyz_text=xyz)
+    attach_output_geometry(session, calculation=calc, geometry=geom)
+    attach_transport_source_calculation(session, transport=tr, calculation=calc)
+    return calc
+
+
+def _approve_transport(session, tr):
+    # Approved transport is immutable, so source calculations attach first.
+    _approve(session, SubmissionRecordType.transport, tr.id)
+
+
+def _export_species(session, entry, **options):
+    rs = build_export_record_set(
+        session, seed=SeedSelection(species_refs=[entry.public_ref])
+    )
+    return rs, serialize_chemkin(rs, options=ChemkinOptions(**options))
+
+
+def _ndjson_species(session, entry) -> dict:
+    lines = iter_export_ndjson(
+        session, seed=SeedSelection(species_refs=[entry.public_ref])
+    )
+    rows = [json.loads(line) for line in lines]
+    return next(r for r in rows if r["record_type"] == "species")
+
+
+def _transport_gaps(result):
+    return [g for g in result.gaps if g.kind == "transport"]
+
+
+@pytest.mark.parametrize(
+    ("smiles", "xyz"), [("O=C=O", CO2_XYZ), ("C#C", C2H2_XYZ)]
+)
+def test_linear_polyatomic_from_a_geometry_witness_is_index_1(db_session, smiles, xyz):
+    entry, tr = _species_with_transport(db_session, smiles)
+    calc = _cite_geometry(db_session, entry, tr, xyz)
+    _approve_transport(db_session, tr)
+
+    rs, result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].is_linear is True
+    assert _tran_dat_geometry_index(result) == 1
+    assert f"linearity=calculation_geometry:{calc.public_ref}" in _tran_dat_row(result)
+    assert _transport_gaps(result) == []
+    assert _ndjson_species(db_session, entry)["is_linear_source"] == {
+        "kind": "calculation_geometry",
+        "ref": calc.public_ref,
+    }
+
+
+def test_geometry_witness_says_bent(db_session):
+    entry, tr = _species_with_transport(db_session, "O")
+    _cite_geometry(db_session, entry, tr, BENT_H2O_XYZ)
+    _approve_transport(db_session, tr)
+
+    rs, result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].is_linear is False
+    assert _tran_dat_geometry_index(result) == 2
+    assert _transport_gaps(result) == []
+
+
+def test_geometry_witness_outranks_a_linked_statmech(db_session):
+    entry, tr = _species_with_transport(db_session, "O=C=O")
+    calc = _cite_geometry(db_session, entry, tr, CO2_XYZ)
+    wrong = make_statmech(db_session, species_entry=entry, is_linear=False)
+    attach_statmech_source_calculation(db_session, statmech=wrong, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    rs, _result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].linearity.source_kind == "calculation_geometry"
+    assert rs.species_records[0].is_linear is True
+
+
+def test_transport_linearity_comes_from_linked_statmech_not_lowest_id(db_session):
+    entry, tr = _species_with_transport(db_session)
+    # Lowest-id statmech says nonlinear but is NOT linked to the transport.
+    make_statmech(db_session, species_entry=entry, is_linear=False)
+    # The linked statmech (higher id) says linear.
+    linked = make_statmech(db_session, species_entry=entry, is_linear=True)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    attach_statmech_source_calculation(db_session, statmech=linked, calculation=calc)
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    rs, result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].is_linear is True
+    assert rs.species_records[0].linearity.source_kind == "statmech"
+    assert rs.species_records[0].linearity.source_ref == linked.public_ref
+    assert _tran_dat_geometry_index(result) == 1
+    assert f"linearity=statmech:{linked.public_ref}" in _tran_dat_row(result)
+    assert _transport_gaps(result) == []
+
+
+def test_statmech_of_another_species_sharing_the_calculation_is_not_a_witness(db_session):
+    entry, tr = _species_with_transport(db_session)
+    _, other_entry, _ = _species_with_nasa(db_session, smiles="N")
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    stranger = make_statmech(db_session, species_entry=other_entry, is_linear=True)
+    attach_statmech_source_calculation(db_session, statmech=stranger, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    rs, _result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].linearity is None
+
+
+def test_statmech_linked_to_a_different_transport_is_not_a_witness(db_session):
+    entry, selected = _species_with_transport(db_session)
+    _approve_transport(db_session, selected)
+    # A second, unapproved transport of the same species, linked to a statmech.
+    other = make_transport(db_session, species_entry=entry)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    attach_transport_source_calculation(db_session, transport=other, calculation=calc)
+    sm = make_statmech(db_session, species_entry=entry, is_linear=True)
+    attach_statmech_source_calculation(db_session, statmech=sm, calculation=calc)
+
+    rs, _result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].transports[0].transport.id == selected.id
+    assert rs.species_records[0].linearity is None
+
+
+def test_statmech_citing_the_calculation_only_as_a_scan_is_not_a_witness(db_session):
+    entry, tr = _species_with_transport(db_session)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    sm = make_statmech(db_session, species_entry=entry, is_linear=True)
+    attach_statmech_source_calculation(
+        db_session, statmech=sm, calculation=calc, role=StatmechCalculationRole.scan
+    )
+    _approve_transport(db_session, tr)
+
+    rs, _result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].linearity is None
+
+
+def test_polyatomic_without_a_witness_is_written_assumed_with_a_gap(db_session):
+    entry, tr = _species_with_transport(db_session, "O=C=O")
+    _approve_transport(db_session, tr)
+    # Two statmech records, neither linked to the transport: never borrowed.
+    make_statmech(db_session, species_entry=entry, is_linear=True)
+    make_statmech(db_session, species_entry=entry, is_linear=False)
+
+    rs, result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].is_linear is None
+    row = _tran_dat_row(result)
+    assert _tran_dat_geometry_index(result) == 2
+    assert "linearity=assumed nonlinear from atom count" in row
+    gaps = _transport_gaps(result)
+    assert [g.ref for g in gaps] == [entry.public_ref]
+    assert "assumed nonlinear from atom count" in gaps[0].detail
+    ndjson = _ndjson_species(db_session, entry)
+    assert ndjson["is_linear"] is None and ndjson["is_linear_source"] is None
+    assert not [g for g in rs.gaps if g.kind == "transport"]  # NDJSON side: no gap
+
+
+def test_no_gap_when_transport_is_not_exported(db_session):
+    entry, tr = _species_with_transport(db_session, "O=C=O")
+    _approve_transport(db_session, tr)
+
+    _rs, result = _export_species(db_session, entry, include_transport=False)
+
+    assert "tran.dat" not in result.files
+    assert _transport_gaps(result) == []
+
+
+def test_no_assumed_gap_for_a_line_that_is_not_written(db_session):
+    entry, tr = _species_with_transport(db_session, "O=C=O", lj=False)
+    _approve_transport(db_session, tr)
+
+    _rs, result = _export_species(db_session, entry)
+
+    details = [g.detail for g in _transport_gaps(result)]
+    assert details == ["selected transport lacks the LJ sigma/epsilon pair"]
+
+
+@pytest.mark.parametrize(("smiles", "index"), [("[Ar]", 0), ("[H][H]", 1)])
+def test_atom_count_decides_one_and_two_atom_species_without_a_gap(db_session, smiles, index):
+    entry, tr = _species_with_transport(db_session, smiles)
+    _approve_transport(db_session, tr)
+
+    _rs, result = _export_species(db_session, entry)
+
+    assert _tran_dat_geometry_index(result) == index
+    assert "linearity=atom_count" in _tran_dat_row(result)
+    assert _transport_gaps(result) == []
+
+
+@pytest.mark.parametrize(
+    ("smiles", "stated", "index", "gap"),
+    [
+        ("[Ar]", False, 0, True),
+        ("[Ar]", True, 0, True),
+        ("[H][H]", False, 1, True),
+        ("[H][H]", True, 1, False),
+    ],
+)
+def test_atom_count_beats_a_linked_statmech_and_a_contradiction_is_named(
+    db_session, smiles, stated, index, gap
+):
+    entry, tr = _species_with_transport(db_session, smiles)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    sm = make_statmech(db_session, species_entry=entry, is_linear=stated)
+    attach_statmech_source_calculation(db_session, statmech=sm, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    _rs, result = _export_species(db_session, entry)
+
+    assert _tran_dat_geometry_index(result) == index
+    gaps = _transport_gaps(result)
+    if gap:
+        assert len(gaps) == 1
+        assert sm.public_ref in gaps[0].detail and "not used" in gaps[0].detail
+        assert f"contradicted by {sm.public_ref}" in _tran_dat_row(result)
+    else:
+        assert gaps == []
+
+
+def test_atom_count_beats_a_conflict_between_linked_records_and_names_it(db_session):
+    entry, tr = _species_with_transport(db_session, "[H][H]")
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    for flag in (True, False):
+        sm = make_statmech(db_session, species_entry=entry, is_linear=flag)
+        attach_statmech_source_calculation(db_session, statmech=sm, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    _rs, result = _export_species(db_session, entry)
+
+    assert _tran_dat_geometry_index(result) == 1
+    gaps = _transport_gaps(result)
+    assert len(gaps) == 1 and "disagree" in gaps[0].detail
+
+
+def test_an_opt_is_judged_by_its_final_output_not_an_initial_output(db_session):
+    """Depositors set the output role themselves, so only ``final`` counts."""
+    entry, tr = _species_with_transport(db_session, "O")
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    final = make_geometry(db_session, natoms=3, xyz_text=BENT_H2O_XYZ)
+    attach_output_geometry(
+        db_session, calculation=calc, geometry=final,
+        role=CalculationGeometryRole.final, output_order=2,
+    )
+    initial = make_geometry(db_session, natoms=3, xyz_text=CO2_XYZ)
+    attach_output_geometry(
+        db_session, calculation=calc, geometry=initial,
+        role=CalculationGeometryRole.initial, output_order=1,
+    )
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    rs, _result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].linearity_conflict is None
+    assert rs.species_records[0].is_linear is False
+
+
+def test_unparseable_smiles_drops_the_line_with_a_gap(db_session):
+    entry, tr = _species_with_transport(db_session, "not a smiles")
+    _approve_transport(db_session, tr)
+
+    _rs, result = _export_species(db_session, entry)
+
+    assert result.files["tran.dat"].strip() == ""
+    gaps = _transport_gaps(result)
+    assert [g.ref for g in gaps] == [entry.public_ref]
+    assert "unparseable SMILES" in gaps[0].detail
+
+
+def test_transport_linearity_is_absent_when_linked_records_disagree(db_session):
+    entry, tr = _species_with_transport(db_session)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    attach_transport_source_calculation(db_session, transport=tr, calculation=calc)
+    for flag in (True, False):
+        sm = make_statmech(db_session, species_entry=entry, is_linear=flag)
+        attach_statmech_source_calculation(db_session, statmech=sm, calculation=calc)
+    _approve_transport(db_session, tr)
+
+    rs, result = _export_species(db_session, entry)
+
+    record = rs.species_records[0]
+    assert record.is_linear is None
+    assert record.linearity_conflict.source_kind == "statmech"
+    assert len(record.linearity_conflict.refs) == 2
+    gaps = _transport_gaps(result)
+    assert len(gaps) == 1 and "disagree" in gaps[0].detail
+    assert all(ref in gaps[0].detail for ref in record.linearity_conflict.refs)
+    assert "assumed nonlinear" in _tran_dat_row(result)
+
+
+def _typed_calc(session, entry, tr, calc_type, xyz, *, where):
+    """A calculation of ``calc_type`` the transport cites, with ``xyz`` as its ``where`` geometry."""
+    calc = make_calculation(session, type=calc_type, species_entry_id=entry.id)
+    geom = make_geometry(session, natoms=int(xyz.split("\n")[0]), xyz_text=xyz)
+    if where == "output":
+        attach_output_geometry(session, calculation=calc, geometry=geom)
+    else:
+        attach_input_geometry(session, calculation=calc, geometry=geom)
+    attach_transport_source_calculation(session, transport=tr, calculation=calc)
+    return calc
+
+
+def test_an_opt_that_only_started_from_a_linear_guess_is_not_a_witness(db_session):
+    entry, tr = _species_with_transport(db_session, "O")
+    _typed_calc(db_session, entry, tr, CalculationType.opt, CO2_XYZ, where="input")
+    _approve_transport(db_session, tr)
+
+    rs, _result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].linearity is None
+    assert rs.species_records[0].linearity_conflict is None
+
+
+def test_an_opt_is_judged_by_its_final_geometry_not_its_guess(db_session):
+    entry, tr = _species_with_transport(db_session, "O")
+    calc = _typed_calc(db_session, entry, tr, CalculationType.opt, BENT_H2O_XYZ, where="output")
+    guess = make_geometry(db_session, natoms=3, xyz_text=CO2_XYZ)
+    attach_input_geometry(db_session, calculation=calc, geometry=guess)
+    _approve_transport(db_session, tr)
+
+    rs, _result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].is_linear is False
+
+
+@pytest.mark.parametrize(
+    "calc_type",
+    [
+        CalculationType.scan,
+        CalculationType.irc,
+        CalculationType.path_search,
+        CalculationType.composite,
+        CalculationType.conf,
+    ],
+)
+def test_scan_irc_path_search_and_composite_are_not_witnesses(db_session, calc_type):
+    entry, tr = _species_with_transport(db_session, "O")
+    _typed_calc(db_session, entry, tr, calc_type, CO2_XYZ, where="output")
+    _typed_calc(db_session, entry, tr, calc_type, CO2_XYZ, where="input")
+    _approve_transport(db_session, tr)
+
+    rs, _result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].linearity is None
+    assert rs.species_records[0].linearity_conflict is None
+
+
+@pytest.mark.parametrize("calc_type", [CalculationType.freq, CalculationType.sp])
+def test_a_freq_or_sp_is_judged_by_its_input_geometry(db_session, calc_type):
+    entry, tr = _species_with_transport(db_session, "O=C=O")
+    calc = _typed_calc(db_session, entry, tr, calc_type, CO2_XYZ, where="input")
+    _approve_transport(db_session, tr)
+
+    rs, result = _export_species(db_session, entry)
+
+    assert rs.species_records[0].is_linear is True
+    assert rs.species_records[0].linearity.source_ref == calc.public_ref
+    assert _tran_dat_geometry_index(result) == 1
+    assert _transport_gaps(result) == []
+
+
+def test_cited_geometries_that_disagree_are_a_named_gap_not_settled_by_a_statmech(db_session):
+    entry, tr = _species_with_transport(db_session, "O")
+    lin = _typed_calc(db_session, entry, tr, CalculationType.opt, CO2_XYZ, where="output")
+    bent = _typed_calc(db_session, entry, tr, CalculationType.opt, BENT_H2O_XYZ, where="output")
+    # A linked statmech that says linear must NOT settle the disagreement.
+    sm = make_statmech(db_session, species_entry=entry, is_linear=True)
+    attach_statmech_source_calculation(db_session, statmech=sm, calculation=lin)
+    _approve_transport(db_session, tr)
+
+    rs, result = _export_species(db_session, entry)
+
+    record = rs.species_records[0]
+    assert record.linearity is None
+    assert record.linearity_conflict.source_kind == "calculation_geometry"
+    assert record.linearity_conflict.refs == tuple(sorted([lin.public_ref, bent.public_ref]))
+    assert _tran_dat_geometry_index(result) == 2
+    assert "linearity=assumed nonlinear: calculation_geometry disagree" in _tran_dat_row(result)
+    gaps = _transport_gaps(result)
+    assert len(gaps) == 1
+    assert "disagree" in gaps[0].detail
+    assert lin.public_ref in gaps[0].detail and bent.public_ref in gaps[0].detail
+    assert "neither" not in gaps[0].detail
+    ndjson = _ndjson_species(db_session, entry)
+    assert ndjson["is_linear"] is None
+    assert ndjson["is_linear_conflict"] == {
+        "kind": "calculation_geometry",
+        "refs": list(record.linearity_conflict.refs),
+    }

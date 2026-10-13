@@ -1151,7 +1151,15 @@ def test_computed_species_statmech_forgot_sp_is_refused(client):
 
 def test_computed_species_statmech_sp_on_other_geometry_is_refused(client):
     """One conformer; its sp explicitly declares a different input
-    geometry than the opt it is supposed to support -- R3'."""
+    geometry than the opt it is supposed to support -- R3'.
+
+    Since #635 the upload itself refuses this first: a calculation inside a
+    conformer states the conformer's geometry as the one it ran on, so an sp
+    whose explicit ``input_geometries`` omit it contradicts itself
+    (``calculation_input_geometry_mismatch``). The statmech rule
+    (``_GEOMETRY_MISMATCH_STATMECH``) still governs the cases the upload
+    accepts (standalone statmech and thermo, whose sp carries no conformer).
+    """
     payload = _computed_species_bundle_payload(
         conformers=[
             _bundle_conformer(
@@ -1164,8 +1172,12 @@ def test_computed_species_statmech_sp_on_other_geometry_is_refused(client):
         ],
     )
     resp = client.post("/api/v1/uploads/computed-species", json=payload)
-    body = _assert_code(resp, _GEOMETRY_MISMATCH_STATMECH)
-    _assert_context_values_are_refs(body)
+    body = _assert_code(resp, "calculation_input_geometry_mismatch")
+    # Local labels only: the calculation's own key and kind, never a row id.
+    assert body["context"] == {
+        "field": "calculation 'sp0' (type='sp')",
+        "stated_by": "the geometry of the conformer it belongs to",
+    }, body
 
 
 def test_computed_species_statmech_two_level_sps_is_refused(client):

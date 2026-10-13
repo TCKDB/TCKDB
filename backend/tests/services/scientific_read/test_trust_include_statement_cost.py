@@ -363,6 +363,34 @@ def test_statmech_search_trust_does_not_scale_with_page_size(
     _assert_slope_is_flat("/statmech/search", small, large)
 
 
+def test_species_statmech_read_trust_does_not_scale_with_page_size(
+    db_session, statmech_page
+):
+    """The per-species statmech read batches the trust graph like search does.
+
+    Kills: removing ``STATMECH_TRUST_EAGER_LOADS`` from the species
+    materializer (the evaluator then lazy-loads the graph once per row).
+    """
+    from app.services.scientific_read.species_statmech import get_species_statmech
+
+    def read(session, request):
+        limit, include = request
+        return get_species_statmech(
+            session, species_entry_id=statmech_page.id, include=include, limit=limit
+        )
+
+    def request_for(limit: int, include: list[str]):
+        return (limit, include)
+
+    small = _marginal_cost(
+        db_session, search=read, request_for=request_for, limit=_SMALL_PAGE
+    )
+    large = _marginal_cost(
+        db_session, search=read, request_for=request_for, limit=_LARGE_PAGE
+    )
+    _assert_slope_is_flat("/species-entries/{id}/statmech", small, large)
+
+
 def test_transport_search_trust_does_not_scale_with_page_size(
     db_session, transport_page
 ):

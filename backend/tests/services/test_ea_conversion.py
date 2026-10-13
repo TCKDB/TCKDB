@@ -163,13 +163,34 @@ class TestKineticsUploadAUnitsMolecularity:
         )
         assert req.a_units == ArrheniusAUnits.cm3_mol_s
 
-    def test_bimolecular_with_per_s_rejected(self) -> None:
+    def test_bimolecular_with_per_s_rejected_for_a_forward_rate(self) -> None:
+        # Two reactants: the forward coefficient is a rate of both, so first-order units are wrong.
         with pytest.raises(ValidationError, match="incompatible with bimolecular"):
             KineticsUploadRequest(
                 reaction=_reaction_with_n_reactants(2),
                 scientific_origin="computed",
+                direction="forward",
                 a=1e12,
                 a_units="per_s",
+            )
+
+    def test_bimolecular_with_per_s_is_possible_when_direction_is_unstated(self) -> None:
+        # 2 reactants -> 1 product: with no direction stated the coefficient could be the reverse
+        # (first-order) rate, so per_s is accepted (#695); no direction is assumed. Units matching
+        # neither side (third order) are still refused.
+        req = KineticsUploadRequest(
+            reaction=_reaction_with_n_reactants(2),
+            scientific_origin="computed",
+            a=1e12,
+            a_units="per_s",
+        )
+        assert req.a_units == ArrheniusAUnits.per_s
+        with pytest.raises(ValidationError, match="matches neither"):
+            KineticsUploadRequest(
+                reaction=_reaction_with_n_reactants(2),
+                scientific_origin="computed",
+                a=1e12,
+                a_units="cm6_mol2_s",
             )
 
     def test_unimolecular_with_cm3_mol_s_rejected(self) -> None:

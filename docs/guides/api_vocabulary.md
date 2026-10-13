@@ -61,10 +61,10 @@ Three things are deliberately absent:
 | Kind of token | Count | Read from |
 | --- | --- | --- |
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
-| Identifier prefixes | 42 | `backend/app/services/public_refs.py` |
+| Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 146 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 296 | `backend/app/api/code_catalogue.py` |
-| **total** | **602** | |
+| Refusal codes a caller can receive | 313 | `backend/app/api/code_catalogue.py` |
+| **total** | **620** | |
 
 ## How a record is named
 
@@ -95,7 +95,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `wfr_` | workflow tool release | yes |
 | `wft_` | workflow tool | yes |
 
-### Opaque prefixes (29)
+### Opaque prefixes (30)
 
 | Prefix | Names a | Same on every instance? |
 | --- | --- | --- |
@@ -121,6 +121,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `sdet_` | structure determination | no — one row, one database |
 | `sfnd_` | structure evidence finding | no — one row, one database |
 | `sm_` | statmech | no — one row, one database |
+| `smd_` | statmech model declaration | no — one row, one database |
 | `spe_` | species entry | no — one row, one database |
 | `sra_` | submission rights attestation | no — one row, one database |
 | `sub_` | submission | no — one row, one database |
@@ -692,7 +693,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `rights_attestation_requires_curator` | a thing |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (24 codes)
+### HTTP 404 (26 codes)
 
 | Code | Names |
 | --- | --- |
@@ -717,11 +718,13 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_release` | a thing |
 | `unknown_release_artifact` | a thing |
 | `unknown_selection` | a thing |
+| `unknown_statmech_candidate_ref` | a thing |
 | `unknown_statmech_ref` | a thing |
+| `unknown_structure_determination_ref` | a thing |
 | `unknown_structure_member_ref` | a thing |
 | `unknown_transition_state_entry_ref` | a thing |
 
-### HTTP 409 (24 codes)
+### HTTP 409 (25 codes)
 
 | Code | Names |
 | --- | --- |
@@ -747,6 +750,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `selection_already_superseded` | a relationship — read `context` |
 | `state_conflict` | a relationship — read `context` |
 | `statmech_subject_not_exactly_one` | a thing |
+| `superseded_record_not_approvable` | a relationship — read `context` |
 | `unique_conflict` | a relationship — read `context` |
 | `username_taken` | a thing |
 
@@ -757,7 +761,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (238 codes)
+### HTTP 422 (252 codes)
 
 | Code | Names |
 | --- | --- |
@@ -777,8 +781,10 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bac_total_requires_components` | a relationship — read `context` |
 | `bundle_too_many_records` | a relationship — read `context` |
 | `calculation_geometry_composition_mismatch` | a relationship — read `context` |
+| `calculation_geometry_conformer_mismatch` | a relationship — read `context` |
 | `calculation_geometry_isotope_mismatch` | a relationship — read `context` |
 | `calculation_handle_conflict` | a relationship — read `context` |
+| `calculation_input_geometry_mismatch` | a relationship — read `context` |
 | `calculation_key_undeclared` | a thing |
 | `calculation_software_is_workflow_tool` | a thing |
 | `calculation_software_release_required` | a thing |
@@ -918,6 +924,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `rights_license_blank` | a thing |
 | `rights_source_terms_required` | a thing |
 | `scf_stability_source_calculation_owner_mismatch` | a relationship — read `context` |
+| `scf_stability_source_conformer_unanchored` | a relationship — read `context` |
+| `scf_stability_source_cycle` | a relationship — read `context` |
 | `scf_stability_source_geometry_mismatch` | a relationship — read `context` |
 | `selection_no_longer_approved` | a thing |
 | `smiles_too_long` | a relationship — read `context` |
@@ -939,7 +947,13 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `statmech_energy_level_contradiction` | a relationship — read `context` |
 | `statmech_energy_level_requires_sp` | a relationship — read `context` |
 | `statmech_energy_sp_and_composite_linked` | a relationship — read `context` |
+| `statmech_model_declaration_invalid` | a thing |
+| `statmech_model_declaration_mismatch` | a relationship — read `context` |
+| `statmech_model_declaration_version_unsupported` | a thing |
 | `statmech_role_duplicate` | a relationship — read `context` |
+| `statmech_selection_bound_exceeded` | a relationship — read `context` |
+| `statmech_selection_scope_owner_mismatch` | a relationship — read `context` |
+| `statmech_selection_unsupported` | a relationship — read `context` |
 | `statmech_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `statmech_source_role_type_mismatch` | a relationship — read `context` |
 | `statmech_sp_geometry_mismatch` | a relationship — read `context` |
@@ -980,6 +994,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `thermoml_no_supported_content` | a relationship — read `context` |
 | `thermoml_schema_invalid` | a thing |
 | `too_many_element_symbols` | a relationship — read `context` |
+| `transition_state_calculation_conformer_key` | a relationship — read `context` |
+| `transition_state_calculation_species_geometry` | a relationship — read `context` |
 | `transition_state_charge_mismatch` | a relationship — read `context` |
 | `transition_state_composition_mismatch` | a relationship — read `context` |
 | `transition_state_irc_mapping_element_mismatch` | a relationship — read `context` |
@@ -988,9 +1004,11 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `transition_state_reaction_coordinate_ambiguous` | a relationship — read `context` |
 | `transition_state_reaction_coordinate_not_designated` | a thing |
 | `transport_source_calculation_owner_mismatch` | a relationship — read `context` |
+| `ts_energy_ordering_source_type_mismatch` | a relationship — read `context` |
 | `ts_energy_ordering_stated_energy_mismatch` | a relationship — read `context` |
 | `unknown_element_symbol` | a thing |
 | `unknown_include_token` | a thing |
+| `unknown_query_parameter` | a thing |
 | `unknown_record_type` | a thing |
 | `unsafe_lowest_energy_comparison` | a thing |
 | `unsupported_direction` | a thing |

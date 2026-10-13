@@ -22,6 +22,8 @@ Sub-routers:
                               /scientific/species-entries/{ref}/conformers/select (+ /manifest)
     structure_selection.tse_router
                             → /scientific/transition-state-entries/{ref}/evidence/select (+ /manifest)
+    statmech_selection.router
+                            → /scientific/statmech/select (+ /manifest)
     species_subresources.router
                             → /scientific/species-entries/{id}/statmech
                               /scientific/species-entries/{id}/transport
@@ -86,6 +88,7 @@ from app.api.routes.scientific import (
     species_calculations_search,
     species_subresources,
     statmech,
+    statmech_selection,
     structure,
     structure_selection,
     thermo,
@@ -131,6 +134,9 @@ scientific_router.include_router(thermo_selection.router)
 # browses, same prefixes, deeper paths. The transition-state route takes an *entry* (tse_), not the concept.
 scientific_router.include_router(structure_selection.species_router)
 scientific_router.include_router(structure_selection.tse_router)
+# Statmech selection (qualify supplied statistical models; prefer only where audited rules say so): one typed target
+# union under /statmech, sibling of the statmech search and detail reads (POST /select, GET /{ref}).
+scientific_router.include_router(statmech_selection.router)
 # Sibling per-entry subresource reads (statmech / transport) sharing the
 # ``/species-entries`` prefix with the thermo per-entry endpoint.
 scientific_router.include_router(species_subresources.router)

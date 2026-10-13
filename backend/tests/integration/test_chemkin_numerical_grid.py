@@ -72,13 +72,19 @@ from tests.integration.test_chemkin_round_trip_real import (
 
 FIXTURE_NAME = "rmg_ammonia_methane"
 
+# Measured: the 13 species of three or more atoms. None of them is actually
+# linear, so the assumption is right here, but nothing in the record says so.
+EXPECTED_ASSUMED_LINEARITY_SMILES: list[str] = [
+    "C", "C=O", "CC", "CN", "CO[O]", "C[O]", "N", "NO[O]", "O", "OO", "[CH3]", "[NH2]", "[O]O",
+]
+
 
 @pytest.fixture
 def pipeline(db_session):
     assert ct.__version__ == PINNED_CANTERA, "revalidate the grid before changing the engine pin"
     _mech_in, resolved_in, _normalized_in, built = _import_payloads()
     species_refs, reaction_refs = _persist_and_approve(db_session, built)
-    _record_set, export = _export_chemkin(db_session, species_refs, reaction_refs)
+    record_set, export = _export_chemkin(db_session, species_refs, reaction_refs)
 
     files_in = {"chem.inp": _read("chem.inp")}  # thermo is embedded in the fixture file
     files_out = dict(export.files)
@@ -96,6 +102,7 @@ def pipeline(db_session):
         "smiles_in": smiles_in,
         "smiles_out": smiles_out,
         "export_gaps": list(export.gaps),
+        "smiles_by_ref": {sr.species_entry.public_ref: sr.species.smiles for sr in record_set.species_records},
         "name_out": {smiles: name for name, smiles in smiles_out.items()},
     }
 
@@ -138,10 +145,18 @@ def test_exported_mechanism_matches_original_on_the_grid(pipeline):
     }
     assert summary["counts"]["unsupported"] == 0
     assert summary["unsupported"] == []
-    # Gaps are listed, never dropped; this fixture has none at all, so a future
-    # transport or thermo gap fails here rather than passing through an empty list.
-    assert summary["export_gaps"] == []
-    assert summary["counts"]["export_gaps"] == 0
+    # Gaps are listed, never dropped. The fixture's tran.dat carries a geometry
+    # index per species, but the import does not keep it and the persisted
+    # transport cites no calculation, so no record states linearity: every
+    # species of three or more atoms is exported with an assumed-nonlinear index
+    # and a gap naming it. Listing them by name means a new or lost gap fails
+    # here rather than passing through a count.
+    gaps = summary["export_gaps"]
+    assert {g["kind"] for g in gaps} == {"transport"}
+    assert all("assumed nonlinear from atom count" in g["detail"] for g in gaps)
+    gap_smiles = sorted(pipeline["smiles_by_ref"][g["ref"]] for g in gaps)
+    assert gap_smiles == EXPECTED_ASSUMED_LINEARITY_SMILES, repr(gap_smiles)
+    assert summary["counts"]["export_gaps"] == len(EXPECTED_ASSUMED_LINEARITY_SMILES)
     assert all(entry["within_bound"] for entry in summary["species"])
     assert all(entry["within_bound"] for entry in summary["reactions"])
     assert sum(1 for entry in summary["reactions"] if entry["duplicate"]) == 3

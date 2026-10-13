@@ -69,7 +69,7 @@ from app.services.submission import (
     list_record_links,
     list_submissions_for_review,
     reject_submission,
-    resolve_submission_handle,
+    resolve_submission_ref,
     supersede_submission,
 )
 
@@ -391,19 +391,19 @@ def read_rights_attestations(
 
 
 @router.post(
-    "/{submission_id}/rights-attestations",
+    "/{submission_ref}/rights-attestations",
     response_model=RightsAttestationRead,
     status_code=201,
     dependencies=[Depends(require_supported_tckdb_client)],
 )
 def create_rights_attestation(
-    submission_id: Annotated[
+    submission_ref: Annotated[
         str,
         Path(
             description=(
-                "The submission, by its ``sub_`` ref (preferred; every upload, "
-                "job and bundle response returns it as ``submission_ref``) or, "
-                "for a deprecation window, by its integer id."
+                "The submission, by its ``sub_`` ref (every upload, job and "
+                "bundle response returns it as ``submission_ref``). A row id "
+                "is refused: 422 ``invalid_handle``."
             ),
         ),
     ],
@@ -423,7 +423,7 @@ def create_rights_attestation(
         422 for a body the caller can correct (blank license, missing
         ``source_terms``).
     """
-    submission = resolve_submission_handle(session, submission_id)
+    submission = resolve_submission_ref(session, submission_ref)
     if not _can_view(submission, current_user):
         # Same answer as every other route on this router for a submission
         # the caller has no business with: not "who may attest", just "no".

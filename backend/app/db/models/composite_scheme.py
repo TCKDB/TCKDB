@@ -6,7 +6,8 @@ stays the flat, hashed row it always was; a side table binds it to its recipe,
 the way ``level_of_theory_merge`` annotates a level without widening it.
 
 * :class:`CompositeScheme` -- the recipe. **Identity**: deduplicated by
-  ``definition_hash`` and never updated in place.
+  ``definition_hash`` and never updated in place. (One stated exception, on the
+  term inputs below: a level-of-theory merge.)
 * :class:`CompositeSchemeTerm` and :class:`CompositeSchemeTermInput` -- the
   recipe's arithmetic, one row per term and per input of a term. Identity too:
   they belong to one scheme and are written with it.
@@ -176,8 +177,17 @@ class CompositeSchemeTermInput(Base):
     ``level_of_theory_id`` is never a composite-bound level: a composite is
     built from ordinary levels, and a nested composite is refused. The check
     is :func:`app.services.composite_scheme_resolution.assert_ordinary_input_level`,
-    which every writer of this table must go through (see its docstring for
-    what it looks at). ``cardinal_number`` is declared by the depositor, not
+    which every depositing writer of this table goes through (see its docstring
+    for what it looks at).
+
+    **One exception to "never updated in place".** The operator merge script
+    (``scripts/ops/merge_duplicate_levels_of_theory.py``) repoints an input with a
+    raw UPDATE when the level it names is merged into its holder. That is the same
+    identity under a different row, so the science is unchanged: resolution follows
+    merges (``stored_scheme_inputs``), so the scheme's re-derived hash is the same
+    whichever row is named. It happens even when an accepted record rests on the
+    scheme, and it does not go through ``assert_ordinary_input_level`` (the holder
+    of an ordinary input is ordinary). ``cardinal_number`` is declared by the depositor, not
     derived from the basis name; it is required on a ``cardinal`` slot and
     optional on the others.
     """

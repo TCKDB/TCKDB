@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from app.db.models.literature import Literature
     from app.db.models.software import SoftwareRelease
     from app.db.models.species import SpeciesEntry
+    from app.db.models.statmech_declaration import StatmechModelDeclaration
     from app.db.models.thermo import Thermo
     from app.db.models.transition_state import TransitionStateEntry
     from app.db.models.workflow import WorkflowToolRelease
@@ -168,6 +169,10 @@ class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         back_populates="statmech",
         order_by="StatmechElectronicLevel.level_index",
         cascade="all, delete-orphan",
+    )
+    # The model this record declares it supplies (at most one; absent for a record deposited without one).
+    model_declaration: Mapped[Optional["StatmechModelDeclaration"]] = relationship(
+        uselist=False, viewonly=True, primaryjoin="Statmech.id == StatmechModelDeclaration.statmech_id"
     )
     # Computed thermo records derived from this statmech interpretation.
     thermo_records: Mapped[list["Thermo"]] = relationship(
