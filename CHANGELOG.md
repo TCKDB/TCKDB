@@ -36,6 +36,20 @@ unchanged.
 - A sweep test calls every `/scientific/*` route under `curated` against a world with a hidden instance of every gated type. Its
   baseline file lists today's known leaks; the per-family follow-ups remove them.
 
+## The XYG3 barrier rule's comparator record is corrected (2026-10-13)
+
+**Data change to an inactive rule; nothing selects differently.** Migration: none. New environment variable: none. No package
+version changes; no schema change.
+
+- Manifest `xyg3_b3lyp_barrier_manifest.yaml` is 0.4.0 (new pin) and the rule `K-XYG3-B3LYP-BARRIER` is 0.3.0, because a rule resting on a different audited manifest
+  is a new rule version (the pre-v2 replay fixture was regenerated). The rule stays **inactive** (`activation_approved: false`).
+- The B3LYP row of Zhang 2009 Table 2 is the 2005 Truhlar B3LYP/MG3S row, not 6-311+G(3df,2p). The same-basis comparison
+  (Zhang, Luo, Xu, J. Chem. Phys. 133, 104105 (2010)) gives a 76-barrier MAD of 1.02 for XYG3 against 4.54 kcal/mol for B3LYP at
+  6-311+G(3df,2p) and QCISD/MG3 geometries, XYG3 closer on 69 of 76 barriers (B3LYP closer on 7). The Table III HAT12 typo
+  (1.66 printed, 1.38 in the SI) is recorded. Four sources are SHA-256 pinned; no PDF is copied into the repository.
+- The comparator blocker is resolved. Geometry provenance is not: TCKDB cannot record which geometry a stored barrier used, so
+  the rule stays inactive until it can. Owner sign-off has not been given.
+
 ## Curated reads no longer name more records the curated profile hides (2026-10-12)
 
 **Narrowing under `profile=curated` only; completes the list left open by the previous entry.** Migration: none. New environment

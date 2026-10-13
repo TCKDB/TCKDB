@@ -41,10 +41,10 @@ RULE_REVOKED = "revoked"
 #: What an edge from a benchmark rule is, in the manifest and everywhere it is shown.
 EDGE_LABEL = "expected-performance inference"
 
-#: SHA-256 of ``xyg3_b3lyp_barrier_manifest.yaml`` as shipped (manifest 0.3.0). The rule refuses to load over any
+#: SHA-256 of ``xyg3_b3lyp_barrier_manifest.yaml`` as shipped (manifest 0.4.0). The rule refuses to load over any
 #: other bytes; a change to a member, a barrier height or a blocker is a new manifest version, a new pin and a new
 #: rule version.
-XYG3_MANIFEST_SHA256 = "1ce59bde6133851d0b92324e6a563f9d7b43c5e2813226fdc91dfcfef1aedd96"
+XYG3_MANIFEST_SHA256 = "4dc3da49c5536cf683764f307d96dad4055e5e271ba68f1c22751534ad45f044"
 
 #: The protocol components, other than the one a rule compares, that must be stated and equal on both sides for the
 #: rule's evidence to speak about the whole rate.
@@ -166,12 +166,12 @@ class XYG3B3LYPBarrierRule(KineticsRule):
     and, of the *pair*, every other component of the protocol (zero-point treatment, geometry relation, rotor,
     conformer and path treatment, departures such as tunneling) stated and equal on both sides.
 
-    **The rule is inactive.** The audited manifest lists its blockers; among them, the paper's B3LYP numbers are
-    not shown to be in the basis the rule requires. See ``activation_blockers`` in the manifest.
+    **The rule is inactive.** The audited manifest lists its blockers; among them, a stored barrier cannot declare
+    which geometry it used and no owner sign-off has been given. See ``activation_blockers`` in the manifest.
     """
 
     rule_id = "K-XYG3-B3LYP-BARRIER"
-    version = "0.2.0"
+    version = "0.3.0"
     objective = (
         "expected accuracy of the classical electronic barrier of a computed rate, for the audited HTBH38/04 and "
         "NHTBH38/04 benchmark reactions"
