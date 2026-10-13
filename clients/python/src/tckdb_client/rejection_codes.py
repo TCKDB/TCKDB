@@ -322,6 +322,7 @@ class RejectionCode(str, Enum):
     STRUCTURE_SELECTION_UNSUPPORTED = "structure_selection_unsupported"
     SUBJECT_TYPE_MISMATCH = "subject_type_mismatch"
     SUBMISSION_SUPERSEDE_NOT_OWNER = "submission_supersede_not_owner"
+    SUPERSEDED_RECORD_NOT_APPROVABLE = "superseded_record_not_approvable"
     SUPERSEDES_SAME_RECORD = "supersedes_same_record"
     TCKDB_CLIENT_VERSION_INVALID = "tckdb_client_version_invalid"
     TCKDB_CLIENT_VERSION_MISSING = "tckdb_client_version_missing"
@@ -686,6 +687,7 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.SELECTION_ALREADY_SUPERSEDED,
         RejectionCode.STATE_CONFLICT,
         RejectionCode.STATMECH_SUBJECT_NOT_EXACTLY_ONE,
+        RejectionCode.SUPERSEDED_RECORD_NOT_APPROVABLE,
         RejectionCode.UNIQUE_CONFLICT,
         RejectionCode.USERNAME_TAKEN,
     }
@@ -942,6 +944,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STRUCTURE_SELECTION_UNSUPPORTED: frozenset({422}),
     RejectionCode.SUBJECT_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.SUBMISSION_SUPERSEDE_NOT_OWNER: frozenset({403}),
+    RejectionCode.SUPERSEDED_RECORD_NOT_APPROVABLE: frozenset({409}),
     RejectionCode.SUPERSEDES_SAME_RECORD: frozenset({422}),
     RejectionCode.TCKDB_CLIENT_VERSION_INVALID: frozenset({426}),
     RejectionCode.TCKDB_CLIENT_VERSION_MISSING: frozenset({426}),

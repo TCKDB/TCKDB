@@ -40,7 +40,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.api.errors import DomainError
+from app.api.errors import DomainError, RecordReviewConflict
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import CalculationArtifact
 from app.db.models.common import (
@@ -50,8 +50,10 @@ from app.db.models.common import (
     SubmissionRecordType,
 )
 from app.db.models.record_review import RecordReview, RecordReviewEvent
+from app.db.models.scientific_record_supersession import ScientificRecordSupersession
 from app.db.models.submission import SubmissionRecordLink
 from app.services.accepted_science import lock_scientific_records
+from app.services.record_refs import resolve_record_public_refs
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 
@@ -414,6 +416,43 @@ def ensure_record_review(
     return review
 
 
+def _refuse_superseded_approval(
+    session: Session, record_type: SubmissionRecordType, record_id: int
+) -> None:
+    """Refuse approving a record that has an outgoing supersession edge.
+
+    Supersession is the correction path: the superseded record is deprecated
+    and the successor stands. Re-approving the predecessor would make it
+    curated-visible again with a notice naming a successor that may be hidden.
+    Only the ``approved`` target is guarded; ``under_review``, ``rejected`` and
+    ``deprecated`` stay open, so a curator can still re-review or reject it.
+    """
+    successor_id = session.scalar(
+        select(ScientificRecordSupersession.superseding_record_id)
+        .where(
+            ScientificRecordSupersession.record_type == record_type,
+            ScientificRecordSupersession.superseded_record_id == record_id,
+        )
+        .limit(1)
+    )
+    if successor_id is None:
+        return
+    refs = resolve_record_public_refs(
+        session, [(record_type, record_id), (record_type, successor_id)]
+    )
+    context: dict[str, str] = {"record_type": record_type.value}
+    if (record_type, record_id) in refs:
+        context["record_ref"] = refs[(record_type, record_id)]
+    if (record_type, successor_id) in refs:
+        context["superseded_by_ref"] = refs[(record_type, successor_id)]
+    raise RecordReviewConflict(
+        "superseded_record_not_approvable: this record has been replaced by a "
+        "correction and cannot be approved again; approve the record that "
+        "superseded it instead.",
+        context=context,
+    )
+
+
 def set_record_review_status(
     session: Session,
     *,
@@ -479,6 +518,9 @@ def set_record_review_status(
         if existing.created_by is not None and existing.created_by == actor.id:
             raise DomainError("Actor cannot approve a record they created.")
         lock_scientific_records(session, (RecordRef(record_type, record_id),))
+        # After the root lock, which ``supersede_scientific_record`` also takes,
+        # so a concurrent supersession and approval serialize.
+        _refuse_superseded_approval(session, record_type, record_id)
 
     existing.status = status
     if submission_id is not None:

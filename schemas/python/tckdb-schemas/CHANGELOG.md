@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.123.0 - 2026-10-13
+
+One new refusal code, `superseded_record_not_approvable` (409): `PATCH /record-reviews/{type}/{id}` refuses moving a record that has
+been replaced by a supersession edge back to `approved`. A curator route, so no producer route and no upload payload changes; this
+release only adds the code to the shipped refusal-code reference.
+
 ## 0.122.0 - 2026-10-12
 
 One new refusal code, `unknown_query_parameter` (422): `GET /scientific/statmech/search` now refuses a query key that is not a

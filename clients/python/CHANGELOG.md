@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.149.0 - 2026-10-13
+
+`RejectionCode` gains `superseded_record_not_approvable` (`tckdb-schemas` 0.123.0): a curator re-approving a record that a correction
+has replaced is refused with 409. No method changed.
+
 ## 0.147.0 - 2026-10-12
 
 `search_statmech` (and `iter_statmech`) take `transition_state_entry_ref` and `declared_conformer_group_ref`. The server now

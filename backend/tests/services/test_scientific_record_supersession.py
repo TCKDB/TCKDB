@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.api.errors import DomainError
@@ -148,12 +149,13 @@ def test_cycle_is_rejected_before_deprecating_old_record(db_session) -> None:
         actor=actor,
         reason="second edge",
     )
-    set_record_review_status(
-        db_session,
-        record_type=SubmissionRecordType.network,
-        record_id=first.id,
-        status=RecordReviewStatus.approved,
-        actor=actor,
+    # `first` is superseded, so set_record_review_status now refuses to approve
+    # it again (superseded_record_not_approvable). The setup this test needs is
+    # the legacy row that was re-approved before that guard existed, so write
+    # that state directly.
+    db_session.execute(
+        text("UPDATE record_review SET status = 'approved' WHERE record_type = 'network' AND record_id = :id"),
+        {"id": first.id},
     )
 
     with pytest.raises(DomainError, match="cycle"):
