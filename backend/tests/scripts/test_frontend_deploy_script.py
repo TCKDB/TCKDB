@@ -89,6 +89,14 @@ esac
     )
     (bindir / "curl").write_text(
         """#!/usr/bin/env bash
+if [[ -n "${FRONTEND_DEPLOY_CURL_FAILS:-}" ]]; then
+  n=$(cat "$FRONTEND_DEPLOY_CURL_COUNT" 2>/dev/null || echo 0)
+  echo $((n + 1)) > "$FRONTEND_DEPLOY_CURL_COUNT"
+  if (( n < FRONTEND_DEPLOY_CURL_FAILS )); then
+    echo "curl: (56) Recv failure: Connection reset by peer" >&2
+    exit 56
+  fi
+fi
 case "$*" in
   *api/v1/status*)
     if [[ "${FRONTEND_DEPLOY_MODE:-}" == *health_fail* ]]; then
@@ -271,3 +279,29 @@ def test_concurrent_lock_refuses_before_pull_or_mutation(fake_commands: Path, tm
     assert result.returncode == 1
     assert "another frontend deployment holds" in result.stderr
     assert not fake_commands.exists()
+
+
+def test_slow_start_is_retried_quietly_then_succeeds(
+    fake_commands: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    monkeypatch.setenv("FRONTEND_DEPLOY_CURL_FAILS", "5")
+    monkeypatch.setenv("FRONTEND_DEPLOY_CURL_COUNT", str(tmp_path / "curl-count"))
+    result = _run()
+    assert result.returncode == 0
+    assert "Connection reset" not in result.stderr
+    assert "frontend healthy" in result.stdout
+    assert "deployed" in result.stdout
+
+
+def test_never_healthy_reports_reason_after_full_window_and_rolls_back(
+    fake_commands: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    monkeypatch.setenv("FRONTEND_DEPLOY_CURL_FAILS", "1000")
+    monkeypatch.setenv("FRONTEND_DEPLOY_CURL_COUNT", str(tmp_path / "curl-count"))
+    result = _run()
+    assert result.returncode == 1
+    assert "not healthy after 30 attempts" in result.stderr
+    assert "Connection reset" not in result.stderr
+    assert "deployed" not in result.stdout
+    assert int((tmp_path / "curl-count").read_text()) == 30
+    assert "restored: laxzal/tckdb-frontend:sha-old" in result.stderr
