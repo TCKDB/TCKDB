@@ -624,3 +624,24 @@ def refs_for_ids(
         )
     ).all()
     return {row.id: row.public_ref for row in rows}
+
+
+def review_hidden_under_profile(
+    session: Session,
+    *,
+    record_type: SubmissionRecordType,
+    record_ids: Iterable[int],
+) -> tuple[dict[int, RecordReviewBadge], set[int]]:
+    """Review badges for ``record_ids`` and which of them the active read profile hides.
+
+    Mirrors the floor the detail-by-ref gate applies (``handles.py``), so a read never names a
+    record that its own detail route answers 404 for. Without a review floor (exploratory, or
+    outside a scientific request) nothing is hidden and no query is made, so that output is
+    unchanged. Returns ``(badges, hidden_ids)``; ``badges`` is empty when no query was made.
+    """
+    ids = set(record_ids)
+    if not ids or current_read_profile().review_floor is None:
+        return {}, set()
+    visible = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
+    badges = fetch_review_badges(session, record_type=record_type, record_ids=ids)
+    return badges, {rid for rid, b in badges.items() if b.status not in visible}

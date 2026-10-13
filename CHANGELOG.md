@@ -22,6 +22,27 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curated reads no longer name more records the curated profile hides (2026-10-12)
+
+**Narrowing under `profile=curated` only; completes the list left open by the previous entry.** Migration: none. New environment
+variable: none. No package version changes; no schema change (OpenAPI golden unchanged).
+
+- `GET /scientific/transition-state-entries/{ref}?include=statmech`: `statmech[].source_calculations` omits calculations below `approved`.
+- `GET /scientific/species-entries/{ref}/thermo`: the provenance's statmech fallback (`freq_calculation_ref` / `sp_calculation_ref`, the
+  primary calculation and the conformer traced through it) no longer names a hidden source calculation, whether it is the thermo's own
+  source or comes from the linked statmech. Applies to the species thermo list and to thermo search (which reuses the same builder).
+  The same read also leaves out the thermodynamic target's `conformer_group_ref`, `provenance.statmech_ref` and the traced
+  `conformer_observation_ref` / `conformer_group_ref` when the record they name is below `approved`.
+- Statmech `include=conformers` omits conformer groups below `approved`.
+- Exploratory (the default) output is unchanged. Record-level facts (levels, evidence, availability flags such as `has_conformers`) are
+  unchanged, as before.
+- Provenance slots are picked from every link first and a hidden pick is then left unnamed: a hidden primary / freq / sp is never
+  replaced by another calculation, and `provenance.level_of_theory` stays the true primary's, so no record-level fact varies by profile.
+- The TS-entry and TS-concept `include=statmech` also omit statmech records below `approved`, in one batch per read.
+- **Not yet covered.** Curated reads are not yet complete: other surfaces may still name records the curated profile hides (a follow-up
+  lists them), and supersession notices can name a successor that has since become hidden (needs an owner decision). Do not assume a
+  curated read hides every unapproved ref.
+
 ## Curated statmech reads no longer name calculations the curated profile hides (2026-10-12)
 
 **Narrowing under `profile=curated` only.** Migration: none. New environment variable: none. No package version changes; no
@@ -32,9 +53,6 @@ schema change (OpenAPI golden unchanged).
   their roles, types and review status. Applies to statmech detail, statmech search and the species-entry statmech read.
 - Under curated, a torsion's `source_scan_calculation_ref` (and `_id` under `internal_ids`) is null when that scan calculation is hidden.
 - Exploratory (the default) output is unchanged.
-- **Not yet covered, to follow:** the transition-state-entry read's `include=statmech` (`statmech[].source_calculations`), the thermo
-  provenance's statmech fallback (`freq_calculation_ref` / `sp_calculation_ref`), and statmech `include=conformers` (`conformer_group_ref`)
-  still name records the curated profile hides.
 - Deliberately not filtered: record-level facts (`levels`, `evidence_summary` counts, `available_sections` flags, trust), which
   describe the approved record's own provenance. Release, archive and export copy raw provenance tables and are unchanged.
 
