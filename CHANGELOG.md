@@ -43,6 +43,26 @@ variable: none. No package version changes; no schema change (OpenAPI golden unc
   lists them), and supersession notices can name a successor that has since become hidden (needs an owner decision). Do not assume a
   curated read hides every unapproved ref.
 
+## A superseded record can no longer be approved again (2026-10-13)
+
+**Narrowing: a review transition previously accepted is now refused.** Migration: none. New environment variable: none.
+`tckdb-schemas` 0.123.0, `tckdb-client` 0.149.0.
+
+- `POST /submissions/{id}/approve` is not refused: a submission member that a correction has already replaced is left deprecated
+  (not re-approved) and the other members are approved. The skipped members are listed by public ref
+  (`record_type`, `record_ref`, `superseded_by_ref`) under `skipped_superseded_records` in the `curator_approved` audit event's
+  `details_json`. Refusing the whole submission would have left it pending forever, since the edge cannot be undone.
+- `PATCH /record-reviews/{type}/{id}` answers 409
+  `superseded_record_not_approvable` when the target is `approved` and the record has an outgoing supersession edge, that is,
+  it has been replaced by a correction. Supersession is the correction path: the predecessor stays deprecated and its successor
+  stands. Re-approving the predecessor made it curated-visible again with a notice naming a successor that might be hidden.
+  `context` is `{record_type, record_ref, superseded_by_ref}`, public refs only (the two refs are omitted for a type that has none).
+- Only the `approved` target is refused. `under_review`, `rejected` and `deprecated` on a superseded record behave as before, so a
+  curator can still reopen or reject it; the record just cannot return to `approved`. An `approved -> approved` re-stamp of a legacy
+  approved-and-superseded row is refused too. Approving the superseding record is unaffected, and the supersession call itself
+  (which writes `deprecated`) is unchanged.
+- Existing data is not touched. A superseded record left approved before this guard stays as it is until a curator deprecates it.
+
 ## Curated statmech reads no longer name calculations the curated profile hides (2026-10-12)
 
 **Narrowing under `profile=curated` only.** Migration: none. New environment variable: none. No package version changes; no

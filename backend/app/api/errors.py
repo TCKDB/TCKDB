@@ -39,6 +39,19 @@ class DomainError(Exception):
     """Business logic violation (valid payload, invalid operation)."""
 
 
+class RecordReviewConflict(DomainError):
+    """A review transition refused because of the record's relationships (409).
+
+    A :class:`DomainError` subclass so a caller that does not know about it
+    still refuses (400); the handler registered below, resolved by MRO, turns it
+    into 409. ``context`` carries public refs only, never row ids.
+    """
+
+    def __init__(self, message: str, *, context: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.context = dict(context or {})
+
+
 class NotFoundError(Exception):
     """Explicit 404 raised by service code.
 
@@ -190,6 +203,17 @@ def _domain_error_handler(_request: Request, exc: DomainError) -> JSONResponse:
     return JSONResponse(
         status_code=400,
         content=error_envelope(str(exc), fallback_code="domain_error"),
+    )
+
+
+def _record_review_conflict_handler(
+    _request: Request, exc: RecordReviewConflict
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content=error_envelope(
+            str(exc), context=exc.context, fallback_code="domain_error"
+        ),
     )
 
 
@@ -812,6 +836,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _request_validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ValueError, _value_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DomainError, _domain_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RecordReviewConflict, _record_review_conflict_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NotFoundError, _not_found_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DataIntegrityError, _data_integrity_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NoResultFound, _no_result_found_handler)  # type: ignore[arg-type]

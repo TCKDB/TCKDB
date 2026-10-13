@@ -2562,6 +2562,21 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "submission, deliberately: the caller named both refs and "
                 "already knows which one they did not create."
             )),
+    ApiCode("superseded_record_not_approvable", 409, Surface.message_prefix,
+            "backend/app/services/record_review.py",
+            shape=Shape.relationship,
+            note=(
+                "Re-approving a record that has an outgoing supersession edge. "
+                "Supersession is the correction path, so the predecessor stays "
+                "deprecated; approve its successor instead. Only the approved "
+                "target is refused: under_review, rejected and deprecated stay "
+                "open. context carries record_type and the public refs "
+                "(record_ref, superseded_by_ref where the type has one). Seen "
+                "on PATCH /record-reviews only: POST /submissions/{id}/approve "
+                "never returns it, because it leaves a replaced member "
+                "deprecated and lists it in the curator_approved audit "
+                "event's details_json (skipped_superseded_records)."
+            )),
     ApiCode("supersedes_same_record", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             shape=Shape.relationship),

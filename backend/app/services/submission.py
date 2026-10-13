@@ -55,6 +55,7 @@ from app.services.public_refs import PREFIXES
 from app.services.record_review import (
     RecordRef,
     bulk_set_record_review_status,
+    split_superseded_targets,
 )
 from app.services.scientific_read.handles import (
     handle_type_mismatch_error,
@@ -576,6 +577,10 @@ def approve_submission(
     record it was meant to replace); approval of the replacement is
     when retirement takes effect.
 
+    A linked record that a correction has already replaced (it has an outgoing
+    supersession edge) is left as it is rather than re-approved, and is listed
+    by public ref in the ``curator_approved`` event's ``details_json``.
+
     :raises DomainError: If the actor lacks curator/admin role, if the
         actor is also the uploader (self-approval is disallowed), or if
         the submission is not in an approvable state.
@@ -598,9 +603,15 @@ def approve_submission(
     submission.approved_at = _now_naive_utc()
     session.flush()
 
+    # A member that a correction has already replaced stays deprecated: the
+    # single-record path refuses to approve it again, and refusing the whole
+    # submission would leave it pending forever (the edge cannot be undone).
+    approvable, skipped = split_superseded_targets(
+        session, _record_links_as_targets(submission)
+    )
     bulk_set_record_review_status(
         session,
-        targets=_record_links_as_targets(submission),
+        targets=approvable,
         status=RecordReviewStatus.approved,
         actor=actor,
         submission_id=submission.id,
@@ -629,6 +640,9 @@ def approve_submission(
         from_status=from_status,
         to_status=SubmissionStatus.approved,
         summary=summary,
+        details_json=(
+            {"skipped_superseded_records": skipped} if skipped else None
+        ),
     )
     return submission
 
