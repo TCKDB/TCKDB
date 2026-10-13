@@ -328,20 +328,24 @@ def release_record_universe(
         tuple[SubmissionRecordType, int], tuple[SubmissionRecordType, int]
     ] = {}
     for record_type in sorted({rt for rt, _ in ledger_pairs}, key=lambda t: t.value):
-        _model, _fk, subject_type = CANDIDATE_SOURCES[record_type]
-        subject_ids = sorted(
-            sid for stype, sid in subject_pairs if stype == subject_type
-        )
-        grouped = candidate_ids_for_subjects(
-            session, record_type=record_type, subject_ids=subject_ids
-        )
-        for subject_id, ids in grouped.items():
-            for record_id in ids:
-                candidates_by_subject[(record_type, record_id)] = (
-                    subject_type,
-                    subject_id,
-                )
-            candidate_pairs |= {(record_type, rid) for rid in ids}
+        for owner in CANDIDATE_SOURCES[record_type]:
+            subject_type = owner.subject_type
+            subject_ids = sorted(
+                sid for stype, sid in subject_pairs if stype == subject_type
+            )
+            grouped = candidate_ids_for_subjects(
+                session,
+                record_type=record_type,
+                subject_type=subject_type,
+                subject_ids=subject_ids,
+            )
+            for subject_id, ids in grouped.items():
+                for record_id in ids:
+                    candidates_by_subject[(record_type, record_id)] = (
+                        subject_type,
+                        subject_id,
+                    )
+                candidate_pairs |= {(record_type, rid) for rid in ids}
 
     # Every record any selection ever named must appear, even if its subject
     # linkage is unusual — never let the "recommended" file or the ledger

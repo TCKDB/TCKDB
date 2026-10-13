@@ -243,3 +243,48 @@ def test_no_eligible_candidate_is_refused_explicitly(db_session, frozen, curator
     publish_release(db_session, draft)
     with pytest.raises(ReleaseStateError, match="release_selects_nothing"):
         freeze_manifest(db_session, draft, created_by=curator.id)
+
+
+def test_a_ts_owned_statmech_release_freezes_archives_and_replays(db_session, draft_release, curator, attested_submission):
+    """TS ownership survives publish, freeze, archive and restore, and the digest reproduces.
+
+    The release's only selection is a transition-state-owned statmech; its
+    sibling ships as a candidate. After the archive round trip the re-render
+    must match the frozen bytes, so the TS subject is reconstructed from rows
+    the archive carries, not from anything held in memory.
+    """
+    from tests.services.release._ts_statmech import approve_and_license, make_ts_entry, make_ts_statmech
+
+    ts_entry = make_ts_entry(db_session)
+    chosen = make_ts_statmech(db_session, ts_entry, external_symmetry=1)
+    sibling = make_ts_statmech(db_session, ts_entry, external_symmetry=2)
+    approve_and_license(db_session, curator, attested_submission, [chosen, sibling])
+    add_selection(
+        db_session,
+        release=draft_release,
+        record_type=SubmissionRecordType.statmech,
+        record_id=chosen.id,
+        subject_type=SubmissionRecordType.transition_state_entry,
+        subject_id=ts_entry.id,
+        rationale="RRHO treatment at the reported level.",
+        selected_by=curator.id,
+    )
+    publish_release(db_session, draft_release)
+    manifest = freeze_manifest(db_session, draft_release, created_by=curator.id)
+    digests = {artifact.path: artifact.sha256 for artifact in manifest.artifacts}
+    candidates = next(a for a in manifest.artifacts if a.path == "candidate_records.ndjson").content.decode()
+    assert candidates.count('"subject_type":"transition_state_entry"') == 2
+    assert sibling.public_ref in candidates
+    assert verify_release(db_session, draft_release).problems == []
+
+    archive = io.BytesIO()
+    write_archive(db_session, archive)
+    frozen_ts = {
+        "archive": archive.getvalue(),
+        "digests": digests,
+        "release_ref": draft_release.public_ref,
+    }
+    release = _restore(db_session, frozen_ts)
+    assert verify_release(db_session, release).problems == []
+    assert _rendered_digests(db_session, release) == digests
+    assert not live_divergence(db_session, release).diverged
