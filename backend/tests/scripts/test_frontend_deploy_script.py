@@ -89,6 +89,7 @@ esac
     )
     (bindir / "curl").write_text(
         """#!/usr/bin/env bash
+[[ -n "${FRONTEND_DEPLOY_CURL_ARGS:-}" ]] && echo "$*" >> "$FRONTEND_DEPLOY_CURL_ARGS"
 if [[ -n "${FRONTEND_DEPLOY_CURL_FAILS:-}" ]]; then
   n=$(cat "$FRONTEND_DEPLOY_CURL_COUNT" 2>/dev/null || echo 0)
   echo $((n + 1)) > "$FRONTEND_DEPLOY_CURL_COUNT"
@@ -305,3 +306,28 @@ def test_never_healthy_reports_reason_after_full_window_and_rolls_back(
     assert "deployed" not in result.stdout
     assert int((tmp_path / "curl-count").read_text()) == 30
     assert "restored: laxzal/tckdb-frontend:sha-old" in result.stderr
+
+
+@pytest.mark.parametrize("value", ["0", "abc", "-1", "2.5", "1e1", "1000", "3 4"])
+def test_invalid_health_attempts_refuses_before_any_mutation(fake_commands: Path, value: str):
+    result = _run(extra_env={"TCKDB_FRONTEND_HEALTH_ATTEMPTS": value})
+    assert result.returncode == 1
+    assert "TCKDB_FRONTEND_HEALTH_ATTEMPTS must be an integer 1-999" in result.stderr
+    commands = fake_commands.read_text(encoding="utf-8") if fake_commands.exists() else ""
+    assert "stop tckdb-frontend" not in commands
+    assert "pull" not in commands
+
+
+def test_every_probe_is_time_bounded_and_failure_names_curl_exit(
+    fake_commands: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    args = tmp_path / "curl-args"
+    monkeypatch.setenv("FRONTEND_DEPLOY_CURL_FAILS", "1000")
+    monkeypatch.setenv("FRONTEND_DEPLOY_CURL_COUNT", str(tmp_path / "curl-count"))
+    monkeypatch.setenv("FRONTEND_DEPLOY_CURL_ARGS", str(args))
+    result = _run()
+    assert result.returncode == 1
+    assert "curl exit 56" in result.stderr
+    lines = args.read_text().splitlines()
+    assert lines
+    assert all("--connect-timeout 2" in line and "--max-time 5" in line for line in lines)

@@ -32,6 +32,10 @@ DEPLOY_PHASE="preflight"
 
 die() { echo "error: $*" >&2; exit 1; }
 
+# Validate before anything mutates: a typo here must not cost a live outage.
+[[ "$HEALTH_ATTEMPTS" =~ ^[1-9][0-9]{0,2}$ ]] \
+    || die "TCKDB_FRONTEND_HEALTH_ATTEMPTS must be an integer 1-999"
+
 running_image() {
     docker inspect "$CONTAINER" --format '{{.Config.Image}}' 2>/dev/null || echo "(not running as a container)"
 }
@@ -106,16 +110,27 @@ rollback_after_interruption() {
 # which is not an error worth printing. The reason for the latest failure is
 # kept in LAST_FAILURE and reported only if the whole wait window is exhausted.
 verify_frontend() {
-    local body
-    LAST_FAILURE="GET / did not return the SPA shell"
-    body="$(curl -fs "http://127.0.0.1:${PORT}/" 2>/dev/null)" || return 1
-    grep -q '<div id="root">' <<<"$body" || return 1
-    LAST_FAILURE="GET /species/CH3 did not return the SPA shell"
-    body="$(curl -fs "http://127.0.0.1:${PORT}/species/CH3" 2>/dev/null)" || return 1
-    grep -q '<div id="root">' <<<"$body" || return 1
-    LAST_FAILURE="GET /api/v1/status was not status=ok with nothing degraded"
-    body="$(curl -fs "http://127.0.0.1:${PORT}/api/v1/status" 2>/dev/null)" || return 1
-    jq -e '.status == "ok" and (.degraded | type == "array") and .degraded == []' <<<"$body" >/dev/null
+    local body rc path
+    for path in / /species/CH3 /api/v1/status; do
+        # Bounded: a container that accepts the connection but never answers
+        # must not hang the loop, or the ~30 s window is not a real bound.
+        rc=0
+        body="$(curl -fs --connect-timeout 2 --max-time 5 "http://127.0.0.1:${PORT}${path}" 2>/dev/null)" || rc=$?
+        if (( rc != 0 )); then
+            LAST_FAILURE="GET ${path} failed (curl exit ${rc})"
+            return 1
+        fi
+        case "$path" in
+            /api/v1/status)
+                jq -e '.status == "ok" and (.degraded | type == "array") and .degraded == []' <<<"$body" >/dev/null \
+                    || { LAST_FAILURE="GET ${path} answered but was not status=ok with nothing degraded"; return 1; }
+                ;;
+            *)
+                grep -q '<div id="root">' <<<"$body" \
+                    || { LAST_FAILURE="GET ${path} answered but did not return the SPA shell"; return 1; }
+                ;;
+        esac
+    done
 }
 
 if [[ "${1:-}" == "--check" ]]; then
