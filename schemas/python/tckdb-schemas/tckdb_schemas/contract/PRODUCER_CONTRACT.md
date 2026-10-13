@@ -225,7 +225,8 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 ### 0.123.0 - 2026-10-13
 
 One new refusal code, `superseded_record_not_approvable` (409): `PATCH /record-reviews/{type}/{id}` refuses moving a record that has
-been replaced by a supersession edge back to `approved`. A curator route, so no producer route and no upload payload changes; this
+been replaced by a supersession edge back to `approved`. `POST /submissions/{id}/approve` does not return it: it leaves a replaced
+member deprecated and lists it in the audit event. A curator route, so no producer route and no upload payload changes; this
 release only adds the code to the shipped refusal-code reference.
 
 ### 0.122.0 - 2026-10-12

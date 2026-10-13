@@ -167,7 +167,12 @@ def test_cycle_is_rejected_before_deprecating_old_record(db_session) -> None:
             actor=actor,
             reason="would close a cycle",
         )
-    assert third.name == "cycle-third"
+    db_session.expire_all()
+    third_status = db_session.scalar(
+        text("SELECT status FROM record_review WHERE record_type = 'network' AND record_id = :id"),
+        {"id": third.id},
+    )
+    assert third_status == RecordReviewStatus.approved.value
 
 
 def test_direct_edge_insert_requires_old_to_be_deprecated(db_session) -> None:

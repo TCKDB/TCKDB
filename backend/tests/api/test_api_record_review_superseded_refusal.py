@@ -7,11 +7,22 @@ the exception is a ``DomainError`` subclass.
 
 from __future__ import annotations
 
+from sqlalchemy import select
+
 from app.db.models.app_user import AppUser
-from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import (
+    AppUserRole,
+    RecordReviewStatus,
+    SubmissionAuditEventKind,
+    SubmissionKind,
+    SubmissionRecordType,
+)
 from app.db.models.network import Network
+from app.db.models.record_review import RecordReview
+from app.db.models.submission import SubmissionAuditEvent
 from app.services.record_review import ensure_record_review, set_record_review_status
 from app.services.scientific_record_supersession import supersede_scientific_record
+from app.services.submission import create_submission, link_record
 
 
 def _approved_network(session, name: str, actor: AppUser) -> Network:
@@ -82,3 +93,55 @@ def test_patch_other_transitions_and_the_successor_are_unaffected(
     ok = client.patch(f"/api/v1/record-reviews/network/{new.id}", json={"status": "approved"})
     assert ok.status_code == 200, ok.text
     assert ok.json()["status"] == "approved"
+
+
+def test_submission_approval_skips_a_superseded_member_and_stays_approvable(
+    client, db_session, login_as, _api_curator_user, _api_test_user
+) -> None:
+    """The review queue approves records one at a time, so a submission can hold a
+    member that a correction has already replaced. Approving the submission must
+    still succeed: the replaced member stays deprecated, the rest are approved,
+    and the skipped member is listed by public ref in the audit event."""
+    actor = login_as(_api_curator_user)
+    old, new = _superseded_pair(db_session, actor)
+    fresh = Network(name="api-fresh")
+    db_session.add(fresh)
+    db_session.flush()
+    ensure_record_review(db_session, record_type=SubmissionRecordType.network, record_id=fresh.id)
+
+    sub = create_submission(
+        db_session, created_by=_api_test_user, submission_kind=SubmissionKind.thermo, title="mixed"
+    )
+    db_session.flush()
+    for row in (old, new, fresh):
+        link_record(db_session, submission=sub, record_type=SubmissionRecordType.network, record_id=row.id)
+    db_session.flush()
+
+    resp = client.post(f"/api/v1/submissions/{sub.id}/approve")
+
+    assert resp.status_code == 200, resp.text
+    db_session.expire_all()
+    status = {
+        r.record_id: r.status
+        for r in db_session.scalars(
+            select(RecordReview).where(
+                RecordReview.record_type == SubmissionRecordType.network,
+                RecordReview.record_id.in_([old.id, new.id, fresh.id]),
+            )
+        )
+    }
+    assert status[old.id] is RecordReviewStatus.deprecated
+    assert status[new.id] is RecordReviewStatus.approved
+    assert status[fresh.id] is RecordReviewStatus.approved
+
+    event = db_session.scalar(
+        select(SubmissionAuditEvent).where(
+            SubmissionAuditEvent.submission_id == sub.id,
+            SubmissionAuditEvent.event_kind == SubmissionAuditEventKind.curator_approved,
+        )
+    )
+    assert event.details_json == {
+        "skipped_superseded_records": [
+            {"record_type": "network", "record_ref": old.public_ref, "superseded_by_ref": new.public_ref}
+        ]
+    }

@@ -48,7 +48,11 @@ variable: none. No package version changes; no schema change (OpenAPI golden unc
 **Narrowing: a review transition previously accepted is now refused.** Migration: none. New environment variable: none.
 `tckdb-schemas` 0.123.0, `tckdb-client` 0.149.0.
 
-- `PATCH /record-reviews/{type}/{id}` (and submission approval, which approves linked records in one batch) answers 409
+- `POST /submissions/{id}/approve` is not refused: a submission member that a correction has already replaced is left deprecated
+  (not re-approved) and the other members are approved. The skipped members are listed by public ref
+  (`record_type`, `record_ref`, `superseded_by_ref`) under `skipped_superseded_records` in the `curator_approved` audit event's
+  `details_json`. Refusing the whole submission would have left it pending forever, since the edge cannot be undone.
+- `PATCH /record-reviews/{type}/{id}` answers 409
   `superseded_record_not_approvable` when the target is `approved` and the record has an outgoing supersession edge, that is,
   it has been replaced by a correction. Supersession is the correction path: the predecessor stays deprecated and its successor
   stands. Re-approving the predecessor made it curated-visible again with a notice naming a successor that might be hidden.

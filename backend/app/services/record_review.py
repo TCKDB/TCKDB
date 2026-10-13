@@ -416,6 +416,54 @@ def ensure_record_review(
     return review
 
 
+def split_superseded_targets(
+    session: Session, targets: Iterable[RecordRef]
+) -> tuple[list[RecordRef], list[dict[str, str]]]:
+    """Split ``targets`` into ``(approvable, skipped)`` for a bulk approval.
+
+    ``skipped`` are the targets with an outgoing supersession edge, each as
+    ``{record_type, record_ref, superseded_by_ref}`` (public refs only; a ref is
+    omitted for a type that has none). Submission approval leaves them as they
+    are (deprecated) rather than re-approving them, which the single-record
+    path refuses. Order is preserved.
+    """
+    targets = list(targets)
+    successors: dict[tuple[SubmissionRecordType, int], int] = {}
+    for record_type in {t.record_type for t in targets}:
+        ids = [t.record_id for t in targets if t.record_type is record_type]
+        for old_id, new_id in session.execute(
+            select(
+                ScientificRecordSupersession.superseded_record_id,
+                ScientificRecordSupersession.superseding_record_id,
+            ).where(
+                ScientificRecordSupersession.record_type == record_type,
+                ScientificRecordSupersession.superseded_record_id.in_(ids),
+            )
+        ):
+            successors[(record_type, old_id)] = new_id
+    approvable: list[RecordRef] = []
+    skipped: list[dict[str, str]] = []
+    if not successors:
+        return targets, skipped
+    refs = resolve_record_public_refs(
+        session,
+        [(rt, rid) for (rt, rid) in successors] + [(rt, nid) for (rt, _), nid in successors.items()],
+    )
+    for target in targets:
+        key = (target.record_type, target.record_id)
+        if key not in successors:
+            approvable.append(target)
+            continue
+        entry = {"record_type": target.record_type.value}
+        if key in refs:
+            entry["record_ref"] = refs[key]
+        successor = (target.record_type, successors[key])
+        if successor in refs:
+            entry["superseded_by_ref"] = refs[successor]
+        skipped.append(entry)
+    return approvable, skipped
+
+
 def _refuse_superseded_approval(
     session: Session, record_type: SubmissionRecordType, record_id: int
 ) -> None:

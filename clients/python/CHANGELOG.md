@@ -3,7 +3,8 @@
 ## 0.149.0 - 2026-10-13
 
 `RejectionCode` gains `superseded_record_not_approvable` (`tckdb-schemas` 0.123.0): a curator re-approving a record that a correction
-has replaced is refused with 409. No method changed.
+has replaced is refused with 409 on `PATCH /record-reviews/{type}/{id}`. Submission approval does not return it (it leaves a replaced
+member deprecated). No method changed.
 
 ## 0.147.0 - 2026-10-12
 

@@ -181,6 +181,24 @@ def test_only_the_approved_target_is_refused(db_session) -> None:
         _set(db_session, old.id, RecordReviewStatus.approved, actor)
 
 
+def test_a_disallowed_transition_keeps_its_own_message_and_is_not_the_conflict(db_session) -> None:
+    """The guard runs after ``_check_transition_allowed`` (design section 8).
+
+    ``rejected -> approved`` is disallowed by the transition table. On a
+    superseded record it must still answer with that 400-class message, not
+    with the 409 conflict.
+    """
+    actor = _curator(db_session)
+    old, new = _approved_pair(db_session, actor)
+    _supersede(db_session, old, new, actor)
+    _set(db_session, old.id, RecordReviewStatus.under_review, actor)
+    _set(db_session, old.id, RecordReviewStatus.rejected, actor)
+
+    with pytest.raises(DomainError, match="Disallowed record-review transition") as caught:
+        _set(db_session, old.id, RecordReviewStatus.approved, actor)
+    assert not isinstance(caught.value, RecordReviewConflict)
+
+
 def test_the_guard_is_scoped_to_record_type(db_session) -> None:
     """An edge on a network does not block a thermo record that has the same id.
 
