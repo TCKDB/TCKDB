@@ -241,6 +241,50 @@ def _resolve_review_target(
     return _REVIEWABLE_HANDLE_TYPES[parent_cls], parent_id
 
 
+def status_hidden_under_profile(status: RecordReviewStatus, *, profile: Any = None) -> bool:
+    """Whether a record at ``status`` is hidden by the read profile's review floor.
+
+    The one definition of "hidden under the profile". Every site that decides visibility of a gated
+    record, including the curated-ref guard, calls this instead of restating the comparison. With no
+    floor (exploratory, or outside a scientific request) nothing is hidden.
+
+    ``profile`` defaults to the request's profile; callers outside the request context (streams,
+    which captured their profile eagerly) pass it explicitly.
+    """
+    from app.services.scientific_read.profile import current_read_profile
+
+    resolved = profile if profile is not None else current_read_profile()
+    floor = resolved.review_floor
+    if floor is None:
+        return False
+    return REVIEW_RANK[status] > REVIEW_RANK[floor]
+
+
+def _hidden_by_floor(session: Session, model_cls: type, row_id: int) -> RecordReviewStatus | None:
+    """The review status that hides this record under the active profile, or ``None`` if it is not hidden.
+
+    Factored out of :func:`_enforce_curated_floor` without a change in behaviour: no floor, an ungated
+    type, or a status at or above the floor all answer ``None`` (and the first two issue no review query).
+    """
+    from app.services.scientific_read.profile import current_read_profile
+
+    if current_read_profile().review_floor is None:
+        return None
+    target = _resolve_review_target(session, model_cls, row_id)
+    if target is None:
+        return None
+    record_type, record_id = target
+
+    review = session.scalars(
+        select(RecordReview).where(
+            RecordReview.record_type == record_type,
+            RecordReview.record_id == record_id,
+        )
+    ).first()
+    status = review.status if review is not None else RecordReviewStatus.not_reviewed
+    return status if status_hidden_under_profile(status) else None
+
+
 def _enforce_curated_floor(
     session: Session, model_cls: type, row_id: int, kind_label: str, ref: str | None = None
 ) -> None:
@@ -268,24 +312,8 @@ def _enforce_curated_floor(
 
     :raises NotFoundError: the record is below the curated review floor.
     """
-    from app.services.scientific_read.profile import current_read_profile
-
-    floor = current_read_profile().review_floor
-    if floor is None:
-        return
-    target = _resolve_review_target(session, model_cls, row_id)
-    if target is None:
-        return
-    record_type, record_id = target
-
-    review = session.scalars(
-        select(RecordReview).where(
-            RecordReview.record_type == record_type,
-            RecordReview.record_id == record_id,
-        )
-    ).first()
-    status = review.status if review is not None else RecordReviewStatus.not_reviewed
-    if REVIEW_RANK[status] <= REVIEW_RANK[floor]:
+    status = _hidden_by_floor(session, model_cls, row_id)
+    if status is None:
         return
 
     logger.info(
@@ -796,4 +824,5 @@ __all__ = [
     "resolve_transition_state_entry_handle",
     "resolve_transition_state_handle",
     "resolve_transport_handle",
+    "status_hidden_under_profile",
 ]

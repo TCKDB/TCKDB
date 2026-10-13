@@ -22,6 +22,20 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A central guard for refs the curated profile hides, wired in but not yet enabled (2026-10-13)
+
+**No behaviour change on the wire.** Migration: none. New environment variable: none. No package version changes; OpenAPI golden
+unchanged.
+
+- New `app/services/scientific_read/ref_guard.py`: finds every ref of a review-gated record type in a finished scientific response,
+  resolves which the active profile hides in one statement, and removes them (delete a pointer block, null an optional ref, fail
+  closed with a 500 for a required ref it cannot place). It is called from `apply_internal_ids_visibility`, but no route family is
+  enabled yet, so it does nothing.
+- One shared predicate, `status_hidden_under_profile`, now answers "hidden under the profile" for the handle gate, the guard and
+  the statmech curvature-witness filter. Thermo, kinetics and molecular-property observations join the review-gated set.
+- A sweep test calls every `/scientific/*` route under `curated` against a world with a hidden instance of every gated type. Its
+  baseline file lists today's known leaks; the per-family follow-ups remove them.
+
 ## Curated reads no longer name more records the curated profile hides (2026-10-12)
 
 **Narrowing under `profile=curated` only; completes the list left open by the previous entry.** Migration: none. New environment
