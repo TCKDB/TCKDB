@@ -1,4 +1,4 @@
-"""Species-owned statmech badges are frozen: PR 6.6 must not move a single one.
+"""Species-owned statmech badges are frozen: the owner-scoped TS rubric must not move a single one.
 
 The trust correction adds an owner-scoped rubric for transition-state-owned records. Every
 species-owned record keeps ``computed_statmech`` v2, its check map, its badge and its
@@ -7,9 +7,10 @@ completeness, byte for byte. This file pins that in two independent ways:
 * ``FROZEN`` holds literals captured from the evaluator as it stood on ``main`` before the change.
   They do not move with the code: a test that compared the live evaluator only with itself would
   stay green under any edit of the species rubric.
-* ``test_live_matches_the_species_rubric_run_directly`` compares the live router with the species
-  rubric driven explicitly, over the same scenarios, including the context hash a stored machine
-  review is keyed on.
+* ``test_live_matches_the_species_rubric_run_directly``, in ``test_trust_ts_statmech_owner_rubric.py``,
+  compares the live router with the species rubric driven explicitly, over these same scenarios,
+  including the context hash a stored machine review is keyed on. That one guards the routing; the
+  literals here are what guard the check code itself.
 
 The scenario list is asserted non-empty and every scenario is asserted to have run: a parametrised
 guard over an empty list passes having verified nothing.
@@ -109,7 +110,7 @@ def digest(evaluation: EvidenceEvaluation) -> str:
     return hashlib.sha256(json.dumps(snapshot(evaluation), sort_keys=True).encode()).hexdigest()
 
 
-#: ``(label, hard_fail, completeness, digest)`` per scenario, captured from ``main`` before PR 6.6.
+#: ``(label, hard_fail, completeness, digest)`` per scenario, captured from ``main`` before the owner-scoped rubric.
 FROZEN: dict[str, tuple[str, str | None, float, str]] = {
     "sparse": ("unsupported", None, 0.1111, "f01d345b26b08236f4ef27de5729458489ebaa0d981c24fcd453b29b1f55b4b2"),
     "full_metadata_no_sources": ("sparse", None, 0.4444, "29c2d83fe81982a06e1415387533d49482eaba0370c196e3bf4003538a3020e5"),

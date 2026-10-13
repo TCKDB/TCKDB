@@ -40,7 +40,7 @@ Current implemented deterministic trust rubrics:
 | `computed_kinetics_v1` | Reaction-entry kinetics reads |
 | `computed_thermo_v1` | Species-entry thermo reads |
 | `computed_statmech_v2` | Statmech detail, search and species-entry reads of a species-owned record |
-| `computed_ts_statmech_v1` | The same reads, for a transition-state-owned record (owner-scoped; PR 6.6) |
+| `computed_ts_statmech_v1` | The same reads, for a transition-state-owned record (owner-scoped) |
 | `computed_transport_v1` | Transport detail reads and species-entry transport reads |
 | `computed_transition_state_v1` | Standalone transition-state-entry detail reads |
 

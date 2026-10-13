@@ -69,7 +69,7 @@ _REVIEWER_RECIPES = {
     "transition_state_entry": {"computed_transition_state_v3": "3"},
 }
 
-#: Owner-scoped reviewer rubrics (PR 6.6): selected per record by the rubric that evaluated it, so
+#: Owner-scoped reviewer rubrics: selected per record by the rubric that evaluated it, so
 #: they are keyed by public rubric name, not by record type. Each is still exactly one key.
 _OWNER_SCOPED_REVIEWER_RECIPES = {
     "computed_ts_statmech_v1": {"computed_ts_statmech_v1": "1"},

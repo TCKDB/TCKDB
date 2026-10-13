@@ -1,4 +1,4 @@
-"""A transition-state-owned statmech is graded by its own owner-scoped rubric (PR 6.6).
+"""A transition-state-owned statmech is graded by its own owner-scoped rubric.
 
 Before this change every TS-owned statmech read ``hard_failed`` / ``species_entry_missing`` on
 ``include=assessments`` and ``include=trust``: the shared species rubric asks for a species entry

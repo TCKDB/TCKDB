@@ -86,11 +86,12 @@ shape changes (OpenAPI golden moves only in one route description), so the packa
   of each TS-owned statmech reads **stale** (`context_hash_mismatch`, `rubric_versions_mismatch`); species-owned reviews stay
   current. There is no automatic or bulk re-review.
 - **Operator report (new, read-only).** `backend/scripts/ops/statmech_trust_owner_report.py` prints, per owner kind, how many
-  statmech records change badge and how, whether any species-owned record moved (`species_entry_unchanged`, which must be `true`),
-  and which stored reviews become stale. It refuses to run without `--database-url` or `--use-configured-database` and runs in a
+  statmech records change badge and how, whether the species-owned records were routed to the other rubric (`species_entry_unchanged`, which checks routing only and
+  must be `true`), and which stored reviews become stale. Also read the species rows of `machine_review_currency`: every one must
+  be `current`, which is the check anchored to the code on `main`. It refuses to run without `--database-url` or `--use-configured-database` and runs in a
   `REPEATABLE READ`, `READ ONLY` transaction; there is no apply mode.
 - **Rollout.** Restore the latest backup into a scratch database, run the report there with this code, read
-  `species_entry_unchanged` and the `transition_state_entry` rows, then deploy. Leave TS-owned reviews stale. Details:
+  `species_entry_unchanged`, that all species review rows are `current`, and the `transition_state_entry` rows, then deploy. Leave TS-owned reviews stale. Details:
   `backend/docs/specs/automated_trust_layer.md` section 9.3.1.
 - The reproducibility rubric has the same species-only assumption for TS-owned statmech; that is a separate decision and is not
   changed here (issue #760).

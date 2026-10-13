@@ -1,4 +1,4 @@
-"""The owner-scoped statmech rubric ``computed_ts_statmech`` v1 (PR 6.6).
+"""The owner-scoped statmech rubric ``computed_ts_statmech`` v1.
 
 A transition-state-owned statmech record used to be graded by the species rubric, whose first
 check asks for a species entry, and so read ``hard_failed`` / ``species_entry_missing`` however
@@ -239,6 +239,30 @@ def test_an_automated_geometry_validation_fail_is_advisory_on_a_ts_record(db_ses
     assert evaluation.hard_fail_reason is None
     assert evaluation.label is not EvidenceBadge.hard_failed
     assert evaluation.checks["geometry_validation_not_failed_for_source_calculations"] is EvidenceOutcome.warning
+
+
+def test_a_later_version_of_the_ts_rubric_keeps_the_transition_state_owner_check(db_session):
+    """The owner check follows the rubric's name, not the v1 object.
+
+    A stand-in ``computed_ts_statmech`` v2 (same checks, higher version) must still be asked for a
+    transition-state entry, not a species entry. If the check were keyed on the v1 object, a future
+    v2 would silently bring back ``species_entry_missing`` on every TS-owned record.
+    """
+    stand_in = COMPUTED_TS_STATMECH_V1.model_copy(update={"version": 2})
+    assert stand_in is not COMPUTED_TS_STATMECH_V1
+    assert (stand_in.name, stand_in.version) == ("computed_ts_statmech", 2)
+
+    statmech = _make_ts_statmech(db_session)
+    evaluation = evaluate_loaded_statmech_under(statmech, stand_in)
+    assert (evaluation.rubric, evaluation.rubric_version) == ("computed_ts_statmech", 2)
+    assert evaluation.hard_fail_reason is None
+    assert evaluation.label is not EvidenceBadge.hard_failed
+
+    transient = Statmech(
+        transition_state_entry_id=123, scientific_origin=ScientificOriginKind.computed, transition_state_entry=None
+    )
+    missing = evaluate_loaded_statmech_under(transient, stand_in)
+    assert missing.hard_fail_reason is HardFailReason.transition_state_entry_missing
 
 
 def test_the_ts_record_forced_through_the_species_rubric_reads_as_it_did_before(db_session):

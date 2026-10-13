@@ -1,4 +1,4 @@
-"""The read-only report of what the owner-scoped statmech rubric does to a database (PR 6.6).
+"""The read-only report of what the owner-scoped statmech rubric does to a database.
 
 The report is what the owner runs on a restored backup before deploying. These tests pin that it
 says the right thing on a database with one record of each owner kind and one stored review each,
@@ -58,8 +58,8 @@ def test_the_report_names_each_transition_and_each_review_state(db_session):
             "count": 1,
         },
     ]
-    assert report["statmech_without_machine_review"] == {"species_entry": 0, "transition_state_entry": 0}
-    assert report["stored_review_rows_by_owner"] == {"species_entry": 1, "transition_state_entry": 1}
+    assert report["statmech_without_machine_review"] == {"species_entry": 0, "transition_state_entry": 0, "unowned": 0}
+    assert report["stored_review_rows_by_owner"] == {"species_entry": 1, "transition_state_entry": 1, "unowned": 0}
 
 
 def test_a_record_with_no_review_is_counted_as_unreviewed_not_as_stale(db_session):
@@ -67,8 +67,8 @@ def test_a_record_with_no_review_is_counted_as_unreviewed_not_as_stale(db_sessio
     _make_ts_statmech(db_session)
     report = statmech_trust_owner_report(db_session)
     assert report["machine_review_currency"] == []
-    assert report["statmech_without_machine_review"] == {"species_entry": 1, "transition_state_entry": 1}
-    assert report["stored_review_rows_by_owner"] == {"species_entry": 0, "transition_state_entry": 0}
+    assert report["statmech_without_machine_review"] == {"species_entry": 1, "transition_state_entry": 1, "unowned": 0}
+    assert report["stored_review_rows_by_owner"] == {"species_entry": 0, "transition_state_entry": 0, "unowned": 0}
 
 
 def test_the_report_flags_a_species_record_that_moved(db_session, monkeypatch):

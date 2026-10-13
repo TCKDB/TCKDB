@@ -47,7 +47,7 @@ _ACTIVE_RUBRICS = (
     COMPUTED_STATMECH_V2,
     COMPUTED_TRANSPORT_V2,
     COMPUTED_TRANSITION_STATE_V3,
-    # PR 6.6: the owner-scoped rubric for transition-state-owned statmech.
+    # The owner-scoped rubric for transition-state-owned statmech.
     COMPUTED_TS_STATMECH_V1,
     # Phase C-E4: not a computed-trust rubric (checks=()), but it is part of
     # the machine-review recipe -- see the comment on _ACTIVE_RUBRICS in

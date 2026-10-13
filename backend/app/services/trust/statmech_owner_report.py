@@ -1,4 +1,4 @@
-"""Read-only report: what the owner-scoped statmech rubric does to the stored corpus (PR 6.6).
+"""Read-only report: what the owner-scoped statmech rubric does to the stored corpus.
 
 Before the owner-scoped rubric every transition-state-owned statmech was graded by the species
 rubric and read ``hard_failed``. This report says, for the database it is pointed at, how many
@@ -9,6 +9,15 @@ stored machine reviews read as stale once the change is deployed.
 (``scripts/ops/statmech_trust_owner_report.py``) runs it inside a ``REPEATABLE READ`` /
 ``READ ONLY`` transaction, so the database refuses a write even if a later edit adds one. There is
 no ``--apply`` mode.
+
+**What ``species_entry_unchanged`` does and does not prove.** It compares two evaluations that both run this
+code: the live router against the species rubric driven explicitly. So it detects a species-owned record being
+*routed* to the other rubric. It cannot detect an edit to a check that both rubrics share (for example a runner
+that starts returning ``missing``): both sides would move together and the flag would still read ``true``. The
+checks that anchor species records to the code on ``main`` are (1) every ``species_entry`` row of
+``machine_review_currency`` reading ``current`` (a moved species badge changes the context hash its stored review
+was made under), and (2) the frozen-literal test ``tests/services/test_trust_statmech_species_frozen.py``, which
+holds the species check maps captured from ``main`` as literals.
 
 Counts only: no record id, public ref or free text leaves the report.
 
@@ -47,6 +56,11 @@ OWNER_SPECIES = "species_entry"
 OWNER_TRANSITION_STATE = "transition_state_entry"
 #: Impossible under ``statmech_exactly_one_subject``; kept so a violated CHECK is counted, not hidden.
 OWNER_NONE = "unowned"
+
+
+#: Every owner bucket a count is reported under. ``unowned`` is impossible under the CHECK and is always listed, so
+#: a violated CHECK shows up in each count instead of vanishing from it.
+_OWNERS = (OWNER_SPECIES, OWNER_TRANSITION_STATE, OWNER_NONE)
 
 
 def _owner(statmech: Statmech) -> str:
@@ -101,7 +115,7 @@ def _stored_review_rows_by_owner(session: Session) -> dict[str, int]:
             else OWNER_NONE
         )
         counts[owner] += int(n)
-    return {owner: counts.get(owner, 0) for owner in (OWNER_SPECIES, OWNER_TRANSITION_STATE)}
+    return {owner: counts.get(owner, 0) for owner in _OWNERS}
 
 
 def _review_currency(session: Session, owner_by_id: dict[int, str]) -> tuple[list[dict[str, Any]], dict[str, int]]:
@@ -143,7 +157,7 @@ def _review_currency(session: Session, owner_by_id: dict[int, str]) -> tuple[lis
         {"owner": owner, "state": state, "stale_reasons": list(reasons), "count": count}
         for (owner, state, reasons), count in sorted(currency.items())
     ]
-    return rows, {owner: unreviewed.get(owner, 0) for owner in (OWNER_SPECIES, OWNER_TRANSITION_STATE)}
+    return rows, {owner: unreviewed.get(owner, 0) for owner in _OWNERS}
 
 
 def statmech_trust_owner_report(session: Session) -> dict[str, Any]:
@@ -184,6 +198,7 @@ def statmech_trust_owner_report(session: Session) -> dict[str, Any]:
                 transitions.items(), key=lambda item: (item[0][0], item[0][1], item[0][3], str(item[0][2]), str(item[0][4]))
             )
         ],
+        # Routing only: see the module docstring. Read it together with the species rows of ``machine_review_currency``.
         "species_entry_unchanged": species_unchanged,
         "species_entry_records_compared": species_checked,
         "machine_review_currency": review_rows,

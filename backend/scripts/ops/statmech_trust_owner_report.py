@@ -13,7 +13,13 @@ container; do not do this before reading the report on a restore)::
     PYTHONPATH=. conda run -n tckdb_env python scripts/ops/statmech_trust_owner_report.py \\
         --use-configured-database
 
-Read ``species_entry_unchanged`` first: ``false`` is a defect in the change, not a finding about the data.
+Reading it:
+
+* ``species_entry_unchanged`` checks ROUTING only (the live router against the species rubric, both from this code). ``false``
+  is a defect in the change. ``true`` does NOT show that the shared checks are untouched.
+* Every ``species_entry`` row of ``machine_review_currency`` must read ``current``. That is the check anchored to the
+  stored reviews (made by the code on ``main``); a species badge that moved shows up there as stale.
+* The code-level guard for species badges is ``tests/services/test_trust_statmech_species_frozen.py``.
 """
 
 from __future__ import annotations

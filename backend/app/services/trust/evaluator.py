@@ -332,7 +332,9 @@ def _statmech_subject_hard_fail(
     needs a species entry, the transition-state rubric a transition-state entry. Everything
     after it in :func:`_detect_statmech_hard_fail` is shared.
     """
-    if rubric is COMPUTED_TS_STATMECH_V1:
+    # Keyed on the rubric's name, not its object: a later version of the same owner-scoped rubric
+    # must keep the transition-state owner check, or the defect this rubric fixes comes back.
+    if rubric.name == COMPUTED_TS_STATMECH_V1.name:
         if statmech.transition_state_entry_id is None or statmech.transition_state_entry is None:
             return HardFailReason.transition_state_entry_missing
         return None

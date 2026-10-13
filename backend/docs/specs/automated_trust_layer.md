@@ -544,7 +544,7 @@ mode treatment record).
 
 **Hard-fail signals:** `missing_required_identity`.
 
-### 9.3.1 `computed_ts_statmech_v1` (owner-scoped; PR 6.6)
+### 9.3.1 `computed_ts_statmech_v1` (owner-scoped)
 
 A statmech row is owned by exactly one of a species entry or a transition-state entry (the
 `statmech_exactly_one_subject` CHECK). `computed_statmech` (v2) asks for a species entry first, so a
@@ -593,8 +593,13 @@ falling back.
   producer would carry no information.
 - Runbook: (1) restore the latest backup into a scratch database; (2) with this code, run
   `PYTHONPATH=. python scripts/ops/statmech_trust_owner_report.py --database-url <scratch url>` from `backend`; (3) read
-  `species_entry_unchanged` (it must be `true`; `false` is a defect in the change) and the `transition_state_entry` rows of
-  `badge_transitions` and `machine_review_currency`; (4) decide, then deploy. The report is read-only by construction (a
+  `species_entry_unchanged`, the `transition_state_entry` rows of `badge_transitions` and `machine_review_currency`, and the
+  species rows of `machine_review_currency`. `species_entry_unchanged` checks **routing only**: it compares the live router
+  with the species rubric run explicitly, both from this code, so `false` is a defect in the change but `true` does not show
+  that the shared checks are untouched (an edit to a check both rubrics share moves both sides together). The check anchored
+  to the code on `main` is that **every `species_entry` row of `machine_review_currency` reads `current`**: stored species
+  reviews were made by the old code, so a moved species badge turns them stale (a species record with no stored review is not covered by this). The code-level guard for species badges is the
+  frozen-literal test `tests/services/test_trust_statmech_species_frozen.py`; (4) decide, then deploy. The report is read-only by construction (a
   `REPEATABLE READ`, `READ ONLY` transaction; no apply mode) and prints counts only. Record the commit, the rubric name and
   version, and the report output with the deploy.
 

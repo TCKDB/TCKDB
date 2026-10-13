@@ -128,7 +128,7 @@ ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"
 # ``test_adding_the_gibbs_rubric_restales_no_stored_review`` in
 # ``tests/services/test_phase_d_persistence.py``.
 #
-# COMPUTED_TS_STATMECH_V1 (PR 6.6) is the owner-scoped statmech rubric for transition-state-owned
+# COMPUTED_TS_STATMECH_V1 is the owner-scoped statmech rubric for transition-state-owned
 # records. It is one more key, filtered like every other: a species-owned statmech review keeps its
 # ``computed_statmech_v2`` key and reads current; only the latest reviewer-family review of a
 # TS-owned statmech reads stale (its context was hashed under the species rubric). The reviewer
