@@ -37,6 +37,8 @@ SNAPSHOT_SUFFIXES = (
     "/statmech/select/manifest",
     "/conformers/relative-energies",
     "/conformers/relative-energies/manifest",
+    "/conformers/relative-energies/compare",
+    "/conformers/relative-energies/compare/manifest",
 )
 
 
@@ -89,6 +91,8 @@ def test_every_selection_and_export_route_uses_the_snapshot_dependency(api_route
     assert {
         "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies",
         "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/manifest",
+        "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare",
+        "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare/manifest",
     } <= paths
     # The H298 thermo selection and its manifest.
     assert {

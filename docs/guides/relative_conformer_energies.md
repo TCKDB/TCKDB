@@ -62,6 +62,21 @@ kept as it is. The reference row itself is `reference` with `0.0`.
 `POST .../relative-energies/manifest` returns the same answer as a downloadable JSON manifest with a checksum. Anyone with
 the server code can recompute the answer from it. The checksums detect edits; they are not signatures.
 
+## Comparing two stored protocols
+
+`POST .../relative-energies/compare` takes two protocols (`candidate` and `reference`, each a level and an optional
+recipe), the same named reference conformer, and a required `pairing` (`same_geometry` or `same_basin`). For each other
+conformer it takes the candidate's relative energy minus the reference protocol's, and summarises the deviations (mean
+signed, mean absolute, root-mean-square, and the largest with its conformer). The reference conformer is not counted:
+its deviation is zero by construction. A conformer missing on one side, or evaluated at different geometries under
+`same_geometry`, is listed with a reason and left out, never counted as zero.
+
+The result is a description. It never says one protocol is more accurate: `claims.superiority` is `not_licensed` and the
+seven things such a claim would need (E1 to E7: reference uncertainty, independence, a resolved margin, coverage and sameness, domain, established protocol facts, and owner acceptance of a rule) are listed as missing. A
+preference is only ever an audited rule edge through the selection kernel, never a by-product of this comparison. The figures depend on which conformer you named as
+the reference; compare them only with figures measured from the same one. `.../compare/manifest` downloads a replayable
+record of both runs.
+
 ## The old route
 
 `GET /api/v1/species-entries/{id}/conformer-observations/lowest-sp` is **deprecated**. It collapses several single points on

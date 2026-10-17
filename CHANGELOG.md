@@ -22,6 +22,28 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A descriptive comparison of two stored protocols (2026-10-18)
+
+**New read routes.** Migration: none. New environment variable: none. Package versions: `tckdb-schemas` 0.125.0 (one new refusal
+code in the shipped reference), `tckdb-client` 0.152.0 (the same code in `RejectionCode`; no method). OpenAPI golden regenerated
+(two new paths, no existing path changed).
+
+- `POST /api/v1/scientific/species-entries/{ref}/conformers/relative-energies/compare` and `/compare/manifest`: how far two stored
+  protocols (`candidate`, `reference`: a level and an optional recipe) deviate from each other, candidate minus reference, in kJ/mol,
+  against the one reference conformer the caller names. `pairing` (`same_geometry` or `same_basin`) is required. Mean signed,
+  mean absolute and root-mean-square deviation, and the largest with its conformer; the reference conformer is not counted. A pair
+  missing on either side or failing the pairing is listed with a coded reason and left out, never counted as zero; with no pair
+  every figure is `null`; a complete answer with an excluded pair is `incomplete_pairing` with no figures.
+- It is a description, not a verdict: `claims.superiority` and `claims.ranking` are `not_licensed`, and the seven prerequisites of a
+  future superiority claim (E1 to E7) are always listed as missing. The comparison builds no selection-kernel edge and reads no rule.
+- New code: `relative_conformer_energy_compare_identical_protocols` (the same level, with the same effective recipe narrowing, named twice; decided after the entry, levels and groups resolve).
+- The manifest holds both runs' complete relative-energy manifests; `replay_comparison` recomputes both and the pairing.
+- Docs: a section in `backend/docs/specs/relative_conformer_energy.md`, and `docs/guides/relative_conformer_energies.md`.
+- The relative-energy members gain `value_geometry_ref` (additive: the one geometry the stored value was evaluated at). The relative-energy semantic
+  version becomes `"2"`. Manifests downloaded from `/relative-energies/manifest` before this release (version `"1"`, no such field) **still replay**:
+  the recorded answer is compared with the recomputed one projected onto the fields version 1 carried. The projection is keyed to the
+  recorded version; a version-2 manifest missing the field is refused.
+
 ## Relative conformer energies against a named reference conformer (2026-10-17)
 
 **New read route; one route deprecated.** Migration: none. New environment variable: none. Package versions: `tckdb-schemas` 0.124.0

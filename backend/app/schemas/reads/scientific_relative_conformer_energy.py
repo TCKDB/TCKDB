@@ -24,6 +24,8 @@ from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
 from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
+from app.services.relative_conformer_energy.compare import ComparisonOutcome
+from app.services.relative_conformer_energy.compare import Pairing as ComparisonPairing
 from app.services.relative_conformer_energy.models import (
     SUPPORTED_KINDS,
     Certificate,
@@ -223,6 +225,9 @@ class RelativeEnergyMember(BaseModel):
     determination_refs: list[str]
     energy_calculation_refs: list[str]
     evaluated_geometry_refs: list[str]
+    value_geometry_ref: str | None = Field(
+        description="The one geometry the stored value was evaluated at; null when the records of the value name several or none."
+    )
     certificate: RelativeEnergyCertificate | None
     alternates: list[RelativeEnergyAlternate]
     absent_reason: str | None = Field(description="A coded reason when the member has no single value; never zero.")
@@ -295,4 +300,234 @@ class RelativeConformerEnergyManifest(BaseModel):
     assessments: list[dict[str, Any]]
     result: dict[str, Any]
     outcome: RelativeEnergyOutcome
+    integrity: RelativeEnergyIntegrity
+
+
+# ---------------------------------------------------------------------------
+# The descriptive benchmark comparison: ``/relative-energies/compare`` and its ``/manifest``
+# ---------------------------------------------------------------------------
+
+
+class RelativeEnergyProtocol(BaseModel):
+    """One stored protocol: a level, and optionally a recipe that narrows within it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    level: RelativeEnergyLevel = Field(description="The one level of theory (or composite scheme) of this protocol. Required.")
+    recipe: ActualProtocolDeclaration | None = Field(
+        default=None,
+        description="Narrows within the level. The units' own stated facts must establish it; a request never fills a missing fact.",
+    )
+
+
+class RelativeConformerEnergyCompareRequest(BaseModel):
+    """A descriptive comparison of two stored protocols on one species entry, against one named reference conformer.
+
+    Everything but the two protocols is shared: the reference conformer, the energy kind and the certificate are the
+    same for both. ``pairing`` is required and has no default. External or published relative references are not
+    supported.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    reference_conformer_ref: str = Field(
+        min_length=1, max_length=64, description="The named reference conformer group (cg_ ref) of this entry. Required."
+    )
+    energy_kind: EnergyKind = Field(
+        description="electronic_energy or zero_kelvin_energy. Required; enthalpy and gibbs_energy are refused."
+    )
+    temperature_k: float | None = Field(default=None, gt=0, description="For the refused kinds only.")
+    certificate: Certificate = Field(description="The curvature evidence each member needs. Required.")
+    candidate: RelativeEnergyProtocol = Field(description="The protocol under description. Deviations are candidate minus reference.")
+    reference: RelativeEnergyProtocol = Field(description="The protocol the candidate's values are set against.")
+    pairing: ComparisonPairing = Field(
+        description=(
+            "same_geometry: both values must be evaluated at the same geom_ ref. same_basin: each protocol's own "
+            "geometry of the basin. Required; there is no default."
+        )
+    )
+    member_refs: list[str] | None = Field(default=None, min_length=1, max_length=500)
+    coverage_requirement: CoverageRequirement = CoverageRequirement.known_values
+    repeat_policy: RepeatPolicy = RepeatPolicy.retain_alternates
+    min_review_status: RecordReviewStatus | None = None
+    permitted_quality: list[CalculationQuality] | None = Field(default=None, max_length=3)
+    require_stable_reference: bool = False
+
+    @field_validator("member_refs")
+    @classmethod
+    def _members_distinct(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and len(set(value)) != len(value):
+            raise ValueError("member_refs names a member twice")
+        return value
+
+    @model_validator(mode="after")
+    def _temperature_belongs_to_the_deferred_kinds(self) -> RelativeConformerEnergyCompareRequest:
+        if self.energy_kind in SUPPORTED_KINDS and self.temperature_k is not None:
+            raise ValueError("temperature_k belongs to enthalpy and gibbs_energy only")
+        if self.energy_kind not in SUPPORTED_KINDS and self.temperature_k is None:
+            raise ValueError("temperature_k is required for enthalpy and gibbs_energy")
+        return self
+
+    def service_requests(
+        self, *, candidate_level: LevelSelector | None = None, reference_level: LevelSelector | None = None
+    ) -> tuple[RelativeEnergyRequest, RelativeEnergyRequest]:
+        """The two relative-energy requests (candidate, reference). Levels carry canonical refs once resolved."""
+
+        def one(protocol: RelativeEnergyProtocol, level: LevelSelector | None) -> RelativeEnergyRequest:
+            return RelativeEnergyRequest(
+                reference_conformer_ref=self.reference_conformer_ref,
+                energy_kind=self.energy_kind,
+                level=level
+                or LevelSelector(
+                    level_of_theory_ref=protocol.level.level_of_theory_ref,
+                    composite_scheme_ref=protocol.level.composite_scheme_ref,
+                ),
+                certificate=self.certificate,
+                recipe=protocol.recipe.model_dump(mode="json", exclude_none=True) if protocol.recipe is not None else None,
+                member_refs=tuple(self.member_refs) if self.member_refs is not None else None,
+                coverage=self.coverage_requirement,
+                repeat_policy=self.repeat_policy,
+                min_review_status=self.min_review_status,
+                permitted_quality=frozenset(self.permitted_quality) if self.permitted_quality is not None else None,
+                require_stable_reference=self.require_stable_reference,
+                temperature_k=self.temperature_k,
+            )
+
+        return one(self.candidate, candidate_level), one(self.reference, reference_level)
+
+    @model_validator(mode="after")
+    def _service_rules(self) -> RelativeConformerEnergyCompareRequest:
+        self.service_requests()
+        return self
+
+
+class RelativeEnergyCompareRequestEcho(ProfiledRequestEcho):
+    """The normalised request: the shared choices, the two protocols with canonical level refs, and the pairing."""
+
+    entry_ref: str
+    pairing: ComparisonPairing
+    candidate: dict[str, Any]
+    reference: dict[str, Any]
+    reference_conformer_ref: str
+    energy_kind: EnergyKind
+    certificate: Certificate
+    member_refs: list[str] | None
+    coverage_requirement: CoverageRequirement
+    repeat_policy: RepeatPolicy
+    min_review_status: RecordReviewStatus | None
+    permitted_quality: list[CalculationQuality] | None
+    require_stable_reference: bool
+    temperature_k: float | None = None
+
+
+class RelativeEnergyCompareUnits(BaseModel):
+    deviation: str
+
+
+class RelativeEnergyCompareStatistics(BaseModel):
+    """Descriptive statistics of the deviations, candidate minus reference, over the paired members.
+
+    The reference conformer is not a pair. Every figure is ``null`` when ``n`` is 0.
+    """
+
+    n: int = Field(description="Paired members; the reference conformer is excluded (its deviation is 0 by construction).")
+    msd_kj_mol: float | None = Field(description="Mean signed deviation.")
+    mad_kj_mol: float | None = Field(description="Mean absolute deviation.")
+    rmsd_kj_mol: float | None = Field(description="Root-mean-square deviation.")
+    max_abs_deviation_kj_mol: float | None
+    max_abs_deviation_conformer_ref: str | None
+    sign_convention: str
+    reference_conformer_ref: str
+    reference_conformer_dependence: str
+
+
+class RelativeEnergyComparePair(BaseModel):
+    """One conformer's two values and their deviation. An unusable pair has ``excluded_reason`` and no deviation."""
+
+    conformer_ref: str
+    candidate_kj_mol: float | None
+    reference_kj_mol: float | None
+    deviation_kj_mol: float | None = Field(description="Candidate minus reference; null when the pair is excluded.")
+    excluded_reason: str | None = Field(description="A coded reason from a closed vocabulary; never a zero deviation.")
+    candidate_uncertainty_hartree: float | None = Field(description="As stored with the candidate's value; never combined.")
+    reference_uncertainty_hartree: float | None = Field(
+        description="As stored with the reference protocol's value; never combined."
+    )
+    candidate_geometry_ref: str | None = Field(
+        description="The one geometry the candidate's value was evaluated at; null when it is tied to none or several."
+    )
+    reference_geometry_ref: str | None = Field(
+        description="The one geometry the reference protocol's value was evaluated at; null when it is tied to none or several."
+    )
+
+
+class RelativeEnergyCompareReferenceConformer(BaseModel):
+    """What the named reference conformer allows. Every relative energy is taken from it, so a problem here is every pair's."""
+
+    conformer_ref: str
+    problem: str | None = Field(
+        description=(
+            "null, or reference_conformer_value_missing, reference_conformer_geometry_not_recorded or "
+            "reference_conformer_geometry_differs (the last two under same_geometry only). With a problem no pair is usable."
+        )
+    )
+    candidate_value_present: bool
+    reference_value_present: bool
+    candidate_geometry_ref: str | None
+    reference_geometry_ref: str | None
+
+
+class RelativeEnergyCompareClaims(BaseModel):
+    kind: str
+    superiority: str
+    ranking: str
+    missing_evidence: list[str] = Field(
+        description="E1 to E7: what a superiority claim would need. Always all seven in this version."
+    )
+    statement: str
+
+
+class RelativeConformerEnergyCompareResponse(BaseModel):
+    """The descriptive comparison, built from the replayable manifest so the two cannot disagree."""
+
+    request: RelativeEnergyCompareRequestEcho
+    review: RelativeEnergyReview
+    outcome: ComparisonOutcome
+    pairing: ComparisonPairing
+    coverage_requirement: CoverageRequirement
+    units: RelativeEnergyCompareUnits
+    statistics: RelativeEnergyCompareStatistics | None = Field(
+        description="Null when the outcome is incomplete_pairing: no statistic is given over a subset."
+    )
+    reference_conformer: RelativeEnergyCompareReferenceConformer
+    pairs: list[RelativeEnergyComparePair]
+    candidate: dict[str, Any]
+    reference: dict[str, Any]
+    claims: RelativeEnergyCompareClaims
+    comparison_version: str
+    notes: list[str]
+    versions: dict[str, Any]
+    snapshot_isolation: str
+    integrity: RelativeEnergyIntegrity
+
+
+class RelativeConformerEnergyCompareManifest(BaseModel):
+    """The replayable manifest of the ``/compare/manifest`` download.
+
+    Both runs' complete relative-energy manifests, the shared request, the pairing and the comparison. The digests are
+    checksums, not signatures; replay recomputes both runs and the pairing and never trusts a recorded flag. Replay it
+    with ``app.services.relative_conformer_energy.replay_comparison``.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    manifest_format: str
+    manifest_format_version: int
+    versions: dict[str, Any]
+    request: dict[str, Any]
+    read_profile: dict[str, Any]
+    snapshot_isolation: str
+    runs: dict[str, Any]
+    result: dict[str, Any]
+    outcome: ComparisonOutcome
     integrity: RelativeEnergyIntegrity
