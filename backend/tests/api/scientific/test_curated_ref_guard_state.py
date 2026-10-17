@@ -1,9 +1,9 @@
-"""The ref guard is wired in but inert (PR-1), and costs at most one statement per response when a family is enabled.
+"""The ref guard never touches exploratory output, is inert outside the enabled families, and costs <= 1 statement.
 
-Report mode must change nothing on the wire. This is the pin: across every crawled scientific route, exploratory bytes
-are identical with the hook removed, wired in (the default) and enabled everywhere; curated bytes are identical with the
-hook removed and wired in. The sweep (``test_curated_ref_sweep.py``) reports what the guard will later fix; this file
-proves that today it fixes, and breaks, nothing.
+Across every crawled scientific route, exploratory bytes are identical with the hook removed, wired in (the default)
+and enabled everywhere. Curated bytes are identical with the hook removed on routes whose family is not enabled yet,
+and equal to the enable-everything output on the routes whose family is. The sweep (``test_curated_ref_sweep.py``)
+reports what the guard has still to fix.
 """
 
 from __future__ import annotations
@@ -53,10 +53,10 @@ def _differences(a, b):
 def test_guard_is_inert_by_default_and_costs_at_most_one_statement_when_enabled(
     client, db_session, login_as, monkeypatch
 ):
-    """Report mode changes nothing on the wire; enabling a family costs at most one statement per response.
+    """Only enabled families change on the wire (curated only); a withheld response costs at most one statement.
 
     * exploratory bytes are identical with the hook removed, wired in (the default) and enabled on every route;
-    * curated bytes are identical with the hook removed and wired in (PR-1 changes no curated output);
+    * curated bytes are identical with the hook removed and wired in (outside the enabled families);
     * with every route enabled, a curated response costs at most one more statement than without the guard;
     * the placements the guard cannot make are listed (ratchet), and it did withhold something somewhere.
 
@@ -93,13 +93,32 @@ def test_guard_is_inert_by_default_and_costs_at_most_one_statement_when_enabled(
 
     failures: list[str] = []
     assert exploratory_default and curated_default and len(exploratory_default) == len(curated_default)
+    def outside_enabled(results):
+        return {k: v for k, v in results.items() if not ref_guard.route_matches(k[0][1], ref_guard._ENABLED_ROUTE_PREFIXES)}
+
+    def inside_enabled(results):
+        return {k: v for k, v in results.items() if ref_guard.route_matches(k[0][1], ref_guard._ENABLED_ROUTE_PREFIXES)}
+
     for name, left, right in (
         ("exploratory: hook wired vs removed", exploratory_default, exploratory_no_hook),
         ("exploratory: every route enabled vs removed", exploratory_enabled, exploratory_no_hook),
-        ("curated: hook wired (nothing enabled) vs removed", curated_default, curated_no_hook),
+        # Routes of a family that is not enabled yet change nothing under curated.
+        (
+            "curated, routes outside the enabled families: hook wired vs removed",
+            outside_enabled(curated_default),
+            outside_enabled(curated_no_hook),
+        ),
+        # Routes of an enabled family are exactly what enabling everywhere gives for them.
+        (
+            "curated, routes inside the enabled families: wired vs every route enabled",
+            inside_enabled(curated_default),
+            inside_enabled(curated_enabled),
+        ),
     ):
         for entry in _differences(_bodies(left), _bodies(right)):
             failures.append(f"{name}: wire output differs at {entry}")
+    if not inside_enabled(curated_default) or not outside_enabled(curated_default):
+        failures.append("the crawl does not cover both enabled and not-yet-enabled routes: the comparison is vacuous")
 
     # Exploratory pays nothing: no extra statement and no withholding, even with every route enabled.
     for key, r in exploratory_enabled.items():
@@ -118,7 +137,7 @@ def test_guard_is_inert_by_default_and_costs_at_most_one_statement_when_enabled(
             unplaceable.add(fmt(route, f"{model}.{path} ({prefix}_)"))
             continue
         withheld += len(r.applied_sites)
-        extra = r.statements - curated_default[key].statements
+        extra = r.statements - curated_no_hook[key].statements
         if extra > EXPECTED_ENABLED_EXTRA_STATEMENTS:
             failures.append(f"{fmt(route, label)} cost {extra} extra statements with the guard enabled")
     if not withheld:

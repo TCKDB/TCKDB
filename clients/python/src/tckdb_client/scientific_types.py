@@ -671,7 +671,9 @@ class NetworkKineticsBatchEvaluateResponse(TypedDict):
 
 class StatmechRecord(TypedDict, total=False):
     statmech: Required[JSONDict]
-    # ``None`` on a transition-state-owned record (it has a ``transition_state`` block instead).
+    # ``None`` on a transition-state-owned record (it has a ``transition_state`` block instead). Under
+    # ``profile="curated"`` BOTH ``species`` and ``transition_state`` are ``None`` when the record's subject is a
+    # transition-state entry that is not approved: the subject is withheld, not absent.
     species: JSONDict | None
     transition_state: JSONDict | None
     supersession: SupersessionNotice | None
@@ -768,10 +770,14 @@ class ConformerRecord(TypedDict, total=False):
 
 
 class ConformerObservationRecord(TypedDict, total=False):
-    """One observation, with the group and species it belongs to attached."""
+    """One observation, with the group and species it belongs to attached.
+
+    ``conformer_group`` is ``None`` when the read used ``profile="curated"`` and the observation's group is not
+    approved: the observation is shown, the group it sits in is not named.
+    """
 
     conformer_observation: Required[JSONDict]
-    conformer_group: Required[JSONDict]
+    conformer_group: Required[JSONDict | None]
     species: Required[JSONDict]
     evidence_summary: Required[JSONDict]
     available_sections: Required[JSONDict]

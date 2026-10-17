@@ -130,6 +130,12 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
         f"{BASE}/level-of-theories/{{level_of_theory_ref_or_id}}",
         f"{BASE}/transport/{{transport_ref_or_id}}",
     },
+    # A hidden calculation with an output geometry on a visible observation (PR-2a review).
+    "calc_hgeo": {
+        f"{BASE}/conformer-groups/{{conformer_group_ref_or_id}}",
+        f"{BASE}/conformer-observations/{{conformer_observation_ref_or_id}}",
+        f"{BASE}/level-of-theories/{{level_of_theory_ref_or_id}}",
+    },
     "calc_h_ts": {f"{BASE}/statmech/{{statmech_ref_or_id}}", _TSE, _TS, _FULL},
     "cg_h": {
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies",

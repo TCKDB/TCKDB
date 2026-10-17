@@ -427,13 +427,54 @@ def test_the_hook_does_nothing_outside_a_scientific_request(hook_env):
     assert calls == []
 
 
-def test_the_hook_counts_that_it_was_reached_but_withholds_nothing_while_no_family_is_enabled(hook_env):
+def test_the_hook_counts_that_it_was_reached_but_withholds_nothing_while_no_family_is_enabled(hook_env, monkeypatch):
     """Kills: PR-1 changing the wire (enabling a family by default); a spy that cannot tell reached from applied."""
     publish, calls = hook_env
+    monkeypatch.setattr(ref_guard, "_ENABLED_ROUTE_PREFIXES", frozenset())
     ctx = publish(CURATED)
-    assert ref_guard._ENABLED_ROUTE_PREFIXES == frozenset()
     ref_guard.withhold_for_current_request(Envelope())
     assert (ctx.reached, ctx.applied, calls) == (1, 0, [])
+
+
+def test_pr_2a_enables_exactly_the_species_side_families():
+    """Kills: enabling a TS/reaction/network family early (their wire changes belong to PR-2b/2c); dropping one."""
+    base = "/api/v1/scientific/"
+    assert ref_guard._ENABLED_ROUTE_PREFIXES == ref_guard.SPECIES_SIDE_PREFIXES
+    assert {p.removeprefix(base) for p in ref_guard.SPECIES_SIDE_PREFIXES} == {
+        "statmech",
+        "thermo",
+        "species-entries",
+        "species",
+        "transport",
+        "conformer-groups",
+        "conformer-observations",
+        "conformers",
+        "calculations",
+        "species-calculations",
+        "artifacts",
+        "geometries",
+    }
+    # Whole-segment matching: no later family rides in on a shared string prefix.
+    for route in (
+        "transition-states",
+        "transition-state-entries",
+        "reaction-entries",
+        "reactions",
+        "kinetics",
+        "networks",
+        "network-solves",
+        "network-kinetics",
+        "literature",
+        "analytics",
+        "level-of-theories",
+        "meta",
+        "releases",
+        "export",
+        "structure",
+    ):
+        assert not ref_guard.route_matches(f"{base}{route}/x", ref_guard._ENABLED_ROUTE_PREFIXES), route
+    assert ref_guard.route_matches(f"{base}species/search", ref_guard._ENABLED_ROUTE_PREFIXES)
+    assert ref_guard.route_matches(f"{base}species-entries/{{id}}/thermo", ref_guard._ENABLED_ROUTE_PREFIXES)
 
 
 def test_the_hook_withholds_on_an_enabled_curated_route(hook_env, monkeypatch):
@@ -515,6 +556,25 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "TransitionStateStatmechSummary",
         "TransitionStateStatmechSourceCalculation",
         "CalculationEvidenceSummary",
+        # PR-2a
+        "CalculationCompositeInputSummary",
+        "CalculationConformerSummary",
+        "CalculationDependencySummary",
+        "ConformerCalculationSummary",
+        "ConformerGeometryLink",
+        "GeometryIdentityOwnerRef",
+        "GeometryTransitionStateIdentity",
+        "StoredThermoProtocolCalculationRef",
+        "SupportingCalculationRef",
+        "ConformerContextBlock",
+        "ConformerGroupCoreBlock",
+        "ConformerObservationGroupSummary",
+        "ConformerObservationSiblingSummary",
+        "GeometryProvenanceCalcLink",
+        "StatmechTransitionStateContext",
+        "SupersessionNotice",
+        "TransitionStateEntryOwnerSummary",
+        "TransportSourceCalculationSummary",
     }
 
 

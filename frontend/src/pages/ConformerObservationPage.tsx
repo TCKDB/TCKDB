@@ -106,8 +106,12 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <span aria-hidden="true">/</span>
                 <Link to={`/species-entries/${species.species_entry_ref}`}>Species entry</Link>
                 <span aria-hidden="true">/</span>
-                <Link to={`/conformer-groups/${group.conformer_group_ref}`}>Conformer basin</Link>
-                <span aria-hidden="true">/</span>
+                {group && (
+                    <>
+                        <Link to={`/conformer-groups/${group.conformer_group_ref}`}>Conformer basin</Link>
+                        <span aria-hidden="true">/</span>
+                    </>
+                )}
                 <span aria-current="page">Observation</span>
             </nav>
             <PageShell
@@ -175,14 +179,17 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                     second row is gone too -- it would only ever
                                     have duplicated the same ref the link itself now
                                     shows. */}
-                                <div>
-                                    <dt>Conformer basin</dt>
-                                    <dd>
-                                        <Link to={`/conformer-groups/${group.conformer_group_ref}`}>
-                                            <code className="data">{group.conformer_group_ref}</code>
-                                        </Link>
-                                    </dd>
-                                </div>
+                                {/* Absent (not "unknown") when the read is curated and the basin is not approved. */}
+                                {group && (
+                                    <div>
+                                        <dt>Conformer basin</dt>
+                                        <dd>
+                                            <Link to={`/conformer-groups/${group.conformer_group_ref}`}>
+                                                <code className="data">{group.conformer_group_ref}</code>
+                                            </Link>
+                                        </dd>
+                                    </div>
+                                )}
                                 <div>
                                     <dt>Species entry</dt>
                                     <dd>
@@ -234,7 +241,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
             <section className="ledger-summary" aria-label="Observation evidence summary">
                 <Metric label="Calculation rows" value={evidence.calculation_count} />
                 <Metric label="Distinct stored geometries" value={evidence.geometry_count} />
-                <Metric label="Other observations in this basin" value={siblings.length} />
+                {group && <Metric label="Other observations in this basin" value={siblings.length} />}
             </section>
             {/* Sits BELOW the tile row above, full row width, as its own
                 `.ledger-summary--single` section -- the SAME shape

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.152.0 - 2026-10-17
+
+`ConformerObservationRecord.conformer_group` is `JSONDict | None`: under `profile="curated"` a visible observation whose conformer
+group is not approved comes back with `conformer_group` null instead of naming the group. Code that indexes
+`record["conformer_group"]` under a type checker now needs a `None` check; the default profile never returns `None`. Also under
+`profile="curated"`, `StatmechRecord.species` and `StatmechRecord.transition_state` are both `None` when the record's subject is a
+transition-state entry that is not approved (documented in the type's comment). No method changed, and `tckdb-schemas` is unchanged.
+
 ## 0.151.0 - 2026-10-17
 
 `RejectionCode` gains `relative_conformer_energy_unsupported`, `relative_conformer_energy_population_too_large` and

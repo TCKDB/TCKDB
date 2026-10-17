@@ -180,6 +180,19 @@ class GeometryIdentity(BaseModel):
     ``provenance.produced_by`` or ``provenance.used_as_input_by`` names
     a calculation with an owner) serves ``identity: null`` on the
     response — this object is never emitted empty.
+
+    **Exceptions, under ``profile=curated`` only.** The ref guard withholds a
+    block that names a hidden owner, so both statements above can fail:
+
+    * when the owning transition-state entry is hidden, ``kind`` is
+      ``"transition_state_entry"`` while *both* owner blocks are ``null``
+      ("the owner is not shown", not "no owner");
+    * ``ambiguous_owners`` can list fewer owners than were found (the hidden
+      ones are dropped), down to a single entry, and ``kind`` can be ``null``
+      with only one owner listed. A curated list is therefore not the full set
+      of owners.
+
+    The default profile never does either.
     """
 
     kind: Literal["species_entry", "transition_state_entry"] | None = None

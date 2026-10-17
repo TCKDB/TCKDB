@@ -24,9 +24,8 @@ How a hidden ref is removed (:func:`withhold_in_model`)
 
 Rollout
 -------
-:data:`_ENABLED_ROUTE_PREFIXES` is empty in this change: the hook is wired into
-:func:`app.services.scientific_read.internal_ids.apply_internal_ids_visibility` and counts that it was
-reached, but no route family is enabled, so nothing changes on the wire. Each family PR adds its prefixes.
+:data:`_ENABLED_ROUTE_PREFIXES` lists the route families on which the hook withholds. PR-2a enables the
+species-side families (:data:`SPECIES_SIDE_PREFIXES`); the TS/reaction and network families follow.
 """
 
 from __future__ import annotations
@@ -38,27 +37,54 @@ from collections.abc import Collection, Mapping
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Union, get_args, get_origin
+from urllib.parse import unquote, urlsplit
 
 from pydantic import BaseModel
 from sqlalchemy import and_, or_, select, union_all
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
+from tckdb_schemas.thermo_declarations import StoredThermoProtocolCalculationRef
 
 from app.db.models.common import ProfileRecommendation, RecordReviewStatus, SubmissionRecordType
 from app.db.models.kinetics import Kinetics
 from app.db.models.molecular_property_observation import MolecularPropertyObservation
 from app.db.models.record_review import RecordReview
 from app.db.models.thermo import Thermo
-from app.schemas.reads.scientific_common import CalculationEvidenceSummary
+from app.schemas.reads.scientific_calculation import (
+    CalculationCompositeInputSummary,
+    CalculationConformerSummary,
+    CalculationDependencySummary,
+    TransitionStateEntryOwnerSummary,
+)
+from app.schemas.reads.scientific_common import CalculationEvidenceSummary, SupersessionNotice
+from app.schemas.reads.scientific_conformer import (
+    ConformerCalculationSummary,
+    ConformerGeometryLink,
+    ConformerGroupCoreBlock,
+    ConformerObservationGroupSummary,
+    ConformerObservationSiblingSummary,
+)
+from app.schemas.reads.scientific_geometry import (
+    GeometryIdentityOwnerRef,
+    GeometryProvenanceCalcLink,
+    GeometryTransitionStateIdentity,
+)
+from app.schemas.reads.scientific_species_calculations import (
+    CalculationProvenanceBlock,
+    ConformerContextBlock,
+    SupportingCalculationRef,
+)
 from app.schemas.reads.scientific_statmech import (
     StatmechConformerContextItem,
     StatmechCurvatureWitness,
     StatmechSourceCalculationSummary,
+    StatmechTransitionStateContext,
 )
 from app.schemas.reads.scientific_transition_state import (
     TransitionStateStatmechSourceCalculation,
     TransitionStateStatmechSummary,
 )
+from app.schemas.reads.scientific_transport import TransportSourceCalculationSummary
 from app.services.public_refs import PREFIXES
 from app.services.scientific_read import handles
 from app.services.scientific_read.handles import status_hidden_under_profile
@@ -153,6 +179,28 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         TransitionStateStatmechSummary,
         TransitionStateStatmechSourceCalculation,
         CalculationEvidenceSummary,
+        # PR-2a: the species-side family.
+        StatmechTransitionStateContext,
+        CalculationCompositeInputSummary,
+        CalculationConformerSummary,
+        CalculationDependencySummary,
+        ConformerContextBlock,
+        ConformerObservationGroupSummary,
+        ConformerObservationSiblingSummary,
+        ConformerCalculationSummary,
+        ConformerGeometryLink,
+        GeometryIdentityOwnerRef,
+        GeometryProvenanceCalcLink,
+        GeometryTransitionStateIdentity,
+        StoredThermoProtocolCalculationRef,
+        SupersessionNotice,
+        SupportingCalculationRef,
+        TransitionStateEntryOwnerSummary,
+        TransportSourceCalculationSummary,
+        # Owner decision D1: a visible observation whose conformer group is hidden stays visible with the group
+        # block blanked. Registering the block is what lets the guard blank it; widening the field alone is not
+        # enough (design note, "Correction from the #770 review").
+        ConformerGroupCoreBlock,
     }
 )
 
@@ -165,7 +213,29 @@ EXEMPT_ROUTE_PREFIXES: Mapping[str, str] = {
 
 #: Rollout allowlist: route-template prefixes on which the hook actually withholds. Empty in PR-1, so the
 #: hook is inert on the wire. Deleted once every family is enabled.
-_ENABLED_ROUTE_PREFIXES: frozenset[str] = frozenset()
+_SCIENTIFIC_BASE = "/api/v1/scientific"
+
+#: PR-2a: the species-side route families. Matched on whole path segments, so ``/species`` does not cover
+#: ``/species-entries`` (which is listed on its own).
+SPECIES_SIDE_PREFIXES: frozenset[str] = frozenset(
+    f"{_SCIENTIFIC_BASE}/{segment}"
+    for segment in (
+        "statmech",
+        "thermo",
+        "species-entries",
+        "species",
+        "transport",
+        "conformer-groups",
+        "conformer-observations",
+        "conformers",
+        "calculations",
+        "species-calculations",
+        "artifacts",
+        "geometries",
+    )
+)
+
+_ENABLED_ROUTE_PREFIXES: frozenset[str] = SPECIES_SIDE_PREFIXES
 
 
 class RefGuardUnplaceable(RuntimeError):
@@ -354,6 +424,36 @@ def _children(node: Any, *, top: bool):
         yield from node.items()
 
 
+#: Longest string the guard will read as a URL; a longer one is not a pointer.
+_MAX_URL_LENGTH = 500
+_URL_START = re.compile(r"^(?:[A-Za-z][A-Za-z0-9+.\-]*://|[/?#;])")
+
+
+def _tokens(component: str) -> list[str]:
+    """The pieces of one URL component a ref can be: the component split on ``/``, ``;``, ``,`` and ``&``."""
+    return [t for t in re.split(r"[/;,&=]", unquote(unquote(component))) if t]
+
+
+def _refs_named_by(value: str) -> list[str]:
+    """Every gated ref a string value names.
+
+    A value is a ref when the whole string is one. It also names refs when it is a URL (an absolute ``scheme://``
+    URL, or a string that starts with ``/``, ``?``, ``#`` or ``;``) and any of these is one: a path segment
+    (``/calculations/{ref}/scan``, in the middle or at the end), a ``;params`` item, a query key or value, or the
+    fragment. Components are percent-decoded first, so ``%2F`` and ``%63alc_...`` do not hide one. Whitespace
+    makes a string prose, which is not read here; the sweep's raw-body check still catches a ref in prose.
+    """
+    if len(value) <= 40 and GATED_REF_RE.match(value):
+        return [value]
+    if len(value) > _MAX_URL_LENGTH or not _URL_START.match(value) or any(c.isspace() for c in value):
+        return []
+    parts = urlsplit(value)
+    found: list[str] = []
+    for component in (parts.path, parts.query, parts.fragment):
+        found.extend(t for t in _tokens(component) if GATED_REF_RE.match(t))
+    return found
+
+
 def _collect_sites(root: BaseModel) -> list[tuple[tuple[_Frame, ...], str]]:
     sites: list[tuple[tuple[_Frame, ...], str]] = []
     stack: list[tuple[Any, tuple[_Frame, ...]]] = [(root, ())]
@@ -365,8 +465,7 @@ def _collect_sites(root: BaseModel) -> list[tuple[tuple[_Frame, ...], str]]:
                 # site so that, if it is hidden, the guard fails closed instead of letting it through.
                 sites.append(((*path, (node, _DictKey(key))), key))
             if isinstance(value, str):
-                if len(value) <= 40 and GATED_REF_RE.match(value):
-                    sites.append(((*path, (node, key)), value))
+                sites.extend(((*path, (node, key)), ref) for ref in _refs_named_by(value))
             elif isinstance(value, (BaseModel, list, tuple, dict)):
                 stack.append((value, (*path, (node, key))))
     return sites
@@ -389,6 +488,31 @@ def _is_subject(path: tuple[_Frame, ...], i: int) -> bool:
     return i == 1 and path[0][1] == "records"
 
 
+#: Pointer lists that travel with a bare list of integer ids, in step: ``(model, list field) -> (id list field,
+#: the id field on a row)``. The ids carry no ref the guard could see, so deleting a pointer row must delete the id
+#: that is *that row's*, or the integer pk of a hidden record stays on the wire. Matching is by value, never by
+#: position: a same-length list in another order would otherwise drop the visible id and keep the hidden one.
+ALIGNED_ID_LISTS: Mapping[tuple[type, str], tuple[str, str]] = {
+    (CalculationProvenanceBlock, "supporting_calculations"): ("supporting_calculation_ids", "calculation_id"),
+}
+
+
+def _aligned_id_deletions(owner_frame: _Frame, deleted_from: list, index: Any, text: str, ref: str) -> list[_Action]:
+    owner, owner_key = owner_frame
+    names = ALIGNED_ID_LISTS.get((type(owner), owner_key)) if isinstance(owner, BaseModel) else None
+    if names is None:
+        return []
+    ids_field, row_id_field = names
+    ids = getattr(owner, ids_field, None)
+    if not isinstance(ids, list) or not ids:
+        return []  # stripped or never populated: nothing of the record's id is on the wire
+    row_id = getattr(deleted_from[index], row_id_field, None)
+    if len(ids) != len(deleted_from) or row_id is None or ids[index] != row_id:
+        # Not the same list in the same order: dropping an index could keep a hidden id and lose a visible one.
+        raise RefGuardUnplaceable(type(owner).__name__, text, ref.split("_", 1)[0])
+    return [_Action("delete", ids, index)]
+
+
 def _plan_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], WithheldSite]:
     text = _path_text(path)
     n = len(path) - 1
@@ -401,7 +525,10 @@ def _plan_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], Withh
             continue
         name = type(node).__name__
         if isinstance(container, (list, dict)):
-            return [_Action("delete", container, key)], WithheldSite(ref, text, "delete_pointer", name)
+            actions = [_Action("delete", container, key)]
+            if isinstance(container, list) and i >= 1:
+                actions.extend(_aligned_id_deletions(path[i - 1], container, key, text, ref))
+            return actions, WithheldSite(ref, text, "delete_pointer", name)
         if isinstance(container, BaseModel) and _field_traits(type(container), key)[0]:
             return [_Action("null", container, key)], WithheldSite(ref, text, "null_pointer", name)
         # Held by a required field: keep looking outward.
@@ -548,10 +675,12 @@ def withhold_for_current_request(payload: BaseModel) -> None:
 
 
 __all__ = [
+    "ALIGNED_ID_LISTS",
     "EXEMPT_ROUTE_PREFIXES",
     "GATED_REF_RE",
     "GATED_TYPES",
     "POINTER_MODELS",
+    "SPECIES_SIDE_PREFIXES",
     "UNGATED_REVIEWABLE",
     "GatedType",
     "RefGuardContext",

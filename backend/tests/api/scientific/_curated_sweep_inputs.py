@@ -23,7 +23,7 @@ def _refs(world: SweepWorld, *keys: str) -> list[str]:
 
 
 PATH_PARAM_PROVIDERS: dict[str, Callable[[SweepWorld], list[str]]] = {
-    "calculation_ref_or_id": lambda w: _refs(w, "calc_vopt", "calc_vsp", "calc_ts_on_hidden_entry", "calc_ts_v"),
+    "calculation_ref_or_id": lambda w: _refs(w, "calc_vopt", "calc_vsp", "calc_ts_on_hidden_entry", "calc_ts_v", "calc_comp"),
     "conformer_group_ref_or_id": lambda w: _refs(w, "cg_v"),
     "conformer_observation_ref_or_id": lambda w: _refs(w, "co_v", "co_v2"),
     "energy_correction_scheme_ref_or_id": lambda w: [w.extra["ecs"].public_ref],
@@ -31,6 +31,8 @@ PATH_PARAM_PROVIDERS: dict[str, Callable[[SweepWorld], list[str]]] = {
     "geometry_handle": lambda w: [
         w.extra["geometry_hidden_calc"].public_ref,
         w.extra["geometry_visible_calc"].public_ref,
+        w.extra["geometry_hidden_ts_entry"].public_ref,
+        w.extra["geometry_ambiguous_owners"].public_ref,
     ],
     "level_of_theory_ref_or_id": lambda w: [w.extra["lot"].public_ref],
     "literature_ref_or_id": lambda w: [w.extra["literature"].public_ref],
@@ -48,6 +50,20 @@ PATH_PARAM_PROVIDERS: dict[str, Callable[[SweepWorld], list[str]]] = {
     "transition_state_ref_or_id": lambda w: _refs(w, "ts_v"),
     "transport_ref_or_id": lambda w: _refs(w, "trn_v"),
     "sha256": lambda w: [w.extra["artifact_sha_visible"]],
+}
+
+#: Providers that apply to one route only, for a parameter whose name is shared with routes that need other records
+#: (the scan, IRC and path-search reads need a calculation that has that kind of result).
+ROUTE_PATH_PARAM_PROVIDERS: dict[tuple[str, str], dict[str, Callable[[SweepWorld], list[str]]]] = {
+    ("GET", f"{BASE}/calculations/{{calculation_ref_or_id}}/scan"): {
+        "calculation_ref_or_id": lambda w: _refs(w, "calc_scan")
+    },
+    ("GET", f"{BASE}/calculations/{{calculation_ref_or_id}}/irc"): {
+        "calculation_ref_or_id": lambda w: _refs(w, "calc_irc")
+    },
+    ("GET", f"{BASE}/calculations/{{calculation_ref_or_id}}/path-search"): {
+        "calculation_ref_or_id": lambda w: _refs(w, "calc_ps")
+    },
 }
 
 #: Path parameters of routes that are exempt (never crawled), so they need no provider.
@@ -174,9 +190,6 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
 #: ``(method, route template)`` -> reason this route cannot be crawled yet. Must be empty once every family is
 #: enforced; each entry names the PR that closes it.
 CRAWL_UNSUPPORTED: dict[tuple[str, str], str] = {
-    ("GET", f"{BASE}/calculations/{{calculation_ref_or_id}}/scan"): "needs a scan-result fixture (PR-2a)",
-    ("GET", f"{BASE}/calculations/{{calculation_ref_or_id}}/irc"): "needs an IRC-result fixture (PR-2a)",
-    ("GET", f"{BASE}/calculations/{{calculation_ref_or_id}}/path-search"): "needs a path-search fixture (PR-2a)",
     ("GET", f"{BASE}/composite-schemes/{{composite_scheme_ref}}"): "needs a composite-scheme fixture (PR-2c)",
     ("POST", f"{BASE}/networks/{{network_ref}}/kinetics/select"): "needs a determination world (PR-3)",
     ("POST", f"{BASE}/networks/{{network_ref}}/kinetics/select/manifest"): "needs a determination world (PR-3)",

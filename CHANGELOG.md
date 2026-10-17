@@ -22,6 +22,32 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curated reads of the species-side routes no longer name hidden records (2026-10-17)
+
+**Narrowing under `profile=curated` only; the default (exploratory) output is unchanged.** Migration: none. New environment variable:
+none. `tckdb-schemas` unchanged, `tckdb-client` 0.152.0.
+
+- The central ref guard is enabled for `/statmech`, `/thermo`, `/species-entries`, `/species`, `/transport`, `/conformer-groups`,
+  `/conformer-observations`, `/conformers`, `/calculations`, `/species-calculations`, `/artifacts` and `/geometries`. A block that
+  is about a hidden record (a source calculation, a dependency, a conformer context, an owner TS entry, a correction notice) is
+  dropped whole; an optional ref is set to null; a ref the guard cannot place fails the request with a 500 rather than leaking it.
+- **Wire change (OpenAPI):** `ScientificConformerObservationRecord.conformer_group` is nullable. Under `profile=curated`, a visible
+  observation whose conformer group is not approved comes back with `conformer_group: null`; the observation itself stays visible.
+  The default profile never returns null there.
+- A URL field whose last path segment is a hidden record's ref (for example an applied correction's `target_endpoint`) is
+  withheld together with the `*_ref` and `*_id` beside it, and a hidden record's id is removed from the aligned
+  `supporting_calculation_ids` list when its `supporting_calculations` row is dropped.
+- Under `profile=curated`, `calculation.owner.kind` can be `transition_state_entry` with both owner blocks null (the owning entry is
+  hidden). The default profile always carries exactly one owner.
+- Owner contracts that said "exactly one" now state the curated exception: `GeometryIdentity` (`kind: "transition_state_entry"` with
+  both owners null; `ambiguous_owners` can list fewer owners than were found) and statmech (`species` and `transition_state` both null
+  when the subject TS entry is hidden). `tckdb-client` 0.152.0 (this text is comment-only).
+- The conformer-observation page (`conformer_group` null) hides the basin breadcrumb and the "Conformer basin" row.
+- Species-entry `availability` flags, `calculation_count` and the `*_summary.ids` lists count only what the curated floor shows
+  under `profile=curated`, the same as the list endpoints. Unchanged under the default profile.
+- **Not yet covered:** transition-state, reaction, kinetics, network, literature, analytics and level-of-theory routes, selection
+  documents and exports (the sweep baseline still lists them).
+
 ## Relative conformer energies against a named reference conformer (2026-10-17)
 
 **New read route; one route deprecated.** Migration: none. New environment variable: none. Package versions: `tckdb-schemas` 0.124.0
