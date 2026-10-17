@@ -1,15 +1,15 @@
-# XYG3 vs B3LYP classical-barrier audit manifest, version 0.3.0 (2026-10-05). NOT approved for activation:
-# status.activation_approved is false and status.activation_blockers says why. Compiled from the five
-# owner-supplied papers listed under sources (SHA-256 pinned there) and copied here unchanged except for this
-# header. Loaded by app.chemistry.kinetics_rules.xyg3_barrier_manifest. A change to a member, a barrier
+# XYG3 vs B3LYP classical-barrier audit manifest, version 0.4.0 (2026-10-13). NOT approved for activation:
+# status.activation_approved is false and status.activation_blockers says why. Compiled from the owner-supplied
+# papers listed under sources (SHA-256 pinned there; the PDFs are not copied into the repository). Version 0.1.0 was
+# copied from the audit; every later version is an edit recorded in manifest_history. Loaded by app.chemistry.kinetics_rules.xyg3_barrier_manifest. A change to a member, a barrier
 # height or a blocker is a new manifest version and a new rule version, never an in-place edit.
 rule_id: K-XYG3-B3LYP-BARRIER
 rule_statement: For a computed rate coefficient whose classical electronic barrier is evaluated with XYG3, an expected-performance
   preference over the same barrier evaluated with B3LYP, restricted to the 38 reactions (76 barrier heights) of the HTBH38/04
   and NHTBH38/04 benchmark sets, and only where the remaining treatment of the two rates is verified compatible. An expected-performance
   inference, not a validated accuracy of any individual rate.
-manifest_version: 0.3.0
-manifest_date: '2026-10-05'
+manifest_version: 0.4.0
+manifest_date: '2026-10-13'
 manifest_history:
 - version: 0.1.0
   date: '2026-10-04'
@@ -24,6 +24,20 @@ manifest_history:
     record can declare its energy-level method and basis (kinetics.energy_level_of_theory_id, PRs 699 and 700) and the
     rule reads it; the old text said it could not. The remaining limit is that a declaration cannot be verified from
     the record's calculations. No number, member or other blocker changed. Rule NOT activated.
+- version: 0.4.0
+  date: '2026-10-13'
+  note: 'Comparator record corrected: the B3LYP row of Zhang 2009 Table 2 is the 2005 Zhao-Gonzalez-Garcia-Truhlar B3LYP/MG3S
+    row, not 6-311+G(3df,2p). The same-basis comparison (Zhang, Luo, Xu, JCP 133, 104105 (2010), Table III and SI Table_s2.doc)
+    is added with four new SHA-256-pinned sources: at 6-311+G(3df,2p) and QCISD/MG3 geometries the 76-barrier MAD is XYG3 1.02
+    against B3LYP 4.54 kcal/mol, XYG3 closer on 69 of 76 barriers. The Table III XYG3 HAT12 typo (1.66 printed, 1.38 in the
+    SI) is recorded. The scoped claim is added with its list of what it does not license. Blocker comparator_protocol_unverified
+    is resolved, as are only_aggregate_evidence (per-barrier data now exist) and correction_changes_a_cited_total (the
+    mixed-basis gap is replaced by the same-basis one); all three move to status.resolved_blockers. owner_sign_off_not_given
+    and member_level_treatment_undecided are added. The electronic-method blocker had already been resolved in 0.3.0 by the
+    declared electronic method (kinetics.energy_level_of_theory_id, PRs 699 and 700). No member or barrier height changed.
+    Geometry provenance stays unresolved: TCKDB cannot record which geometry a stored barrier used. Owner decision
+    2026-10-13: keep the rule INACTIVE for now; whether to fix that by (a) a schema change that records the geometry level or
+    (b) accepting it as a stated limitation is undecided. Rule NOT activated.'
 status:
   membership_listed_complete: true
   membership_listing_sources:
@@ -42,32 +56,81 @@ status:
   identity_unresolved: 0
   members_with_a_complex_identity_caveat: 4
   activation_approved: false
-  activation_recommendation: 'Do not activate. Membership is complete by listing, but the evidence cannot establish the comparison
-    the rule would need: see activation_blockers. Activation also needs explicit owner or curator sign-off, which has not
-    been given.'
+  activation_recommendation: 'Do not activate. Membership is complete by listing and the comparator basis is now resolved,
+    but a stored barrier cannot declare which geometry it used, so the rule cannot check that a record matches the benchmark
+    protocol (owner decision 2026-10-13: keep the rule inactive for now; route (a) a schema change recording the geometry level or
+    route (b) a stated limitation is undecided). Activation also needs explicit owner or curator sign-off, which has not been
+    given.'
   curator_acceptance: null
-  activation_blockers:
+  resolved_blockers:
   - id: comparator_protocol_unverified
-    text: Zhang 2009 Table 2 marks B3LYP (4.28 / 4.23 / 8.49 / 3.25 / 2.02) as the authors' own 6-311+G(3df,2p) calculation,
-      but all five numbers are identical to the B3LYP/MG3S values Zhao-Gonzalez-Garcia-Truhlar printed in 2005 (jp045141s
-      Tables 4 and 5, including the uncorrected 4.28 total). A recomputation in another basis would not reproduce five columns
-      to 0.01 kcal/mol. The paper therefore does not establish an XYG3 versus B3LYP comparison in one basis set.
+    resolved_in: 0.4.0
+    resolved_by: ZHANG_2010_JCP, ZHANG_2010_JCP_SI
+    text: 'Resolved. The B3LYP row of Zhang 2009 Table 2 (4.28 / 4.23 / 8.49 / 3.25 / 2.02) is the Zhao-Gonzalez-Garcia-Truhlar
+      2005 B3LYP/MG3S row (jp045141s Tables 4 and 5, with its uncorrected 4.28 total), not a 6-311+G(3df,2p) calculation; no author
+      statement says so, the conclusion rests on numerical identity. The same-basis comparison is Zhang, Luo, Xu, J. Chem. Phys.
+      133, 104105 (2010), doi:10.1063/1.3488649, Table III row B3LYP/B9 (B9 = 6-311+G(3df,2p)) and SI Table_s2.doc, at the
+      Truhlar-database geometries: B3LYP UM10 2.02, NS16 3.38, HAT12 8.51, HT38 4.43, all 76 4.54; XYG3 0.98, 1.42, 1.38, 0.75, 1.02.'
+  - id: electronic_method_not_a_protocol_field
+    resolved_in: 0.3.0
+    text: 'Resolved earlier, in 0.3.0 (replaced by declared_energy_level_not_verifiable_from_calculations): a kinetics record can
+      declare its energy-level method and basis (kinetics.energy_level_of_theory_id, PRs 699 and 700) and the rule reads it.'
   - id: only_aggregate_evidence
-    text: Zhang 2009 and its SI give subset mean unsigned errors only. The SI holds heats of formation (Table S1) and no per-reaction
-      XYG3 barrier heights, so no member-by-member advantage can be checked; the rule would extend subset-level evidence to
-      each listed member.
+    resolved_in: 0.4.0
+    resolved_by: ZHANG_2010_JCP_SI
+    text: 'Resolved. Zhang 2009 and its SI gave subset errors only; the JCP 2010 SI gives the XYG3 and B3LYP error of every one
+      of the 76 barriers at 6-311+G(3df,2p) and the same geometries (Tables S10, S11, S13, S14 and S22, S23, S25, S26). What
+      the per-barrier data show for member-level use is the open blocker member_level_treatment_undecided.'
+  - id: correction_changes_a_cited_total
+    resolved_in: 0.4.0
+    resolved_by: ZHANG_2010_JCP
+    text: 'Resolved. The 2006 correction (jp061040d) moves the printed B3LYP/MG3S totals (non-HT(38) 4.34 -> 4.58, all(76) 4.28
+      -> 4.40), and Zhang 2009 prints the uncorrected 4.28, so its all-76 gap (3.26 as printed, 3.38 corrected) is a
+      mixed-basis gap and must not be cited as a same-basis one. The same-basis gap is 4.54 - 1.02 = 3.52 kcal/mol
+      (ZHANG_2010_JCP Table III).'
+  activation_blockers:
   - id: reference_geometry_not_expressible
     text: Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration
-      can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry.
+      can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry,
+      so TCKDB cannot record which geometry a stored barrier used. Unresolved. Owner decision of 2026-10-13 was to keep the rule inactive
+      for now; the choice between (a) a schema change that records the geometry level and (b) accepting it as a stated
+      limitation has not been made. Recording the geometry would let the rule check that a record matches the benchmark
+      protocol; it would not widen the evidence beyond QCISD/MG3 geometries.
+  - id: owner_sign_off_not_given
+    text: No owner or curator has accepted the scoped claim (the scoped_claim block of the manifest file, which the downloadable
+      decision manifest does not carry) as the evidence for an active rule. Not given as of 2026-10-13.
+  - id: member_level_treatment_undecided
+    text: The rule would apply a subset-level result to each listed member, but the per-barrier data show B3LYP closer than XYG3
+      on 7 of the 76 barriers (HT11 reverse, HT16 forward, HT19 forward and reverse, NHT15 reverse, NHT17 reverse, NHT19
+      forward). Whether those members are excluded, flagged or covered is undecided; the owner has not chosen.
   - id: declared_energy_level_not_verifiable_from_calculations
     text: A kinetics record can declare the electronic method and basis of its energies (kinetics.energy_level_of_theory_id) and
       the rule reads it. A declaration cannot be verified from the record's calculations, because supporting calculations and
       source links carry no role saying which side of the barrier (transition state, reactants, products) they cover, so they
       can only corroborate or contradict it.
-  - id: correction_changes_a_cited_total
-    text: 'The 2006 correction (jp061040d) changes the printed totals: B3LYP non-HT(38) 4.34 -> 4.58 and all(76) 4.28 -> 4.40.
-      Zhang 2009 prints the uncorrected 4.28, so the paper''s all-76 gap to B3LYP is 3.26 as printed and 3.38 corrected. Subset
-      columns are unaffected.'
+scoped_claim:
+  statement: On the 76 classical (zero-point-exclusive) forward and reverse barrier heights of HTBH38/04 and NHTBH38/04, evaluated
+    as single-point energies at the QCISD/MG3 reference geometries against the 2005 best-estimate references, XYG3/6-311+G(3df,2p)
+    (with self-consistent B3LYP/6-311+G(3df,2p) orbitals) has a mean absolute deviation of 1.02 kcal/mol, against 4.54 kcal/mol
+    for B3LYP/6-311+G(3df,2p) computed in the same study, and a smaller absolute error on 69 of the 76 barriers.
+  source: ZHANG_2010_JCP Table III and SI Table_s2.doc (Tables S10, S11, S13, S14 for B3LYP; S22, S23, S25, S26 for XYG3)
+  also_supported: The MAD ordering holds in each of the ten Pople triple-zeta basis sets tested (XYG3 0.92-1.63, B3LYP 4.32-4.77).
+  does_not_license:
+  - id: single_barriers
+    text: Any individual barrier. B3LYP is closer on 7 of the 76.
+  - id: other_geometries
+    text: Other geometries. Every number is at QCISD/MG3 geometries; barriers at DFT-optimized transition states were not tested
+      here.
+  - id: other_bases
+    text: Other basis sets than the ten Pople sets tested, or any comparison where XYG3 and B3LYP use different bases.
+  - id: zpe_tunnelling_rate_accuracy
+    text: Zero-point-corrected barriers, tunnelling, partition functions or the accuracy of a rate coefficient.
+  - id: reactions_outside_the_38
+    text: Reactions outside the 38 of the two benchmark sets.
+  - id: mixed_basis_figures
+    text: Citing Zhang 2009's 4.28 as a same-basis B3LYP value, or the 3.26 / 3.38 gap as a same-basis gap.
+  - id: corrected_mg3s_total
+    text: Any claim about the corrected ZGT 2005 B3LYP/MG3S total (4.40); that is a different basis.
 sources:
 - id: ZHANG_2009
   citation: Y. Zhang, X. Xu, W. A. Goddard III, Proc. Natl. Acad. Sci. USA 106, 4963-4968 (2009)
@@ -105,6 +168,41 @@ sources:
   read_from: owner-supplied PDF, full text
   used_for: Corrected Table 4 total (38) and Table 5 columns after the CH3 + FCl -> CH3F + Cl barrier heights were wrongly
     left out of the totals
+- id: ZHANG_2010_JCP
+  citation: Y. Zhang, Y. Luo, X. Xu, J. Chem. Phys. 133, 104105 (2010)
+  doi: 10.1063/1.3488649
+  file: 10.1063_1.3488649.pdf
+  sha256: f0df839629686b6ce88fdbb87f158e3eb5458131c682061ce5cf41b956340e73
+  read_from: owner-supplied PDF, full text (13 pages, including the AIP cover)
+  used_for: Table III same-basis B3LYP and XYG3 subset MADs for B1-B10 (B9 = 6-311+G(3df,2p)); computational details (Truhlar-database
+    geometries, Gaussian 03). Table III prints XYG3/B9 HAT12 as 1.66; the SI per-barrier data give 1.38 and the printed total
+    1.02 requires 1.38
+- id: ZHANG_2010_JCP_SI
+  citation: Supplementary material for Zhang, Luo, Xu, J. Chem. Phys. 133, 104105 (2010)
+  file: 104105_1_supplements.zip
+  sha256: 8fdb70a5de8857ea97deaed77156bcb984b1471e2caa892ab430ac19dc9d2eb2
+  contained_file: Table_s2.doc
+  contained_file_sha256: 15c1cab00d4160eb781a21b673963a5c51ad1bb9c3ec6e1233d4934fed094a13
+  read_from: owner-supplied zip; text of Table_s2.doc extracted and the subset MADs recomputed from it
+  used_for: Per-barrier errors for all 76 barriers, B3LYP (Tables S10, S11, S13, S14) and XYG3 (S22, S23, S25, S26), ten basis
+    sets, same geometries
+- id: ZHANG_2010_CHEMCOMM
+  citation: Y. Zhang, A. Wu, X. Xu, Chem. Commun. 46, 3057 (2010)
+  doi: 10.1039/c000677g
+  file: 10.1039_c000677g.pdf
+  sha256: 34df00b9e4c2a6bf009e5a7c18f4c5c5475fda8b7225564ed5c9c95b2becf58c
+  read_from: owner-supplied PDF, full text (14 pages)
+  used_for: 'Corroboration only: still quotes B3LYP 4.3 citing PNAS 2009, and its per-reaction values match 6-311+G(3df,2p).
+    Its Table 7 uses B3LYP/6-311+G(d,p) re-optimized geometries, not the benchmark geometries, and is not evidence for this rule'
+- id: ZHANG_2011_PNAS
+  citation: Y. Zhang, X. Xu, Y. Jung, W. A. Goddard III, Proc. Natl. Acad. Sci. USA 108, 19896 (2011), XYGJ-OS
+  doi: 10.1073/pnas.1115123108
+  file: PMC3250148.pdf
+  sha256: 627dc301f01a621f9f14e7202fdea0526effd85762da050e4554fcb81d92c9e5
+  read_from: owner-supplied PDF, main article (5 pages); its SI was not supplied and is not pinned
+  used_for: 'Corroboration only: a separate same-group (Q-Chem) B3LYP/6-311+G(3df,2p) 76-barrier MAD of 4.47, against 4.54 in
+    ZHANG_2010_JCP. The 4.47 appears only in the unsupplied SI Table S2, so it cannot be checked against the pinned bytes
+    and nothing in this manifest depends on it'
 corrections_applied:
 - source: ZHAO_2005_CORRECTION
   target: ZHAO_2005 Table 4, total (38)
@@ -154,6 +252,8 @@ protocol_facts:
     basis_as_footnoted_by_zhang: 6-311+G(3df,2p) (own calculation, footnote *)
     basis_in_the_identical_published_numbers: MG3S at QCISD/MG3 geometries (jp045141s section 2.6; SI Tables S2-S5 footnote
       b)
+    comparator_record_corrected_in_0_4_0: the footnote is wrong in effect. The Zhang 2009 B3LYP row is the 2005 B3LYP/MG3S row,
+      so the same-basis B3LYP comparator is ZHANG_2010_JCP Table III row B9 (6-311+G(3df,2p), 4.54 over 76 barriers)
     training: parametrized only against thermochemistry (jp045141s introduction), so barrier heights are out of sample
   out_of_sample: barrier heights are out of sample for both XYG3 and B3LYP; they were in the M06 training set
 aggregates:
@@ -182,6 +282,29 @@ aggregates:
       HAT12: 1.61
       NS16: 1.22
       UM10: 0.92
+  zhang_2010_jcp_table_3_b9_mad_kcal_mol:
+    basis: 6-311+G(3df,2p)
+    geometry: QCISD/MG3 (Truhlar database)
+    XYG3:
+      all_76: 1.02
+      HT38: 0.75
+      HAT12: 1.38
+      NS16: 1.42
+      UM10: 0.98
+    B3LYP:
+      all_76: 4.54
+      HT38: 4.43
+      HAT12: 8.51
+      NS16: 3.38
+      UM10: 2.02
+    same_basis_gap_all_76: 3.52
+    xyg3_closer_barriers: 69
+    b3lyp_closer_barriers: 7
+    printed_typo:
+      location: ZHANG_2010_JCP Table III, row XYG3/B9, column HAT12
+      printed: 1.66
+      correct: 1.38
+      evidence: the SI per-barrier data give 1.38, and the printed total of 1.02 requires 1.38 (1.66 would give a total of about 1.06)
   zhao_2005_b3lyp_mg3s_published:
     original_table_4_5:
       HAT12_mue: 8.49
@@ -206,7 +329,8 @@ reproduction_checks:
     to 0.02
 evidence_limits:
 - id: aggregate_not_per_member
-  text: Mean unsigned errors over a subset do not say XYG3 beats B3LYP for any particular reaction.
+  text: Mean unsigned errors over a subset do not say XYG3 beats B3LYP for any particular reaction; B3LYP is closer on 7 of
+    the 76 barriers (ZHANG_2010_JCP_SI).
 - id: single_geometry
   text: All energies are single points at QCISD/MG3 geometries; performance with other geometries is not tested.
 - id: classical_barrier_only

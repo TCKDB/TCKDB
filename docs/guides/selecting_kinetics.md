@@ -107,9 +107,11 @@ are labelled `expected-performance inference`: a benchmark, not a measurement of
 more than one objective are not composed into one path; they are listed under `relations.unused_edges`.
 
 **Every rule in this release is inactive.** `policy.rules` lists each rule consulted with its status and why it is
-inactive. The XYG3 versus B3LYP classical-barrier rule is audited from its primary sources and shipped inactive
-because the comparison's basis set is not verified, only aggregate evidence is published, and the benchmark geometry
-cannot be expressed by a protocol declaration; the multipath, tunneling and master-equation examples are registered
+inactive. The XYG3 versus B3LYP classical-barrier rule is audited from its primary sources and shipped inactive.
+Its comparator basis is now resolved (a same-basis comparison exists), but a stored barrier cannot declare which
+geometry it used, the benchmark evidence holds at QCISD/MG3 geometries only, how to treat the 7 of 76 barriers where
+B3LYP is closer is undecided, and there is no owner sign-off. The owner chose to keep it inactive for now; whether to
+record the geometry in the schema or accept it as a stated limitation is undecided. The multipath, tunneling and master-equation examples are registered
 inactive without an audit. Activation needs a named curator's sign-off on an audited manifest. Until then
 `method_preferred` ranks nothing and says so.
 
@@ -126,7 +128,8 @@ The manifest holds the normalised request, the snapshot isolation the data was r
 READ snapshot, so one consistent state), every assessed candidate with its normalised inputs, the determinations, the
 rules consulted, each comparison and the administrative order, as public refs only. It is enough to recompute the
 decision with no database. A replay refuses a manifest made under another policy version, or one whose rule version,
-status or audited manifest is not what the running registry carries; it never substitutes another.
+status or audited manifest is not what the running registry carries; it never substitutes another. A rule version that has been superseded stays loadable for replay only, so a decision recorded under it still
+replays; it is never used for a live selection.
 
 ## Depositing so that a record can take part
 
