@@ -77,6 +77,41 @@ variable: none. No package version changes; no schema change (OpenAPI golden unc
   (which writes `deprecated`) is unchanged.
 - Existing data is not touched. A superseded record left approved before this guard stays as it is until a curator deprecates it.
 
+## Transition-state-owned statmech is graded by its own rubric, not hard-failed (2026-10-13)
+
+**Trust correction; changes what readers see. Requires owner sign-off and a rollout step (below).** Migration: none (rubrics are
+code; no `record_machine_review` row is touched). New environment variable: none. No package version changes: no response-schema
+shape changes (OpenAPI golden moves only in one route description), so the package versions are not bumped.
+
+- **Defect.** A statmech record owned by a transition-state entry was graded by the species rubric, whose first required check is
+  "attached to a species entry". Every such record read `hard_failed` / `species_entry_missing` on `include=assessments` and
+  `include=trust` (detail, search, species read), however complete it was.
+- **Fix.** A new owner-scoped rubric, `computed_ts_statmech` v1, grades transition-state-owned statmech. It is `computed_statmech`
+  v2 with one check swapped (`transition_state_entry_present` replaces `species_entry_present`); every other check is the same
+  object. It adds no TS-specific check, certifies nothing, keeps an automated geometry fail advisory, and the statmech selection
+  package still never imports the trust layer. A TS-owned record's `assessments.deterministic_trust.rubric` /
+  `trust.evidence.rubric` become `computed_ts_statmech` / `computed_ts_statmech_v1` and its check map gains
+  `transition_state_entry_present` and loses `species_entry_present`.
+- **Species-owned records do not change**: rubric `computed_statmech` v2, check map, badge, completeness and the currency of their
+  stored machine reviews are byte-identical (the shared version is deliberately not bumped). Pinned by a frozen-expectation test
+  and by an equivalence test against the species rubric run directly.
+- **Machine review.** A review is now stamped with the rubric that actually evaluated the record. The reviewer-family recipe for a
+  TS-owned statmech is `{"computed_ts_statmech_v1": "1"}`. No stored review is rewritten or deleted. After deploy, the latest review
+  of each TS-owned statmech reads **stale** (`context_hash_mismatch`, `rubric_versions_mismatch`); species-owned reviews stay
+  current. There is no automatic or bulk re-review.
+- **Operator report (new, read-only).** `backend/scripts/ops/statmech_trust_owner_report.py` prints, per owner kind, how many
+  statmech records change badge and how, whether the species-owned records were routed to the other rubric (`species_entry_unchanged`, which checks routing only and
+  must be `true`), and which stored reviews become stale. Also read the species rows of `machine_review_currency`: every one must
+  be `current`, which is the check anchored to the code on `main`. It refuses to run without `--database-url` or `--use-configured-database` and runs in a
+  `REPEATABLE READ`, `READ ONLY` transaction; there is no apply mode.
+- **Rollout.** Restore the latest backup into a scratch database, run the report there with this code, read
+  `species_entry_unchanged`, that all species review rows are `current`, and the `transition_state_entry` rows, then deploy. Leave TS-owned reviews stale. Details:
+  `backend/docs/specs/automated_trust_layer.md` section 9.3.1.
+- The reproducibility rubric has the same species-only assumption for TS-owned statmech; that is a separate decision and is not
+  changed here (issue #760).
+- Generated: `docs/guides/api_vocabulary.md` (the new check name), the OpenAPI golden (one route description no longer names
+  `computed_statmech_v1`).
+
 ## Curated statmech reads no longer name calculations the curated profile hides (2026-10-12)
 
 **Narrowing under `profile=curated` only.** Migration: none. New environment variable: none. No package version changes; no

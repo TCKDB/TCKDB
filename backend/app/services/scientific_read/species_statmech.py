@@ -91,7 +91,7 @@ def get_species_statmech(
 
     Records are pinned to ``species_entry_id`` and returned in the
     shared deterministic order. ``include=trust`` adds the
-    ``computed_statmech_v1`` fragment per record; ``include=all`` never
+    record's computed statmech rubric fragment per record; ``include=all`` never
     expands to trust (it is an internal token here). The response
     reuses :class:`ScientificStatmechSearchResponse`; the pinned entry
     is echoed in ``request.filter.species_entry_ref``.

@@ -174,6 +174,35 @@ def active_rubric_versions_for_record_type(record_type: str) -> dict[str, str]:
     return {name: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[name]}
 
 
+def active_rubric_versions_for_fragment(
+    record_type: str, fragment: TrustFragment
+) -> dict[str, str]:
+    """Return the active recipe for the rubric that *actually evaluated* this record.
+
+    A record type can have more than one rubric: a statmech record is graded by
+    ``computed_statmech`` when a species entry owns it and by ``computed_ts_statmech`` when
+    a transition-state entry does. The context hash folds the rubric's name and version in,
+    so the recipe stamped beside it must name the same rubric. Stamping the record type's
+    default instead would give a review that contradicts itself and reads stale on arrival.
+
+    Fails loudly (a bare ``RuntimeError``, which the API answers with 500) when the rubric
+    that ran is not in the active table: that is a code defect, and silently falling back
+    to the record type's default would hide it.
+
+    :func:`active_rubric_versions_for_record_type` is *not* owner-aware: it returns the
+    record type's default rubric (for statmech, the species one) and remains the lookup for
+    callers that have no evaluated record in hand.
+    """
+    _require_resolver(record_type)
+    name = fragment.evidence.get("rubric")
+    if not isinstance(name, str) or name not in ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS:
+        raise RuntimeError(
+            f"The {record_type} rubric that evaluated this record ({name!r}) has no entry in the "
+            "active machine-review rubric table."
+        )
+    return {name: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[name]}
+
+
 def resolve_record_trust_fragment(
     session: Session,
     *,
@@ -250,7 +279,7 @@ def run_admin_fake_machine_review(
         record_ref=str(record_id),
         trust_fragment=fragment,
         active_prompt_version=ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-        active_rubric_versions=active_rubric_versions_for_record_type(record_type),
+        active_rubric_versions=active_rubric_versions_for_fragment(record_type, fragment),
         producer=producer if producer is not None else FakeMachineReviewProducer(),
         reviewed_at=reviewed_at,
     )

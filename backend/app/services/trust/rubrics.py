@@ -1196,6 +1196,14 @@ def _check_statmech_species_entry_present(statmech: Statmech) -> EvidenceOutcome
     )
 
 
+def _check_statmech_transition_state_entry_present(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when the statmech row is attached to a transition_state_entry."""
+    return _bool_outcome(
+        statmech.transition_state_entry_id is not None
+        and statmech.transition_state_entry is not None
+    )
+
+
 def _check_statmech_origin_is_computed(statmech: Statmech) -> EvidenceOutcome:
     """Return passed when the statmech record declares computed origin."""
     return _bool_outcome(statmech.scientific_origin is ScientificOriginKind.computed)
@@ -3278,6 +3286,37 @@ COMPUTED_TRANSITION_STATE_V3: EvidenceRubric = EvidenceRubric(
 )
 
 
+assert COMPUTED_STATMECH_V2.checks[0].name == "species_entry_present", (
+    "COMPUTED_TS_STATMECH_V1 swaps the first check of COMPUTED_STATMECH_V2; "
+    "if V2 is reordered, re-derive the TS rubric instead of slicing it"
+)
+
+COMPUTED_TS_STATMECH_V1: EvidenceRubric = EvidenceRubric(
+    name="computed_ts_statmech",
+    version=1,
+    record_type="statmech",
+    checks=(
+        EvidenceCheckSpec(
+            name="transition_state_entry_present",
+            kind=EvidenceCheckKind.required,
+            explain="Statmech must be attached to a transition_state_entry.",
+            runner=_check_statmech_transition_state_entry_present,
+        ),
+        *COMPUTED_STATMECH_V2.checks[1:],
+    ),
+)
+"""Evidence completeness for a statmech record owned by a transition-state entry.
+
+``COMPUTED_STATMECH_V2`` with exactly one check swapped: "attached to a
+transition-state entry" replaces "attached to a species entry". Every other check
+is the *same* spec object, so the two rubrics cannot drift apart. It adds no
+transition-state-specific check (no imaginary-mode count, no reaction-coordinate
+designation, no IRC requirement): the badge reports whether the record's
+provenance fields are populated, not whether the transverse model is suitable.
+That judgment belongs to the statmech selection endpoint.
+"""
+
+
 RUBRIC_REGISTRY: dict[str, EvidenceRubric] = {
     "calculation": COMPUTED_CALCULATION_V2,
     "kinetics": COMPUTED_KINETICS_V2,
@@ -3305,6 +3344,32 @@ def get_rubric_for_record_type(record_type: str) -> Optional[EvidenceRubric]:
     rather than the API failing.
     """
     return RUBRIC_REGISTRY.get(record_type)
+
+
+OWNER_SCOPED_RUBRICS: tuple[tuple[str, EvidenceRubric], ...] = (
+    ("statmech", COMPUTED_TS_STATMECH_V1),
+)
+"""Rubrics that apply to one *owner kind* of a record type, outside ``RUBRIC_REGISTRY``.
+
+``RUBRIC_REGISTRY`` keeps the record-type default (for statmech, the species rubric
+``COMPUTED_STATMECH_V2``). An entry here is selected per record by a router
+(``statmech_rubric_for``), never by the registry. Each entry is
+``(record_type, rubric)``. Anything that enumerates "every check a trust map can
+contain" (the API vocabulary) must read this as well as the registry.
+"""
+
+
+def statmech_rubric_for(statmech: Statmech) -> EvidenceRubric:
+    """Return the rubric that evaluates ``statmech``, by who owns the record.
+
+    A transition-state-owned record (``species_entry_id`` null, ``transition_state_entry_id``
+    set) is graded by ``COMPUTED_TS_STATMECH_V1``. Everything else, species-owned records
+    and the impossible-under-the-CHECK rows with neither or both owners, keeps
+    ``COMPUTED_STATMECH_V2`` exactly as before.
+    """
+    if statmech.species_entry_id is None and statmech.transition_state_entry_id is not None:
+        return COMPUTED_TS_STATMECH_V1
+    return COMPUTED_STATMECH_V2
 
 
 # ---------------------------------------------------------------------------
