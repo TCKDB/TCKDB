@@ -91,7 +91,8 @@ def test_a_manifest_made_now_carries_the_structured_block_and_is_labelled_curren
         "evidence_rubric": "computed_kinetics@2",
         "source_findings": "1",
     }
-    assert replay_provenance(manifest)["kind"] == "current"
+    label = replay_provenance(manifest)
+    assert label["kind"] == "current" and label["superseded_rule_versions"] == []
     assert manifest["policy"] == {"name": "kinetics_method_preferred", "version": POLICY_VERSION}  # procedure unchanged
 
 
@@ -164,3 +165,14 @@ def test_each_xyg3_rule_version_is_tied_to_one_manifest_digest_and_moving_a_pin_
     for rule in replay_rules():
         if rule.rule_id == "K-XYG3-B3LYP-BARRIER":
             assert rule.describe()["manifest_sha256"] == ledger[rule.version], rule.version
+
+
+def test_a_v2_manifest_naming_a_replay_only_rule_version_is_labelled_historical(db_session, world):
+    with_protocol(db_session, world, "good", PREFERRED, status=RecordReviewStatus.not_reviewed)
+    manifest = select(db_session, world.entry, rules=default_rules()).manifest
+    assert manifest["assessment_semantics"]["version"] == ASSESSMENT_SEMANTICS_VERSION
+    _xyg3_entry(manifest)["version"] = "0.2.0"
+    label = replay_provenance(manifest)
+    assert label["kind"] == "historical"
+    assert label["superseded_rule_versions"] == ["K-XYG3-B3LYP-BARRIER 0.2.0"]
+    assert "K-XYG3-B3LYP-BARRIER 0.2.0" in label["statement"]

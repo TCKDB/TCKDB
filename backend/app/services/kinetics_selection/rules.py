@@ -429,6 +429,9 @@ class XYG3B3LYPBarrierRuleV0_2_0(XYG3B3LYPBarrierRule):
 
     The logic is the same; only the audited manifest differs (the comparator-basis blocker was still open). Replay
     only: :func:`default_rules` does not carry it, so no live selection uses it.
+
+    It subclasses the live rule, so it inherits that rule's logic. If a future version changes the logic, 0.2.0 replay
+    would silently inherit the change; only the golden fixture would catch it. Freeze the old logic before doing that.
     """
 
     version = "0.2.0"
