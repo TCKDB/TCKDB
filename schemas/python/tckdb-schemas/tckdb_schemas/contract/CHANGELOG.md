@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.124.0 - 2026-10-17
+
+Three new refusal codes for the relative conformer energy read, `POST /scientific/species-entries/{ref}/conformers/relative-energies`:
+`relative_conformer_energy_unsupported` (422; `context.reason` is `deferred_energy_kind` for enthalpy or Gibbs energy, or
+`deferred_certificate` for a request for no minimum certificate), `relative_conformer_energy_population_too_large` (422; more than
+500 visible conformer groups) and `relative_conformer_energy_scope_owner_mismatch` (422; `context.field` names a conformer group
+that belongs to another species entry). A read route, so no producer route and no upload payload changes; this release only adds
+the codes to the shipped refusal-code reference.
+
 ## 0.123.0 - 2026-10-13
 
 One new refusal code, `superseded_record_not_approvable` (409): `PATCH /record-reviews/{type}/{id}` refuses moving a record that has

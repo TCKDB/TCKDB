@@ -857,6 +857,16 @@ _RAW_ONLY: tuple[tuple[str, str, str], ...] = tuple(
         "records through search_transition_states(). Reachable via "
         "get_json().",
     ),
+    *(
+        (
+            "POST",
+            f"/api/v1/scientific/species-entries/{{species_entry_ref}}/conformers/relative-energies{suffix}",
+            "Relative conformer energies against a named reference conformer. A typed method needs its request "
+            "and response types and the four required scientific choices as required keyword arguments, which "
+            "ships as its own client release; until then it is reached through post_json().",
+        )
+        for suffix in ("", "/manifest")
+    ),
 )
 
 # ---------------------------------------------------------------------------

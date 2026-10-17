@@ -10,6 +10,9 @@ question: "of the stored results that can answer this exact question, which one 
 you know?" Total energies from different methods are not on one scale, so the honest answer is often "these are
 alternatives and nothing ranks them", and the endpoint says so instead of picking one.
 
+For the energy difference between a conformer and a reference conformer you name, see the separate operation in
+`docs/guides/relative_conformer_energies.md`; relative energies are not a selection.
+
 ## What it is, and what it is not
 
 - **Read-only.** Nothing is stored and nothing is edited. Browse orders are unchanged.

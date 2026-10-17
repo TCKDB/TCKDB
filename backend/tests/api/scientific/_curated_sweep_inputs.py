@@ -115,6 +115,16 @@ _KINETICS_SELECT = _post(
     }
 )
 _THERMO_SELECT = _post(lambda w: {"target": {"kind": "equilibrium_ensemble"}})
+# Relative conformer energies: the visible group is the reference; the world's hidden group is the same entry's, so a
+# leak of it into the answer or the manifest is what this crawl would see.
+_RELATIVE_ENERGIES = _post(
+    lambda w: {
+        "reference_conformer_ref": w.visible["cg_v"].public_ref,
+        "energy_kind": "electronic_energy",
+        "level": {"level_of_theory_ref": w.extra["lot"].public_ref},
+        "certificate": "local_minimum_any_surface",
+    }
+)
 
 #: ``(method, route template)`` -> list of input variants, each ``{"query": {...}, "json": {...}}`` (GET uses the
 #: query, POST the JSON). A route absent from this map is crawled once with no extra input (empty JSON for POSTs).
@@ -146,6 +156,10 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
     ("POST", f"{BASE}/reaction-entries/{{reaction_entry_ref}}/kinetics/select/manifest"): _KINETICS_SELECT,
     ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/thermo/select"): _THERMO_SELECT,
     ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/thermo/select/manifest"): _THERMO_SELECT,
+    **{
+        ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies{suffix}"): _RELATIVE_ENERGIES
+        for suffix in ("", "/manifest")
+    },
     **{
         ("POST", f"{BASE}/{root}/select{suffix}"): _SELECT_STRUCTURE
         for root in (
