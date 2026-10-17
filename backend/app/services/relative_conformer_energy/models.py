@@ -22,7 +22,12 @@ from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.services.structure_selection.models import CoverageRequirement, RepeatPolicy
 
 #: Version of the relative-energy semantics (grouping, level filter, repeats, differencing).
-RELATIVE_ENERGY_VERSION = "1"
+RELATIVE_ENERGY_VERSION = "2"
+#: Earlier semantic versions whose manifests still replay, and the member fields each did not carry. Version 1 (the
+#: first release of the route) recorded no ``value_geometry_ref``; replay compares such a manifest's recorded answer with
+#: the recomputed one projected onto the fields that version carried. The rule is keyed to the recorded version: a
+#: manifest that claims the current version and lacks a field is refused, not projected.
+LEGACY_MEMBER_FIELDS: dict[str, tuple[str, ...]] = {"1": ("value_geometry_ref",)}
 #: Version of the engineering bounds below.
 BOUNDS_VERSION = "1"
 #: The most conformer groups one request is answered for. Same number as the structure candidate bound.

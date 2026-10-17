@@ -39,6 +39,10 @@ code in the shipped reference), `tckdb-client` 0.152.0 (the same code in `Reject
 - New code: `relative_conformer_energy_compare_identical_protocols` (the same level, with the same effective recipe narrowing, named twice; decided after the entry, levels and groups resolve).
 - The manifest holds both runs' complete relative-energy manifests; `replay_comparison` recomputes both and the pairing.
 - Docs: a section in `backend/docs/specs/relative_conformer_energy.md`, and `docs/guides/relative_conformer_energies.md`.
+- The relative-energy members gain `value_geometry_ref` (additive: the one geometry the stored value was evaluated at). The relative-energy semantic
+  version becomes `"2"`. Manifests downloaded from `/relative-energies/manifest` before this release (version `"1"`, no such field) **still replay**:
+  the recorded answer is compared with the recomputed one projected onto the fields version 1 carried. The projection is keyed to the
+  recorded version; a version-2 manifest missing the field is refused.
 
 ## Relative conformer energies against a named reference conformer (2026-10-17)
 
