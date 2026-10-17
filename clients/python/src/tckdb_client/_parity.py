@@ -865,7 +865,7 @@ _RAW_ONLY: tuple[tuple[str, str, str], ...] = tuple(
             "and response types and the four required scientific choices as required keyword arguments, which "
             "ships as its own client release; until then it is reached through post_json().",
         )
-        for suffix in ("", "/manifest")
+        for suffix in ("", "/manifest", "/compare", "/compare/manifest")
     ),
 )
 

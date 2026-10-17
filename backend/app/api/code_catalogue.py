@@ -2510,6 +2510,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/structure_selection/bounds.py",
             shape=Shape.relationship,
             note="context.reason names what this release does not evaluate."),
+    ApiCode("relative_conformer_energy_compare_identical_protocols", 422, Surface.coded_exception,
+            "backend/app/services/relative_conformer_energy/compare.py",
+            shape=Shape.relationship,
+            note=(
+                "The candidate and the reference name the same level and recipe (two spellings of one level, such as a "
+                "merged lot_ and the one it was merged into, are still one). Refused before the first read; nothing was "
+                "compared."
+            )),
     ApiCode("relative_conformer_energy_population_too_large", 422, Surface.coded_exception,
             "backend/app/services/relative_conformer_energy/bounds.py",
             shape=Shape.relationship,

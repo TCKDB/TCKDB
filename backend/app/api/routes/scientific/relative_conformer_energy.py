@@ -2,6 +2,11 @@
 
 ``POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies``
 ``POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/manifest``
+``POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare``
+``POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare/manifest``
+
+The two ``/compare`` routes describe the deviations between two stored protocols on one entry (candidate minus
+reference), in one snapshot. They are descriptive: they never say that one protocol is better and never rank.
 
 How much higher or lower in energy each conformer of ONE species entry is than a conformer the caller names. Read-only:
 a POST because the request is a structured body, not because anything is written.
@@ -24,6 +29,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_snapshot_db
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.schemas.reads.scientific_relative_conformer_energy import (
+    RelativeConformerEnergyCompareManifest,
+    RelativeConformerEnergyCompareRequest,
+    RelativeConformerEnergyCompareResponse,
     RelativeConformerEnergyManifest,
     RelativeConformerEnergyRequest,
     RelativeConformerEnergyResponse,
@@ -96,4 +104,60 @@ def relative_conformer_energies_manifest(
     return JSONResponse(
         run_.manifest,
         headers={"Content-Disposition": f'attachment; filename="relative_conformer_energy_{species_entry_ref}.json"'},
+    )
+
+
+@router.post(
+    "/{species_entry_ref}/conformers/relative-energies/compare",
+    response_model=RelativeConformerEnergyCompareResponse,
+    summary="Describe the deviations between two stored protocols' relative conformer energies",
+)
+def relative_conformer_energies_compare(
+    request: Request,
+    body: RelativeConformerEnergyCompareRequest,
+    species_entry_ref: str = Path(..., min_length=1, max_length=64),
+    session: Session = Depends(get_snapshot_db),
+) -> RelativeConformerEnergyCompareResponse:
+    """Deviations, candidate minus reference, in kJ/mol, of two stored protocols against one named reference conformer.
+
+    Both protocols are evaluated over one population in one snapshot and paired by conformer; ``pairing`` is required
+    (``same_geometry`` or ``same_basin``). The reference conformer is not a pair. A pair that is missing on either side,
+    or fails the pairing, is listed with a coded ``excluded_reason`` and never counted as a zero deviation. With no
+    pair every statistic is null; under ``all_requested_members`` any excluded pair gives ``incomplete_pairing`` and no
+    statistics. The answer is descriptive: ``claims.superiority`` and ``claims.ranking`` are ``not_licensed``, and the
+    evidence a superiority claim would need (E1 to E7) is listed as missing. Naming the same level and recipe twice is
+    422 ``relative_conformer_energy_compare_identical_protocols``; enthalpy, Gibbs energy and no certificate are 422
+    ``relative_conformer_energy_unsupported``. External or published references are not supported.
+    """
+    _refuse_unknown_query_keys(request)
+    public.refuse_unsupported_compare(body)
+    entry_id = public.resolve_entry(session, species_entry_ref)
+    payload = public.build_compare_response(
+        public.run_compare(session, entry_id=entry_id, body=body), entry_ref=species_entry_ref
+    )
+    stamp_read_profile(payload)
+    return payload
+
+
+@router.post(
+    "/{species_entry_ref}/conformers/relative-energies/compare/manifest",
+    response_model=RelativeConformerEnergyCompareManifest,
+    summary="Download the replayable manifest for a relative conformer energy comparison",
+)
+def relative_conformer_energies_compare_manifest(
+    request: Request,
+    body: RelativeConformerEnergyCompareRequest,
+    species_entry_ref: str = Path(..., min_length=1, max_length=64),
+    session: Session = Depends(get_snapshot_db),
+) -> JSONResponse:
+    """The same request, answered with the replayable manifest as a download (a new snapshot, not a saved answer)."""
+    _refuse_unknown_query_keys(request)
+    public.refuse_unsupported_compare(body)
+    entry_id = public.resolve_entry(session, species_entry_ref)
+    run_ = public.run_compare(session, entry_id=entry_id, body=body)
+    return JSONResponse(
+        run_.manifest,
+        headers={
+            "Content-Disposition": f'attachment; filename="relative_conformer_energy_comparison_{species_entry_ref}.json"'
+        },
     )
