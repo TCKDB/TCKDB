@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from app.api.config import settings as default_settings
 from app.services.scientific_read.profile import stamp_read_profile
+from app.services.scientific_read.ref_guard import withhold_for_current_request
 
 # ---------------------------------------------------------------------------
 # Stripping rules
@@ -197,6 +198,7 @@ def apply_internal_ids_visibility(
     would leave endpoints that silently report the default profile.
     """
     stamp_read_profile(payload)
+    withhold_for_current_request(payload)
     resolved_includes = _extract_resolved_includes(payload)
     if should_include_internal_ids(
         resolved_includes, settings_obj=settings_obj

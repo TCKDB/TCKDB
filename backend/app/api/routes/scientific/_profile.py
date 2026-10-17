@@ -28,6 +28,11 @@ from app.services.scientific_read.profile import (
     resolve_read_profile,
     set_current_read_profile,
 )
+from app.services.scientific_read.ref_guard import (
+    RefGuardContext,
+    reset_ref_guard_context,
+    set_ref_guard_context,
+)
 
 _PROFILE_DESCRIPTION = (
     "Read contract. 'exploratory' (default) returns every visible candidate "
@@ -73,9 +78,16 @@ async def resolve_profile_dependency(
 
     request.state.read_profile = resolved
     token = set_current_read_profile(resolved)
+    # The curated-ref guard needs the route's own session and the route template; both are known here.
+    # ``scope["route"]`` is set by the router when it matches, before dependencies are solved.
+    route = request.scope.get("route")
+    guard_token = set_ref_guard_context(
+        RefGuardContext(session=session, route_path=getattr(route, "path", request.url.path))
+    )
     try:
         yield resolved
     finally:
+        reset_ref_guard_context(guard_token)
         reset_current_read_profile(token)
 
 
