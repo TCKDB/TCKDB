@@ -129,7 +129,7 @@ def test_the_scoped_claim_is_narrow_and_lists_what_it_does_not_license():
     assert "69 of the 76" in claim["statement"] and "1.02" in claim["statement"] and "4.54" in claim["statement"]
     assert {x["id"] for x in claim["does_not_license"]} == {
         "single_barriers", "other_geometries", "other_bases", "zpe_tunnelling_rate_accuracy",
-        "reactions_outside_the_38", "mixed_basis_figures",
+        "reactions_outside_the_38", "mixed_basis_figures", "corrected_mg3s_total",
     }
 
 
@@ -143,17 +143,21 @@ def test_it_loads_but_is_not_activatable_and_names_every_blocker():
     assert {b["id"] for b in manifest.activation_blockers} == {
         "reference_geometry_not_expressible",
         "owner_sign_off_not_given",
-        "only_aggregate_evidence",
+        "member_level_treatment_undecided",
         "declared_energy_level_not_verifiable_from_calculations",
-        "correction_changes_a_cited_total",
     }
     # Resolved blockers are history, not blockers: the comparator-basis one is resolved by the JCP 2010 same-basis data.
     resolved = {b["id"]: b for b in RAW["status"]["resolved_blockers"]}
-    assert set(resolved) == {"comparator_protocol_unverified", "electronic_method_not_a_protocol_field"}
+    assert set(resolved) == {
+        "comparator_protocol_unverified",
+        "electronic_method_not_a_protocol_field",
+        "only_aggregate_evidence",
+        "correction_changes_a_cited_total",
+    }
     assert "comparator_protocol_unverified" not in {b["id"] for b in manifest.activation_blockers}
     assert XYG3B3LYPBarrierRule(manifest).status == "inactive"
     reasons = XYG3B3LYPBarrierRule(manifest).inactive_reasons
-    assert len(reasons) == 6 and reasons[-1].startswith("not approved")
+    assert len(reasons) == 5 and reasons[-1].startswith("not approved")
 
 
 def test_a_document_that_claims_approval_must_carry_an_acceptance_and_no_blockers(monkeypatch):
@@ -231,5 +235,16 @@ def test_the_energy_level_blocker_describes_the_field_that_exists_and_no_text_is
     assert "energy_level_of_theory_id" in text and "has no electronic method" not in text
     # The source and the rule's own output carry the plain characters; an entity can only come from a later display.
     reasons = " ".join(XYG3B3LYPBarrierRule(manifest).inactive_reasons)
-    assert "4.34 -> 4.58" in reasons
-    assert not re.search(r"&(gt|lt|amp|quot|#\d+);", reasons)
+    assert "QCISD/MG3" in reasons
+    resolved_text = " ".join(b["text"] for b in RAW["status"]["resolved_blockers"])
+    assert "4.34 -> 4.58" in resolved_text
+    assert not re.search(r"&(gt|lt|amp|quot|#\d+);", reasons + resolved_text)
+
+
+def test_the_geometry_blocker_does_not_claim_the_owner_chose_a_route():
+    text = " ".join(
+        next(b for b in RAW["status"]["activation_blockers"] if b["id"] == "reference_geometry_not_expressible")["text"].split()
+    )
+    assert "(a)" in text and "(b)" in text and "has not been made" in text
+    assert "would not widen the evidence beyond QCISD/MG3" in text
+    assert "until TCKDB can record" not in " ".join(str(RAW).split())

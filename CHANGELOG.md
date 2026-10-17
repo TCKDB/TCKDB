@@ -42,13 +42,16 @@ unchanged.
 version changes; no schema change.
 
 - Manifest `xyg3_b3lyp_barrier_manifest.yaml` is 0.4.0 (new pin) and the rule `K-XYG3-B3LYP-BARRIER` is 0.3.0, because a rule resting on a different audited manifest
-  is a new rule version (the pre-v2 replay fixture was regenerated). The rule stays **inactive** (`activation_approved: false`).
+  is a new rule version. Rule 0.2.0 over the preserved manifest 0.3.0 (`xyg3_b3lyp_barrier_manifest_0_3_0.yaml`, unchanged
+  bytes) stays loadable **for replay only**, so a kinetics decision manifest recorded before this release still replays;
+  live selection uses 0.3.0. The rule stays **inactive** (`activation_approved: false`).
 - The B3LYP row of Zhang 2009 Table 2 is the 2005 Truhlar B3LYP/MG3S row, not 6-311+G(3df,2p). The same-basis comparison
   (Zhang, Luo, Xu, J. Chem. Phys. 133, 104105 (2010)) gives a 76-barrier MAD of 1.02 for XYG3 against 4.54 kcal/mol for B3LYP at
   6-311+G(3df,2p) and QCISD/MG3 geometries, XYG3 closer on 69 of 76 barriers (B3LYP closer on 7). The Table III HAT12 typo
   (1.66 printed, 1.38 in the SI) is recorded. Four sources are SHA-256 pinned; no PDF is copied into the repository.
-- The comparator blocker is resolved. Geometry provenance is not: TCKDB cannot record which geometry a stored barrier used, so
-  the rule stays inactive until it can. Owner sign-off has not been given.
+- The comparator blocker is resolved. Geometry provenance is not: TCKDB cannot record which geometry a stored barrier used.
+  The owner chose to keep the rule inactive for now; whether to fix that with a schema change or accept it as a stated
+  limitation is undecided. The 7 barriers where B3LYP is closer have no treatment yet, and owner sign-off has not been given.
 
 ## Curated reads no longer name more records the curated profile hides (2026-10-12)
 
