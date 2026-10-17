@@ -101,7 +101,7 @@ from app.services.scientific_read.composite_recipe import (
 from app.services.scientific_read.declared_levels import (
     load_declared_energy_summaries,
 )
-from app.services.scientific_read.handles import resolve_statmech_handle
+from app.services.scientific_read.handles import resolve_statmech_handle, status_hidden_under_profile
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -1189,7 +1189,6 @@ def _curvature_witnesses(
     # A calculation the active profile hides from ``GET /calculations/{ref}`` must not be
     # confirmed here either (existence, review state, or having a Hessian). The same floor
     # detail-by-ref gate applies: no extra restriction when exploratory, approval when curated.
-    visible = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
     badges = fetch_review_badges(
         session,
         record_type=SubmissionRecordType.calculation,
@@ -1201,7 +1200,7 @@ def _curvature_witnesses(
         if row is None or (row.freq_id is None and row.hessian_id is None):
             continue
         badge = badges.get(link.calculation_id)
-        if badge is None or badge.status not in visible:
+        if badge is None or status_hidden_under_profile(badge.status):
             continue
         witnesses.append(
             StatmechCurvatureWitness(

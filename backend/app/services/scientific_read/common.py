@@ -642,6 +642,7 @@ def review_hidden_under_profile(
     ids = set(record_ids)
     if not ids or current_read_profile().review_floor is None:
         return {}, set()
-    visible = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
+    from app.services.scientific_read.handles import status_hidden_under_profile
+
     badges = fetch_review_badges(session, record_type=record_type, record_ids=ids)
-    return badges, {rid for rid, b in badges.items() if b.status not in visible}
+    return badges, {rid for rid, b in badges.items() if status_hidden_under_profile(b.status)}
