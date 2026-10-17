@@ -1465,6 +1465,32 @@ def _build_page_records(
     return records
 
 
+def _within_review_floor(stmt: Any, model: Any, record_type: Any) -> Any:
+    """Restrict a ``select`` over ``model`` to the rows the active read profile's review floor leaves visible.
+
+    Owner decision D5: the availability flags, ``calculation_count`` and the ``*_summary.ids`` lists on a species
+    entry answer "what would the list endpoint return", so under ``?profile=curated`` they count only what the
+    floor shows. Without a floor (the default profile) the statement is returned untouched: exploratory output
+    is byte-identical. A missing review row reads as ``not_reviewed``, as everywhere else.
+    """
+    from app.db.models.common import RecordReviewStatus
+    from app.db.models.record_review import RecordReview
+    from app.services.scientific_read.handles import status_hidden_under_profile
+    from app.services.scientific_read.profile import current_read_profile
+
+    profile = current_read_profile()
+    if profile.review_floor is None:
+        return stmt
+    hidden = [s for s in RecordReviewStatus if status_hidden_under_profile(s, profile=profile)]
+    visible = RecordReview.status.not_in(hidden)
+    if not status_hidden_under_profile(RecordReviewStatus.not_reviewed, profile=profile):
+        visible = or_(visible, RecordReview.id.is_(None))
+    return stmt.outerjoin(
+        RecordReview,
+        and_(RecordReview.record_type == record_type, RecordReview.record_id == model.id),
+    ).where(visible)
+
+
 def _compute_availability(
     session: Session, entries: list[SpeciesEntry]
 ) -> dict[int, SpeciesEntryAvailability]:
@@ -1475,38 +1501,50 @@ def _compute_availability(
 
     thermo_ids = set(
         session.scalars(
-            select(Thermo.species_entry_id).where(
-                Thermo.species_entry_id.in_(entry_ids)
+            _within_review_floor(
+                select(Thermo.species_entry_id).where(Thermo.species_entry_id.in_(entry_ids)),
+                Thermo,
+                SubmissionRecordType.thermo,
             )
         ).all()
     )
     statmech_ids = set(
         session.scalars(
-            select(Statmech.species_entry_id).where(
-                Statmech.species_entry_id.in_(entry_ids)
+            _within_review_floor(
+                select(Statmech.species_entry_id).where(Statmech.species_entry_id.in_(entry_ids)),
+                Statmech,
+                SubmissionRecordType.statmech,
             )
         ).all()
     )
     transport_ids = set(
         session.scalars(
-            select(Transport.species_entry_id).where(
-                Transport.species_entry_id.in_(entry_ids)
+            _within_review_floor(
+                select(Transport.species_entry_id).where(Transport.species_entry_id.in_(entry_ids)),
+                Transport,
+                SubmissionRecordType.transport,
             )
         ).all()
     )
     conformer_ids = set(
         session.scalars(
-            select(ConformerGroup.species_entry_id).where(
-                ConformerGroup.species_entry_id.in_(entry_ids)
+            _within_review_floor(
+                select(ConformerGroup.species_entry_id).where(ConformerGroup.species_entry_id.in_(entry_ids)),
+                ConformerGroup,
+                SubmissionRecordType.conformer_group,
             )
         ).all()
     )
 
     calc_counts: dict[int, int] = dict.fromkeys(entry_ids, 0)
     for entry_id, count in session.execute(
-        select(Calculation.species_entry_id, func.count(Calculation.id))
-        .where(Calculation.species_entry_id.in_(entry_ids))
-        .group_by(Calculation.species_entry_id)
+        _within_review_floor(
+            select(Calculation.species_entry_id, func.count(Calculation.id)).where(
+                Calculation.species_entry_id.in_(entry_ids)
+            ),
+            Calculation,
+            SubmissionRecordType.calculation,
+        ).group_by(Calculation.species_entry_id)
     ).all():
         calc_counts[entry_id] = count
 
@@ -1537,8 +1575,10 @@ def _compute_section_ids(
 
     if "thermo" in includes:
         thermo_pairs = session.execute(
-            select(Thermo.species_entry_id, Thermo.id).where(
-                Thermo.species_entry_id.in_(entry_ids)
+            _within_review_floor(
+                select(Thermo.species_entry_id, Thermo.id).where(Thermo.species_entry_id.in_(entry_ids)),
+                Thermo,
+                SubmissionRecordType.thermo,
             )
         ).all()
         per_entry: dict[int, list[int]] = {eid: [] for eid in entry_ids}
@@ -1549,8 +1589,10 @@ def _compute_section_ids(
 
     if "statmech" in includes:
         pairs = session.execute(
-            select(Statmech.species_entry_id, Statmech.id).where(
-                Statmech.species_entry_id.in_(entry_ids)
+            _within_review_floor(
+                select(Statmech.species_entry_id, Statmech.id).where(Statmech.species_entry_id.in_(entry_ids)),
+                Statmech,
+                SubmissionRecordType.statmech,
             )
         ).all()
         per_entry = {eid: [] for eid in entry_ids}
@@ -1561,8 +1603,10 @@ def _compute_section_ids(
 
     if "transport" in includes:
         pairs = session.execute(
-            select(Transport.species_entry_id, Transport.id).where(
-                Transport.species_entry_id.in_(entry_ids)
+            _within_review_floor(
+                select(Transport.species_entry_id, Transport.id).where(Transport.species_entry_id.in_(entry_ids)),
+                Transport,
+                SubmissionRecordType.transport,
             )
         ).all()
         per_entry = {eid: [] for eid in entry_ids}
@@ -1573,8 +1617,12 @@ def _compute_section_ids(
 
     if "conformers" in includes:
         pairs = session.execute(
-            select(ConformerGroup.species_entry_id, ConformerGroup.id).where(
-                ConformerGroup.species_entry_id.in_(entry_ids)
+            _within_review_floor(
+                select(ConformerGroup.species_entry_id, ConformerGroup.id).where(
+                    ConformerGroup.species_entry_id.in_(entry_ids)
+                ),
+                ConformerGroup,
+                SubmissionRecordType.conformer_group,
             )
         ).all()
         per_entry = {eid: [] for eid in entry_ids}

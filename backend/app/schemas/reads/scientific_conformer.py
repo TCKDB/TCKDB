@@ -584,7 +584,9 @@ class ScientificConformerObservationRecord(BaseModel):
     """
 
     conformer_observation: ConformerObservationCoreBlock
-    conformer_group: ConformerGroupCoreBlock
+    #: ``None`` only when the profile hides the owning group (``?profile=curated`` and the group is not
+    #: approved): the observation stays visible, the group is not named. Never ``None`` otherwise.
+    conformer_group: ConformerGroupCoreBlock | None
     species: ConformerSpeciesContext
     assignment_scheme: ConformerAssignmentSchemeSummary | None = None
     evidence_summary: ConformerObservationEvidenceSummary

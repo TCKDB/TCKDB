@@ -21,12 +21,15 @@ How a hidden ref is removed (:func:`withhold_in_model`)
 3. Anything else is **unplaceable** and raises :class:`RefGuardUnplaceable` (fail closed, owner decision D4).
    The subject of a response (``record``, the elements of ``records``) is never deleted as a pointer: a
    hidden subject ref means a service forgot its population filter, which is exactly what should be loud.
+4. Free text (a note, a label, a file name, a depositor URL) that names a hidden ref anywhere in its tokens is
+   blanked as a whole field: ``None`` when the field is nullable, else ``""``. Never token by token (the shape of
+   what was removed would show), and text whose percent-encoding does not settle is blanked too, never refused.
+   Exploratory text is untouched.
 
 Rollout
 -------
-:data:`_ENABLED_ROUTE_PREFIXES` is empty in this change: the hook is wired into
-:func:`app.services.scientific_read.internal_ids.apply_internal_ids_visibility` and counts that it was
-reached, but no route family is enabled, so nothing changes on the wire. Each family PR adds its prefixes.
+:data:`_ENABLED_ROUTE_PREFIXES` lists the route families on which the hook withholds. PR-2a enables the
+species-side families (:data:`SPECIES_SIDE_PREFIXES`); the TS/reaction and network families follow.
 """
 
 from __future__ import annotations
@@ -38,27 +41,55 @@ from collections.abc import Collection, Mapping
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Union, get_args, get_origin
+from urllib.parse import unquote, urlsplit
 
 from pydantic import BaseModel
 from sqlalchemy import and_, or_, select, union_all
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
+from tckdb_schemas.thermo_declarations import StoredThermoProtocolCalculationRef
 
 from app.db.models.common import ProfileRecommendation, RecordReviewStatus, SubmissionRecordType
 from app.db.models.kinetics import Kinetics
 from app.db.models.molecular_property_observation import MolecularPropertyObservation
 from app.db.models.record_review import RecordReview
 from app.db.models.thermo import Thermo
-from app.schemas.reads.scientific_common import CalculationEvidenceSummary
+from app.schemas.reads.scientific_calculation import (
+    CalculationCompositeInputSummary,
+    CalculationConformerSummary,
+    CalculationDependencySummary,
+    TransitionStateEntryOwnerSummary,
+)
+from app.schemas.reads.scientific_common import CalculationEvidenceSummary, SupersessionNotice
+from app.schemas.reads.scientific_conformer import (
+    ConformerCalculationSummary,
+    ConformerGeometryLink,
+    ConformerGroupCoreBlock,
+    ConformerObservationGroupSummary,
+    ConformerObservationSiblingSummary,
+)
+from app.schemas.reads.scientific_geometry import (
+    GeometryIdentity,
+    GeometryIdentityOwnerRef,
+    GeometryProvenanceCalcLink,
+    GeometryTransitionStateIdentity,
+)
+from app.schemas.reads.scientific_species_calculations import (
+    CalculationProvenanceBlock,
+    ConformerContextBlock,
+    SupportingCalculationRef,
+)
 from app.schemas.reads.scientific_statmech import (
     StatmechConformerContextItem,
     StatmechCurvatureWitness,
     StatmechSourceCalculationSummary,
+    StatmechTransitionStateContext,
 )
 from app.schemas.reads.scientific_transition_state import (
     TransitionStateStatmechSourceCalculation,
     TransitionStateStatmechSummary,
 )
+from app.schemas.reads.scientific_transport import TransportSourceCalculationSummary
 from app.services.public_refs import PREFIXES
 from app.services.scientific_read import handles
 from app.services.scientific_read.handles import status_hidden_under_profile
@@ -130,9 +161,11 @@ UNGATED_REVIEWABLE: Mapping[SubmissionRecordType, str] = {
     SubmissionRecordType.artifact: "contribution evidence; never carries a record_review row",
 }
 
-#: A ref is a whole-string value of a gated prefix and the 26-character body.
+#: A ref is a whole-string value of a gated prefix and the 26-character body. ``\Z``, not ``$``: ``$`` also matches
+#: before a trailing newline, which would let ``calc_...\n`` count as a ref in one place and not in another.
+#: Uppercase and suffixed look-alikes (``CALC_...``, ``calc_...x``) are not refs: no route resolves them.
 GATED_REF_RE = re.compile(
-    "^(?:" + "|".join(sorted((re.escape(p) for p in GATED_TYPES), key=len, reverse=True)) + ")_[a-z0-9]{26}$"
+    "^(?:" + "|".join(sorted((re.escape(p) for p in GATED_TYPES), key=len, reverse=True)) + r")_[a-z0-9]{26}\Z"
 )
 
 # ---------------------------------------------------------------------------
@@ -153,6 +186,28 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         TransitionStateStatmechSummary,
         TransitionStateStatmechSourceCalculation,
         CalculationEvidenceSummary,
+        # PR-2a: the species-side family.
+        StatmechTransitionStateContext,
+        CalculationCompositeInputSummary,
+        CalculationConformerSummary,
+        CalculationDependencySummary,
+        ConformerContextBlock,
+        ConformerObservationGroupSummary,
+        ConformerObservationSiblingSummary,
+        ConformerCalculationSummary,
+        ConformerGeometryLink,
+        GeometryIdentityOwnerRef,
+        GeometryProvenanceCalcLink,
+        GeometryTransitionStateIdentity,
+        StoredThermoProtocolCalculationRef,
+        SupersessionNotice,
+        SupportingCalculationRef,
+        TransitionStateEntryOwnerSummary,
+        TransportSourceCalculationSummary,
+        # Owner decision D1: a visible observation whose conformer group is hidden stays visible with the group
+        # block blanked. Registering the block is what lets the guard blank it; widening the field alone is not
+        # enough (design note, "Correction from the #770 review").
+        ConformerGroupCoreBlock,
     }
 )
 
@@ -165,7 +220,29 @@ EXEMPT_ROUTE_PREFIXES: Mapping[str, str] = {
 
 #: Rollout allowlist: route-template prefixes on which the hook actually withholds. Empty in PR-1, so the
 #: hook is inert on the wire. Deleted once every family is enabled.
-_ENABLED_ROUTE_PREFIXES: frozenset[str] = frozenset()
+_SCIENTIFIC_BASE = "/api/v1/scientific"
+
+#: PR-2a: the species-side route families. Matched on whole path segments, so ``/species`` does not cover
+#: ``/species-entries`` (which is listed on its own).
+SPECIES_SIDE_PREFIXES: frozenset[str] = frozenset(
+    f"{_SCIENTIFIC_BASE}/{segment}"
+    for segment in (
+        "statmech",
+        "thermo",
+        "species-entries",
+        "species",
+        "transport",
+        "conformer-groups",
+        "conformer-observations",
+        "conformers",
+        "calculations",
+        "species-calculations",
+        "artifacts",
+        "geometries",
+    )
+)
+
+_ENABLED_ROUTE_PREFIXES: frozenset[str] = SPECIES_SIDE_PREFIXES
 
 
 class RefGuardUnplaceable(RuntimeError):
@@ -354,6 +431,97 @@ def _children(node: Any, *, top: bool):
         yield from node.items()
 
 
+#: How many times a component is percent-decoded looking for a stable form. Three layers is already hostile; a
+#: component still changing after this many is refused (fail closed), never kept.
+_MAX_DECODE_ROUNDS = 5
+
+
+def _is_url_valued(key: Any) -> bool:
+    """Fields registered as URL-valued: ``endpoint`` and ``*_endpoint``.
+
+    These are read as URLs whatever their length or content. The prose shortcut below applies to every OTHER field.
+    """
+    return isinstance(key, str) and (key == "endpoint" or key.endswith("_endpoint"))
+
+
+def _decode_stable(component: str) -> str:
+    """Percent-decode ``component`` until it stops changing; a form that never settles raises ``ValueError``."""
+    for _ in range(_MAX_DECODE_ROUNDS):
+        decoded = unquote(component)
+        if decoded == component:
+            return component
+        component = decoded
+    raise ValueError("percent-encoding does not settle")
+
+
+class _FreeRef(str):
+    """A ref found inside free text (or the stand-in for text whose encoding never settles).
+
+    The site is blanked as a whole field: a free-text value that names a hidden record is not editable token by token
+    (the position and shape of what was removed would say what it was).
+    """
+
+
+#: Stands in for a free-text value that does not settle under percent-decoding. It is "hidden" by definition: the text
+#: is blanked rather than guessed at, and never raises (a depositor's odd text must not fail a page).
+UNSETTLED_TEXT = "unsettled_encoding"
+
+#: Any gated ref anywhere in a string. A cheap pre-filter so ordinary text is not tokenised.
+_REF_ANYWHERE = re.compile(
+    "(?:" + "|".join(sorted((re.escape(p) for p in GATED_TYPES), key=len, reverse=True)) + ")_[a-z0-9]{26}"
+)
+
+
+def _tokens(component: str) -> list[str]:
+    """The pieces of text a ref can be: the decoded text split on anything that is not a word character, so a ref
+    next to whitespace, ``/``, ``;``, ``,``, ``&``, ``=``, a bracket, a quote or a full stop still comes out as one."""
+    return [t for t in re.split(r"\W+", _decode_stable(component)) if t]
+
+
+def _free_text_refs(value: str) -> list[str]:
+    """Gated refs named by free text (a note, a label, a file name, a depositor URL).
+
+    Returns :class:`_FreeRef` sites. Text whose percent-encoding does not settle is returned as the
+    :data:`UNSETTLED_TEXT` stand-in, so the field is blanked, never kept and never an error.
+    """
+    if "%" not in value and not _REF_ANYWHERE.search(value):
+        return []
+    try:
+        tokens = _tokens(value)
+    except ValueError:
+        return [_FreeRef(UNSETTLED_TEXT)]
+    return [_FreeRef(t) for t in tokens if GATED_REF_RE.match(t)]
+
+
+def _refs_named_by(value: str, *, url_valued: bool = False) -> list[str]:
+    """Every gated ref a string value names.
+
+    A value that is exactly one ref (a stray newline allowed) is that ref, handled by the placement rules.
+
+    A URL-valued field (``url_valued``: see :func:`_is_url_valued`) is parsed as a URL whatever its length or
+    whitespace: a path segment (in the middle or at the end), a ``;params`` item, a query key or value, or the
+    fragment, percent-decoded until stable. A value that cannot be parsed raises ``ValueError``, which the caller
+    turns into :class:`RefGuardUnplaceable` (fail closed).
+
+    Every other string is free text (:func:`_free_text_refs`): any token that is a gated ref makes the whole field a
+    site, and a hidden one blanks the field. Uppercase and suffixed look-alikes (``CALC_...``, ``calc_...x``) are not
+    refs: no route resolves them.
+    """
+    if len(value) <= 40:
+        if GATED_REF_RE.match(value):
+            return [value]
+        stripped = value.strip()  # ``calc_...\n`` is that ref with a stray newline, and must not slip past
+        if stripped != value and GATED_REF_RE.match(stripped):
+            return [stripped]
+    if not url_valued:
+        return _free_text_refs(value)
+    parts = urlsplit(value)
+    found: list[str] = []
+    for component in (parts.path, parts.query, parts.fragment):
+        found.extend(t for t in _tokens(component) if GATED_REF_RE.match(t))
+    return found
+
+
 def _collect_sites(root: BaseModel) -> list[tuple[tuple[_Frame, ...], str]]:
     sites: list[tuple[tuple[_Frame, ...], str]] = []
     stack: list[tuple[Any, tuple[_Frame, ...]]] = [(root, ())]
@@ -365,8 +533,14 @@ def _collect_sites(root: BaseModel) -> list[tuple[tuple[_Frame, ...], str]]:
                 # site so that, if it is hidden, the guard fails closed instead of letting it through.
                 sites.append(((*path, (node, _DictKey(key))), key))
             if isinstance(value, str):
-                if len(value) <= 40 and GATED_REF_RE.match(value):
-                    sites.append(((*path, (node, key)), value))
+                try:
+                    refs = _refs_named_by(value, url_valued=_is_url_valued(key))
+                except ValueError as exc:
+                    # A URL-valued field the guard cannot read is refused, never kept (owner decision D4).
+                    raise RefGuardUnplaceable(
+                        type(node).__name__, f"{_path_text((*path, (node, key)))}<unparseable URL>", "url"
+                    ) from exc
+                sites.extend(((*path, (node, key)), ref) for ref in refs)
             elif isinstance(value, (BaseModel, list, tuple, dict)):
                 stack.append((value, (*path, (node, key))))
     return sites
@@ -389,7 +563,49 @@ def _is_subject(path: tuple[_Frame, ...], i: int) -> bool:
     return i == 1 and path[0][1] == "records"
 
 
+#: Pointer lists that travel with a bare list of integer ids, in step: ``(model, list field) -> (id list field,
+#: the id field on a row)``. The ids carry no ref the guard could see, so deleting a pointer row must delete the id
+#: that is *that row's*, or the integer pk of a hidden record stays on the wire. Matching is by value, never by
+#: position: a same-length list in another order would otherwise drop the visible id and keep the hidden one.
+ALIGNED_ID_LISTS: Mapping[tuple[type, str], tuple[str, str]] = {
+    (CalculationProvenanceBlock, "supporting_calculations"): ("supporting_calculation_ids", "calculation_id"),
+}
+
+
+def _aligned_id_deletions(owner_frame: _Frame, deleted_from: list, index: Any, text: str, ref: str) -> list[_Action]:
+    owner, owner_key = owner_frame
+    names = ALIGNED_ID_LISTS.get((type(owner), owner_key)) if isinstance(owner, BaseModel) else None
+    if names is None:
+        return []
+    ids_field, row_id_field = names
+    ids = getattr(owner, ids_field, None)
+    if not isinstance(ids, list) or not ids:
+        return []  # stripped or never populated: nothing of the record's id is on the wire
+    row_id = getattr(deleted_from[index], row_id_field, None)
+    if len(ids) != len(deleted_from) or row_id is None or ids[index] != row_id:
+        # Not the same list in the same order: dropping an index could keep a hidden id and lose a visible one.
+        raise RefGuardUnplaceable(type(owner).__name__, text, ref.split("_", 1)[0])
+    return [_Action("delete", ids, index)]
+
+
+def _plan_free_text(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], WithheldSite]:
+    """Blank the whole field: ``None`` when it may be null, else ``""``. A pointer model above does not apply: the
+    text belongs to a record that stays visible, and only the text goes."""
+    text = _path_text(path)
+    holder, key = path[-1]
+    if isinstance(holder, BaseModel):
+        nullable = _field_traits(type(holder), key)[0]
+        return [_Action("null" if nullable else "empty", holder, key)], WithheldSite(ref, text, "blank_free_text")
+    if isinstance(holder, dict):
+        return [_Action("null", holder, key)], WithheldSite(ref, text, "blank_free_text")
+    if isinstance(holder, list):
+        return [_Action("empty", holder, key)], WithheldSite(ref, text, "blank_free_text")
+    raise RefGuardUnplaceable(type(holder).__name__, text, ref.split("_", 1)[0])
+
+
 def _plan_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], WithheldSite]:
+    if isinstance(ref, _FreeRef):
+        return _plan_free_text(path, ref)
     text = _path_text(path)
     n = len(path) - 1
 
@@ -401,7 +617,10 @@ def _plan_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], Withh
             continue
         name = type(node).__name__
         if isinstance(container, (list, dict)):
-            return [_Action("delete", container, key)], WithheldSite(ref, text, "delete_pointer", name)
+            actions = [_Action("delete", container, key)]
+            if isinstance(container, list) and i >= 1:
+                actions.extend(_aligned_id_deletions(path[i - 1], container, key, text, ref))
+            return actions, WithheldSite(ref, text, "delete_pointer", name)
         if isinstance(container, BaseModel) and _field_traits(type(container), key)[0]:
             return [_Action("null", container, key)], WithheldSite(ref, text, "null_pointer", name)
         # Held by a required field: keep looking outward.
@@ -452,11 +671,12 @@ def _plan_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], Withh
 
 def _apply(actions: Collection[_Action]) -> None:
     for action in actions:
-        if action.kind == "null":
+        if action.kind in ("null", "empty"):
+            value = None if action.kind == "null" else ""
             if isinstance(action.container, BaseModel):
-                setattr(action.container, action.key, None)
+                setattr(action.container, action.key, value)
             else:
-                action.container[action.key] = None
+                action.container[action.key] = value
     deletes = [a for a in actions if a.kind == "delete"]
     # Highest index first, so earlier deletions in the same list do not shift later ones.
     deletes.sort(key=lambda a: (id(a.container), -a.key if isinstance(a.key, int) else 0))
@@ -465,6 +685,48 @@ def _apply(actions: Collection[_Action]) -> None:
             action.container.pop(action.key, None)
         else:
             del action.container[action.key]
+
+
+def _geometry_identity_is_empty(node: BaseModel) -> bool:
+    """A ``GeometryIdentity`` with no owner block and no listed owner says nothing; it is not emitted at all."""
+    return (
+        getattr(node, "species_entry", None) is None
+        and getattr(node, "transition_state_entry", None) is None
+        and not getattr(node, "ambiguous_owners", None)
+    )
+
+
+#: Blocks that must not survive as an empty shell once their contents were withheld: the field that holds one is set
+#: to ``None``, exactly as when there was never anything to show. A client cannot tell "every owner withheld" from
+#: "no owner" (hidden equals unknown). ``model -> is it empty``.
+COLLAPSE_WHEN_EMPTY: Mapping[type, Any] = {GeometryIdentity: _geometry_identity_is_empty}
+
+
+def _collapse_empty(sites: list[tuple[tuple[_Frame, ...], str]], hidden: set[str]) -> list[WithheldSite]:
+    done: list[WithheldSite] = []
+    seen: set[tuple[int, Any]] = set()
+    for path, ref in sites:
+        if ref not in hidden:
+            continue
+        for i in range(len(path) - 1):
+            container, key = path[i]
+            node = path[i + 1][0]
+            check = COLLAPSE_WHEN_EMPTY.get(type(node))
+            if check is None or not check(node):
+                continue
+            if not isinstance(container, BaseModel) or not _field_traits(type(container), key)[0]:
+                # An empty shell with nowhere to go: refuse the response, never emit it (owner decision D4).
+                raise RefGuardUnplaceable(
+                    type(container).__name__,
+                    f"{_path_text(path[: i + 1])}<empty {type(node).__name__}>",
+                    ref.split("_", 1)[0],
+                )
+            if (id(container), key) in seen:
+                continue
+            seen.add((id(container), key))
+            setattr(container, key, None)
+            done.append(WithheldSite(ref, _path_text(path[: i + 1]), "collapse_empty", type(node).__name__))
+    return done
 
 
 def withhold_in_model(
@@ -476,17 +738,21 @@ def withhold_in_model(
 ) -> WithholdReport:
     """Remove every ref the profile hides from a response model, in place.
 
-    With ``apply=False`` nothing is mutated (a dry run that reports what would go). Raises
+    With ``apply=False`` nothing is mutated (a dry run on a copy, reporting what would go, collapses included). Raises
     :class:`RefGuardUnplaceable` for a hidden ref that has nowhere safe to go, in either mode.
     """
     report = WithholdReport()
     if profile.review_floor is None:
         return report
+    if not apply:
+        # A dry run works on a copy, so what it reports (collapses included) is exactly what an applied run would do.
+        return withhold_in_model(session, payload.model_copy(deep=True), profile=profile, apply=True)
     sites = _collect_sites(payload)
     report.refs_seen = len(sites)
     if not sites:
         return report
     report.hidden = hidden_refs(session, {ref for _, ref in sites}, profile=profile)
+    report.hidden |= {ref for _, ref in sites if ref == UNSETTLED_TEXT}
     if not report.hidden:
         return report
     planned: dict[tuple[int, Any, str], _Action] = {}
@@ -499,6 +765,7 @@ def withhold_in_model(
             planned.setdefault((id(action.container), action.key, action.kind), action)
     if apply:
         _apply(list(planned.values()))
+        report.sites.extend(_collapse_empty(sites, report.hidden))
     return report
 
 
@@ -548,10 +815,12 @@ def withhold_for_current_request(payload: BaseModel) -> None:
 
 
 __all__ = [
+    "ALIGNED_ID_LISTS",
     "EXEMPT_ROUTE_PREFIXES",
     "GATED_REF_RE",
     "GATED_TYPES",
     "POINTER_MODELS",
+    "SPECIES_SIDE_PREFIXES",
     "UNGATED_REVIEWABLE",
     "GatedType",
     "RefGuardContext",

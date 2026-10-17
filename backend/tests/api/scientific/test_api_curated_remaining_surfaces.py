@@ -55,6 +55,9 @@ BASE = "/api/v1/scientific"
 EXPECTED_THERMO_LIST_STATEMENTS = 20  # measured identical on origin/main
 EXPECTED_STATMECH_SEARCH_CONFORMERS_STATEMENTS = 60  # measured identical on origin/main, n=8
 EXPECTED_CURATED_EXTRA_STATEMENTS = 0
+#: The central ref guard resolves every ref of a response in one batched statement (independent of the page size), on
+#: the route families it is enabled for.
+EXPECTED_REF_GUARD_STATEMENTS = 1
 
 
 def _review(db_session, kind, row, status=APPROVED):
@@ -498,4 +501,4 @@ def test_statmech_search_conformers_statement_count(client, db_session):
     exploratory = _count_statements(db_session, lambda: client.post(url + "?profile=exploratory", json=body))
     curated = _count_statements(db_session, lambda: client.post(url + "?profile=curated", json=body))
     assert exploratory == EXPECTED_STATMECH_SEARCH_CONFORMERS_STATEMENTS
-    assert curated == exploratory + EXPECTED_CURATED_EXTRA_STATEMENTS
+    assert curated == exploratory + EXPECTED_CURATED_EXTRA_STATEMENTS + EXPECTED_REF_GUARD_STATEMENTS

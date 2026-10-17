@@ -178,6 +178,13 @@ class CalculationOwnerSummary(BaseModel):
     non-null; ``kind`` mirrors that for cheap client-side branching.
     The schema invariant ``one_owner`` on the calculation table
     guarantees this.
+
+    **One exception, under ``profile=curated`` only.** When the owning
+    transition-state entry is hidden (not approved), the ref guard withholds
+    the whole ``transition_state_entry`` block, so ``kind`` can be
+    ``"transition_state_entry"`` while *both* owners are ``null``. That is
+    "the owner is not shown", not "the calculation has no owner". The default
+    profile always carries exactly one.
     """
 
     kind: Literal["species_entry", "transition_state_entry"]

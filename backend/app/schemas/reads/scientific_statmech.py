@@ -151,6 +151,11 @@ class StatmechTransitionStateContext(BaseModel):
     transition-state entry. For a TS-owned record ``species`` is ``None`` and
     this block carries the attribution instead — the record is never dressed
     up with an empty species stand-in.
+
+    Under ``profile=curated``, when the transition-state entry this record
+    describes is hidden, the whole block is withheld: the record is returned
+    with ``species`` and ``transition_state`` both ``null``. The default
+    profile always carries exactly one.
     """
 
     transition_state_id: int | None = None
@@ -415,7 +420,9 @@ class ScientificStatmechRecord(BaseModel):
     #: address on every scientific product read.
     supersession: SupersessionNotice | None = None
     # Exactly one of these is populated — the DB enforces the same XOR via
-    # ``statmech_exactly_one_subject``.
+    # ``statmech_exactly_one_subject`` — EXCEPT under ``profile=curated`` when the record's subject is a hidden
+    # transition-state entry: the guard withholds the whole ``transition_state`` block, so both are ``null`` (the
+    # subject is not shown, which is not the same as having none).
     species: StatmechSpeciesContext | None = None
     transition_state: StatmechTransitionStateContext | None = None
     frequency_scale_factor: StatmechFrequencyScaleFactorSummary | None = None

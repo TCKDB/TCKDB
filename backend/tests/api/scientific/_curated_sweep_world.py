@@ -22,17 +22,34 @@ from dataclasses import dataclass, field
 from sqlalchemy import text
 
 from app.db.models.app_user import AppUser
+from app.db.models.calculation import (
+    CalculationCompositeInput,
+    CalculationCompositeResult,
+    CalculationCompositeTerm,
+    CalculationIRCPoint,
+    CalculationIRCResult,
+    CalculationPathSearchPoint,
+    CalculationPathSearchResult,
+    CalculationScanCoordinate,
+    CalculationScanPoint,
+    CalculationScanResult,
+)
 from app.db.models.common import (
     AppUserRole,
     ArrheniusAUnits,
     CalculationDependencyRole,
     CalculationType,
+    CompositeAssembly,
+    CompositeInputSlot,
+    IRCDirection,
     NetworkChannelKind,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkSpeciesRole,
     NetworkStateKind,
+    PathSearchMethod,
     RecordReviewStatus,
+    ScanCoordinateKind,
     StatmechCalculationRole,
     SubmissionRecordType,
     ThermoCalculationRole,
@@ -49,10 +66,12 @@ from tests.services.scientific_read._factories import (
     attach_network_species,
     attach_network_state_participant,
     attach_output_geometry,
+    attach_scf_stability,
     attach_statmech_source_calculation,
     attach_statmech_torsion,
     attach_thermo_source_calculation,
     attach_transport_source_calculation,
+    make_applied_energy_correction,
     make_calculation,
     make_chem_reaction,
     make_conformer_group,
@@ -294,6 +313,126 @@ def build_sweep_world(session) -> SweepWorld:
     vis["nsolve_v_under_hidden_net"], vis["nkin_v_under_hidden_net"] = nsolve_vh, nkin_vh
     vis["nsolve_v"], vis["nkin_v"] = nsolve_v, nkin_v
     hid["nsolve_h"], hid["nkin_h"] = nsolve_h, nkin_h
+
+    # ---- shapes that need their own hidden-record link (PR-2a review) -----------------------------------------------
+    # A visible calculation whose dependency PARENT is hidden: names it through ``supporting_calculations``.
+    calc_vdep = make_calculation(session, type=CalculationType.sp, species_entry_id=sa.id, lot_id=lot.id)
+    attach_dependency(session, parent=calc_h, child=calc_vdep, role=CalculationDependencyRole.single_point_on)
+    vis["calc_vdep"] = calc_vdep
+
+    # An assembled composite with one hidden and one visible input calculation.
+    calc_comp = make_calculation(session, type=CalculationType.composite, species_entry_id=sa.id, lot_id=lot.id)
+    session.add(CalculationCompositeResult(calculation_id=calc_comp.id, assembly=CompositeAssembly.assembled))
+    session.flush()
+    for position, inp in enumerate((calc_h, calc_vf)):
+        session.add(
+            CalculationCompositeInput(
+                calculation_id=calc_comp.id,
+                term_position=position,
+                slot=CompositeInputSlot.value,
+                input_calculation_id=inp.id,
+            )
+        )
+        session.add(CalculationCompositeTerm(calculation_id=calc_comp.id, term_position=position, value_hartree=-1.0))
+        attach_dependency(session, parent=inp, child=calc_comp, role=CalculationDependencyRole.composite_input)
+    session.flush()
+    vis["calc_comp"] = calc_comp
+
+    # A hidden calculation with an output geometry, on a VISIBLE observation: reached through the conformer's
+    # calculations and geometries includes.
+    calc_hgeo = make_calculation(
+        session, type=CalculationType.opt, species_entry_id=sa.id, lot_id=lot.id, conformer_observation_id=co_v.id
+    )
+    attach_output_geometry(session, calculation=calc_hgeo, geometry=make_geometry(session))
+    hid["calc_hgeo"] = calc_hgeo
+
+    # SCF stability whose origin calculation is hidden (the integer id sits beside the ref).
+    scf = attach_scf_stability(session, calculation=calc_vopt)
+    scf.source_calculation_id = calc_h.id
+    session.flush()
+
+    # Thermo protocol declaration citing a hidden and a visible calculation.
+    thm_v.protocol_declaration = {
+        "version": 1,
+        "supporting_calculations": [{"calculation_ref": calc_h.public_ref}, {"calculation_ref": calc_vf.public_ref}],
+    }
+    session.flush()
+
+    # A correction (from a visible calculation) that targets the HIDDEN entry tse_h.
+    make_applied_energy_correction(
+        session, target_transition_state_entry=tse_h, scheme=ext["ecs"], source_calculation=calc_vopt
+    )
+
+    # Geometry of a visible calculation owned by the hidden entry tse_h: names the entry's identity.
+    geom_ts = make_geometry(session)
+    attach_output_geometry(session, calculation=calc_ts_v_on_h, geometry=geom_ts)
+    ext["geometry_hidden_ts_entry"] = geom_ts
+    # A geometry shared by a species calculation and a calculation of tse_h: owners are ambiguous, one is hidden.
+    geom_amb = make_geometry(session)
+    calc_vamb = make_calculation(session, type=CalculationType.sp, species_entry_id=sa.id, lot_id=lot.id)
+    calc_tsamb = make_calculation(session, type=CalculationType.sp, transition_state_entry_id=tse_h.id, lot_id=lot.id)
+    attach_output_geometry(session, calculation=calc_vamb, geometry=geom_amb)
+    attach_output_geometry(session, calculation=calc_tsamb, geometry=geom_amb)
+    ext["geometry_ambiguous_owners"] = geom_amb
+    vis["calc_vamb"], vis["calc_tsamb"] = calc_vamb, calc_tsamb
+
+    # Scan / IRC / path-search results: one visible calculation each (the IRC and the path search belong to tse_h).
+    calc_scan = make_calculation(session, type=CalculationType.scan, species_entry_id=sa.id, lot_id=lot.id)
+    session.add(CalculationScanResult(calculation_id=calc_scan.id, dimension=1, is_relaxed=True))
+    session.flush()
+    session.add(
+        CalculationScanCoordinate(
+            calculation_id=calc_scan.id,
+            coordinate_index=1,
+            coordinate_kind=ScanCoordinateKind.bond,
+            atom1_index=1,
+            atom2_index=2,
+        )
+    )
+    session.flush()
+    for i in (1, 2):
+        session.add(
+            CalculationScanPoint(
+                calculation_id=calc_scan.id, point_index=i, electronic_energy_hartree=-1.0 * i, geometry_id=geom_amb.id
+            )
+        )
+    attach_dependency(session, parent=calc_h, child=calc_scan, role=CalculationDependencyRole.freq_on)
+    calc_irc = make_calculation(session, type=CalculationType.irc, transition_state_entry_id=tse_h.id, lot_id=lot.id)
+    session.add(CalculationIRCResult(calculation_id=calc_irc.id, point_count=2, zero_energy_reference_hartree=-1.0))
+    session.flush()
+    for i in (1, 2):
+        session.add(
+            CalculationIRCPoint(
+                calculation_id=calc_irc.id,
+                point_index=i,
+                direction=IRCDirection.forward,
+                is_ts=(i == 1),
+                electronic_energy_hartree=-1.0 * i,
+                geometry_id=geom_ts.id,
+            )
+        )
+    calc_ps = make_calculation(
+        session, type=CalculationType.path_search, transition_state_entry_id=tse_h.id, lot_id=lot.id
+    )
+    session.add(
+        CalculationPathSearchResult(
+            calculation_id=calc_ps.id,
+            method=PathSearchMethod.neb,
+            is_double_ended=True,
+            converged=True,
+            n_points=2,
+        )
+    )
+    session.flush()
+    for i in (1, 2):
+        session.add(
+            CalculationPathSearchPoint(
+                calculation_id=calc_ps.id, point_index=i, electronic_energy_hartree=-1.0 * i, geometry_id=geom_ts.id
+            )
+        )
+    session.flush()
+    vis["calc_scan"], vis["calc_irc"], vis["calc_ps"] = calc_scan, calc_irc, calc_ps
+    ext["scan_calc"], ext["irc_calc"], ext["path_search_calc"] = calc_scan, calc_irc, calc_ps
 
     # ---- review states: hidden ones first (under_review for some), approvals last ---------------------------------
     under_review_keys = {"cg_h", "ts_h", "sm_h", "net_h", "kin_h"}
