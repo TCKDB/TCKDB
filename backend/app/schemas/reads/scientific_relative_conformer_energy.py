@@ -258,6 +258,17 @@ class RelativeConformerEnergyResponse(BaseModel):
     integrity: RelativeEnergyIntegrity
 
 
+class RelativeEnergyManifestRequest(ProfiledRequestEcho):
+    """The manifest's normalised request. Every key the answer recorded is kept (``extra=allow``).
+
+    The manifest is served as a download and replayed offline, so the profile it was made under is the manifest's own
+    ``read_profile`` block; the profile echo fields here keep the published shape uniform with every other scientific
+    envelope and are not part of the digested content.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+
 class RelativeConformerEnergyManifest(BaseModel):
     """The replayable manifest of the ``/manifest`` download.
 
@@ -272,7 +283,7 @@ class RelativeConformerEnergyManifest(BaseModel):
     manifest_format: str
     manifest_format_version: int
     versions: dict[str, Any]
-    request: dict[str, Any]
+    request: RelativeEnergyManifestRequest
     structure_request: dict[str, Any]
     effective_review_statuses: list[RecordReviewStatus]
     read_profile: dict[str, Any]

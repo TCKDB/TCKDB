@@ -41461,9 +41461,7 @@
             "type": "object"
           },
           "request": {
-            "additionalProperties": true,
-            "title": "Request",
-            "type": "object"
+            "$ref": "#/components/schemas/RelativeEnergyManifestRequest"
           },
           "result": {
             "additionalProperties": true,
@@ -41907,6 +41905,33 @@
           "recipe_facts"
         ],
         "title": "RelativeEnergyLevelBlock",
+        "type": "object"
+      },
+      "RelativeEnergyManifestRequest": {
+        "additionalProperties": true,
+        "description": "The manifest's normalised request. Every key the answer recorded is kept (``extra=allow``).\n\nThe manifest is served as a download and replayed offline, so the profile it was made under is the manifest's own\n``read_profile`` block; the profile echo fields here keep the published shape uniform with every other scientific\nenvelope and are not part of the digested content.",
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          }
+        },
+        "title": "RelativeEnergyManifestRequest",
         "type": "object"
       },
       "RelativeEnergyMember": {

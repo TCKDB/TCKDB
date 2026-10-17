@@ -33,6 +33,7 @@ from app.schemas.reads.scientific_relative_conformer_energy import (
     RelativeEnergyRequestEcho,
     RelativeEnergyReview,
 )
+from app.services.relative_conformer_energy.bounds import check_supported
 from app.services.relative_conformer_energy.models import LevelSelector
 from app.services.relative_conformer_energy.population import profile_statuses
 from app.services.relative_conformer_energy.service import RelativeEnergyRun, run_relative_energies
@@ -99,6 +100,15 @@ def run(session: Session, *, entry_id: int, body: RelativeConformerEnergyRequest
     )
 
 
+def refuse_unsupported(body: RelativeConformerEnergyRequest) -> None:
+    """Refuse (422 ``relative_conformer_energy_unsupported``) what this release does not evaluate, before any query.
+
+    Called first by both routes, ahead of the entry lookup: the refusal depends on the request alone, so it is the same
+    whatever the path names (an unknown entry included) and nothing is read to make it.
+    """
+    check_supported(body.service_request())
+
+
 def resolve_entry(session: Session, ref: str) -> int:
     return resolve_species_entry_ref(session, ref)
 
@@ -135,6 +145,7 @@ def build_response(run_: RelativeEnergyRun, *, entry_ref: str) -> RelativeConfor
 __all__ = [
     "build_response",
     "check_request_refs",
+    "refuse_unsupported",
     "resolve_entry",
     "resolve_level",
     "run",

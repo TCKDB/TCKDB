@@ -70,6 +70,7 @@ def relative_conformer_energies(
     answered from a subset. The answer covers the caller's authorized population only.
     """
     _refuse_unknown_query_keys(request)
+    public.refuse_unsupported(body)
     entry_id = public.resolve_entry(session, species_entry_ref)
     payload = public.build_response(public.run(session, entry_id=entry_id, body=body), entry_ref=species_entry_ref)
     stamp_read_profile(payload)
@@ -89,6 +90,7 @@ def relative_conformer_energies_manifest(
 ) -> JSONResponse:
     """The same request, answered with the replayable manifest as a download (a new snapshot, not a saved answer)."""
     _refuse_unknown_query_keys(request)
+    public.refuse_unsupported(body)
     entry_id = public.resolve_entry(session, species_entry_ref)
     run_ = public.run(session, entry_id=entry_id, body=body)
     return JSONResponse(

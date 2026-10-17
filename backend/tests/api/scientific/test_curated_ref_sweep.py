@@ -82,10 +82,21 @@ KNOWN_UNGUARDED: dict[tuple[str, str], str] = {
         (
             "POST",
             f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies{suffix}",
-        ): "stamps the profile and returns; a hidden group is filtered out of the population before the service reads it"
+        ): "stamps the profile and returns; guard PR-3 adds run_relative_energies to the selection seam"
         for suffix in ("", "/manifest")
     },
 }
+
+#: The relative-energy routes, and the only two coverage counts that differ between profiles there: a hidden conformer
+#: group is not in the compared population under curated, so it is not counted. Scoped to these routes and these keys
+#: so no other route's ``coverage`` is muted; the API test asserts the whole coverage block against the visible members.
+RELATIVE_ENERGY_ROUTES = {
+    ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies{suffix}")
+    for suffix in ("", "/manifest")
+}
+RELATIVE_ENERGY_POPULATION_PATHS = frozenset(
+    f"{prefix}coverage.{name}" for prefix in ("", "result.") for name in ("absent", "requested_members")
+)
 
 #: Routes that answer something other than 200 to a visible subject under the curated profile, and why. The batch
 #: evaluate route evaluates every fit of the network, including those of a hidden solve, and then 404s naming the
@@ -121,6 +132,8 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     },
     "calc_h_ts": {f"{BASE}/statmech/{{statmech_ref_or_id}}", _TSE, _TS, _FULL},
     "cg_h": {
+        f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies",
+        f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/manifest",
         _CALC,
         f"{BASE}/conformer-observations/{{conformer_observation_ref_or_id}}",
         f"{BASE}/statmech/{{statmech_ref_or_id}}",
@@ -307,6 +320,8 @@ def test_curated_sweep_report_and_ratchet(client, db_session, login_as, monkeypa
         if ekind != "json" or ckind != "json":
             continue
         for path in withholding_violations(eobj, cobj):
+            if route in RELATIVE_ENERGY_ROUTES and path.split("<", 1)[0] in RELATIVE_ENERGY_POPULATION_PATHS:
+                continue
             substituted.add(fmt(route, path))
 
     found = {

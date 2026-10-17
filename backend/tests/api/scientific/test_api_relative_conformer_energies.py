@@ -220,6 +220,39 @@ def test_enthalpy_and_gibbs_are_the_coded_unsupported_422(client, three, kind):
         assert response.json()["context"]["reason"] == "deferred_energy_kind"
 
 
+@pytest.mark.parametrize("suffix", ["", "/manifest"])
+@pytest.mark.parametrize(
+    ("changes", "reason"),
+    [
+        ({"energy_kind": "enthalpy", "temperature_k": 298.15}, "deferred_energy_kind"),
+        ({"certificate": "none"}, "deferred_certificate"),
+    ],
+)
+def test_an_unsupported_request_is_refused_before_anything_is_read_even_for_an_unknown_entry(
+    client, db_session, three, suffix, changes, reason
+):
+    from sqlalchemy import event
+
+    world, ref, *_ = three
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    engine = db_session.get_bind()
+    ghost = f"{API}/species-entries/spe_{'0' * 26}/conformers/relative-energies{suffix}"
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        response = client.post(ghost, json=body(world, ref, **changes))
+        real = client.post(url(world.entry, manifest=bool(suffix)), json=body(world, ref, **changes))
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    for r in (response, real):
+        assert r.status_code == 422 and code(r) == "relative_conformer_energy_unsupported"
+        assert r.json()["context"]["reason"] == reason
+    assert statements == []
+
+
 def test_a_request_for_no_certificate_is_the_coded_unsupported_422(client, three):
     world, ref, *_ = three
     response = client.post(url(world.entry), json=body(world, ref, certificate="none"))
@@ -324,7 +357,22 @@ def test_curated_names_no_hidden_group_observation_determination_or_calculation(
     assert out.status_code == manifest.status_code == 200
     assert out.json()["request"]["profile"] == "curated"
     assert [m["conformer_ref"] for m in out.json()["members"]] == [shown.public_ref]
-    assert out.json()["coverage"]["requested_members"] == 1
+    # The whole coverage block, in the response and in the manifest, counts the visible members and nothing else.
+    for coverage, members in (
+        (out.json()["coverage"], out.json()["members"]),
+        (manifest.json()["result"]["coverage"], manifest.json()["result"]["members"]),
+    ):
+        by_status = [m["status"] for m in members]
+        assert coverage == {
+            "requirement": "known_values",
+            "requested_members": len(members),
+            "present": sum(s in ("reference", "present") for s in by_status),
+            "absent": by_status.count("absent"),
+            "unresolved": by_status.count("unresolved"),
+            "complete": True,
+            "authorized_population_only": True,
+        }
+        assert coverage["requested_members"] == 1 and coverage["present"] == 1 and coverage["absent"] == 0
     for doc in (out.text, manifest.text):
         assert hidden.public_ref not in doc and hidden_obs.public_ref not in doc
     # Every calculation the hidden group's determination pinned stays out; the shown group's are named.

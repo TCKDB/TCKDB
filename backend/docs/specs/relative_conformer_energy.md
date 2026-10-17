@@ -83,8 +83,14 @@ The structure assessment's own bound codes pass through unchanged. Order of ref 
 Under `curated` a hidden group, observation, determination or pinned calculation is not in the world: it is filtered
 before the assessment, so it is not listed, counted, used or named in the response or the manifest. Nothing is borrowed
 from a visible sibling. The response carries no database id and is returned directly (not through the internal-id
-stripper). The central curated ref guard (`scientific_read/ref_guard.py`) is a second line for the `/species-entries`
-family; the population filter stands on its own and is tested at the API level.
+stripper), so the central curated ref guard (`scientific_read/ref_guard.py`) does not see these routes: they are listed
+as unguarded in the curated sweep. **The population filter is the only line of defence** until the guard's selection-seam
+PR adds `run_relative_energies` to that seam. It is tested at the API level and by the sweep, which finds no hidden ref.
+Under `curated` the compared population shrinks by design, so `coverage.requested_members` and `coverage.absent` count
+visible members only.
+
+The unsupported-request refusal (`relative_conformer_energy_unsupported`) depends on the request alone and is made first,
+before the entry is looked up: it is the same 422 for an unknown entry, and nothing is read to make it.
 
 ## Manifest and replay
 
