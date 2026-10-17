@@ -24,7 +24,9 @@ How a hidden ref is removed (:func:`withhold_in_model`)
 4. Free text (a note, a label, a file name, a depositor URL) that names a hidden ref anywhere in its tokens is
    blanked as a whole field: ``None`` when the field is nullable, else ``""``. Never token by token (the shape of
    what was removed would show), and text whose percent-encoding does not settle is blanked too, never refused.
-   Exploratory text is untouched.
+   Exploratory text is untouched. A required field whose WHOLE value is a bare hidden ref is not free text: it is
+   a ref in the wrong place (most likely a pointer the registry missed), so it raises :class:`RefGuardUnplaceable`
+   and the registry gets fixed (D4).
 
 Rollout
 -------
@@ -34,9 +36,12 @@ species-side families (:data:`SPECIES_SIDE_PREFIXES`); the TS/reaction and netwo
 
 from __future__ import annotations
 
+import functools
 import logging
 import re
+import sys
 import types
+import unicodedata
 from collections.abc import Collection, Mapping
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
@@ -164,9 +169,13 @@ UNGATED_REVIEWABLE: Mapping[SubmissionRecordType, str] = {
 #: A ref is a whole-string value of a gated prefix and the 26-character body. ``\Z``, not ``$``: ``$`` also matches
 #: before a trailing newline, which would let ``calc_...\n`` count as a ref in one place and not in another.
 #: Uppercase and suffixed look-alikes (``CALC_...``, ``calc_...x``) are not refs: no route resolves them.
-GATED_REF_RE = re.compile(
-    "^(?:" + "|".join(sorted((re.escape(p) for p in GATED_TYPES), key=len, reverse=True)) + r")_[a-z0-9]{26}\Z"
-)
+_GATED_PREFIX_ALT = "|".join(sorted((re.escape(p) for p in GATED_TYPES), key=len, reverse=True))
+GATED_REF_RE = re.compile("^(?:" + _GATED_PREFIX_ALT + r")_[a-z0-9]{26}\Z")
+#: A ref inside text. The boundaries are alphanumeric only: ``_`` is not one, so ``_calc_...``, ``__calc_...__``,
+#: ``calc_..._freq.log`` and ``foo_calc_...`` all contain a ref, while a suffixed or prefixed alphanumeric
+#: look-alike (``calc_...x``, ``xcalc_...``) does not.
+_REF_IN_TEXT = re.compile("(?<![a-z0-9])(?:" + _GATED_PREFIX_ALT + ")_[a-z0-9]{26}(?![a-z0-9])")
+
 
 # ---------------------------------------------------------------------------
 # Pointer registry
@@ -466,16 +475,30 @@ class _FreeRef(str):
 #: is blanked rather than guessed at, and never raises (a depositor's odd text must not fail a page).
 UNSETTLED_TEXT = "unsettled_encoding"
 
-#: Any gated ref anywhere in a string. A cheap pre-filter so ordinary text is not tokenised.
-_REF_ANYWHERE = re.compile(
-    "(?:" + "|".join(sorted((re.escape(p) for p in GATED_TYPES), key=len, reverse=True)) + ")_[a-z0-9]{26}"
-)
+#: Any gated ref anywhere in a string, no boundaries: a cheap superset pre-filter so ordinary text is not decoded.
+_REF_ANYWHERE = re.compile("(?:" + _GATED_PREFIX_ALT + ")_[a-z0-9]{26}")
 
 
-def _tokens(component: str) -> list[str]:
-    """The pieces of text a ref can be: the decoded text split on anything that is not a word character, so a ref
-    next to whitespace, ``/``, ``;``, ``,``, ``&``, ``=``, a bracket, a quote or a full stop still comes out as one."""
-    return [t for t in re.split(r"\W+", _decode_stable(component)) if t]
+@functools.cache
+def _invisible_characters() -> re.Pattern[str]:
+    """Unicode category ``Cf`` (format) characters: soft hyphen, zero-width space and joiners, bidi marks, tags."""
+    chars = "".join(chr(c) for c in range(sys.maxunicode + 1) if unicodedata.category(chr(c)) == "Cf")
+    return re.compile("[" + re.escape(chars) + "]")
+
+
+def _strip_invisible(text: str) -> str:
+    """The text with invisible format characters removed. Only the copy used for matching is stripped."""
+    return text if text.isascii() else _invisible_characters().sub("", text)
+
+
+def _refs_in_text(text: str) -> list[str]:
+    """Every gated ref in ``text``, after percent-decoding until stable and dropping invisible characters.
+
+    Raises ``ValueError`` when the encoding does not settle. Boundaries are alphanumeric only (see
+    :data:`_REF_IN_TEXT`), so a ref joined to other text by ``_`` is found.
+    """
+    decoded = _strip_invisible(_decode_stable(_strip_invisible(text)))
+    return [m.group(0) for m in _REF_IN_TEXT.finditer(decoded)]
 
 
 def _free_text_refs(value: str) -> list[str]:
@@ -484,13 +507,14 @@ def _free_text_refs(value: str) -> list[str]:
     Returns :class:`_FreeRef` sites. Text whose percent-encoding does not settle is returned as the
     :data:`UNSETTLED_TEXT` stand-in, so the field is blanked, never kept and never an error.
     """
-    if "%" not in value and not _REF_ANYWHERE.search(value):
+    text = _strip_invisible(value)  # ASCII (the common case) is returned as is; a soft hyphen cannot split a ref
+    if "%" not in text and not _REF_ANYWHERE.search(text):
         return []
     try:
-        tokens = _tokens(value)
+        refs = _refs_in_text(text)
     except ValueError:
         return [_FreeRef(UNSETTLED_TEXT)]
-    return [_FreeRef(t) for t in tokens if GATED_REF_RE.match(t)]
+    return [_FreeRef(r) for r in refs]
 
 
 def _refs_named_by(value: str, *, url_valued: bool = False) -> list[str]:
@@ -503,9 +527,9 @@ def _refs_named_by(value: str, *, url_valued: bool = False) -> list[str]:
     fragment, percent-decoded until stable. A value that cannot be parsed raises ``ValueError``, which the caller
     turns into :class:`RefGuardUnplaceable` (fail closed).
 
-    Every other string is free text (:func:`_free_text_refs`): any token that is a gated ref makes the whole field a
-    site, and a hidden one blanks the field. Uppercase and suffixed look-alikes (``CALC_...``, ``calc_...x``) are not
-    refs: no route resolves them.
+    Every other string is free text (:func:`_free_text_refs`): any gated ref in it makes the whole field a site, and
+    a hidden one blanks the field. Uppercase and alphanumeric-suffixed look-alikes (``CALC_...``, ``calc_...x``) are
+    not refs: no route resolves them. Invisible format characters are ignored when matching.
     """
     if len(value) <= 40:
         if GATED_REF_RE.match(value):
@@ -518,7 +542,7 @@ def _refs_named_by(value: str, *, url_valued: bool = False) -> list[str]:
     parts = urlsplit(value)
     found: list[str] = []
     for component in (parts.path, parts.query, parts.fragment):
-        found.extend(t for t in _tokens(component) if GATED_REF_RE.match(t))
+        found.extend(_refs_in_text(component))
     return found
 
 
@@ -763,9 +787,8 @@ def withhold_in_model(
         report.sites.append(site)
         for action in actions:
             planned.setdefault((id(action.container), action.key, action.kind), action)
-    if apply:
-        _apply(list(planned.values()))
-        report.sites.extend(_collapse_empty(sites, report.hidden))
+    _apply(list(planned.values()))
+    report.sites.extend(_collapse_empty(sites, report.hidden))
     return report
 
 

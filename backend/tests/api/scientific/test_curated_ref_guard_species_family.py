@@ -479,7 +479,15 @@ def test_a_url_or_text_that_names_only_visible_records_is_kept(client, db_sessio
     ]
     for value in kept:
         assert _withhold_one(db_session, value) == value, value
-    for value in (f"see {visible} for details", f"({visible}).", "50% yield, 100%25 sure", f"{hidden}x is not a ref"):
+    for value in (
+        f"see {visible} for details",
+        f"({visible}).",
+        f"_{visible}_ and __{visible}__",
+        f"{visible}_freq.log",
+        "50% yield, 100%25 sure",
+        f"{hidden}x is not a ref",  # an alphanumeric suffix: not a ref
+        f"x{hidden} is not a ref",  # an alphanumeric prefix: not a ref
+    ):
         assert _withhold_one(db_session, value, field="note") == value, value
 
 
@@ -495,6 +503,13 @@ def _hidden_text_forms(hidden: str) -> dict[str, str]:
         "encoded": f"duplicate of %{first}{hidden[1:]}",
         "double encoded": f"duplicate of %25{first}{hidden[1:]}",
         "with newline": f"first line\n{hidden}\nlast line",
+        "markdown italics": f"see _{hidden}_",
+        "markdown bold": f"__{hidden}__",
+        "file name": f"{hidden}_freq.log",
+        "joined by an underscore": f"foo_{hidden}",
+        "soft hyphen inside the ref": f"duplicate of {hidden[:6]}\u00ad{hidden[6:]}",
+        "zero-width space inside the ref": f"duplicate of {hidden[:9]}\u200b{hidden[9:]}",
+        "soft hyphen after decoding": f"duplicate of {hidden[:6]}%C2%AD{hidden[6:]}",
     }
 
 
@@ -761,3 +776,27 @@ def test_the_review_shapes_each_build_a_hidden_link_and_none_fails_closed(client
         curated = client.get(f"{BASE}{route}", params={**params, "profile": "curated"})
         assert curated.status_code == 200, (route, curated.text)
         assert ref not in curated.text, f"{route}: curated still names {key}"
+
+
+def test_a_required_field_that_is_exactly_a_hidden_ref_fails_closed(client, db_session):
+    """A required free-text field whose whole value is a bare hidden ref is a ref in the wrong place, most likely a
+    pointer the registry missed: it raises (D4) so the registry gets fixed, instead of being quietly emptied. The same
+    value in a nullable field is nulled.
+
+    Kills: treating a whole-value ref as free text and blanking it to ``""``.
+    """
+    from pydantic import BaseModel
+
+    class Required(BaseModel):
+        label: str
+
+    class Nullable(BaseModel):
+        label: str | None = None
+
+    world = build_sweep_world(db_session)
+    hidden = world.hidden["calc_h"].public_ref
+    with pytest.raises(ref_guard.RefGuardUnplaceable):
+        ref_guard.withhold_in_model(db_session, Required(label=hidden), profile=CURATED)
+    nullable = Nullable(label=hidden)
+    ref_guard.withhold_in_model(db_session, nullable, profile=CURATED)
+    assert nullable.label is None
