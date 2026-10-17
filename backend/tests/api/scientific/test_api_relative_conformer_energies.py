@@ -13,6 +13,7 @@ import json
 import pytest
 
 from app.db.models.common import RecordReviewStatus, StructureDeterminationTargetKind, SubmissionRecordType
+from app.db.models.level_of_theory import LevelOfTheoryMerge
 from app.services.relative_conformer_energy import replay_matches
 from tests.services.scientific_read._factories import (
     make_conformer_group,
@@ -130,6 +131,28 @@ def test_a_value_only_at_another_level_is_absent_for_the_requested_one(client, d
     by = {m["conformer_ref"]: m for m in out["members"]}
     assert by[elsewhere.public_ref]["absent_reason"] == "no_value_at_requested_level"
     assert by[elsewhere.public_ref]["relative_energy_kj_mol"] is None
+
+
+def test_a_merged_level_ref_is_answered_under_the_level_it_was_merged_into(client, db_session):
+    world = make_world(db_session)
+    ref, _ = conformer(world, -76.4)
+    other, _ = conformer(world, -76.5)
+    duplicate = make_lot(db_session, method="b3lyp")  # no calculation uses it; it is merged into the world's level
+    db_session.add(LevelOfTheoryMerge(merged_lot_id=duplicate.id, into_lot_id=world.lot.id))
+    db_session.flush()
+    world.settle()
+    out = client.post(url(world.entry), json=body(world, ref, level={"level_of_theory_ref": duplicate.public_ref})).json()
+    assert out["request"]["level"]["level_of_theory_ref"] == world.lot.public_ref
+    assert {m["conformer_ref"]: m["status"] for m in out["members"]}[other.public_ref] == "present"
+
+
+def test_the_legacy_lowest_sp_route_is_deprecated_in_openapi_and_points_to_the_new_operation(client):
+    spec = client.get("/openapi.json").json()
+    operation = spec["paths"]["/api/v1/species-entries/{entry_id}/conformer-observations/lowest-sp"]["get"]
+    assert operation["deprecated"] is True
+    assert "conformers/relative-energies" in operation["description"]
+    new = spec["paths"]["/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies"]["post"]
+    assert not new.get("deprecated")
 
 
 # ---------------------------------------------------------------------------
