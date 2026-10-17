@@ -480,7 +480,9 @@ def test_compare_refuses_a_protocol_compared_with_itself_with_a_coded_422(client
     # the caller cannot see: an unknown entry, level or group is its usual 404 first.
     ghost = f"{API}/species-entries/spe_{'0' * 26}/conformers/relative-energies/compare"
     assert client.post(ghost, json=same).status_code == 404
-    unknown_level = compare_body(world, a, world.lot, candidate={"level": {"level_of_theory_ref": f"lot_{'0' * 26}"}})
+    # The same unknown level on both sides is "identical" on its face; the lookup still comes first, so it is a 404.
+    nothing = {"level": {"level_of_theory_ref": f"lot_{'0' * 26}"}}
+    unknown_level = {**compare_body(world, a, world.lot), "candidate": nothing, "reference": nothing}
     assert client.post(compare_url(world.entry), json=unknown_level).status_code == 404
     unknown_group = {**same, "reference_conformer_ref": f"cg_{'0' * 26}"}
     assert client.post(compare_url(world.entry), json=unknown_group).status_code == 404
@@ -543,3 +545,16 @@ def test_compare_names_no_database_id(client, two_levels):
     for manifest in (False, True):
         doc = client.post(compare_url(world.entry, manifest=manifest), json=req).json()
         assert not [k for k in keys(doc) if k in {"id", "entry_id", "species_entry_id", "conformer_group_id"}]
+
+
+def test_compare_refuses_a_merged_level_against_the_level_it_was_merged_into(client, db_session):
+    world = make_world(db_session)
+    ref, _ = conformer(world, -76.4)
+    duplicate = make_lot(db_session, method="b3lyp")  # no calculation uses it; it is merged into the world's level
+    db_session.add(LevelOfTheoryMerge(merged_lot_id=duplicate.id, into_lot_id=world.lot.id))
+    db_session.flush()
+    world.settle()
+    # Two spellings of one level: only the canonical resolution after the lookups can see that they are the same.
+    body_ = compare_body(world, ref, duplicate)
+    response = client.post(compare_url(world.entry), json=body_)
+    assert response.status_code == 422 and code(response) == "relative_conformer_energy_compare_identical_protocols"
