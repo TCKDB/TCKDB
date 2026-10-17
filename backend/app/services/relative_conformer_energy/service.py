@@ -113,6 +113,7 @@ def run_relative_energies(
         group_refs=population.group_refs,
         excluded_groups=population.excluded_groups,
         floor_excluded_refs=population.floor_excluded_refs,
+        terminal_excluded_refs=population.terminal_excluded_refs,
         determinations=assessment.determinations,
         assessments=assessment.assessments,
         calculations={c.calculation_ref: c for c in assessment.calculations},

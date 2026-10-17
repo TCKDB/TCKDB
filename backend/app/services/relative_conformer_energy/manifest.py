@@ -19,6 +19,8 @@ from typing import Any
 from app.db.models.common import RecordReviewStatus
 from app.services.relative_conformer_energy.compute import compute_relative_energies
 from app.services.relative_conformer_energy.models import (
+    GROUP_BELOW_REVIEW_FLOOR,
+    GROUP_TERMINAL_REVIEW_STATUS,
     RELATIVE_ENERGY_VERSION,
     RelativeEnergyRequest,
     RelativeEnergyResult,
@@ -100,6 +102,7 @@ def build_manifest(
             "groups": list(population.group_refs),
             "excluded_groups": dict(sorted(population.excluded_groups.items())),
             "floor_excluded_groups": sorted(population.floor_excluded_refs),
+            "terminal_excluded_groups": sorted(population.terminal_excluded_refs),
             "determinations": list(population.determination_refs),
         },
         "calculations": [_with_digest(c.to_dict()) for c in assessment.calculations],
@@ -171,6 +174,39 @@ def _check_consistency(
         d.determination_ref for d in dets
     ):
         raise ReplayError("inconsistent_manifest", "the recorded determinations are not the ones the population names")
+    _check_population_claims(population, dets, curated=name == "curated", floor_set=floor is not None or request.min_review_status is not None)
+
+
+_GROUP_EXCLUSION_CODES = frozenset({GROUP_BELOW_REVIEW_FLOOR, GROUP_TERMINAL_REVIEW_STATUS})
+
+
+def _check_population_claims(
+    population: dict[str, Any], dets: list[NormalizedDetermination], *, curated: bool, floor_set: bool
+) -> None:
+    """Refuse a population that contradicts itself: the claims about which groups were held out must agree with each
+    other, with the groups compared, with the determinations recorded and with the profile."""
+
+    def refuse(message: str) -> None:
+        raise ReplayError("inconsistent_manifest", message)
+
+    groups = set(population.get("groups", []))
+    excluded: dict[str, str] = population.get("excluded_groups", {})
+    floor_held = set(population.get("floor_excluded_groups", []))
+    terminal_held = set(population.get("terminal_excluded_groups", []))
+    if curated and (excluded or floor_held or terminal_held):
+        refuse("a curated profile shows approved records only, so it has no excluded or held-out groups")
+    if not set(excluded) <= groups:
+        refuse("an excluded group is not among the compared groups")
+    if not set(excluded.values()) <= _GROUP_EXCLUSION_CODES:
+        refuse("an excluded group carries a reason that is not a group exclusion")
+    if not (floor_held <= groups and terminal_held <= groups):
+        refuse("a held-out group is not among the compared groups")
+    if (floor_held | terminal_held) & set(excluded) or floor_held & terminal_held:
+        refuse("a group is claimed excluded and held out, or held out twice")
+    if any(d.conformer_group_ref in excluded for d in dets):
+        refuse("a recorded determination belongs to an excluded group, whose determinations are never assessed")
+    if not floor_set and (GROUP_BELOW_REVIEW_FLOOR in excluded.values() or floor_held):
+        refuse("no review floor is set, so no group can be below one")
 
 
 def replay_relative_energies(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -195,6 +231,7 @@ def replay_relative_energies(manifest: dict[str, Any]) -> dict[str, Any]:
         groups = tuple(manifest["population"]["groups"])
         excluded = dict(manifest["population"]["excluded_groups"])
         floor_excluded = frozenset(manifest["population"]["floor_excluded_groups"])
+        terminal_excluded = frozenset(manifest["population"]["terminal_excluded_groups"])
     except (KeyError, TypeError, ValueError) as exc:
         raise ReplayError("unreadable_manifest", f"the manifest cannot be read back: {exc}") from exc
     _check_consistency(manifest, structure_request, dets, calcs)
@@ -215,6 +252,7 @@ def replay_relative_energies(manifest: dict[str, Any]) -> dict[str, Any]:
         group_refs=groups,
         excluded_groups=excluded,
         floor_excluded_refs=floor_excluded,
+        terminal_excluded_refs=terminal_excluded,
         determinations=dets,
         assessments=recomputed,
         calculations=by_ref,

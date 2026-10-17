@@ -120,6 +120,7 @@ def compute(
     *basins: Basin,
     excluded: dict[str, str] | None = None,
     floor_excluded: frozenset[str] = frozenset(),
+    terminal_excluded: frozenset[str] = frozenset(),
 ) -> RelativeEnergyResult:
     """Assess every basin and compute, the way the service does."""
     calcs = {c.calculation_ref: c for b in basins for c in b.calcs}
@@ -132,6 +133,7 @@ def compute(
         group_refs=groups,
         excluded_groups=excluded,
         floor_excluded_refs=floor_excluded,
+        terminal_excluded_refs=terminal_excluded,
         determinations=dets,
         assessments=assessments,
         calculations=calcs,

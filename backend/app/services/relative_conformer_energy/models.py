@@ -92,6 +92,9 @@ GROUP_TERMINAL_REVIEW_STATUS = "group_terminal_review_status"
 #: A determination exists but the caller's floor holds it out (its observation, or the entry, is below the floor or
 #: terminal). The group has no other value.
 DETERMINATION_BELOW_REVIEW_FLOOR = "determination_below_review_floor"
+#: A determination exists but is held out because its observation, or the entry, is rejected or deprecated: terminal,
+#: which is not a floor (the caller may have set none).
+DETERMINATION_TERMINAL_REVIEW_STATUS = "determination_terminal_review_status"
 #: A detail code (not a reason): the named level is bound to a composite scheme, which is what a value is filed under.
 LEVEL_BOUND_TO_COMPOSITE_SCHEME = "level_bound_to_composite_scheme"
 REFERENCE_UNAVAILABLE_DETAIL = "reference_unavailable"
@@ -112,6 +115,7 @@ REASONS = frozenset(
         GROUP_BELOW_REVIEW_FLOOR,
         GROUP_TERMINAL_REVIEW_STATUS,
         DETERMINATION_BELOW_REVIEW_FLOOR,
+        DETERMINATION_TERMINAL_REVIEW_STATUS,
     }
 )
 

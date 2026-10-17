@@ -42,6 +42,7 @@ from app.services.relative_conformer_energy.models import (
     CERTIFICATE_NOT_SUPPORTED,
     CONTESTED_CERTIFICATE,
     DETERMINATION_BELOW_REVIEW_FLOOR,
+    DETERMINATION_TERMINAL_REVIEW_STATUS,
     LEVEL_BOUND_TO_COMPOSITE_SCHEME,
     MULTIPLE_RECIPES_AT_LEVEL,
     NO_DETERMINATION_SUPPLIES_KIND,
@@ -229,6 +230,14 @@ def _member_from_values(
     )
 
 
+def _no_unit_reason(group: str, floor_held: frozenset[str], terminal_held: frozenset[str]) -> str:
+    if group in floor_held:
+        return DETERMINATION_BELOW_REVIEW_FLOOR
+    if group in terminal_held:
+        return DETERMINATION_TERMINAL_REVIEW_STATUS
+    return NO_STRUCTURE_DETERMINATION
+
+
 def _without_value(ref: str, judged: list[_Judged]) -> MemberResult:
     best = min(judged, key=lambda j: j.rank)
     return _absent(ref, best.reason, best.detail)
@@ -241,6 +250,7 @@ def compute_relative_energies(
     group_refs: Sequence[str],
     excluded_groups: Mapping[str, str] | None = None,
     floor_excluded_refs: frozenset[str] = frozenset(),
+    terminal_excluded_refs: frozenset[str] = frozenset(),
     determinations: Sequence[NormalizedDetermination],
     assessments: Sequence[StructureAssessment],
     calculations: dict[str, NormalizedCalculation],
@@ -291,9 +301,7 @@ def compute_relative_energies(
             continue
         units = by_group.get(g, [])
         if not units:
-            members[g] = _absent(
-                g, DETERMINATION_BELOW_REVIEW_FLOOR if g in floor_excluded_refs else NO_STRUCTURE_DETERMINATION
-            )
+            members[g] = _absent(g, _no_unit_reason(g, floor_excluded_refs, terminal_excluded_refs))
             continue
         # A target (one observation's basin) with a qualifying and a refuted determination is contested: the pass is
         # not an answer, and nothing of that group is used.

@@ -42,8 +42,10 @@ class Population:
         caller's floor, or a terminal status (rejected, deprecated). They stay members, reported absent, and none of
         their determinations is assessed.
     :param floor_excluded_refs: Compared groups that have a determination the caller's own floor holds out (its
-        observation, or the entry, is below the floor or terminal). It is not assessed; if the group has no other
-        value, its absence says so rather than claiming there is no determination.
+        observation, or the entry, is below the floor). It is not assessed; if the group has no other value, its
+        absence says so rather than claiming there is no determination.
+    :param terminal_excluded_refs: The same for a determination whose observation, or the entry, is rejected or
+        deprecated (terminal, not a floor), for groups not already in ``floor_excluded_refs``.
     :param determination_refs: The ``sdet_`` refs to assess: basin determinations of a compared, in-floor group
         whose observation the profile shows and the floor admits. Sorted.
     """
@@ -51,6 +53,7 @@ class Population:
     group_refs: tuple[str, ...]
     excluded_groups: dict[str, str]
     floor_excluded_refs: frozenset[str]
+    terminal_excluded_refs: frozenset[str]
     determination_refs: tuple[str, ...]
 
 
@@ -139,6 +142,7 @@ def scan_population(session: Session, *, entry_id: int, request: RelativeEnergyR
     group_ref_of = shown
     determinations: list[str] = []
     floor_held: set[str] = set()
+    terminal_held: set[str] = set()
     for r in det_rows:
         group_id = group_of.get(r.conformer_observation_id)
         if group_id not in in_floor:
@@ -148,11 +152,15 @@ def scan_population(session: Session, *, entry_id: int, request: RelativeEnergyR
             continue
         if entry_in_floor and status in effective:
             determinations.append(r.public_ref)
+        elif status in _TERMINAL or entry_status in _TERMINAL:
+            # Rejected or deprecated is terminal, which is not a floor: the caller may have set none.
+            terminal_held.add(group_ref_of[group_id])
         else:
             floor_held.add(group_ref_of[group_id])
     return Population(
         group_refs=tuple(sorted(shown.values())),
         excluded_groups=excluded,
         floor_excluded_refs=frozenset(floor_held),
+        terminal_excluded_refs=frozenset(terminal_held - floor_held),
         determination_refs=tuple(sorted(determinations)),
     )
