@@ -22,6 +22,24 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A descriptive comparison of two stored protocols (2026-10-18)
+
+**New read routes.** Migration: none. New environment variable: none. Package versions: `tckdb-schemas` 0.125.0 (one new refusal
+code in the shipped reference), `tckdb-client` 0.153.0 (the same code in `RejectionCode`; no method). OpenAPI golden regenerated
+(two new paths, no existing path changed).
+
+- `POST /api/v1/scientific/species-entries/{ref}/conformers/relative-energies/compare` and `/compare/manifest`: how far two stored
+  protocols (`candidate`, `reference`: a level and an optional recipe) deviate from each other, candidate minus reference, in kJ/mol,
+  against the one reference conformer the caller names. `pairing` (`same_geometry` or `same_basin`) is required. Mean signed,
+  mean absolute and root-mean-square deviation, and the largest with its conformer; the reference conformer is not counted. A pair
+  missing on either side or failing the pairing is listed with a coded reason and left out, never counted as zero; with no pair
+  every figure is `null`; a complete answer with an excluded pair is `incomplete_pairing` with no figures.
+- It is a description, not a verdict: `claims.superiority` and `claims.ranking` are `not_licensed`, and the seven prerequisites of a
+  future superiority claim (E1 to E7) are always listed as missing. The comparison builds no selection-kernel edge and reads no rule.
+- New code: `relative_conformer_energy_compare_identical_protocols` (the same level and recipe named twice).
+- The manifest holds both runs' complete relative-energy manifests; `replay_comparison` recomputes both and the pairing.
+- Docs: a section in `backend/docs/specs/relative_conformer_energy.md`, and `docs/guides/relative_conformer_energies.md`.
+
 ## Curated reads of the species-side routes no longer name hidden records (2026-10-17)
 
 **Narrowing under `profile=curated` only; the default (exploratory) output is unchanged.** Migration: none. New environment variable:

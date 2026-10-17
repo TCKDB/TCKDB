@@ -85,6 +85,13 @@ KNOWN_UNGUARDED: dict[tuple[str, str], str] = {
         ): "stamps the profile and returns; guard PR-3 adds run_relative_energies to the selection seam"
         for suffix in ("", "/manifest")
     },
+    **{
+        (
+            "POST",
+            f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/compare{suffix}",
+        ): "stamps the profile and returns; guard PR-3 withholds at the engine seam (the comparison runs the same engine)"
+        for suffix in ("", "/manifest")
+    },
 }
 
 #: The relative-energy routes, and the only two coverage counts that differ between profiles there: a hidden conformer
@@ -96,6 +103,24 @@ RELATIVE_ENERGY_ROUTES = {
 }
 RELATIVE_ENERGY_POPULATION_PATHS = frozenset(
     f"{prefix}coverage.{name}" for prefix in ("", "result.") for name in ("absent", "requested_members")
+)
+#: The comparison runs the same engine twice, so the same two counts appear under each protocol's block (and, in its
+#: manifest, under each run's recorded answer). The same two keys, scoped to the two ``/compare`` routes only.
+RELATIVE_ENERGY_COMPARE_ROUTES = {
+    ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/compare{suffix}")
+    for suffix in ("", "/manifest")
+}
+RELATIVE_ENERGY_COMPARE_POPULATION_PATHS = frozenset(
+    f"{prefix}coverage.{name}"
+    for prefix in (
+        "candidate.",
+        "reference.",
+        "result.candidate.",
+        "result.reference.",
+        "runs.candidate.result.",
+        "runs.reference.result.",
+    )
+    for name in ("absent", "requested_members")
 )
 
 #: Routes that answer something other than 200 to a visible subject under the curated profile, and why. The batch
@@ -140,6 +165,8 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     "cg_h": {
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies",
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/manifest",
+        f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/compare",
+        f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/compare/manifest",
         _CALC,
         f"{BASE}/conformer-observations/{{conformer_observation_ref_or_id}}",
         f"{BASE}/statmech/{{statmech_ref_or_id}}",
@@ -327,6 +354,11 @@ def test_curated_sweep_report_and_ratchet(client, db_session, login_as, monkeypa
             continue
         for path in withholding_violations(eobj, cobj):
             if route in RELATIVE_ENERGY_ROUTES and path.split("<", 1)[0] in RELATIVE_ENERGY_POPULATION_PATHS:
+                continue
+            if (
+                route in RELATIVE_ENERGY_COMPARE_ROUTES
+                and path.split("<", 1)[0] in RELATIVE_ENERGY_COMPARE_POPULATION_PATHS
+            ):
                 continue
             substituted.add(fmt(route, path))
 

@@ -397,3 +397,110 @@ def test_no_database_id_appears_in_either_document(client, three):
         assert found == set(), found
         text = json.dumps(document)
         assert "calculation_id" not in text and "species_entry_id" not in text
+
+
+# ---------------------------------------------------------------------------
+# The descriptive benchmark comparison: /compare and /compare/manifest
+# ---------------------------------------------------------------------------
+
+
+def compare_url(entry, *, manifest: bool = False) -> str:
+    return url(entry) + "/compare" + ("/manifest" if manifest else "")
+
+
+def compare_body(world, reference, candidate_lot, **changes):
+    base = {
+        "reference_conformer_ref": reference.public_ref,
+        "energy_kind": "electronic_energy",
+        "certificate": "local_minimum_any_surface",
+        "candidate": {"level": {"level_of_theory_ref": candidate_lot.public_ref}},
+        "reference": {"level": {"level_of_theory_ref": world.lot.public_ref}},
+        "pairing": "same_basin",
+    }
+    base.update(changes)
+    return base
+
+
+@pytest.fixture
+def two_levels(db_session):
+    """Three conformers, each with a value at the world's level and one at a b3lyp level."""
+    world = make_world(db_session)
+    other = make_lot(db_session, method="b3lyp")
+    groups = []
+    for at_world, at_other in ((-76.400, -76.500), (-76.401, -76.503), (-76.398, -76.499)):
+        group, obs = conformer(world, at_world)
+        build_basin(world, energy=at_other, observation=obs, lot=other, target=StructureDeterminationTargetKind.conformer_basin)
+        groups.append(group)
+    world.settle()
+    return world, other, groups
+
+
+def test_compare_describes_the_deviations_and_licenses_no_claim(client, two_levels):
+    world, other, (a, b, c) = two_levels
+    response = client.post(compare_url(world.entry), json=compare_body(world, a, other))
+    assert response.status_code == 200, response.text
+    out = response.json()
+    assert out["outcome"] == "compared" and out["pairing"] == "same_basin"
+    assert out["statistics"]["n"] == 2 and out["statistics"]["reference_conformer_ref"] == a.public_ref
+    assert out["statistics"]["sign_convention"] == "candidate minus reference"
+    by = {p["conformer_ref"]: p for p in out["pairs"]}
+    assert set(by) == {b.public_ref, c.public_ref}  # the reference conformer is not a pair
+    assert by[b.public_ref]["deviation_kj_mol"] == pytest.approx(
+        by[b.public_ref]["candidate_kj_mol"] - by[b.public_ref]["reference_kj_mol"]
+    )
+    assert out["claims"]["superiority"] == "not_licensed"
+    assert out["claims"]["missing_evidence"] == [f"E{i}" for i in range(1, 8)]
+    assert out["request"]["candidate"]["level"]["level_of_theory_ref"] == other.public_ref
+    assert [p["conformer_ref"] for p in out["pairs"]] == sorted(by)
+    assert not any(k.startswith("rank") and k != "ranking" for k in keys(out))  # "ranking" is the not_licensed claim
+
+
+def test_compare_manifest_downloads_equals_the_response_and_replays(client, two_levels):
+    from app.services.relative_conformer_energy import replay_comparison_matches
+
+    world, other, (a, *_) = two_levels
+    req = compare_body(world, a, other)
+    out = client.post(compare_url(world.entry), json=req).json()
+    download = client.post(compare_url(world.entry, manifest=True), json=req)
+    assert download.status_code == 200 and "attachment" in download.headers["content-disposition"]
+    manifest = download.json()
+    assert manifest["manifest_format"] == "relative_conformer_energy_comparison_manifest"
+    assert out["pairs"] == manifest["result"]["pairs"] and out["statistics"] == manifest["result"]["statistics"]
+    assert out["integrity"]["manifest_sha256"] == manifest["integrity"]["manifest_sha256"]
+    assert replay_comparison_matches(manifest)
+
+
+def test_compare_refuses_a_protocol_compared_with_itself_with_a_coded_422(client, two_levels):
+    world, other, (a, *_) = two_levels
+    same = compare_body(world, a, world.lot)
+    for manifest in (False, True):
+        response = client.post(compare_url(world.entry, manifest=manifest), json=same)
+        assert response.status_code == 422 and code(response) == "relative_conformer_energy_compare_identical_protocols"
+    # Even for an entry that does not exist: the refusal depends on the request alone and reads nothing.
+    ghost = f"{API}/species-entries/spe_{'0' * 26}/conformers/relative-energies/compare"
+    assert code(client.post(ghost, json=same)) == "relative_conformer_energy_compare_identical_protocols"
+
+
+def test_compare_pairing_is_required_and_has_no_default(client, two_levels):
+    world, other, (a, *_) = two_levels
+    req = compare_body(world, a, other)
+    del req["pairing"]
+    response = client.post(compare_url(world.entry), json=req)
+    assert response.status_code == 422 and "pairing" in json.dumps(response.json())
+    assert client.post(compare_url(world.entry), json={**req, "pairing": "nearest"}).status_code == 422
+
+
+def test_compare_refuses_what_is_not_evaluated_before_any_read(client, two_levels):
+    world, other, (a, *_) = two_levels
+    ghost = f"{API}/species-entries/spe_{'0' * 26}/conformers/relative-energies/compare"
+    for changes in ({"certificate": "none"}, {"energy_kind": "enthalpy", "temperature_k": 298.15}):
+        response = client.post(ghost, json=compare_body(world, a, other, **changes))
+        assert response.status_code == 422 and code(response) == "relative_conformer_energy_unsupported"
+
+
+def test_compare_names_no_database_id(client, two_levels):
+    world, other, (a, *_) = two_levels
+    req = compare_body(world, a, other)
+    for manifest in (False, True):
+        doc = client.post(compare_url(world.entry, manifest=manifest), json=req).json()
+        assert not [k for k in keys(doc) if k in {"id", "entry_id", "species_entry_id", "conformer_group_id"}]

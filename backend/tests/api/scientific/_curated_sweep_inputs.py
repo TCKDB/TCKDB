@@ -141,6 +141,25 @@ _RELATIVE_ENERGIES = _post(
         "certificate": "local_minimum_any_surface",
     }
 )
+# The comparison of two protocols. The world has one level, so the protocols differ by a recipe (the same level named
+# twice would be refused as identical); the visible group is the reference, the hidden group the same entry's.
+_RELATIVE_ENERGIES_COMPARE = _post(
+    lambda w: {
+        "reference_conformer_ref": w.visible["cg_v"].public_ref,
+        "energy_kind": "electronic_energy",
+        "certificate": "local_minimum_any_surface",
+        "candidate": {
+            "level": {"level_of_theory_ref": w.extra["lot"].public_ref},
+            "recipe": {
+                "version": 1,
+                "source": {"origin": "producer_declared", "producer": "arc"},
+                "spin_treatment": {"state": "known", "value": "restricted"},
+            },
+        },
+        "reference": {"level": {"level_of_theory_ref": w.extra["lot"].public_ref}},
+        "pairing": "same_basin",
+    }
+)
 
 #: ``(method, route template)`` -> list of input variants, each ``{"query": {...}, "json": {...}}`` (GET uses the
 #: query, POST the JSON). A route absent from this map is crawled once with no extra input (empty JSON for POSTs).
@@ -174,6 +193,13 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
     ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/thermo/select/manifest"): _THERMO_SELECT,
     **{
         ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies{suffix}"): _RELATIVE_ENERGIES
+        for suffix in ("", "/manifest")
+    },
+    **{
+        (
+            "POST",
+            f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/compare{suffix}",
+        ): _RELATIVE_ENERGIES_COMPARE
         for suffix in ("", "/manifest")
     },
     **{

@@ -8,6 +8,8 @@ coded reason, never as zero; the reference is never re-chosen; stored uncertaint
 """
 
 from app.services.relative_conformer_energy.manifest import (
+    replay_comparison,
+    replay_comparison_matches,
     replay_matches,
     replay_relative_energies,
 )
@@ -20,18 +22,27 @@ from app.services.relative_conformer_energy.models import (
     RelativeEnergyRequest,
     RelativeEnergyResult,
 )
-from app.services.relative_conformer_energy.service import RelativeEnergyRun, run_relative_energies
+from app.services.relative_conformer_energy.service import (
+    ComparisonRun,
+    RelativeEnergyRun,
+    run_comparison,
+    run_relative_energies,
+)
 
 __all__ = [
     "RELATIVE_ENERGY_VERSION",
     "Certificate",
+    "ComparisonRun",
     "EnergyKind",
     "LevelSelector",
     "RelativeEnergyOutcome",
     "RelativeEnergyRequest",
     "RelativeEnergyResult",
     "RelativeEnergyRun",
+    "replay_comparison",
+    "replay_comparison_matches",
     "replay_matches",
     "replay_relative_energies",
+    "run_comparison",
     "run_relative_energies",
 ]
