@@ -132,6 +132,11 @@ def _population(result: StructureAssessmentResult, *, withhold_excluded: bool) -
     }
 
 
+#: Public name for consumers outside this module (relative conformer energies). An alias, not a copy: there is one
+#: redaction of the excluded listing under a floor.
+population_block = _population
+
+
 def build_manifest(
     result: StructureAssessmentResult,
     decision: StructureDecision,

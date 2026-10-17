@@ -377,6 +377,12 @@ def _qualifies(request: StructureRequest, u: _U) -> bool:
     return claim is None or (a.claim is not None and a.claim.supported)
 
 
+#: Public names for the two predicates, for consumers outside this module (relative conformer energies). Aliases,
+#: not copies: there is one definition of "refuted" and one of "qualifies".
+refutes = _refutes
+qualifies = _qualifies
+
+
 # ---------------------------------------------------------------------------
 # Numerical cohorts
 # ---------------------------------------------------------------------------
@@ -865,6 +871,8 @@ __all__ = [
     "build_units",
     "cohort_id",
     "decide_structures",
+    "qualifies",
+    "refutes",
     "target_key",
     "unit_ref",
 ]
