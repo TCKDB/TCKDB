@@ -1,0 +1,129 @@
+"""The population a relative conformer energy is asked over: which conformer groups, and which determinations of them.
+
+The compared unit is the conformer group, so a hidden group must not be in the world at all. That is a *population
+filter*, applied before anything is read or assessed: a group the read profile hides is dropped without trace (not
+listed, not counted, not named), and so is every determination whose observation or group is hidden. Filtering
+before the assessment is what keeps a hidden group's ref out of the structure assessment's own output (which names
+the group of each observation it loads), and it cannot borrow: nothing is filled in from a visible sibling.
+
+A visible group with no determination is still a member; it is reported absent, not dropped.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.api.errors import NotFoundError, not_found
+from app.db.models.common import RecordReviewStatus, StructureDeterminationTargetKind, SubmissionRecordType
+from app.db.models.species import ConformerGroup, ConformerObservation
+from app.db.models.structure_determination import StructureDetermination
+from app.services.relative_conformer_energy.bounds import check_members
+from app.services.relative_conformer_energy.models import RelativeEnergyRequest
+from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.structure_selection.loader import assert_subject_visible
+from app.services.structure_selection.models import Grain
+
+_TERMINAL = frozenset({RecordReviewStatus.rejected, RecordReviewStatus.deprecated})
+
+
+@dataclass(frozen=True)
+class Population:
+    """The compared conformer groups and the determinations the assessment is asked about.
+
+    :param group_refs: Every compared group the read profile shows, sorted by ref.
+    :param below_floor_refs: The compared groups the caller's own floor (or a terminal status) excludes; they stay
+        members, reported absent, and none of their determinations is assessed.
+    :param determination_refs: The ``sdet_`` refs to assess: basin determinations of a compared, in-floor group
+        whose observation the profile shows. Sorted.
+    """
+
+    group_refs: tuple[str, ...]
+    below_floor_refs: frozenset[str]
+    determination_refs: tuple[str, ...]
+
+
+def profile_statuses() -> frozenset[RecordReviewStatus]:
+    """What the read profile itself shows (under ``curated``: ``approved`` and nothing below)."""
+    return frozenset(visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True))
+
+
+def effective_statuses(request: RelativeEnergyRequest) -> frozenset[RecordReviewStatus]:
+    """What the request may use: the profile, the caller's floor, and no terminal status."""
+    return frozenset(
+        visible_statuses(min_review_status=request.min_review_status, include_rejected=False, include_deprecated=False)
+    )
+
+
+def _unknown(label: str, ref: str) -> NotFoundError:
+    # One answer for a ref that names nothing, names another entry's group, or names one the profile hides.
+    return not_found(label, ref=ref, code="handle_not_found")
+
+
+def scan_population(session: Session, *, entry_id: int, request: RelativeEnergyRequest) -> Population:
+    """The compared groups and the determinations to assess, with the profile applied before anything else is read.
+
+    :raises NotFoundError: the entry, the reference or a named member is unknown or hidden (the cases are not told
+        apart, and a group of another entry is the same answer here; the route reports ownership separately).
+    :raises CodedValueError: ``relative_conformer_energy_population_too_large``; nothing is assessed.
+    """
+    profile = profile_statuses()
+    effective = effective_statuses(request)
+    assert_subject_visible(session, Grain.conformer, entry_id, profile=profile)
+
+    rows = session.execute(
+        select(ConformerGroup.id, ConformerGroup.public_ref)
+        .where(ConformerGroup.species_entry_id == entry_id)
+        .order_by(ConformerGroup.id)
+    ).all()
+    badges = fetch_review_badges(
+        session, record_type=SubmissionRecordType.conformer_group, record_ids=[r.id for r in rows]
+    )
+    shown = {r.id: r.public_ref for r in rows if badges[r.id].status in profile}
+    wanted = request.wanted_refs
+    if wanted is not None:
+        missing = sorted(wanted - set(shown.values()))
+        if missing:
+            raise _unknown("conformer_group", missing[0])
+        shown = {i: ref for i, ref in shown.items() if ref in wanted}
+    elif request.reference_conformer_ref not in set(shown.values()):
+        raise _unknown("conformer_group", request.reference_conformer_ref)
+    check_members(len(shown))
+
+    below = frozenset(ref for i, ref in shown.items() if badges[i].status not in effective)
+    in_floor = {i for i, ref in shown.items() if ref not in below}
+
+    det_rows = session.execute(
+        select(StructureDetermination.id, StructureDetermination.public_ref, StructureDetermination.conformer_observation_id)
+        .where(
+            StructureDetermination.species_entry_id == entry_id,
+            StructureDetermination.target_kind == StructureDeterminationTargetKind.conformer_basin,
+            StructureDetermination.conformer_observation_id.is_not(None),
+        )
+        .order_by(StructureDetermination.id)
+    ).all()
+    observation_ids = {r.conformer_observation_id for r in det_rows}
+    group_of = (
+        dict(
+            session.execute(
+                select(ConformerObservation.id, ConformerObservation.conformer_group_id).where(
+                    ConformerObservation.id.in_(observation_ids)
+                )
+            ).tuples().all()
+        )
+        if observation_ids
+        else {}
+    )
+    observation_badges = fetch_review_badges(
+        session, record_type=SubmissionRecordType.conformer_observation, record_ids=observation_ids
+    )
+    determinations = sorted(
+        r.public_ref
+        for r in det_rows
+        if group_of.get(r.conformer_observation_id) in in_floor and observation_badges[r.conformer_observation_id].status in profile
+    )
+    return Population(
+        group_refs=tuple(sorted(shown.values())), below_floor_refs=below, determination_refs=tuple(determinations)
+    )
