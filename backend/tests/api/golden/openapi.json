@@ -41638,6 +41638,9 @@
             "title": "Reference",
             "type": "object"
           },
+          "reference_conformer": {
+            "$ref": "#/components/schemas/RelativeEnergyCompareReferenceConformer"
+          },
           "request": {
             "$ref": "#/components/schemas/RelativeEnergyCompareRequestEcho"
           },
@@ -41676,6 +41679,7 @@
           "coverage_requirement",
           "units",
           "statistics",
+          "reference_conformer",
           "pairs",
           "candidate",
           "reference",
@@ -42123,12 +42127,17 @@
       "RelativeEnergyComparePair": {
         "description": "One conformer's two values and their deviation. An unusable pair has ``excluded_reason`` and no deviation.",
         "properties": {
-          "candidate_geometry_refs": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Candidate Geometry Refs",
-            "type": "array"
+          "candidate_geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one geometry the candidate's value was evaluated at; null when it is tied to none or several.",
+            "title": "Candidate Geometry Ref"
           },
           "candidate_kj_mol": {
             "anyOf": [
@@ -42181,12 +42190,17 @@
             "description": "A coded reason from a closed vocabulary; never a zero deviation.",
             "title": "Excluded Reason"
           },
-          "reference_geometry_refs": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Reference Geometry Refs",
-            "type": "array"
+          "reference_geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one geometry the reference protocol's value was evaluated at; null when it is tied to none or several.",
+            "title": "Reference Geometry Ref"
           },
           "reference_kj_mol": {
             "anyOf": [
@@ -42220,10 +42234,71 @@
           "excluded_reason",
           "candidate_uncertainty_hartree",
           "reference_uncertainty_hartree",
-          "candidate_geometry_refs",
-          "reference_geometry_refs"
+          "candidate_geometry_ref",
+          "reference_geometry_ref"
         ],
         "title": "RelativeEnergyComparePair",
+        "type": "object"
+      },
+      "RelativeEnergyCompareReferenceConformer": {
+        "description": "What the named reference conformer allows. Every relative energy is taken from it, so a problem here is every pair's.",
+        "properties": {
+          "candidate_geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Geometry Ref"
+          },
+          "candidate_value_present": {
+            "title": "Candidate Value Present",
+            "type": "boolean"
+          },
+          "conformer_ref": {
+            "title": "Conformer Ref",
+            "type": "string"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null, or reference_conformer_value_missing, reference_conformer_geometry_not_recorded or reference_conformer_geometry_differs (the last two under same_geometry only). With a problem no pair is usable.",
+            "title": "Problem"
+          },
+          "reference_geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Geometry Ref"
+          },
+          "reference_value_present": {
+            "title": "Reference Value Present",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conformer_ref",
+          "problem",
+          "candidate_value_present",
+          "reference_value_present",
+          "candidate_geometry_ref",
+          "reference_geometry_ref"
+        ],
+        "title": "RelativeEnergyCompareReferenceConformer",
         "type": "object"
       },
       "RelativeEnergyCompareRequestEcho": {
@@ -42694,6 +42769,18 @@
             "title": "Status",
             "type": "string"
           },
+          "value_geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one geometry the stored value was evaluated at; null when the records of the value name several or none.",
+            "title": "Value Geometry Ref"
+          },
           "value_hartree": {
             "anyOf": [
               {
@@ -42730,6 +42817,7 @@
           "determination_refs",
           "energy_calculation_refs",
           "evaluated_geometry_refs",
+          "value_geometry_ref",
           "certificate",
           "alternates",
           "absent_reason",
@@ -96319,7 +96407,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare": {
       "post": {
-        "description": "Deviations, candidate minus reference, in kJ/mol, of two stored protocols against one named reference conformer.\n\nBoth protocols are evaluated over one population in one snapshot and paired by conformer; ``pairing`` is required\n(``same_geometry`` or ``same_basin``). The reference conformer is not a pair. A pair that is missing on either side,\nor fails the pairing, is listed with a coded ``excluded_reason`` and never counted as a zero deviation. With no\npair every statistic is null; under ``all_requested_members`` any excluded pair gives ``incomplete_pairing`` and no\nstatistics. The answer is descriptive: ``claims.superiority`` and ``claims.ranking`` are ``not_licensed``, and the\nevidence a superiority claim would need (E1 to E7) is listed as missing. Naming the same level and recipe twice is\n422 ``relative_conformer_energy_compare_identical_protocols``; enthalpy, Gibbs energy and no certificate are 422\n``relative_conformer_energy_unsupported``. External or published references are not supported.",
+        "description": "Deviations, candidate minus reference, in kJ/mol, of two stored protocols against one named reference conformer.\n\nBoth protocols are evaluated over one population in one snapshot and paired by conformer; ``pairing`` is required\n(``same_geometry`` or ``same_basin``). The reference conformer is not a pair. A pair that is missing on either side,\nor fails the pairing, is listed with a coded ``excluded_reason`` and never counted as a zero deviation. With no\npair every statistic is null; under ``all_requested_members`` any excluded pair gives ``incomplete_pairing`` and no\nstatistics. The answer is descriptive: ``claims.superiority`` and ``claims.ranking`` are ``not_licensed``, and the\nevidence a superiority claim would need (E1 to E7) is listed as missing. Naming the same level with the same recipe facts twice is\n422 ``relative_conformer_energy_compare_identical_protocols``; enthalpy, Gibbs energy and no certificate are 422\n``relative_conformer_energy_unsupported``. External or published references are not supported.",
         "operationId": "relative_conformer_energies_compare_api_v1_scientific_species_entries__species_entry_ref__conformers_relative_energies_compare_post",
         "parameters": [
           {

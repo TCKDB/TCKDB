@@ -225,6 +225,9 @@ class RelativeEnergyMember(BaseModel):
     determination_refs: list[str]
     energy_calculation_refs: list[str]
     evaluated_geometry_refs: list[str]
+    value_geometry_ref: str | None = Field(
+        description="The one geometry the stored value was evaluated at; null when the records of the value name several or none."
+    )
     certificate: RelativeEnergyCertificate | None
     alternates: list[RelativeEnergyAlternate]
     absent_reason: str | None = Field(description="A coded reason when the member has no single value; never zero.")
@@ -450,8 +453,28 @@ class RelativeEnergyComparePair(BaseModel):
     reference_uncertainty_hartree: float | None = Field(
         description="As stored with the reference protocol's value; never combined."
     )
-    candidate_geometry_refs: list[str]
-    reference_geometry_refs: list[str]
+    candidate_geometry_ref: str | None = Field(
+        description="The one geometry the candidate's value was evaluated at; null when it is tied to none or several."
+    )
+    reference_geometry_ref: str | None = Field(
+        description="The one geometry the reference protocol's value was evaluated at; null when it is tied to none or several."
+    )
+
+
+class RelativeEnergyCompareReferenceConformer(BaseModel):
+    """What the named reference conformer allows. Every relative energy is taken from it, so a problem here is every pair's."""
+
+    conformer_ref: str
+    problem: str | None = Field(
+        description=(
+            "null, or reference_conformer_value_missing, reference_conformer_geometry_not_recorded or "
+            "reference_conformer_geometry_differs (the last two under same_geometry only). With a problem no pair is usable."
+        )
+    )
+    candidate_value_present: bool
+    reference_value_present: bool
+    candidate_geometry_ref: str | None
+    reference_geometry_ref: str | None
 
 
 class RelativeEnergyCompareClaims(BaseModel):
@@ -476,6 +499,7 @@ class RelativeConformerEnergyCompareResponse(BaseModel):
     statistics: RelativeEnergyCompareStatistics | None = Field(
         description="Null when the outcome is incomplete_pairing: no statistic is given over a subset."
     )
+    reference_conformer: RelativeEnergyCompareReferenceConformer
     pairs: list[RelativeEnergyComparePair]
     candidate: dict[str, Any]
     reference: dict[str, Any]

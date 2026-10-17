@@ -32,9 +32,11 @@ from app.services.relative_conformer_energy.compare import (
     ComparisonRequest,
     Pairing,
     compare_results,
+    narrowing_of,
 )
-from app.services.structure_selection.manifest import ReplayError
-from app.services.structure_selection.models import CoverageRequirement
+from app.services.relative_conformer_energy.manifest import build_comparison_manifest
+from app.services.structure_selection.manifest import ReplayError, canonical
+from app.services.structure_selection.models import CoverageRequirement, RepeatPolicy, SelectionBounds
 from tests.services.relative_conformer_energy.test_service import conformer
 from tests.services.scientific_read._factories import make_geometry, make_lot
 from tests.services.structure_selection._support import make_world
@@ -45,24 +47,36 @@ KNOWN = CoverageRequirement.known_values
 ALL = CoverageRequirement.all_requested_members
 
 
-def side(anchor: str, members: dict[str, tuple[float | None, tuple[str, ...]]], *, anchor_value: float | None = -76.4):
-    """One protocol's answer: ``{ref: (relative kJ/mol or None, evaluated geometry refs)}`` plus the named reference."""
+def side(
+    anchor: str,
+    members: dict[str, tuple[float | None, str | None]],
+    *,
+    anchor_value: float | None = -76.4,
+    anchor_geometry: str | None = "geom_a",
+):
+    """One protocol's answer: ``{ref: (relative kJ/mol or None, geometry of the value or None)}`` plus the reference.
+
+    A value is present exactly when its relative energy is; its geometry is the one it was evaluated at.
+    """
+    has_anchor = anchor_value is not None
     rows = [
         {
             "conformer_ref": anchor,
-            "relative_energy_kj_mol": 0.0 if anchor_value is not None else None,
+            "relative_energy_kj_mol": 0.0 if has_anchor else None,
+            "value_hartree": anchor_value,
             "value_uncertainty_hartree": None,
-            "evaluated_geometry_refs": ["geom_a"] if anchor_value is not None else [],
+            "value_geometry_ref": anchor_geometry if has_anchor else None,
         }
     ]
     rows += [
         {
             "conformer_ref": ref,
             "relative_energy_kj_mol": kj,
+            "value_hartree": -76.0 if kj is not None else None,
             "value_uncertainty_hartree": 0.001 if kj is not None else None,
-            "evaluated_geometry_refs": list(geoms),
+            "value_geometry_ref": geometry if kj is not None else None,
         }
-        for ref, (kj, geoms) in members.items()
+        for ref, (kj, geometry) in members.items()
     ]
     return {
         "outcome": "relative_energies",
@@ -79,7 +93,7 @@ def side(anchor: str, members: dict[str, tuple[float | None, tuple[str, ...]]], 
     }
 
 
-G = ("geom_a",)
+G = "geom_a"
 
 
 def run(cand, ref, *, pairing=Pairing.same_basin, coverage=KNOWN, anchor=ANCHOR):
@@ -112,6 +126,13 @@ def test_synthetic_deviations_give_exact_statistics_and_the_member_of_the_maximu
     assert ANCHOR not in {p["conformer_ref"] for p in out["pairs"]}
     assert stats["reference_conformer_ref"] == ANCHOR and stats["sign_convention"] == "candidate minus reference"
     assert "another reference conformer" in stats["reference_conformer_dependence"]
+
+
+def test_a_tie_for_the_largest_deviation_goes_to_the_lowest_conformer_ref():
+    # |+2| ties |-2|; the members are listed highest-ref first to show the answer does not follow list order.
+    cand, ref = three({"d": 3.0, "c": -1.0, "b": 3.0}, {"d": 1.0, "c": 1.0, "b": 1.0})  # d +2, c -2, b +2
+    stats = run(cand, ref)["statistics"]
+    assert stats["max_abs_deviation_kj_mol"] == 2.0 and stats["max_abs_deviation_conformer_ref"] == "cg_b"
 
 
 def test_the_deviation_is_candidate_minus_reference_and_keeps_its_sign():
@@ -148,8 +169,8 @@ def test_a_member_listed_by_only_one_answer_is_excluded_not_dropped():
 
 
 def test_same_geometry_excludes_a_pair_evaluated_at_different_geometries_and_same_basin_keeps_it():
-    cand = side(ANCHOR, {"cg_b": (3.0, ("geom_a",)), "cg_c": (3.0, ("geom_a",)), "cg_d": (3.0, ())})
-    ref = side(ANCHOR, {"cg_b": (1.0, ("geom_a",)), "cg_c": (1.0, ("geom_z",)), "cg_d": (1.0, ("geom_a",))})
+    cand = side(ANCHOR, {"cg_b": (3.0, "geom_a"), "cg_c": (3.0, "geom_a"), "cg_d": (3.0, None)})
+    ref = side(ANCHOR, {"cg_b": (1.0, "geom_a"), "cg_c": (1.0, "geom_z"), "cg_d": (1.0, "geom_a")})
     strict = {p["conformer_ref"]: p for p in run(cand, ref, pairing=Pairing.same_geometry)["pairs"]}
     assert strict["cg_b"]["excluded_reason"] is None
     assert strict["cg_c"]["excluded_reason"] == "geometry_differs" and strict["cg_c"]["deviation_kj_mol"] is None
@@ -180,10 +201,87 @@ def test_a_complete_answer_with_one_exclusion_is_incomplete_pairing_with_no_stat
     assert [p["excluded_reason"] for p in complete["pairs"]] == [None, "candidate_value_missing"]
 
 
-def test_a_missing_reference_conformer_value_makes_a_complete_answer_incomplete():
-    cand = side(ANCHOR, {"cg_b": (None, ())}, anchor_value=None)
-    ref = side(ANCHOR, {"cg_b": (None, ())}, anchor_value=None)
-    assert run(cand, ref, coverage=ALL)["outcome"] == "incomplete_pairing"
+def with_anchor_missing(members, **kw):
+    """An answer whose reference conformer has no value, so the engine gives every member a value but no difference."""
+    answer = side(ANCHOR, dict.fromkeys(members, (1.0, G)), anchor_value=None, **kw)
+    for row in answer["members"]:
+        if row["conformer_ref"] != ANCHOR:
+            row["relative_energy_kj_mol"] = None  # the member has its value; only the anchor is missing
+    return answer
+
+
+def test_a_reference_conformer_missing_on_one_side_is_named_once_and_blames_no_member():
+    cand = with_anchor_missing(["cg_b", "cg_c"])
+    ref = side(ANCHOR, {"cg_b": (1.0, G), "cg_c": (2.0, G)})
+    known = run(cand, ref, coverage=KNOWN)
+    assert known["reference_conformer"]["problem"] == "reference_conformer_value_missing"
+    assert known["reference_conformer"]["candidate_value_present"] is False
+    assert known["reference_conformer"]["reference_value_present"] is True
+    # Both members have a value on both sides: what is missing is the anchor, and the pairs say exactly that.
+    assert {p["excluded_reason"] for p in known["pairs"]} == {"reference_conformer_value_missing"}
+    assert (
+        known["outcome"] == "no_pairs" and known["statistics"]["n"] == 0 and known["statistics"]["msd_kj_mol"] is None
+    )
+    # A member that itself lacks a value keeps its own reason.
+    cand_missing = with_anchor_missing(["cg_b"])
+    cand_missing["members"].append(side(ANCHOR, {"cg_c": (None, None)})["members"][1])
+    mixed = {p["conformer_ref"]: p["excluded_reason"] for p in run(cand_missing, ref)["pairs"]}
+    assert mixed == {"cg_b": "reference_conformer_value_missing", "cg_c": "candidate_value_missing"}
+
+
+def test_a_complete_answer_is_incomplete_when_the_reference_conformer_is_missing_even_with_no_other_member():
+    # The only member is the reference conformer, so no pair is excluded: the anchor clause alone makes this incomplete.
+    cand = side(ANCHOR, {}, anchor_value=None)
+    ref = side(ANCHOR, {})
+    out = run(cand, ref, coverage=ALL)
+    assert out["pairs"] == [] and out["reference_conformer"]["problem"] == "reference_conformer_value_missing"
+    assert out["outcome"] == "incomplete_pairing" and out["statistics"] is None
+    assert run(cand, ref, coverage=KNOWN)["outcome"] == "no_pairs"
+    # With members, a complete answer is incomplete as well, and its statistics are null.
+    members = with_anchor_missing(["cg_b"])
+    full = run(members, side(ANCHOR, {"cg_b": (1.0, G)}), coverage=ALL)
+    assert full["outcome"] == "incomplete_pairing" and full["statistics"] is None
+
+
+# --- 1: the reference conformer's geometry -------------------------------------------------------------------------
+
+
+def test_same_geometry_needs_the_reference_conformer_at_one_geometry_on_both_sides():
+    # The member sits at geom_B on both sides, but the anchor it is measured from is at geom_A1 against geom_A2.
+    cand = side(ANCHOR, {"cg_b": (3.0, "geom_B")}, anchor_geometry="geom_A1")
+    ref = side(ANCHOR, {"cg_b": (1.0, "geom_B")}, anchor_geometry="geom_A2")
+    strict = run(cand, ref, pairing=Pairing.same_geometry)
+    assert strict["reference_conformer"]["problem"] == "reference_conformer_geometry_differs"
+    assert strict["reference_conformer"]["candidate_geometry_ref"] == "geom_A1"
+    assert strict["reference_conformer"]["reference_geometry_ref"] == "geom_A2"
+    assert [p["excluded_reason"] for p in strict["pairs"]] == ["reference_conformer_geometry_differs"]
+    assert (
+        strict["outcome"] == "no_pairs"
+        and strict["statistics"]["n"] == 0
+        and strict["statistics"]["mad_kj_mol"] is None
+    )
+    assert run(cand, ref, pairing=Pairing.same_geometry, coverage=ALL)["outcome"] == "incomplete_pairing"
+    # The same data under same_basin compares: the anchor's geometry matters only when the pairing says so.
+    loose = run(cand, ref, pairing=Pairing.same_basin)
+    assert loose["reference_conformer"]["problem"] is None and loose["statistics"]["n"] == 1
+
+
+def test_same_geometry_with_an_unrecorded_reference_conformer_geometry_has_no_usable_pair():
+    cand = side(ANCHOR, {"cg_b": (3.0, "geom_B")}, anchor_geometry=None)
+    ref = side(ANCHOR, {"cg_b": (1.0, "geom_B")})
+    out = run(cand, ref, pairing=Pairing.same_geometry)
+    assert out["reference_conformer"]["problem"] == "reference_conformer_geometry_not_recorded"
+    assert [p["excluded_reason"] for p in out["pairs"]] == ["reference_conformer_geometry_not_recorded"]
+    assert out["statistics"]["n"] == 0
+
+
+def test_a_value_tied_to_a_different_geometry_than_the_other_sides_is_excluded_even_when_every_ref_is_shared():
+    cand = side(ANCHOR, {"cg_b": (3.0, "geom_B1")})
+    ref = side(ANCHOR, {"cg_b": (1.0, "geom_B2")})
+    pair = run(cand, ref, pairing=Pairing.same_geometry)["pairs"][0]
+    assert pair["excluded_reason"] == "geometry_differs"
+    # The echo is the geometry each value came from, one each.
+    assert (pair["candidate_geometry_ref"], pair["reference_geometry_ref"]) == ("geom_B1", "geom_B2")
 
 
 def test_no_pair_means_every_statistic_is_null_not_zero():
@@ -223,11 +321,51 @@ def _imported_modules(path: Path) -> set[str]:
     return out
 
 
-def test_the_comparison_module_imports_nothing_from_the_rules_or_the_selection_kernel():
-    imported = _imported_modules(Path(compare_module.__file__))
-    assert imported, "the scan read no import, so it proves nothing"
-    assert not [m for m in imported if any(bad in m for bad in _FORBIDDEN)]
-    assert "app.services.structure_selection.models" in imported  # the scan does see this module's real imports
+def _comparison_path() -> dict[str, Path]:
+    """The modules the comparison runs through, by file."""
+    from app.services.relative_conformer_energy import manifest, public, service
+
+    return {m.__name__: Path(m.__file__) for m in (compare_module, service, manifest, public)}
+
+
+def _names_used(path: Path) -> set[str]:
+    """Every identifier the module uses or imports by name (``Name``, ``Attribute`` and import aliases)."""
+    out: set[str] = set()
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.Name):
+            out.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            out.add(node.attr)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            out |= {a.name.rsplit(".", 1)[-1] for a in node.names} | {a.asname for a in node.names if a.asname}
+    return out
+
+
+def test_no_comparison_path_module_imports_the_rules_or_the_selection_kernel_or_names_an_edge():
+    """Direct imports and names only.
+
+    This reads the four modules the comparison runs through (``compare``, ``service``, ``manifest``, ``public``). It
+    does **not** follow imports transitively: the certificate legitimately comes through ``structure_selection.public``
+    and the assessment, which sit beside the rules, so a transitive scan would be both wrong and unreadable. What it
+    pins is that none of these modules wires a rule or builds a kernel ``Edge`` itself.
+    """
+    modules = _comparison_path()
+    assert len(modules) == 4
+    for name, path in modules.items():
+        imported = _imported_modules(path)
+        assert imported, f"the scan read no import in {name}, so it proves nothing"
+        assert not [m for m in imported if any(bad in m for bad in _FORBIDDEN)], name
+        assert "Edge" not in _names_used(path), name
+    assert "app.services.structure_selection.models" in _imported_modules(
+        modules["app.services.relative_conformer_energy.compare"]
+    )
+
+
+def test_the_name_scan_catches_an_edge_in_any_form(tmp_path):
+    for source in ("from x import Edge\n", "import x\nx.Edge(1)\n", "e = Edge(1)\n", "from x import Foo as Edge\n"):
+        path = tmp_path / "m.py"
+        path.write_text(source)
+        assert "Edge" in _names_used(path), source
 
 
 def test_the_boundary_scan_catches_a_forbidden_import(tmp_path):
@@ -317,7 +455,9 @@ def test_the_same_data_against_two_anchors_gives_different_statistics_and_each_e
 def test_same_geometry_excludes_conformers_whose_two_values_sit_at_different_geometries(db_session):
     world, cand_lot, (a, b, c) = two_level_world(db_session, other_geometry=True)
     strict = run_service(db_session, world, request_for(world, a, cand_lot, world.lot, pairing=Pairing.same_geometry))
-    assert {p["excluded_reason"] for p in strict.comparison["pairs"]} == {"geometry_differs"}
+    # The reference conformer is at another geometry on the candidate side, so no relative energy can be paired.
+    assert strict.comparison["reference_conformer"]["problem"] == "reference_conformer_geometry_differs"
+    assert {p["excluded_reason"] for p in strict.comparison["pairs"]} == {"reference_conformer_geometry_differs"}
     assert strict.comparison["statistics"]["n"] == 0 and strict.comparison["outcome"] == "no_pairs"
     loose = run_service(db_session, world, request_for(world, a, cand_lot, world.lot, pairing=Pairing.same_basin))
     assert loose.comparison["statistics"]["n"] == 2
@@ -346,7 +486,15 @@ def test_a_protocol_is_not_compared_with_itself():
             candidate=one, reference=RelativeEnergyRequest(level=lot, **shared), pairing=Pairing.same_basin
         )
     assert raised.value.code == CODE_IDENTICAL_PROTOCOLS
-    other_recipe = RelativeEnergyRequest(level=lot, recipe={"x": 1}, **shared)
+    other_recipe = RelativeEnergyRequest(
+        level=lot,
+        recipe={
+            "version": 1,
+            "source": {"origin": "producer_declared", "producer": "arc"},
+            "spin_treatment": {"state": "known", "value": "restricted"},
+        },
+        **shared,
+    )
     ComparisonRequest(candidate=one, reference=other_recipe, pairing=Pairing.same_basin)  # a recipe makes it a protocol
 
 
@@ -411,3 +559,126 @@ def test_replay_recomputes_and_never_trusts_a_recorded_flag(db_session):
     with pytest.raises(ReplayError) as raised:
         replay_comparison(_resealed(swapped))
     assert raised.value.code == "inconsistent_manifest"
+
+
+# ---------------------------------------------------------------------------
+# The geometry a value came from; the identical-protocol rule; the combined manifest bound
+# ---------------------------------------------------------------------------
+
+
+def test_pairing_uses_the_geometry_each_value_came_from_not_the_set_over_its_repeats(db_session):
+    world = make_world(db_session)
+    cand_lot = make_lot(db_session, method="b3lyp")
+    anchor, anchor_obs = conformer(world, -76.400)
+    build_basin(
+        world,
+        energy=-76.500,
+        observation=anchor_obs,
+        lot=cand_lot,
+        target=StructureDeterminationTargetKind.conformer_basin,
+    )
+    group, obs = conformer(world, None)
+    b1, b2 = make_geometry(db_session), make_geometry(db_session)
+    basin = {"observation": obs, "target": StructureDeterminationTargetKind.conformer_basin}
+    # Two repeats of the basin at each level, at B1 and B2. The administrative representative is the latest stored, so
+    # the candidate's value comes from B2 and the reference protocol's from B1, although both have the set {B1, B2}.
+    build_basin(world, energy=-76.503, lot=cand_lot, geometry=b1, **basin)
+    build_basin(world, energy=-76.513, lot=cand_lot, geometry=b2, **basin)
+    build_basin(world, energy=-76.401, geometry=b2, **basin)
+    build_basin(world, energy=-76.411, geometry=b1, **basin)
+    world.settle()
+    both = {"repeat_policy": RepeatPolicy.administrative_representative}
+    strict = run_service(
+        db_session, world, request_for(world, anchor, cand_lot, world.lot, pairing=Pairing.same_geometry, **both)
+    )
+    members = {name: {m.conformer_ref: m for m in r.result.members} for name, r in strict.runs.items()}
+    cand_member, ref_member = members["candidate"][group.public_ref], members["reference"][group.public_ref]
+    assert (
+        set(cand_member.evaluated_geometry_refs)
+        == set(ref_member.evaluated_geometry_refs)
+        == {
+            b1.public_ref,
+            b2.public_ref,
+        }
+    )  # the set over the repeats is the same: a pairing that read it would pass this pair
+    assert cand_member.value_geometry_ref == b2.public_ref and ref_member.value_geometry_ref == b1.public_ref
+    pair = {p["conformer_ref"]: p for p in strict.comparison["pairs"]}[group.public_ref]
+    assert pair["excluded_reason"] == "geometry_differs" and pair["deviation_kj_mol"] is None
+    assert (pair["candidate_geometry_ref"], pair["reference_geometry_ref"]) == (b2.public_ref, b1.public_ref)
+    loose = run_service(db_session, world, request_for(world, anchor, cand_lot, world.lot, **both))
+    assert {p["conformer_ref"]: p["excluded_reason"] for p in loose.comparison["pairs"]}[group.public_ref] is None
+
+
+def test_repeats_that_agree_on_a_value_but_not_on_a_geometry_tie_it_to_none(db_session):
+    world = make_world(db_session)
+    anchor, anchor_obs = conformer(world, -76.400)
+    group, obs = conformer(world, None)
+    b1, b2 = make_geometry(db_session), make_geometry(db_session)
+    basin = {"observation": obs, "target": StructureDeterminationTargetKind.conformer_basin}
+    build_basin(world, energy=-76.401, geometry=b1, **basin)
+    build_basin(world, energy=-76.401, geometry=b2, **basin)
+    world.settle()
+    request = RelativeEnergyRequest(
+        reference_conformer_ref=anchor.public_ref,
+        energy_kind=EnergyKind.electronic_energy,
+        level=LevelSelector(level_of_theory_ref=world.lot.public_ref),
+        certificate=Certificate.local_minimum_any_surface,
+    )
+    from app.services.relative_conformer_energy import run_relative_energies
+
+    result = run_relative_energies(db_session, entry_id=world.entry.id, request=request, require_snapshot=False).result
+    member = {m.conformer_ref: m for m in result.members}[group.public_ref]
+    assert member.value_hartree == -76.401 and member.value_geometry_ref is None  # never borrowed from either record
+    assert set(member.evaluated_geometry_refs) == {b1.public_ref, b2.public_ref}
+
+
+def test_the_identical_protocol_rule_compares_what_the_recipes_narrow_to():
+    lot = LevelSelector(level_of_theory_ref="lot_x")
+    shared = {
+        "reference_conformer_ref": "cg_a",
+        "energy_kind": EnergyKind.electronic_energy,
+        "certificate": Certificate.local_minimum_any_surface,
+    }
+    source = {"origin": "producer_declared", "producer": "arc"}
+
+    def pair(a, b):
+        return ComparisonRequest(
+            candidate=RelativeEnergyRequest(level=lot, recipe=a, **shared),
+            reference=RelativeEnergyRequest(level=lot, recipe=b, **shared),
+            pairing=Pairing.same_basin,
+        )
+
+    unknown = {"version": 1, "source": source, "spin_treatment": {"state": "unknown"}}
+    restricted = {"version": 1, "source": source, "spin_treatment": {"state": "known", "value": "restricted"}}
+    assert narrowing_of(unknown) == narrowing_of(None) == ()
+    for a, b in (
+        (unknown, None),
+        (None, unknown),
+        (restricted, {**restricted, "source": {"origin": "producer_declared", "producer": "other"}}),
+        (restricted, {**restricted, "supporting_dois": ["10.1000/182"]}),
+    ):
+        with pytest.raises(CodedValueError) as raised:
+            pair(a, b)
+        assert raised.value.code == CODE_IDENTICAL_PROTOCOLS
+    pair(restricted, None)  # a known fact narrows: a real second protocol
+    pair(restricted, {**restricted, "spin_treatment": {"state": "known", "value": "unrestricted"}})
+
+
+def test_the_combined_comparison_manifest_is_held_to_the_size_bound(db_session):
+    world, cand_lot, (a, *_) = two_level_world(db_session)
+    request = request_for(world, a, cand_lot, world.lot)
+    run_ = run_service(db_session, world, request)
+    one = len(canonical(run_.runs["candidate"].manifest).encode())
+    combined = len(canonical(run_.manifest).encode())
+    assert combined > one  # the combined record is bigger than either run, so a per-run bound cannot protect it
+    runs = {name: r.manifest for name, r in run_.runs.items()}
+    kwargs = {"profile": run_.manifest["read_profile"], "snapshot_isolation": run_.manifest["snapshot_isolation"]}
+    build_comparison_manifest(request, runs, run_.comparison, bounds=SelectionBounds(manifest_bytes=combined), **kwargs)
+    with pytest.raises(CodedValueError) as raised:
+        build_comparison_manifest(
+            request, runs, run_.comparison, bounds=SelectionBounds(manifest_bytes=combined - 1), **kwargs
+        )
+    assert raised.value.code == "structure_selection_manifest_too_large"
+    assert raised.value.context["size"] == combined and raised.value.context["limit"] == combined - 1
+    # Each run fits under that limit on its own: it is the combination that is refused.
+    assert one < combined - 1

@@ -72,7 +72,8 @@ its deviation is zero by construction. A conformer missing on one side, or evalu
 `same_geometry`, is listed with a reason and left out, never counted as zero.
 
 The result is a description. It never says one protocol is more accurate: `claims.superiority` is `not_licensed` and the
-seven things such a claim would need (E1 to E7) are listed as missing. The figures depend on which conformer you named as
+seven things such a claim would need (E1 to E7: reference uncertainty, independence, a resolved margin, coverage and sameness, domain, established protocol facts, and owner acceptance of a rule) are listed as missing. A
+preference is only ever an audited rule edge through the selection kernel, never a by-product of this comparison. The figures depend on which conformer you named as
 the reference; compare them only with figures measured from the same one. `.../compare/manifest` downloads a replayable
 record of both runs.
 

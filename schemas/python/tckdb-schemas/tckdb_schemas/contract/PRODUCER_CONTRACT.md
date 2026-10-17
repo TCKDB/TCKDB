@@ -225,7 +225,7 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 ### 0.125.0 - 2026-10-18
 
 One new refusal code for the relative conformer energy comparison, `POST /scientific/species-entries/{ref}/conformers/relative-energies/compare`:
-`relative_conformer_energy_compare_identical_protocols` (422; the candidate and the reference name the same level and recipe, so a
+`relative_conformer_energy_compare_identical_protocols` (422; the candidate and the reference name the same level with the same effective recipe narrowing, so a
 protocol would be compared with itself). A read route, so no producer route and no upload payload changes; this release only adds
 the code to the shipped refusal-code reference.
 

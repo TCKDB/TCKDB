@@ -38,11 +38,7 @@ from app.schemas.reads.scientific_relative_conformer_energy import (
     RelativeEnergyReview,
 )
 from app.services.relative_conformer_energy.bounds import check_supported
-from app.services.relative_conformer_energy.compare import (
-    ComparisonRequest,
-    identical_protocols,
-    protocols_identical,
-)
+from app.services.relative_conformer_energy.compare import ComparisonRequest
 from app.services.relative_conformer_energy.models import LevelSelector
 from app.services.relative_conformer_energy.population import profile_statuses
 from app.services.relative_conformer_energy.service import (
@@ -161,14 +157,14 @@ def build_response(run_: RelativeEnergyRun, *, entry_ref: str) -> RelativeConfor
 
 
 def refuse_unsupported_compare(body: RelativeConformerEnergyCompareRequest) -> None:
-    """Refuse what this release does not evaluate, and a protocol compared with itself, before any query.
+    """Refuse what this release does not evaluate, before any query (the same 422 whatever the path names).
 
-    Both depend on the request alone, so they are the same whatever the path names and nothing is read to make them.
+    A protocol compared with itself is not refused here: whether two levels are one level (a merged ``lot_``) is only
+    known after the lookups, so that refusal is made in :func:`check_compare_refs`, after the entry, the levels and the
+    conformer refs have been resolved. It therefore never answers for an entry, level or group the caller cannot see.
     """
-    candidate, reference = body.service_requests()
+    candidate, _ = body.service_requests()
     check_supported(candidate)
-    if protocols_identical(candidate, reference):
-        raise identical_protocols()
 
 
 def check_compare_refs(session: Session, body: RelativeConformerEnergyCompareRequest, *, entry_id: int) -> ComparisonRequest:
@@ -182,7 +178,8 @@ def check_compare_refs(session: Session, body: RelativeConformerEnergyCompareReq
         if group.species_entry_id != entry_id:
             raise _mismatch(field)
     candidate, reference = body.service_requests(candidate_level=candidate_level, reference_level=reference_level)
-    # Two spellings of one level (a merged lot_ and the one it was merged into) are still one protocol.
+    # Two spellings of one level (a merged lot_ and the one it was merged into) are still one protocol, and two recipes
+    # that narrow by the same facts are one recipe: ComparisonRequest refuses that, last, after every ref above.
     return ComparisonRequest(candidate=candidate, reference=reference, pairing=body.pairing)
 
 
@@ -219,6 +216,7 @@ def build_compare_response(run_: ComparisonRun, *, entry_ref: str) -> RelativeCo
         coverage_requirement=result["coverage_requirement"],
         units=result["units"],
         statistics=result["statistics"],
+        reference_conformer=result["reference_conformer"],
         pairs=result["pairs"],
         candidate=result["candidate"],
         reference=result["reference"],

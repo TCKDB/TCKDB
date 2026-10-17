@@ -36,7 +36,7 @@ code in the shipped reference), `tckdb-client` 0.152.0 (the same code in `Reject
   every figure is `null`; a complete answer with an excluded pair is `incomplete_pairing` with no figures.
 - It is a description, not a verdict: `claims.superiority` and `claims.ranking` are `not_licensed`, and the seven prerequisites of a
   future superiority claim (E1 to E7) are always listed as missing. The comparison builds no selection-kernel edge and reads no rule.
-- New code: `relative_conformer_energy_compare_identical_protocols` (the same level and recipe named twice).
+- New code: `relative_conformer_energy_compare_identical_protocols` (the same level, with the same effective recipe narrowing, named twice; decided after the entry, levels and groups resolve).
 - The manifest holds both runs' complete relative-energy manifests; `replay_comparison` recomputes both and the pairing.
 - Docs: a section in `backend/docs/specs/relative_conformer_energy.md`, and `docs/guides/relative_conformer_energies.md`.
 

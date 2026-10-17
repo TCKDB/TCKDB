@@ -8,7 +8,9 @@ the plain answers (``RelativeEnergyResult.to_dict()``), so a recorded comparison
 What is decided here, and nowhere else:
 
 * **The reference conformer is not a pair.** Its deviation is zero by construction, so counting it would only dilute
-  every statistic. It is echoed, never counted.
+  every statistic. It is echoed, never counted. It is the anchor of every relative energy, so when it has no value on a
+  side, or (for ``same_geometry``) is evaluated at a different geometry on the two sides, no pair satisfies the pairing
+  and the problem is named once at the top level, not blamed on the members.
 * **A pair with no value on either side, or failing the pairing, is excluded with a coded reason.** It is never a zero
   deviation and never enters a statistic.
 * **No statistic over a subset when a complete answer was asked for.** Under ``all_requested_members`` any excluded
@@ -29,6 +31,12 @@ from typing import Any
 from app.api.error_contract import CodedValueError
 from app.services.relative_conformer_energy.models import RelativeEnergyRequest
 from app.services.structure_selection.models import CoverageRequirement
+from app.services.structure_selection.normalizer import (
+    ENDPOINT_FACTS,
+    OPTIONAL_KEYED_FACTS,
+    REQUIRED_FACTS,
+    declared_fact,
+)
 
 #: Version of the comparison semantics (pairing, exclusion, statistics, claims).
 COMPARISON_VERSION = "1"
@@ -65,8 +73,12 @@ class ComparisonOutcome(str, Enum):
 NEITHER_PROTOCOL_HAS_VALUE = "neither_protocol_has_value"
 CANDIDATE_VALUE_MISSING = "candidate_value_missing"
 REFERENCE_PROTOCOL_VALUE_MISSING = "reference_protocol_value_missing"
-GEOMETRY_NOT_RECORDED = "geometry_not_recorded"
+GEOMETRY_NOT_RECORDED = "geometry_not_recorded"  # a value not tied to one recorded geometry cannot satisfy same_geometry
 GEOMETRY_DIFFERS = "geometry_differs"
+#: The named reference conformer is the anchor of every relative energy, so a problem with it is a problem with every pair.
+REFERENCE_CONFORMER_VALUE_MISSING = "reference_conformer_value_missing"
+REFERENCE_CONFORMER_GEOMETRY_NOT_RECORDED = "reference_conformer_geometry_not_recorded"
+REFERENCE_CONFORMER_GEOMETRY_DIFFERS = "reference_conformer_geometry_differs"
 
 EXCLUDED_REASONS = frozenset(
     {
@@ -75,7 +87,13 @@ EXCLUDED_REASONS = frozenset(
         REFERENCE_PROTOCOL_VALUE_MISSING,
         GEOMETRY_NOT_RECORDED,
         GEOMETRY_DIFFERS,
+        REFERENCE_CONFORMER_VALUE_MISSING,
+        REFERENCE_CONFORMER_GEOMETRY_NOT_RECORDED,
+        REFERENCE_CONFORMER_GEOMETRY_DIFFERS,
     }
+)
+REFERENCE_CONFORMER_PROBLEMS = frozenset(
+    {REFERENCE_CONFORMER_VALUE_MISSING, REFERENCE_CONFORMER_GEOMETRY_NOT_RECORDED, REFERENCE_CONFORMER_GEOMETRY_DIFFERS}
 )
 
 #: The fields of a relative-energy request that differ between a comparison's two runs.
@@ -90,15 +108,30 @@ def shared_fields(request: RelativeEnergyRequest) -> dict[str, Any]:
     return {k: v for k, v in request.to_dict().items() if k not in PROTOCOL_FIELDS}
 
 
+def narrowing_of(recipe: dict[str, Any] | None) -> tuple[tuple[str, str, str | None], ...]:
+    """What a requested recipe narrows by: the facts it states as known, as the assessment reads them.
+
+    A fact stated ``unknown`` (or not at all) narrows nothing, and neither do ``source`` or ``supporting_dois``, which
+    are about who said it. Two recipes with the same narrowing select the same units.
+    """
+    out = []
+    for name in (*REQUIRED_FACTS, *OPTIONAL_KEYED_FACTS, *ENDPOINT_FACTS):
+        wanted = declared_fact(recipe, name)
+        if wanted is not None and wanted[0] != "unknown":
+            out.append((name, wanted[0], wanted[1]))
+    return tuple(out)
+
+
 def protocols_identical(a: RelativeEnergyRequest, b: RelativeEnergyRequest) -> bool:
-    return a.level == b.level and (a.recipe or None) == (b.recipe or None)
+    """The same level and the same effective narrowing: a protocol is not compared with itself."""
+    return a.level == b.level and narrowing_of(a.recipe) == narrowing_of(b.recipe)
 
 
 def identical_protocols() -> CodedValueError:
     return CodedValueError(
         CODE_IDENTICAL_PROTOCOLS,
-        "the candidate and the reference name the same level and recipe; a protocol is not compared with itself and "
-        "nothing was compared.",
+        "the candidate and the reference name the same level and narrow it by the same recipe facts; a protocol is not "
+        "compared with itself and nothing was compared.",
         context={},
         message_prefix=False,
     )
@@ -138,23 +171,63 @@ def _member_map(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {m["conformer_ref"]: m for m in result["members"]}
 
 
-def _pair(g: str, c: dict[str, Any] | None, r: dict[str, Any] | None, pairing: Pairing) -> dict[str, Any]:
-    c_kj = c["relative_energy_kj_mol"] if c else None
-    r_kj = r["relative_energy_kj_mol"] if r else None
-    c_geo = sorted(c["evaluated_geometry_refs"]) if c else []
-    r_geo = sorted(r["evaluated_geometry_refs"]) if r else []
-    reason: str | None = None
-    if c_kj is None and r_kj is None:
-        reason = NEITHER_PROTOCOL_HAS_VALUE
-    elif c_kj is None:
-        reason = CANDIDATE_VALUE_MISSING
-    elif r_kj is None:
-        reason = REFERENCE_PROTOCOL_VALUE_MISSING
+def _has_value(member: dict[str, Any] | None) -> bool:
+    return member is not None and member["value_hartree"] is not None
+
+
+def _reference_conformer(
+    candidate: dict[str, Any], reference: dict[str, Any], anchor: str, pairing: Pairing
+) -> dict[str, Any]:
+    """What the named reference conformer allows: its value on both sides and, under ``same_geometry``, one geometry.
+
+    A relative energy is the member's value minus the reference conformer's, so a reference conformer that is missing
+    on a side, or (for ``same_geometry``) evaluated at a different geometry on the two sides, makes every pair unusable.
+    """
+    c, r = _member_map(candidate).get(anchor), _member_map(reference).get(anchor)
+    c_geo = c["value_geometry_ref"] if _has_value(c) else None
+    r_geo = r["value_geometry_ref"] if _has_value(r) else None
+    problem: str | None = None
+    if not (_has_value(c) and _has_value(r)):
+        problem = REFERENCE_CONFORMER_VALUE_MISSING
     elif pairing is Pairing.same_geometry:
-        if not c_geo or not r_geo:
+        if c_geo is None or r_geo is None:
+            problem = REFERENCE_CONFORMER_GEOMETRY_NOT_RECORDED
+        elif c_geo != r_geo:
+            problem = REFERENCE_CONFORMER_GEOMETRY_DIFFERS
+    return {
+        "conformer_ref": anchor,
+        "problem": problem,
+        "candidate_value_present": _has_value(c),
+        "reference_value_present": _has_value(r),
+        "candidate_geometry_ref": c_geo,
+        "reference_geometry_ref": r_geo,
+    }
+
+
+def _pair(
+    g: str, c: dict[str, Any] | None, r: dict[str, Any] | None, pairing: Pairing, anchor_problem: str | None
+) -> dict[str, Any]:
+    """One member's pair. The geometry is the one each value came from, never a sibling record's."""
+    c_has, r_has = _has_value(c), _has_value(r)
+    c_geo = c["value_geometry_ref"] if c_has else None
+    r_geo = r["value_geometry_ref"] if r_has else None
+    reason: str | None = None
+    if not c_has and not r_has:
+        reason = NEITHER_PROTOCOL_HAS_VALUE
+    elif not c_has:
+        reason = CANDIDATE_VALUE_MISSING
+    elif not r_has:
+        reason = REFERENCE_PROTOCOL_VALUE_MISSING
+    elif anchor_problem is not None:
+        # The member has a value on both sides; what is missing is the anchor, and that is what is said.
+        reason = anchor_problem
+    elif pairing is Pairing.same_geometry:
+        if c_geo is None or r_geo is None:
             reason = GEOMETRY_NOT_RECORDED
         elif c_geo != r_geo:
             reason = GEOMETRY_DIFFERS
+    c_kj = c["relative_energy_kj_mol"] if c else None
+    r_kj = r["relative_energy_kj_mol"] if r else None
     deviation = (c_kj - r_kj) if reason is None and c_kj is not None and r_kj is not None else None
     return {
         "conformer_ref": g,
@@ -164,8 +237,8 @@ def _pair(g: str, c: dict[str, Any] | None, r: dict[str, Any] | None, pairing: P
         "excluded_reason": reason,
         "candidate_uncertainty_hartree": c["value_uncertainty_hartree"] if c else None,
         "reference_uncertainty_hartree": r["value_uncertainty_hartree"] if r else None,
-        "candidate_geometry_refs": c_geo,
-        "reference_geometry_refs": r_geo,
+        "candidate_geometry_ref": c_geo,
+        "reference_geometry_ref": r_geo,
     }
 
 
@@ -222,11 +295,11 @@ def compare_results(
     """
     cm, rm = _member_map(candidate), _member_map(reference)
     refs = sorted((set(cm) | set(rm)) - {reference_conformer_ref})
-    pairs = [_pair(g, cm.get(g), rm.get(g), pairing) for g in refs]
+    anchor = _reference_conformer(candidate, reference, reference_conformer_ref, pairing)
+    pairs = [_pair(g, cm.get(g), rm.get(g), pairing, anchor["problem"]) for g in refs]
     paired = [(p["conformer_ref"], p["deviation_kj_mol"]) for p in pairs if p["excluded_reason"] is None]
-    anchor_missing = any(side["reference"]["value_hartree"] is None for side in (candidate, reference))
     incomplete = coverage_requirement is CoverageRequirement.all_requested_members and (
-        anchor_missing or any(p["excluded_reason"] is not None for p in pairs)
+        anchor["problem"] is not None or any(p["excluded_reason"] is not None for p in pairs)
     )
     if incomplete:
         outcome, stats = ComparisonOutcome.incomplete_pairing, None
@@ -239,6 +312,7 @@ def compare_results(
         "pairing": pairing.value,
         "coverage_requirement": coverage_requirement.value,
         "units": {"deviation": "kJ/mol"},
+        "reference_conformer": anchor,
         "statistics": stats,
         "pairs": pairs,
         "candidate": _protocol_block(candidate),
