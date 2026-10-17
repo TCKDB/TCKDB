@@ -22,6 +22,7 @@ from app.services.relative_conformer_energy import (
     RelativeEnergyRequest,
     replay_comparison,
     replay_comparison_matches,
+    replay_relative_energies,
     run_comparison,
 )
 from app.services.relative_conformer_energy import compare as compare_module
@@ -682,3 +683,20 @@ def test_the_combined_comparison_manifest_is_held_to_the_size_bound(db_session):
     assert raised.value.context["size"] == combined and raised.value.context["limit"] == combined - 1
     # Each run fits under that limit on its own: it is the combination that is refused.
     assert one < combined - 1
+
+
+def test_a_comparison_manifest_embedding_older_version_runs_is_refused_not_crashed(db_session):
+    world, cand_lot, (a, *_) = two_level_world(db_session)
+    manifest = run_service(db_session, world, request_for(world, a, cand_lot, world.lot)).manifest
+    old = copy.deepcopy(manifest)
+    for name in ("candidate", "reference"):
+        run_ = old["runs"][name]
+        for member in run_["result"]["members"]:
+            del member["value_geometry_ref"]
+        run_["result"]["relative_energy_version"] = "1"
+        run_["versions"]["relative_energy"] = "1"
+        old["runs"][name] = _resealed(run_)  # a valid version-1 run: it replays on its own
+        assert replay_relative_energies(old["runs"][name])
+    with pytest.raises(ReplayError) as raised:  # not a KeyError from the pairing
+        replay_comparison(_resealed(old))
+    assert raised.value.code == "inconsistent_manifest"
