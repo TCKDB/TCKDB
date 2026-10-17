@@ -125,7 +125,7 @@ def relative_conformer_energies_compare(
     or fails the pairing, is listed with a coded ``excluded_reason`` and never counted as a zero deviation. With no
     pair every statistic is null; under ``all_requested_members`` any excluded pair gives ``incomplete_pairing`` and no
     statistics. The answer is descriptive: ``claims.superiority`` and ``claims.ranking`` are ``not_licensed``, and the
-    evidence a superiority claim would need (E1 to E7) is listed as missing. Naming the same level and recipe twice is
+    evidence a superiority claim would need (E1 to E7) is listed as missing. Naming the same level with the same recipe facts twice is
     422 ``relative_conformer_energy_compare_identical_protocols``; enthalpy, Gibbs energy and no certificate are 422
     ``relative_conformer_energy_unsupported``. External or published references are not supported.
     """

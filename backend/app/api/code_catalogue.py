@@ -2514,9 +2514,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/relative_conformer_energy/compare.py",
             shape=Shape.relationship,
             note=(
-                "The candidate and the reference name the same level and recipe (two spellings of one level, such as a "
-                "merged lot_ and the one it was merged into, are still one). Refused before the first read; nothing was "
-                "compared."
+                "The candidate and the reference name the same canonical level (two spellings, such as a merged lot_ and the "
+                "one it was merged into, are one) and narrow it by the same recipe facts. Decided after the entry, the "
+                "levels and the conformer refs are resolved, so an unknown or hidden one is its usual 404 first; no energy "
+                "was read and nothing was compared."
             )),
     ApiCode("relative_conformer_energy_population_too_large", 422, Surface.coded_exception,
             "backend/app/services/relative_conformer_energy/bounds.py",

@@ -476,9 +476,48 @@ def test_compare_refuses_a_protocol_compared_with_itself_with_a_coded_422(client
     for manifest in (False, True):
         response = client.post(compare_url(world.entry, manifest=manifest), json=same)
         assert response.status_code == 422 and code(response) == "relative_conformer_energy_compare_identical_protocols"
-    # Even for an entry that does not exist: the refusal depends on the request alone and reads nothing.
+    # The refusal is decided after the entry, the levels and the groups are resolved, so it never answers for a record
+    # the caller cannot see: an unknown entry, level or group is its usual 404 first.
     ghost = f"{API}/species-entries/spe_{'0' * 26}/conformers/relative-energies/compare"
-    assert code(client.post(ghost, json=same)) == "relative_conformer_energy_compare_identical_protocols"
+    assert client.post(ghost, json=same).status_code == 404
+    unknown_level = compare_body(world, a, world.lot, candidate={"level": {"level_of_theory_ref": f"lot_{'0' * 26}"}})
+    assert client.post(compare_url(world.entry), json=unknown_level).status_code == 404
+    unknown_group = {**same, "reference_conformer_ref": f"cg_{'0' * 26}"}
+    assert client.post(compare_url(world.entry), json=unknown_group).status_code == 404
+
+
+SOURCE = {"origin": "producer_declared", "producer": "arc"}
+RESTRICTED = {"version": 1, "source": SOURCE, "spin_treatment": {"state": "known", "value": "restricted"}}
+
+
+def test_compare_refuses_two_recipes_that_narrow_to_the_same_thing(client, two_levels):
+    world, other, (a, *_) = two_levels
+    level = {"level_of_theory_ref": world.lot.public_ref}
+    cases = [
+        # a fact stated unknown narrows nothing, so it is no recipe
+        ({"level": level, "recipe": {"version": 1, "source": SOURCE, "spin_treatment": {"state": "unknown"}}}, {"level": level}),
+        # the same known fact from another source, or with literature, selects the same units
+        (
+            {"level": level, "recipe": RESTRICTED},
+            {"level": level, "recipe": {**RESTRICTED, "source": {"origin": "producer_declared", "producer": "other"}}},
+        ),
+        (
+            {"level": level, "recipe": RESTRICTED},
+            {"level": level, "recipe": {**RESTRICTED, "supporting_dois": ["10.1000/182"]}},
+        ),
+    ]
+    for candidate, reference in cases:
+        response = client.post(
+            compare_url(world.entry), json={**compare_body(world, a, other), "candidate": candidate, "reference": reference}
+        )
+        assert response.status_code == 422 and code(response) == "relative_conformer_energy_compare_identical_protocols"
+    # A known fact against none is a different protocol: the request is answered.
+    different = {
+        **compare_body(world, a, other),
+        "candidate": {"level": level, "recipe": RESTRICTED},
+        "reference": {"level": level},
+    }
+    assert client.post(compare_url(world.entry), json=different).status_code == 200
 
 
 def test_compare_pairing_is_required_and_has_no_default(client, two_levels):

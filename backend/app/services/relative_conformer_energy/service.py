@@ -217,5 +217,6 @@ def run_comparison(
         comparison,
         profile=profile,
         snapshot_isolation=isolation,
+        bounds=runs["candidate"].structure_request.bounds,
     )
     return ComparisonRun(request=request, population=population, runs=runs, comparison=comparison, manifest=manifest)

@@ -186,6 +186,12 @@ def _certificate(units: Sequence["_U"], chosen: "_U", calculations: dict[str, No
     )
 
 
+def _value_geometry(ordered: Sequence["_U"], hartree: float) -> str | None:
+    """The one geometry every record giving ``hartree`` was evaluated at, or ``None`` (none recorded, or several)."""
+    refs = {u.assessment.energy.geometry_ref for u in ordered if u.assessment.energy and u.assessment.energy.hartree == hartree}
+    return next(iter(refs)) if len(refs) == 1 and None not in refs else None
+
+
 def _member_from_values(
     ref: str,
     units: list["_U"],
@@ -221,6 +227,7 @@ def _member_from_values(
         evaluated_geometry_refs=tuple(
             sorted({u.assessment.energy.geometry_ref for u in ordered if u.assessment.energy and u.assessment.energy.geometry_ref})
         ),
+        value_geometry_ref=_value_geometry(ordered, energy.hartree),
         certificate=_certificate(ordered, chosen, calculations),
         alternates=tuple(
             Alternate(u.ref, u.assessment.energy.hartree)

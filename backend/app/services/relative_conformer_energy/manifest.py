@@ -44,6 +44,7 @@ from app.services.structure_selection.models import (
     SUPPORTED_FINDING_VERSIONS,
     NormalizedCalculation,
     NormalizedDetermination,
+    SelectionBounds,
     StructureAssessmentResult,
     StructureRequest,
     StructureSubject,
@@ -285,12 +286,16 @@ def build_comparison_manifest(
     *,
     profile: dict[str, Any],
     snapshot_isolation: str,
+    bounds: SelectionBounds,
 ) -> dict[str, Any]:
     """The manifest of one comparison: both runs' complete manifests, the pairing and the comparison.
 
     Each run is a whole relative-energy manifest (its own inputs, assessments, answer and checksums), so replay of the
     comparison is replay of the two runs and a recomputation of the pairing from their replayed answers. The digests
     are checksums, not signatures.
+
+    :raises CodedValueError: ``structure_selection_manifest_too_large`` when the combined canonical manifest (not only
+        each run) exceeds the bound; nothing is returned without its whole manifest.
     """
     body: dict[str, Any] = {
         "manifest_format": COMPARISON_MANIFEST_FORMAT,
@@ -304,7 +309,9 @@ def build_comparison_manifest(
         "outcome": comparison["outcome"],
     }
     body = _canon(body)
-    return {**body, "integrity": {"algorithm": "sha256", "manifest_sha256": digest(body), "note": INTEGRITY_NOTE}}
+    manifest = {**body, "integrity": {"algorithm": "sha256", "manifest_sha256": digest(body), "note": INTEGRITY_NOTE}}
+    check_manifest_size(bounds, len(canonical(manifest).encode()))
+    return manifest
 
 
 def replay_comparison(manifest: dict[str, Any]) -> dict[str, Any]:

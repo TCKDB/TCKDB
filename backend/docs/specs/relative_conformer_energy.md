@@ -114,11 +114,14 @@ does not say which protocol is better.
 of the level and recipe above) and `pairing`. `pairing` is required and has no default:
 
 - `same_geometry`: both values of a conformer must be evaluated at the same `geom_` ref (the sets of evaluated
-  geometries are equal and recorded);
+  geometries are equal and recorded). The geometry is the one each stored value was evaluated at
+  (`value_geometry_ref`, set only when every record giving that value names the same geometry), not the set over all
+  repeats; a value not tied to one geometry cannot satisfy `same_geometry`. The reference conformer's value must also be
+  evaluated at the same geometry on both sides, because every relative energy is taken from it;
 - `same_basin`: each protocol's own geometry of the basin, so only the conformer group is matched.
 
 External or published relative references are not supported. Enthalpy, Gibbs energy and `certificate: none` are refused
-as above, before any read.
+as above, before the first query.
 
 **What runs.** The relative-energy computation runs twice in **one** snapshot, over **one** population, once per
 protocol. Members are paired by `conformer_ref`; the deviation is `candidate - reference`, in kJ/mol, of the two
@@ -132,19 +135,28 @@ manifest's integrity. `statistics`: `n`, `msd_kj_mol`, `mad_kj_mol`, `rmsd_kj_mo
 `reference_conformer_ref` and `reference_conformer_dependence` (the figures change with the named conformer; compare
 them only with figures measured from the same one). `pairs` are ordered by ref and carry no rank:
 `conformer_ref`, `candidate_kj_mol`, `reference_kj_mol`, `deviation_kj_mol`, `excluded_reason`, each side's stored
-uncertainty (hartree, echoed, never combined) and each side's evaluated geometry refs.
+uncertainty (hartree, echoed, never combined) and the one geometry each side's value came from
+(`candidate_geometry_ref`, `reference_geometry_ref`; null when the value is tied to none or several, never borrowed from
+a sibling record). The top-level `reference_conformer` block names the anchor, each side's value and geometry, and a
+`problem` (null, or one of the three codes below) that applies to every pair.
 
 **Rules.**
 
 - A pair missing on either side, or failing `pairing`, is listed with a coded `excluded_reason` and does not enter any
   statistic. It is never a zero deviation. The closed vocabulary: `neither_protocol_has_value`,
   `candidate_value_missing`, `reference_protocol_value_missing`, `geometry_not_recorded` and `geometry_differs` (the last
-  two only under `same_geometry`).
-- `n == 0`: `outcome` is `no_pairs` and every statistic is `null`, not 0 (`n` is the integer 0).
-- `coverage_requirement: all_requested_members` with any excluded pair, or with no value for the reference conformer on
-  either side: `outcome` is `incomplete_pairing` and `statistics` is `null`. No statistic is given over a subset.
-- A candidate identical to the reference (same level, same recipe, after a merged `lot_` is resolved to the kept row) is
-  422 `relative_conformer_energy_compare_identical_protocols`, made before any read.
+  two only under `same_geometry`), and the reference-conformer reasons `reference_conformer_value_missing`,
+  `reference_conformer_geometry_not_recorded` and `reference_conformer_geometry_differs` (the last two only under
+  `same_geometry`). When the reference conformer has a problem, every pair whose member value exists on both sides is
+  excluded with that reason (the members are not blamed); a pair already missing a value keeps its own reason.
+- `n == 0` (which includes any reference-conformer problem under `known_values`, since every deviation needs the
+  anchor): `outcome` is `no_pairs` and every statistic is `null`, not 0 (`n` is the integer 0).
+- `coverage_requirement: all_requested_members` with any excluded pair, or with any reference-conformer problem: `outcome` is `incomplete_pairing` and `statistics` is `null`. No statistic is given over a subset.
+- A candidate identical to the reference (the same canonical level, after a merged `lot_` is resolved to the kept row,
+  and the same effective narrowing: the same known recipe facts; a fact stated `unknown`, and `source` or
+  `supporting_dois`, narrow nothing) is 422 `relative_conformer_energy_compare_identical_protocols`. It is decided after
+  the entry, the levels and the conformer refs are resolved (an unknown or hidden one is its usual 404 first, so the
+  refusal never answers for a record the caller cannot see) and before any energy is read.
 - Two stored uncertainties are never combined; each side's is echoed.
 
 **Claims.** `claims.kind` is `descriptive`; `claims.superiority` and `claims.ranking` are `not_licensed`; and
@@ -153,21 +165,26 @@ claim that one protocol is more accurate; none is evaluated yet, so all seven ar
 
 | Code | Prerequisite |
 |---|---|
-| E1 | The uncertainty of the reference (the protocol deviations are measured against). |
-| E2 | Independence: the two protocols' values are not correlated copies of each other. |
-| E3 | A resolved margin: a difference larger than what the data can resolve. |
-| E4 | Coverage and sameness: the same conformers, the same population, the same conditions. |
-| E5 | Domain: the chemistry the comparison covers is the chemistry the claim is about. |
-| E6 | Established protocol facts: what each protocol actually ran, stated rather than inferred. |
-| E7 | Owner acceptance of a rule that turns the above into a claim. |
+| E1 | A numeric uncertainty for the reference values, per member or as a stated set-level bound, with its source. |
+| E2 | Independence: the reference shares no computed component with the candidate, shown from recorded composition, not asserted. |
+| E3 | A resolved margin: for superiority, the paired difference in the error metric between two candidates exceeds its combined uncertainty (reference uncertainty plus paired sampling uncertainty by a stated method with stated n). For a near-tie ranking, every adjacent pair in the ranking is resolved this way; unresolved neighbours are reported as indistinguishable, not ordered. |
+| E4 | Coverage and sameness: the full named member set, the same geometries for both candidates, the same named reference conformer as the source. |
+| E5 | Domain: the claim is scoped to the member set measured; transfer to other molecules needs evidence on them. |
+| E6 | Established protocol facts: every setting that defines the protocol (thresholds, PNO cut-offs, extrapolation, core treatment, corrections) is typed and established, not read from a label. |
+| E7 | Owner acceptance of the rule that would carry the claim, and its predicates implemented and reviewed. |
 
-**Boundary.** The comparison never builds a selection-kernel `Edge` and never consults the rule registry: nothing in
-`compare.py` is imported from `structure_selection.rules` or `selection_kernel` (a test reads the module's imports). A
+Even with E1–E7 met, a preference is an audited rule edge through the selection kernel, never a by-product of this comparison.
+
+**Boundary.** The comparison never builds a selection-kernel `Edge` and never consults the rule registry: none of
+`compare.py`, `service.py`, `manifest.py` or `public.py` directly imports `structure_selection.rules` or
+`selection_kernel`, and none references `Edge` (a test reads their imports and names; it does not cover transitive
+imports, and the certificate legitimately comes through `structure_selection.public`). A
 mean absolute deviation is a description and cannot become a rule input.
 
 **Manifest.** `format: relative_conformer_energy_comparison_manifest`, version 1. It holds the shared request, both
 protocols, the pairing, the read profile and snapshot isolation, **both runs' complete relative-energy manifests** (each
-with its inputs, assessments, answer and checksums), the `result` and a whole-manifest digest. The response is built
+with its inputs, assessments, answer and checksums), the `result` and a whole-manifest digest. The combined manifest is checked against the manifest size bound (422
+`structure_selection_manifest_too_large`), not only each run. The response is built
 from it. `replay_comparison(manifest)` replays both runs (recomputing every assessment, never trusting a recorded flag),
 checks the runs were made for the recorded request, profile, snapshot and one population, then recomputes the pairing
 and statistics from the *replayed* answers and refuses any difference. The digests are checksums, not signatures.

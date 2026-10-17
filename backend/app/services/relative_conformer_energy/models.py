@@ -291,6 +291,9 @@ class MemberResult:
     determination_refs: tuple[str, ...] = ()
     energy_calculation_refs: tuple[str, ...] = ()
     evaluated_geometry_refs: tuple[str, ...] = ()
+    #: The one geometry the stored value was evaluated at: set only when every record that gives this value names the
+    #: same geometry. ``None`` when the records of the value name several or none (it is never taken from a sibling).
+    value_geometry_ref: str | None = None
     certificate: MemberCertificate | None = None
     alternates: tuple[Alternate, ...] = ()
     absent_reason: str | None = None
@@ -312,6 +315,7 @@ class MemberResult:
             "determination_refs": list(self.determination_refs),
             "energy_calculation_refs": list(self.energy_calculation_refs),
             "evaluated_geometry_refs": list(self.evaluated_geometry_refs),
+            "value_geometry_ref": self.value_geometry_ref,
             "certificate": self.certificate.to_dict() if self.certificate is not None else None,
             "alternates": [a.to_dict() for a in self.alternates],
             "absent_reason": self.absent_reason,
