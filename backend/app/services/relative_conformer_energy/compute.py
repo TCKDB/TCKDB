@@ -25,7 +25,7 @@ What is decided here, and nowhere else:
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
@@ -41,7 +41,7 @@ from app.services.relative_conformer_energy.models import (
     CERTIFICATE_NOT_ON_ENERGY_SURFACE,
     CERTIFICATE_NOT_SUPPORTED,
     CONTESTED_CERTIFICATE,
-    GROUP_BELOW_REVIEW_FLOOR,
+    DETERMINATION_BELOW_REVIEW_FLOOR,
     LEVEL_BOUND_TO_COMPOSITE_SCHEME,
     MULTIPLE_RECIPES_AT_LEVEL,
     NO_DETERMINATION_SUPPLIES_KIND,
@@ -239,7 +239,8 @@ def compute_relative_energies(
     structure_request: StructureRequest,
     *,
     group_refs: Sequence[str],
-    below_floor_refs: frozenset[str] = frozenset(),
+    excluded_groups: Mapping[str, str] | None = None,
+    floor_excluded_refs: frozenset[str] = frozenset(),
     determinations: Sequence[NormalizedDetermination],
     assessments: Sequence[StructureAssessment],
     calculations: dict[str, NormalizedCalculation],
@@ -247,12 +248,16 @@ def compute_relative_energies(
     """The relative energies of every compared group against the named reference. Pure; see the module docstring.
 
     :param group_refs: The compared conformer groups (every one the read profile shows, reference included).
-    :param below_floor_refs: Compared groups the caller's own floor excludes; they are members, reported absent.
+    :param excluded_groups: Compared groups their own review state excludes (group to reason code); members, reported
+        absent, never assessed.
+    :param floor_excluded_refs: Groups with a determination the caller's floor holds out; reported with a floor reason
+        when they have no other value.
     :param determinations: The conformer-basin determinations the assessment was run over.
     :param assessments: One assessment per determination. Replay passes freshly *recomputed* ones.
     :param calculations: Every loaded calculation by public ref (a determination's source calculations).
     """
     groups = tuple(sorted(group_refs))
+    excluded: Mapping[str, str] = excluded_groups or {}
     reference = request.reference_conformer_ref
     if not groups:
         return RelativeEnergyResult(
@@ -274,19 +279,21 @@ def compute_relative_energies(
     by_group: dict[str, list["_U"]] = defaultdict(list)
     for u in built:
         group = u.unit.conformer_group_ref if isinstance(u.unit, NormalizedDetermination) else None
-        if group is not None and group in groups and group not in below_floor_refs:
+        if group is not None and group in groups and group not in excluded:
             by_group[group].append(u)
 
     members: dict[str, MemberResult] = {}
     usable: dict[str, list[_Judged]] = {}
     judged_by_group: dict[str, list[_Judged]] = {}
     for g in groups:
-        if g in below_floor_refs:
-            members[g] = _absent(g, GROUP_BELOW_REVIEW_FLOOR)
+        if g in excluded:
+            members[g] = _absent(g, excluded[g])
             continue
         units = by_group.get(g, [])
         if not units:
-            members[g] = _absent(g, NO_STRUCTURE_DETERMINATION)
+            members[g] = _absent(
+                g, DETERMINATION_BELOW_REVIEW_FLOOR if g in floor_excluded_refs else NO_STRUCTURE_DETERMINATION
+            )
             continue
         # A target (one observation's basin) with a qualifying and a refuted determination is contested: the pass is
         # not an answer, and nothing of that group is used.

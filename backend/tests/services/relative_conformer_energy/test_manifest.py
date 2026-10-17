@@ -51,7 +51,9 @@ def test_an_edited_stored_value_is_caught_by_recomputation_even_with_every_check
 
 def test_an_edited_answer_is_caught_even_with_every_checksum_recomputed(manifest):
     forged = copy.deepcopy(manifest)
-    forged["result"]["members"][1]["relative_energy_kj_mol"] = 0.0
+    # A non-reference member that has a value (members are in random ref order, so never pick by position).
+    target = next(m for m in forged["result"]["members"] if m["status"] == "present")
+    target["relative_energy_kj_mol"] = target["relative_energy_kj_mol"] + 1.0
     with pytest.raises(ReplayError) as raised:
         replay_relative_energies(reseal(forged))
     assert raised.value.code == "result_mismatch"

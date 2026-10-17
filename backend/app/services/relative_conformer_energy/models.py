@@ -85,7 +85,13 @@ CERTIFICATE_NOT_ON_ENERGY_SURFACE = "certificate_not_on_energy_surface"
 CONTESTED_CERTIFICATE = "contested_certificate"
 REPEAT_VALUES_DISAGREE = "repeat_values_disagree"
 MULTIPLE_RECIPES_AT_LEVEL = "multiple_recipes_at_level"
+#: The group's own review state is below the caller's floor.
 GROUP_BELOW_REVIEW_FLOOR = "group_below_review_floor"
+#: The group is rejected or deprecated: terminal, which is not a floor.
+GROUP_TERMINAL_REVIEW_STATUS = "group_terminal_review_status"
+#: A determination exists but the caller's floor holds it out (its observation, or the entry, is below the floor or
+#: terminal). The group has no other value.
+DETERMINATION_BELOW_REVIEW_FLOOR = "determination_below_review_floor"
 #: A detail code (not a reason): the named level is bound to a composite scheme, which is what a value is filed under.
 LEVEL_BOUND_TO_COMPOSITE_SCHEME = "level_bound_to_composite_scheme"
 REFERENCE_UNAVAILABLE_DETAIL = "reference_unavailable"
@@ -104,6 +110,8 @@ REASONS = frozenset(
         REPEAT_VALUES_DISAGREE,
         MULTIPLE_RECIPES_AT_LEVEL,
         GROUP_BELOW_REVIEW_FLOOR,
+        GROUP_TERMINAL_REVIEW_STATUS,
+        DETERMINATION_BELOW_REVIEW_FLOOR,
     }
 )
 

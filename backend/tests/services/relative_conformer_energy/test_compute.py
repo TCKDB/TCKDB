@@ -297,6 +297,6 @@ def test_a_complete_answer_asked_of_an_incomplete_population_says_so():
 
 
 def test_a_group_below_the_callers_floor_is_a_member_reported_absent():
-    r = compute(request(), ["cg_a", "cg_b"], basin("cg_a"), basin("cg_b", energy=-76.5), below=frozenset({"cg_b"}))
+    r = compute(request(), ["cg_a", "cg_b"], basin("cg_a"), basin("cg_b", energy=-76.5), excluded={"cg_b": "group_below_review_floor"})
     b = member(r, "cg_b")
     assert b.absent_reason == "group_below_review_floor" and b.value_hartree is None

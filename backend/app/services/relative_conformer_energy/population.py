@@ -21,7 +21,11 @@ from app.db.models.common import RecordReviewStatus, StructureDeterminationTarge
 from app.db.models.species import ConformerGroup, ConformerObservation
 from app.db.models.structure_determination import StructureDetermination
 from app.services.relative_conformer_energy.bounds import check_members
-from app.services.relative_conformer_energy.models import RelativeEnergyRequest
+from app.services.relative_conformer_energy.models import (
+    GROUP_BELOW_REVIEW_FLOOR,
+    GROUP_TERMINAL_REVIEW_STATUS,
+    RelativeEnergyRequest,
+)
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
 from app.services.structure_selection.loader import assert_subject_visible
 from app.services.structure_selection.models import Grain
@@ -34,14 +38,19 @@ class Population:
     """The compared conformer groups and the determinations the assessment is asked about.
 
     :param group_refs: Every compared group the read profile shows, sorted by ref.
-    :param below_floor_refs: The compared groups the caller's own floor (or a terminal status) excludes; they stay
-        members, reported absent, and none of their determinations is assessed.
+    :param excluded_groups: Compared groups the group's own review state excludes, with the reason code: below the
+        caller's floor, or a terminal status (rejected, deprecated). They stay members, reported absent, and none of
+        their determinations is assessed.
+    :param floor_excluded_refs: Compared groups that have a determination the caller's own floor holds out (its
+        observation, or the entry, is below the floor or terminal). It is not assessed; if the group has no other
+        value, its absence says so rather than claiming there is no determination.
     :param determination_refs: The ``sdet_`` refs to assess: basin determinations of a compared, in-floor group
-        whose observation the profile shows. Sorted.
+        whose observation the profile shows and the floor admits. Sorted.
     """
 
     group_refs: tuple[str, ...]
-    below_floor_refs: frozenset[str]
+    excluded_groups: dict[str, str]
+    floor_excluded_refs: frozenset[str]
     determination_refs: tuple[str, ...]
 
 
@@ -92,8 +101,16 @@ def scan_population(session: Session, *, entry_id: int, request: RelativeEnergyR
         raise _unknown("conformer_group", request.reference_conformer_ref)
     check_members(len(shown))
 
-    below = frozenset(ref for i, ref in shown.items() if badges[i].status not in effective)
-    in_floor = {i for i, ref in shown.items() if ref not in below}
+    excluded = {
+        ref: (GROUP_TERMINAL_REVIEW_STATUS if badges[i].status in _TERMINAL else GROUP_BELOW_REVIEW_FLOOR)
+        for i, ref in shown.items()
+        if badges[i].status not in effective
+    }
+    in_floor = {i for i, ref in shown.items() if ref not in excluded}
+    entry_status = fetch_review_badges(session, record_type=SubmissionRecordType.species_entry, record_ids=[entry_id])[
+        entry_id
+    ].status
+    entry_in_floor = entry_status in effective
 
     det_rows = session.execute(
         select(StructureDetermination.id, StructureDetermination.public_ref, StructureDetermination.conformer_observation_id)
@@ -119,11 +136,23 @@ def scan_population(session: Session, *, entry_id: int, request: RelativeEnergyR
     observation_badges = fetch_review_badges(
         session, record_type=SubmissionRecordType.conformer_observation, record_ids=observation_ids
     )
-    determinations = sorted(
-        r.public_ref
-        for r in det_rows
-        if group_of.get(r.conformer_observation_id) in in_floor and observation_badges[r.conformer_observation_id].status in profile
-    )
+    group_ref_of = shown
+    determinations: list[str] = []
+    floor_held: set[str] = set()
+    for r in det_rows:
+        group_id = group_of.get(r.conformer_observation_id)
+        if group_id not in in_floor:
+            continue
+        status = observation_badges[r.conformer_observation_id].status
+        if status not in profile:
+            continue
+        if entry_in_floor and status in effective:
+            determinations.append(r.public_ref)
+        else:
+            floor_held.add(group_ref_of[group_id])
     return Population(
-        group_refs=tuple(sorted(shown.values())), below_floor_refs=below, determination_refs=tuple(determinations)
+        group_refs=tuple(sorted(shown.values())),
+        excluded_groups=excluded,
+        floor_excluded_refs=frozenset(floor_held),
+        determination_refs=tuple(sorted(determinations)),
     )

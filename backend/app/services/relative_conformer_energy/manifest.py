@@ -30,10 +30,10 @@ from app.services.structure_selection.bounds import check_manifest_size
 from app.services.structure_selection.manifest import (
     INTEGRITY_NOTE,
     ReplayError,
-    _population,
     canonical,
     digest,
     expected_effective_statuses,
+    population_block,
 )
 from app.services.structure_selection.models import (
     ASSESSMENT_VERSION,
@@ -96,9 +96,10 @@ def build_manifest(
         "snapshot_isolation": assessment.snapshot_isolation,
         "subject": assessment.subject.to_dict(),
         "population": {
-            **_population(assessment, withhold_excluded=profile.get("review_floor") is not None),
+            **population_block(assessment, withhold_excluded=profile.get("review_floor") is not None),
             "groups": list(population.group_refs),
-            "below_floor_groups": sorted(population.below_floor_refs),
+            "excluded_groups": dict(sorted(population.excluded_groups.items())),
+            "floor_excluded_groups": sorted(population.floor_excluded_refs),
             "determinations": list(population.determination_refs),
         },
         "calculations": [_with_digest(c.to_dict()) for c in assessment.calculations],
@@ -192,7 +193,8 @@ def replay_relative_energies(manifest: dict[str, Any]) -> dict[str, Any]:
         calcs = [NormalizedCalculation.from_dict(_without_digest(c)[0]) for c in manifest["calculations"]]
         dets = [NormalizedDetermination.from_dict(_without_digest(d)[0]) for d in manifest["determinations"]]
         groups = tuple(manifest["population"]["groups"])
-        below = frozenset(manifest["population"]["below_floor_groups"])
+        excluded = dict(manifest["population"]["excluded_groups"])
+        floor_excluded = frozenset(manifest["population"]["floor_excluded_groups"])
     except (KeyError, TypeError, ValueError) as exc:
         raise ReplayError("unreadable_manifest", f"the manifest cannot be read back: {exc}") from exc
     _check_consistency(manifest, structure_request, dets, calcs)
@@ -211,7 +213,8 @@ def replay_relative_energies(manifest: dict[str, Any]) -> dict[str, Any]:
         request,
         structure_request,
         group_refs=groups,
-        below_floor_refs=below,
+        excluded_groups=excluded,
+        floor_excluded_refs=floor_excluded,
         determinations=dets,
         assessments=recomputed,
         calculations=by_ref,
