@@ -472,8 +472,12 @@ def _refs_named_by(value: str, *, url_valued: bool = False) -> list[str]:
     marks free text, which this reader leaves alone. A hidden ref inside free text is therefore NOT withheld at run
     time; a field that can carry one needs its own rule. (The sweep's raw-body check finds such a leak in tests only.)
     """
-    if len(value) <= 40 and GATED_REF_RE.match(value):
-        return [value]
+    if len(value) <= 40:
+        if GATED_REF_RE.match(value):
+            return [value]
+        stripped = value.strip()  # ``calc_...\n`` is that ref with a stray newline, and must not slip past
+        if stripped != value and GATED_REF_RE.match(stripped):
+            return [stripped]
     if not url_valued and (not _URL_START.match(value) or any(c.isspace() for c in value)):
         return []
     try:

@@ -441,6 +441,9 @@ def test_a_url_naming_a_hidden_record_is_withheld_like_the_ref(client, db_sessio
     hidden = world.hidden["tse_h"].public_ref
     for form, url in _url_forms(hidden).items():
         assert _withhold_one(db_session, url) is None, f"{form}: {url!r} was kept"
+    # A bare ref with a stray newline is that ref, in a free-text field too.
+    for value in (f"{hidden}\n", f"\n{hidden}", f"{hidden}\r\n"):
+        assert _withhold_one(db_session, value, field="note") is None, f"{value!r} was kept"
 
 
 def test_a_url_valued_field_that_cannot_be_read_fails_closed(client, db_session):
