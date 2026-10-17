@@ -78,6 +78,13 @@ KNOWN_UNGUARDED: dict[tuple[str, str], str] = {
         )
         for suffix in ("", "/manifest")
     },
+    **{
+        (
+            "POST",
+            f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies{suffix}",
+        ): "stamps the profile and returns; a hidden group is filtered out of the population before the service reads it"
+        for suffix in ("", "/manifest")
+    },
 }
 
 #: Routes that answer something other than 200 to a visible subject under the curated profile, and why. The batch

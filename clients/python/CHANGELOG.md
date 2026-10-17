@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.151.0 - 2026-10-17
+
+`RejectionCode` gains `relative_conformer_energy_unsupported`, `relative_conformer_energy_population_too_large` and
+`relative_conformer_energy_scope_owner_mismatch` (`tckdb-schemas` 0.124.0): the codes of the new server read
+`POST /scientific/species-entries/{ref}/conformers/relative-energies` (relative conformer energies against a named reference
+conformer). No method changed; a client method for the route is a separate release.
+
 ## 0.149.0 - 2026-10-13
 
 `RejectionCode` gains `superseded_record_not_approvable` (`tckdb-schemas` 0.123.0): a curator re-approving a record that a correction

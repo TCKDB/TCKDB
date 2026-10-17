@@ -12,9 +12,9 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 | Classification | Operations |
 |---|---|
 | typed | 123 |
-| raw_only | 107 |
+| raw_only | 109 |
 | not_applicable | 45 |
-| **total** | **275** |
+| **total** | **277** |
 
 ## Typed coverage
 
@@ -292,6 +292,13 @@ Deliberately reachable only through the generic request helpers. Each group stat
 | Operation | raw HTTP | typed client | iterator | example | contract test |
 |---|---|---|---|---|---|
 | `GET /api/v1/scientific/species-entries/{species_entry_id}/transport` | yes | — | — | — | — |
+
+> Relative conformer energies against a named reference conformer. A typed method needs its request and response types and the four required scientific choices as required keyword arguments, which ships as its own client release; until then it is reached through post_json().
+
+| Operation | raw HTTP | typed client | iterator | example | contract test |
+|---|---|---|---|---|---|
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies` | yes | — | — | — | — |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/manifest` | yes | — | — | — | — |
 
 > Single-record read of a row already returned in full by search_statmech(statmech_ref=...). Reachable via get_json() when only the ref is known.
 

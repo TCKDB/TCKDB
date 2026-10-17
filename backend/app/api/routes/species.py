@@ -352,6 +352,7 @@ def _resolve_lowest_sp_conformer_observation(
 @entries_router.get(
     "/{entry_id}/conformer-observations/lowest-sp",
     response_model=LowestSPConformerObservationResultRead,
+    deprecated=True,
 )
 def get_lowest_sp_conformer_observation_for_entry(
     entry_id: int,
@@ -363,6 +364,12 @@ def get_lowest_sp_conformer_observation_for_entry(
     session: Session = Depends(get_db),
 ):
     """Return the lowest qualifying SP conformer observation for a species entry.
+
+    **Deprecated.** Use ``POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies``
+    instead: it names the reference conformer, the energy kind, the level and the certificate, reports a missing value
+    as absent with a coded reason, and treats repeated records of one conformer as alternates. This route collapses
+    several single points on one observation to the lowest, which is the opposite rule. It is kept for now and will be
+    removed once it is unused.
 
     This is a context-qualified ranking, not a stored "best conformer" claim.
     A calculation qualifies only if it is an SP at the requested `lot_id` with

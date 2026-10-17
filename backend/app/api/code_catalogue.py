@@ -2512,16 +2512,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             note="context.reason names what this release does not evaluate."),
     ApiCode("relative_conformer_energy_population_too_large", 422, Surface.coded_exception,
             "backend/app/services/relative_conformer_energy/bounds.py",
-            reach=Reach.guard, shape=Shape.relationship,
-            note="No route calls the relative-conformer-energy service yet (it ships ahead of its endpoint), so no "
-                 "request can produce this; the entry becomes request-reachable when the route lands. context names "
-                 "the bound, the visible count, the limit and the bounds version; nothing was assessed."),
+            shape=Shape.relationship,
+            note="context names the bound, the visible count, the limit and the bounds version; nothing was assessed."),
+    ApiCode("relative_conformer_energy_scope_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/relative_conformer_energy/public.py",
+            shape=Shape.relationship,
+            note=(
+                "context.field names the ref (reference_conformer_ref or member_refs) that the caller may see but that "
+                "belongs to another species entry than the path's. A ref the read profile hides, or that names nothing, "
+                "is the 404 handle_not_found instead; the owner is never named."
+            )),
     ApiCode("relative_conformer_energy_unsupported", 422, Surface.coded_exception,
             "backend/app/services/relative_conformer_energy/bounds.py",
-            reach=Reach.guard, shape=Shape.relationship,
-            note="No route calls the relative-conformer-energy service yet (it ships ahead of its endpoint), so no "
-                 "request can produce this; the entry becomes request-reachable when the route lands. "
-                 "context.reason names what this release does not evaluate (deferred_energy_kind, deferred_certificate)."),
+            shape=Shape.relationship,
+            note="context.reason names what this release does not evaluate (deferred_energy_kind, deferred_certificate)."),
     ApiCode("statmech_selection_bound_exceeded", 422, Surface.coded_exception,
             "backend/app/services/statmech_selection/vocabulary.py",
             shape=Shape.relationship,

@@ -348,7 +348,8 @@ class StructureSelectionManifest(BaseModel):
 
     Public refs only: the normalised request, read profile, snapshot isolation, subject, every normalised unit and
     source calculation, each assessment, the registry entries consulted and the decision. ``replay_structure_assessment``
-    and ``replay_structure_decision`` (``tckdb_client``) recompute it offline. The digests in ``integrity`` are
+    and ``replay_structure_decision`` (``app.services.structure_selection``) recompute it, in the server's own
+    code; ``tckdb_client`` does not replay structure manifests. The digests in ``integrity`` are
     checksums, not signatures: they detect edits and anyone who edits a manifest can recompute them, so replay
     shows the reasoning follows from the captured inputs and proves neither that they are true nor that the
     population was complete. The download is a new snapshot of the current data, not a retrieval of an earlier decision.

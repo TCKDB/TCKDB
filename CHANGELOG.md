@@ -22,6 +22,26 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Relative conformer energies against a named reference conformer (2026-10-17)
+
+**New read route; one route deprecated.** Migration: none. New environment variable: none. Package versions: `tckdb-schemas` 0.124.0
+(three new refusal codes in the shipped reference), `tckdb-client` 0.151.0 (the same codes in `RejectionCode`). OpenAPI golden
+regenerated (new paths; the structure-manifest description corrected).
+
+- `POST /api/v1/scientific/species-entries/{ref}/conformers/relative-energies` and `/manifest`: each conformer group's energy
+  minus a reference conformer group the caller names, in kJ/mol, at one named level, for the electronic energy or the zero-kelvin
+  energy. The reference, energy kind, level and certificate are required and have no default; a negative difference stays negative;
+  a conformer with no usable value is listed absent with a coded reason and `null` numbers, never zero; members are ordered by ref
+  with no rank. Read in a REPEATABLE READ snapshot; the manifest replays.
+- New codes: `relative_conformer_energy_unsupported` (enthalpy, Gibbs, no certificate), `relative_conformer_energy_population_too_large`
+  (more than 500 visible groups) and `relative_conformer_energy_scope_owner_mismatch` (a group of another entry). Enthalpy and
+  Gibbs energy are deferred until a deposit needs them.
+- Under `curated`, a hidden group, observation, determination or calculation is not in the answer or the manifest.
+- `GET /api/v1/species-entries/{id}/conformer-observations/lowest-sp` is **deprecated** (`deprecated: true` in OpenAPI), pointing to
+  the new operation. It still works and is not removed.
+- Docs: `backend/docs/specs/relative_conformer_energy.md`, `docs/guides/relative_conformer_energies.md`. The structure manifest's
+  schema description no longer claims `tckdb_client` replays it (the client has no such function).
+
 ## A central guard for refs the curated profile hides, wired in but not yet enabled (2026-10-13)
 
 **No behaviour change on the wire.** Migration: none. New environment variable: none. No package version changes; OpenAPI golden

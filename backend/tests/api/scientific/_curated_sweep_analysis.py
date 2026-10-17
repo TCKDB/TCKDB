@@ -59,7 +59,18 @@ POPULATION_KEYS = frozenset(
 #: checksum) rather than the records. They differ between profiles by design.
 DESCRIBES_THE_READ_KEYS = frozenset({"watermark", "disclosures", "read_profile", "integrity", "population"})
 #: Exact paths for the same reason where the key name is too common to ignore everywhere (``review`` is also a badge).
-DESCRIBES_THE_READ_PATHS = frozenset({"review.effective_floor"})
+DESCRIBES_THE_READ_PATHS = frozenset(
+    {
+        "review.effective_floor",
+        # Relative conformer energies: the coverage counts describe the compared population, which the profile
+        # shrinks by design (a hidden conformer group is not in the world, so it is not counted).
+        *(
+            f"{prefix}coverage.{name}"
+            for prefix in ("", "result.")
+            for name in ("requested_members", "present", "absent", "unresolved", "complete")
+        ),
+    }
+)
 
 #: Key stem -> world kind, for the integer-id check.
 ID_STEM_TO_KIND = {

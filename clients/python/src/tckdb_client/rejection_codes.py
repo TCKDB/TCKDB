@@ -259,6 +259,9 @@ class RejectionCode(str, Enum):
     RECORD_SUBJECT_MISMATCH = "record_subject_mismatch"
     RECORD_TYPE_NOT_SELECTABLE = "record_type_not_selectable"
     REFERENCE_CONFLICT = "reference_conflict"
+    RELATIVE_CONFORMER_ENERGY_POPULATION_TOO_LARGE = "relative_conformer_energy_population_too_large"
+    RELATIVE_CONFORMER_ENERGY_SCOPE_OWNER_MISMATCH = "relative_conformer_energy_scope_owner_mismatch"
+    RELATIVE_CONFORMER_ENERGY_UNSUPPORTED = "relative_conformer_energy_unsupported"
     RELEASE_NOT_DRAFT = "release_not_draft"
     RELEASE_NOT_PUBLISHED = "release_not_published"
     RELEASE_SCOPING_NOT_IMPLEMENTED = "release_scoping_not_implemented"
@@ -553,6 +556,9 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.RECORD_REF_NOT_SELECTABLE,
         RejectionCode.RECORD_SUBJECT_MISMATCH,
         RejectionCode.RECORD_TYPE_NOT_SELECTABLE,
+        RejectionCode.RELATIVE_CONFORMER_ENERGY_POPULATION_TOO_LARGE,
+        RejectionCode.RELATIVE_CONFORMER_ENERGY_SCOPE_OWNER_MISMATCH,
+        RejectionCode.RELATIVE_CONFORMER_ENERGY_UNSUPPORTED,
         RejectionCode.RELEASE_SCOPING_NOT_IMPLEMENTED,
         RejectionCode.RELEASE_SELECTS_NOTHING,
         RejectionCode.RIGHTS_BASIS_INCOMPATIBLE,
@@ -881,6 +887,9 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.RECORD_SUBJECT_MISMATCH: frozenset({422}),
     RejectionCode.RECORD_TYPE_NOT_SELECTABLE: frozenset({422}),
     RejectionCode.REFERENCE_CONFLICT: frozenset({409}),
+    RejectionCode.RELATIVE_CONFORMER_ENERGY_POPULATION_TOO_LARGE: frozenset({422}),
+    RejectionCode.RELATIVE_CONFORMER_ENERGY_SCOPE_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.RELATIVE_CONFORMER_ENERGY_UNSUPPORTED: frozenset({422}),
     RejectionCode.RELEASE_NOT_DRAFT: frozenset({409}),
     RejectionCode.RELEASE_NOT_PUBLISHED: frozenset({409}),
     RejectionCode.RELEASE_SCOPING_NOT_IMPLEMENTED: frozenset({422}),
