@@ -162,7 +162,8 @@ row carries them + evidence summary + available_sections.
 ### Trust token policy
 
 `trust` is a **detail/subresource-only** token. It adds the
-`computed_statmech_v1` fragment per record and is legal only on:
+computed-trust fragment per record (`computed_statmech_v2` for a species-owned
+record, `computed_ts_statmech_v1` for a transition-state-owned one) and is legal only on:
 
 - `GET /scientific/statmech/{ref_or_id}` (standalone detail)
 - `GET /scientific/species-entries/{id}/statmech` (per-entry subresource)

@@ -41,17 +41,17 @@
     ],
     "applicability": "applicable",
     "blocking": [],
-    "kinetics_ref": "kin_gov76dlhqe2n7pbiag4qvkt5km",
+    "kinetics_ref": "kin_ayvnofjqqd4qdvrj56slvicaau",
     "physically_eligible": true,
     "reasons": []
    },
    "chebyshev": null,
-   "created_at": "2026-10-05T19:00:46.170278",
+   "created_at": "2026-10-13T14:22:28.119523",
    "degeneracy": null,
    "degeneracy_convention": "unknown",
    "determination": {
     "channel_key": null,
-    "determination_ref": "kdet_nczb3sgtjjabxhqeq3dg5ulvri",
+    "determination_ref": "kdet_naptmf2xgtc2lyvobypsw3xqhq",
     "direction": "forward",
     "network_ref": null,
     "target_kind": "whole_reaction",
@@ -65,7 +65,7 @@
    "has_falloff": false,
    "id_rank": 1,
    "is_third_body": false,
-   "kinetics_ref": "kin_gov76dlhqe2n7pbiag4qvkt5km",
+   "kinetics_ref": "kin_ayvnofjqqd4qdvrj56slvicaau",
    "model_kind": "modified_arrhenius",
    "network_channel_ref": null,
    "network_solve_ref": null,
@@ -143,17 +143,17 @@
     ],
     "applicability": "applicable",
     "blocking": [],
-    "kinetics_ref": "kin_tdhlpeysndrmfdzw77d4bix37q",
+    "kinetics_ref": "kin_klwul3i3iyb6ka6cxlsfkbyktq",
     "physically_eligible": true,
     "reasons": []
    },
    "chebyshev": null,
-   "created_at": "2026-10-05T19:00:46.170278",
+   "created_at": "2026-10-13T14:22:28.119523",
    "degeneracy": null,
    "degeneracy_convention": "unknown",
    "determination": {
     "channel_key": null,
-    "determination_ref": "kdet_7numzmql2o3slc25unzbx7srhi",
+    "determination_ref": "kdet_6plugufp35y35ex34fqoe5qdhe",
     "direction": "forward",
     "network_ref": null,
     "target_kind": "whole_reaction",
@@ -167,7 +167,7 @@
    "has_falloff": false,
    "id_rank": 2,
    "is_third_body": false,
-   "kinetics_ref": "kin_tdhlpeysndrmfdzw77d4bix37q",
+   "kinetics_ref": "kin_klwul3i3iyb6ka6cxlsfkbyktq",
    "model_kind": "modified_arrhenius",
    "network_channel_ref": null,
    "network_solve_ref": null,
@@ -208,19 +208,19 @@
  "decision": {
   "administrative_first": {
    "basis": "administrative order among unresolved first-front alternatives; not a claim that the record is method-superior",
-   "determination_ref": "kdet_7numzmql2o3slc25unzbx7srhi"
+   "determination_ref": "kdet_6plugufp35y35ex34fqoe5qdhe"
   },
   "administrative_order": [
-   "kdet_7numzmql2o3slc25unzbx7srhi",
-   "kdet_nczb3sgtjjabxhqeq3dg5ulvri"
+   "kdet_6plugufp35y35ex34fqoe5qdhe",
+   "kdet_naptmf2xgtc2lyvobypsw3xqhq"
   ],
   "basis": "no registered rule compares these eligible candidates; they are unranked, not equally accurate",
   "cycles": [],
   "edges": [],
   "fronts": [
    [
-    "kdet_7numzmql2o3slc25unzbx7srhi",
-    "kdet_nczb3sgtjjabxhqeq3dg5ulvri"
+    "kdet_6plugufp35y35ex34fqoe5qdhe",
+    "kdet_naptmf2xgtc2lyvobypsw3xqhq"
    ]
   ],
   "opposing_pairs": [],
@@ -232,15 +232,14 @@
    {
     "applied": false,
     "reasons": [
-     "comparator_protocol_unverified: Zhang 2009 Table 2 marks B3LYP (4.28 / 4.23 / 8.49 / 3.25 / 2.02) as the authors' own 6-311+G(3df,2p) calculation, but all five numbers are identical to the B3LYP/MG3S values Zhao-Gonzalez-Garcia-Truhlar printed in 2005 (jp045141s Tables 4 and 5, including the uncorrected 4.28 total). A recomputation in another basis would not reproduce five columns to 0.01 kcal/mol. The paper therefore does not establish an XYG3 versus B3LYP comparison in one basis set.",
-     "only_aggregate_evidence: Zhang 2009 and its SI give subset mean unsigned errors only. The SI holds heats of formation (Table S1) and no per-reaction XYG3 barrier heights, so no member-by-member advantage can be checked; the rule would extend subset-level evidence to each listed member.",
-     "reference_geometry_not_expressible: Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry.",
+     "reference_geometry_not_expressible: Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry, so TCKDB cannot record which geometry a stored barrier used. Unresolved. Owner decision of 2026-10-13 was to keep the rule inactive for now; the choice between (a) a schema change that records the geometry level and (b) accepting it as a stated limitation has not been made. Recording the geometry would let the rule check that a record matches the benchmark protocol; it would not widen the evidence beyond QCISD/MG3 geometries.",
+     "owner_sign_off_not_given: No owner or curator has accepted the scoped claim (the scoped_claim block of the manifest file, which the downloadable decision manifest does not carry) as the evidence for an active rule. Not given as of 2026-10-13.",
+     "member_level_treatment_undecided: The rule would apply a subset-level result to each listed member, but the per-barrier data show B3LYP closer than XYG3 on 7 of the 76 barriers (HT11 reverse, HT16 forward, HT19 forward and reverse, NHT15 reverse, NHT17 reverse, NHT19 forward). Whether those members are excluded, flagged or covered is undecided; the owner has not chosen.",
      "declared_energy_level_not_verifiable_from_calculations: A kinetics record can declare the electronic method and basis of its energies (kinetics.energy_level_of_theory_id) and the rule reads it. A declaration cannot be verified from the record's calculations, because supporting calculations and source links carry no role saying which side of the barrier (transition state, reactants, products) they cover, so they can only corroborate or contradict it.",
-     "correction_changes_a_cited_total: The 2006 correction (jp061040d) changes the printed totals: B3LYP non-HT(38) 4.34 -> 4.58 and all(76) 4.28 -> 4.40. Zhang 2009 prints the uncorrected 4.28, so the paper's all-76 gap to B3LYP is 3.26 as printed and 3.38 corrected. Subset columns are unaffected.",
      "not approved for activation by an owner or curator"
     ],
     "rule_id": "K-XYG3-B3LYP-BARRIER",
-    "rule_version": "0.2.0",
+    "rule_version": "0.3.0",
     "why": "rule_status_inactive"
    },
    {
@@ -289,7 +288,7 @@
     "evidence_limits": [
      {
       "id": "aggregate_not_per_member",
-      "text": "Mean unsigned errors over a subset do not say XYG3 beats B3LYP for any particular reaction."
+      "text": "Mean unsigned errors over a subset do not say XYG3 beats B3LYP for any particular reaction; B3LYP is closer on 7 of the 76 barriers (ZHANG_2010_JCP_SI)."
      },
      {
       "id": "single_geometry",
@@ -319,11 +318,10 @@
      "a zero-point-corrected barrier"
     ],
     "inactive_reasons": [
-     "comparator_protocol_unverified: Zhang 2009 Table 2 marks B3LYP (4.28 / 4.23 / 8.49 / 3.25 / 2.02) as the authors' own 6-311+G(3df,2p) calculation, but all five numbers are identical to the B3LYP/MG3S values Zhao-Gonzalez-Garcia-Truhlar printed in 2005 (jp045141s Tables 4 and 5, including the uncorrected 4.28 total). A recomputation in another basis would not reproduce five columns to 0.01 kcal/mol. The paper therefore does not establish an XYG3 versus B3LYP comparison in one basis set.",
-     "only_aggregate_evidence: Zhang 2009 and its SI give subset mean unsigned errors only. The SI holds heats of formation (Table S1) and no per-reaction XYG3 barrier heights, so no member-by-member advantage can be checked; the rule would extend subset-level evidence to each listed member.",
-     "reference_geometry_not_expressible: Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry.",
+     "reference_geometry_not_expressible: Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry, so TCKDB cannot record which geometry a stored barrier used. Unresolved. Owner decision of 2026-10-13 was to keep the rule inactive for now; the choice between (a) a schema change that records the geometry level and (b) accepting it as a stated limitation has not been made. Recording the geometry would let the rule check that a record matches the benchmark protocol; it would not widen the evidence beyond QCISD/MG3 geometries.",
+     "owner_sign_off_not_given: No owner or curator has accepted the scoped claim (the scoped_claim block of the manifest file, which the downloadable decision manifest does not carry) as the evidence for an active rule. Not given as of 2026-10-13.",
+     "member_level_treatment_undecided: The rule would apply a subset-level result to each listed member, but the per-barrier data show B3LYP closer than XYG3 on 7 of the 76 barriers (HT11 reverse, HT16 forward, HT19 forward and reverse, NHT15 reverse, NHT17 reverse, NHT19 forward). Whether those members are excluded, flagged or covered is undecided; the owner has not chosen.",
      "declared_energy_level_not_verifiable_from_calculations: A kinetics record can declare the electronic method and basis of its energies (kinetics.energy_level_of_theory_id) and the rule reads it. A declaration cannot be verified from the record's calculations, because supporting calculations and source links carry no role saying which side of the barrier (transition state, reactants, products) they cover, so they can only corroborate or contradict it.",
-     "correction_changes_a_cited_total: The 2006 correction (jp061040d) changes the printed totals: B3LYP non-HT(38) 4.34 -> 4.58 and all(76) 4.28 -> 4.40. Zhang 2009 prints the uncorrected 4.28, so the paper's all-76 gap to B3LYP is 3.26 as printed and 3.38 corrected. Subset columns are unaffected.",
      "not approved for activation by an owner or curator"
     ],
     "interpretation": "A subset mean-error comparison supports an expected-performance judgment about the classical barrier within the audited reaction set. It is not a per-reaction guarantee, a per-record uncertainty, a statement about the rate's other contributions, or a curator recommendation.",
@@ -331,24 +329,20 @@
      "activation_approved": false,
      "activation_blockers": [
       {
-       "id": "comparator_protocol_unverified",
-       "text": "Zhang 2009 Table 2 marks B3LYP (4.28 / 4.23 / 8.49 / 3.25 / 2.02) as the authors' own 6-311+G(3df,2p) calculation, but all five numbers are identical to the B3LYP/MG3S values Zhao-Gonzalez-Garcia-Truhlar printed in 2005 (jp045141s Tables 4 and 5, including the uncorrected 4.28 total). A recomputation in another basis would not reproduce five columns to 0.01 kcal/mol. The paper therefore does not establish an XYG3 versus B3LYP comparison in one basis set."
-      },
-      {
-       "id": "only_aggregate_evidence",
-       "text": "Zhang 2009 and its SI give subset mean unsigned errors only. The SI holds heats of formation (Table S1) and no per-reaction XYG3 barrier heights, so no member-by-member advantage can be checked; the rule would extend subset-level evidence to each listed member."
-      },
-      {
        "id": "reference_geometry_not_expressible",
-       "text": "Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry."
+       "text": "Every benchmark energy is a single point at the Truhlar QCISD/MG3 reference geometry. A TCKDB protocol declaration can say the geometry was optimized at another level, but not which; it cannot show a record used the benchmark geometry, so TCKDB cannot record which geometry a stored barrier used. Unresolved. Owner decision of 2026-10-13 was to keep the rule inactive for now; the choice between (a) a schema change that records the geometry level and (b) accepting it as a stated limitation has not been made. Recording the geometry would let the rule check that a record matches the benchmark protocol; it would not widen the evidence beyond QCISD/MG3 geometries."
+      },
+      {
+       "id": "owner_sign_off_not_given",
+       "text": "No owner or curator has accepted the scoped claim (the scoped_claim block of the manifest file, which the downloadable decision manifest does not carry) as the evidence for an active rule. Not given as of 2026-10-13."
+      },
+      {
+       "id": "member_level_treatment_undecided",
+       "text": "The rule would apply a subset-level result to each listed member, but the per-barrier data show B3LYP closer than XYG3 on 7 of the 76 barriers (HT11 reverse, HT16 forward, HT19 forward and reverse, NHT15 reverse, NHT17 reverse, NHT19 forward). Whether those members are excluded, flagged or covered is undecided; the owner has not chosen."
       },
       {
        "id": "declared_energy_level_not_verifiable_from_calculations",
        "text": "A kinetics record can declare the electronic method and basis of its energies (kinetics.energy_level_of_theory_id) and the rule reads it. A declaration cannot be verified from the record's calculations, because supporting calculations and source links carry no role saying which side of the barrier (transition state, reactants, products) they cover, so they can only corroborate or contradict it."
-      },
-      {
-       "id": "correction_changes_a_cited_total",
-       "text": "The 2006 correction (jp061040d) changes the printed totals: B3LYP non-HT(38) 4.34 -> 4.58 and all(76) 4.28 -> 4.40. Zhang 2009 prints the uncorrected 4.28, so the paper's all-76 gap to B3LYP is 3.26 as printed and 3.38 corrected. Subset columns are unaffected."
       }
      ],
      "barrier_height_count": 76,
@@ -360,7 +354,7 @@
      "evidence_limits": [
       {
        "id": "aggregate_not_per_member",
-       "text": "Mean unsigned errors over a subset do not say XYG3 beats B3LYP for any particular reaction."
+       "text": "Mean unsigned errors over a subset do not say XYG3 beats B3LYP for any particular reaction; B3LYP is closer on 7 of the 76 barriers (ZHANG_2010_JCP_SI)."
       },
       {
        "id": "single_geometry",
@@ -383,18 +377,22 @@
        "text": "A better classical barrier is not a better rate; the rule is an expected-performance inference."
       }
      ],
-     "manifest_version": "0.3.0",
+     "manifest_version": "0.4.0",
      "member_count": 38,
-     "sha256": "1ce59bde6133851d0b92324e6a563f9d7b43c5e2813226fdc91dfcfef1aedd96",
+     "sha256": "e7f37fa3b726f632c3a264d8a62e216945eff5c8036fcf6afef7dfcafd976989",
      "sources": [
       "ZHANG_2009",
       "ZHANG_2009_SI",
       "ZHAO_2005",
       "ZHAO_2005_SI",
-      "ZHAO_2005_CORRECTION"
+      "ZHAO_2005_CORRECTION",
+      "ZHANG_2010_JCP",
+      "ZHANG_2010_JCP_SI",
+      "ZHANG_2010_CHEMCOMM",
+      "ZHANG_2011_PNAS"
      ]
     },
-    "manifest_sha256": "1ce59bde6133851d0b92324e6a563f9d7b43c5e2813226fdc91dfcfef1aedd96",
+    "manifest_sha256": "e7f37fa3b726f632c3a264d8a62e216945eff5c8036fcf6afef7dfcafd976989",
     "objective": "expected accuracy of the classical electronic barrier of a computed rate, for the audited HTBH38/04 and NHTBH38/04 benchmark reactions",
     "objective_key": "classical_electronic_barrier",
     "observable": "rate_coefficient",
@@ -402,7 +400,7 @@
     "statement": "For a computed rate coefficient whose classical electronic barrier is evaluated with XYG3, an expected-performance preference over the same barrier evaluated with B3LYP, restricted to the 38 reactions (76 barrier heights) of the HTBH38/04 and NHTBH38/04 benchmark sets, and only where the remaining treatment of the two rates is verified compatible. An expected-performance inference, not a validated accuracy of any individual rate.",
     "status": "inactive",
     "supersedes": [],
-    "version": "0.2.0"
+    "version": "0.3.0"
    },
    {
     "authority": "none",
@@ -474,20 +472,20 @@
  },
  "determinations": [
   {
-   "determination_ref": "kdet_7numzmql2o3slc25unzbx7srhi",
+   "determination_ref": "kdet_6plugufp35y35ex34fqoe5qdhe",
    "representation_count": 1,
    "representation_refs": [
-    "kin_tdhlpeysndrmfdzw77d4bix37q"
+    "kin_klwul3i3iyb6ka6cxlsfkbyktq"
    ],
-   "representative_ref": "kin_tdhlpeysndrmfdzw77d4bix37q"
+   "representative_ref": "kin_klwul3i3iyb6ka6cxlsfkbyktq"
   },
   {
-   "determination_ref": "kdet_nczb3sgtjjabxhqeq3dg5ulvri",
+   "determination_ref": "kdet_naptmf2xgtc2lyvobypsw3xqhq",
    "representation_count": 1,
    "representation_refs": [
-    "kin_gov76dlhqe2n7pbiag4qvkt5km"
+    "kin_ayvnofjqqd4qdvrj56slvicaau"
    ],
-   "representative_ref": "kin_gov76dlhqe2n7pbiag4qvkt5km"
+   "representative_ref": "kin_ayvnofjqqd4qdvrj56slvicaau"
   }
  ],
  "disclosures": {
@@ -547,7 +545,7 @@
     "inchi_key": "KSC000000000000000000003   ",
     "isotope_key": null,
     "multiplicity": 1,
-    "species_entry_ref": "spe_mlb6gell6csel7htdpgcfdpjla"
+    "species_entry_ref": "spe_txhwgsylpiv5pqqmzfpeobkiz4"
    },
    {
     "charge": 0,
@@ -556,7 +554,7 @@
     "inchi_key": "KSD000000000000000000004   ",
     "isotope_key": null,
     "multiplicity": 2,
-    "species_entry_ref": "spe_2ueoiae6kpbicn2ehvzhudlxei"
+    "species_entry_ref": "spe_zqe77t4ase3ai4aiv2bhupqoym"
    }
   ],
   "reactants": [
@@ -567,7 +565,7 @@
     "inchi_key": "KSA000000000000000000001   ",
     "isotope_key": null,
     "multiplicity": 2,
-    "species_entry_ref": "spe_vxavxegzef6ifssniw25e33bku"
+    "species_entry_ref": "spe_ieqowcgersfnxfglfpri7b6fbq"
    },
    {
     "charge": 0,
@@ -576,9 +574,9 @@
     "inchi_key": "KSB000000000000000000002   ",
     "isotope_key": null,
     "multiplicity": 1,
-    "species_entry_ref": "spe_6jo22wh3nrsz63sz54hxqbciyi"
+    "species_entry_ref": "spe_356keubwn543buff4ulo623qgq"
    }
   ],
-  "reaction_entry_ref": "rxe_y7azsdspn3t4ofkbmzixo3tdgi"
+  "reaction_entry_ref": "rxe_cc44a4zdzfxv7y2ze4ch4mromi"
  }
 }

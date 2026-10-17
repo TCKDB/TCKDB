@@ -544,6 +544,65 @@ mode treatment record).
 
 **Hard-fail signals:** `missing_required_identity`.
 
+### 9.3.1 `computed_ts_statmech_v1` (owner-scoped)
+
+A statmech row is owned by exactly one of a species entry or a transition-state entry (the
+`statmech_exactly_one_subject` CHECK). `computed_statmech` (v2) asks for a species entry first, so a
+transition-state-owned record could never pass its first required check and was badged `hard_failed` /
+`species_entry_missing` however complete it was. A hard fail is a discrete structural signal (section 8), and that record
+was internally consistent and validly owned, so the badge was a defect.
+
+**The rubric.** `computed_ts_statmech` v1 is `computed_statmech` v2 with one check swapped: `transition_state_entry_present`
+(required, "Statmech must be attached to a transition_state_entry.") replaces `species_entry_present`. Every other check is the
+*same spec object*, so the two cannot drift. It adds no transition-state-specific check: no imaginary-mode count, no
+reaction-coordinate designation, no IRC requirement.
+
+**Selection.** `statmech_rubric_for(statmech)` returns the TS rubric iff `species_entry_id is None and transition_state_entry_id is
+not None`, else `computed_statmech` v2 (a row with neither or both owners, impossible under the CHECK, keeps v2).
+`RUBRIC_REGISTRY["statmech"]` stays v2: it is the record-type default. The TS rubric lives in `OWNER_SCOPED_RUBRICS`, which the
+API vocabulary also reads. The structural hard-fail check differs only in its first line (`transition_state_entry_missing`, an
+existing `HardFailReason`); external symmetry, torsion dimension and required-role source calculations are shared code.
+
+**What does not change.**
+
+- *Species-owned records.* Rubric, version, check map, badge and completeness are byte-identical, and so are their stored machine
+  reviews' currency. The shared species rubric version is not bumped, because a shared bump would restale every species review
+  while nothing those records claim changed.
+- *Completeness is not certification.* `is_certified` is false on every evaluation.
+- *A geometry-validation fail stays advisory.* The shared warning-kind check and the shared hard-fail detector are reused unchanged.
+- *The badge describes evidence completeness, not validity.* A `well_supported` TS statmech badge says the record's provenance
+  fields are populated. Whether the transverse model suits a task is judged by `POST /scientific/statmech/select`.
+- *Task assessment does not inherit the badge's required-role checks.* `app.services.statmech_selection` never imports
+  `app.services.trust` (pinned by a test).
+- *The reproducibility rubric* has the same species-only assumption (`scientific_context`); it is a separate tier with a
+  separate decision (issue #760) and is not touched here.
+
+**Machine-review recipe.** A reviewer-family review is stamped with the rubric that actually evaluated the record
+(`active_rubric_versions_for_fragment`), not with the record type's default: `{"computed_ts_statmech_v1": "1"}` for a
+TS-owned statmech, `{"computed_statmech_v2": "2"}` for a species-owned one. `active_rubric_versions_for_record_type` is not
+owner-aware and remains the species default for statmech. A rubric absent from the active table raises (HTTP 500) instead of
+falling back.
+
+**Effect on stored reviews, and the rollout.**
+
+- No `record_machine_review` row is updated, deleted or appended by the change or by its deploy. Staleness is derived at read
+  time. After deploy, the latest reviewer-family review of each TS-owned statmech reads `stale`
+  (`context_hash_mismatch` and `rubric_versions_mismatch`), because its context was hashed under the species rubric. Species-owned
+  reviews stay `current`.
+- There is no automatic or bulk re-review. Re-review stays the existing per-record admin action; a fresh pass from the fake
+  producer would carry no information.
+- Runbook: (1) restore the latest backup into a scratch database; (2) with this code, run
+  `PYTHONPATH=. python scripts/ops/statmech_trust_owner_report.py --database-url <scratch url>` from `backend`; (3) read
+  `species_entry_unchanged`, the `transition_state_entry` rows of `badge_transitions` and `machine_review_currency`, and the
+  species rows of `machine_review_currency`. `species_entry_unchanged` checks **routing only**: it compares the live router
+  with the species rubric run explicitly, both from this code, so `false` is a defect in the change but `true` does not show
+  that the shared checks are untouched (an edit to a check both rubrics share moves both sides together). The check anchored
+  to the code on `main` is that **every `species_entry` row of `machine_review_currency` reads `current`**: stored species
+  reviews were made by the old code, so a moved species badge turns them stale (a species record with no stored review is not covered by this). The code-level guard for species badges is the
+  frozen-literal test `tests/services/test_trust_statmech_species_frozen.py`; (4) decide, then deploy. The report is read-only by construction (a
+  `REPEATABLE READ`, `READ ONLY` transaction; no apply mode) and prints counts only. Record the commit, the rubric name and
+  version, and the report output with the deploy.
+
 ### 9.4 `computed_transport_v1`
 
 **Purpose:** evidence checklist for a computed `transport` record.

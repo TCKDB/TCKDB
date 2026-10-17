@@ -100,7 +100,7 @@ def species_statmech(
     ``sort=`` is rejected (v0). ``include=assessments`` adds compact
     deterministic-trust and reproducibility freshness summaries, while
     ``include=trust`` adds the
-    ``computed_statmech_v1`` fragment per record; ``include=all`` does
+    record's computed statmech rubric fragment per record; ``include=all`` does
     not include trust.
 
     Statmech records are candidate products for the resolved form;

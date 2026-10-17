@@ -69,6 +69,12 @@ _REVIEWER_RECIPES = {
     "transition_state_entry": {"computed_transition_state_v3": "3"},
 }
 
+#: Owner-scoped reviewer rubrics: selected per record by the rubric that evaluated it, so
+#: they are keyed by public rubric name, not by record type. Each is still exactly one key.
+_OWNER_SCOPED_REVIEWER_RECIPES = {
+    "computed_ts_statmech_v1": {"computed_ts_statmech_v1": "1"},
+}
+
 #: What each scientific-check runner must store: exactly its own rubric.
 _ADVISORY_RECIPES = {
     (thermo_check.RUNNER, THERMO_CONSISTENCY_V1): {"thermo_consistency_v1": "1"},
@@ -97,7 +103,15 @@ def test_the_expected_tables_cover_every_consumer():
     """Premise: the parametrized cases below are not empty and miss no consumer."""
     assert set(_REVIEWER_RECIPES) == set(SUPPORTED_RECORD_TYPES)
     assert len(_REVIEWER_RECIPES) == 6
-    owned = {key for recipe in (*_REVIEWER_RECIPES.values(), *_ADVISORY_RECIPES.values()) for key in recipe}
+    owned = {
+        key
+        for recipe in (
+            *_REVIEWER_RECIPES.values(),
+            *_OWNER_SCOPED_REVIEWER_RECIPES.values(),
+            *_ADVISORY_RECIPES.values(),
+        )
+        for key in recipe
+    }
     assert owned == set(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
     assert UNRELATED_KEY not in ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
 
@@ -115,6 +129,32 @@ def test_reviewer_recipe_survives_an_unrelated_rubric(record_type, monkeypatch):
     result = _classify(stored, active)
     assert (result.state, result.stale_reasons) == (MachineReviewCurrencyState.current, ())
     # Control: had the consumer stored the unfiltered dict, the same change restales it.
+    control = _classify(unfiltered, dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS))
+    assert (control.state, control.stale_reasons) == (
+        MachineReviewCurrencyState.stale, (MachineReviewStaleReason.rubric_versions_mismatch,))
+
+
+def test_the_owner_scoped_reviewer_table_is_not_empty():
+    assert _OWNER_SCOPED_REVIEWER_RECIPES
+
+
+@pytest.mark.parametrize("rubric_name", sorted(_OWNER_SCOPED_REVIEWER_RECIPES))
+def test_owner_scoped_reviewer_recipe_survives_an_unrelated_rubric(rubric_name, monkeypatch):
+    """A transition-state-owned statmech review is stamped with its own one key, so it too is not restaled."""
+    from app.services.machine_review.admin_trigger import active_rubric_versions_for_fragment
+    from app.services.trust.models import TrustFragment
+
+    fragment = TrustFragment(trust_status="partial", evidence={"rubric": rubric_name})
+    stored = active_rubric_versions_for_fragment("statmech", fragment)
+    assert stored == _OWNER_SCOPED_REVIEWER_RECIPES[rubric_name]
+    unfiltered = dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
+
+    monkeypatch.setitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, UNRELATED_KEY, "1")
+
+    active = active_rubric_versions_for_fragment("statmech", fragment)
+    assert active == _OWNER_SCOPED_REVIEWER_RECIPES[rubric_name]
+    result = _classify(stored, active)
+    assert (result.state, result.stale_reasons) == (MachineReviewCurrencyState.current, ())
     control = _classify(unfiltered, dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS))
     assert (control.state, control.stale_reasons) == (
         MachineReviewCurrencyState.stale, (MachineReviewStaleReason.rubric_versions_mismatch,))

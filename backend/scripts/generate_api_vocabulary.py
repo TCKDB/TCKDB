@@ -295,7 +295,8 @@ def _trust_check_section(checks: tuple[RubricCheck, ...]) -> str:
         )
         + ". `weight` is that check's share of the completeness ratio.",
         "",
-        "Which rubric applies is decided by the kind of record: "
+        "Which rubric applies is decided by the kind of record, and for a statmech record by what owns it "
+        "(`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): "
         + ", ".join(f"`{name}` (v{version})" for name, version in rubrics)
         + ".",
         "",

@@ -31,7 +31,7 @@ from app.services.kinetics_selection.models import (
     KineticsSubject,
     NormalizedKinetics,
 )
-from app.services.kinetics_selection.rules import KineticsRule, default_rules
+from app.services.kinetics_selection.rules import KineticsRule, default_rules, replay_rules
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
     check_supported,
@@ -93,7 +93,7 @@ def build_manifest(result: KineticsAssessmentResult, decision: KineticsDecision)
 
 
 def _rules_for(manifest: dict[str, Any], rules: Sequence[KineticsRule] | None) -> tuple[KineticsRule, ...]:
-    registry = tuple(default_rules() if rules is None else rules)
+    registry = tuple(replay_rules() if rules is None else rules)
     available = {(r.rule_id, r.version): r for r in registry}
     used: list[KineticsRule] = []
     for entry in manifest["decision"]["rules"]:
@@ -185,8 +185,22 @@ def replay_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
     :raises ReplayError: when the manifest records assessment semantics this release does not carry.
     """
     try:
-        return describe_replay(
+        label = describe_replay(
             manifest, current=ASSESSMENT_SEMANTICS_VERSION, supported=SUPPORTED_ASSESSMENT_SEMANTICS
         )
     except UnsupportedAssessmentSemantics as exc:
         raise ReplayError(str(exc)) from exc
+    live = {(r.rule_id, r.version) for r in default_rules()}
+    superseded = [
+        f"{e['rule_id']} {e['version']}"
+        for e in manifest["decision"]["rules"]
+        if (e["rule_id"], e["version"]) not in live
+    ]
+    label["superseded_rule_versions"] = superseded
+    if superseded:
+        label["kind"] = "historical"
+        label["statement"] += (
+            f" It names rule version(s) kept for replay only ({', '.join(superseded)}); "
+            "a fresh selection uses the current versions."
+        )
+    return label

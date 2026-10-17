@@ -245,16 +245,18 @@ def ref_prefixes() -> tuple[RefPrefix, ...]:
 def rubric_checks() -> tuple[RubricCheck, ...]:
     """Every check name a ``trust.evidence.checks`` map can contain.
 
-    Read from :data:`app.services.trust.rubrics.RUBRIC_REGISTRY`, in the
+    Read from :data:`app.services.trust.rubrics.RUBRIC_REGISTRY` and then from
+    :data:`app.services.trust.rubrics.OWNER_SCOPED_RUBRICS` (rubrics a router selects
+    by who owns the record, which the registry does not list), in the
     rubric's own declared check order — which is also the key order of
     the serialised map, so the document and a real response list the
     checks the same way round.
     """
-    from app.services.trust.rubrics import RUBRIC_REGISTRY
+    from app.services.trust.rubrics import OWNER_SCOPED_RUBRICS, RUBRIC_REGISTRY
 
     seen: set[tuple[str, str]] = set()
     checks: list[RubricCheck] = []
-    for record_type, rubric in sorted(RUBRIC_REGISTRY.items()):
+    for record_type, rubric in (*sorted(RUBRIC_REGISTRY.items()), *OWNER_SCOPED_RUBRICS):
         for spec in rubric.checks:
             key = (rubric.name, spec.name)
             if key in seen:

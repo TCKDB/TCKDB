@@ -161,6 +161,9 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 _DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = _LEGAL_INCLUDE_TOKENS
 _TRUST_EAGER_LOADS = (
     selectinload(Statmech.species_entry),
+    # The owner-scoped rubric for a transition-state-owned record reads this relationship
+    # (``transition_state_entry_present``); without the load it is a lazy query per row.
+    selectinload(Statmech.transition_state_entry),
     selectinload(Statmech.frequency_scale_factor),
     selectinload(Statmech.torsions).selectinload(StatmechTorsion.coordinates),
     selectinload(Statmech.torsions)

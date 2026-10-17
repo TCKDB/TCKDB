@@ -62,9 +62,9 @@ Three things are deliberately absent:
 | --- | --- | --- |
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
-| Trust check names | 146 | `backend/app/services/trust/rubrics.py` |
+| Trust check names | 172 | `backend/app/services/trust/rubrics.py` |
 | Refusal codes a caller can receive | 313 | `backend/app/api/code_catalogue.py` |
-| **total** | **620** | |
+| **total** | **646** | |
 
 ## How a record is named
 
@@ -250,7 +250,7 @@ A check name is an assertion, so read it together with its value: `"irc_evidence
 
 `kind` decides what a failure costs: **required** — failing it stops the record reaching `well_supported`, however good the ratio is; **optional** — contributes to completeness; its absence blocks no badge; **warning** — informational; carries zero weight. `weight` is that check's share of the completeness ratio.
 
-Which rubric applies is decided by the kind of record: `computed_calculation` (v2), `computed_kinetics` (v2), `computed_statmech` (v2), `computed_thermo` (v2), `computed_transition_state` (v3), `computed_transport` (v2).
+Which rubric applies is decided by the kind of record, and for a statmech record by what owns it (`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): `computed_calculation` (v2), `computed_kinetics` (v2), `computed_statmech` (v2), `computed_thermo` (v2), `computed_transition_state` (v3), `computed_transport` (v2), `computed_ts_statmech` (v1).
 
 | Check | Rubric | Kind | Weight | What it asks |
 | --- | --- | --- | --- | --- |
@@ -270,11 +270,14 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `dipole_source_present_if_dipole_present` | `computed_transport` | optional | 1 | Computed dipole transport evidence should link a dipole source calculation. |
 | `epsilon_present` | `computed_transport` | optional | 1 | Lennard-Jones transport should include epsilon/k. |
 | `external_symmetry_present` | `computed_statmech` | optional | 1 | External symmetry number should be recorded. |
+| `external_symmetry_present` | `computed_ts_statmech` | optional | 1 | External symmetry number should be recorded. |
 | `extra_imaginary_modes_not_flagged` | `computed_transition_state` | warning | 1 | Recorded ADR 0012 structural flag: an extra imaginary mode at or above the protocol's tau (advisory). |
 | `freq_source_present` | `computed_statmech` | optional | 1 | Computed statmech should link a frequency source calculation when available. |
 | `freq_source_present` | `computed_thermo` | optional | 1 | Computed thermo should link a frequency source calculation when available. |
+| `freq_source_present` | `computed_ts_statmech` | optional | 1 | Computed statmech should link a frequency source calculation when available. |
 | `frequency_scale_factor_present_if_applicable` | `computed_statmech` | optional | 1 | Frequency-derived statmech should record a frequency scale factor. |
 | `frequency_scale_factor_present_if_applicable` | `computed_thermo` | optional | 1 | Frequency-derived thermo should record its frequency scale factor when schema support exists. |
+| `frequency_scale_factor_present_if_applicable` | `computed_ts_statmech` | optional | 1 | Frequency-derived statmech should record a frequency scale factor. |
 | `frequency_source_present` | `computed_kinetics` | optional | 1 | Frequency source calculations should be linked when available. |
 | `full_transport_source_present` | `computed_transport` | optional | 1 | Computed transport should link a full-transport source calculation when available. |
 | `geometry_validation_not_failed_for_source_calculations` | `computed_kinetics` | warning | 1 | Source calculation geometry validation is warning (advisory). |
@@ -282,6 +285,7 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `geometry_validation_not_failed_for_source_calculations` | `computed_thermo` | warning | 1 | Source calculation geometry validation is warning (advisory). |
 | `geometry_validation_not_failed_for_source_calculations` | `computed_transition_state` | warning | 1 | Source calculation geometry validation is warning (advisory). |
 | `geometry_validation_not_failed_for_source_calculations` | `computed_transport` | warning | 1 | Source calculation geometry validation is warning (advisory). |
+| `geometry_validation_not_failed_for_source_calculations` | `computed_ts_statmech` | warning | 1 | Source calculation geometry validation is warning (advisory). |
 | `geometry_validation_passed_or_warning` | `computed_calculation` | warning | 1 | Geometry validation status is warning (advisory). |
 | `geometry_validation_present` | `computed_calculation` | optional | 1 | Opt calculations should carry geometry-validation evidence. |
 | `geometry_validation_present_for_source_calculations` | `computed_kinetics` | optional | 1 | Strong source calculations should carry geometry-validation evidence. |
@@ -289,12 +293,14 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `geometry_validation_present_for_source_calculations` | `computed_thermo` | optional | 1 | Strong source calculations should carry geometry-validation evidence. |
 | `geometry_validation_present_for_source_calculations` | `computed_transition_state` | optional | 1 | At least one opt/irc/path_search source calc should carry geometry validation. |
 | `geometry_validation_present_for_source_calculations` | `computed_transport` | optional | 1 | Strong source calculations should carry geometry-validation evidence. |
+| `geometry_validation_present_for_source_calculations` | `computed_ts_statmech` | optional | 1 | Strong source calculations should carry geometry-validation evidence. |
 | `imaginary_frequency_count_recorded` | `computed_transition_state` | optional | 1 | Representative freq result should record n_imag. |
 | `imaginary_frequency_value_present` | `computed_transition_state` | optional | 1 | Representative freq result should record the imaginary-mode value (cm-1). |
 | `input_geometry_present` | `computed_calculation` | required | 1 | At least one input geometry must be linked. |
 | `irc_evidence_present` | `computed_kinetics` | optional | 1 | IRC evidence should be linked when available. |
 | `irc_evidence_present` | `computed_transition_state` | optional | 1 | IRC calculation present (additive only) -- this checks that an IRC calculation exists in the source set, not that structured pass/fail validation evidence was deposited. |
 | `is_linear_present` | `computed_statmech` | optional | 1 | Linearity should be explicitly recorded. |
+| `is_linear_present` | `computed_ts_statmech` | optional | 1 | Linearity should be explicitly recorded. |
 | `kinetics_model_present` | `computed_kinetics` | required | 1 | Kinetics.model_kind must be set. |
 | `level_of_theory_present` | `computed_calculation` | required | 1 | Calculation must resolve to a level_of_theory row. |
 | `lj_pair_present_if_applicable` | `computed_transport` | optional | 1 | Lennard-Jones transport should include both sigma and epsilon/k. |
@@ -305,11 +311,13 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `no_frequency_result_lacks_an_imaginary_mode` | `computed_transition_state` | warning | 1 | No attached frequency result with a recorded count reports zero imaginary modes (advisory; the badge does not certify the saddle). |
 | `opt_source_present` | `computed_statmech` | optional | 1 | Computed statmech should link an optimization source calculation when available. |
 | `opt_source_present` | `computed_thermo` | optional | 1 | Computed thermo should link an optimization source calculation when available. |
+| `opt_source_present` | `computed_ts_statmech` | optional | 1 | Computed statmech should link an optimization source calculation when available. |
 | `output_geometry_present` | `computed_calculation` | optional | 1 | Geometry-producing calculation types should record an output geometry. |
 | `parameters_parsed` | `computed_calculation` | optional | 1 | ESS execution parameters should be parsed (EAV rows or JSONB snapshot). |
 | `path_search_evidence_present` | `computed_kinetics` | optional | 1 | Path-search evidence should be linked when available. |
 | `path_search_evidence_present` | `computed_transition_state` | optional | 1 | Path-search (NEB/GSM/scan parent) evidence should be linked when available. |
 | `point_group_present` | `computed_statmech` | optional | 1 | Point group should be recorded when known. |
+| `point_group_present` | `computed_ts_statmech` | optional | 1 | Point group should be recorded when known. |
 | `polarizability_present` | `computed_transport` | optional | 1 | Polarizability evidence should be populated when this representation is present. |
 | `polarizability_source_present_if_polarizability_present` | `computed_transport` | optional | 1 | Computed polarizability transport evidence should link a polarizability source calculation. |
 | `product_energy_sources_present` | `computed_kinetics` | optional | 1 | Product energy source calculations should cover all loaded products. |
@@ -321,9 +329,11 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `result_block_present` | `computed_calculation` | required | 1 | Calculation must have the result block matching its type (sp/opt/freq/irc/scan/path_search). |
 | `review_not_rejected_or_deprecated_if_applicable` | `computed_transition_state` | required | 1 | TS-entry review/deprecation checks apply once record_review lookup is wired. |
 | `rigid_rotor_kind_present` | `computed_statmech` | required | 1 | Rigid rotor treatment should be recorded. |
+| `rigid_rotor_kind_present` | `computed_ts_statmech` | required | 1 | Rigid rotor treatment should be recorded. |
 | `rotational_relaxation_present` | `computed_transport` | optional | 1 | Rotational-relaxation evidence should be populated when present. |
 | `scalar_thermo_present` | `computed_thermo` | optional | 1 | Scalar H298 or S298 values should be populated when using scalar thermo. |
 | `scan_source_present_if_torsions_present` | `computed_statmech` | optional | 1 | Torsion-bearing statmech should link scan source evidence. |
+| `scan_source_present_if_torsions_present` | `computed_ts_statmech` | optional | 1 | Torsion-bearing statmech should link scan source evidence. |
 | `scf_stability_present_if_claimed` | `computed_calculation` | optional | 1 | SCF stability evidence should be attached when claimed. |
 | `sigma_epsilon_pair_consistent` | `computed_transport` | required | 1 | sigma_angstrom and epsilon_over_k_k must be both present or both absent. |
 | `sigma_present` | `computed_transport` | optional | 1 | Lennard-Jones transport should include sigma. |
@@ -333,41 +343,52 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `source_calculation_artifacts_present` | `computed_thermo` | optional | 1 | At least one linked source calculation should retain an artifact. |
 | `source_calculation_artifacts_present` | `computed_transition_state` | optional | 1 | At least one source calculation should retain an artifact. |
 | `source_calculation_artifacts_present` | `computed_transport` | optional | 1 | At least one linked source calculation should retain an artifact. |
+| `source_calculation_artifacts_present` | `computed_ts_statmech` | optional | 1 | At least one linked source calculation should retain an artifact. |
 | `source_calculation_has_non_hard_failed_evidence` | `computed_statmech` | optional | 1 | Linked source calculations should avoid deterministic hard-fail signals. |
 | `source_calculation_has_non_hard_failed_evidence` | `computed_thermo` | optional | 1 | Linked source calculations should avoid deterministic hard-fail signals. |
 | `source_calculation_has_non_hard_failed_evidence` | `computed_transition_state` | required | 2 | At least one source calculation must avoid deterministic hard-fail signals. |
 | `source_calculation_has_non_hard_failed_evidence` | `computed_transport` | optional | 1 | Linked source calculations should avoid deterministic hard-fail signals. |
+| `source_calculation_has_non_hard_failed_evidence` | `computed_ts_statmech` | optional | 1 | Linked source calculations should avoid deterministic hard-fail signals. |
 | `source_calculation_lot_present` | `computed_kinetics` | required | 1 | All linked source calculations should resolve to level_of_theory. |
 | `source_calculation_lot_present` | `computed_statmech` | required | 1 | All linked source calculations should resolve to level_of_theory. |
 | `source_calculation_lot_present` | `computed_thermo` | required | 1 | All linked source calculations should resolve to level_of_theory. |
 | `source_calculation_lot_present` | `computed_transition_state` | required | 1 | Every source calculation must resolve to a level_of_theory. |
 | `source_calculation_lot_present` | `computed_transport` | optional | 1 | All linked source calculations should resolve to level_of_theory. |
+| `source_calculation_lot_present` | `computed_ts_statmech` | required | 1 | All linked source calculations should resolve to level_of_theory. |
 | `source_calculation_result_blocks_present` | `computed_kinetics` | optional | 1 | Linked source calculations should have their expected result blocks. |
 | `source_calculation_result_blocks_present` | `computed_statmech` | optional | 1 | Linked source calculations should have their expected result blocks. |
 | `source_calculation_result_blocks_present` | `computed_thermo` | optional | 1 | Linked source calculations should have their expected result blocks. |
 | `source_calculation_result_blocks_present` | `computed_transport` | optional | 1 | Linked source calculations should have their expected result blocks. |
+| `source_calculation_result_blocks_present` | `computed_ts_statmech` | optional | 1 | Linked source calculations should have their expected result blocks. |
 | `source_calculation_software_present` | `computed_kinetics` | optional | 1 | All linked source calculations should declare software_release. |
 | `source_calculation_software_present` | `computed_statmech` | optional | 1 | All linked source calculations should declare software_release. |
 | `source_calculation_software_present` | `computed_thermo` | optional | 1 | All linked source calculations should declare software_release. |
 | `source_calculation_software_present` | `computed_transition_state` | optional | 1 | Every source calculation should declare a software_release. |
 | `source_calculation_software_present` | `computed_transport` | optional | 1 | All linked source calculations should declare software_release. |
+| `source_calculation_software_present` | `computed_ts_statmech` | optional | 1 | All linked source calculations should declare software_release. |
 | `source_calculation_workflow_tool_present` | `computed_statmech` | optional | 1 | Statmech or at least one source calc should declare workflow-tool release metadata. |
 | `source_calculation_workflow_tool_present` | `computed_thermo` | optional | 1 | Thermo or at least one source calc should declare workflow-tool release metadata. |
 | `source_calculation_workflow_tool_present` | `computed_transition_state` | optional | 1 | At least one source calculation should declare a workflow_tool_release. |
 | `source_calculation_workflow_tool_present` | `computed_transport` | optional | 1 | Transport or at least one source calc should declare workflow-tool release metadata. |
+| `source_calculation_workflow_tool_present` | `computed_ts_statmech` | optional | 1 | Statmech or at least one source calc should declare workflow-tool release metadata. |
 | `source_calculations_present` | `computed_kinetics` | required | 1 | At least one kinetics_source_calculation row should support computed kinetics. |
 | `source_calculations_present` | `computed_statmech` | required | 1 | At least one statmech_source_calculation row should support computed statmech. |
 | `source_calculations_present` | `computed_thermo` | required | 1 | At least one thermo_source_calculation row should support computed thermo. |
 | `source_calculations_present` | `computed_transport` | optional | 1 | At least one transport_source_calculation row should support computed transport. |
+| `source_calculations_present` | `computed_ts_statmech` | required | 1 | At least one statmech_source_calculation row should support computed statmech. |
 | `sp_or_composite_source_present` | `computed_statmech` | optional | 1 | Computed statmech may link single-point or composite supporting evidence. |
+| `sp_or_composite_source_present` | `computed_ts_statmech` | optional | 1 | Computed statmech may link single-point or composite supporting evidence. |
 | `sp_or_composite_source_present_if_applicable` | `computed_thermo` | optional | 1 | Computed thermo should link single-point or composite energy evidence when applicable. |
 | `species_entry_present` | `computed_statmech` | required | 1 | Statmech must be attached to a species_entry. |
 | `species_entry_present` | `computed_thermo` | required | 1 | Thermo must be attached to a species_entry. |
 | `species_entry_present` | `computed_transport` | required | 1 | Transport must be attached to a species_entry. |
 | `statmech_not_rejected_or_deprecated_if_applicable` | `computed_statmech` | optional | 1 | Statmech rejection/deprecation checks apply once modeled. |
+| `statmech_not_rejected_or_deprecated_if_applicable` | `computed_ts_statmech` | optional | 1 | Statmech rejection/deprecation checks apply once modeled. |
 | `statmech_origin_is_computed` | `computed_statmech` | required | 1 | Statmech.scientific_origin should be computed for this rubric. |
+| `statmech_origin_is_computed` | `computed_ts_statmech` | required | 1 | Statmech.scientific_origin should be computed for this rubric. |
 | `statmech_present` | `computed_thermo` | optional | 1 | Linked statmech evidence is expected when schema support exists. |
 | `statmech_treatment_present` | `computed_statmech` | required | 1 | Statmech treatment kind should be recorded. |
+| `statmech_treatment_present` | `computed_ts_statmech` | required | 1 | Statmech treatment kind should be recorded. |
 | `supporting_calculations_present` | `computed_transition_state` | required | 2 | At least one calculation should support this TS entry. |
 | `supporting_geometry_source_present` | `computed_transport` | optional | 1 | Computed transport should link supporting-geometry evidence when available. |
 | `temperature_range_present` | `computed_kinetics` | optional | 1 | Both tmin_k and tmax_k should be populated. |
@@ -379,9 +400,13 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `thermo_origin_is_computed` | `computed_thermo` | required | 1 | Thermo.scientific_origin should be computed for this rubric. |
 | `thermo_points_present` | `computed_thermo` | optional | 1 | Tabulated thermo should include at least one point with a thermo value. |
 | `torsion_definitions_present` | `computed_statmech` | optional | 1 | Recorded torsions should include torsion coordinate definitions. |
+| `torsion_definitions_present` | `computed_ts_statmech` | optional | 1 | Recorded torsions should include torsion coordinate definitions. |
 | `torsion_symmetry_recorded` | `computed_statmech` | optional | 1 | Recorded torsions should include symmetry numbers. |
+| `torsion_symmetry_recorded` | `computed_ts_statmech` | optional | 1 | Recorded torsions should include symmetry numbers. |
 | `torsions_recorded_if_hindered_rotor_treatment` | `computed_statmech` | optional | 1 | Hindered-rotor/statmech torsion treatments should include torsion rows. |
+| `torsions_recorded_if_hindered_rotor_treatment` | `computed_ts_statmech` | optional | 1 | Hindered-rotor/statmech torsion treatments should include torsion rows. |
 | `transition_state_entry_present` | `computed_transition_state` | required | 1 | The transition_state_entry record under evaluation is loaded. |
+| `transition_state_entry_present` | `computed_ts_statmech` | required | 1 | Statmech must be attached to a transition_state_entry. |
 | `transition_state_parent_present` | `computed_transition_state` | required | 1 | transition_state_entry must resolve to its parent transition_state. |
 | `transport_model_present` | `computed_transport` | required | 1 | Transport should expose at least one structured property representation. |
 | `transport_not_rejected_or_deprecated_if_applicable` | `computed_transport` | optional | 1 | Transport rejection/deprecation checks apply once modeled. |
@@ -398,6 +423,7 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `uncertainty_present` | `computed_kinetics` | optional | 1 | At least one uncertainty field should be populated. |
 | `uncertainty_present` | `computed_thermo` | optional | 1 | At least one thermo uncertainty field should be populated. |
 | `uses_projected_frequencies_recorded` | `computed_statmech` | optional | 1 | Projected-frequency handling should be explicitly recorded. |
+| `uses_projected_frequencies_recorded` | `computed_ts_statmech` | optional | 1 | Projected-frequency handling should be explicitly recorded. |
 | `workflow_tool_release_present` | `computed_calculation` | optional | 1 | Calculation should declare which workflow_tool_release orchestrated it. |
 | `workflow_tool_release_present` | `computed_kinetics` | optional | 1 | Kinetics or at least one source calc should declare workflow-tool release metadata. |
 

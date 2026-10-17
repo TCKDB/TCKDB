@@ -30,6 +30,7 @@ from app.services.trust.rubrics import (
     COMPUTED_THERMO_V2,
     COMPUTED_TRANSITION_STATE_V3,
     COMPUTED_TRANSPORT_V2,
+    COMPUTED_TS_STATMECH_V1,
     EXTERNAL_CP_COMPARISON_V2,
     GIBBS_SELF_CONSISTENCY_V1,
     HESS_CONSISTENCY_V1,
@@ -46,6 +47,8 @@ _ACTIVE_RUBRICS = (
     COMPUTED_STATMECH_V2,
     COMPUTED_TRANSPORT_V2,
     COMPUTED_TRANSITION_STATE_V3,
+    # The owner-scoped rubric for transition-state-owned statmech.
+    COMPUTED_TS_STATMECH_V1,
     # Phase C-E4: not a computed-trust rubric (checks=()), but it is part of
     # the machine-review recipe -- see the comment on _ACTIVE_RUBRICS in
     # app.services.machine_review.recipe.

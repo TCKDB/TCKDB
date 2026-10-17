@@ -36,6 +36,23 @@ unchanged.
 - A sweep test calls every `/scientific/*` route under `curated` against a world with a hidden instance of every gated type. Its
   baseline file lists today's known leaks; the per-family follow-ups remove them.
 
+## The XYG3 barrier rule's comparator record is corrected (2026-10-13)
+
+**Data change to an inactive rule; nothing selects differently.** Migration: none. New environment variable: none. No package
+version changes; no schema change.
+
+- Manifest `xyg3_b3lyp_barrier_manifest.yaml` is 0.4.0 (new pin) and the rule `K-XYG3-B3LYP-BARRIER` is 0.3.0, because a rule resting on a different audited manifest
+  is a new rule version. Rule 0.2.0 over the preserved manifest 0.3.0 (`xyg3_b3lyp_barrier_manifest_0_3_0.yaml`, unchanged
+  bytes) stays loadable **for replay only**, so a kinetics decision manifest recorded before this release still replays;
+  live selection uses 0.3.0. The rule stays **inactive** (`activation_approved: false`).
+- The B3LYP row of Zhang 2009 Table 2 is the 2005 Truhlar B3LYP/MG3S row, not 6-311+G(3df,2p). The same-basis comparison
+  (Zhang, Luo, Xu, J. Chem. Phys. 133, 104105 (2010)) gives a 76-barrier MAD of 1.02 for XYG3 against 4.54 kcal/mol for B3LYP at
+  6-311+G(3df,2p) and QCISD/MG3 geometries, XYG3 closer on 69 of 76 barriers (B3LYP closer on 7). The Table III HAT12 typo
+  (1.66 printed, 1.38 in the SI) is recorded. Four sources are SHA-256 pinned; no PDF is copied into the repository.
+- The comparator blocker is resolved. Geometry provenance is not: TCKDB cannot record which geometry a stored barrier used.
+  The owner chose to keep the rule inactive for now; whether to fix that with a schema change or accept it as a stated
+  limitation is undecided. The 7 barriers where B3LYP is closer have no treatment yet, and owner sign-off has not been given.
+
 ## Curated reads no longer name more records the curated profile hides (2026-10-12)
 
 **Narrowing under `profile=curated` only; completes the list left open by the previous entry.** Migration: none. New environment
@@ -76,6 +93,41 @@ variable: none. No package version changes; no schema change (OpenAPI golden unc
   approved-and-superseded row is refused too. Approving the superseding record is unaffected, and the supersession call itself
   (which writes `deprecated`) is unchanged.
 - Existing data is not touched. A superseded record left approved before this guard stays as it is until a curator deprecates it.
+
+## Transition-state-owned statmech is graded by its own rubric, not hard-failed (2026-10-13)
+
+**Trust correction; changes what readers see. Requires owner sign-off and a rollout step (below).** Migration: none (rubrics are
+code; no `record_machine_review` row is touched). New environment variable: none. No package version changes: no response-schema
+shape changes (OpenAPI golden moves only in one route description), so the package versions are not bumped.
+
+- **Defect.** A statmech record owned by a transition-state entry was graded by the species rubric, whose first required check is
+  "attached to a species entry". Every such record read `hard_failed` / `species_entry_missing` on `include=assessments` and
+  `include=trust` (detail, search, species read), however complete it was.
+- **Fix.** A new owner-scoped rubric, `computed_ts_statmech` v1, grades transition-state-owned statmech. It is `computed_statmech`
+  v2 with one check swapped (`transition_state_entry_present` replaces `species_entry_present`); every other check is the same
+  object. It adds no TS-specific check, certifies nothing, keeps an automated geometry fail advisory, and the statmech selection
+  package still never imports the trust layer. A TS-owned record's `assessments.deterministic_trust.rubric` /
+  `trust.evidence.rubric` become `computed_ts_statmech` / `computed_ts_statmech_v1` and its check map gains
+  `transition_state_entry_present` and loses `species_entry_present`.
+- **Species-owned records do not change**: rubric `computed_statmech` v2, check map, badge, completeness and the currency of their
+  stored machine reviews are byte-identical (the shared version is deliberately not bumped). Pinned by a frozen-expectation test
+  and by an equivalence test against the species rubric run directly.
+- **Machine review.** A review is now stamped with the rubric that actually evaluated the record. The reviewer-family recipe for a
+  TS-owned statmech is `{"computed_ts_statmech_v1": "1"}`. No stored review is rewritten or deleted. After deploy, the latest review
+  of each TS-owned statmech reads **stale** (`context_hash_mismatch`, `rubric_versions_mismatch`); species-owned reviews stay
+  current. There is no automatic or bulk re-review.
+- **Operator report (new, read-only).** `backend/scripts/ops/statmech_trust_owner_report.py` prints, per owner kind, how many
+  statmech records change badge and how, whether the species-owned records were routed to the other rubric (`species_entry_unchanged`, which checks routing only and
+  must be `true`), and which stored reviews become stale. Also read the species rows of `machine_review_currency`: every one must
+  be `current`, which is the check anchored to the code on `main`. It refuses to run without `--database-url` or `--use-configured-database` and runs in a
+  `REPEATABLE READ`, `READ ONLY` transaction; there is no apply mode.
+- **Rollout.** Restore the latest backup into a scratch database, run the report there with this code, read
+  `species_entry_unchanged`, that all species review rows are `current`, and the `transition_state_entry` rows, then deploy. Leave TS-owned reviews stale. Details:
+  `backend/docs/specs/automated_trust_layer.md` section 9.3.1.
+- The reproducibility rubric has the same species-only assumption for TS-owned statmech; that is a separate decision and is not
+  changed here (issue #760).
+- Generated: `docs/guides/api_vocabulary.md` (the new check name), the OpenAPI golden (one route description no longer names
+  `computed_statmech_v1`).
 
 ## Curated statmech reads no longer name calculations the curated profile hides (2026-10-12)
 

@@ -94,11 +94,43 @@ def test_the_published_numbers_and_the_correction_are_recorded_next_to_each_othe
     assert any(c["reason"].startswith("CH3 + FCl") for c in RAW["corrections_applied"])
 
 
-def test_the_five_papers_are_pinned_by_digest():
+def test_the_nine_sources_are_pinned_by_digest():
     ids = {s["id"] for s in RAW["sources"]}
-    assert ids == {"ZHANG_2009", "ZHANG_2009_SI", "ZHAO_2005", "ZHAO_2005_SI", "ZHAO_2005_CORRECTION"}
+    assert ids == {
+        "ZHANG_2009", "ZHANG_2009_SI", "ZHAO_2005", "ZHAO_2005_SI", "ZHAO_2005_CORRECTION",
+        "ZHANG_2010_JCP", "ZHANG_2010_JCP_SI", "ZHANG_2010_CHEMCOMM", "ZHANG_2011_PNAS",
+    }
     assert all(re.fullmatch(r"[0-9a-f]{64}", s["sha256"]) for s in RAW["sources"])
-    assert len({s["sha256"] for s in RAW["sources"]}) == 5
+    assert len({s["sha256"] for s in RAW["sources"]}) == 9
+    by_id = {s["id"]: s for s in RAW["sources"]}
+    assert by_id["ZHANG_2010_JCP"]["sha256"] == "f0df839629686b6ce88fdbb87f158e3eb5458131c682061ce5cf41b956340e73"
+    assert by_id["ZHANG_2010_JCP_SI"]["sha256"] == "8fdb70a5de8857ea97deaed77156bcb984b1471e2caa892ab430ac19dc9d2eb2"
+    assert re.fullmatch(r"[0-9a-f]{64}", by_id["ZHANG_2010_JCP_SI"]["contained_file_sha256"])
+
+
+def test_the_same_basis_comparison_and_its_table_typo_are_recorded_and_internally_consistent():
+    same_basis = RAW["aggregates"]["zhang_2010_jcp_table_3_b9_mad_kcal_mol"]
+    assert same_basis["XYG3"]["all_76"] == 1.02 and same_basis["B3LYP"]["all_76"] == 4.54
+    assert round(same_basis["B3LYP"]["all_76"] - same_basis["XYG3"]["all_76"], 2) == same_basis["same_basis_gap_all_76"]
+    assert same_basis["xyg3_closer_barriers"] + same_basis["b3lyp_closer_barriers"] == 76
+    # The subset MADs weight 12 + 16 + 10 + 38 = 76 barriers.
+    for method in ("XYG3", "B3LYP"):
+        m = same_basis[method]
+        total = (12 * m["HAT12"] + 16 * m["NS16"] + 10 * m["UM10"] + 38 * m["HT38"]) / 76
+        assert abs(total - m["all_76"]) < 0.01, method
+    typo = same_basis["printed_typo"]
+    assert (typo["printed"], typo["correct"]) == (1.66, 1.38) and same_basis["XYG3"]["HAT12"] == typo["correct"]
+    # The 2009 B3LYP row is not the same-basis one.
+    assert RAW["aggregates"]["zhang_2009_table_2_mad_kcal_mol"]["B3LYP"]["all_76"] != same_basis["B3LYP"]["all_76"]
+
+
+def test_the_scoped_claim_is_narrow_and_lists_what_it_does_not_license():
+    claim = RAW["scoped_claim"]
+    assert "69 of the 76" in claim["statement"] and "1.02" in claim["statement"] and "4.54" in claim["statement"]
+    assert {x["id"] for x in claim["does_not_license"]} == {
+        "single_barriers", "other_geometries", "other_bases", "zpe_tunnelling_rate_accuracy",
+        "reactions_outside_the_38", "mixed_basis_figures", "corrected_mg3s_total",
+    }
 
 
 # -- the manifest is not approved, and says why ---------------------------------------------------------
@@ -109,15 +141,23 @@ def test_it_loads_but_is_not_activatable_and_names_every_blocker():
     assert manifest.activation_approved is False and manifest.activatable is False
     assert manifest.curator_acceptance is None
     assert {b["id"] for b in manifest.activation_blockers} == {
-        "comparator_protocol_unverified",
-        "only_aggregate_evidence",
         "reference_geometry_not_expressible",
+        "owner_sign_off_not_given",
+        "member_level_treatment_undecided",
         "declared_energy_level_not_verifiable_from_calculations",
+    }
+    # Resolved blockers are history, not blockers: the comparator-basis one is resolved by the JCP 2010 same-basis data.
+    resolved = {b["id"]: b for b in RAW["status"]["resolved_blockers"]}
+    assert set(resolved) == {
+        "comparator_protocol_unverified",
+        "electronic_method_not_a_protocol_field",
+        "only_aggregate_evidence",
         "correction_changes_a_cited_total",
     }
+    assert "comparator_protocol_unverified" not in {b["id"] for b in manifest.activation_blockers}
     assert XYG3B3LYPBarrierRule(manifest).status == "inactive"
     reasons = XYG3B3LYPBarrierRule(manifest).inactive_reasons
-    assert len(reasons) == 6 and reasons[-1].startswith("not approved")
+    assert len(reasons) == 5 and reasons[-1].startswith("not approved")
 
 
 def test_a_document_that_claims_approval_must_carry_an_acceptance_and_no_blockers(monkeypatch):
@@ -174,8 +214,9 @@ def test_the_degenerate_flag_follows_the_species_and_the_identity_exchanges_say_
     assert flagged == same_species
     # The two complex-to-complex exchanges were once recorded as not degenerate while their species were identical.
     assert {"NHT08", "NHT10"} <= flagged
-    assert manifest.version == "0.3.0"
-    assert [h["version"] for h in RAW["manifest_history"]] == ["0.1.0", "0.2.0", "0.3.0"]
+    assert manifest.version == "0.4.0" and RAW["manifest_date"] == "2026-10-13"
+    assert [h["version"] for h in RAW["manifest_history"]] == ["0.1.0", "0.2.0", "0.3.0", "0.4.0"]
+    assert RAW["manifest_history"][-1]["date"] == "2026-10-13"
 
 
 @pytest.mark.parametrize("member_id,flag", [("NHT08", False), ("HT01", True)])
@@ -194,5 +235,16 @@ def test_the_energy_level_blocker_describes_the_field_that_exists_and_no_text_is
     assert "energy_level_of_theory_id" in text and "has no electronic method" not in text
     # The source and the rule's own output carry the plain characters; an entity can only come from a later display.
     reasons = " ".join(XYG3B3LYPBarrierRule(manifest).inactive_reasons)
-    assert "4.34 -> 4.58" in reasons
-    assert not re.search(r"&(gt|lt|amp|quot|#\d+);", reasons)
+    assert "QCISD/MG3" in reasons
+    resolved_text = " ".join(b["text"] for b in RAW["status"]["resolved_blockers"])
+    assert "4.34 -> 4.58" in resolved_text
+    assert not re.search(r"&(gt|lt|amp|quot|#\d+);", reasons + resolved_text)
+
+
+def test_the_geometry_blocker_does_not_claim_the_owner_chose_a_route():
+    text = " ".join(
+        next(b for b in RAW["status"]["activation_blockers"] if b["id"] == "reference_geometry_not_expressible")["text"].split()
+    )
+    assert "(a)" in text and "(b)" in text and "has not been made" in text
+    assert "would not widen the evidence beyond QCISD/MG3" in text
+    assert "until TCKDB can record" not in " ".join(str(RAW).split())
