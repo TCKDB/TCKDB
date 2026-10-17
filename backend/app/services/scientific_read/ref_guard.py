@@ -65,6 +65,7 @@ from app.schemas.reads.scientific_conformer import (
     ConformerObservationSiblingSummary,
 )
 from app.schemas.reads.scientific_geometry import (
+    GeometryIdentity,
     GeometryIdentityOwnerRef,
     GeometryProvenanceCalcLink,
     GeometryTransitionStateIdentity,
@@ -156,9 +157,11 @@ UNGATED_REVIEWABLE: Mapping[SubmissionRecordType, str] = {
     SubmissionRecordType.artifact: "contribution evidence; never carries a record_review row",
 }
 
-#: A ref is a whole-string value of a gated prefix and the 26-character body.
+#: A ref is a whole-string value of a gated prefix and the 26-character body. ``\Z``, not ``$``: ``$`` also matches
+#: before a trailing newline, which would let ``calc_...\n`` count as a ref in one place and not in another.
+#: Uppercase and suffixed look-alikes (``CALC_...``, ``calc_...x``) are not refs: no route resolves them.
 GATED_REF_RE = re.compile(
-    "^(?:" + "|".join(sorted((re.escape(p) for p in GATED_TYPES), key=len, reverse=True)) + ")_[a-z0-9]{26}$"
+    "^(?:" + "|".join(sorted((re.escape(p) for p in GATED_TYPES), key=len, reverse=True)) + r")_[a-z0-9]{26}\Z"
 )
 
 # ---------------------------------------------------------------------------
@@ -424,33 +427,70 @@ def _children(node: Any, *, top: bool):
         yield from node.items()
 
 
-#: Longest string the guard will read as a URL; a longer one is not a pointer.
-_MAX_URL_LENGTH = 500
 _URL_START = re.compile(r"^(?:[A-Za-z][A-Za-z0-9+.\-]*://|[/?#;])")
+#: How many times a component is percent-decoded looking for a stable form. Three layers is already hostile; a
+#: component still changing after this many is refused (fail closed), never kept.
+_MAX_DECODE_ROUNDS = 5
+
+
+def _is_url_valued(key: Any) -> bool:
+    """Fields registered as URL-valued: ``endpoint`` and ``*_endpoint``.
+
+    These are read as URLs whatever their length or content. The prose shortcut below applies to every OTHER field.
+    """
+    return isinstance(key, str) and (key == "endpoint" or key.endswith("_endpoint"))
+
+
+def _decode_stable(component: str) -> str:
+    """Percent-decode ``component`` until it stops changing; a form that never settles raises ``ValueError``."""
+    for _ in range(_MAX_DECODE_ROUNDS):
+        decoded = unquote(component)
+        if decoded == component:
+            return component
+        component = decoded
+    raise ValueError("percent-encoding does not settle")
 
 
 def _tokens(component: str) -> list[str]:
-    """The pieces of one URL component a ref can be: the component split on ``/``, ``;``, ``,`` and ``&``."""
-    return [t for t in re.split(r"[/;,&=]", unquote(unquote(component))) if t]
+    """The pieces of one URL component a ref can be: the decoded component split on ``/``, ``;``, ``,``, ``&``, ``=``
+    and whitespace (so a ref followed by an encoded newline still comes out as a ref)."""
+    return [t for t in re.split(r"[/;,&=\s]", _decode_stable(component)) if t]
 
 
-def _refs_named_by(value: str) -> list[str]:
+def _refs_named_by(value: str, *, url_valued: bool = False) -> list[str]:
     """Every gated ref a string value names.
 
-    A value is a ref when the whole string is one. It also names refs when it is a URL (an absolute ``scheme://``
-    URL, or a string that starts with ``/``, ``?``, ``#`` or ``;``) and any of these is one: a path segment
-    (``/calculations/{ref}/scan``, in the middle or at the end), a ``;params`` item, a query key or value, or the
-    fragment. Components are percent-decoded first, so ``%2F`` and ``%63alc_...`` do not hide one. Whitespace
-    makes a string prose, which is not read here; the sweep's raw-body check still catches a ref in prose.
+    A value is a ref when the whole string is one. It also names refs when it is a URL and any of these is one: a
+    path segment (``/calculations/{ref}/scan``, in the middle or at the end), a ``;params`` item, a query key or
+    value, or the fragment. Components are percent-decoded until stable, so ``%2F``, ``%63alc_...`` and
+    ``%2563alc_...`` do not hide one.
+
+    In a URL-valued field (``url_valued``: see :func:`_is_url_valued`) the value is parsed whatever its length or
+    whitespace; a value that cannot be parsed raises ``ValueError``, which the caller turns into
+    :class:`RefGuardUnplaceable` (fail closed). In any other field a string is read as a URL only when it looks like
+    one (an absolute ``scheme://`` URL, or a start of ``/``, ``?``, ``#`` or ``;``) and has no whitespace: whitespace
+    marks free text, which this reader leaves alone. A hidden ref inside free text is therefore NOT withheld at run
+    time; a field that can carry one needs its own rule. (The sweep's raw-body check finds such a leak in tests only.)
     """
     if len(value) <= 40 and GATED_REF_RE.match(value):
         return [value]
-    if len(value) > _MAX_URL_LENGTH or not _URL_START.match(value) or any(c.isspace() for c in value):
+    if not url_valued and (not _URL_START.match(value) or any(c.isspace() for c in value)):
         return []
-    parts = urlsplit(value)
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        if url_valued:
+            raise
+        return []  # free text that merely looks like a URL and is not one
     found: list[str] = []
     for component in (parts.path, parts.query, parts.fragment):
-        found.extend(t for t in _tokens(component) if GATED_REF_RE.match(t))
+        try:
+            tokens = _tokens(component)
+        except ValueError:
+            if url_valued:
+                raise
+            return []
+        found.extend(t for t in tokens if GATED_REF_RE.match(t))
     return found
 
 
@@ -465,7 +505,14 @@ def _collect_sites(root: BaseModel) -> list[tuple[tuple[_Frame, ...], str]]:
                 # site so that, if it is hidden, the guard fails closed instead of letting it through.
                 sites.append(((*path, (node, _DictKey(key))), key))
             if isinstance(value, str):
-                sites.extend(((*path, (node, key)), ref) for ref in _refs_named_by(value))
+                try:
+                    refs = _refs_named_by(value, url_valued=_is_url_valued(key))
+                except ValueError as exc:
+                    # A URL-valued field the guard cannot read is refused, never kept (owner decision D4).
+                    raise RefGuardUnplaceable(
+                        type(node).__name__, f"{_path_text((*path, (node, key)))}<unparseable URL>", "url"
+                    ) from exc
+                sites.extend(((*path, (node, key)), ref) for ref in refs)
             elif isinstance(value, (BaseModel, list, tuple, dict)):
                 stack.append((value, (*path, (node, key))))
     return sites
@@ -594,6 +641,41 @@ def _apply(actions: Collection[_Action]) -> None:
             del action.container[action.key]
 
 
+def _geometry_identity_is_empty(node: BaseModel) -> bool:
+    """A ``GeometryIdentity`` with no owner block and no listed owner says nothing; it is not emitted at all."""
+    return (
+        getattr(node, "species_entry", None) is None
+        and getattr(node, "transition_state_entry", None) is None
+        and not getattr(node, "ambiguous_owners", None)
+    )
+
+
+#: Blocks that must not survive as an empty shell once their contents were withheld: the field that holds one is set
+#: to ``None``, exactly as when there was never anything to show. A client cannot tell "every owner withheld" from
+#: "no owner" (hidden equals unknown). ``model -> is it empty``.
+COLLAPSE_WHEN_EMPTY: Mapping[type, Any] = {GeometryIdentity: _geometry_identity_is_empty}
+
+
+def _collapse_empty(sites: list[tuple[tuple[_Frame, ...], str]], hidden: set[str]) -> list[WithheldSite]:
+    done: list[WithheldSite] = []
+    seen: set[tuple[int, Any]] = set()
+    for path, ref in sites:
+        if ref not in hidden:
+            continue
+        for i in range(len(path) - 1):
+            container, key = path[i]
+            node = path[i + 1][0]
+            check = COLLAPSE_WHEN_EMPTY.get(type(node))
+            if check is None or not check(node) or not isinstance(container, BaseModel):
+                continue
+            if (id(container), key) in seen or not _field_traits(type(container), key)[0]:
+                continue
+            seen.add((id(container), key))
+            setattr(container, key, None)
+            done.append(WithheldSite(ref, _path_text(path[: i + 1]), "collapse_empty", type(node).__name__))
+    return done
+
+
 def withhold_in_model(
     session: Session,
     payload: BaseModel,
@@ -626,6 +708,7 @@ def withhold_in_model(
             planned.setdefault((id(action.container), action.key, action.kind), action)
     if apply:
         _apply(list(planned.values()))
+        report.sites.extend(_collapse_empty(sites, report.hidden))
     return report
 
 

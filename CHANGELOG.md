@@ -34,13 +34,14 @@ none. `tckdb-schemas` unchanged, `tckdb-client` 0.152.0.
 - **Wire change (OpenAPI):** `ScientificConformerObservationRecord.conformer_group` is nullable. Under `profile=curated`, a visible
   observation whose conformer group is not approved comes back with `conformer_group: null`; the observation itself stays visible.
   The default profile never returns null there.
-- A URL field whose last path segment is a hidden record's ref (for example an applied correction's `target_endpoint`) is
+- A URL field that names a hidden record's ref anywhere (every path segment, `;params`, query keys and values, the fragment;
+  percent-decoded until stable, absolute or relative; for example an applied correction's `target_endpoint`) is
   withheld together with the `*_ref` and `*_id` beside it, and a hidden record's id is removed from the aligned
   `supporting_calculation_ids` list when its `supporting_calculations` row is dropped.
 - Under `profile=curated`, `calculation.owner.kind` can be `transition_state_entry` with both owner blocks null (the owning entry is
   hidden). The default profile always carries exactly one owner.
-- Owner contracts that said "exactly one" now state the curated exception: `GeometryIdentity` (`kind: "transition_state_entry"` with
-  both owners null; `ambiguous_owners` can list fewer owners than were found) and statmech (`species` and `transition_state` both null
+- Owner contracts that said "exactly one" now state the curated exception: `GeometryIdentity` (`identity` is `null` when every
+  owner is hidden, the same as a geometry with no owner; `ambiguous_owners` can list fewer owners than were found, never none) and statmech (`species` and `transition_state` both null
   when the subject TS entry is hidden). `tckdb-client` 0.152.0 (this text is comment-only).
 - The conformer-observation page (`conformer_group` null) hides the basin breadcrumb and the "Conformer basin" row.
 - Species-entry `availability` flags, `calculation_count` and the `*_summary.ids` lists count only what the curated floor shows

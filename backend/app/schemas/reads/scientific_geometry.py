@@ -184,13 +184,15 @@ class GeometryIdentity(BaseModel):
     **Exceptions, under ``profile=curated`` only.** The ref guard withholds a
     block that names a hidden owner, so both statements above can fail:
 
-    * when the owning transition-state entry is hidden, ``kind`` is
-      ``"transition_state_entry"`` while *both* owner blocks are ``null``
-      ("the owner is not shown", not "no owner");
     * ``ambiguous_owners`` can list fewer owners than were found (the hidden
       ones are dropped), down to a single entry, and ``kind`` can be ``null``
       with only one owner listed. A curated list is therefore not the full set
-      of owners.
+      of owners;
+    * when *every* owner is hidden (one hidden owning transition-state entry,
+      or every owner of an ambiguous geometry), the whole ``identity`` is
+      ``null``, exactly as for a geometry with no owner. A client cannot tell
+      "every owner withheld" from "no owner": hidden is the same as unknown.
+      An identity is never emitted with no owner block and no listed owner.
 
     The default profile never does either.
     """

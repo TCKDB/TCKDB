@@ -389,8 +389,8 @@ def test_a_withheld_ref_takes_its_id_and_its_endpoint_with_it(client, db_session
 
 
 def _url_forms(hidden: str) -> dict[str, str]:
-    """Every shape a URL naming ``hidden`` can take. Each must be withheld."""
-    encoded = "%" + format(ord(hidden[0]), "02x") + hidden[1:]  # first character percent-encoded
+    """Every shape a URL naming ``hidden`` can take. Each must be withheld from a URL-valued field."""
+    first = format(ord(hidden[0]), "02x")  # the first character, percent-encoded below
     base = f"{BASE}/transition-state-entries"
     return {
         "last segment": f"{base}/{hidden}",
@@ -402,55 +402,125 @@ def _url_forms(hidden: str) -> dict[str, str]:
         "middle segment": f"{BASE}/calculations/{hidden}/scan",
         "short path": f"/c/{hidden}",
         "path params": f"{base};ref={hidden}",
+        "bare path params": f"{base};{hidden}",
         "encoded slash": f"/api%2Fv1%2Fscientific%2Fcalculations%2F{hidden}",
-        "encoded ref": f"{base}/{encoded}",
+        "encoded ref": f"{base}/%{first}{hidden[1:]}",
+        "double encoded ref": f"{base}/%25{first}{hidden[1:]}",
+        "triple encoded ref": f"{base}/%2525{first}{hidden[1:]}",
+        "trailing encoded newline": f"{base}/{hidden}%0a",
+        "trailing raw newline": f"{base}/{hidden}\n",
+        "whitespace in the query": f"{BASE}/calculations/{hidden}/scan?q=a b",
+        "longer than 500 characters": "/" + "a/" * 300 + hidden,
     }
 
 
-def _withhold_one(db_session, value):
+def _withhold_one(db_session, value, *, field="target_endpoint"):
     from pydantic import BaseModel
 
     class Row(BaseModel):
-        target_endpoint: str | None = None
+        target_endpoint: str | None = None  # registered as URL-valued (`*_endpoint`)
+        note: str | None = None  # free text
 
-    row = Row(target_endpoint=value)
+    row = Row(**{field: value})
     ref_guard.withhold_in_model(db_session, row, profile=CURATED)
-    return row.target_endpoint
+    return getattr(row, field)
 
 
 def test_a_url_naming_a_hidden_record_is_withheld_like_the_ref(client, db_session):
-    """Planner level: a field holding a URL that names a hidden ref anywhere is nulled, in every URL form.
+    """Planner level: a URL-valued field that names a hidden ref anywhere is nulled, in every URL form.
 
-    Query, fragment, absolute, middle-segment, short, ``;params`` and percent-encoded forms are all read (none is
-    emitted by an enabled family today; PR-2b's ``/full`` builds middle-segment URLs).
+    Query, fragment, absolute, middle-segment, short, ``;params`` (with and without ``=``), single, double and triple
+    percent-encoding, a trailing newline (raw and ``%0a``), whitespace in the query and a URL over 500 characters are
+    all read. None is emitted by an enabled family today; PR-2b's ``/full`` builds middle-segment URLs.
 
     Kills: reading only the last path segment; skipping the query or the fragment; keeping the 40-character shortcut
-    for short paths; not decoding ``%2F``/``%63``; not splitting ``;params``.
+    for short paths; decoding once; not splitting ``;params``; ``$`` instead of ``\\Z`` and not splitting on
+    whitespace; a length cap or a whitespace shortcut applied to a URL-valued field.
     """
     world = build_sweep_world(db_session)
     hidden = world.hidden["tse_h"].public_ref
     for form, url in _url_forms(hidden).items():
-        assert _withhold_one(db_session, url) is None, f"{form}: {url} was kept"
+        assert _withhold_one(db_session, url) is None, f"{form}: {url!r} was kept"
+
+
+def test_a_url_valued_field_that_cannot_be_read_fails_closed(client, db_session):
+    """A URL-valued field the guard cannot parse is refused (D4), never kept; free text that merely looks like a URL
+    is left alone.
+
+    Kills: swallowing the parse error in a URL-valued field; raising on free text; a percent-encoding that never settles
+    being kept (seven layers deep is refused, three is read).
+    """
+    world = build_sweep_world(db_session)
+    hidden = world.hidden["tse_h"].public_ref
+    for url in ("http://[::1", f"/x/%{'25' * 7}2F{hidden}"):
+        with pytest.raises(ref_guard.RefGuardUnplaceable):
+            _withhold_one(db_session, url)
+    assert _withhold_one(db_session, "http://[::1", field="note") == "http://[::1"
 
 
 def test_a_url_or_text_that_names_only_visible_records_is_kept(client, db_session):
     """The URL reader does not over-reach: visible refs, prose and look-alikes are left alone.
 
-    Kills: nulling every URL; reading prose that contains a hidden ref as a pointer (the sweep's raw-body check owns
-    that); matching a ref-shaped token with the wrong prefix or length.
+    Free-text fields keep the prose shortcut (whitespace means free text): a hidden ref there is NOT withheld at run
+    time, which is why the shortcut is scoped to free-text fields only and a URL-valued field never uses it.
+
+    Kills: nulling every URL; reading prose that contains a hidden ref as a pointer; matching a ref-shaped token with
+    the wrong prefix, length or a trailing suffix; removing the whitespace clause for free-text fields.
     """
     world = build_sweep_world(db_session)
     hidden, visible = world.hidden["tse_h"].public_ref, world.visible["tse_v"].public_ref
     kept = [
         f"{BASE}/transition-state-entries/{visible}",
         f"{BASE}/calculations/{visible}/scan?x={visible}#{visible}",
-        f"see {hidden} for details",  # prose: whitespace
         f"{BASE}/lookalike/lot_{hidden.split('_', 1)[1]}",  # an ungated prefix
         f"{BASE}/transition-state-entries/{hidden}x",  # wrong length
+        f"{BASE}/transition-state-entries/{hidden.upper()}",  # uppercase is not a ref: no route resolves it
         "/api/v1/scientific/meta/software",
     ]
     for value in kept:
         assert _withhold_one(db_session, value) == value, value
+    # Free text: whitespace marks prose, which is left alone in a free-text field only.
+    for value in (f"see {hidden} for details", f"{BASE}/calculations/{hidden}/scan?q=a b"):
+        assert _withhold_one(db_session, value, field="note") == value, value
+    assert _withhold_one(db_session, f"{BASE}/calculations/{hidden}/scan?q=a b") is None  # URL-valued: read anyway
+
+
+def test_an_identity_with_no_owner_left_is_not_emitted_at_all(client, db_session, login_as):
+    """When every owner of a geometry is withheld, ``identity`` is null, as for a geometry with no owner.
+
+    One hidden owning TS entry, and two hidden TS-entry owners of a shared geometry, both give ``identity: null`` (a
+    client cannot tell "all withheld" from "no owner"). An ambiguous geometry with one visible owner left keeps its
+    identity and lists only that owner. Exploratory is the control.
+
+    Kills: emitting ``{kind: null, ambiguous_owners: []}`` or a bare ``kind`` with no block; collapsing an identity
+    that still has a visible owner.
+    """
+    from tests.services.scientific_read._factories import make_geometry, make_transition_state_entry
+
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+    tse_h2 = make_transition_state_entry(db_session, transition_state=world.visible["ts_v"], multiplicity=6)
+    shared = make_geometry(db_session)
+    from tests.services.scientific_read._factories import attach_output_geometry
+
+    for tse in (world.hidden["tse_h"], tse_h2):
+        calc = make_calculation(db_session, type=CalculationType.sp, transition_state_entry_id=tse.id)
+        attach_output_geometry(db_session, calculation=calc, geometry=shared)
+        set_review(db_session, record_type=R.calculation, record_id=calc.id, status=APPROVED)
+
+    def identity(geometry, profile):
+        r = client.get(f"{BASE}/geometries/{geometry.public_ref}", params={"profile": profile})
+        assert r.status_code == 200, r.text
+        return r.json()["identity"]
+
+    for geometry in (world.extra["geometry_hidden_ts_entry"], shared):
+        assert identity(geometry, "exploratory") is not None
+        assert identity(geometry, "curated") is None
+    assert len(identity(shared, "exploratory")["ambiguous_owners"]) == 2
+
+    partial = identity(world.extra["geometry_ambiguous_owners"], "curated")
+    assert partial is not None and partial["kind"] is None
+    assert [o["kind"] for o in partial["ambiguous_owners"]] == ["species_entry"]
 
 
 def test_ids_are_dropped_with_their_own_row_not_with_the_same_index(client, db_session):
