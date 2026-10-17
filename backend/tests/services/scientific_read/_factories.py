@@ -166,7 +166,15 @@ def make_species(
     return that row instead of trying to manufacture a duplicate with a fake
     InChI key.
     """
-    resolved_smiles = smiles if smiles is not None else unique_smiles()
+    if smiles is not None:
+        resolved_smiles = smiles
+    else:
+        # A generated SMILES must not collide with a species another test COMMITTED to the shared session database:
+        # `get-or-create` below would then hand back that species (with its entries and reviews) as if it were new, and
+        # which counter value collides depends on how many species every earlier test generated.
+        resolved_smiles = unique_smiles()
+        while session.scalar(select(Species.id).where(Species.smiles == resolved_smiles).limit(1)) is not None:
+            resolved_smiles = unique_smiles()
     existing = session.scalar(
         select(Species).where(
             Species.kind == kind,
