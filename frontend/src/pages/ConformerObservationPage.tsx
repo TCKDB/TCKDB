@@ -332,31 +332,35 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 )}
             </section>
 
-            <section className="ledger-section" aria-labelledby="sibling-ledger">
-                <SectionHeading
-                    id="sibling-ledger"
-                    kicker="Deposited provenance"
-                    intro="Each sibling is an independent deposition; none of them is this observation. Review status is shown only where it differs from this observation's."
-                >
-                    Sibling observations
-                </SectionHeading>
-                {observationsAvailability === "populated" && siblings.length > 0 ? (
-                    <ul className="observation-list">
-                        {siblings.map((sibling) => (
-                            <SiblingRow
-                                key={sibling.conformer_observation.conformer_observation_ref}
-                                sibling={sibling}
-                                currentStatus={core.review.status}
-                            />
-                        ))}
-                    </ul>
-                ) : (
-                    <SectionEmptyMessage
-                        availability={observationsAvailability === "not-requested" ? "not-requested" : "empty"}
-                        emptyText="No other deposited observations were returned for this basin."
-                    />
-                )}
-            </section>
+            {/* The siblings are this basin's other members: with the basin withheld (a curated read of an unapproved
+                group) naming them would name the basin, so the whole ledger goes with it. */}
+            {group && (
+                <section className="ledger-section" aria-labelledby="sibling-ledger">
+                    <SectionHeading
+                        id="sibling-ledger"
+                        kicker="Deposited provenance"
+                        intro="Each sibling is an independent deposition; none of them is this observation. Review status is shown only where it differs from this observation's."
+                    >
+                        Sibling observations
+                    </SectionHeading>
+                    {observationsAvailability === "populated" && siblings.length > 0 ? (
+                        <ul className="observation-list">
+                            {siblings.map((sibling) => (
+                                <SiblingRow
+                                    key={sibling.conformer_observation.conformer_observation_ref}
+                                    sibling={sibling}
+                                    currentStatus={core.review.status}
+                                />
+                            ))}
+                        </ul>
+                    ) : (
+                        <SectionEmptyMessage
+                            availability={observationsAvailability === "not-requested" ? "not-requested" : "empty"}
+                            emptyText="No other deposited observations were returned for this basin."
+                        />
+                    )}
+                </section>
+            )}
 
             <section className="ledger-section" aria-labelledby="review-ledger">
                 <SectionHeading

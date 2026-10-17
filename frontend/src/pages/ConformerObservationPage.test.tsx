@@ -149,6 +149,9 @@ describe("ConformerObservationPage", () => {
         expect(container.querySelector('a[href^="/conformer-groups/"]')).toBeNull()
         // The basin tile is withheld too: its count would describe a basin the page does not name.
         expect(screen.queryByText("Other observations in this basin")).toBeNull()
+        // ... and so is the sibling ledger: its rows are the withheld basin's other members.
+        expect(screen.queryByRole("heading", { name: "Sibling observations" })).toBeNull()
+        expect(screen.queryByText("co_two")).toBeNull()
         // The rest of the page is intact: the observation's own ref and the species entry are still there.
         expect(screen.getAllByText("co_one").length).toBeGreaterThan(0)
         expect(screen.getByRole("link", { name: "Species entry" })).toBeVisible()
