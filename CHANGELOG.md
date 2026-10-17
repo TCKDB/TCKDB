@@ -34,6 +34,11 @@ none. `tckdb-schemas` unchanged, `tckdb-client` 0.152.0.
 - **Wire change (OpenAPI):** `ScientificConformerObservationRecord.conformer_group` is nullable. Under `profile=curated`, a visible
   observation whose conformer group is not approved comes back with `conformer_group: null`; the observation itself stays visible.
   The default profile never returns null there.
+- Free text under `profile=curated`: a note, label, file name or depositor URL (for example a review note saying "duplicate of
+  calc_..." on a visible record, or `LiteratureIdentifiers.url`) that names a hidden record's ref is blanked as a whole field
+  (`null`, or `""` where the field is required), never edited token by token. Text whose percent-encoding never settles is
+  blanked too. The default profile is unchanged. Not covered here: pagination cursors (`next_cursor`), left to their own
+  family's change.
 - A URL field that names a hidden record's ref anywhere (every path segment, `;params`, query keys and values, the fragment;
   percent-decoded until stable, absolute or relative; for example an applied correction's `target_endpoint`) is
   withheld together with the `*_ref` and `*_id` beside it, and a hidden record's id is removed from the aligned

@@ -21,6 +21,10 @@ How a hidden ref is removed (:func:`withhold_in_model`)
 3. Anything else is **unplaceable** and raises :class:`RefGuardUnplaceable` (fail closed, owner decision D4).
    The subject of a response (``record``, the elements of ``records``) is never deleted as a pointer: a
    hidden subject ref means a service forgot its population filter, which is exactly what should be loud.
+4. Free text (a note, a label, a file name, a depositor URL) that names a hidden ref anywhere in its tokens is
+   blanked as a whole field: ``None`` when the field is nullable, else ``""``. Never token by token (the shape of
+   what was removed would show), and text whose percent-encoding does not settle is blanked too, never refused.
+   Exploratory text is untouched.
 
 Rollout
 -------
@@ -427,7 +431,6 @@ def _children(node: Any, *, top: bool):
         yield from node.items()
 
 
-_URL_START = re.compile(r"^(?:[A-Za-z][A-Za-z0-9+.\-]*://|[/?#;])")
 #: How many times a component is percent-decoded looking for a stable form. Three layers is already hostile; a
 #: component still changing after this many is refused (fail closed), never kept.
 _MAX_DECODE_ROUNDS = 5
@@ -451,26 +454,58 @@ def _decode_stable(component: str) -> str:
     raise ValueError("percent-encoding does not settle")
 
 
+class _FreeRef(str):
+    """A ref found inside free text (or the stand-in for text whose encoding never settles).
+
+    The site is blanked as a whole field: a free-text value that names a hidden record is not editable token by token
+    (the position and shape of what was removed would say what it was).
+    """
+
+
+#: Stands in for a free-text value that does not settle under percent-decoding. It is "hidden" by definition: the text
+#: is blanked rather than guessed at, and never raises (a depositor's odd text must not fail a page).
+UNSETTLED_TEXT = "unsettled_encoding"
+
+#: Any gated ref anywhere in a string. A cheap pre-filter so ordinary text is not tokenised.
+_REF_ANYWHERE = re.compile(
+    "(?:" + "|".join(sorted((re.escape(p) for p in GATED_TYPES), key=len, reverse=True)) + ")_[a-z0-9]{26}"
+)
+
+
 def _tokens(component: str) -> list[str]:
-    """The pieces of one URL component a ref can be: the decoded component split on ``/``, ``;``, ``,``, ``&``, ``=``
-    and whitespace (so a ref followed by an encoded newline still comes out as a ref)."""
-    return [t for t in re.split(r"[/;,&=\s]", _decode_stable(component)) if t]
+    """The pieces of text a ref can be: the decoded text split on anything that is not a word character, so a ref
+    next to whitespace, ``/``, ``;``, ``,``, ``&``, ``=``, a bracket, a quote or a full stop still comes out as one."""
+    return [t for t in re.split(r"\W+", _decode_stable(component)) if t]
+
+
+def _free_text_refs(value: str) -> list[str]:
+    """Gated refs named by free text (a note, a label, a file name, a depositor URL).
+
+    Returns :class:`_FreeRef` sites. Text whose percent-encoding does not settle is returned as the
+    :data:`UNSETTLED_TEXT` stand-in, so the field is blanked, never kept and never an error.
+    """
+    if "%" not in value and not _REF_ANYWHERE.search(value):
+        return []
+    try:
+        tokens = _tokens(value)
+    except ValueError:
+        return [_FreeRef(UNSETTLED_TEXT)]
+    return [_FreeRef(t) for t in tokens if GATED_REF_RE.match(t)]
 
 
 def _refs_named_by(value: str, *, url_valued: bool = False) -> list[str]:
     """Every gated ref a string value names.
 
-    A value is a ref when the whole string is one. It also names refs when it is a URL and any of these is one: a
-    path segment (``/calculations/{ref}/scan``, in the middle or at the end), a ``;params`` item, a query key or
-    value, or the fragment. Components are percent-decoded until stable, so ``%2F``, ``%63alc_...`` and
-    ``%2563alc_...`` do not hide one.
+    A value that is exactly one ref (a stray newline allowed) is that ref, handled by the placement rules.
 
-    In a URL-valued field (``url_valued``: see :func:`_is_url_valued`) the value is parsed whatever its length or
-    whitespace; a value that cannot be parsed raises ``ValueError``, which the caller turns into
-    :class:`RefGuardUnplaceable` (fail closed). In any other field a string is read as a URL only when it looks like
-    one (an absolute ``scheme://`` URL, or a start of ``/``, ``?``, ``#`` or ``;``) and has no whitespace: whitespace
-    marks free text, which this reader leaves alone. A hidden ref inside free text is therefore NOT withheld at run
-    time; a field that can carry one needs its own rule. (The sweep's raw-body check finds such a leak in tests only.)
+    A URL-valued field (``url_valued``: see :func:`_is_url_valued`) is parsed as a URL whatever its length or
+    whitespace: a path segment (in the middle or at the end), a ``;params`` item, a query key or value, or the
+    fragment, percent-decoded until stable. A value that cannot be parsed raises ``ValueError``, which the caller
+    turns into :class:`RefGuardUnplaceable` (fail closed).
+
+    Every other string is free text (:func:`_free_text_refs`): any token that is a gated ref makes the whole field a
+    site, and a hidden one blanks the field. Uppercase and suffixed look-alikes (``CALC_...``, ``calc_...x``) are not
+    refs: no route resolves them.
     """
     if len(value) <= 40:
         if GATED_REF_RE.match(value):
@@ -478,23 +513,12 @@ def _refs_named_by(value: str, *, url_valued: bool = False) -> list[str]:
         stripped = value.strip()  # ``calc_...\n`` is that ref with a stray newline, and must not slip past
         if stripped != value and GATED_REF_RE.match(stripped):
             return [stripped]
-    if not url_valued and (not _URL_START.match(value) or any(c.isspace() for c in value)):
-        return []
-    try:
-        parts = urlsplit(value)
-    except ValueError:
-        if url_valued:
-            raise
-        return []  # free text that merely looks like a URL and is not one
+    if not url_valued:
+        return _free_text_refs(value)
+    parts = urlsplit(value)
     found: list[str] = []
     for component in (parts.path, parts.query, parts.fragment):
-        try:
-            tokens = _tokens(component)
-        except ValueError:
-            if url_valued:
-                raise
-            return []
-        found.extend(t for t in tokens if GATED_REF_RE.match(t))
+        found.extend(t for t in _tokens(component) if GATED_REF_RE.match(t))
     return found
 
 
@@ -564,7 +588,24 @@ def _aligned_id_deletions(owner_frame: _Frame, deleted_from: list, index: Any, t
     return [_Action("delete", ids, index)]
 
 
+def _plan_free_text(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], WithheldSite]:
+    """Blank the whole field: ``None`` when it may be null, else ``""``. A pointer model above does not apply: the
+    text belongs to a record that stays visible, and only the text goes."""
+    text = _path_text(path)
+    holder, key = path[-1]
+    if isinstance(holder, BaseModel):
+        nullable = _field_traits(type(holder), key)[0]
+        return [_Action("null" if nullable else "empty", holder, key)], WithheldSite(ref, text, "blank_free_text")
+    if isinstance(holder, dict):
+        return [_Action("null", holder, key)], WithheldSite(ref, text, "blank_free_text")
+    if isinstance(holder, list):
+        return [_Action("empty", holder, key)], WithheldSite(ref, text, "blank_free_text")
+    raise RefGuardUnplaceable(type(holder).__name__, text, ref.split("_", 1)[0])
+
+
 def _plan_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], WithheldSite]:
+    if isinstance(ref, _FreeRef):
+        return _plan_free_text(path, ref)
     text = _path_text(path)
     n = len(path) - 1
 
@@ -630,11 +671,12 @@ def _plan_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], Withh
 
 def _apply(actions: Collection[_Action]) -> None:
     for action in actions:
-        if action.kind == "null":
+        if action.kind in ("null", "empty"):
+            value = None if action.kind == "null" else ""
             if isinstance(action.container, BaseModel):
-                setattr(action.container, action.key, None)
+                setattr(action.container, action.key, value)
             else:
-                action.container[action.key] = None
+                action.container[action.key] = value
     deletes = [a for a in actions if a.kind == "delete"]
     # Highest index first, so earlier deletions in the same list do not shift later ones.
     deletes.sort(key=lambda a: (id(a.container), -a.key if isinstance(a.key, int) else 0))
@@ -670,9 +712,16 @@ def _collapse_empty(sites: list[tuple[tuple[_Frame, ...], str]], hidden: set[str
             container, key = path[i]
             node = path[i + 1][0]
             check = COLLAPSE_WHEN_EMPTY.get(type(node))
-            if check is None or not check(node) or not isinstance(container, BaseModel):
+            if check is None or not check(node):
                 continue
-            if (id(container), key) in seen or not _field_traits(type(container), key)[0]:
+            if not isinstance(container, BaseModel) or not _field_traits(type(container), key)[0]:
+                # An empty shell with nowhere to go: refuse the response, never emit it (owner decision D4).
+                raise RefGuardUnplaceable(
+                    type(container).__name__,
+                    f"{_path_text(path[: i + 1])}<empty {type(node).__name__}>",
+                    ref.split("_", 1)[0],
+                )
+            if (id(container), key) in seen:
                 continue
             seen.add((id(container), key))
             setattr(container, key, None)
@@ -689,17 +738,21 @@ def withhold_in_model(
 ) -> WithholdReport:
     """Remove every ref the profile hides from a response model, in place.
 
-    With ``apply=False`` nothing is mutated (a dry run that reports what would go). Raises
+    With ``apply=False`` nothing is mutated (a dry run on a copy, reporting what would go, collapses included). Raises
     :class:`RefGuardUnplaceable` for a hidden ref that has nowhere safe to go, in either mode.
     """
     report = WithholdReport()
     if profile.review_floor is None:
         return report
+    if not apply:
+        # A dry run works on a copy, so what it reports (collapses included) is exactly what an applied run would do.
+        return withhold_in_model(session, payload.model_copy(deep=True), profile=profile, apply=True)
     sites = _collect_sites(payload)
     report.refs_seen = len(sites)
     if not sites:
         return report
     report.hidden = hidden_refs(session, {ref for _, ref in sites}, profile=profile)
+    report.hidden |= {ref for _, ref in sites if ref == UNSETTLED_TEXT}
     if not report.hidden:
         return report
     planned: dict[tuple[int, Any, str], _Action] = {}

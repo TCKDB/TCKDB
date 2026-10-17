@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationType, ProfileRecommendation, ReadProfile, RecordReviewStatus
@@ -462,13 +462,10 @@ def test_a_url_valued_field_that_cannot_be_read_fails_closed(client, db_session)
 
 
 def test_a_url_or_text_that_names_only_visible_records_is_kept(client, db_session):
-    """The URL reader does not over-reach: visible refs, prose and look-alikes are left alone.
+    """The readers do not over-reach: visible refs, ordinary text and look-alikes are left alone.
 
-    Free-text fields keep the prose shortcut (whitespace means free text): a hidden ref there is NOT withheld at run
-    time, which is why the shortcut is scoped to free-text fields only and a URL-valued field never uses it.
-
-    Kills: nulling every URL; reading prose that contains a hidden ref as a pointer; matching a ref-shaped token with
-    the wrong prefix, length or a trailing suffix; removing the whitespace clause for free-text fields.
+    Kills: nulling every URL or every string; matching a ref-shaped token with the wrong prefix, length or a trailing
+    suffix; treating a visible ref in a note as hidden; blanking text only because it contains ``%``.
     """
     world = build_sweep_world(db_session)
     hidden, visible = world.hidden["tse_h"].public_ref, world.visible["tse_v"].public_ref
@@ -482,10 +479,180 @@ def test_a_url_or_text_that_names_only_visible_records_is_kept(client, db_sessio
     ]
     for value in kept:
         assert _withhold_one(db_session, value) == value, value
-    # Free text: whitespace marks prose, which is left alone in a free-text field only.
-    for value in (f"see {hidden} for details", f"{BASE}/calculations/{hidden}/scan?q=a b"):
+    for value in (f"see {visible} for details", f"({visible}).", "50% yield, 100%25 sure", f"{hidden}x is not a ref"):
         assert _withhold_one(db_session, value, field="note") == value, value
-    assert _withhold_one(db_session, f"{BASE}/calculations/{hidden}/scan?q=a b") is None  # URL-valued: read anyway
+
+
+def _hidden_text_forms(hidden: str) -> dict[str, str]:
+    """Free text that names ``hidden``: each of these must be blanked whole."""
+    first = format(ord(hidden[0]), "02x")
+    return {
+        "prose": f"duplicate of {hidden}",
+        "punctuation": f"(see {hidden}).",
+        "comma list": f"a,{hidden},b",
+        "quoted": f'"{hidden}"',
+        "a url in text": f"see https://x.example/calculations/{hidden}/scan?q=1 for details",
+        "encoded": f"duplicate of %{first}{hidden[1:]}",
+        "double encoded": f"duplicate of %25{first}{hidden[1:]}",
+        "with newline": f"first line\n{hidden}\nlast line",
+    }
+
+
+def test_free_text_naming_a_hidden_record_is_blanked_whole(client, db_session):
+    """A note, label or file name that names a hidden record is blanked as a whole field, never edited token by token.
+
+    ``None`` when the field is nullable, ``""`` when it is required. Exploratory (no floor) is untouched, and so is
+    text that names only visible records.
+
+    Kills: leaving free text alone; partial redaction (which would show where the ref was); ``None`` written into a
+    required field; reading only whole-string refs; not splitting on punctuation or not decoding.
+    """
+    from pydantic import BaseModel
+
+    from app.schemas.reads.scientific_common import RecordReviewBadge
+
+    class Row(BaseModel):
+        review: RecordReviewBadge
+        label: str  # required free text
+
+    world = build_sweep_world(db_session)
+    hidden = world.hidden["calc_h"].public_ref
+    for form, body in _hidden_text_forms(hidden).items():
+        row = Row(review=RecordReviewBadge(status="approved", note=body), label=body)
+        ref_guard.withhold_in_model(db_session, row, profile=CURATED)
+        assert row.review.note is None, f"{form}: the nullable note was kept: {row.review.note!r}"
+        assert row.label == "", f"{form}: the required label was not emptied: {row.label!r}"
+        untouched = Row(review=RecordReviewBadge(status="approved", note=body), label=body)
+        ref_guard.withhold_in_model(db_session, untouched, profile=EXPLORATORY)
+        assert untouched.review.note == body and untouched.label == body, f"{form}: exploratory was changed"
+
+
+def test_a_review_note_naming_a_hidden_record_is_blanked_over_http(client, db_session, login_as):
+    """The same, on a real response: a curator's note on a visible statmech that says "duplicate of <hidden calc>".
+
+    Kills: a boundary hook that does not reach free text; blanking the note under exploratory.
+    """
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+    hidden = world.hidden["calc_h"].public_ref
+    sm = world.visible["sm_v"]
+    db_session.execute(
+        text("UPDATE record_review SET note = :note WHERE record_type = 'statmech' AND record_id = :id"),
+        {"note": f"duplicate of {hidden}, see notes", "id": sm.id},
+    )
+    db_session.expire_all()
+
+    def note(profile):
+        r = client.get(f"{BASE}/statmech/{sm.public_ref}", params={"profile": profile})
+        assert r.status_code == 200, r.text
+        return r.json()["record"]["statmech"]["review"]["note"], r.text
+
+    exploratory_note, _ = note("exploratory")
+    assert exploratory_note == f"duplicate of {hidden}, see notes"
+    curated_note, curated_text = note("curated")
+    assert curated_note is None
+    assert hidden not in curated_text
+
+
+def test_text_whose_encoding_never_settles_is_blanked_not_refused(client, db_session):
+    """Free text that does not settle under percent-decoding is blanked, never an error (a depositor's odd text must
+    not 500 a page), whether or not it names a ref.
+
+    Kills: raising on free text; keeping an unsettled value; failing to blank a required field to ``""``.
+    """
+    from pydantic import BaseModel
+
+    class Row(BaseModel):
+        note: str | None = None
+        label: str = ""
+
+    build_sweep_world(db_session)
+    odd = f"odd %{'25' * 7}2F text"
+    row = Row(note=odd, label=odd)
+    ref_guard.withhold_in_model(db_session, row, profile=CURATED)
+    assert (row.note, row.label) == (None, "")
+    plain = Row(note="odd %41 text", label="ok")  # settles in one round: kept
+    ref_guard.withhold_in_model(db_session, plain, profile=CURATED)
+    assert (plain.note, plain.label) == ("odd %41 text", "ok")
+
+
+def test_a_literature_url_is_free_text_not_a_url_valued_field(client, db_session):
+    """``LiteratureIdentifiers.url`` is depositor-supplied, so it is read as free text: a relative URL, or one with
+    whitespace, that carries a hidden ref is blanked; a clean one is kept. It is never refused.
+
+    Kills: making the field fail closed; treating it as server-built; keeping a relative or whitespace-bearing URL.
+    """
+    from app.schemas.reads.scientific_literature import LiteratureIdentifiers
+
+    world = build_sweep_world(db_session)
+    hidden, visible = world.hidden["calc_h"].public_ref, world.visible["calc_vf"].public_ref
+    for url in (f"calculations/{hidden}", f"/x/{hidden} y", f"https://example.org/p?q=a b&r={hidden}", f"see {hidden}"):
+        ids = LiteratureIdentifiers(doi="10.1/x", url=url)
+        ref_guard.withhold_in_model(db_session, ids, profile=CURATED)
+        assert ids.url is None and ids.doi == "10.1/x", url
+    clean = LiteratureIdentifiers(url=f"https://example.org/calculations/{visible}")
+    ref_guard.withhold_in_model(db_session, clean, profile=CURATED)
+    assert clean.url == f"https://example.org/calculations/{visible}"
+
+
+def test_an_empty_identity_with_nowhere_to_go_fails_closed(client, db_session):
+    """Collapsing an emptied ``GeometryIdentity`` needs a nullable field to null; with none (a required field, a list)
+    the guard refuses (D4) instead of emitting the empty shell. The nullable case is the control.
+
+    Kills: ``continue`` instead of raising when the container is not a model or the field is not nullable.
+    """
+    from pydantic import BaseModel
+
+    from app.schemas.reads.scientific_geometry import GeometryIdentity, GeometryIdentityOwnerRef
+
+    world = build_sweep_world(db_session)
+    hidden = world.hidden["tse_h"].public_ref
+
+    def identity():
+        owner = GeometryIdentityOwnerRef(kind="transition_state_entry", ref=hidden)
+        return GeometryIdentity(ambiguous_owners=[owner])
+
+    class Nullable(BaseModel):
+        identity: GeometryIdentity | None = None
+
+    class Required(BaseModel):
+        identity: GeometryIdentity
+
+    class InList(BaseModel):
+        identities: list[GeometryIdentity]
+
+    ok = Nullable(identity=identity())
+    ref_guard.withhold_in_model(db_session, ok, profile=CURATED)
+    assert ok.identity is None
+    for payload in (Required(identity=identity()), InList(identities=[identity()])):
+        with pytest.raises(ref_guard.RefGuardUnplaceable):
+            ref_guard.withhold_in_model(db_session, payload, profile=CURATED)
+
+
+def test_a_dry_run_reports_collapses_and_changes_nothing(client, db_session):
+    """``apply=False`` reports what an applied run would do, collapse-empty sites included, and mutates nothing.
+
+    Kills: a dry run that skips the collapse step; a dry run that mutates the payload.
+    """
+    from pydantic import BaseModel
+
+    from app.schemas.reads.scientific_geometry import GeometryIdentity, GeometryIdentityOwnerRef
+
+    class Holder(BaseModel):
+        identity: GeometryIdentity | None = None
+
+    world = build_sweep_world(db_session)
+    hidden = world.hidden["tse_h"].public_ref
+    owner = GeometryIdentityOwnerRef(kind="transition_state_entry", ref=hidden)
+    payload = Holder(identity=GeometryIdentity(ambiguous_owners=[owner]))
+
+    dry = ref_guard.withhold_in_model(db_session, payload, profile=CURATED, apply=False)
+    assert [site.action for site in dry.sites] == ["delete_pointer", "collapse_empty"]
+    assert payload.identity is not None and len(payload.identity.ambiguous_owners) == 1  # untouched
+
+    real = ref_guard.withhold_in_model(db_session, payload, profile=CURATED)
+    assert [site.action for site in real.sites] == [site.action for site in dry.sites]
+    assert payload.identity is None
 
 
 def test_an_identity_with_no_owner_left_is_not_emitted_at_all(client, db_session, login_as):
