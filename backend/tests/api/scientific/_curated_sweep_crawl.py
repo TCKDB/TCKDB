@@ -35,7 +35,7 @@ class RouteSpec:
 
     @property
     def exempt(self) -> bool:
-        return any(self.path.startswith(p) for p in ref_guard.EXEMPT_ROUTE_PREFIXES)
+        return ref_guard.route_matches(self.path, ref_guard.EXEMPT_ROUTE_PREFIXES)
 
 
 @dataclass(frozen=True)

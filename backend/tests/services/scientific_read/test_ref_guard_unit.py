@@ -230,6 +230,88 @@ def test_a_value_inside_an_untyped_dict_or_list_is_blanked(monkeypatch):
     assert payload.extra.open_list == [None, 3]
 
 
+def test_a_ref_list_inside_an_untyped_dict_is_blanked_with_its_aligned_ids(monkeypatch):
+    """Kills: raising for a list owned by a dict (a stored protocol's ``supporting_calculations``), or leaving the
+    aligned ``*_ids`` entry (the integer pk of the hidden record)."""
+    hide(monkeypatch, HIDDEN_CALC)
+    payload = Envelope(
+        extra=Facts(
+            blob={"protocol": {"calculation_refs": [VISIBLE_CALC, HIDDEN_CALC], "calculation_ids": [10, 11], "n": 2}}
+        )
+    )
+    run(payload)
+    assert payload.extra.blob["protocol"]["calculation_refs"] == [VISIBLE_CALC, None]
+    assert payload.extra.blob["protocol"]["calculation_ids"] == [10, None]
+    assert payload.extra.blob["protocol"]["n"] == 2
+
+
+def test_a_blanked_ref_in_an_untyped_dict_takes_its_same_stem_id_with_it(monkeypatch):
+    """Kills: blanking ``calculation_ref`` and leaving ``calculation_id`` beside it (``KineticsProvenance.irc``)."""
+    hide(monkeypatch, HIDDEN_CALC)
+    payload = Envelope(extra=Facts(blob={"irc": {"calculation_ref": HIDDEN_CALC, "calculation_id": 42, "kind": "irc"}}))
+    run(payload)
+    assert payload.extra.blob["irc"] == {"calculation_ref": None, "calculation_id": None, "kind": "irc"}
+
+
+def test_a_hidden_ref_used_as_a_dict_key_fails_closed(monkeypatch):
+    """Kills: letting a hidden ref through because it is a key, not a value (fails open against D4)."""
+    hide(monkeypatch, HIDDEN_CALC)
+    payload = Envelope(extra=Facts(blob={HIDDEN_CALC: {"role": "freq"}}))
+    with pytest.raises(ref_guard.RefGuardUnplaceable) as caught:
+        run(payload)
+    assert "dict key" in caught.value.field_path
+    assert HIDDEN_CALC in payload.extra.blob  # nothing was changed on the way to failing
+
+
+def test_a_visible_dict_key_is_left_alone_and_a_hidden_one_inside_a_pointer_goes_with_it(monkeypatch):
+    """Kills: refusing every ref-shaped key; refusing a key that a pointer removal already covers."""
+    hide(monkeypatch, HIDDEN_CALC)
+    visible = Envelope(extra=Facts(blob={VISIBLE_CALC: 1}))
+    assert run(visible).sites == []
+
+    class Keyed(BaseModel):
+        calculation_ref: str
+        by_ref: dict[str, Any] = {}
+
+    class Env(BaseModel):
+        rows: list[Keyed] = []
+
+    monkeypatch.setattr(ref_guard, "POINTER_MODELS", frozenset({Keyed}))
+    payload = Env(
+        rows=[Keyed(calculation_ref=VISIBLE_CALC, by_ref={HIDDEN_CALC: 1}), Keyed(calculation_ref=ref("calc", 8))]
+    )
+    run(payload)
+    assert [r.calculation_ref for r in payload.rows] == [ref("calc", 8)]
+
+
+def test_the_unplaceable_hint_does_not_claim_widening_alone_helps(monkeypatch):
+    """Kills: the old hint "make the field optional", which is not enough when the ref sits in a required block."""
+    message = str(ref_guard.RefGuardUnplaceable("M", "a.b", "tse"))
+    assert "POINTER_MODELS" in message and "widening an owner field alone is not enough" in message
+
+
+def test_routes_match_on_whole_path_segments():
+    """Kills: plain string-prefix matching (``/meta`` exempting a future ``/metadata``)."""
+    assert ref_guard.route_matches("/api/v1/scientific/meta", ["/api/v1/scientific/meta"])
+    assert ref_guard.route_matches("/api/v1/scientific/meta/software", ["/api/v1/scientific/meta"])
+    assert not ref_guard.route_matches("/api/v1/scientific/metadata", ["/api/v1/scientific/meta"])
+    assert not ref_guard.route_matches("/api/v1/scientific/metadata/x", ["/api/v1/scientific/meta"])
+    assert not ref_guard.route_matches("/api/v1/scientific/thermo", [])
+
+
+def test_the_hook_does_not_exempt_or_enable_by_a_shared_string_prefix(hook_env, monkeypatch):
+    """Kills: exemptions and the allowlist matching by plain prefix."""
+    publish, calls = hook_env
+    monkeypatch.setattr(ref_guard, "_ENABLED_ROUTE_PREFIXES", frozenset({"/api/v1/scientific/statmech"}))
+    ctx = publish(CURATED, "/api/v1/scientific/statmechanics/x")
+    ref_guard.withhold_for_current_request(Envelope())
+    assert (ctx.applied, calls) == (0, [])  # not enabled: shares only a string prefix with an enabled family
+    monkeypatch.setattr(ref_guard, "_ENABLED_ROUTE_PREFIXES", frozenset({"/api/v1/scientific"}))
+    ctx = publish(CURATED, "/api/v1/scientific/metadata/x")
+    ref_guard.withhold_for_current_request(Envelope())
+    assert ctx.applied == 1  # not exempt: shares only a string prefix with /meta
+
+
 def test_a_required_field_with_no_pointer_is_unplaceable_and_says_where(monkeypatch):
     """Kills: writing None into a required field, or silently emitting the ref (fail closed, owner decision D4)."""
     hide(monkeypatch, HIDDEN_TSE)

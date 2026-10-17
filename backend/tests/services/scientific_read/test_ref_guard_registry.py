@@ -216,9 +216,23 @@ def test_the_hook_sees_the_route_s_own_session_and_route_template(client, db_ses
 
     Kills: publishing a different session; publishing the concrete URL instead of the template; never resetting.
     """
+    from sqlalchemy.orm import Session
+
+    from app.api.deps import get_db
     from app.services.scientific_read import internal_ids
 
     world = build_sweep_world(db_session)
+    # The harness's ``get_db`` hands every caller one shared session, which would make the identity check below
+    # unfailable. Give each call of the dependency a fresh session instead (FastAPI calls it once per request).
+    created: list[Session] = []
+
+    def fresh_session():
+        session = Session(bind=db_session.get_bind(), expire_on_commit=False, join_transaction_mode="create_savepoint")
+        created.append(session)
+        yield session
+
+    previous = client.app.dependency_overrides[get_db]
+    client.app.dependency_overrides[get_db] = fresh_session
     seen = []
     real = internal_ids.withhold_for_current_request
 
@@ -229,9 +243,14 @@ def test_the_hook_sees_the_route_s_own_session_and_route_template(client, db_ses
 
     monkeypatch.setattr(internal_ids, "withhold_for_current_request", spy)
     ref = world.visible["calc_vopt"].public_ref
-    assert client.get(f"/api/v1/scientific/calculations/{ref}", params={"profile": "curated"}).status_code == 200
+    try:
+        assert client.get(f"/api/v1/scientific/calculations/{ref}", params={"profile": "curated"}).status_code == 200
+    finally:
+        client.app.dependency_overrides[get_db] = previous
     assert len(seen) == 1
     session, route_path = seen[0]
-    assert session is db_session
+    assert len(created) == 1  # one session for the whole request: the route and the profile dependency share it
+    assert session is created[0]
+    assert session is not db_session
     assert route_path == "/api/v1/scientific/calculations/{calculation_ref_or_id}"
     assert ref_guard.current_ref_guard_context() is None  # reset when the request ended

@@ -177,7 +177,9 @@ class RefGuardUnplaceable(RuntimeError):
         self.ref_prefix = ref_prefix
         super().__init__(
             f"curated ref guard cannot place a hidden {ref_prefix}_ ref at {field_path} ({model_name}): "
-            "register a pointer model or make the field optional"
+            "make this field optional, or register the model that holds it in POINTER_MODELS AND make the field that "
+            "holds that model optional (widening an owner field alone is not enough: a required ref inside a "
+            "required block still has nowhere to go)"
         )
 
 
@@ -335,6 +337,10 @@ def _field_traits(model_cls: type, name: str) -> tuple[bool, bool]:
     return traits
 
 
+class _DictKey(str):
+    """Marks a site whose ref is the key of a dict rather than a value in it."""
+
+
 def _children(node: Any, *, top: bool):
     if isinstance(node, BaseModel):
         for name in type(node).model_fields:
@@ -354,6 +360,10 @@ def _collect_sites(root: BaseModel) -> list[tuple[tuple[_Frame, ...], str]]:
     while stack:
         node, path = stack.pop()
         for key, value in _children(node, top=not path):
+            if isinstance(node, dict) and isinstance(key, str) and len(key) <= 40 and GATED_REF_RE.match(key):
+                # A ref used as a dict KEY cannot be blanked or deleted without renaming the entry. Recorded as a
+                # site so that, if it is hidden, the guard fails closed instead of letting it through.
+                sites.append(((*path, (node, _DictKey(key))), key))
             if isinstance(value, str):
                 if len(value) <= 40 and GATED_REF_RE.match(value):
                     sites.append(((*path, (node, key)), value))
@@ -398,8 +408,18 @@ def _plan_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], Withh
 
     # Rule 2: no pointer.
     holder, key = path[n]
+    if isinstance(key, _DictKey):
+        raise RefGuardUnplaceable(type(holder).__name__, f"{text}<dict key>", ref.split("_", 1)[0])
     if isinstance(holder, list):
         owner, owner_key = path[n - 1] if n >= 1 else (None, None)
+        if isinstance(owner, dict):
+            # A list inside an untyped dict (a stored protocol blob): blank the element, and the aligned id if any.
+            actions = [_Action("null", holder, key)]
+            if isinstance(owner_key, str) and owner_key.endswith("_refs"):
+                sibling = owner.get(owner_key[: -len("_refs")] + "_ids")
+                if isinstance(sibling, list) and len(sibling) == len(holder):
+                    actions.append(_Action("null", sibling, key))
+            return actions, WithheldSite(ref, text, "null_untyped")
         if isinstance(owner, BaseModel):
             if isinstance(owner_key, str) and _field_traits(type(owner), owner_key)[1]:
                 return [_Action("null", holder, key)], WithheldSite(ref, text, "null_untyped")
@@ -412,7 +432,12 @@ def _plan_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], Withh
                     actions.append(_Action("delete", sibling, key))
             return actions, WithheldSite(ref, text, "delete_list_element")
     elif isinstance(holder, dict):
-        return [_Action("null", holder, key)], WithheldSite(ref, text, "null_untyped")
+        actions = [_Action("null", holder, key)]
+        if isinstance(key, str) and key.endswith("_ref"):
+            sibling_name = key[: -len("_ref")] + "_id"
+            if holder.get(sibling_name) is not None:
+                actions.append(_Action("null", holder, sibling_name))
+        return actions, WithheldSite(ref, text, "null_untyped")
     elif isinstance(holder, BaseModel):
         nullable, untyped = _field_traits(type(holder), key)
         if nullable:
@@ -482,8 +507,9 @@ def withhold_in_model(
 # ---------------------------------------------------------------------------
 
 
-def _route_matches(route_path: str, prefixes: Collection[str]) -> bool:
-    return any(route_path.startswith(p) for p in prefixes)
+def route_matches(route_path: str, prefixes: Collection[str]) -> bool:
+    """Prefix match on whole path segments: ``/meta`` covers ``/meta/x`` but not ``/metadata``."""
+    return any(route_path == p or route_path.startswith(p + "/") for p in prefixes)
 
 
 def withhold_for_current_request(payload: BaseModel) -> None:
@@ -502,9 +528,9 @@ def withhold_for_current_request(payload: BaseModel) -> None:
         return
     if profile.recommendation is ProfileRecommendation.tckdb_curated_release:
         return
-    if _route_matches(ctx.route_path, EXEMPT_ROUTE_PREFIXES):
+    if route_matches(ctx.route_path, EXEMPT_ROUTE_PREFIXES):
         return
-    if not _route_matches(ctx.route_path, _ENABLED_ROUTE_PREFIXES):
+    if not route_matches(ctx.route_path, _ENABLED_ROUTE_PREFIXES):
         return
     try:
         report = withhold_in_model(ctx.session, payload, profile=profile)
@@ -535,6 +561,7 @@ __all__ = [
     "current_ref_guard_context",
     "hidden_refs",
     "reset_ref_guard_context",
+    "route_matches",
     "set_ref_guard_context",
     "withhold_for_current_request",
     "withhold_in_model",

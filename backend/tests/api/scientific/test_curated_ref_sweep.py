@@ -133,8 +133,8 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     },
     "nsolve_h": {_NET, _LIT},
     "nkin_h": {f"{_NET}/kinetics/evaluate"},
-    "thm_h": {f"{_SPE}/thermo"},
-    "kin_h": {f"{BASE}/reaction-entries/{{reaction_entry_id}}/kinetics", _FULL},
+    "thm_h": {f"{_SPE}/thermo", _LIT},
+    "kin_h": {f"{BASE}/reaction-entries/{{reaction_entry_id}}/kinetics", _FULL, _LIT},
     "mpo_h": {f"{_SPE}/observations"},
 }
 
@@ -179,7 +179,7 @@ def test_every_scientific_route_is_enumerated_and_classified():
     assert not missing_providers(specs), "add a path-parameter provider in _curated_sweep_inputs.py"
     assert set(CRAWL_UNSUPPORTED) <= crawled_ops, "CRAWL_UNSUPPORTED names a route that does not exist"
     for prefix in ref_guard.EXEMPT_ROUTE_PREFIXES:
-        assert any(spec.path.startswith(prefix) for spec in specs), f"exempt prefix {prefix} matches no route"
+        assert any(ref_guard.route_matches(spec.path, [prefix]) for spec in specs), f"exempt prefix {prefix} matches no route"
     exempt = {spec.key for spec in specs if spec.exempt}
     assert not exempt & set(CRAWL_UNSUPPORTED)
     # Every route is crawled, exempt, or unsupported with a reason; nothing else.

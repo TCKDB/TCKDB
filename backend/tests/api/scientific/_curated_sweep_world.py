@@ -19,6 +19,8 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 
+from sqlalchemy import text
+
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
@@ -188,6 +190,8 @@ def build_sweep_world(session) -> SweepWorld:
     thm_v = make_thermo_scalar(session, species_entry=sa, statmech_id=sm_v.id)
     thm_v2 = make_thermo_scalar(session, species_entry=sa, statmech_id=sm_h.id, h298_kj_mol=-20.0)
     thm_h = make_thermo_scalar(session, species_entry=sa, h298_kj_mol=-30.0)
+    thm_h.literature_id = lit.id  # so /literature/{ref}/records names it
+    session.flush()
     attach_thermo_source_calculation(session, thermo=thm_v, calculation=calc_vsp, role=ThermoCalculationRole.sp)
     attach_thermo_source_calculation(session, thermo=thm_v, calculation=calc_h, role=ThermoCalculationRole.freq)
     attach_thermo_source_calculation(session, thermo=thm_v, calculation=calc_vopt, role=ThermoCalculationRole.opt)
@@ -238,6 +242,8 @@ def build_sweep_world(session) -> SweepWorld:
     # Kinetics: a visible and a hidden record on the reaction entry.
     kin_v = make_kinetics(session, reaction_entry=rxe)
     kin_h = make_kinetics(session, reaction_entry=rxe, a=3.0e-12)
+    kin_h.literature_id = lit.id  # so /literature/{ref}/records names it
+    session.flush()
     vis["kin_v"] = kin_v
     hid["kin_h"] = kin_h
 
@@ -330,8 +336,9 @@ def build_sweep_world(session) -> SweepWorld:
         _approve(session, kind_to_type[kind], row)
 
     # Legacy supersession: an approved predecessor whose successor is hidden. The write path deprecates the
-    # predecessor; re-approving it afterwards (deprecated -> approved is an allowed transition today) reproduces the
-    # legacy state in which a curated-visible record names a hidden successor in its supersession notice.
+    # predecessor, and since #769 refuses to re-approve a superseded record. Rows approved before that guard are the
+    # state being reproduced (a curated-visible record names a hidden successor in its supersession notice), so the
+    # predecessor is put back to approved with a direct write, as #769's own legacy-row test does.
     curator = AppUser(username="sweep-world-curator", role=AppUserRole.curator)
     session.add(curator)
     session.flush()
@@ -348,7 +355,11 @@ def build_sweep_world(session) -> SweepWorld:
         actor=curator,
         reason="legacy edge: approved predecessor names a hidden successor",
     )
-    set_record_review_status(session, record_type=R.thermo, record_id=thm_v.id, status=APPROVED, actor=curator)
+    session.execute(
+        text("UPDATE record_review SET status = 'approved' WHERE record_type = 'thermo' AND record_id = :id"),
+        {"id": thm_v.id},
+    )
+    session.expire_all()
     set_record_review_status(session, record_type=R.thermo, record_id=thm_h.id, status=UNDER_REVIEW, actor=curator)
     return w
 
