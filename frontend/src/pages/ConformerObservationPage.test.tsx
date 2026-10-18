@@ -135,6 +135,28 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
 }
 
 describe("ConformerObservationPage", () => {
+    it("renders without a basin link or row when a curated read withholds the group (conformer_group is null)", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record: mockRecord({ conformer_group: null }) })
+        )))
+
+        const { container } = page()
+        expect(await screen.findByRole("heading", { name: "Computed observation" })).toBeVisible()
+
+        // Neither the breadcrumb nor the identity block names a basin, and no link points at one.
+        expect(screen.queryByRole("link", { name: "Conformer basin" })).toBeNull()
+        expect(Array.from(container.querySelectorAll("dt")).some((el) => el.textContent === "Conformer basin")).toBe(false)
+        expect(container.querySelector('a[href^="/conformer-groups/"]')).toBeNull()
+        // The basin tile is withheld too: its count would describe a basin the page does not name.
+        expect(screen.queryByText("Other observations in this basin")).toBeNull()
+        // ... and so is the sibling ledger: its rows are the withheld basin's other members.
+        expect(screen.queryByRole("heading", { name: "Sibling observations" })).toBeNull()
+        expect(screen.queryByText("co_two")).toBeNull()
+        // The rest of the page is intact: the observation's own ref and the species entry are still there.
+        expect(screen.getAllByText("co_one").length).toBeGreaterThan(0)
+        expect(screen.getByRole("link", { name: "Species entry" })).toBeVisible()
+    })
+
     it("keeps observation, calculation-row and geometry counts in their own metric", async () => {
         server.use(http.get("/api/v1/scientific/conformer-observations/co_one", ({ request }) => {
             expect(new URL(request.url).searchParams.getAll("include")).toEqual([

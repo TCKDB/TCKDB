@@ -88,7 +88,14 @@ def test_pointer_models_are_live_and_never_a_response_subject():
     guard would then refuse to delete."""
     for model in ref_guard.POINTER_MODELS:
         assert issubclass(model, BaseModel)
-        assert any(name.endswith(("_ref", "_refs")) for name in model.model_fields), model.__name__
+        # ``SupersessionNotice`` holds its refs in ``superseded_by`` / ``current`` and ``GeometryIdentityOwnerRef`` in
+        # ``ref``: none is ``*_ref`` named.
+        # A wrapper (``ConformerObservationSiblingSummary``) holds its ref one block down.
+        assert any(
+            name.endswith(("_ref", "_refs")) or name in {"superseded_by", "current", "ref"}
+            for holder in (model, *_nested_models(model))
+            for name in holder.model_fields
+        ), model.__name__
 
     def all_models(cls):
         for sub in cls.__subclasses__():
@@ -105,6 +112,11 @@ def test_pointer_models_are_live_and_never_a_response_subject():
                 subjects |= set(_model_classes(info.annotation))
     assert subjects, "found no response envelopes: the scan itself is broken"
     assert not subjects & ref_guard.POINTER_MODELS, sorted(m.__name__ for m in subjects & ref_guard.POINTER_MODELS)
+
+
+def _nested_models(model):
+    for info in model.model_fields.values():
+        yield from _model_classes(info.annotation)
 
 
 def _model_classes(annotation):

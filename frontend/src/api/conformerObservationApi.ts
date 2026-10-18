@@ -101,7 +101,8 @@ export type ConformerObservationSibling = z.infer<typeof siblingObservationSchem
 
 export interface ConformerObservation {
     conformer_observation: z.infer<typeof observationCoreSchema>
-    conformer_group: z.infer<typeof conformerGroupContextSchema>
+    // null under `profile=curated` when the group is not approved: the observation is shown, its basin is not named.
+    conformer_group: z.infer<typeof conformerGroupContextSchema> | null
     species: z.infer<typeof speciesContextSchema>
     assignment_scheme?: z.infer<typeof assignmentSchemeSchema> | null
     evidence_summary: z.infer<typeof evidenceSummarySchema>
@@ -115,7 +116,7 @@ export interface ConformerObservation {
 
 const observationRecordSchema: z.ZodType<ConformerObservation> = z.object({
     conformer_observation: observationCoreSchema,
-    conformer_group: conformerGroupContextSchema,
+    conformer_group: conformerGroupContextSchema.nullable(),
     species: speciesContextSchema,
     assignment_scheme: assignmentSchemeSchema.nullable().optional(),
     evidence_summary: evidenceSummarySchema,

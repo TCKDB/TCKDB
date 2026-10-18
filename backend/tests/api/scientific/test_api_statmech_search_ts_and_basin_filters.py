@@ -8,6 +8,8 @@ query parameter is ignored), so a caller got unfiltered results.
 
 from __future__ import annotations
 
+import json
+
 from app.db.models.common import (
     RecordReviewStatus,
     ScientificOriginKind,
@@ -247,3 +249,7 @@ def test_curated_approved_statmech_under_a_not_approved_ts_entry_is_returned(cli
     for resp in _both_verbs(client, "transition_state_entry_ref", ts.public_ref):
         assert resp.status_code == 200, resp.text
         assert _refs(resp.json()) == {sm.public_ref}
+        # The record stays; the TS context naming the not-approved entry is withheld by the ref guard (the caller's
+        # own filter ref is echoed under ``request`` only).
+        assert [r["transition_state"] for r in resp.json()["records"]] == [None]
+        assert ts.public_ref not in json.dumps(resp.json()["records"])

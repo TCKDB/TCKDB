@@ -7224,7 +7224,7 @@
         "type": "string"
       },
       "CalculationOwnerSummary": {
-        "description": "Discriminated owner block.\n\nExactly one of ``species_entry`` / ``transition_state_entry`` is\nnon-null; ``kind`` mirrors that for cheap client-side branching.\nThe schema invariant ``one_owner`` on the calculation table\nguarantees this.",
+        "description": "Discriminated owner block.\n\nExactly one of ``species_entry`` / ``transition_state_entry`` is\nnon-null; ``kind`` mirrors that for cheap client-side branching.\nThe schema invariant ``one_owner`` on the calculation table\nguarantees this.\n\n**One exception, under ``profile=curated`` only.** When the owning\ntransition-state entry is hidden (not approved), the ref guard withholds\nthe whole ``transition_state_entry`` block, so ``kind`` can be\n``\"transition_state_entry\"`` while *both* owners are ``null``. That is\n\"the owner is not shown\", not \"the calculation has no owner\". The default\nprofile always carries exactly one.",
         "properties": {
           "kind": {
             "enum": [
@@ -19539,7 +19539,7 @@
         "type": "object"
       },
       "GeometryIdentity": {
-        "description": "Molecular identity of the record that owns a geometry.\n\nExactly one of ``species_entry`` / ``transition_state_entry`` is\nnon-null in the ordinary case, mirroring ``kind``. ``kind`` is\n``null`` in exactly one situation: the geometry (deduped by content\nhash, so it can be shared) is reachable from calculations that\nbelong to *more than one* distinct owning entry — e.g. two\nisotopologues whose plain-element coordinates happen to be\nidentical. Rather than silently pick one, every per-owner field is\nleft null and ``ambiguous_owners`` lists every distinct owner found,\nso a reader can tell \"ambiguous\" apart from \"none\" and go look at\n``provenance`` to disambiguate by calculation.\n\nA geometry with no owning calculation at all (nothing in either\n``provenance.produced_by`` or ``provenance.used_as_input_by`` names\na calculation with an owner) serves ``identity: null`` on the\nresponse — this object is never emitted empty.",
+        "description": "Molecular identity of the record that owns a geometry.\n\nExactly one of ``species_entry`` / ``transition_state_entry`` is\nnon-null in the ordinary case, mirroring ``kind``. ``kind`` is\n``null`` in exactly one situation: the geometry (deduped by content\nhash, so it can be shared) is reachable from calculations that\nbelong to *more than one* distinct owning entry — e.g. two\nisotopologues whose plain-element coordinates happen to be\nidentical. Rather than silently pick one, every per-owner field is\nleft null and ``ambiguous_owners`` lists every distinct owner found,\nso a reader can tell \"ambiguous\" apart from \"none\" and go look at\n``provenance`` to disambiguate by calculation.\n\nA geometry with no owning calculation at all (nothing in either\n``provenance.produced_by`` or ``provenance.used_as_input_by`` names\na calculation with an owner) serves ``identity: null`` on the\nresponse — this object is never emitted empty.\n\n**Exceptions, under ``profile=curated`` only.** The ref guard withholds a\nblock that names a hidden owner, so both statements above can fail:\n\n* ``ambiguous_owners`` can list fewer owners than were found (the hidden\n  ones are dropped), down to a single entry, and ``kind`` can be ``null``\n  with only one owner listed. A curated list is therefore not the full set\n  of owners;\n* when *every* owner is hidden (one hidden owning transition-state entry,\n  or every owner of an ambiguous geometry), the whole ``identity`` is\n  ``null``, exactly as for a geometry with no owner. A client cannot tell\n  \"every owner withheld\" from \"no owner\": hidden is the same as unknown.\n  An identity is never emitted with no owner block and no listed owner.\n\nThe default profile never does either.",
         "properties": {
           "ambiguous_owners": {
             "items": {
@@ -45564,7 +45564,14 @@
             "x-tckdb-include-gated": "calculations"
           },
           "conformer_group": {
-            "$ref": "#/components/schemas/ConformerGroupCoreBlock"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConformerGroupCoreBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "conformer_observation": {
             "$ref": "#/components/schemas/ConformerObservationCoreBlock"
@@ -53959,7 +53966,7 @@
         "type": "object"
       },
       "StatmechTransitionStateContext": {
-        "description": "Lightweight TS/TS-entry pointer for a TS-owned statmech record.\n\nA statmech row describes exactly one subject: a species entry OR a\ntransition-state entry. For a TS-owned record ``species`` is ``None`` and\nthis block carries the attribution instead — the record is never dressed\nup with an empty species stand-in.",
+        "description": "Lightweight TS/TS-entry pointer for a TS-owned statmech record.\n\nA statmech row describes exactly one subject: a species entry OR a\ntransition-state entry. For a TS-owned record ``species`` is ``None`` and\nthis block carries the attribution instead — the record is never dressed\nup with an empty species stand-in.\n\nUnder ``profile=curated``, when the transition-state entry this record\ndescribes is hidden, the whole block is withheld: the record is returned\nwith ``species`` and ``transition_state`` both ``null``. The default\nprofile always carries exactly one.",
         "properties": {
           "charge": {
             "anyOf": [

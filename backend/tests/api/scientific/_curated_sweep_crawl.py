@@ -16,6 +16,7 @@ from tests.api.scientific._curated_sweep_inputs import (
     EXEMPT_ONLY_PARAMS,
     PATH_PARAM_PROVIDERS,
     ROUTE_INPUTS,
+    ROUTE_PATH_PARAM_PROVIDERS,
 )
 from tests.api.scientific._curated_sweep_world import SweepWorld
 
@@ -92,7 +93,8 @@ def missing_providers(specs: list[RouteSpec]) -> list[tuple[str, str]]:
 
 
 def variants_for(spec: RouteSpec, world: SweepWorld, *, with_internal_ids: bool) -> list[Variant]:
-    value_lists = [[(p, v) for v in PATH_PARAM_PROVIDERS[p](world)] for p in spec.path_params]
+    providers = {**PATH_PARAM_PROVIDERS, **ROUTE_PATH_PARAM_PROVIDERS.get(spec.key, {})}
+    value_lists = [[(p, v) for v in providers[p](world)] for p in spec.path_params]
     combos = list(itertools.product(*value_lists)) if value_lists else [()]
     # Labels are stable across runs (provider positions, never ref text) so the ratchet baseline can name them.
     positions = list(itertools.product(*[range(len(vl)) for vl in value_lists])) if value_lists else [()]
