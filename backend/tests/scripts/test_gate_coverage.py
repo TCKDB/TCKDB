@@ -821,38 +821,55 @@ def test_frontend_image_publish_workflow_cannot_silently_skip_shipping_changes()
     assert "workflow_dispatch" in triggers
 
     jobs = workflow["jobs"]
-    assert set(jobs) == {"build-and-push"}
-    job = jobs["build-and-push"]
+    assert set(jobs) == {"build", "merge"}
+    job = jobs["build"]
+    merge = jobs["merge"]
     assert job.get("if") == "github.repository == 'TCKDB/TCKDB'"
+    assert merge.get("if") == "github.repository == 'TCKDB/TCKDB'"
+    assert merge.get("needs") == "build"
+
+    # Native per-platform builds: dropping the arm64 leg would publish an
+    # amd64-only image the Pi cannot pull, and QEMU is the 6-hour hang this
+    # layout exists to remove.
+    include = job["strategy"]["matrix"]["include"]
+    assert {entry["platform"] for entry in include} == {"linux/amd64", "linux/arm64"}
+    assert {entry["runner"] for entry in include} == {"ubuntu-latest", "ubuntu-24.04-arm"}
+    for entry in include:
+        assert entry["arch"] in entry["platform"]
+    for wf_job in (job, merge):
+        for step in wf_job.get("steps", []):
+            assert not str(step.get("uses", "")).startswith("docker/setup-qemu-action@")
+
+    # Every job and build step must carry a timeout (GitHub's default is 6h).
+    assert "timeout-minutes" in job and "timeout-minutes" in merge
     steps = job.get("steps", [])
+    for step in steps:
+        if str(step.get("uses", "")).startswith("docker/build-push-action@"):
+            assert "timeout-minutes" in step, step.get("name")
+
     names = [step.get("name") for step in steps]
     smoke = names.index("Smoke test — SPA fallback and same-origin API proxy")
-    publish = names.index("Build and push multi-arch image")
+    publish = names.index("Push by digest")
     assert smoke < publish, "the image must serve its SPA and proxy before it is published"
 
-    # An arm64-only build before publication duplicates the arm64 half of
-    # the final multi-arch build. Its old name is irrelevant: recognize the
-    # expensive, non-publishing build by its action configuration so a rename
-    # cannot restore it unnoticed. The amd64 image remains a valid smoke-test
-    # input, and the final multi-arch step remains the sole publishing build.
+    # The smoke build is the only non-publishing build, and it is per-platform.
     for step in steps[:publish]:
         if not str(step.get("uses", "")).startswith("docker/build-push-action@"):
             continue
-        build = step.get("with", {})
-        is_arm64_only = str(build.get("platforms", "")).strip() == "linux/arm64"
-        assert not (is_arm64_only and build.get("push") is not True), (
-            "an arm64-only docker/build-push-action step before publication "
-            "must not be a non-publishing build"
-        )
+        assert step["with"]["platforms"] == "${{ matrix.platform }}"
 
     publish_step = steps[publish]
     assert publish_step["with"]["context"] == "frontend"
     assert publish_step["with"]["file"] == "frontend/Dockerfile"
-    assert publish_step["with"]["platforms"] == "linux/amd64,linux/arm64"
-    assert publish_step["with"]["push"] is True
+    assert publish_step["with"]["platforms"] == "${{ matrix.platform }}"
+    assert "push-by-digest=true" in publish_step["with"]["outputs"]
+    assert "scope=frontend-${{ matrix.arch }}" in publish_step["with"]["cache-from"]
 
-    metadata = next(step for step in steps if step.get("id") == "meta")
-    assert "type=sha,format=long" in metadata["with"]["tags"]
+    merge_run = "\n".join(str(step.get("run", "")) for step in merge["steps"])
+    assert "docker buildx imagetools create" in merge_run
+    merge_meta = next(step for step in merge["steps"] if step.get("id") == "meta")
+
+    assert "type=sha,format=long" in merge_meta["with"]["tags"]
     smoke_step = steps[smoke]
     command = smoke_step["run"]
     for expected in (

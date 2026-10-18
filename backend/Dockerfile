@@ -11,7 +11,7 @@
 # STATUS: validated. .github/workflows/build-api-image.yml now builds the
 # native arch, RUNS it, and fails the workflow unless the image imports (rdkit,
 # tckdb_schemas, the app factory), serves /api/v1/health, and starts its inline
-# worker thread — plus an arm64 import check under emulation, because arm64 is
+# worker thread — plus the same import check natively on arm64 (no emulation), because arm64 is
 # the deployment target and a missing arm64 build is the failure that would
 # only ever show up on the Pi. A `docker build` that succeeds proves the layers
 # assembled and nothing more, which is why publishing used to be the first time
