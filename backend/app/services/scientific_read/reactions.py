@@ -48,11 +48,13 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     molecular_formula_expr,
     reject_client_sort,
+    review_floor_predicate,
     review_summary,
     slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.handles import (
     NO_MATCH,
@@ -898,19 +900,26 @@ def _compute_availability(
     if not entry_ids:
         return {}
 
+    # Owner decision D5: the availability flags and the kinetics count answer "what would the list show", so under
+    # ``?profile=curated`` they count only the records the review floor leaves visible. With no floor every predicate is
+    # ``None`` and the statements are the ones they always were.
     kinetics_count_by_entry: dict[int, int] = dict.fromkeys(entry_ids, 0)
     for entry_id, count in session.execute(
-        select(Kinetics.reaction_entry_id, func.count(Kinetics.id))
-        .where(Kinetics.reaction_entry_id.in_(entry_ids))
-        .group_by(Kinetics.reaction_entry_id)
+        where_visible(
+            select(Kinetics.reaction_entry_id, func.count(Kinetics.id)).where(
+                Kinetics.reaction_entry_id.in_(entry_ids)
+            ),
+            review_floor_predicate(Kinetics.id, SubmissionRecordType.kinetics),
+        ).group_by(Kinetics.reaction_entry_id)
     ).all():
         kinetics_count_by_entry[entry_id] = count
 
     has_ts_set = set(
         session.scalars(
-            select(TransitionState.reaction_entry_id)
-            .where(TransitionState.reaction_entry_id.in_(entry_ids))
-            .distinct()
+            where_visible(
+                select(TransitionState.reaction_entry_id).where(TransitionState.reaction_entry_id.in_(entry_ids)),
+                review_floor_predicate(TransitionState.id, SubmissionRecordType.transition_state),
+            ).distinct()
         ).all()
     )
 
@@ -920,7 +929,7 @@ def _compute_availability(
     if has_ts_set:
         from app.db.models.transition_state import TransitionStateEntry
 
-        rows = session.execute(
+        path_search = (
             select(TransitionState.reaction_entry_id)
             .join(TransitionStateEntry, TransitionStateEntry.transition_state_id == TransitionState.id)
             .join(Calculation, Calculation.transition_state_entry_id == TransitionStateEntry.id)
@@ -928,8 +937,14 @@ def _compute_availability(
                 TransitionState.reaction_entry_id.in_(entry_ids),
                 Calculation.type == CalculationType.path_search,
             )
-            .distinct()
-        ).all()
+        )
+        for id_column, record_type in (
+            (TransitionState.id, SubmissionRecordType.transition_state),
+            (TransitionStateEntry.id, SubmissionRecordType.transition_state_entry),
+            (Calculation.id, SubmissionRecordType.calculation),
+        ):
+            path_search = where_visible(path_search, review_floor_predicate(id_column, record_type))
+        rows = session.execute(path_search.distinct()).all()
         has_path_search_set = {row[0] for row in rows}
 
     # has_atom_map: the reaction states which atom of its reactants and
@@ -939,9 +954,13 @@ def _compute_availability(
     # one, and the flag is what makes the incompleteness visible.
     has_atom_map_set = set(
         session.scalars(
-            select(ReactionAtomMap.reaction_entry_id)
-            .where(ReactionAtomMap.reaction_entry_id.in_(entry_ids))
-            .distinct()
+            where_visible(
+                select(ReactionAtomMap.reaction_entry_id).where(ReactionAtomMap.reaction_entry_id.in_(entry_ids)),
+                # A map of a transition-state entry the floor hides is not counted (D5).
+                review_floor_predicate(
+                    ReactionAtomMap.transition_state_entry_id, SubmissionRecordType.transition_state_entry
+                ),
+            ).distinct()
         ).all()
     )
 

@@ -353,6 +353,7 @@ class KineticsProvenance(BaseModel):
     ts_sp_calculation_id: int | None = None
     ts_sp_calculation_ref: str | None = None
     path_search: PathSearchSummary | None = None
+    #: Under ``?profile=curated`` the whole block is ``null`` when the IRC calculation is below the review floor.
     irc: dict[str, object] | None = None
     primary_level_of_theory: LevelOfTheorySummary | None = None
     primary_software: SoftwareReleaseSummary | None = None
@@ -418,6 +419,10 @@ class KineticsRecord(BaseModel):
     #: The determination this record was declared a representation of; ``null`` means no
     #: determination was declared (every record deposited before declarations existed).
     #: Never inferred from direction, model kind or source links.
+    #:
+    #: Under ``?profile=curated`` it is also ``null`` when the determination's target (a transition-state entry, or a
+    #: network's channel) is below the review floor: a target-less ``resolved_channel`` would say a hidden record
+    #: exists. Read ``null`` there as "not shown", not as "none was declared".
     determination: KineticsDeterminationBlock | None = None
     #: What the depositor declared the coefficient is a coefficient of (phase, observable,
     #: basis, pressure and collider meaning); ``null`` means none was declared. An attributed

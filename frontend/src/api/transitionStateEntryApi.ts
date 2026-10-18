@@ -161,7 +161,8 @@ const trustSchema = z.object({
 const responseSchema = z.object({
     record: z.object({
         transition_state_entry: entryCoreSchema,
-        transition_state: tsCoreSchema,
+        // null under `profile=curated` when the owning transition state is not approved: the entry is shown, its owner is not named.
+        transition_state: tsCoreSchema.nullable(),
         reaction: reactionContextSchema,
         evidence_summary: evidenceSummarySchema,
         validation: validationSchema,
@@ -206,7 +207,7 @@ const siblingRecordSchema = z.object({
     }).passthrough(),
     transition_state: z.object({
         label: z.string().nullable().optional(),
-    }).passthrough(),
+    }).passthrough().nullable(),
     calculations: z.array(calculationSchema).nullable().optional(),
 }).passthrough()
 

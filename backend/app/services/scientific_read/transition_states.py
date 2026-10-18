@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from sqlalchemy import and_, exists, func, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import not_found
@@ -91,9 +91,11 @@ from app.schemas.reads.scientific_transition_state import (
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    review_floor_predicate,
     review_hidden_under_profile,
     review_summary,
     validate_includes,
+    where_visible,
 )
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
@@ -319,8 +321,15 @@ def get_transition_state(
         .order_by(TransitionStateEntry.id.asc())
     ).all()
     entry_ids = [e.id for e in entries]
+    # Owner decision D5: counts and flags answer what the list would show. The lists keep every entry (the ref guard
+    # removes the hidden ones from them); what is COUNTED follows the review floor.
+    _, hidden_entry_ids = review_hidden_under_profile(
+        session, record_type=SubmissionRecordType.transition_state_entry, record_ids=entry_ids
+    )
+    counted_entries = [e for e in entries if e.id not in hidden_entry_ids]
+    counted_entry_ids = [e.id for e in counted_entries]
 
-    entries_summary = _build_entries_summary(entries)
+    entries_summary = _build_entries_summary(counted_entries)
     # One statement for the whole concept, shared by the pooled summary and
     # by every embedded entry record under ``include=entries``. Built here
     # rather than inside each builder so a 20-entry TS pays it once.
@@ -328,7 +337,7 @@ def get_transition_state(
         session, entry_ids
     )
     evidence_summary = _build_concept_evidence_summary(
-        session, entry_ids, levels_index=levels_index
+        session, counted_entry_ids, levels_index=levels_index
     )
     # ``has_review`` at concept grain must answer the same question this
     # concept's own ``include=review`` body does (``_build_review_history``
@@ -337,8 +346,8 @@ def get_transition_state(
     # can disagree with that body in either direction (#534).
     available = _build_available_sections(
         session,
-        entry_ids,
-        has_entries=bool(entries),
+        counted_entry_ids,
+        has_entries=bool(counted_entries),
         has_review=_exists_review_for(
             session, SubmissionRecordType.transition_state, ts.id
         ),
@@ -1003,13 +1012,14 @@ def _build_concept_evidence_summary(
     # One pass gives both the calculation total (COUNT(id)) and the
     # per-type entry coverage (COUNT(DISTINCT transition_state_entry_id)).
     type_rows = session.execute(
-        select(
-            Calculation.type,
-            func.count(Calculation.id),
-            func.count(func.distinct(Calculation.transition_state_entry_id)),
-        )
-        .where(Calculation.transition_state_entry_id.in_(entry_ids))
-        .group_by(Calculation.type)
+        where_visible(
+            select(
+                Calculation.type,
+                func.count(Calculation.id),
+                func.count(func.distinct(Calculation.transition_state_entry_id)),
+            ).where(Calculation.transition_state_entry_id.in_(entry_ids)),
+            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+        ).group_by(Calculation.type)
     ).all()
     calc_counts: dict[CalculationType, int] = {row[0]: row[1] for row in type_rows}
     entry_coverage: dict[CalculationType, int] = {
@@ -1065,14 +1075,17 @@ def _entry_coverage_via_join(
     """
     return int(
         session.scalar(
-            select(
-                func.count(
-                    func.distinct(Calculation.transition_state_entry_id)
+            where_visible(
+                select(
+                    func.count(
+                        func.distinct(Calculation.transition_state_entry_id)
+                    )
                 )
+                .select_from(Calculation)
+                .join(joined, onclause)
+                .where(Calculation.transition_state_entry_id.in_(entry_ids)),
+                review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
             )
-            .select_from(Calculation)
-            .join(joined, onclause)
-            .where(Calculation.transition_state_entry_id.in_(entry_ids))
         )
         or 0
     )
@@ -1093,10 +1106,14 @@ def _build_entry_evidence_summary(
     :class:`TransitionStateEvidenceSummary`).
     """
     entry_ids = [entry_id]
+    calc_visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
     type_rows = session.execute(
-        select(Calculation.type, func.count(Calculation.id))
-        .where(Calculation.transition_state_entry_id.in_(entry_ids))
-        .group_by(Calculation.type)
+        where_visible(
+            select(Calculation.type, func.count(Calculation.id)).where(
+                Calculation.transition_state_entry_id.in_(entry_ids)
+            ),
+            calc_visible,
+        ).group_by(Calculation.type)
     ).all()
     type_counts: dict[CalculationType, int] = {row[0]: row[1] for row in type_rows}
     total = sum(type_counts.values())
@@ -1104,12 +1121,15 @@ def _build_entry_evidence_summary(
     has_geom_val = bool(
         session.scalar(
             select(
-                exists().where(
-                    and_(
-                        CalculationGeometryValidation.calculation_id
-                        == Calculation.id,
-                        Calculation.transition_state_entry_id.in_(entry_ids),
-                    )
+                where_visible(
+                    exists().where(
+                        and_(
+                            CalculationGeometryValidation.calculation_id
+                            == Calculation.id,
+                            Calculation.transition_state_entry_id.in_(entry_ids),
+                        )
+                    ),
+                    calc_visible,
                 )
             )
         )
@@ -1117,12 +1137,15 @@ def _build_entry_evidence_summary(
     has_scf = bool(
         session.scalar(
             select(
-                exists().where(
-                    and_(
-                        CalculationSCFStability.calculation_id
-                        == Calculation.id,
-                        Calculation.transition_state_entry_id.in_(entry_ids),
-                    )
+                where_visible(
+                    exists().where(
+                        and_(
+                            CalculationSCFStability.calculation_id
+                            == Calculation.id,
+                            Calculation.transition_state_entry_id.in_(entry_ids),
+                        )
+                    ),
+                    calc_visible,
                 )
             )
         )
@@ -1172,12 +1195,16 @@ def _build_available_sections(
     """
     has_calcs = False
     has_geoms = False
+    calc_visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
     if entry_ids:
         has_calcs = bool(
             session.scalar(
                 select(
-                    exists().where(
-                        Calculation.transition_state_entry_id.in_(entry_ids)
+                    where_visible(
+                        exists().where(
+                            Calculation.transition_state_entry_id.in_(entry_ids)
+                        ),
+                        calc_visible,
                     )
                 )
             )
@@ -1186,14 +1213,17 @@ def _build_available_sections(
             has_geoms = bool(
                 session.scalar(
                     select(
-                        exists().where(
-                            and_(
-                                CalculationOutputGeometry.calculation_id
-                                == Calculation.id,
-                                Calculation.transition_state_entry_id.in_(
-                                    entry_ids
-                                ),
-                            )
+                        where_visible(
+                            exists().where(
+                                and_(
+                                    CalculationOutputGeometry.calculation_id
+                                    == Calculation.id,
+                                    Calculation.transition_state_entry_id.in_(
+                                        entry_ids
+                                    ),
+                                )
+                            ),
+                            calc_visible,
                         )
                     )
                 )
@@ -1202,8 +1232,11 @@ def _build_available_sections(
         entry_ids
         and session.scalar(
             select(
-                exists().where(
-                    TransitionStateValidationEvidence.transition_state_entry_id.in_(entry_ids)
+                where_visible(
+                    exists().where(
+                        TransitionStateValidationEvidence.transition_state_entry_id.in_(entry_ids)
+                    ),
+                    _evidence_visible(),
                 )
             )
         )
@@ -1215,6 +1248,22 @@ def _build_available_sections(
         has_review=has_review,
         has_validation_evidence=has_validation_evidence,
     )
+
+
+def _evidence_visible():
+    """The review-floor condition on a validation evidence row, for the flags and the descriptor built from it.
+
+    An evidence row rests on the calculation that reconstructed it (the IRC, the frequency job). When that calculation
+    is below the floor, the flag "this entry has IRC evidence" would say a hidden record exists (D5), so the row is not
+    counted. A row with no source calculation (``energy_ordering``) is a deposited claim and is always counted. The
+    LISTS of evidence are left whole: the ref guard removes the rows and energies that name a hidden calculation.
+    """
+    visible = review_floor_predicate(
+        TransitionStateValidationEvidence.reconstruction_calculation_id, SubmissionRecordType.calculation
+    )
+    if visible is None:
+        return None
+    return or_(TransitionStateValidationEvidence.reconstruction_calculation_id.is_(None), visible)
 
 
 def _exists_other_entries_in_ts(
@@ -1240,12 +1289,17 @@ def _exists_other_entries_in_ts(
     return bool(
         session.scalar(
             select(
-                exists().where(
-                    and_(
-                        TransitionStateEntry.transition_state_id
-                        == transition_state_id,
-                        TransitionStateEntry.id != exclude_entry_id,
-                    )
+                where_visible(
+                    exists().where(
+                        and_(
+                            TransitionStateEntry.transition_state_id
+                            == transition_state_id,
+                            TransitionStateEntry.id != exclude_entry_id,
+                        )
+                    ),
+                    review_floor_predicate(
+                        TransitionStateEntry.id, SubmissionRecordType.transition_state_entry
+                    ),
                 )
             )
         )
@@ -1467,10 +1521,13 @@ def _build_validation_descriptor(
     caller to infer it from an empty optional block.
     """
     rows = session.execute(
-        select(
-            TransitionStateValidationEvidence.kind,
-            TransitionStateValidationEvidence.passed,
-        ).where(TransitionStateValidationEvidence.transition_state_entry_id == entry_id)
+        where_visible(
+            select(
+                TransitionStateValidationEvidence.kind,
+                TransitionStateValidationEvidence.passed,
+            ).where(TransitionStateValidationEvidence.transition_state_entry_id == entry_id),
+            _evidence_visible(),
+        )
     ).all()
 
     def _token(kind: str) -> Literal["present", "absent", "failed"]:

@@ -205,7 +205,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         unmappedSmiles: entry.unmapped_smiles ?? null,
         charge: entry.charge,
         multiplicity: entry.multiplicity,
-        transitionStateRef: ts.transition_state_ref,
+        transitionStateRef: ts?.transition_state_ref,
         // No `label` here any more -- `ts.label` is the depositor's own
         // `transition_state.label` (e.g. "TS1"), which this page no longer
         // reads for display (house rule widened 2026-09: no depositor-typed
@@ -273,7 +273,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     // identity header below via `ownRef`; only RELATED refs stay here, per
     // `RefsDisclosure.tsx`'s own docstring.
     const refs = [
-        { label: "Transition state", value: ts.transition_state_ref },
+        ...(ts ? [{ label: "Transition state", value: ts.transition_state_ref }] : []),
         ...(reaction.reaction_entry_ref ? [{ label: "Reaction entry", value: reaction.reaction_entry_ref }] : []),
     ]
 
@@ -337,7 +337,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                         <dl className="kv-list">
                             <div><dt>Entry status</dt><dd>{statusLabel(entry.status)}</dd></div>
                             <div><dt>Deposited</dt><dd>{isoDate(entry.created_at)}</dd></div>
-                            {ts.note && <div><dt>Transition state note</dt><dd>{ts.note}</dd></div>}
+                            {ts?.note && <div><dt>Transition state note</dt><dd>{ts.note}</dd></div>}
                             {/* A plain fact, not a second pill -- see the
                                 comment on `RecordIdentityHeader`'s `pill`
                                 prop above. */}

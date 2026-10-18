@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.155.0 - 2026-10-18
+
+`TransitionStateEntryRecord.transition_state` is `JSONDict | None`: under `profile="curated"` a visible transition-state entry whose
+transition state is not approved comes back with `transition_state` null instead of naming the owner (the key is always present).
+Code that indexes `record["transition_state"]["transition_state_ref"]` under a type checker now needs a `None` check; the default
+profile never returns `None`. Also under `profile="curated"`, a kinetics record's `determination`, `tunneling_application` and
+`provenance["irc"]` are `None` when the transition-state entry, network channel or calculation they name is not approved
+(documented in the type's comment). No method changed, and `tckdb-schemas` is unchanged.
+
 ## 0.154.0 - 2026-10-18
 
 Four typed methods for the relative conformer energy reads: `relative_conformer_energies`, `get_relative_conformer_energy_manifest`,

@@ -111,7 +111,17 @@ def test_pointer_models_are_live_and_never_a_response_subject():
             if info is not None:
                 subjects |= set(_model_classes(info.annotation))
     assert subjects, "found no response envelopes: the scan itself is broken"
-    assert not subjects & ref_guard.POINTER_MODELS, sorted(m.__name__ for m in subjects & ref_guard.POINTER_MODELS)
+    # One model is both a subject and a nested block: a TS entry record is the subject of the entry detail, the browse
+    # and the search, and also an element of another record's ``entries``. The planner never deletes a subject
+    # position (``_is_subject``), so registering it only ever acts on the nested one; it is named here so a second
+    # model cannot join it unnoticed.
+    from app.schemas.reads.scientific_transition_state import ScientificTransitionStateEntryRecord
+
+    both = {ScientificTransitionStateEntryRecord}
+    assert both <= subjects & ref_guard.POINTER_MODELS, "the allowance names a model that is no longer both"
+    assert not (subjects & ref_guard.POINTER_MODELS) - both, sorted(
+        m.__name__ for m in (subjects & ref_guard.POINTER_MODELS) - both
+    )
 
 
 def _nested_models(model):

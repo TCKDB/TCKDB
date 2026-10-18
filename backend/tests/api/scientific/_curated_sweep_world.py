@@ -37,17 +37,23 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     AppUserRole,
     ArrheniusAUnits,
+    AtomMapSource,
     CalculationDependencyRole,
     CalculationType,
     CompositeAssembly,
     CompositeInputSlot,
     IRCDirection,
+    KineticsCalculationRole,
+    KineticsDeterminationTargetKind,
+    KineticsDirection,
+    KineticsRepresentationRole,
     NetworkChannelKind,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkSpeciesRole,
     NetworkStateKind,
     PathSearchMethod,
+    ReactionRole,
     RecordReviewStatus,
     ScanCoordinateKind,
     StatmechCalculationRole,
@@ -59,7 +65,11 @@ from app.services.record_review import ensure_record_review, set_record_review_s
 from app.services.scientific_record_supersession import supersede_scientific_record
 from tests.services.scientific_read._factories import (
     attach_artifact,
+    attach_conformer_selection,
     attach_dependency,
+    attach_freq_result,
+    attach_geometry_atoms,
+    attach_geometry_validation,
     attach_network_kinetics_chebyshev,
     attach_network_reaction,
     attach_network_solve_source_calculation,
@@ -434,6 +444,30 @@ def build_sweep_world(session) -> SweepWorld:
     vis["calc_scan"], vis["calc_irc"], vis["calc_ps"] = calc_scan, calc_irc, calc_ps
     ext["scan_calc"], ext["irc_calc"], ext["path_search_calc"] = calc_scan, calc_irc, calc_ps
 
+    # ---- PR-2b: the transition-state and reaction families --------------------------------------------------------
+    _extend_for_ts_and_reaction_family(
+        session,
+        w,
+        lot=lot,
+        lit=lit,
+        sa=sa,
+        rxe=rxe,
+        r1=r1,
+        ts_v=ts_v,
+        tse_v2=tse_v2,
+        tse_h=tse_h,
+        calc_ts_h=calc_ts_h,
+        calc_ts_v=calc_ts_v,
+        calc_vopt=calc_vopt,
+        calc_h=calc_h,
+        sm_h=sm_h,
+        cg_h=cg_h,
+        kin_v=kin_v,
+        nkin_h=nkin_h,
+        nkin_vh=nkin_vh,
+        geom_ts=geom_ts,
+    )
+
     # ---- review states: hidden ones first (under_review for some), approvals last ---------------------------------
     under_review_keys = {"cg_h", "ts_h", "sm_h", "net_h", "kin_h"}
     kind_to_type = {
@@ -452,8 +486,8 @@ def build_sweep_world(session) -> SweepWorld:
     }
     for key, row in hid.items():
         kind = key.split("_", 1)[0]
-        if kind == "nkin" or key == "thm_h":
-            continue  # nkin is reviewed through its solve; thm_h is moved by the supersession block below
+        if kind == "nkin" or key in ("thm_h", "kin_h"):
+            continue  # nkin is reviewed through its solve; thm_h and kin_h are moved by the supersession blocks below
         _hide(session, kind_to_type[kind], row, under_review=key in under_review_keys)
 
     # Scoping parents are approved too: some reads (structure selection) gate the entry they are scoped to.
@@ -465,12 +499,14 @@ def build_sweep_world(session) -> SweepWorld:
         (p1, R.species_entry),
     ):
         _approve(session, record_type, scoping)
+    for record_type, scoping in ext["scoping_approved_extra"]:
+        _approve(session, record_type, scoping)
 
     # Visible: order matters only in that links already exist (they do). ``thm_v`` is approved below, through the
     # service, because it is also the legacy superseded record.
     for key, row in vis.items():
         kind = key.split("_", 1)[0]
-        if kind == "nkin" or key == "thm_v":
+        if kind == "nkin" or key in ("thm_v", "kin_vs"):
             continue
         _approve(session, kind_to_type[kind], row)
 
@@ -500,6 +536,26 @@ def build_sweep_world(session) -> SweepWorld:
     )
     session.expire_all()
     set_record_review_status(session, record_type=R.thermo, record_id=thm_h.id, status=UNDER_REVIEW, actor=curator)
+
+    # The same legacy edge for kinetics: an approved predecessor (kin_vs) names a hidden successor (kin_h).
+    kin_vs, kin_h = vis["kin_vs"], hid["kin_h"]
+    for row in (kin_vs, kin_h):
+        ensure_record_review(session, record_type=R.kinetics, record_id=row.id)
+        set_record_review_status(session, record_type=R.kinetics, record_id=row.id, status=APPROVED, actor=curator)
+    supersede_scientific_record(
+        session,
+        record_type=R.kinetics,
+        superseded_record_id=kin_vs.id,
+        superseding_record_id=kin_h.id,
+        actor=curator,
+        reason="legacy edge: approved predecessor names a hidden successor",
+    )
+    session.execute(
+        text("UPDATE record_review SET status = 'approved' WHERE record_type = 'kinetics' AND record_id = :id"),
+        {"id": kin_vs.id},
+    )
+    session.expire_all()
+    set_record_review_status(session, record_type=R.kinetics, record_id=kin_h.id, status=UNDER_REVIEW, actor=curator)
     return w
 
 
@@ -515,3 +571,405 @@ def make_statmech_for_ts(session, tse):
     session.add(sm)
     session.flush()
     return sm
+
+
+def _add_irc(session, calc, geometry) -> None:
+    session.add(CalculationIRCResult(calculation_id=calc.id, point_count=2, zero_energy_reference_hartree=-1.0))
+    session.flush()
+    for i in (1, 2):
+        session.add(
+            CalculationIRCPoint(
+                calculation_id=calc.id,
+                point_index=i,
+                direction=IRCDirection.forward,
+                is_ts=(i == 1),
+                electronic_energy_hartree=-1.0 * i,
+                geometry_id=geometry.id,
+            )
+        )
+    session.flush()
+
+
+def _add_path_search(session, calc, geometry) -> None:
+    session.add(
+        CalculationPathSearchResult(
+            calculation_id=calc.id, method=PathSearchMethod.neb, is_double_ended=True, converged=True, n_points=2
+        )
+    )
+    session.flush()
+    for i in (1, 2):
+        session.add(
+            CalculationPathSearchPoint(
+                calculation_id=calc.id, point_index=i, electronic_energy_hartree=-1.0 * i, geometry_id=geometry.id
+            )
+        )
+    session.flush()
+
+
+def _atom_map(session, *, reaction_entry, tse, participant):
+    """A declared one-pair atom map of ``tse`` (the pair binds a reactant atom to a saddle-point atom)."""
+    from app.db.models.reaction_atom_map import ReactionAtomMap, ReactionAtomMapPair
+
+    reactant_geometry = make_geometry(session, natoms=2)
+    ts_geometry = make_geometry(session, natoms=2)
+    for geometry in (reactant_geometry, ts_geometry):
+        attach_geometry_atoms(session, geometry=geometry, symbols=["H", "H"], coords=[[0.0, 0.0, 0.0], [0.0, 0.0, 0.9]])
+    atom_map = ReactionAtomMap(
+        reaction_entry_id=reaction_entry.id,
+        transition_state_entry_id=tse.id,
+        transition_state_geometry_id=ts_geometry.id,
+        source=AtomMapSource.declared,
+    )
+    session.add(atom_map)
+    session.flush()
+    session.add(
+        ReactionAtomMapPair(
+            atom_map_id=atom_map.id,
+            side=ReactionRole.reactant,
+            structure_participant_id=participant.id,
+            geometry_id=reactant_geometry.id,
+            atom_index=1,
+            transition_state_geometry_id=ts_geometry.id,
+            ts_atom_index=1,
+            element="H",
+            ts_element="H",
+        )
+    )
+    session.flush()
+    return atom_map
+
+
+def _extend_for_ts_and_reaction_family(
+    session,
+    w: SweepWorld,
+    *,
+    lot,
+    lit,
+    sa,
+    rxe,
+    r1,
+    ts_v,
+    tse_v2,
+    tse_h,
+    calc_ts_h,
+    calc_ts_v,
+    calc_vopt,
+    calc_h,
+    sm_h,
+    cg_h,
+    kin_v,
+    nkin_h,
+    nkin_vh,
+    geom_ts,
+) -> None:
+    """Every response shape of the transition-state, reaction-entry, reaction and kinetics routes.
+
+    PR-2a's review found seven blocks that failed closed under curated because the world never built them, and every
+    route "answered 200" on a world without the shape. So the world holds, for this family, a hidden record in each
+    place a visible one can name it:
+
+    * a hidden TS with a visible entry (``ts_h`` / ``tse_v``), a hidden entry under a visible TS (``tse_h`` under
+      ``ts_v``), and a visible TS whose entries are one of each;
+    * hidden IRC, path-search, single-point and freq calculations on the VISIBLE entry ``tse_v2``, each with a visible
+      sibling where the shape has one, and the validation evidence that cites them;
+    * statmech on a visible entry, and a VISIBLE statmech on the HIDDEN entry;
+    * visible kinetics that cite hidden calculations, a hidden entry, a hidden statmech and conformer group, a hidden
+      network and a hidden network kinetics, and a superseded kinetics naming a hidden successor;
+    * an atom map on a hidden entry and on a visible one;
+    * free text (a TS note, a kinetics note) that names a hidden record;
+    * UNREVIEWED reaction and species entries. They are scoping parents, not gated records: the curated profile hides
+      no route of theirs, so the world holds them to show the guard hides nothing about them either.
+    """
+
+    from app.db.models.kinetics import (
+        KineticsDetermination,
+        KineticsInterpretationAssignment,
+        KineticsSourceCalculation,
+        KineticsTunnelingApplication,
+    )
+    from app.db.models.transition_state import TransitionStateValidationEnergy, TransitionStateValidationEvidence
+
+    vis, hid, ext = w.visible, w.hidden, w.extra
+
+    # -- hidden calculations on the visible entry tse_v2, each with a visible sibling ---------------------------------
+    def calc_on_tse_v2(type_, *, hidden=False):
+        # The hidden ones carry no level of theory: their shape here is the entry's evidence, and a hidden calculation
+        # with a level would add the same ``used_by`` leaks the level-of-theory family (PR-2c) already lists.
+        return make_calculation(
+            session, type=type_, transition_state_entry_id=tse_v2.id, lot_id=None if hidden else lot.id
+        )
+
+    calc_h_tssp, calc_ts_sp_v = calc_on_tse_v2(CalculationType.sp, hidden=True), calc_on_tse_v2(CalculationType.sp)
+    calc_h_irc, calc_irc_v = calc_on_tse_v2(CalculationType.irc, hidden=True), calc_on_tse_v2(CalculationType.irc)
+    calc_h_ps, calc_ps_v = (
+        calc_on_tse_v2(CalculationType.path_search, hidden=True),
+        calc_on_tse_v2(CalculationType.path_search),
+    )
+    for calc in (calc_h_irc, calc_irc_v):
+        _add_irc(session, calc, geom_ts)
+    for calc in (calc_h_ps, calc_ps_v):
+        _add_path_search(session, calc, geom_ts)
+    hid["calc_h_tssp"], hid["calc_h_irc"], hid["calc_h_ps"] = calc_h_tssp, calc_h_irc, calc_h_ps
+    vis["calc_ts_sp_v"], vis["calc_irc_v"], vis["calc_ps_v"] = calc_ts_sp_v, calc_irc_v, calc_ps_v
+    ext["irc_calc_on_visible_entry"], ext["path_search_calc_on_visible_entry"] = calc_irc_v, calc_ps_v
+    # Artifacts: the tunneling application below cites the freq's and the IRC's.
+    freq_artifact = attach_artifact(
+        session, calculation=calc_ts_h, sha256="c" * 64, uri="s3://bucket/ts-freq.log", filename="tf.log"
+    )
+    irc_artifact = attach_artifact(
+        session, calculation=calc_h_irc, sha256="d" * 64, uri="s3://bucket/ts-irc.dat", filename="ti.dat"
+    )
+    # Geometry validation and SCF stability on the hidden calculation the kinetics provenance resolves to.
+    attach_geometry_validation(session, calculation=calc_h_tssp)
+    attach_scf_stability(session, calculation=calc_h_tssp)
+
+    # -- TS validation evidence on tse_v2 citing them ----------------------------------------------------------------
+    irc_ev = TransitionStateValidationEvidence(
+        transition_state_entry_id=tse_v2.id,
+        kind="irc",
+        passed=True,
+        rationale="IRC connects the declared wells",
+        reconstruction_calculation_id=calc_h_irc.id,
+    )
+    mode_ev = TransitionStateValidationEvidence(
+        transition_state_entry_id=tse_v2.id,
+        kind="imaginary_mode",
+        passed=True,
+        rationale="one imaginary mode along the reaction coordinate",
+        reconstruction_calculation_id=calc_ts_h.id,
+        imaginary_frequency_count=1,
+        imaginary_frequency_cm1=-1234.5,
+        mode_displacement_agrees=True,
+    )
+    order_ev = TransitionStateValidationEvidence(
+        transition_state_entry_id=tse_v2.id,
+        kind="energy_ordering",
+        passed=True,
+        rationale="the saddle point lies above both wells",
+    )
+    session.add_all([irc_ev, mode_ev, order_ev])
+    session.flush()
+    session.add_all(
+        [
+            TransitionStateValidationEnergy(
+                evidence_id=order_ev.id,
+                participant="ts",
+                energy_kind="electronic",
+                energy_hartree=-1.0,
+                source_calculation_id=calc_h_tssp.id,
+            ),
+            TransitionStateValidationEnergy(
+                evidence_id=order_ev.id,
+                participant="ts",
+                energy_kind="e0",
+                energy_hartree=-0.9,
+                source_calculation_id=calc_ts_sp_v.id,
+            ),
+        ]
+    )
+    session.flush()
+
+    # -- more shapes of the entry's evidence: a hidden scan and optimisation, the dependency edges between the entry's
+    #    calculations, and the freq result the saddle-point verdict is read from --------------------------------------
+    calc_h_scan, calc_scan_v = calc_on_tse_v2(CalculationType.scan, hidden=True), calc_on_tse_v2(CalculationType.scan)
+    for calc in (calc_h_scan, calc_scan_v):
+        session.add(CalculationScanResult(calculation_id=calc.id, dimension=1, is_relaxed=True))
+        session.flush()
+        session.add(
+            CalculationScanCoordinate(
+                calculation_id=calc.id,
+                coordinate_index=1,
+                coordinate_kind=ScanCoordinateKind.bond,
+                atom1_index=1,
+                atom2_index=2,
+            )
+        )
+        session.flush()
+        for i in (1, 2):
+            session.add(
+                CalculationScanPoint(
+                    calculation_id=calc.id, point_index=i, electronic_energy_hartree=-1.0 * i, geometry_id=geom_ts.id
+                )
+            )
+        session.flush()
+    calc_h_tsopt = calc_on_tse_v2(CalculationType.opt, hidden=True)
+    hid["calc_h_scan"], hid["calc_h_tsopt"] = calc_h_scan, calc_h_tsopt
+    vis["calc_scan_on_visible_entry"] = calc_scan_v
+    attach_geometry_validation(session, calculation=calc_h_tsopt)
+    attach_dependency(session, parent=calc_ts_v, child=calc_ts_sp_v, role=CalculationDependencyRole.single_point_on)
+    attach_dependency(session, parent=calc_ts_h, child=calc_ts_sp_v, role=CalculationDependencyRole.freq_on)
+    attach_dependency(session, parent=calc_ts_v, child=calc_ts_h, role=CalculationDependencyRole.freq_on)
+    attach_freq_result(session, calculation=calc_ts_h, frequencies_cm1=[-1234.5, 345.0, 678.0])
+    # Conformers of a reaction participant: a hidden group and a visible one (reached through /full?include=conformers).
+    cg_h_rxn = make_conformer_group(session, r1, label="hidden-participant-group")
+    cg_v_rxn = make_conformer_group(session, r1, label="visible-participant-group")
+    hid["cg_h_rxn"], vis["cg_v_rxn"] = cg_h_rxn, cg_v_rxn
+
+    # -- a VISIBLE statmech on the hidden entry, and free text that names a hidden record ----------------------------
+    sm_ts_on_hidden = make_statmech_for_ts(session, tse_h)
+    attach_statmech_source_calculation(
+        session,
+        statmech=sm_ts_on_hidden,
+        calculation=make_calculation(
+            session, type=CalculationType.freq, transition_state_entry_id=tse_h.id, lot_id=lot.id
+        ),
+        role=StatmechCalculationRole.freq,
+    )
+    vis["sm_ts_on_hidden_entry"] = sm_ts_on_hidden
+    ts_v.note = f"reviewed against {calc_ts_h.public_ref}"
+
+    # -- atom maps: one on the hidden entry, one on the visible entry --------------------------------------------------
+    participant = rxe.structure_participants[0]
+    _atom_map(session, reaction_entry=rxe, tse=tse_h, participant=participant)
+    _atom_map(session, reaction_entry=rxe, tse=tse_v2, participant=participant)
+
+    # -- kinetics ---------------------------------------------------------------------------------------------------
+    def source(kinetics, calc, role):
+        session.add(KineticsSourceCalculation(kinetics_id=kinetics.id, calculation_id=calc.id, role=role))
+
+    source(kin_v, calc_ts_h, KineticsCalculationRole.freq)
+    source(kin_v, calc_h_tssp, KineticsCalculationRole.ts_energy)
+    source(kin_v, calc_h_irc, KineticsCalculationRole.irc)
+    source(kin_v, calc_h_ps, KineticsCalculationRole.fit_source)
+    source(kin_v, calc_h_tsopt, KineticsCalculationRole.fit_source)  # the optimisation the geometry validation hangs on
+    session.flush()
+    kin_v.network_kinetics_id = nkin_h.id  # the bridge to a hidden network kinetics
+    kin_v.note = f"fit to {calc_h_tssp.public_ref}"
+    kin_v.protocol_declaration = {
+        "version": 1,
+        "supporting_calculations": [
+            {"calculation_ref": calc_h.public_ref, "purpose": "frequency"},
+            {"calculation_ref": calc_vopt.public_ref, "purpose": "geometry"},
+        ],
+    }
+    determination = KineticsDetermination(
+        reaction_entry_id=rxe.id,
+        direction=KineticsDirection.forward,
+        target_kind=KineticsDeterminationTargetKind.resolved_channel,
+        target_transition_state_entry_id=tse_h.id,
+        literature_id=lit.id,
+        determination_key="sweep-hidden-ts-entry",
+        identity_hash=_hash("sweep-hidden-ts-entry"),
+    )
+    session.add(determination)
+    session.flush()
+    kin_v.determination_id = determination.id
+    kin_v.representation_role = KineticsRepresentationRole.complete
+    selection = attach_conformer_selection(session, conformer_group=cg_h)
+    session.add_all(
+        [
+            KineticsInterpretationAssignment(
+                kinetics_id=kin_v.id,
+                subject_key="transition_state",
+                role="transition_state",
+                statmech_id=sm_h.id,
+                transition_state_entry_id=tse_h.id,
+                ensemble_policy="lowest_energy_conformer",
+                standard_state_convention="ideal_gas_1_bar",
+                degeneracy_interpretation="reaction_path_degeneracy",
+            ),
+            KineticsInterpretationAssignment(
+                kinetics_id=kin_v.id,
+                subject_key="reactant:1",
+                role="reactant",
+                statmech_id=vis["sm_v"].id,
+                conformer_selection_id=selection.id,
+                ensemble_policy="lowest_energy_conformer",
+                standard_state_convention="ideal_gas_1_bar",
+                degeneracy_interpretation="reaction_path_degeneracy",
+            ),
+            KineticsTunnelingApplication(
+                kinetics_id=kin_v.id,
+                model="sct",
+                transition_state_entry_id=tse_h.id,
+                source_calculation_id=calc_h_tssp.id,
+                imaginary_frequency_cm1=-1234.5,
+                result_artifact_id=freq_artifact.id,
+                sct_path_integral_artifact_id=irc_artifact.id,
+            ),
+        ]
+    )
+    session.flush()
+
+    # A second visible record whose determination targets a HIDDEN network's channel.
+    kin_vn = make_kinetics(session, reaction_entry=rxe, a=2.0e-12, ea_kj_mol=20.0)
+    channel_determination = KineticsDetermination(
+        reaction_entry_id=rxe.id,
+        direction=KineticsDirection.forward,
+        target_kind=KineticsDeterminationTargetKind.resolved_channel,
+        target_network_channel_id=nkin_vh.channel_id,
+        literature_id=lit.id,
+        determination_key="sweep-hidden-network-channel",
+        identity_hash=_hash("sweep-hidden-network-channel"),
+    )
+    session.add(channel_determination)
+    session.flush()
+    kin_vn.determination_id = channel_determination.id
+    kin_vn.representation_role = KineticsRepresentationRole.complete
+    vis["kin_vn"] = kin_vn
+
+    # A visible predecessor naming the hidden kin_h through its supersession notice (wired at the end of the world).
+    vis["kin_vs"] = make_kinetics(session, reaction_entry=rxe, a=5.0e-12, ea_kj_mol=12.0)
+
+    # -- unreviewed scoping parents -----------------------------------------------------------------------------------
+    # rxe_u and every species entry of it are unreviewed; rxe_a is APPROVED but has an unreviewed reactant (ru1).
+    ru1, ru2, pu1, pa1 = (
+        make_species_entry(session, make_species(session, inchi_key=next_inchi_key(tag)))
+        for tag in ("SWU1", "SWU2", "SWU3", "SWU4")
+    )
+    reaction_u = make_chem_reaction(
+        session, reactants=[ru1.species, ru2.species], products=[pu1.species], reversible=False
+    )
+    rxe_u = make_reaction_entry(session, reaction=reaction_u, reactant_entries=[ru1, ru2], product_entries=[pu1])
+    reaction_a = make_chem_reaction(session, reactants=[ru1.species], products=[pa1.species], reversible=False)
+    rxe_a = make_reaction_entry(session, reaction=reaction_a, reactant_entries=[ru1], product_entries=[pa1])
+    ts_u = make_transition_state(session, reaction_entry=rxe_u, label="unreviewed-entry-ts")
+    tse_vu = make_transition_state_entry(session, transition_state=ts_u)
+    kin_vu = make_kinetics(session, reaction_entry=rxe_u)
+    kin_va = make_kinetics(session, reaction_entry=rxe_a)
+    vis["ts_vu"], vis["tse_vu"], vis["kin_vu"], vis["kin_va"] = ts_u, tse_vu, kin_vu, kin_va
+    ext["reaction_entry_unreviewed"], ext["reaction_entry_hidden_participant"] = rxe_u, rxe_a
+    ext["species_entry_unreviewed"] = ru1
+    # pa1 is the only one of these approved (below, with the world's scoping approvals).
+    ext["scoping_approved_extra"] = [(R.reaction_entry, rxe_a), (R.species_entry, pa1)]
+
+    # -- counts and flags (D5): records whose every child is hidden -------------------------------------------------------
+    # A visible TS (ts_vw) with a visible entry (tse_vw) whose ONLY calculations and evidence are hidden, and a hidden
+    # sibling entry (tse_hw2). Under curated nothing about those children may be counted or flagged.
+    ts_vw = make_transition_state(session, reaction_entry=rxe, label="visible-ts-hidden-children")
+    tse_vw = make_transition_state_entry(session, transition_state=ts_vw)
+    tse_hw2 = make_transition_state_entry(session, transition_state=ts_vw, multiplicity=6)
+    calc_h_w1 = make_calculation(session, type=CalculationType.irc, transition_state_entry_id=tse_vw.id, lot_id=None)
+    calc_h_w2 = make_calculation(session, type=CalculationType.opt, transition_state_entry_id=tse_vw.id, lot_id=None)
+    _add_irc(session, calc_h_w1, geom_ts)
+    attach_geometry_validation(session, calculation=calc_h_w2)
+    attach_output_geometry(session, calculation=calc_h_w2, geometry=make_geometry(session))
+    session.add(
+        TransitionStateValidationEvidence(
+            transition_state_entry_id=tse_vw.id,
+            kind="irc",
+            passed=True,
+            rationale="IRC connects the declared wells",
+            reconstruction_calculation_id=calc_h_w1.id,
+        )
+    )
+    session.flush()
+    vis["ts_vw"], vis["tse_vw"] = ts_vw, tse_vw
+    hid["tse_hw2"], hid["calc_h_w1"], hid["calc_h_w2"] = tse_hw2, calc_h_w1, calc_h_w2
+
+    # A reaction entry (approved) that has ONLY hidden things: a hidden TS with a hidden path search, a hidden kinetics.
+    wr1, wp1 = (
+        make_species_entry(session, make_species(session, inchi_key=next_inchi_key(t))) for t in ("SWW1", "SWW2")
+    )
+    reaction_w = make_chem_reaction(session, reactants=[wr1.species], products=[wp1.species], reversible=False)
+    rxe_w = make_reaction_entry(session, reaction=reaction_w, reactant_entries=[wr1], product_entries=[wp1])
+    ts_hw = make_transition_state(session, reaction_entry=rxe_w, label="hidden-only-ts")
+    tse_hw = make_transition_state_entry(session, transition_state=ts_hw)
+    calc_h_psw = make_calculation(
+        session, type=CalculationType.path_search, transition_state_entry_id=tse_hw.id, lot_id=None
+    )
+    _add_path_search(session, calc_h_psw, geom_ts)
+    kin_hw = make_kinetics(session, reaction_entry=rxe_w, a=7.0e-12)
+    hid["ts_hw"], hid["tse_hw"], hid["calc_h_psw"], hid["kin_hw"] = ts_hw, tse_hw, calc_h_psw, kin_hw
+    ext["reaction_entry_all_hidden"] = rxe_w
+    ext["scoping_approved_extra"].append((R.reaction_entry, rxe_w))

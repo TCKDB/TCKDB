@@ -52,6 +52,21 @@ POPULATION_KEYS = frozenset(
         "has_kinetics",
         "has_calculations",
         "ids",
+        # PR-2b (D5): the transition-state and reaction counts and flags follow the floor like the species-side ones.
+        "kinetics_count",
+        "has_transition_state",
+        "has_path_search",
+        "has_entries",
+        "has_geometries",
+        "has_validation_evidence",
+        "has_opt",
+        "has_freq",
+        "has_sp",
+        "has_irc",
+        "has_geometry_validation",
+        "has_scf_stability",
+        "entry_count",
+        "by_status",
     }
 )
 
@@ -59,7 +74,23 @@ POPULATION_KEYS = frozenset(
 #: checksum) rather than the records. They differ between profiles by design.
 DESCRIBES_THE_READ_KEYS = frozenset({"watermark", "disclosures", "read_profile", "integrity", "population"})
 #: Exact paths for the same reason where the key name is too common to ignore everywhere (``review`` is also a badge).
-DESCRIBES_THE_READ_PATHS = frozenset({"review.effective_floor"})
+DESCRIBES_THE_READ_PATHS = frozenset(
+    {
+        "review.effective_floor",
+        # D5 (PR-2b): the validation tokens and the per-type entry coverage count only the evidence the floor shows.
+        "validation.irc",
+        "validation.energy_ordering",
+        "validation.imaginary_mode",
+        *(
+            f"evidence_coverage.{name}"
+            for name in ("opt", "freq", "sp", "irc", "path_search", "geometry_validation", "scf_stability")
+        ),
+    }
+)
+
+#: Fields whose value is a MAP of slots keyed by role (``/full``'s ``transition_states[*].calculations``), not a model
+#: with fixed keys. A slot whose calculation is hidden is removed from the map; the key of a model is never removed.
+REMOVABLE_MAP_FIELDS = frozenset({"calculations"})
 
 #: Key stem -> world kind, for the integer-id check.
 ID_STEM_TO_KIND = {
@@ -187,11 +218,13 @@ def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
                 key in REQUEST_KEYS
                 or key in POPULATION_KEYS
                 or key in DESCRIBES_THE_READ_KEYS
-                or sub in DESCRIBES_THE_READ_PATHS
+                or any(sub == known or sub.endswith("." + known) for known in DESCRIBES_THE_READ_PATHS)
                 or key.endswith("_sha256")  # a checksum over whatever population the profile left
             ):
                 continue
             if key not in cur:
+                if path.rsplit(".", 1)[-1] in REMOVABLE_MAP_FIELDS and isinstance(exp[key], dict):
+                    continue  # a slot of a map, withheld whole
                 out.append(f"{sub}<key removed>")
             elif key not in exp:
                 out.append(f"{sub}<key added>")
@@ -211,3 +244,16 @@ def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
             i += 1
         return []
     return [] if exp == cur else [f"{path}<value changed>"]
+
+
+#: Routes whose default order sorts on the availability flags (``has_kinetics``, ``has_transition_state``). Those flags
+#: follow the floor (D5), so a curated page can order the same records differently: it is compared by record, not by
+#: position.
+FLAG_SORTED_ROUTES = frozenset({"/api/v1/scientific/reactions/browse", "/api/v1/scientific/reactions/search"})
+
+
+def order_independent(route_path: str, body: Any) -> Any:
+    """``body`` with the ``records`` of a flag-sorted route put in a canonical order, for the withholding comparison."""
+    if route_path in FLAG_SORTED_ROUTES and isinstance(body, dict) and isinstance(body.get("records"), list):
+        return {**body, "records": sorted(body["records"], key=lambda r: str(r.get("reaction_entry_ref")))}
+    return body

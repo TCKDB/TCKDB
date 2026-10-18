@@ -22,6 +22,27 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curated reads of the transition-state and reaction routes no longer name hidden records (2026-10-18)
+
+**Narrowing under `profile=curated` only; the default (exploratory) output is unchanged.** Migration: none. New environment variable:
+none. `tckdb-schemas` unchanged, `tckdb-client` 0.155.0.
+
+- The central ref guard is enabled for `/transition-states`, `/transition-state-entries`, `/reaction-entries` (the entry's kinetics and
+  `/full`), `/reactions` and `/kinetics`. Calculation, transition-state-entry, network, statmech, conformer-group and kinetics blocks that
+  name a record below the review floor are dropped from lists or set to `null`; a ref the guard cannot place fails the request (500)
+  rather than leaking. The sweep ratchet lost its 40 entries for these routes.
+- **OpenAPI field widening (D1):** `ScientificTransitionStateEntryRecord.transition_state` and `TransitionStateInFull.transition_state_ref`
+  are nullable (still required keys). A visible entry whose transition state is hidden stays visible with the owner withheld; a hidden
+  owner never hides its entry.
+- A kinetics record's `determination` is `null` when its target entry or network channel is hidden, `tunneling_application` is `null` when
+  it cites a hidden entry or calculation, and `provenance.irc` is `null` when its calculation is hidden.
+- Counts and flags follow the floor (D5): a transition state's `entries_summary` and evidence coverage, an entry's `evidence_summary`,
+  `available_sections` and `validation` tokens, and a reaction's `availability` (kinetics count, transition state, path search, atom map)
+  count only what the profile shows. `/reactions` default order sorts on those flags, so a curated page can order the same records
+  differently.
+- `tckdb-client` 0.155.0: `TransitionStateEntryRecord.transition_state` is `JSONDict | None`. The transition-state entry page tolerates a
+  null owner.
+
 ## Structure rule manifest 0.2.0, with 0.1.0 kept for replay (2026-10-18)
 
 **Audit record only; no rule is activated.** Migration: none. New environment variable: none. Package versions: unchanged. OpenAPI

@@ -646,3 +646,37 @@ def review_hidden_under_profile(
 
     badges = fetch_review_badges(session, record_type=record_type, record_ids=ids)
     return badges, {rid for rid, b in badges.items() if status_hidden_under_profile(b.status)}
+
+
+def review_floor_predicate(id_column: Any, record_type: SubmissionRecordType) -> Any:
+    """A SQL condition true for the rows of ``record_type`` the active profile's review floor leaves visible.
+
+    ``id_column`` is the column holding the record id (``Calculation.id``, or a foreign key such as
+    ``Evidence.reconstruction_calculation_id``). Returns ``None`` when there is no floor (the default profile) or the
+    floor hides nothing, so a caller adds no condition and its statement is unchanged.
+
+    Owner decision D5: a count or flag that would say a hidden record exists ("this entry has an IRC", "3 calculations")
+    answers what the list endpoint would show. A missing review row reads as ``not_reviewed``, as everywhere else.
+    """
+    from app.services.scientific_read.handles import status_hidden_under_profile
+
+    profile = current_read_profile()
+    if profile.review_floor is None:
+        return None
+    hidden = [s for s in RecordReviewStatus if status_hidden_under_profile(s, profile=profile)]
+    if not hidden:
+        return None
+
+    def review_of(*conditions: Any) -> Any:
+        return select(RecordReview.id).where(
+            RecordReview.record_type == record_type, RecordReview.record_id == id_column, *conditions
+        )
+
+    if status_hidden_under_profile(RecordReviewStatus.not_reviewed, profile=profile):
+        return review_of(RecordReview.status.not_in(hidden)).exists()
+    return ~review_of(RecordReview.status.in_(hidden)).exists()
+
+
+def where_visible(stmt: Any, predicate: Any) -> Any:
+    """``stmt`` restricted by ``predicate`` (from :func:`review_floor_predicate`); untouched when it is ``None``."""
+    return stmt if predicate is None else stmt.where(predicate)

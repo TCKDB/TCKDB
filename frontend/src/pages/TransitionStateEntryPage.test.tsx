@@ -607,6 +607,16 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.getAllByRole("link", { name: "rxn_nu4c52up4c4hqtbtxufwbscq3a" })).toHaveLength(1)
     })
 
+    it("renders an entry whose owning transition state is withheld (profile=curated): no transition-state ref, one reference row", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord({ transition_state: null }) })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.queryByText("ts_uql5lf3xeqnehtostrilmns5yi")).not.toBeInTheDocument()
+        expect(screen.getByText(bySummaryText(/References \(1\)/))).toBeVisible()
+    })
+
     it("shows this entry's OWN ref first in the identity block, at rest, with the data face and a copy button -- and never inside the References disclosure", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({ record: mockRecord() })

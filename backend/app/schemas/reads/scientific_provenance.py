@@ -296,6 +296,9 @@ class TransitionStateInFull(BaseModel):
     - ``calculations[*].calculation_ref`` →
       ``GET /scientific/calculations/{ref}``
 
+    ``transition_state_ref`` is ``null`` under ``?profile=curated`` when the owning transition state is below the review
+    floor: the entry stays in the response and only its owner ref (and id) is withheld (owner decision D1).
+
     Integer ``*_id`` siblings are Phase D policy-gated. ``status``
     and ``evidence_summary`` mirror the corresponding fields on
     :class:`ScientificTransitionStateEntryRecord` so the
@@ -311,7 +314,9 @@ class TransitionStateInFull(BaseModel):
     """
 
     transition_state_id: int | None = None
-    transition_state_ref: str
+    #: The owning transition state. ``null`` under ``?profile=curated`` when that transition state is below
+    #: the review floor: the entry stays in the response, only its owner ref is withheld (owner decision D1).
+    transition_state_ref: str | None
     transition_state_entry_id: int
     transition_state_entry_ref: str
     status: TransitionStateEntryStatus | None = None

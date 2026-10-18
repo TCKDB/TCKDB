@@ -38,6 +38,7 @@ from tests.api.scientific._curated_sweep_analysis import (
     REGENERATE,
     fmt,
     id_leaks,
+    order_independent,
     parse_body,
     read_baseline,
     ref_leaks,
@@ -140,6 +141,9 @@ _CALC = f"{BASE}/calculations/{{calculation_ref_or_id}}"
 _TSE = f"{BASE}/transition-state-entries/{{transition_state_entry_ref_or_id}}"
 _TS = f"{BASE}/transition-states/{{transition_state_ref_or_id}}"
 _NET = f"{BASE}/networks/{{network_ref_or_id}}"
+_KIN = f"{BASE}/reaction-entries/{{reaction_entry_id}}/kinetics"
+_KSEARCH = f"{BASE}/kinetics/search"
+_TSBROWSE = f"{BASE}/transition-states/browse"
 
 #: Hidden record -> route templates where the exploratory profile names it today (the inventory's paths). The positive
 #: control. Every pair must be seen by the exploratory crawl.
@@ -161,7 +165,23 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
         f"{BASE}/conformer-observations/{{conformer_observation_ref_or_id}}",
         f"{BASE}/level-of-theories/{{level_of_theory_ref_or_id}}",
     },
-    "calc_h_ts": {f"{BASE}/statmech/{{statmech_ref_or_id}}", _TSE, _TS, _FULL},
+    "calc_h_ts": {f"{BASE}/statmech/{{statmech_ref_or_id}}", _TSE, _TS, _FULL, _KIN, _KSEARCH},
+    # PR-2b: hidden calculations of every kind a visible TS entry holds, named by the entry's reads and by the visible
+    # kinetics that cite them.
+    "calc_h_tssp": {_TSE, _TS, _TSBROWSE, _FULL, _KIN, _KSEARCH},
+    "calc_h_irc": {_TSE, _TS, _TSBROWSE, _FULL, _KIN, _KSEARCH},
+    "calc_h_ps": {_TSE, _TS, _TSBROWSE, _FULL, _KIN, _KSEARCH},
+    "calc_h_tsopt": {_TSE, _TS, _TSBROWSE, _FULL, _KIN, _KSEARCH},
+    "calc_h_scan": {_TSE, _TS, _TSBROWSE, _FULL},
+    "cg_h_rxn": {_FULL},
+    # D5 world: children of a visible entry and a reaction entry with only hidden records.
+    "tse_hw2": {_TS, _TSBROWSE},
+    "calc_h_w1": {_TSE, _TS, _TSBROWSE},
+    "calc_h_w2": {_TSE, _TS, _TSBROWSE},
+    "ts_hw": {_TSBROWSE},
+    "tse_hw": {_TSBROWSE},
+    "calc_h_psw": {_TSBROWSE},
+    "kin_hw": {_KIN},
     "cg_h": {
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies",
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/manifest",
@@ -174,7 +194,7 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     },
     "co_h": {_CALC, f"{BASE}/conformer-groups/{{conformer_group_ref_or_id}}", f"{_SPE}/thermo"},
     "ts_h": {_TSE, _FULL},
-    "tse_h": {_CALC, _TS, _FULL},
+    "tse_h": {_CALC, _TS, _FULL, _KIN, _KSEARCH},
     "sm_h": {f"{_SPE}/thermo", f"{_SPE}/statmech"},
     "sm_ts_h": {_TSE, _TS},
     "trn_h": {f"{_SPE}/transport"},
@@ -352,7 +372,7 @@ def test_curated_sweep_report_and_ratchet(client, db_session, login_as, monkeypa
         ckind, cobj = parse_body(c.text)
         if ekind != "json" or ckind != "json":
             continue
-        for path in withholding_violations(eobj, cobj):
+        for path in withholding_violations(order_independent(route[1], eobj), order_independent(route[1], cobj)):
             if route in RELATIVE_ENERGY_ROUTES and path.split("<", 1)[0] in RELATIVE_ENERGY_POPULATION_PATHS:
                 continue
             if (
