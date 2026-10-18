@@ -624,22 +624,32 @@ def _species_thermo_block(
 
 
 def _conformer_refs(
-    session: Session, observation_ids: list[int]
+    session: Session, observation_ids: list[int], profile: ResolvedReadProfile
 ) -> tuple[list[str], list[str]]:
-    """Resolve conformer observation ids to (group_refs, observation_refs)."""
+    """Resolve conformer observation ids to (group_refs, observation_refs).
+
+    Only observations the profile shows are resolved, so a group is named only THROUGH a shown observation: a visible
+    group reached by a hidden observation would otherwise be named beside an empty observation list, which says the
+    hidden observation exists. (A hidden group reached by a shown observation still arrives here; the document withhold
+    drops its ref.)
+    """
     if not observation_ids:
         return [], []
     rows = session.execute(
-        select(
-            ConformerObservation.public_ref,
-            ConformerGroup.public_ref,
-        )
-        .join(
-            ConformerGroup,
-            ConformerGroup.id == ConformerObservation.conformer_group_id,
-        )
-        .where(ConformerObservation.id.in_(observation_ids))
-        .order_by(ConformerObservation.id)
+        where_visible(
+            select(
+                ConformerObservation.public_ref,
+                ConformerGroup.public_ref,
+            )
+            .join(
+                ConformerGroup,
+                ConformerGroup.id == ConformerObservation.conformer_group_id,
+            )
+            .where(ConformerObservation.id.in_(observation_ids)),
+            review_floor_predicate(
+                ConformerObservation.id, SubmissionRecordType.conformer_observation, profile=profile
+            ),
+        ).order_by(ConformerObservation.id)
     ).all()
     observation_refs = [r[0] for r in rows]
     group_refs = sorted({r[1] for r in rows})
@@ -752,7 +762,7 @@ def _build_species_records(
             continue
 
         conformer_group_refs, conformer_observation_refs = _conformer_refs(
-            session, sorted(conformer_obs_ids)
+            session, sorted(conformer_obs_ids), profile
         )
 
         records.append(

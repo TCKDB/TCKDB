@@ -22,7 +22,6 @@ import json
 
 from sqlalchemy.orm import Session
 
-from app.db.models.common import ProfileRecommendation
 from app.services.scientific_read import ref_guard
 from app.services.scientific_read.profile import ResolvedReadProfile
 
@@ -41,9 +40,7 @@ class WithheldBatcher:
     def __init__(self, session: Session, profile: ResolvedReadProfile) -> None:
         self._session = session
         self._profile = profile
-        self._active = (
-            profile.review_floor is not None and profile.recommendation is not ProfileRecommendation.tckdb_curated_release
-        )
+        self._active = ref_guard.guard_active(profile)
         self._pending: list[dict] = []
 
     def add(self, record: dict) -> list[str]:
@@ -61,8 +58,10 @@ class WithheldBatcher:
             return []
         batch, self._pending = self._pending, []
         # Looked up on the module at call time, so a test (or the sweep) can observe the call.
-        ref_guard.withhold_in_document(self._session, batch, profile=self._profile)
-        return [dumps_line(record) for record in batch]
+        # The guard returns a withheld copy and leaves ``batch`` alone: the copy is what is released.
+        report = ref_guard.withhold_in_document(self._session, batch, profile=self._profile, mode="null")
+        assert report.facts is not None
+        return [dumps_line(record) for record in report.facts]
 
 
 __all__ = ["EXPORT_BATCH_SIZE", "WithheldBatcher", "dumps_line"]

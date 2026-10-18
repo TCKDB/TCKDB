@@ -289,9 +289,9 @@ def test_one_visibility_statement_per_batch(client, world, monkeypatch):
     calls: list[int] = []
     real = ref_guard.withhold_in_document
 
-    def counting(session, documents, *, profile):
+    def counting(session, documents, *, profile, mode):
         calls.append(len(documents))
-        return real(session, documents, profile=profile)
+        return real(session, documents, profile=profile, mode=mode)
 
     monkeypatch.setattr(ref_guard, "withhold_in_document", counting)
 
@@ -308,15 +308,15 @@ def test_one_visibility_statement_per_batch(client, world, monkeypatch):
     real_hidden = ref_guard.hidden_refs
     inside = {"on": False}
 
-    def spying_hidden(session, refs, *, profile):
+    def spying_hidden(session, refs, *, profile, **kwargs):
         if inside["on"]:
             statements.append(1)
-        return real_hidden(session, refs, profile=profile)
+        return real_hidden(session, refs, profile=profile, **kwargs)
 
-    def wrapped(session, documents, *, profile):
+    def wrapped(session, documents, *, profile, mode):
         inside["on"] = True
         try:
-            return real(session, documents, profile=profile)
+            return real(session, documents, profile=profile, mode=mode)
         finally:
             inside["on"] = False
 
@@ -436,8 +436,11 @@ def test_gap_and_skip_counts_follow_the_floor(client, world):
 # ---------------------------------------------------------------------------
 
 
-def test_untyped_mode_blanks_values_and_drops_list_strings(db_session, world):
-    """Kills: a hidden ref kept as a value or list element; a list element blanked instead of dropped; free text kept."""
+def test_null_mode_blanks_values_and_drops_list_strings_on_a_copy(db_session, world):
+    """Kills: a hidden ref kept as a value or list element; a list element blanked instead of dropped; free text kept;
+    the input modified (the guard returns a copy)."""
+    import copy
+
     w = world
     hidden_calc, visible_calc = w.hidden["calc_h"].public_ref, w.visible["calc_vf"].public_ref
     documents = [
@@ -449,8 +452,10 @@ def test_untyped_mode_blanks_values_and_drops_list_strings(db_session, world):
             "note": f"see {hidden_calc} for details",
         }
     ]
-    report = ref_guard.withhold_in_document(db_session, documents, profile=CURATED)
-    assert documents == [
+    before = copy.deepcopy(documents)
+    report = ref_guard.withhold_in_document(db_session, documents, profile=CURATED, mode="null")
+    assert documents == before, "the input was modified"
+    assert report.facts == [
         {
             "a": None,
             "b": visible_calc,
@@ -460,16 +465,110 @@ def test_untyped_mode_blanks_values_and_drops_list_strings(db_session, world):
         }
     ]
     assert report.hidden == {hidden_calc}
-    # exploratory: untouched, no statement
+    assert report.tokens == {} and [b.path for b in report.blanked] == ["note"]
+    # exploratory: a copy, unchanged, no site
     again = [{"a": hidden_calc}]
-    assert ref_guard.withhold_in_document(db_session, again, profile=EXPLORATORY).sites == []
-    assert again == [{"a": hidden_calc}]
+    report = ref_guard.withhold_in_document(db_session, again, profile=EXPLORATORY, mode="null")
+    assert report.sites == [] and report.facts == again and report.facts is not again
 
 
-def test_a_hidden_ref_used_as_a_dict_key_fails_closed(db_session, world):
-    """Kills: dropping or ignoring a hidden ref that has nowhere to go (owner decision D4)."""
+def test_the_mode_is_required_and_placeholder_belongs_to_pr_3(db_session, world):
+    """Kills: a default mode; a placeholder mode that quietly behaves like null."""
+    with pytest.raises(TypeError):
+        ref_guard.withhold_in_document(db_session, [{}], profile=CURATED)  # type: ignore[call-arg]
+    with pytest.raises(NotImplementedError, match="PR-3"):
+        ref_guard.withhold_in_document(db_session, [{}], profile=CURATED, mode="placeholder")
+    with pytest.raises(ValueError):
+        ref_guard.withhold_in_document(db_session, [{}], profile=CURATED, mode="other")  # type: ignore[arg-type]
+
+
+def test_a_ref_that_names_no_row_is_hidden(db_session, world):
+    """Kills: a well-formed ref of nothing passing through (hidden equals unknown)."""
+    ghost = "calc_" + "a" * 26
+    report = ref_guard.withhold_in_document(
+        db_session, [{"x": ghost, "y": [ghost, "kept"]}], profile=CURATED, mode="null"
+    )
+    assert report.facts == [{"x": None, "y": ["kept"]}] and report.hidden == {ghost}
     with pytest.raises(ref_guard.RefGuardUnplaceable):
-        ref_guard.withhold_in_document(db_session, [{world.hidden["calc_h"].public_ref: 1}], profile=CURATED)
+        ref_guard.refuse_hidden_refs_in_text(db_session, {"f": f"! {ghost}"}, profile=CURATED)
+
+
+def test_the_batcher_releases_the_withheld_copy_and_not_its_input(db_session, world):
+    """Kills: a batcher that ignores the return value of the guard (and so emits the hidden ref)."""
+    hidden_calc = world.hidden["calc_h"].public_ref
+    batcher = export_withhold.WithheldBatcher(db_session, CURATED)
+    record = {"calculation_ref": hidden_calc, "value": 1.0}
+    assert batcher.add(record) == []
+    lines = batcher.flush()
+    assert [json.loads(line) for line in lines] == [{"calculation_ref": None, "value": 1.0}]
+    assert hidden_calc not in "".join(lines)
+    assert record["calculation_ref"] == hidden_calc  # the input is the caller's, untouched
+
+
+def test_the_guard_is_active_by_one_predicate(db_session):
+    """Kills: a second, diverging definition of "the guard is in force" (floor, release-backed)."""
+    release = ResolvedReadProfile(
+        profile=ReadProfile.curated, recommendation=ProfileRecommendation.tckdb_curated_release
+    )
+    assert ref_guard.guard_active(CURATED) and not ref_guard.guard_active(EXPLORATORY)
+    assert not ref_guard.guard_active(release)
+    assert not export_withhold.WithheldBatcher(db_session, release)._active
+    ghost = "calc_" + "a" * 26
+    assert ref_guard.withhold_in_document(db_session, [{"x": ghost}], profile=release, mode="null").facts == [
+        {"x": ghost}
+    ]
+    ref_guard.refuse_hidden_refs_in_text(db_session, {"f": ghost}, profile=release)
+
+
+def test_text_whose_encoding_never_settles_is_refused_not_a_422(db_session, world):
+    """Kills: a ``ValueError`` escaping the text refusal (it became a 422)."""
+    from urllib.parse import quote
+
+    text = "%41"
+    for _ in range(8):
+        text = quote(text)
+    with pytest.raises(ref_guard.RefGuardUnplaceable):
+        ref_guard.refuse_hidden_refs_in_text(db_session, {"tran.dat": text}, profile=CURATED)
+
+
+def test_a_group_is_named_only_through_a_shown_observation(client, world):
+    """Kills: the observation-to-group join without a floor (a visible group named beside an empty observation list).
+
+    ``calc_vsp`` is a shown calculation on the HIDDEN observation ``co_h`` of the SHOWN group ``cg_v``: exploratory names
+    both; curated names neither (the group was reachable only through a hidden observation).
+    """
+    w = world
+    geometry_ref = w.extra["geometry_vsp"].public_ref
+    cg_v, co_h = w.visible["cg_v"].public_ref, w.hidden["co_h"].public_ref
+
+    def record(profile):
+        lines = _lines(_get(client, "/export/ml/species.ndjson", profile, _query(w)))
+        return next(r for r in lines if r.get("geometry", {}).get("geometry_ref") == geometry_ref)
+
+    assert record("exploratory")["conformer_group_refs"] == [cg_v]
+    assert record("exploratory")["conformer_observation_refs"] == [co_h]
+    shown = record("curated")
+    assert shown["conformer_group_refs"] == [] and shown["conformer_observation_refs"] == []
+
+
+def test_the_reactant_energy_floor_moves_the_barrier(client, world):
+    """Kills: reactant energies read without the floor (a hidden reactant single point lowering the reactant sum).
+
+    The shown energies at the shared level of theory: transition state -89.0 (shown single point), reactants -50.0 and
+    -40.0. A hidden single point of -60.0 on the first reactant would make the reactant sum -100.0 and, with the hidden
+    TS energy of -91.0, the exploratory barrier 9.0 Eh; the curated barrier is (-89.0) - (-90.0) = 1.0 Eh.
+    """
+    from app.services.scientific_read.ml_dataset import HARTREE_TO_KJ_MOL
+
+    w = world
+    rx = w.extra["reaction_entry"].public_ref
+
+    def barrier(profile):
+        lines = _lines(_get(client, "/export/ml/reactions.ndjson", profile, _query(w)))
+        return _by(lines, "reaction_entry_ref", rx)["barrier"]["electronic_forward_kj_mol"]
+
+    assert barrier("curated") == pytest.approx(1.0 * HARTREE_TO_KJ_MOL)
+    assert barrier("exploratory") == pytest.approx((-91.0 - (-60.0 + -40.0)) * HARTREE_TO_KJ_MOL)
 
 
 def test_generated_text_that_names_a_hidden_ref_is_refused(db_session, world):
@@ -485,3 +584,73 @@ def test_generated_text_that_names_a_hidden_ref_is_refused(db_session, world):
             db_session, {"tran.dat": f"! linearity=calculation_geometry:{hidden_calc}"}, profile=CURATED
         )
     ref_guard.refuse_hidden_refs_in_text(db_session, {"tran.dat": f"! {hidden_calc}"}, profile=EXPLORATORY)
+
+
+# ---------------------------------------------------------------------------
+# Every visibility statement, on every stream
+# ---------------------------------------------------------------------------
+
+#: A visibility statement of the guard is the batched ref lookup (``ref_guard.hidden_refs``): it selects
+#: ``<table>.public_ref`` through ``LEFT OUTER JOIN record_review``. Floors embedded in the statements that read the rows
+#: are subqueries of those statements (``EXISTS (SELECT record_review.id ...)``), not statements of their own.
+_VISIBILITY_STATEMENT = "LEFT OUTER JOIN record_review"
+
+
+def _count_visibility_statements(db_session, send) -> tuple[int, int, int]:
+    """``(visibility statements, statements that mention record_review at all, all statements)`` while ``send`` runs."""
+    from sqlalchemy import event
+
+    statements: list[str] = []
+
+    def hook(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    bind = db_session.get_bind()
+    event.listen(bind, "before_cursor_execute", hook)
+    try:
+        send()
+    finally:
+        event.remove(bind, "before_cursor_execute", hook)
+    visibility = sum(1 for s in statements if _VISIBILITY_STATEMENT in s)
+    return visibility, sum(1 for s in statements if "record_review" in s), len(statements)
+
+
+def test_every_stream_issues_at_most_one_visibility_statement_per_batch(client, db_session, world, monkeypatch):
+    """Kills: a visibility statement per record or per source (the CHEMKIN/NDJSON witness asked ``hidden_refs`` up to
+    twice per transport, outside the batch seam); a batch that asks twice.
+
+    The count is of EVERY statement of the guard's lookup shape the stream issues, not of calls through the seam. Budget:
+    at most one per batch of ``EXPORT_BATCH_SIZE`` records, and a fixed setup cost of **zero** for the three NDJSON
+    streams (their floors are subqueries of the statements that already read the rows). CHEMKIN builds its whole record
+    set first; its fixed cost is the two net calls on the finished files: the manifest withhold and the text refusal
+    (at most one lookup each, and only when the manifest or a file names a gated ref at all).
+    """
+    w = world
+    streams = {
+        "ndjson": lambda: _get(client, "/export/ndjson", "curated", _query(w)),
+        "ndjson_all": lambda: _get(client, "/export/ndjson", "curated", _query(w, collapse="all")),
+        "ml_species": lambda: _get(
+            client, "/export/ml/species.ndjson", "curated", {**_query(w), "include_hessian": True}
+        ),
+        "ml_reactions": lambda: _get(client, "/export/ml/reactions.ndjson", "curated", _query(w)),
+        "chemkin": lambda: _chemkin(client, w, "curated"),
+    }
+    n_records = {name: len(_lines(streams[name]())) - 2 for name in streams if name != "chemkin"}
+    counts = {}
+    for size in (200, 2):
+        monkeypatch.setattr(export_withhold, "EXPORT_BATCH_SIZE", size)
+        for name, send in streams.items():
+            visibility, review, total = _count_visibility_statements(db_session, send)
+            counts[(name, size)] = (visibility, review, total)
+            if name == "chemkin":
+                assert visibility <= 2, f"chemkin, batch {size}: {visibility} visibility statements"
+                continue
+            batches = -(-n_records[name] // size)
+            assert n_records[name] > 3, f"{name}: the stream is too small to mean anything"
+            assert visibility <= batches, (
+                f"{name}, batch {size}: {visibility} visibility statements for {batches} batches"
+            )
+    # the NDJSON streams at 200 records per batch: exactly the one statement, nothing else
+    for name in ("ndjson", "ndjson_all", "ml_species", "ml_reactions"):
+        assert counts[(name, 200)][0] == 1, f"{name}: {counts[(name, 200)]}"
+    print("STATEMENT COUNTS (visibility, mention record_review, all):", counts)

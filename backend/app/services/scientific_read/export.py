@@ -82,10 +82,11 @@ from app.services.frequency_geometry_linearity import (
     GeometryLinearity,
     classify_xyz_linearity,
 )
-from app.services.scientific_read import ref_guard
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    review_floor_predicate,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.export_withhold import WithheldBatcher
 from app.services.scientific_read.handles import status_hidden_under_profile
@@ -978,17 +979,21 @@ def _transport_linearity_witness(
     request's. Under the exploratory profile nothing is left out.
     """
     floor_profile = profile if profile is not None else current_read_profile()
+    # The floor is a subquery of the statements that read the sources, never a statement of its own (a lookup per
+    # transport would be one visibility statement per record, outside the batch). No floor: ``None``, nothing added.
+    calc_shown = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=floor_profile)
+    statmech_shown = review_floor_predicate(Statmech.id, SubmissionRecordType.statmech, profile=floor_profile)
     calc_rows = session.execute(
-        select(Calculation.id, Calculation.public_ref, Calculation.type)
-        .join(
-            TransportSourceCalculation,
-            TransportSourceCalculation.calculation_id == Calculation.id,
-        )
-        .where(TransportSourceCalculation.transport_id == transport_id)
-        .order_by(Calculation.id)
+        where_visible(
+            select(Calculation.id, Calculation.public_ref, Calculation.type)
+            .join(
+                TransportSourceCalculation,
+                TransportSourceCalculation.calculation_id == Calculation.id,
+            )
+            .where(TransportSourceCalculation.transport_id == transport_id),
+            calc_shown,
+        ).order_by(Calculation.id)
     ).all()
-    hidden = ref_guard.hidden_refs(session, [ref for _id, ref, _t in calc_rows], profile=floor_profile)
-    calc_rows = [row for row in calc_rows if row[1] not in hidden]
 
     verdicts: dict[str, set[bool]] = {}
     for calc_id, calc_ref, calc_type in calc_rows:
@@ -1012,8 +1017,9 @@ def _transport_linearity_witness(
             )
         return None, LinearityConflict("calculation_geometry", tuple(sorted(verdicts)))
 
-    stat_rows = session.execute(
-        select(Statmech.public_ref, Statmech.is_linear, Calculation.public_ref)
+    # A statmech record is a witness only if it and the calculation that links it to this transport are both shown.
+    stat_query = (
+        select(Statmech.public_ref, Statmech.is_linear)
         .select_from(Statmech)
         .join(
             StatmechSourceCalculation,
@@ -1031,16 +1037,10 @@ def _transport_linearity_witness(
             StatmechSourceCalculation.role.in_(_STATMECH_GEOMETRY_ROLES),
             Statmech.is_linear.is_not(None),
         )
-        .distinct()
-        .order_by(Statmech.public_ref)
+    )
+    stat_rows = session.execute(
+        where_visible(where_visible(stat_query, statmech_shown), calc_shown).distinct().order_by(Statmech.public_ref)
     ).all()
-    # A statmech record is a witness only if it and the calculation that links it to this transport are both shown.
-    hidden = ref_guard.hidden_refs(
-        session, [r for ref, _lin, calc_ref in stat_rows for r in (ref, calc_ref)], profile=floor_profile
-    )
-    stat_rows = sorted(
-        {(ref, lin) for ref, lin, calc_ref in stat_rows if ref not in hidden and calc_ref not in hidden}
-    )
     if stat_rows:
         if len({is_linear for _ref, is_linear in stat_rows}) == 1:
             ref, is_linear = stat_rows[0]

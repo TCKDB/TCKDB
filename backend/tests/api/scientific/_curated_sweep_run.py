@@ -55,10 +55,10 @@ def install_spy(monkeypatch) -> GuardSpy:
     # seam (``ref_guard.withhold_in_document``, looked up on the module at call time), which is spied the same way.
     real_document = ref_guard.withhold_in_document
 
-    def document_wrapper(session, documents, *, profile):
+    def document_wrapper(session, documents, *, profile, mode):
         spy.reached = True
         try:
-            report = real_document(session, documents, profile=profile)
+            report = real_document(session, documents, profile=profile, mode=mode)
         except ref_guard.RefGuardUnplaceable as exc:
             spy.unplaceable = (exc.model_name, exc.field_path, exc.ref_prefix)
             raise

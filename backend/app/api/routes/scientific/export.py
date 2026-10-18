@@ -174,7 +174,9 @@ def export_chemkin(
     # build time. Both do nothing under the exploratory profile.
     profile = record_set.read_profile
     if profile is not None:
-        ref_guard.withhold_in_document(session, [manifest], profile=profile)
+        withheld = ref_guard.withhold_in_document(session, [manifest], profile=profile, mode="null").facts
+        assert withheld is not None
+        manifest = withheld[0]
         ref_guard.refuse_hidden_refs_in_text(session, result.files, profile=profile)
 
     buffer = io.BytesIO()

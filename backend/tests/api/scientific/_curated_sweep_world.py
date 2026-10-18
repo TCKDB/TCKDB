@@ -1057,6 +1057,13 @@ def _extend_for_export_family(session, w: SweepWorld, *, lot, rxe, r1, r2, tse_v
     hid["calc_h_xlin"], hid["calc_h_xsp"] = calc_h_xlin, calc_h_xsp
     vis["calc_xv"], vis["trn_xv"] = calc_xv, trx_v
 
+    # -- sa: a visible calculation (calc_vsp) on a HIDDEN observation (co_h) in a VISIBLE group (cg_v). Until now it had no
+    # geometry, so the ML species export never made a record of it and never met the shape: a group named through a
+    # hidden observation (the group ref beside an empty observation list).
+    g_vsp = geometry(_BENT_XYZ, ["O", "H", "H"], [[0, 0, 0], [0.8, 0.6, 0], [-0.8, 0.6, 0]])
+    attach_input_geometry(session, calculation=vis["calc_vsp"], geometry=g_vsp)
+    ext["geometry_vsp"] = g_vsp
+
     # -- sy: two statmech records that disagree, one hidden ----------------------------------------------------------------
     sy = entry("SWY")
     calc_yv = make_calculation(session, type=CalculationType.freq, species_entry_id=sy.id, lot_id=lot.id)
@@ -1091,6 +1098,11 @@ def _extend_for_export_family(session, w: SweepWorld, *, lot, rxe, r1, r2, tse_v
         calc_r = make_calculation(session, type=CalculationType.sp, species_entry_id=reactant.id, lot_id=lot.id)
         attach_sp_result(session, calculation=calc_r, electronic_energy_hartree=energy)
         vis[f"calc_r{reactant.id}"] = calc_r
+    # A hidden reactant single point at the same level of theory, lower than the shown one: unfloored, the reactant
+    # energy (and so the barrier) follows it. Hidden by having no review row; it names nowhere, only its value could leak.
+    calc_h_r1 = make_calculation(session, type=CalculationType.sp, species_entry_id=r1.id, lot_id=lot.id)
+    attach_sp_result(session, calculation=calc_h_r1, electronic_energy_hartree=-60.0)
+    ext["calc_hidden_reactant_sp"] = calc_h_r1
     calc_ts_vsp = make_calculation(session, type=CalculationType.sp, transition_state_entry_id=tse_v2.id, lot_id=lot.id)
     attach_sp_result(session, calculation=calc_ts_vsp, electronic_energy_hartree=-89.0)
     calc_h_xts = make_calculation(session, type=CalculationType.sp, transition_state_entry_id=tse_v2.id, lot_id=lot.id)
