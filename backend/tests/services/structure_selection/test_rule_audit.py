@@ -229,7 +229,7 @@ def test_the_record_says_exactly_what_the_article_says_and_no_more():
     assert "looser" not in text and "any other threshold" in text and "vvTight" in text  # vvTight is tighter, not looser
     blockers = {b["id"]: b["text"] for b in lno.activation_blockers}
     circular = blockers["reference_is_silver_and_partly_circular"]
-    assert "near-zero" not in circular and "HLC14" in circular and "0.06 and 0.09" in circular and "0.05 on" in circular
+    assert "near-zero" not in circular and "HLC14" in circular and "MAD 0.06 kcal/mol" in circular and "0.05 on" in circular
     assert "same calculation one preferred" in circular  # the correction's localized part, not the full protocol
     dlpno = manifest.candidate("S-ACONFL-DLPNO-F12-VERYTIGHT")
     assert "(T) unscaled" not in " ".join(dlpno.protocols["preferred"] + dlpno.protocols["yielding"])

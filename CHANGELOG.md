@@ -38,7 +38,7 @@ golden: unchanged.
   slip on the ACONF20 column is recorded as an unresolved noted discrepancy.
 - Dual pin, as for the kinetics XYG3 rule: manifest 0.1.0 is preserved byte for byte and `replay_rules()` loads its rules for replay
   only. A structure manifest recorded under 0.1.0 still replays and `replay_provenance` labels it `historical`; new decisions carry
-  0.2.0. A version in neither registry is still refused. `validate_rules` now keys duplicates on (rule id, version).
+  0.2.0. A version in neither registry is still refused, and `replay_provenance` (structure and kinetics) refuses it rather than labelling it historical. The live validator stays strict on rule id; only replay holds one rule at two versions, and a manifest naming two versions of a rule is refused.
 
 ## A descriptive comparison of two stored protocols (2026-10-18)
 

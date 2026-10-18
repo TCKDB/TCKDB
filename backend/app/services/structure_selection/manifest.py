@@ -58,9 +58,9 @@ from app.services.structure_selection.models import (
 from app.services.structure_selection.rules import (
     RULES_VERSION,
     StructureRule,
-    default_rules,
+    replay_only_keys,
     replay_rules,
-    validate_rules,
+    validate_replay_rules,
 )
 
 MANIFEST_FORMAT_VERSION = 1
@@ -307,9 +307,13 @@ def _rules_for(manifest: dict[str, Any], rules: Sequence[StructureRule] | None) 
     # A replay may name a rule version this release no longer applies live (kept loadable for replay only); a version
     # in neither list is refused below.
     registry = tuple(replay_rules() if rules is None else rules)
-    validate_rules(registry)
+    validate_replay_rules(registry)
     available = {(r.rule_id, r.version): r for r in registry}
     protocol = manifest["decision"].get("protocol") or {}
+    named = [e["rule_id"] for e in protocol.get("rules", [])]
+    if len(set(named)) != len(named):
+        # A live decision never holds two versions of one rule, and its supersession is keyed by rule id.
+        raise ReplayError("rule_version_ambiguous", "the manifest names one rule at more than one version")
     used: list[StructureRule] = []
     for entry in protocol.get("rules", []):
         key = (entry["rule_id"], entry["version"])
@@ -360,15 +364,24 @@ def replay_matches(manifest: dict[str, Any], *, rules: Sequence[StructureRule] |
 def replay_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
     """Label a replay as historical or current: the rule versions the manifest was made under versus today's registry.
 
-    A manifest that names a rule version kept for replay only (one ``default_rules`` no longer carries) is historical:
-    replay reproduces what that decision recorded, and a fresh selection uses the current versions. Pure; it does not
-    replay or reassess anything.
+    A manifest that names a rule version in the replay-only set is historical: replay reproduces what that decision
+    recorded, and a fresh selection uses the current versions. A (rule, version) in neither the live nor the replay-only
+    set is never labelled: it is refused. Pure; it does not replay or reassess anything.
+
+    The kinetics fields ``recorded_assessment_semantics`` and ``current_assessment_semantics`` do not apply: a structure
+    manifest records no assessment-semantics block, only per-rule versions and digests, and those are what is checked here.
+
+    :raises ReplayError: ``rule_unavailable`` when a named rule version is in neither set.
     """
-    live = {(r.rule_id, r.version) for r in default_rules()}
+    replay_only = replay_only_keys()
     protocol = manifest["decision"].get("protocol") or {}
-    superseded = [
-        f"{e['rule_id']} {e['version']}" for e in protocol.get("rules", []) if (e["rule_id"], e["version"]) not in live
-    ]
+    superseded = []
+    for e in protocol.get("rules", []):
+        key = (e["rule_id"], e["version"])
+        if key in replay_only:
+            superseded.append(f"{key[0]} {key[1]}")
+        elif key not in {(r.rule_id, r.version) for r in replay_rules()}:
+            raise ReplayError("rule_unavailable", f"rule {key[0]} version {key[1]} is not in the running registry")
     statement = (
         "Replay reproduces the decision from the inputs recorded in the manifest. It does not reassess any candidate "
         "and is not an endorsement under today's rules"

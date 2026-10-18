@@ -159,19 +159,21 @@ class StructureRule(ABC):
 
 
 def validate_rules(rules: Sequence[StructureRule]) -> None:
-    """Refuse a registry that could make an unsupported edge: a repeated (rule id, version), or an active rule not pinned.
+    """Refuse a registry that could make an unsupported edge: duplicate ids, or an active rule that is not pinned.
 
-    One rule id may appear at two versions (the replay registry holds the current rule and its earlier, replay-only one).
+    Strict on ``rule_id``: two versions of one rule are refused here, because a live decision keys ``supersedes`` by rule
+    id and the two would collapse. Replay, which may hold a rule at its current and its replay-only version, validates
+    each version's slice separately (:func:`validate_replay_rules`).
 
-    :raises ValueError: duplicate ``(rule_id, version)``; an active rule with no objective, no pinned manifest digest or
+    :raises ValueError: duplicate ``(rule_id)``; an active rule with no objective, no pinned manifest digest or
         with inactive reasons still listed; a model-fidelity rule with no reference model.
     """
-    seen: set[tuple[str, str]] = set()
+    seen: set[str] = set()
     for rule in rules:
         name = rule.rule_id  # a registry name, not a database row id
-        if (name, rule.version) in seen:
-            raise ValueError(f"rule names must be distinct: {name} {rule.version}")
-        seen.add((name, rule.version))
+        if name in seen:
+            raise ValueError(f"rule names must be distinct: {name}")
+        seen.add(name)
         if rule.status != RULE_ACTIVE:
             continue
         problems = []
@@ -190,7 +192,7 @@ def validate_rules(rules: Sequence[StructureRule]) -> None:
 #: SHA-256 of ``structure_rule_candidates.yaml`` as shipped (manifest 0.2.0). The registry refuses to load over any
 #: other bytes; a change to an entry, a blocker or a source list is a new manifest version, a new pin and a new rule
 #: version. A manifest handed to a rule must be the one this pins.
-STRUCTURE_RULE_MANIFEST_SHA256 = "e8c25422f4192b2ba505321959b6be6afe943516bcbb224c2445cdc6b6c054f4"
+STRUCTURE_RULE_MANIFEST_SHA256 = "812301928688c9a921b70c8b1195881489b40078564483145a8dcb7d67b84621"
 
 #: The pin of manifest 0.1.0, which rule version 0.1.0 rested on. Rule 0.1.0 is kept loadable for replay only, so a
 #: decision recorded before manifest 0.2.0 still replays; it is never in ``default_rules`` and never takes part in a
@@ -309,6 +311,22 @@ def default_rules() -> tuple[StructureRule, ...]:
     """The rules registered in this release: the audited council examples. **None is active.**"""
     manifest = load_structure_rule_manifest(expected_sha256=STRUCTURE_RULE_MANIFEST_SHA256)
     return tuple(AuditedStructureRule(candidate, manifest) for candidate in manifest.candidates)
+
+
+def validate_replay_rules(rules: Sequence[StructureRule]) -> None:
+    """Validate a replay registry: each version's slice is held to :func:`validate_rules`, so one rule id may appear
+    once per version and no (rule id, version) pair twice."""
+    by_version: dict[str, list[StructureRule]] = {}
+    for rule in rules:
+        by_version.setdefault(rule.version, []).append(rule)
+    for group in by_version.values():
+        validate_rules(group)
+
+
+def replay_only_keys() -> frozenset[tuple[str, str]]:
+    """The (rule id, version) pairs kept loadable for replay only: in the replay registry, not in the live one."""
+    live = {(r.rule_id, r.version) for r in default_rules()}
+    return frozenset((r.rule_id, r.version) for r in replay_rules()) - live
 
 
 def active_rules(rules: Sequence[StructureRule] | None = None) -> tuple[StructureRule, ...]:

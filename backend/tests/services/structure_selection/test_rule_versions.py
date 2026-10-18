@@ -66,7 +66,7 @@ def test_each_rule_version_is_tied_to_one_manifest_digest_and_moving_a_pin_needs
     """The ledger is written out here, so editing a pin together with its test cannot hide a move."""
     ledger = {
         "0.1.0": "cff519d81754e1cb42ac52d86d6a9988b7702455cc96d699f3d7c3413e535048",
-        "0.2.0": "e8c25422f4192b2ba505321959b6be6afe943516bcbb224c2445cdc6b6c054f4",
+        "0.2.0": "812301928688c9a921b70c8b1195881489b40078564483145a8dcb7d67b84621",
     }
     assert STRUCTURE_RULE_VERSION_PINS == ledger
     assert STRUCTURE_RULE_MANIFEST_SHA256 == ledger["0.2.0"]
@@ -246,8 +246,141 @@ def test_the_source_is_corrected_and_recorded_as_given_not_fetched():
 def test_the_aconf20_footnote_marker_is_a_noted_discrepancy_that_follows_neither_reading():
     manifest = next(iter(default_rules()))._manifest  # type: ignore[attr-defined]
     [item] = manifest.noted_discrepancies
-    assert item["id"] == "ACONF20_REFERENCE_FOOTNOTE_MARKER" and item["resolved"] is False
+    assert item["id"] == "ACONF20_REFERENCE_FOOTNOTE_MARKER"
+    assert item["resolved"] is False and item["followed_reading"] == "none"
     assert set(item["affects"]) == set(ACONFL)
-    assert "b" in item["observation"] and "c" in item["observation"] and "p. 9382" in item["observation"]
-    assert "most likely a typesetting slip" in item["reading"] and "does not decide it" in item["reading"]
-    assert "noted_discrepancies" in _blockers(ACONFL[0])["reference_is_silver_and_partly_circular"]["text"]
+    markers = {m["set"]: (m["marker"], m["footnote_recipe"]) for m in item["table_markers"]}
+    assert markers == {"ACONF16": ("c", "HLC14"), "ACONF20": ("b", "CCSD(F12*) silver recipe")}
+    assert item["text_says"] == {"where": "p. 9382", "ACONF16": "HLC14", "ACONF20": "HLC14"}
+    assert {r["id"] for r in item["readings"]} == {"text", "table_marker"}
+    # The slip is recorded as a judgement and is not the reading the manifest follows.
+    assert item["judgement"]["kind"] == "judgement" and item["judgement"]["followed_by_manifest"] is False
+    assert "typesetting slip" in item["judgement"]["text"]
+
+
+@pytest.mark.parametrize("rule_id", ACONFL)
+def test_no_blocker_or_anchor_states_the_aconf20_reference_as_fact(rule_id):
+    """Each place that speaks of ACONF20's reference says the sources disagree and points at the discrepancy."""
+    rule = next(r for r in default_rules() if r.rule_id == rule_id).describe()
+    texts = [b["text"] for b in rule["activation_blockers"]] + [a["claim"] for a in rule["anchors"]]
+    mentioning = [t for t in texts if "ACONF20" in t and any(w in t for w in ("HLC14", "silver", "localized"))]
+    assert mentioning, rule_id
+    for text in mentioning:
+        assert "ACONF16 and ACONF20" not in text, text
+        assert "noted_discrepancies" in text or "unresolved" in text, text
+    circular = {b["id"]: b["text"] for b in rule["activation_blockers"]}
+    first = circular.get("reference_is_silver_and_partly_circular") or circular["reference_is_silver_and_not_canonical_beyond_dodecane"]
+    assert "neither reading" in first and "stays blocked either way" in first
+
+
+# -- the loader refuses malformed new fields ----------------------------------------------------------------------------
+
+
+def _raw() -> dict:
+    return yaml.safe_load(MANIFEST_PATH.read_bytes())
+
+
+def _with(path_edit) -> dict:
+    raw = copy.deepcopy(_raw())
+    path_edit(raw)
+    return raw
+
+
+def _blocker(raw: dict, rule: int, blocker_id: str) -> dict:
+    return next(b for b in raw["rules"][rule]["activation_blockers"] if b["id"] == blocker_id)
+
+
+REFUSALS = {
+    "unknown_discrepancy_key": (lambda r: r["noted_discrepancies"][0].update(resolvd=True), "unknown keys"),
+    "resolved_not_boolean": (lambda r: r["noted_discrepancies"][0].update(resolved="no"), "resolved must be true or false"),
+    "unresolved_follows_a_reading": (
+        lambda r: r["noted_discrepancies"][0].update(followed_reading="text"),
+        "must follow neither reading",
+    ),
+    "unknown_followed_reading": (lambda r: r["noted_discrepancies"][0].update(followed_reading="both"), "followed_reading"),
+    "judgement_not_marked": (lambda r: r["noted_discrepancies"][0]["judgement"].pop("kind"), "marked kind: judgement"),
+    "discrepancy_missing_markers": (lambda r: r["noted_discrepancies"][0].pop("table_markers"), "is incomplete"),
+    "discrepancy_names_no_rule": (lambda r: r["noted_discrepancies"][0].update(affects=["NOT-A-RULE"]), "not an entry"),
+    "unknown_blocker_key": (
+        lambda r: _blocker(r, 0, "no_numeric_reference_uncertainty").update(severity="low"),
+        "has unknown keys",
+    ),
+    "unknown_blocker_evidence_key": (
+        lambda r: _blocker(r, 0, "descriptive_mad_is_not_preference_evidence")["evidence_needed"][0].update(statuss="open"),
+        "has unknown keys",
+    ),
+    "blocker_evidence_without_text": (
+        lambda r: _blocker(r, 0, "descriptive_mad_is_not_preference_evidence")["evidence_needed"][0].update(text=""),
+        "evidence with no id or text",
+    ),
+    "unknown_evidence_status": (
+        lambda r: r["rules"][0]["evidence_needed"][-1].update(status="done"),
+        "not one of",
+    ),
+    "answer_without_status": (lambda r: r["rules"][0]["evidence_needed"][0].update(answered_by="owner"), "no status"),
+    "answered_without_a_date": (lambda r: r["rules"][0]["evidence_needed"][-1].update(answered_on=""), "names no decision, date or answer"),
+    "unknown_evidence_key": (lambda r: r["rules"][0]["evidence_needed"][0].update(stauts="answered"), "unknown keys"),
+}
+
+
+@pytest.mark.parametrize("name", sorted(REFUSALS))
+def test_the_loader_refuses_a_malformed_new_field(name):
+    from app.chemistry.structure_rules.manifest import ManifestError, parse_structure_rule_manifest
+
+    edit, message = REFUSALS[name]
+    with pytest.raises(ManifestError, match=message):
+        parse_structure_rule_manifest(_with(edit))
+
+
+def test_the_unedited_manifest_still_parses_so_a_refusal_is_not_a_loader_that_refuses_everything():
+    from app.chemistry.structure_rules.manifest import parse_structure_rule_manifest
+
+    parse_structure_rule_manifest(_raw())
+
+
+# -- the live registry stays strict; only replay holds two versions of a rule ----------------------------------------------
+
+
+def test_the_live_validator_refuses_two_versions_of_one_rule():
+    from app.services.structure_selection.rules import active_rules, validate_rules
+
+    old = next(r for r in replay_rules() if r.version == "0.1.0")
+    new = next(r for r in default_rules() if r.rule_id == old.rule_id)
+    with pytest.raises(ValueError, match="rule names must be distinct"):
+        validate_rules([new, old])
+    with pytest.raises(ValueError, match="rule names must be distinct"):
+        active_rules(replay_rules())  # the live path never takes the replay registry
+    validate_rules(default_rules())
+
+
+def test_a_replay_manifest_naming_one_rule_at_two_versions_is_refused():
+    manifest = copy.deepcopy(_golden())
+    entries = _rule_entries(manifest)
+    twin = copy.deepcopy(entries[0])
+    twin["version"] = "0.2.0"
+    twin["manifest_sha256"] = STRUCTURE_RULE_MANIFEST_SHA256
+    entries.append(twin)
+    with pytest.raises(ReplayError) as exc:
+        replay_structure_decision(reseal(manifest))
+    assert exc.value.code == "rule_version_ambiguous"
+
+
+def test_the_replay_registry_itself_is_valid_one_version_at_a_time():
+    from app.services.structure_selection.rules import validate_replay_rules
+
+    validate_replay_rules(replay_rules())
+    dup = [*replay_rules(), replay_rules()[0]]
+    with pytest.raises(ValueError, match="rule names must be distinct"):
+        validate_replay_rules(dup)
+
+
+# -- a version in neither set is refused, never labelled ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("version", ["9.9.9", "0.1.9"])
+def test_replay_provenance_refuses_a_version_in_neither_set(version):
+    manifest = copy.deepcopy(_golden())
+    _rule_entries(manifest)[0]["version"] = version
+    with pytest.raises(ReplayError) as exc:
+        replay_provenance(reseal(manifest))
+    assert exc.value.code == "rule_unavailable" and version in str(exc.value)
