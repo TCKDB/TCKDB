@@ -1992,7 +1992,24 @@ def _without_levels_from_hidden_calculations(
         update.update(energy=None, energy_source=None, composite_energy_verification=None)
     if (sp and levels.frequency_source == "composite_recipe"):
         update.update(frequency=None, frequency_source=None)
-    return levels.model_copy(update=update) if update else levels
+    if not update:
+        return levels
+    masked = levels.model_copy(update=update)
+    # The annotation describes the levels it sits beside: recomputed from what is left, so it cannot still say that a
+    # hidden calculation sat at a named-method level.
+    return masked.model_copy(
+        update={
+            "legacy_composite_shape": legacy_composite_shape(
+                composite_role_on_non_composite=False,
+                geometry=masked.geometry,
+                geometry_source=masked.geometry_source,
+                frequency=masked.frequency,
+                frequency_source=masked.frequency_source,
+                energy=masked.energy,
+                energy_source=masked.energy_source,
+            )
+        }
+    )
 
 
 def _software_summary_for_calc(meta: _CalcMeta | None) -> SoftwareReleaseSummary | None:

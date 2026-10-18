@@ -182,6 +182,7 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     "tse_hw": {_TSBROWSE},
     "calc_h_psw": {_TSBROWSE},
     "kin_hw": {_KIN},
+    "calc_h_psp": {_TSE, _TS, _TSBROWSE, _FULL},
     "cg_h": {
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies",
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/manifest",

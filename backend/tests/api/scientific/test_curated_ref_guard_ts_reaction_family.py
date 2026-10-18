@@ -752,3 +752,78 @@ def test_an_id_whose_type_sits_in_a_sibling_key_is_seen_by_the_leak_check(db_ses
     assert id_leaks(body, world) == {("id:kin_h", "review_records[*].record_id")}
     visible = json.dumps({"review_records": [{"record_type": "kinetics", "record_id": world.visible["kin_v"].id}]})
     assert id_leaks(visible, world) == set()
+
+
+def test_the_legacy_composite_annotation_follows_the_masked_levels():
+    """``legacy_composite_shape`` says a named-method level (a catalogued recipe) sits on a non-composite calculation.
+    When the calculation that supplied that level is hidden the annotation goes with the level; one supplied by a
+    visible calculation stays.
+
+    Kills: computing the annotation before the mask and keeping it.
+    """
+    from app.schemas.reads.scientific_common import (
+        CompositeSchemeSummary,
+        LevelOfTheorySummary,
+        ScientificLevelsSummary,
+    )
+    from app.services.scientific_read.kinetics import _without_levels_from_hidden_calculations
+
+    named = LevelOfTheorySummary(
+        level_of_theory_id=1,
+        level_of_theory_ref="lot_named",
+        method="CBS-QB3",
+        composite_scheme=CompositeSchemeSummary(composite_scheme_ref="cs_x", kind="named_method", name="CBS-QB3"),
+    )
+    plain = LevelOfTheorySummary(level_of_theory_id=2, level_of_theory_ref="lot_plain", method="B3LYP", basis="6-31G(d)")
+    levels = ScientificLevelsSummary(
+        geometry=plain,
+        geometry_source="opt",
+        frequency=named,
+        frequency_source="freq",
+        legacy_composite_shape="named_method_level_on_non_composite_calculation",
+    )
+    kept = _without_levels_from_hidden_calculations(levels, hidden=set(), opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
+    assert kept.legacy_composite_shape is not None
+    # The freq is hidden: its level goes, and so does the annotation that rested on it.
+    masked = _without_levels_from_hidden_calculations(levels, hidden={11}, opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
+    assert masked.frequency is None and masked.legacy_composite_shape is None
+    assert masked.geometry == plain
+    # A hidden opt does not touch an annotation that rests on the visible freq.
+    other = _without_levels_from_hidden_calculations(levels, hidden={10}, opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
+    assert other.geometry is None and other.legacy_composite_shape is not None
+
+
+def test_a_hidden_parent_of_a_visible_optimisation_is_neither_shown_nor_counted(client, db_session, login_as):
+    """The only path search of ``tse_vp`` is the hidden parent (``optimized_from``) of its visible optimisation. Under
+    curated the dependency edge and the parent's ref are absent from ``/full``, the visible optimisation is still
+    shown, and the trust verdict does not find the path search through the edge. Exploratory shows all of it.
+
+    Kills: letting the trust evaluation follow a dependency edge to a hidden calculation; the edge surviving in /full.
+    """
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+    hidden = world.hidden["calc_h_psp"].public_ref
+    opt = world.visible["calc_vp_opt"].public_ref
+    entry = world.visible["tse_vp"].public_ref
+    full = f"/reaction-entries/{world.extra['reaction_entry'].public_ref}/full"
+
+    def edges(profile):
+        body = _get(client, full, profile, include="transition_states").json()
+        item = next(t for t in body["transition_states"] if t["transition_state_entry_ref"] == entry)
+        return item, body
+
+    exp, _ = edges("exploratory")
+    assert any(
+        d["parent_calculation_ref"] == hidden and d["child_calculation_ref"] == opt for d in exp["dependencies"]
+    ), "the world builds no hidden-parent edge"
+    cur, body = edges("curated")
+    assert hidden not in str(body)
+    assert not [d for d in cur["dependencies"] if hidden in (d["parent_calculation_ref"], d["child_calculation_ref"])]
+    assert opt in str(body), "the visible optimisation is no longer shown"
+
+    detail = f"/transition-state-entries/{entry}"
+    exp_checks = _get(client, detail, "exploratory", include="trust").json()["record"]["trust"]["evidence"]["checks"]
+    cur_checks = _get(client, detail, "curated", include="trust").json()["record"]["trust"]["evidence"]["checks"]
+    assert exp_checks["path_search_evidence_present"] == "passed"
+    assert cur_checks["path_search_evidence_present"] != "passed"
+    assert cur_checks["ts_optimization_present"] == "passed"

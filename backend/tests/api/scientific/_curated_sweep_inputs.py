@@ -48,8 +48,8 @@ PATH_PARAM_PROVIDERS: dict[str, Callable[[SweepWorld], list[str]]] = {
     "species_entry_ref": lambda w: [w.extra["species_entry"].public_ref],
     "statmech_ref_or_id": lambda w: _refs(w, "sm_v", "sm_v2", "sm_ts_v"),
     "transition_state_entry_ref": lambda w: _refs(w, "tse_v", "tse_v2"),
-    "transition_state_entry_ref_or_id": lambda w: _refs(w, "tse_v", "tse_v2", "tse_vu", "tse_vw"),
-    "transition_state_ref_or_id": lambda w: _refs(w, "ts_v", "ts_vu", "ts_vw"),
+    "transition_state_entry_ref_or_id": lambda w: _refs(w, "tse_v", "tse_v2", "tse_vu", "tse_vw", "tse_vp"),
+    "transition_state_ref_or_id": lambda w: _refs(w, "ts_v", "ts_vu", "ts_vw", "ts_vp"),
     "transport_ref_or_id": lambda w: _refs(w, "trn_v"),
     "sha256": lambda w: [w.extra["artifact_sha_visible"]],
 }

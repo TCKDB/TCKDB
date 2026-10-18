@@ -341,8 +341,9 @@ def test_min_review_status_excluding_every_entry_still_returns_the_species(db_se
     caller of the zero-visible-entries drop this pins search never
     receives).
     """
+    # The search below is by SMILES alone, so the SMILES must be one no committed row already has.
     species = make_species(
-        db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("MINNONE")
+        db_session, smiles=unique_smiles(db_session), inchi_key=next_inchi_key("MINNONE")
     )
     entry = make_species_entry(db_session, species)
     set_review(
@@ -517,3 +518,41 @@ def test_collapse_first_applies_before_offset(db_session):
     assert response.records == []
     assert response.pagination.total == 1
     assert response.pagination.returned == 0
+
+
+def test_a_smiles_search_matches_every_charge_and_multiplicity_and_the_generator_skips_taken_smiles(
+    db_session, monkeypatch
+):
+    """Why a leftover row breaks a test that searches by a generated SMILES, and the check that prevents it.
+
+    The search matches on ``Species.smiles`` alone unless ``charge`` / ``multiplicity`` are supplied (documented:
+    species identity is the triple, and the caller names the part it knows). So a committed row with the same SMILES at
+    another charge is a second, correct hit. ``unique_smiles(session)`` therefore skips a SMILES any row has.
+
+    Kills: a generator that hands out a SMILES a committed row already holds.
+    """
+    from tests.services.scientific_read import _factories
+
+    taken = unique_smiles()
+    monkeypatch.setattr(_factories, "_SMILES_COUNTER", _factories._SMILES_COUNTER - 1)  # the next call would repeat it
+    leftover = make_species(db_session, smiles=taken, charge=1, multiplicity=2, inchi_key=next_inchi_key("LEFTOVR"))
+    assert unique_smiles(db_session) != taken
+    mine = make_species(db_session, smiles=taken, inchi_key=next_inchi_key("MINE"))
+    both = search_species(db_session, SpeciesSearchRequest(smiles=taken))
+    assert {r.species_id for r in both.records} == {leftover.id, mine.id}
+    only_mine = search_species(db_session, SpeciesSearchRequest(smiles=taken, charge=0, multiplicity=1))
+    assert [r.species_id for r in only_mine.records] == [mine.id]
+
+
+def test_generated_smiles_stay_within_the_request_bound_and_distinct(monkeypatch):
+    """A long run must not outgrow the 2048-character SMILES bound of the search request.
+
+    Kills: ``"C" * n`` for every n (the failure that depended on how many species earlier tests had made).
+    """
+    from tests.services.scientific_read import _factories
+
+    monkeypatch.setattr(_factories, "_SMILES_COUNTER", _factories._LINEAR_LIMIT - 3)
+    values = [unique_smiles() for _ in range(2500)]
+    assert len(set(values)) == len(values)
+    assert max(len(v) for v in values) <= 2048
+    SpeciesSearchRequest(smiles=values[-1])

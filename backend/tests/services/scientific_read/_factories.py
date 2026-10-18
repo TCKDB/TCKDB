@@ -134,8 +134,29 @@ def next_inchi_key(prefix: str = "ABCDEF") -> str:
 _SMILES_COUNTER = 0
 
 
-def unique_smiles() -> str:
+#: Linear alkanes up to this length, then a second scheme. A long serial run generates thousands of species, and
+#: ``"C" * n`` passes the 2048-character SMILES bound of the search request after ~2000 of them, which failed
+#: ``test_min_review_status_excluding_every_entry_still_returns_the_species`` (a ``ValidationError``) by position in
+#: the run, not by anything it does.
+_LINEAR_LIMIT = 1500
+
+
+def _smiles_for(n: int) -> str:
+    """The n-th generated SMILES: ``"C" * n`` up to :data:`_LINEAR_LIMIT`, then ``C...C[Si]C...C`` (a distinct, short,
+    RDKit-valid pair of chain lengths per n; no test uses a silane literal)."""
+    if n <= _LINEAR_LIMIT:
+        return "C" * n
+    left, right = divmod(n - _LINEAR_LIMIT, 1000)
+    return "C" * left + "[Si]" + "C" * right
+
+
+def unique_smiles(session: Session | None = None) -> str:
     """Return a distinct, RDKit-valid SMILES per call (linear alkane).
+
+    With a ``session`` the value is also checked against the species table and skipped when taken: a SMILES search
+    matches on the SMILES alone (any charge or multiplicity), so a row another test COMMITTED to the shared database
+    with the same SMILES would be returned beside the species a test just made. Tests that search by the SMILES they
+    generated pass their session.
 
     Species identity is (smiles, charge, multiplicity) (DR-0031), so
     fixtures that need several *distinct* species — or that run against the
@@ -144,8 +165,11 @@ def unique_smiles() -> str:
     specific SMILES still pass one explicitly.
     """
     global _SMILES_COUNTER
-    _SMILES_COUNTER += 1
-    return "C" * _SMILES_COUNTER
+    while True:
+        _SMILES_COUNTER += 1
+        candidate = _smiles_for(_SMILES_COUNTER)
+        if session is None or session.scalar(select(Species.id).where(Species.smiles == candidate).limit(1)) is None:
+            return candidate
 
 
 def make_species(
@@ -172,9 +196,7 @@ def make_species(
         # A generated SMILES must not collide with a species another test COMMITTED to the shared session database:
         # `get-or-create` below would then hand back that species (with its entries and reviews) as if it were new, and
         # which counter value collides depends on how many species every earlier test generated.
-        resolved_smiles = unique_smiles()
-        while session.scalar(select(Species.id).where(Species.smiles == resolved_smiles).limit(1)) is not None:
-            resolved_smiles = unique_smiles()
+        resolved_smiles = unique_smiles(session)
     existing = session.scalar(
         select(Species).where(
             Species.kind == kind,

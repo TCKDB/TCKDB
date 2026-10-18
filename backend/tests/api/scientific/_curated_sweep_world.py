@@ -976,3 +976,15 @@ def _extend_for_ts_and_reaction_family(
     hid["ts_hw"], hid["tse_hw"], hid["calc_h_psw"], hid["kin_hw"] = ts_hw, tse_hw, calc_h_psw, kin_hw
     ext["reaction_entry_all_hidden"] = rxe_w
     ext["scoping_approved_extra"].append((R.reaction_entry, rxe_w))
+
+    # -- a hidden PARENT of a visible TS optimisation (``optimized_from``): the only path search of its entry ---------------
+    ts_vp = make_transition_state(session, reaction_entry=rxe, label="visible-ts-hidden-parent")
+    tse_vp = make_transition_state_entry(session, transition_state=ts_vp)
+    calc_vp_opt = make_calculation(session, type=CalculationType.opt, transition_state_entry_id=tse_vp.id, lot_id=lot.id)
+    calc_h_psp = make_calculation(
+        session, type=CalculationType.path_search, transition_state_entry_id=tse_vp.id, lot_id=None
+    )
+    _add_path_search(session, calc_h_psp, geom_ts)
+    attach_dependency(session, parent=calc_h_psp, child=calc_vp_opt, role=CalculationDependencyRole.optimized_from)
+    vis["ts_vp"], vis["tse_vp"], vis["calc_vp_opt"] = ts_vp, tse_vp, calc_vp_opt
+    hid["calc_h_psp"] = calc_h_psp
