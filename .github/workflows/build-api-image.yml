@@ -197,15 +197,20 @@ jobs:
       # build, or a shared library that fails to load.
       # A healthy run takes about 6 minutes. QEMU emulation has hung twice
       # with no output; without a limit the job only fails at GitHub's
-      # 6-hour default. Fail fast and re-run instead.
+      # 6-hour default, so the import run has its own 10-minute limit.
+      # The build gets a longer step limit: when the repository's Actions
+      # cache passes 10 GB, GitHub evicts the arm64 conda layer, and a cold
+      # conda install under QEMU takes well over 20 minutes. It also writes
+      # the cache, so one slow cold run restores the fast path; without
+      # cache-to here, a cold cache made every re-run time out the same way.
       - name: Smoke test — arm64 imports under emulation
-        timeout-minutes: 20
+        timeout-minutes: 75
         run: |
           set -euo pipefail
           docker buildx build --platform linux/arm64 \
             -f backend/Dockerfile -t tckdb-api:arm64-smoke --load \
-            --cache-from type=gha .
-          docker run --rm --platform linux/arm64 tckdb-api:arm64-smoke \
+            --cache-from type=gha --cache-to type=gha,mode=max .
+          timeout 600 docker run --rm --platform linux/arm64 tckdb-api:arm64-smoke \
             python -c "import rdkit, tckdb_schemas; from app.api.app import create_app; print('arm64 imports ok', rdkit.__version__)"
 
       - name: Build and push multi-arch
