@@ -91,6 +91,10 @@ POPULATION_KEYS = frozenset(
         "has_linked_records",
         "has_statmech_provenance",
         "has_transition_state_provenance",
+        "has_software",
+        "distinct_software_count",
+        "partial_sources",
+        "has_channel_barriers",
     }
 )
 

@@ -100,6 +100,7 @@ from tests.services.scientific_read._factories import (
     make_network_state,
     make_observation,
     make_reaction_entry,
+    make_software_release,
     make_species,
     make_species_entry,
     make_statmech,
@@ -107,6 +108,7 @@ from tests.services.scientific_read._factories import (
     make_transition_state,
     make_transition_state_entry,
     make_transport,
+    make_workflow_tool_release,
     next_inchi_key,
     set_review,
 )
@@ -984,7 +986,9 @@ def _extend_for_ts_and_reaction_family(
     # -- a hidden PARENT of a visible TS optimisation (``optimized_from``): the only path search of its entry ---------------
     ts_vp = make_transition_state(session, reaction_entry=rxe, label="visible-ts-hidden-parent")
     tse_vp = make_transition_state_entry(session, transition_state=ts_vp)
-    calc_vp_opt = make_calculation(session, type=CalculationType.opt, transition_state_entry_id=tse_vp.id, lot_id=lot.id)
+    calc_vp_opt = make_calculation(
+        session, type=CalculationType.opt, transition_state_entry_id=tse_vp.id, lot_id=lot.id
+    )
     calc_h_psp = make_calculation(
         session, type=CalculationType.path_search, transition_state_entry_id=tse_vp.id, lot_id=None
     )
@@ -1121,6 +1125,42 @@ def _extend_for_network_and_provenance_family(session, w: SweepWorld, *, lot, li
         )
     session.flush()
 
+    # Two states with two participants each, so ``partial_sources`` has something to be true about. E: the second
+    # participant's zero-point calculation is hidden; F: its source calculation is hidden. Under curated the second
+    # source is withheld and the state says its sources are incomplete.
+    p2 = make_species_entry(session, make_species(session, inchi_key=next_inchi_key("SWP2")))
+    state_e = make_network_state(session, network=net_v, kind=NetworkStateKind.well, composition_hash=_hash("e-state"))
+    state_f = make_network_state(session, network=net_v, kind=NetworkStateKind.well, composition_hash=_hash("f-state"))
+    for state in (state_e, state_f):
+        attach_network_state_participant(session, state=state, species_entry=sa)
+        attach_network_state_participant(session, state=state, species_entry=p2)
+        session.add(
+            NetworkSolveStateEnergy(
+                solve_id=nsolve_v.id,
+                state_id=state.id,
+                energy_kj_mol=-5.0,
+                energy_zero_convention=EnergyZeroConvention.lowest_state,
+                correction_convention=EnergyCorrectionConvention.electronic_plus_zpe,
+            )
+        )
+    session.flush()
+    for state, entry, calc, zpe in (
+        (state_e, sa, calc_vopt, None),
+        (state_e, p2, calc_vf, calc_h),
+        (state_f, sa, calc_vopt, None),
+        (state_f, p2, calc_h, None),
+    ):
+        session.add(
+            NetworkSolveStateEnergySource(
+                solve_id=nsolve_v.id,
+                state_id=state.id,
+                species_entry_id=entry.id,
+                calculation_id=calc.id,
+                zpe_calculation_id=None if zpe is None else zpe.id,
+            )
+        )
+    session.flush()
+
     # A validation entry pinning the hidden solve; hidden and visible source calculations of the visible solve.
     nsolve_v.validation_declaration = {
         "version": 1,
@@ -1174,6 +1214,56 @@ def _extend_for_network_and_provenance_family(session, w: SweepWorld, *, lot, li
     )
     attach_network_kinetics_chebyshev(session, kinetics=nkin_v2)
     vis["nsolve_v_hidden_sources"], vis["nkin_v_hidden_sources"] = nsolve_v2, nkin_v2
+    # That solve's only barrier is on the hidden entry: it has barriers, none of them shown.
+    session.add(
+        NetworkSolveChannelBarrier(
+            solve_id=nsolve_v2.id,
+            channel_id=channel_v.id,
+            reaction_entry_id=rxe.id,
+            transition_state_entry_id=tse_h.id,
+            forward_barrier_kj_mol=90.0,
+            reverse_barrier_kj_mol=70.0,
+            energy_zero_convention=EnergyZeroConvention.lowest_state,
+            correction_convention=EnergyCorrectionConvention.electronic_only,
+        )
+    )
+    # A VISIBLE network whose only solve (and its only fit) is hidden: nothing under it may be counted or found.
+    net_v3 = make_network(session, name="visible-net-hidden-solves-only", literature_id=lit.id)
+    state_a3 = make_network_state(
+        session, network=net_v3, kind=NetworkStateKind.well, composition_hash=_hash("a-v3"), label="A"
+    )
+    state_b3 = make_network_state(
+        session, network=net_v3, kind=NetworkStateKind.well, composition_hash=_hash("b-v3"), label="B"
+    )
+    attach_network_state_participant(session, state=state_a3, species_entry=sa)
+    attach_network_state_participant(session, state=state_b3, species_entry=sa)
+    channel_v3 = make_network_channel(
+        session,
+        network=net_v3,
+        source_state=state_a3,
+        sink_state=state_b3,
+        kind=NetworkChannelKind.isomerization,
+        channel_key="ch-hidden-solves-only",
+    )
+    nsolve_h3 = make_network_solve(session, network=net_v3, literature_id=lit.id)
+    nkin_h3 = make_network_kinetics(
+        session,
+        channel=channel_v3,
+        solve=nsolve_h3,
+        model_kind=NetworkKineticsModelKind.chebyshev,
+        rate_units=ArrheniusAUnits.cm3_mol_s,
+    )
+    attach_network_kinetics_chebyshev(session, kinetics=nkin_h3)
+    vis["net_v_hidden_solves_only"] = net_v3
+    hid["nsolve_h3"], hid["nkin_h3"] = nsolve_h3, nkin_h3
+    # A VISIBLE calculation with a level of its own, cited only by the hidden solve: a search by that level must not find
+    # the visible network through it.
+    lot_so = make_lot(session, method="solveonly", basis="def2svp")
+    calc_v_so = make_calculation(session, type=CalculationType.sp, species_entry_id=sa.id, lot_id=lot_so.id)
+    vis["calc_v_solveonly"] = calc_v_so
+    attach_network_solve_source_calculation(
+        session, solve=nsolve_h, calculation=calc_v_so, role=NetworkSolveCalculationRole.well_energy
+    )
     nsolve_v.note = f"fit compared with {calc_h.public_ref}"
     net_v.description = f"see also {nsolve_h.public_ref}"
     session.flush()
@@ -1188,6 +1278,12 @@ def _extend_for_network_and_provenance_family(session, w: SweepWorld, *, lot, li
         session, type=CalculationType.sp, transition_state_entry_id=tse_v2.id, lot_id=lot_ho.id
     )
     hid["calc_h_lot"], hid["calc_h_lot_ts"] = calc_h_lot, calc_h_lot_ts
+    # The software and workflow tool that ran them: the level's software breakdown rests on hidden calculations only.
+    software = make_software_release(session, name="hiddensoft", version="1")
+    workflow = make_workflow_tool_release(session, name="hiddenflow", version="1")
+    for calc in (calc_h_lot, calc_h_lot_ts):
+        calc.software_release_id = software.id
+        calc.workflow_tool_release_id = workflow.id
     for solve in (nsolve_v, nsolve_v2):
         attach_network_solve_source_calculation(
             session, solve=solve, calculation=calc_h_lot, role=NetworkSolveCalculationRole.well_energy
@@ -1220,6 +1316,25 @@ def _extend_for_network_and_provenance_family(session, w: SweepWorld, *, lot, li
         frequency_scale_factor=fsf_ho,
         application_role=EnergyCorrectionApplicationRole.zpe,
     )
+
+    # A scale factor whose users start with a hidden statmech and a hidden application, followed by shown ones: with a
+    # short ``used_by`` limit a hidden row must not displace a shown one.
+    fsf_lim = make_frequency_scale_factor(session, lot=lot)
+    ext["fsf_limit"] = fsf_lim
+    sm_h2 = make_statmech(session, species_entry=sa)
+    sm_v3 = make_statmech(session, species_entry=sa)
+    sm_h2.frequency_scale_factor_id = fsf_lim.id
+    sm_v3.frequency_scale_factor_id = fsf_lim.id
+    hid["sm_h2"], vis["sm_v3"] = sm_h2, sm_v3
+    for target in ("hidden", "visible"):
+        make_applied_energy_correction(
+            session,
+            target_transition_state_entry=tse_h if target == "hidden" else None,
+            target_species_entry=sa if target == "visible" else None,
+            frequency_scale_factor=fsf_lim,
+            application_role=EnergyCorrectionApplicationRole.zpe,
+        )
+    session.flush()
 
     lot_comp = make_lot(session, method="sweepcomposite", basis=None)
     calc_h_comp = make_calculation(session, type=CalculationType.sp, species_entry_id=sa.id, lot_id=lot_comp.id)

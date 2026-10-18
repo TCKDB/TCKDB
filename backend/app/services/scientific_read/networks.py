@@ -595,16 +595,6 @@ def _build_states(
     ]
 
 
-def _microreaction_entry_visible():
-    """A microreaction whose transition-state entry the profile hides is not listed (a barrierless path has none)."""
-    visible = review_floor_predicate(
-        NetworkChannelMicroReaction.transition_state_entry_id, SubmissionRecordType.transition_state_entry
-    )
-    if visible is None:
-        return True
-    return NetworkChannelMicroReaction.transition_state_entry_id.is_(None) | visible
-
-
 def _build_channels(
     session: Session, network_id: int
 ) -> list[NetworkChannelSummary]:
@@ -633,7 +623,6 @@ def _build_channels(
             == NetworkChannelMicroReaction.transition_state_entry_id,
         )
         .where(NetworkChannelMicroReaction.channel_id.in_([r.id for r in rows]))
-        .where(_microreaction_entry_visible())
         .order_by(
             NetworkChannelMicroReaction.channel_id.asc(),
             NetworkChannelMicroReaction.reaction_entry_id.asc(),
@@ -918,10 +907,8 @@ def _build_source_calculations(
     solve_ids = [s.id for s in solve_rows]
     solve_ref_by_id = {s.id: s.public_ref for s in solve_rows}
     rows = session.scalars(
-        where_visible(
-            select(NetworkSolveSourceCalculation).where(NetworkSolveSourceCalculation.solve_id.in_(solve_ids)),
-            review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
-        )
+        select(NetworkSolveSourceCalculation)
+        .where(NetworkSolveSourceCalculation.solve_id.in_(solve_ids))
         .order_by(
             NetworkSolveSourceCalculation.solve_id.asc(),
             NetworkSolveSourceCalculation.role.asc(),
@@ -1413,7 +1400,7 @@ def _build_state_energies_for_solve(
         .join(NetworkState, NetworkState.id == NetworkSolveStateEnergy.state_id)
         .outerjoin(
             Calculation,
-            _visible_join(Calculation, NetworkSolveStateEnergy.source_calculation_id),
+            Calculation.id == NetworkSolveStateEnergy.source_calculation_id,
         )
         .where(NetworkSolveStateEnergy.solve_id == solve_id)
         .order_by(NetworkState.composition_hash.asc())
@@ -1520,7 +1507,12 @@ def _build_state_energies_for_solve(
 
 
 def _visible_join(calculation, id_column):
-    """``calculation.id = id_column`` that holds only for a calculation the profile shows (an outer join then yields NULL)."""
+    """``calculation.id = id_column`` that holds only for a calculation the profile shows.
+
+    Used for the per-participant sources of a state energy, where the service (not only the guard) must drop a source
+    whose calculation is hidden: ``partial_sources`` is computed here from the sources that remain, and a guard that
+    deleted the element afterwards would leave it saying the sources are complete.
+    """
     visible = review_floor_predicate(calculation.id, SubmissionRecordType.calculation)
     return calculation.id == id_column if visible is None else and_(calculation.id == id_column, visible)
 
@@ -1546,7 +1538,7 @@ def _build_channel_barriers_for_solve(
         .join(NetworkChannel, NetworkChannel.id == NetworkSolveChannelBarrier.channel_id)
         .join(ReactionEntry, ReactionEntry.id == NetworkSolveChannelBarrier.reaction_entry_id)
         .join(TransitionStateEntry, TransitionStateEntry.id == NetworkSolveChannelBarrier.transition_state_entry_id)
-        .outerjoin(Calculation, _visible_join(Calculation, NetworkSolveChannelBarrier.source_calculation_id))
+        .outerjoin(Calculation, Calculation.id == NetworkSolveChannelBarrier.source_calculation_id)
         .where(NetworkSolveChannelBarrier.solve_id == solve_id)
         .where(_barrier_entry_visible())
         .order_by(NetworkChannel.channel_key, ReactionEntry.public_ref, TransitionStateEntry.public_ref)

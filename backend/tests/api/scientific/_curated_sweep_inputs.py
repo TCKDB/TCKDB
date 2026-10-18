@@ -30,7 +30,11 @@ PATH_PARAM_PROVIDERS: dict[str, Callable[[SweepWorld], list[str]]] = {
     "conformer_observation_ref_or_id": lambda w: _refs(w, "co_v", "co_v2"),
     "composite_scheme_ref": lambda w: [w.extra["composite_scheme"].public_ref],
     "energy_correction_scheme_ref_or_id": lambda w: [w.extra["ecs"].public_ref, w.extra["ecs_hidden_only"].public_ref],
-    "frequency_scale_factor_ref_or_id": lambda w: [w.extra["fsf"].public_ref, w.extra["fsf_hidden_only"].public_ref],
+    "frequency_scale_factor_ref_or_id": lambda w: [
+        w.extra["fsf"].public_ref,
+        w.extra["fsf_hidden_only"].public_ref,
+        w.extra["fsf_limit"].public_ref,
+    ],
     "geometry_handle": lambda w: [
         w.extra["geometry_hidden_calc"].public_ref,
         w.extra["geometry_visible_calc"].public_ref,

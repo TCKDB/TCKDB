@@ -195,6 +195,9 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     },
     "nsolve_h": {_NET, _LIT},
     "nkin_h": {f"{_NET}/kinetics/evaluate", f"{BASE}/network-kinetics/search"},
+    "nsolve_h3": {f"{BASE}/networks/browse", f"{BASE}/network-solves/search", _LIT},
+    "nkin_h3": {f"{BASE}/network-kinetics/search"},
+    "sm_h2": {f"{BASE}/frequency-scale-factors/{{frequency_scale_factor_ref_or_id}}"},
     # PR-2c: a hidden solve's PLOG fit (the only one of its kind), and the hidden calculations of a level of theory,
     # a composite-scheme binding and a literature record that nothing visible uses.
     "nkin_h_plog": {f"{_NET}/kinetics/evaluate", f"{BASE}/network-kinetics/search"},

@@ -293,7 +293,8 @@ def test_every_block_the_families_register_is_placed_by_the_guard(db_session, mo
         return {ref for ref in hidden if ref in text}
 
     for name, factory in _blocks(db_session, world):
-        model = next(m for m in registry if m.__name__ == name)
+        model = next((m for m in registry if m.__name__ == name), None)
+        assert model is not None, f"{name} is not registered in POINTER_MODELS"
         before = factory()
         assert named(before), f"{name}: the unfiltered payload names no hidden record: the world does not reach it"
         ref_guard.withhold_in_model(db_session, before, profile=CURATED)
@@ -382,6 +383,17 @@ def test_network_counts_flags_and_blocks_agree_with_what_is_served(client, db_se
     assert cur["network"]["solve_pressure_max_bar"] == 100.0 and exp["network"]["solve_pressure_max_bar"] == 1000.0
     available = cur["available_sections"]
     assert available["has_solves"] and available["has_kinetics"] and available["has_source_calculations"]
+    # A solve summary's own source count is the count its detail page serves, and the shared solve's is the smaller one.
+    exp_by_solve = {s["network_solve_ref"]: s for s in exp["solves"]}
+    for summary in cur["solves"]:
+        ref = summary["network_solve_ref"]
+        detail = _get(client, f"/network-solves/{ref}", "curated").json()["record"]
+        assert summary["source_calculation_count"] == detail["evidence_summary"]["source_calculation_count"], ref
+    shared = world.visible["nsolve_v"].public_ref
+    assert (
+        next(s for s in cur["solves"] if s["network_solve_ref"] == shared)["source_calculation_count"]
+        < exp_by_solve[shared]["source_calculation_count"]
+    )
 
     by_key = {c["channel_key"]: c for c in cur["channels"]}
     exp_by_key = {c["channel_key"]: c for c in exp["channels"]}
@@ -418,12 +430,30 @@ def test_solve_counts_flags_and_blocks_agree_with_what_is_served(client, db_sess
     assert any(b["source_calculation_ref"] == hidden_calc for b in exp["channel_barriers"])
     assert cur["channel_barriers"][0]["transition_state_entry_ref"] == world.visible["tse_v2"].public_ref
 
-    assert sum(len(e["sources"]) for e in exp["state_energies"]) == 4
-    assert sum(len(e["sources"]) for e in cur["state_energies"]) == 1
+    assert sum(len(e["sources"]) for e in exp["state_energies"]) == 8
+    assert sum(len(e["sources"]) for e in cur["state_energies"]) == 3
     single = [e for e in exp["state_energies"] if e["source_calculation_ref"] == hidden_calc]
     assert single, "the world builds no older single-slot state energy"
     assert all(e["source_calculation_ref"] is None for e in cur["state_energies"])
     assert hidden_calc not in _get(client, f"/network-solves/{solve}", "curated", include="all").text
+
+    # A solve whose only barrier is on the hidden entry has barriers, and shows none.
+    only_hidden_barrier = world.visible["nsolve_v_hidden_sources"].public_ref
+    cur_b = _get(client, f"/network-solves/{only_hidden_barrier}", "curated", include="all").json()["record"]
+    exp_b = _get(client, f"/network-solves/{only_hidden_barrier}", "exploratory", include="all").json()["record"]
+    assert exp_b["available_sections"]["has_channel_barriers"] is True and len(exp_b["channel_barriers"]) == 1
+    assert cur_b["available_sections"]["has_channel_barriers"] is False and cur_b["channel_barriers"] == []
+
+    # Two participants, the second one's source (E: its zero-point calculation, F: its calculation) hidden: the source
+    # goes and the state says its sources are incomplete, in the same breath.
+    import hashlib
+
+    for tag in ("e-state", "f-state"):
+        digest = hashlib.sha256(tag.encode()).hexdigest()
+        exp_e = next(e for e in exp["state_energies"] if e["state_composition_hash"] == digest)
+        cur_e = next(e for e in cur["state_energies"] if e["state_composition_hash"] == digest)
+        assert len(exp_e["sources"]) == 2 and exp_e["partial_sources"] is False, tag
+        assert len(cur_e["sources"]) == 1 and cur_e["partial_sources"] is True, tag
 
 
 def test_fit_detail_counts_agree_with_its_source_calculations(client, db_session, login_as):
@@ -510,9 +540,22 @@ def test_network_searches_do_not_find_a_network_by_what_only_a_hidden_record_has
         rows = _get(client, "/networks/search", profile, limit=100, **params).json()["records"]
         return {r["network"]["network_ref"] for r in rows}
 
-    for params in ({"temperature_min": 4000}, {"pressure_min": 500}, {"has_plog": "true"}, {"method": "hiddenonly"}):
+    for params in (
+        {"temperature_min": 4000},
+        {"pressure_min": 500},
+        {"has_plog": "true"},
+        {"method": "hiddenonly"},
+        {"method": "solveonly"},  # a shown calculation, cited only by the hidden solve
+    ):
         assert net in networks("exploratory", **params), params
         assert net not in networks("curated", **params), params
+
+    # A visible network whose only solve (and fit) is hidden has none.
+    only_hidden = world.visible["net_v_hidden_solves_only"].public_ref
+    for params in ({"has_solves": "true"}, {"has_kinetics": "true"}, {"has_chebyshev": "true"}):
+        assert only_hidden in networks("exploratory", **params), params
+        assert only_hidden not in networks("curated", **params), params
+    assert only_hidden in networks("curated", has_solves="false")
 
     found = lambda profile, **p: {  # noqa: E731
         r["network_solve"]["network_solve_ref"]
@@ -576,6 +619,11 @@ def test_level_of_theory_usage_follows_the_floor(client, db_session, login_as):
     )
     exp_only = _get(client, f"/level-of-theories/{only}", "exploratory", include="all").json()["record"]
     assert exp_only["evidence_summary"]["calculation_usage_count"] == 2
+    assert (
+        exp_only["evidence_summary"]["distinct_software_count"] == 1 and exp_only["available_sections"]["has_software"]
+    )
+    assert [s["software"] for s in exp_only["software"]["software"]] == ["hiddensoft"]
+    assert [w["workflow_tool"] for w in exp_only["software"]["workflow_tools"]] == ["hiddenflow"]
 
     cur = _get(client, f"/level-of-theories/{shared}", "curated", include="all").json()["record"]
     exp = _get(client, f"/level-of-theories/{shared}", "exploratory", include="all").json()["record"]
@@ -659,6 +707,30 @@ def test_frequency_scale_factor_usage_follows_the_floor(client, db_session, logi
 
     assert {fsf, only} <= factors("exploratory")
     assert factors("curated") & {fsf, only} == {fsf}
+
+
+def test_a_hidden_user_of_a_scale_factor_does_not_displace_a_shown_one_under_the_limit(
+    client, db_session, login_as, monkeypatch
+):
+    """``used_by`` is bounded. The floor is applied before the limit, so a hidden statmech or a hidden application
+    standing first in row order leaves its place to the shown ones behind it.
+
+    The scale factor's users, in row order, are a hidden statmech, a shown statmech, an application to a hidden entry and
+    one to a shown entry; with a limit of two the shown statmech and the shown application are what is served.
+
+    Kills: a limit applied to hidden rows (the statmech floor or the application floor removed).
+    """
+    from app.services.scientific_read import frequency_scale_factors
+
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+    ref = world.extra["fsf_limit"].public_ref
+    monkeypatch.setattr(frequency_scale_factors, "_USAGE_LIMIT", 2)
+    served = _get(client, f"/frequency-scale-factors/{ref}", "curated", include="used_by").json()["record"]["used_by"]
+    assert {u["record_ref"] for u in served} == {
+        world.visible["sm_v3"].public_ref,
+        world.extra["species_entry"].public_ref,
+    }
 
 
 def test_literature_counts_agree_with_the_records_it_lists(client, db_session, login_as):

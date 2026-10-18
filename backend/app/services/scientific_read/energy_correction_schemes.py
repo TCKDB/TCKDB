@@ -320,14 +320,6 @@ def _build_corrections(
     return out
 
 
-def _visible_calculation_join(id_column):
-    """``Calculation.id = id_column``, true only for a calculation the profile shows (the outer join then yields NULL)."""
-    from sqlalchemy import and_
-
-    visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
-    return Calculation.id == id_column if visible is None else and_(Calculation.id == id_column, visible)
-
-
 def _build_used_by(
     session: Session, ecs_id: int
 ) -> list[EnergyCorrectionSchemeUsageSummary]:
@@ -350,10 +342,10 @@ def _build_used_by(
             Calculation.public_ref.label("source_calculation_ref"),
         ).select_from(AppliedEnergyCorrection).outerjoin(
             Calculation,
-            _visible_calculation_join(AppliedEnergyCorrection.source_calculation_id),
+            Calculation.id == AppliedEnergyCorrection.source_calculation_id,
         ).where(AppliedEnergyCorrection.scheme_id == ecs_id)
-    # An application to a hidden transition-state entry is not listed; one whose source calculation is hidden is, with
-    # the source withheld (the outer join yields NULL for it).
+    # An application to a hidden transition-state entry is not listed (floored before the limit, so a hidden row cannot
+    # displace a shown one); one whose source calculation is hidden is, and the guard withholds the source.
     rows = session.execute(
         where_visible(applied_stmt, applied_target_visible()).order_by(AppliedEnergyCorrection.id.asc()).limit(_USAGE_LIMIT)
     ).all()
