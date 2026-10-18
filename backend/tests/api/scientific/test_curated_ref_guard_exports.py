@@ -140,7 +140,8 @@ def test_native_ndjson_names_no_hidden_record_and_keeps_the_visible_ones(client,
     sa = w.extra["species_entry"].public_ref
     every = _lines(_get(client, "/export/ndjson", "curated", _query(w, collapse="all")))
     shown_thermos = {t["thermo_ref"] for t in _by(every, "species_entry_ref", sa)["thermos"]}
-    assert shown_thermos and shown_thermos <= {w.visible["thm_v"].public_ref, w.visible["thm_v2"].public_ref}
+    visible_thermos = {w.visible[k].public_ref for k in ("thm_v", "thm_v2", "thm_vg")}  # thm_vg: guard PR-3's world
+    assert shown_thermos and shown_thermos <= visible_thermos
 
 
 def test_ml_species_leaves_out_the_hidden_calculations_and_drops_hidden_conformer_refs(client, world):
@@ -469,15 +470,17 @@ def test_null_mode_blanks_values_and_drops_list_strings_on_a_copy(db_session, wo
     # exploratory: a copy, unchanged, no site
     again = [{"a": hidden_calc}]
     report = ref_guard.withhold_in_document(db_session, again, profile=EXPLORATORY, mode="null")
-    assert report.sites == [] and report.facts == again and report.facts is not again
+    assert report.sites == [] and report.facts is again  # nothing withheld: no copy is made
 
 
-def test_the_mode_is_required_and_placeholder_belongs_to_pr_3(db_session, world):
+def test_the_mode_is_required_and_placeholder_is_not_null(db_session, world):
     """Kills: a default mode; a placeholder mode that quietly behaves like null."""
     with pytest.raises(TypeError):
         ref_guard.withhold_in_document(db_session, [{}], profile=CURATED)  # type: ignore[call-arg]
-    with pytest.raises(NotImplementedError, match="PR-3"):
-        ref_guard.withhold_in_document(db_session, [{}], profile=CURATED, mode="placeholder")
+    hidden_calc = world.hidden["calc_h"].public_ref
+    as_null = ref_guard.withhold_in_document(db_session, [{"a": hidden_calc}], profile=CURATED, mode="null")
+    as_placeholder = ref_guard.withhold_in_document(db_session, [{"a": hidden_calc}], profile=CURATED, mode="placeholder")
+    assert as_null.facts == [{"a": None}] and as_placeholder.facts == [{"a": "withheld:1"}]
     with pytest.raises(ValueError):
         ref_guard.withhold_in_document(db_session, [{}], profile=CURATED, mode="other")  # type: ignore[arg-type]
 

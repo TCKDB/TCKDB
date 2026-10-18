@@ -42,6 +42,22 @@ none. `tckdb-schemas` and `tckdb-client` unchanged.
   baseline entries for the four exports are gone.
 - Release artifacts and `/releases/*` are untouched (they carry their own digest; the export streams carry none).
 
+## Curated selection documents no longer name hidden records (2026-10-18)
+
+**Under `profile=curated`, hidden evidence now reads as unavailable and the curated decision may differ from the exploratory one. Exploratory output is unchanged except the manifest format-version numbers.** Migration: none. New environment variable: none. `tckdb-schemas` and `tckdb-client` unchanged; OpenAPI golden unchanged.
+
+Rule (hidden == unknown): selection evidence that points at a record the reader cannot open is treated exactly like a reference to nothing. A nested ref the engine only needs to compare (a determination's target, a candidate's own target group, a supersession pointer) becomes a placeholder `withheld:<n>` (sorted-ref numbering, one token per real ref per document, taken on the selection's own snapshot) before anything is assessed, decided or hashed; a curated manifest replays byte for byte.
+
+- **Thermo (format 2):** curated, a hidden supporting calculation (protocol citation or source link) no longer counts: it is dropped from the protocol, from the recipe keys, from the source-finding check and from the trust evidence. A record that targets a hidden conformer group carries a token.
+- **Kinetics (format 2):** curated, hidden supporting and energy calculations and a hidden network solve (with the fit link it gates) no longer count. A determination's target (transition-state entry, network, channel) carries a token.
+- **Network (format 3):** unchanged behaviour: a validation entry's reference to a solve the reader cannot open is `reference_solve_ref: null` with `reference_withheld: true`, as for a reference to nothing, and the evidence reads as unavailable. Replay of a format-2 manifest still reads the flag.
+- **Structure (format 2):** curated, validation evidence resting on a hidden calculation is no evidence row. A basin determination of a hidden conformer group carries a token.
+- **Statmech (format 2):** curated, a hidden conformer group no longer anchors a legacy record and a member declared in one states no group. A declaration's own scope group and a supersession pointer carry tokens.
+- **Relative energies (version 3):** a hidden group stays out of the compared world as before; the semantic version moved so the document may carry a token. Version 2 manifests, comparison manifests included, still replay.
+- Free text that names a hidden record (in any spelling: percent-encoded, with invisible characters) is blanked whole to `""`, never to null: a torsion's `invalidated_reason` is read for its presence, so the invalidation stays and only the words naming the hidden record go. A depositor URL is blanked whole.
+- Thermo and kinetics source findings no longer read structure determinations the profile hides: a live finding on a hidden determination that shares a visible source calculation does not block the visible record.
+- The sweep crawls network select, statmech select and export-selected over a world with a hidden ref in every nested position; its baseline lost every selection entry.
+
 ## Curated reads of the network, literature, analytics and provenance routes no longer name hidden records (2026-10-18)
 
 **Narrowing under `profile=curated` only; the default (exploratory) output is unchanged.** Migration: none. New environment variable:

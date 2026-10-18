@@ -51,11 +51,14 @@ def test_the_decision_procedure_version_did_not_move_and_the_old_decisions_are_b
         assert entry["manifest"]["policy"] == NEW["manifests"][name]["manifest"]["policy"]
 
 
-def test_the_current_golden_differs_from_the_old_one_by_the_assessment_block_alone():
+def test_the_current_golden_differs_from_the_old_one_by_the_assessment_block_and_the_format_version_alone():
     for name, entry in OLD["manifests"].items():
         current = dict(NEW["manifests"][name]["manifest"])
         block = current.pop("assessment_semantics")
         assert block == {"version": "2", "evidence_rubric": "computed_thermo@2", "source_findings": "1"}
+        # Guard PR-3: format 2 allows a placeholder token where a hidden ref was; the old fixture is format 1.
+        assert (entry["manifest"]["manifest_format_version"], current.pop("manifest_format_version")) == (1, 2)
+        entry = {**entry, "manifest": {k: v for k, v in entry["manifest"].items() if k != "manifest_format_version"}}
         assert current == entry["manifest"], name
         assert NEW["manifests"][name]["replay"] == entry.get("replay")
 

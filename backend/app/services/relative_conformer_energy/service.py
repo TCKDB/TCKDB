@@ -23,6 +23,7 @@ from app.services.relative_conformer_energy.manifest import build_comparison_man
 from app.services.relative_conformer_energy.models import RelativeEnergyRequest, RelativeEnergyResult
 from app.services.relative_conformer_energy.population import Population, effective_statuses, scan_population
 from app.services.scientific_read.profile import current_read_profile
+from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.structure_selection.loader import load_subject
 from app.services.structure_selection.models import (
     CoverageRequirement,
@@ -87,10 +88,12 @@ def assess_and_compute(
             session, entry_id=entry_id, request=structure_request, require_snapshot=require_snapshot
         )
     else:
-        # Nothing to assess: every compared group reports absent. The subject and statuses are still recorded.
+        # Nothing to assess: every compared group reports absent. The subject and statuses are still recorded. The
+        # facts still cross the loader to engine seam (a subject names no gated record, so nothing changes), so that
+        # every path of this operation passes it.
         assessment = StructureAssessmentResult(
             request=structure_request,
-            subject=load_subject(session, Grain.conformer, entry_id),
+            subject=withhold_selection_facts(session, load_subject(session, Grain.conformer, entry_id)),
             effective_statuses=tuple(sorted(effective_statuses(request), key=lambda s: s.value)),
             total_units=0,
             visible_units=0,

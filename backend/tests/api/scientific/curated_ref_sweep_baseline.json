@@ -1,20 +1,6 @@
 {
  "hidden_id_leaks": [],
- "hidden_ref_leaks": [
-  "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select :: calc_h @ candidates[*].protocol.supporting_calculations[*].calculation_ref",
-  "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest :: calc_h @ candidates[*].protocol.supporting_calculations[*].calculation_ref",
-  "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest :: calc_h_tssp @ candidates[*].energy_levels[*].calculation_ref",
-  "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest :: net_h @ candidates[*].determination.network_ref",
-  "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest :: nsolve_h @ candidates[*].network_solve_ref",
-  "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest :: tse_h @ candidates[*].determination.transition_state_entry_ref",
-  "POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select :: calc_h @ candidates[*].protocol.supporting_calculations[*].calculation_ref",
-  "POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select/manifest :: calc_h @ candidates[*].protocol.supporting_calculations[*].calculation_ref"
- ],
- "not_a_withholding": [
-  "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest :: candidates[*]<element not in exploratory list>",
-  "POST /api/v1/scientific/species-entries/{species_entry_ref}/calculations/select :: coverage.requested_units<value changed>",
-  "POST /api/v1/scientific/species-entries/{species_entry_ref}/calculations/select/manifest :: calculations[*]<element not in exploratory list>",
-  "POST /api/v1/scientific/species-entries/{species_entry_ref}/calculations/select/manifest :: decision.coverage.requested_units<value changed>"
- ],
+ "hidden_ref_leaks": [],
+ "not_a_withholding": [],
  "unplaceable_when_enabled": []
 }

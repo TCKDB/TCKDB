@@ -31,6 +31,7 @@ from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.species import ConformerGroup, Species, SpeciesEntry
 from app.db.models.thermo import Thermo
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.ref_guard import unavailable_refs
 from app.services.scientific_read.thermo import THERMO_TRUST_EAGER_LOADS
 from app.services.thermo_selection.models import H298Request, NormalizedCandidate, Subject
 
@@ -65,6 +66,8 @@ class LoadedPopulation:
     subject: Subject
     rows: list[Thermo]
     candidates: dict[int, NormalizedCandidate] = field(default_factory=dict)
+    #: Calculation refs the profile hides (or that name no row): evidence that reads as unavailable (see ``unavailable_evidence``).
+    unavailable: frozenset[str] = frozenset()
 
 
 def molecular_formula(smiles: str) -> str | None:
@@ -109,17 +112,40 @@ def scan_population(session: Session, *, species_entry_id: int, request: H298Req
     )
 
 
-def _protocol(thermo: Thermo) -> tuple[str, dict | None]:
+def unavailable_evidence(session: Session, rows: list[Thermo]) -> frozenset[str]:
+    """The calculations these records cite that the reader cannot open: hidden under the profile, or naming no row.
+
+    Hidden == unknown: such evidence is treated exactly like a reference to nothing, so a hidden supporting calculation
+    (a source link, a protocol citation) does not count under ``curated``. Empty, with no statement, without a review
+    floor: an exploratory selection is unchanged.
+    """
+    refs: set[str] = set()
+    for t in rows:
+        refs.update(link.calculation.public_ref for link in t.source_calculations if link.calculation is not None)
+        for support in (t.protocol_declaration or {}).get("supporting_calculations") or ():
+            if isinstance(support, dict) and support.get("calculation_ref"):
+                refs.add(support["calculation_ref"])
+    return frozenset(unavailable_refs(session, refs))
+
+
+def _protocol(thermo: Thermo, unavailable: frozenset[str] = frozenset()) -> tuple[str, dict | None]:
     raw = thermo.protocol_declaration
     if raw is None:
         return "absent", None
     try:
-        return "valid", StoredThermoProtocolDeclaration.model_validate(raw).model_dump(mode="json")
+        dumped = StoredThermoProtocolDeclaration.model_validate(raw).model_dump(mode="json")
     except ValueError:
         return "unreadable", None
+    if unavailable and dumped.get("supporting_calculations"):
+        dumped["supporting_calculations"] = [
+            s for s in dumped["supporting_calculations"] if s.get("calculation_ref") not in unavailable
+        ]
+    return "valid", dumped
 
 
-def _linked_recipe_keys(thermo: Thermo, declared_lot_methods: dict[int, str]) -> tuple[str, ...]:
+def _linked_recipe_keys(
+    thermo: Thermo, declared_lot_methods: dict[int, str], unavailable: frozenset[str] = frozenset()
+) -> tuple[str, ...]:
     """Named composite methods the record's own declared energy level and own source calculations carry."""
     methods: list[str] = []
     if thermo.energy_level_of_theory_id is not None:
@@ -127,6 +153,8 @@ def _linked_recipe_keys(thermo: Thermo, declared_lot_methods: dict[int, str]) ->
         if method:
             methods.append(method)
     for link in thermo.source_calculations:
+        if link.calculation is not None and link.calculation.public_ref in unavailable:
+            continue
         lot = link.calculation.lot if link.calculation is not None else None
         if lot is not None and lot.method:
             methods.append(lot.method)
@@ -169,12 +197,16 @@ def load_population(session: Session, scan: PopulationScan) -> LoadedPopulation:
             .order_by(Thermo.id)
         ).all()
     )
-    candidates = normalize_rows(session, rows, scan.review_status)
-    return LoadedPopulation(entry=entry, subject=subject, rows=rows, candidates=candidates)
+    unavailable = unavailable_evidence(session, rows)
+    candidates = normalize_rows(session, rows, scan.review_status, unavailable)
+    return LoadedPopulation(entry=entry, subject=subject, rows=rows, candidates=candidates, unavailable=unavailable)
 
 
 def normalize_rows(
-    session: Session, rows: list[Thermo], review_status: dict[int, RecordReviewStatus]
+    session: Session,
+    rows: list[Thermo],
+    review_status: dict[int, RecordReviewStatus],
+    unavailable: frozenset[str] = frozenset(),
 ) -> dict[int, NormalizedCandidate]:
     """Normalise loaded rows (trust eager-loads required) into engine inputs; ``id_rank`` follows the given order.
 
@@ -196,7 +228,7 @@ def normalize_rows(
             declared[lot_id] = method
     candidates: dict[int, NormalizedCandidate] = {}
     for rank, thermo in enumerate(rows, start=1):
-        state, protocol = _protocol(thermo)
+        state, protocol = _protocol(thermo, unavailable)
         candidates[thermo.id] = NormalizedCandidate(
             thermo_ref=thermo.public_ref,
             review_status=review_status[thermo.id],
@@ -215,6 +247,6 @@ def normalize_rows(
             ),
             protocol_state=state,
             protocol=protocol,
-            linked_recipe_keys=_linked_recipe_keys(thermo, declared),
+            linked_recipe_keys=_linked_recipe_keys(thermo, declared, unavailable),
         )
     return candidates

@@ -45,6 +45,11 @@ class Variant:
     path_values: tuple[tuple[str, str], ...]
     query: tuple[tuple[str, str], ...] = ()
     body: str | None = None  # JSON text
+    #: A body that depends on the profile the request is made under: ``((profile, JSON text), ...)``.
+    body_by_profile: tuple[tuple[str, str], ...] = ()
+
+    def body_for(self, profile: str) -> str | None:
+        return dict(self.body_by_profile).get(profile, self.body)
 
     @property
     def request_text(self) -> str:
@@ -66,6 +71,9 @@ class Result:
     spy_paths: list[str] = field(default_factory=list)
     #: What the guard withheld from this response (empty unless the route family is enabled).
     applied_sites: list[Any] = field(default_factory=list)
+    #: Selection documents that passed the loader to engine seam in this request, and the placeholder tokens they made.
+    documents: int = 0
+    document_tokens: list[str] = field(default_factory=list)
 
 
 def enumerate_routes(app) -> list[RouteSpec]:
@@ -105,6 +113,7 @@ def variants_for(spec: RouteSpec, world: SweepWorld, *, with_internal_ids: bool)
         for n, inp in enumerate(inputs):
             query: dict[str, Any] = dict(inp.get("query", {})) if spec.method == "GET" else {}
             body = inp.get("json") if spec.method == "POST" else None
+            by_profile = inp.get("json_by_profile") if spec.method == "POST" else None
             if spec.method == "POST" and body is None:
                 body = {}
             if "limit" in spec.query_params and "limit" not in query:
@@ -126,6 +135,7 @@ def variants_for(spec: RouteSpec, world: SweepWorld, *, with_internal_ids: bool)
                     path_values=tuple(combo),
                     query=tuple(qitems),
                     body=json.dumps(body, sort_keys=True) if body is not None else None,
+                    body_by_profile=tuple((k, json.dumps(v, sort_keys=True)) for k, v in (by_profile or {}).items()),
                 )
             )
             # The `include=all` twin for routes that declare `include` on the query string.
@@ -153,4 +163,6 @@ def send(client, spec: RouteSpec, variant: Variant, *, profile: str, counter: Ca
     url = url_for(spec, variant)
     if spec.method == "GET":
         return client.get(url, params=params)
-    return client.post(url, params=params, content=variant.body or "{}", headers={"content-type": "application/json"})
+    return client.post(
+        url, params=params, content=variant.body_for(profile) or "{}", headers={"content-type": "application/json"}
+    )

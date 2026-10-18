@@ -44,7 +44,8 @@ PATH_PARAM_PROVIDERS: dict[str, Callable[[SweepWorld], list[str]]] = {
     "level_of_theory_ref_or_id": lambda w: [w.extra["lot"].public_ref, w.extra["lot_hidden_only"].public_ref],
     "literature_ref_or_id": lambda w: [w.extra["literature"].public_ref, w.extra["literature_hidden_only"].public_ref],
     "network_kinetics_ref_or_id": lambda w: _refs(w, "nkin_v", "nkin_v_under_hidden_net"),
-    "network_ref": lambda w: _refs(w, "net_v"),
+    # The selection routes (select, manifest, export-selected) take the dedicated network of the selection world.
+    "network_ref": lambda w: _refs(w, "net_sel"),
     "network_ref_or_id": lambda w: _refs(w, "net_v"),
     "network_solve_ref_or_id": lambda w: _refs(w, "nsolve_v", "nsolve_v_under_hidden_net"),
     "reaction_entry_id": lambda w: [w.extra["reaction_entry"].public_ref],
@@ -224,6 +225,91 @@ _RELATIVE_ENERGIES_COMPARE = _post(
     }
 )
 
+def _network_question(w: SweepWorld) -> dict[str, Any]:
+    """A single-channel question the dedicated network's visible solve answers (its hidden sibling answers it too)."""
+    ns = w.extra["network_select_world"]
+    return {
+        "scope": "single_channel",
+        "channel_key": "assoc",
+        "observable": "product_resolved_coefficient",
+        "coefficient_basis": "kernel",
+        "temperature_min_k": 500.0,
+        "temperature_max_k": 1500.0,
+        "pressure_min_bar": 0.5,
+        "pressure_max_bar": 5.0,
+        "bath": {"components": [{"species_ref": ns.ar.public_ref}]},
+        "partition": {"retained": sorted(ns.hashes.values())},
+    }
+
+
+_NETWORK_SELECT = _post(_network_question)
+
+#: A thermal qualification of the species entry's statmech models in the visible conformer group.
+_STATMECH_SELECT = _post(
+    lambda w: {
+        "intent": "qualify",
+        "task": "within_basin_thermal",
+        "observable": "entropy",
+        "target": {
+            "kind": "species_entry",
+            "species_entry_ref": w.extra["species_entry"].public_ref,
+            "scope": {"kind": "basin", "conformer_group_ref": w.visible["cg_v"].public_ref},
+            "isotope_convention": "entry_documented_masses",
+            "electronic_scope": "entry_state",
+            "stereochemical_scope": "entry_identity",
+        },
+        "conditions": {"temperature_domain_k": {"min": 298.15, "max": 500.0}, "normalization": "internal_only"},
+    }
+)
+
+
+def _export_selected(w: SweepWorld) -> list[dict[str, Any]]:
+    """The export request each profile would make: the manifest ITS download gives, and the node it selects.
+
+    An export is only accepted for a manifest the server would write itself now, so the body depends on the profile the
+    request is made under; ``json_by_profile`` carries one per profile.
+    """
+    from app.db.models.common import ProfileRecommendation, ReadProfile
+    from app.schemas.reads.scientific_network_selection import NetworkSelectionRequest
+    from app.services.network_selection.public import profile_has_floor, redact_manifest, run_selection
+    from app.services.scientific_read.profile import (
+        EXPLORATORY,
+        ResolvedReadProfile,
+        reset_current_read_profile,
+        set_current_read_profile,
+    )
+
+    session = w.extra["session"]
+    session.info["tckdb_read_snapshot_opt_out"] = True  # the harness holds one outer transaction, as the dependency override says
+    network_ref = w.visible["net_sel"].public_ref
+    out: dict[str, dict[str, Any]] = {}
+    for name, resolved in (
+        ("exploratory", EXPLORATORY),
+        (
+            "curated",
+            ResolvedReadProfile(profile=ReadProfile.curated, recommendation=ProfileRecommendation.approved_floor_only),
+        ),
+    ):
+        token = set_current_read_profile(resolved)
+        try:
+            selection = run_selection(
+                session, network_ref=network_ref, body=NetworkSelectionRequest.model_validate(_network_question(w))
+            )
+            manifest = redact_manifest(selection.manifest, withhold_excluded=profile_has_floor())
+        finally:
+            reset_current_read_profile(token)
+        decision = manifest["decision"]
+        node = decision["selected_ref"] or decision["fronts"][0][0]
+        row = next(a for a in manifest["assessments"]["determinations"] if a["determination_ref"] == node)
+        out[name] = {
+            "manifest": manifest,
+            "node_ref": node,
+            "representation_refs": list(row["eligible_fit_refs"]),
+            "allow_administrative_choice": True,
+        }
+    return [{"json_by_profile": out}]
+
+
 #: ``(method, route template)`` -> list of input variants, each ``{"query": {...}, "json": {...}}`` (GET uses the
 #: query, POST the JSON). A route absent from this map is crawled once with no extra input (empty JSON for POSTs).
 def _export_species_refs(w: SweepWorld) -> list[str]:
@@ -300,6 +386,11 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
     ),
     ("POST", f"{BASE}/reaction-entries/{{reaction_entry_ref}}/kinetics/select"): _KINETICS_SELECT,
     ("POST", f"{BASE}/reaction-entries/{{reaction_entry_ref}}/kinetics/select/manifest"): _KINETICS_SELECT,
+    ("POST", f"{BASE}/networks/{{network_ref}}/kinetics/select"): _NETWORK_SELECT,
+    ("POST", f"{BASE}/networks/{{network_ref}}/kinetics/select/manifest"): _NETWORK_SELECT,
+    ("POST", f"{BASE}/networks/{{network_ref}}/kinetics/export-selected"): _export_selected,
+    ("POST", f"{BASE}/statmech/select"): _STATMECH_SELECT,
+    ("POST", f"{BASE}/statmech/select/manifest"): _STATMECH_SELECT,
     ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/thermo/select"): _THERMO_SELECT,
     ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/thermo/select/manifest"): _THERMO_SELECT,
     **{
@@ -327,12 +418,6 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
     },
 }
 
-#: ``(method, route template)`` -> reason this route cannot be crawled yet. Must be empty once every family is
-#: enforced; each entry names the PR that closes it.
-CRAWL_UNSUPPORTED: dict[tuple[str, str], str] = {
-    ("POST", f"{BASE}/networks/{{network_ref}}/kinetics/select"): "needs a determination world (PR-3)",
-    ("POST", f"{BASE}/networks/{{network_ref}}/kinetics/select/manifest"): "needs a determination world (PR-3)",
-    ("POST", f"{BASE}/networks/{{network_ref}}/kinetics/export-selected"): "needs a verified manifest (PR-3)",
-    ("POST", f"{BASE}/statmech/select"): "needs a statmech-model declaration world (PR-3)",
-    ("POST", f"{BASE}/statmech/select/manifest"): "needs a statmech-model declaration world (PR-3)",
-}
+#: ``(method, route template)`` -> reason this route cannot be crawled yet. Empty since guard PR-3: the selection routes
+#: (network select, statmech select, export-selected) are crawled over the selection world.
+CRAWL_UNSUPPORTED: dict[tuple[str, str], str] = {}

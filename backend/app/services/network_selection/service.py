@@ -47,6 +47,7 @@ from app.services.network_selection.models import (
     SolveFacts,
 )
 from app.services.read_snapshot import begin_read_snapshot
+from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.selection_kernel import Applicability
 
 #: What a result is scoped to, said once and uniformly: a preference is within the eligible population only.
@@ -121,6 +122,9 @@ def assess_network(
     scan = scan_population(session, request=request)
     resolve_reference_model(session, request)
     network, solves = load_population(session, scan, request)
+    # The loader to engine seam (guard PR-3): a hidden ref in the captured facts (a validation entry's reference solve)
+    # becomes a placeholder token BEFORE the solves are assessed, decided or sealed into the manifest.
+    network, solves = withhold_selection_facts(session, (network, solves))
     check_request_against_network(request, network)
     check_snapshot_size(request.bounds, snapshot_size_bytes(request, network, solves))
 

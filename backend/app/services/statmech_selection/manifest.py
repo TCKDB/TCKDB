@@ -63,7 +63,10 @@ from app.services.statmech_selection.service import StatmechQualification
 from app.services.statmech_selection.vocabulary import CONTRACT_VERSION
 from app.services.structure_selection.models import NormalizedCalculation
 
-MANIFEST_FORMAT_VERSION = 1
+#: 2: a hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor (guard
+#: PR-3). A format-1 manifest, made before that, still replays: replay only compares the refs it is given with each other.
+MANIFEST_FORMAT_VERSION = 2
+SUPPORTED_MANIFEST_FORMATS = frozenset({1, MANIFEST_FORMAT_VERSION})
 
 #: Assessment semantics versions this release can reassess. A manifest made under another is refused, not run under today's.
 SUPPORTED_ASSESSMENT_SEMANTICS = frozenset({ASSESSMENT_VERSION})
@@ -186,7 +189,7 @@ def build_manifest(
 
 
 def _check_format(manifest: dict[str, Any]) -> None:
-    if manifest.get("manifest_format_version") != MANIFEST_FORMAT_VERSION:
+    if manifest.get("manifest_format_version") not in SUPPORTED_MANIFEST_FORMATS:
         raise ReplayError("unsupported_manifest_format", f"unknown manifest format {manifest.get('manifest_format_version')!r}")
 
 

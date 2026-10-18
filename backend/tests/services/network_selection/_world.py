@@ -57,7 +57,7 @@ ORDER = {"assoc": 2, "diss": 1, "elim": 1, "elim_alt": 1}
 UNITS = {2: "cm3_mol_s", 1: "per_s", 3: "cm6_mol2_s"}
 
 
-def build_world(session) -> SimpleNamespace:
+def build_world(session, *, actor_name: str = "ns-curator") -> SimpleNamespace:
     def entry(smiles: str, tag: str, mult: int = 1):
         return make_species_entry(session, make_species(session, smiles=smiles, multiplicity=mult, inchi_key=next_inchi_key(tag)))
 
@@ -78,7 +78,7 @@ def build_world(session) -> SimpleNamespace:
         "elim": make_network_channel(session, network=network, source_state=well, sink_state=exit_, kind=NetworkChannelKind.dissociation, channel_key="elim"),
         "elim_alt": make_network_channel(session, network=network, source_state=well, sink_state=exit_, kind=NetworkChannelKind.dissociation, channel_key="elim_alt"),
     }
-    actor = AppUser(username="ns-curator", role=AppUserRole.curator)
+    actor = AppUser(username=actor_name, role=AppUserRole.curator)
     session.add(actor)
     session.flush()
     return SimpleNamespace(

@@ -1,0 +1,2577 @@
+{
+ "curated": {
+  "assessments": {
+   "bundles": [],
+   "determinations": [
+    {
+     "advisory": [
+      "protocol_not_declared"
+     ],
+     "applicability": "applicable",
+     "blocking": [],
+     "channel_key": "assoc",
+     "determination_ref": "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+     "eligible_fit_refs": [
+      "nkin_ct263ibhe5w3xg6ltuw5ntp4fi"
+     ],
+     "evidence": {
+      "convergence": "unavailable",
+      "dependence": "unavailable",
+      "model_fidelity": "unavailable",
+      "physical_validation": "unavailable",
+      "representation_validation": "unavailable",
+      "uncertainty": "unavailable"
+     },
+     "physically_eligible": true,
+     "reasons": [],
+     "solve_ref": "nsolve_37c6m5gedd2ykcu35v5cyobt6q"
+    },
+    {
+     "advisory": [
+      "protocol_not_declared"
+     ],
+     "applicability": "applicable",
+     "blocking": [],
+     "channel_key": "assoc",
+     "determination_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+     "eligible_fit_refs": [
+      "nkin_pagu5osd6kjhmydr7eso6gu62q"
+     ],
+     "evidence": {
+      "convergence": "unavailable",
+      "dependence": "unavailable",
+      "model_fidelity": "unavailable",
+      "physical_validation": "unavailable",
+      "representation_validation": "unavailable",
+      "uncertainty": "unavailable"
+     },
+     "physically_eligible": true,
+     "reasons": [],
+     "solve_ref": "nsolve_n2an37rg5mrnry6ytwwi2rhgti"
+    }
+   ],
+   "ungrouped_fit_refs": []
+  },
+  "decision": {
+   "administrative_first": {
+    "basis": "administrative order among unresolved first-front alternatives; not a claim that the record is method-superior",
+    "node_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u"
+   },
+   "administrative_order": [
+    "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+    "nkdet_pqceiyah6mzkykcbm5b6e2urte"
+   ],
+   "basis": "no registered rule compares these eligible candidates; they are unranked, not equally accurate",
+   "cycles": [],
+   "edges": [],
+   "fronts": [
+    [
+     "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+     "nkdet_pqceiyah6mzkykcbm5b6e2urte"
+    ]
+   ],
+   "opposing_pairs": [],
+   "outcome": "incomparable_alternatives",
+   "overridden_edges": [],
+   "pair_checks": [],
+   "representations": [
+    {
+     "administrative_first": null,
+     "administrative_order": [
+      "nkin_ct263ibhe5w3xg6ltuw5ntp4fi"
+     ],
+     "basis": "no representation rule applies to this request; the fits are in administrative order, which is not a claim that one fit is more accurate",
+     "chosen_fit_ref": "nkin_ct263ibhe5w3xg6ltuw5ntp4fi",
+     "determination_ref": "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+     "edges": [],
+     "fronts": [
+      [
+       "nkin_ct263ibhe5w3xg6ltuw5ntp4fi"
+      ]
+     ],
+     "independent_confirmation": false,
+     "node_ref": "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+     "outcome": "sole_eligible_candidate",
+     "shared_provenance": {
+      "solve_ref": "nsolve_37c6m5gedd2ykcu35v5cyobt6q"
+     },
+     "unused_edges": []
+    },
+    {
+     "administrative_first": null,
+     "administrative_order": [
+      "nkin_pagu5osd6kjhmydr7eso6gu62q"
+     ],
+     "basis": "no representation rule applies to this request; the fits are in administrative order, which is not a claim that one fit is more accurate",
+     "chosen_fit_ref": "nkin_pagu5osd6kjhmydr7eso6gu62q",
+     "determination_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+     "edges": [],
+     "fronts": [
+      [
+       "nkin_pagu5osd6kjhmydr7eso6gu62q"
+      ]
+     ],
+     "independent_confirmation": false,
+     "node_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+     "outcome": "sole_eligible_candidate",
+     "shared_provenance": {
+      "solve_ref": "nsolve_n2an37rg5mrnry6ytwwi2rhgti"
+     },
+     "unused_edges": []
+    }
+   ],
+   "rule_matches": [
+    {
+     "applied": false,
+     "level": "candidate",
+     "reasons": [
+      "compared_objects_are_falloff_fits: The compared objects are Troe falloff fits (an elementary kinetics model with a broadening factor Fc). Network selection compares Chebyshev and PLOG products of one solve; a Troe-form pair is not a pair of network fits, so no network rule can be stated until the owner decides whether such a comparison belongs to elementary kinetics only.",
+      "dataset_members_not_extracted: Table 1 (the He measurements, open access, with 2-sigma uncertainties) has been located but its points were not extracted into the manifest, so the reproduction metric, the domain and the member list the rule needs are not pinned.",
+      "fit_audit_is_partial: Only the two He fits (Fc = 0.32 and 0.39) and their stated percent deviations were read, from section 3.1 and the Fig. S2 caption. The measured-to-fitted ratios behind the 5 % and 10 % figures were not reconstructed, and the fitting procedure was not audited beyond what those passages say.",
+      "no_verified_evidence_state: TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified dataset-reproduction evidence cannot be satisfied.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "rule_id": "N-AMEDRO-HE-FC",
+     "rule_version": "0.1.0",
+     "why": "rule_status_inactive"
+    },
+    {
+     "applied": false,
+     "level": "candidate",
+     "reasons": [
+      "exact_cells_and_metric_unaudited: The tested PES variants, bath composition, temperature and pressure cells, initial and source conditions, observation time and metric were seen only through indexed passages; detailed figures and data are unaudited.",
+      "article_not_read: The article is open access (CC BY 3.0), and the earlier 403 was the publisher blocking automated requests, not a paywall. It has not been read here yet, so the full text, figures and supplement remain unaudited.",
+      "reduction_vocabulary_one_open_name: TCKDB's NetworkReductionMethod already has the chemically significant eigenvalue, modified strong collision and reservoir-state methods. The one open naming decision is whether to add simulation_least_squares (the abstract defines SLS as simulation least-squares); that mapping must not be guessed.",
+      "transient_flux_is_not_a_phenomenological_coefficient: Fidelity of a transient flux does not independently validate the physical chemistry or identify a unique phenomenological coefficient; a time-regime mapping for the requested observable is not defined.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "rule_id": "N-JG-REDUCTION-FIDELITY",
+     "rule_version": "0.1.0",
+     "why": "rule_status_inactive"
+    },
+    {
+     "applied": false,
+     "level": "candidate",
+     "reasons": [
+      "reference_values_only_as_curves: The article gives the direct-dynamics and pairwise deactivating-collision averages as plotted curves (Figs. 3-6, 7 and 9), not as a table; the only tabulated numbers are the fitted alpha300 and n of Table 4 and a few values quoted in the text. A numeric reference with its uncertainty cannot be pinned from the main article, and the Supporting Information, as the article describes it, holds the fitted V_TM parameters and the approach-geometry and potential-comparison figures, not transfer averages. Reading values off the figures was not done here.",
+      "reference_is_a_validated_low_level_surface: The reference is MP2/aug'-cc-pVDZ (SAC for H2) direct dynamics, itself checked against QCISD(T)/CBS interaction energies (Table 2, p. 6441) with an estimated 10 % statistical uncertainty in the average, so a preference is for agreement with that model, not with a converged or measured energy transfer. The H2 comparison is the only one that uses the SAC surface.",
+      "preference_holds_for_he_only: The one supported preference (exp/6 over Lennard-Jones) was tested for He only, at 300, 1150 and 2000 K (Fig. 3); the paper did not consider Lennard-Jones for any other bath (p. 6444). For Ne exp/6 reproduces MP2 direct dynamics but no competitor was tested, so any Ne extension would rest only on the authors' expectation (p. 6447) that the deficiency is general. For H2 the best exp/6 fit is called accidental, and N2, CO, Ar and Kr have no direct dynamics, so the rule's domain is one bath.",
+      "transfer_treatment_not_typed: network_solve_energy_transfer.model exists as free text. What is missing is a typed field for how the parameters were obtained (which interaction potential or fitted kernel), so a candidate cannot state the property the rule would compare. A stored solve carries a fitted alpha300 and n (Table 4's form), not the trajectory potential. This is an owner decision and has not been added.",
+      "whole_rate_comparison_not_supported: A comparison of the transfer treatment alone says nothing about the rate unless every other contribution is verified equal, which needs typed protocol fields. The paper itself finds density-of-states error can matter more than energy-transfer error at intermediate and low pressure (p. 6453).",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "rule_id": "N-JM-CH4-TRANSFER",
+     "rule_version": "0.2.0",
+     "why": "rule_status_inactive"
+    },
+    {
+     "applied": false,
+     "level": "candidate",
+     "reasons": [
+      "agreement_is_qualitative_and_by_figure: The paper states agreement in words and figures (Ar k0 about 25 % low, Ar falloff low by up to a factor of 2, CH4 slightly low, He good) with no metric, no table of predicted and measured values and no per-point uncertainty. The experimental points belong to the cited papers (refs 61-67, 70, 71) and the Baulch et al. evaluation, none of which was read here, so no reference set or metric can be pinned.",
+      "paper_ranks_no_competing_solves: The paper gives agreement for one prediction per bath. It does not compare the rates of two energy-transfer treatments or two solves against experiment, so it gives no evidence that one solve's rates are better than another's.",
+      "density_of_states_confounds_the_comparison: The paper reports that density-of-states error can be larger than the energy-transfer error at intermediate and low pressure, and that the anharmonic scaling that doubles the threshold density of states makes the Ar k0 about 50 % too high (worse than the harmonic calculation, p. 6452), improves only the Ar falloff, worsens He (pp. 6452-6453) and is unclear for He, Ar and CH4 overall (p. 6453). A rate comparison is not an energy-transfer comparison unless the density of states is verified equal.",
+      "four_of_eight_baths: Only He, Ar, Kr and CH4 have an experimental comparison; the other four baths have none.",
+      "no_verified_evidence_state: TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified agreement with experiment cannot be satisfied.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "rule_id": "N-JM-CH4-RATE",
+     "rule_version": "0.2.0",
+     "why": "rule_status_inactive"
+    },
+    {
+     "applied": false,
+     "level": "candidate",
+     "reasons": [
+      "no_source_comparison: This is a proposed evidence rule. No source comparison or benchmark was audited, and no convergence reference is pinned.",
+      "no_verification_step: A producer's convergence entry is stored as declared; TCKDB has no step that verifies it, so the prerequisite \"verified\" cannot be satisfied for any record.",
+      "same_model_not_expressible: Two solves being of the same physical model is not a stated fact in the schema (no model identity beyond the network and the declared protocol), so the pair's compatibility cannot be verified.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "rule_id": "N-ME-CONVERGENCE",
+     "rule_version": "0.1.0",
+     "why": "rule_status_inactive"
+    },
+    {
+     "applied": false,
+     "level": "representation",
+     "rule_id": "N-REP-HELDOUT",
+     "rule_version": "0.1.0",
+     "why": "request_is_not_representation_fidelity"
+    }
+   ],
+   "rules": [
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "compared_objects_are_falloff_fits",
+       "text": "The compared objects are Troe falloff fits (an elementary kinetics model with a broadening factor Fc). Network selection compares Chebyshev and PLOG products of one solve; a Troe-form pair is not a pair of network fits, so no network rule can be stated until the owner decides whether such a comparison belongs to elementary kinetics only."
+      },
+      {
+       "id": "dataset_members_not_extracted",
+       "text": "Table 1 (the He measurements, open access, with 2-sigma uncertainties) has been located but its points were not extracted into the manifest, so the reproduction metric, the domain and the member list the rule needs are not pinned."
+      },
+      {
+       "id": "fit_audit_is_partial",
+       "text": "Only the two He fits (Fc = 0.32 and 0.39) and their stated percent deviations were read, from section 3.1 and the Fig. S2 caption. The measured-to-fitted ratios behind the 5 % and 10 % figures were not reconstructed, and the fitting procedure was not audited beyond what those passages say."
+      },
+      {
+       "id": "no_verified_evidence_state",
+       "text": "TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified dataset-reproduction evidence cannot be satisfied."
+      }
+     ],
+     "anchors": [
+      {
+       "claim": "best He fit Fc = 0.32, k0He = 1.4e-30 cm6 molecule-2 s-1 (kinf fixed 6.3e-11, n = 0)",
+       "where": "ACP 20, p. 3095, section 3.1; Fig. 1 caption, p. 3094; Fig. S2 caption (supplement)"
+      },
+      {
+       "claim": "with Fc = 0.39 (the N2 value) the fit overestimates by about 5 % above about 300 Torr and underestimates by about 10 % below; k0He becomes 1.0e-30",
+       "where": "ACP 20, p. 3095, section 3.1; Fig. S2 (ratio panel)"
+      },
+      {
+       "claim": "the He dataset is Table 1 (T, p, M, k1 with 2-sigma total uncertainty), and Table 1 is the dataset the Data availability statement names",
+       "where": "ACP 20, Table 1, p. 3092; Data availability statement"
+      }
+     ],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "Amedro, D. et al., Atmos. Chem. Phys. 20, 3091-3105 (2020), OH + NO2 (+M) total loss in He, N2 and humid mixtures. https://acp.copernicus.org/articles/20/3091/2020/",
+     "council_observation": "The study distinguishes product-summed loss from HNO3-only formation and shows bath-sensitive falloff. Its He fit with Fc = 0.32 reproduces the stated dataset better than imposing the N2 value 0.39. This is the paper's own statement of the comparison (section 3.1 and Fig. S2), verified against the open article.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "extract the Table 1 points (temperature, pressure, M, k1, 2-sigma) with page and table anchors; open, not yet extracted",
+       "source": "Amedro et al., Atmos. Chem. Phys. 20, 3091 (2020), Table 1, open access (CC BY 4.0), already pinned above"
+      },
+      {
+       "items": "whether a Troe-falloff comparison is in scope for network selection at all",
+       "source": "owner decision"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "A request for HNO3-only formation (needs branching evidence this study does not give for the requested form).",
+      "A humid or composition-dependent bath."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "compared_objects_are_falloff_fits: The compared objects are Troe falloff fits (an elementary kinetics model with a broadening factor Fc). Network selection compares Chebyshev and PLOG products of one solve; a Troe-form pair is not a pair of network fits, so no network rule can be stated until the owner decides whether such a comparison belongs to elementary kinetics only.",
+      "dataset_members_not_extracted: Table 1 (the He measurements, open access, with 2-sigma uncertainties) has been located but its points were not extracted into the manifest, so the reproduction metric, the domain and the member list the rule needs are not pinned.",
+      "fit_audit_is_partial: Only the two He fits (Fc = 0.32 and 0.39) and their stated percent deviations were read, from section 3.1 and the Fig. S2 caption. The measured-to-fitted ratios behind the 5 % and 10 % figures were not reconstructed, and the fitting procedure was not audited beyond what those passages say.",
+      "no_verified_evidence_state: TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified dataset-reproduction evidence cannot be satisfied.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "candidate",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "representation_fidelity",
+     "objective_key": "named_dataset_reproduction_falloff_broadening",
+     "observable": "rate_coefficient",
+     "open_access": true,
+     "owner_acceptance": null,
+     "proposed_statement": "For the named OH + NO2 dataset in He, a representation fitted with the He-specific broadening factor is preferred over one that imposes the N2 factor, on the objective of reproducing that dataset. A named-dataset reproduction objective, not independent physical validation and not a universal predictive-accuracy claim.",
+     "required_predicates": [
+      "The candidate's observable is total loss of OH + NO2 (not HNO3-only formation) and its coefficient basis states the bath.",
+      "The candidate's bath is He (a specified collider); a humid or mixed bath needs an applicable mixture treatment.",
+      "The two representations being compared are fits of the same pinned dataset, with the dataset members named.",
+      "The temperature and pressure domain of the request lies inside the dataset's domain."
+     ],
+     "rule_id": "N-AMEDRO-HE-FC",
+     "source_ids": [
+      "AMEDRO_2020",
+      "AMEDRO_2020_SUPPLEMENT"
+     ],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.1.0"
+    },
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "exact_cells_and_metric_unaudited",
+       "text": "The tested PES variants, bath composition, temperature and pressure cells, initial and source conditions, observation time and metric were seen only through indexed passages; detailed figures and data are unaudited."
+      },
+      {
+       "id": "article_not_read",
+       "text": "The article is open access (CC BY 3.0), and the earlier 403 was the publisher blocking automated requests, not a paywall. It has not been read here yet, so the full text, figures and supplement remain unaudited."
+      },
+      {
+       "id": "reduction_vocabulary_one_open_name",
+       "text": "TCKDB's NetworkReductionMethod already has the chemically significant eigenvalue, modified strong collision and reservoir-state methods. The one open naming decision is whether to add simulation_least_squares (the abstract defines SLS as simulation least-squares); that mapping must not be guessed."
+      },
+      {
+       "id": "transient_flux_is_not_a_phenomenological_coefficient",
+       "text": "Fidelity of a transient flux does not independently validate the physical chemistry or identify a unique phenomenological coefficient; a time-regime mapping for the requested observable is not defined."
+      }
+     ],
+     "anchors": [],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "Johnson, M. S. and Green, W. H., Faraday Discuss. 238, 380-404 (2022), https://pubs.rsc.org/en/content/articlehtml/2022/fd/d2fd00040g. CC BY 3.0; open copies at MIT DSpace (hdl 1721.1/143677) and OSTI.",
+     "council_observation": "Council-reported, NOT verified here (the full text was not read): controlled reductions are compared against energy-grained master-equation fluxes, with the system acetyl + O2 in N2; SLS variants improve some tested low-pressure cases, while every tested reduction fails in some conditions and a modified-barrier case defeats a universal hierarchy. The abstract defines SLS as simulation least-squares.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "the definition of each reduction variant, the PES variants, the bath, every temperature and pressure cell tested, initial conditions, observation time, the error metric and the per-cell results",
+       "source": "Johnson and Green, Faraday Discuss. 238, 380-404 (2022), d2fd00040g, full text (open access; a browser fetch from RSC, MIT DSpace or OSTI is needed only if a reduction-fidelity rule is wanted)"
+      },
+      {
+       "items": "the numerical data behind the comparison figures",
+       "source": "the same article's electronic supplementary information"
+      },
+      {
+       "items": "whether to add simulation_least_squares to the reduction_method vocabulary, and a time-regime mapping",
+       "source": "owner decision"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "The modified-barrier case, where the council reports (unverified) that no universal reduction hierarchy holds.",
+      "Any condition the study reports as a failure of every tested reduction."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "exact_cells_and_metric_unaudited: The tested PES variants, bath composition, temperature and pressure cells, initial and source conditions, observation time and metric were seen only through indexed passages; detailed figures and data are unaudited.",
+      "article_not_read: The article is open access (CC BY 3.0), and the earlier 403 was the publisher blocking automated requests, not a paywall. It has not been read here yet, so the full text, figures and supplement remain unaudited.",
+      "reduction_vocabulary_one_open_name: TCKDB's NetworkReductionMethod already has the chemically significant eigenvalue, modified strong collision and reservoir-state methods. The one open naming decision is whether to add simulation_least_squares (the abstract defines SLS as simulation least-squares); that mapping must not be guessed.",
+      "transient_flux_is_not_a_phenomenological_coefficient: Fidelity of a transient flux does not independently validate the physical chemistry or identify a unique phenomenological coefficient; a time-regime mapping for the requested observable is not defined.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "candidate",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "model_fidelity",
+     "objective_key": "reduction_fidelity_to_energy_grained_flux",
+     "observable": "rate_coefficient",
+     "open_access": true,
+     "owner_acceptance": null,
+     "proposed_statement": "For one pinned PES variant, bath, temperature and pressure cell set, initialization, observation window and error metric, a reduction shown to track the energy-grained flux more closely is preferred over one shown to track it less closely, on the objective of fidelity to that pinned master-equation model.",
+     "required_predicates": [
+      "Both candidates carry the same pinned physical model (PES variant and inputs) and differ only in the reduction.",
+      "The request lies inside the tested temperature and pressure cells, with the same initialization and observation window.",
+      "The reference model is a pinned energy-grained solve of that PES, named in the request.",
+      "The comparison metric and its reference uncertainty are stated."
+     ],
+     "rule_id": "N-JG-REDUCTION-FIDELITY",
+     "source_ids": [],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.1.0"
+    },
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "reference_values_only_as_curves",
+       "text": "The article gives the direct-dynamics and pairwise deactivating-collision averages as plotted curves (Figs. 3-6, 7 and 9), not as a table; the only tabulated numbers are the fitted alpha300 and n of Table 4 and a few values quoted in the text. A numeric reference with its uncertainty cannot be pinned from the main article, and the Supporting Information, as the article describes it, holds the fitted V_TM parameters and the approach-geometry and potential-comparison figures, not transfer averages. Reading values off the figures was not done here."
+      },
+      {
+       "id": "reference_is_a_validated_low_level_surface",
+       "text": "The reference is MP2/aug'-cc-pVDZ (SAC for H2) direct dynamics, itself checked against QCISD(T)/CBS interaction energies (Table 2, p. 6441) with an estimated 10 % statistical uncertainty in the average, so a preference is for agreement with that model, not with a converged or measured energy transfer. The H2 comparison is the only one that uses the SAC surface."
+      },
+      {
+       "id": "preference_holds_for_he_only",
+       "text": "The one supported preference (exp/6 over Lennard-Jones) was tested for He only, at 300, 1150 and 2000 K (Fig. 3); the paper did not consider Lennard-Jones for any other bath (p. 6444). For Ne exp/6 reproduces MP2 direct dynamics but no competitor was tested, so any Ne extension would rest only on the authors' expectation (p. 6447) that the deficiency is general. For H2 the best exp/6 fit is called accidental, and N2, CO, Ar and Kr have no direct dynamics, so the rule's domain is one bath."
+      },
+      {
+       "id": "transfer_treatment_not_typed",
+       "text": "network_solve_energy_transfer.model exists as free text. What is missing is a typed field for how the parameters were obtained (which interaction potential or fitted kernel), so a candidate cannot state the property the rule would compare. A stored solve carries a fitted alpha300 and n (Table 4's form), not the trajectory potential. This is an owner decision and has not been added."
+      },
+      {
+       "id": "whole_rate_comparison_not_supported",
+       "text": "A comparison of the transfer treatment alone says nothing about the rate unless every other contribution is verified equal, which needs typed protocol fields. The paper itself finds density-of-states error can matter more than energy-transfer error at intermediate and low pressure (p. 6453)."
+      }
+     ],
+     "anchors": [
+      {
+       "claim": "eight baths, M = He, Ne, Ar, Kr, H2, N2, CO, CH4",
+       "where": "J. Phys. Chem. A 115, title, p. 6438; Lennard-Jones collision parameters for all eight, Table 1, p. 6441"
+      },
+      {
+       "claim": "full-dimensional direct dynamics was run for four baths, He, Ne, H2 and CH4. The interaction-potential approximations were tested against it for He, Ne and H2 only. No separable-pairwise potential was fitted for CH4, so CH4 has direct dynamics and no comparison. N2 and CO have no full-dimensional direct dynamics. Ar and Kr have none either (their exp/6 parameters are taken from Alexander and Troya)",
+       "where": "p. 6439 (last paragraph of the introduction), p. 6441 (Direct Dynamics), p. 6443 (Ar and Kr parameters), p. 6445 (no CH4 fit), p. 6448 (no MP2 results for N2 and CO), p. 6453 (Conclusions)"
+      },
+      {
+       "claim": "the direct-dynamics reference is not exact. It is MP2/aug'-cc-pVDZ for He, Ne and CH4 and the same method with correlation scaled (SAC, F = 0.8, empirically fitted) for H2, each checked against counterpoise-corrected QCISD(T)/CBS interaction energies. The paper says the good accuracy of the MP2 level is likely due to a cancellation of errors and that its general accuracy is unknown",
+       "where": "Table 2, 'Direct Dynamics' block (p. 6441), eps_min 3.9, 4.9, 10.3 and 24.3 cm-1 for He, Ne, CH4 and H2 (MP2), 11.1 cm-1 for H2 (SAC); pp. 6442-6443"
+      },
+      {
+       "claim": "direct-dynamics ensembles have about 10 % relative 1-sigma uncertainty in the deactivating-collision average (100-2000 trajectories); the cheaper TB+exp/6 ensembles a few percent (5000-20000 trajectories)",
+       "where": "p. 6446, last paragraph"
+      },
+      {
+       "claim": "potential forms compared for the bath interaction V_TM, as a separable sum of atom-atom pairs. Lennard-Jones (eq 23; LJ-A fitted to QCISD(T)/CBS and LJ-B from tabulated parameters, He only) and a modified Buckingham exp/6 (eq 24). For the diatomic baths three exp/6 fits each (compromise RP, radial-only R, perpendicular-only P; CO has two radial sets, O-in and C-in). Intramolecular CH4 potential V_T compared as MP2/aug'-cc-pVDZ against a semiempirical tight-binding model (Wang and Mak). Results are labelled A+B (V_T + V_TM)",
+       "where": "eqs 21-24 and following text, pp. 6443-6445; Table 2, 'Separable Pairwise' block, p. 6441; labelling convention p. 6445"
+      },
+      {
+       "claim": "He, deactivating-collision average against MP2 direct dynamics. LJ-A overestimates by 120-150 %; LJ-B by 70 % at 300 K and almost a factor 3 at 1150 and 2000 K; MP2+exp/6 within 15 % of MP2 at 1150 and 2000 K and about 30 % apart at 300 K (said to be near the 1-sigma statistical uncertainty); TB+exp/6 differs from MP2+exp/6 by 5-15 % for He and Ne. Fig. 3 (five surfaces: MP2, MP2+exp/6, TB+exp/6, MP2+LJ A, MP2+LJ B). LJ points exist only at 300, 1150 and 2000 K, so the exp/6-over-LJ comparison covers 300-2000 K. LJ was tested for He only: the paper says eq 23 was not considered for the other baths",
+       "where": "Fig. 3 (p. 6447); text p. 6447, left and right columns; p. 6444 (LJ form not considered for the other baths)"
+      },
+      {
+       "claim": "Ne, Fig. 4 plots only MP2, MP2+exp/6 and TB+exp/6. exp/6 reproduces MP2 direct dynamics and TB and MP2 intramolecular choices differ by 5-15 %, but no competitor to exp/6 (no LJ) was tested for Ne, so there is no preference result for Ne. The authors expect the LJ deficiencies to be general (p. 6447: 'likely ... general'); that is their expectation, not a Ne result",
+       "where": "Fig. 4 (p. 6447); text p. 6447; p. 6444"
+      },
+      {
+       "claim": "H2, against SAC direct dynamics. exp/6 RP is about 25 % low; exp/6 R agrees well but the authors call that agreement likely accidental; exp/6 P is accurate at high temperature and worse at 300 K. The spread of the three fits is taken as an additional uncertainty of the separable-pairwise approximation",
+       "where": "Fig. 5 (p. 6448); text p. 6448, left column"
+      },
+      {
+       "claim": "N2 fits differ from each other by about 10 % and CO fits by 25-50 %, with no direct-dynamics reference for either. The additional uncertainty for the diatomic baths is stated three ways, 20-40 % (abstract and Table 4 footnote), up to 50 % (p. 6448) and 10-50 % (pp. 6449 and 6453)",
+       "where": "Fig. 6 and text (p. 6448); Table 4 footnote (p. 6450); Conclusions (p. 6453)"
+      },
+      {
+       "claim": "the transfer averages are insensitive to the intramolecular CH4 potential. Shown for He and Ne only (TB against MP2); the TB harmonic density of states at threshold is 40 % smaller than MP2's. The paper does not test the diatomic baths this way",
+       "where": "p. 6447, right column"
+      },
+      {
+       "claim": "temperature range of the trajectory ensembles 300-4000 K (single-temperature He ensembles at 300, 1150, 2000 and 4000 K; multitemperature sampling for the atomic baths). The Table 4 fit covers 300-2000 K. The Ne, H2 and N2/CO figures plot to about 2500 K on the axis; the temperatures of their individual ensembles are not stated in the text (not found)",
+       "where": "p. 6445 (Initial Conditions), p. 6448 (He ensembles at 300, 1150, 2000, 4000 K; multitemperature sampling 300-4000 K), p. 6450 (fit range), Figs. 4-6 axes"
+      },
+      {
+       "claim": "quantities reported. Per-collision averages <dE>, <dE^2>^1/2 and <dE_d> (eqs 26-28, scaled to the Lennard-Jones collision rate) and first-order rates <r>, <r_d>, <r^2>^1/2 (eqs 30-32). <dE> is negative or near zero and no better than its statistical uncertainty. The master equation uses a single-exponential-down kernel (eq 14) with alpha = <dE_d>, alpha(T) = alpha300 (T/300 K)^n (eq 1), rotational dependence by an empirical factor (eq 15)",
+       "where": "pp. 6439-6440 (eqs 1, 14, 15), p. 6446 (eqs 26-32), p. 6451 (<dE>)"
+      },
+      {
+       "claim": "tabulated parameters, Table 4, alpha300 in cm-1 and n. He 117, 0.95; Ne 104, 0.86; Ar 115, 0.75; Kr 123, 0.67; H2 162, 0.83; N2 130, 0.76; CO 130, 0.76; CH4 390, 0.60. Stated 1-sigma 15 % (statistics and the limits of the functional form), with an additional 20-40 % for the diatomic baths. The fit minimises the mean unsigned error over the Fig. 9 data. It underpredicts 300 K by 10-20 % for the atomic baths and overpredicts 1150 K by up to 15 % for the polyatomic baths. Fig. 9 surfaces by bath, TB+exp/6 for He, Ne, Ar, Kr; SAC for H2; MP2 for CH4; the several TB+exp/6 fits averaged for N2 and CO",
+       "where": "Table 4 and footnote (p. 6450); Fig. 9 and text (p. 6450)"
+      },
+      {
+       "claim": "the deactivating-collision averages as functions of temperature are plotted (Figs. 3-7 and 9) in the article, not tabulated. Only Table 4 gives transfer parameters. A few values are quoted in text, for example <dE^2>^1/2 at 2000 K of 940, 716, 604, 572, 839, 702, 712 and 1146 cm-1 for He, Ne, Ar, Kr, H2, N2, CO and CH4",
+       "where": "p. 6451, left column; Figs. 3-7, 9"
+      },
+      {
+       "claim": "the paper's limits on its own transfer results. Classical trajectories with no zero-point-energy enforcement; the dependence of alpha on the initial energy is neglected; relative bath efficiencies change with temperature (crossover near 500 K) so room-temperature ranks do not carry to combustion; per-collision averages depend on an arbitrary Lennard-Jones scaling; the separable-pairwise approach may be worse for less spherical targets",
+       "where": "p. 6446 (zero-point energy), p. 6440 (initial-energy dependence), p. 6449 (efficiencies, scaling), p. 6448 (less spherical targets)"
+      }
+     ],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "Jasper, A. W. and Miller, J. A., J. Phys. Chem. A 115, 6438-6455 (2011), https://pubs.acs.org/doi/abs/10.1021/jp200048n (CH4 collisional energy transfer).",
+     "council_observation": "Read in full (owner-supplied copy, pinned as JASPER_MILLER_2011; the Supporting Information was not supplied). The paper compares ways of modelling the CH4 + M interaction against full-dimensional direct dynamics for He, Ne and H2 (direct dynamics was also run for CH4, with nothing to compare it to). The reference is a validated low-level surface (MP2, or scaled-correlation SAC for H2), not an exact one. For He and Ne an exp/6 pairwise potential reproduces the direct-dynamics deactivating-collision average closely; a Lennard-Jones one overshoots it, tested for He only, at 300-2000 K (the paper expects the deficiency to be general, p. 6447); for H2, N2 and CO the pairwise form is too inflexible and its parametrisation adds an uncertainty the paper states as 20-40 %, 10-50 % or up to 50 % in different places. The transfer averages did not depend on the intramolecular potential (shown for He and Ne only). The comparison is a fidelity-to-a-model claim: only the paper's final CH4 rates against experiment are physical accuracy, registered separately as N-JM-CH4-RATE.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "supplied by the owner and pinned as JASPER_MILLER_2011; every number above is anchored to a page, table or figure. Nothing further is needed from the article body",
+       "source": "Jasper and Miller, J. Phys. Chem. A 115, 6438-6455 (2011), jp200048n, full text"
+      },
+      {
+       "items": "fitted exp/6 and LJ intermolecular parameters per bath and fit, and the QCISD(T)/CBS comparison figures. Needed only if a rule must identify a fitted potential by its parameters or reproduce a surface; not needed for a rule built on a declared treatment label. No tabulated transfer averages are described there, and none are available from the main article (the averages are plotted)",
+       "source": "the same article's supporting information (NOT supplied; described on p. 6454)"
+      },
+      {
+       "items": "not found in the article; would have to come from the authors or from digitising the figures, which was not done",
+       "source": "a numeric deactivating-collision average per surface, bath and temperature (the plotted values of Figs. 3-5)"
+      },
+      {
+       "items": "a typed energy-transfer treatment declaration (a new protocol vocabulary entry)",
+       "source": "owner decision"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "A claim that a better intramolecular electronic treatment improves energy transfer (shown for He and Ne only, and the TB and MP2 surfaces differ in density of states).",
+      "A diatomic bath treated with the separable pairwise approximation (20-40 %, 10-50 % or up to 50 % additional uncertainty depending on the page).",
+      "H2, where the paper calls the agreement of its best exp/6 fit accidental.",
+      "Ne, where no competitor to exp/6 was tested; any extension to Ne rests only on the authors' p. 6447 expectation that the Lennard-Jones deficiency is general.",
+      "N2, CO, Ar and Kr, which carry no direct-dynamics reference."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "reference_values_only_as_curves: The article gives the direct-dynamics and pairwise deactivating-collision averages as plotted curves (Figs. 3-6, 7 and 9), not as a table; the only tabulated numbers are the fitted alpha300 and n of Table 4 and a few values quoted in the text. A numeric reference with its uncertainty cannot be pinned from the main article, and the Supporting Information, as the article describes it, holds the fitted V_TM parameters and the approach-geometry and potential-comparison figures, not transfer averages. Reading values off the figures was not done here.",
+      "reference_is_a_validated_low_level_surface: The reference is MP2/aug'-cc-pVDZ (SAC for H2) direct dynamics, itself checked against QCISD(T)/CBS interaction energies (Table 2, p. 6441) with an estimated 10 % statistical uncertainty in the average, so a preference is for agreement with that model, not with a converged or measured energy transfer. The H2 comparison is the only one that uses the SAC surface.",
+      "preference_holds_for_he_only: The one supported preference (exp/6 over Lennard-Jones) was tested for He only, at 300, 1150 and 2000 K (Fig. 3); the paper did not consider Lennard-Jones for any other bath (p. 6444). For Ne exp/6 reproduces MP2 direct dynamics but no competitor was tested, so any Ne extension would rest only on the authors' expectation (p. 6447) that the deficiency is general. For H2 the best exp/6 fit is called accidental, and N2, CO, Ar and Kr have no direct dynamics, so the rule's domain is one bath.",
+      "transfer_treatment_not_typed: network_solve_energy_transfer.model exists as free text. What is missing is a typed field for how the parameters were obtained (which interaction potential or fitted kernel), so a candidate cannot state the property the rule would compare. A stored solve carries a fitted alpha300 and n (Table 4's form), not the trajectory potential. This is an owner decision and has not been added.",
+      "whole_rate_comparison_not_supported: A comparison of the transfer treatment alone says nothing about the rate unless every other contribution is verified equal, which needs typed protocol fields. The paper itself finds density-of-states error can matter more than energy-transfer error at intermediate and low pressure (p. 6453).",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "candidate",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "model_fidelity",
+     "objective_key": "energy_transfer_fidelity_to_direct_dynamics",
+     "observable": "rate_coefficient",
+     "open_access": false,
+     "owner_acceptance": null,
+     "proposed_statement": "For CH4 in He, between 300 and 2000 K, an exponential-6 pairwise interaction treatment is preferred over a Lennard-Jones one, on the objective of agreement with the paper's MP2 direct-dynamics deactivating-collision average. For Ne, exp/6 reproduces MP2 direct dynamics but no competitor was tested, so no preference is stated; any Ne extension would rest only on the authors' expectation (p. 6447) that the Lennard-Jones deficiency is general. For H2 the paper supports no preference among its three exp/6 fits (the best agreement is called accidental) and for N2, CO, Ar and Kr there is no direct-dynamics reference. A fidelity claim about a trajectory interaction potential, not a whole-rate or level-of-theory preference.",
+     "required_predicates": [
+      "The candidates differ only in the energy-transfer treatment (the interaction potential), the rest of the coupled protocol verified equal.",
+      "The bath is He (the only bath for which the paper tests a competitor to exp/6 against direct dynamics) and the temperature range lies inside 300-2000 K, where the Lennard-Jones points of Fig. 3 lie.",
+      "The reference direct-dynamics transfer data and their uncertainty (about 10 % relative 1-sigma in the paper) are pinned in a form that can be compared, which the article gives only as curves."
+     ],
+     "rule_id": "N-JM-CH4-TRANSFER",
+     "source_ids": [
+      "JASPER_MILLER_2011"
+     ],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.2.0"
+    },
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "agreement_is_qualitative_and_by_figure",
+       "text": "The paper states agreement in words and figures (Ar k0 about 25 % low, Ar falloff low by up to a factor of 2, CH4 slightly low, He good) with no metric, no table of predicted and measured values and no per-point uncertainty. The experimental points belong to the cited papers (refs 61-67, 70, 71) and the Baulch et al. evaluation, none of which was read here, so no reference set or metric can be pinned."
+      },
+      {
+       "id": "paper_ranks_no_competing_solves",
+       "text": "The paper gives agreement for one prediction per bath. It does not compare the rates of two energy-transfer treatments or two solves against experiment, so it gives no evidence that one solve's rates are better than another's."
+      },
+      {
+       "id": "density_of_states_confounds_the_comparison",
+       "text": "The paper reports that density-of-states error can be larger than the energy-transfer error at intermediate and low pressure, and that the anharmonic scaling that doubles the threshold density of states makes the Ar k0 about 50 % too high (worse than the harmonic calculation, p. 6452), improves only the Ar falloff, worsens He (pp. 6452-6453) and is unclear for He, Ar and CH4 overall (p. 6453). A rate comparison is not an energy-transfer comparison unless the density of states is verified equal."
+      },
+      {
+       "id": "four_of_eight_baths",
+       "text": "Only He, Ar, Kr and CH4 have an experimental comparison; the other four baths have none."
+      },
+      {
+       "id": "no_verified_evidence_state",
+       "text": "TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified agreement with experiment cannot be satisfied."
+      }
+     ],
+     "anchors": [
+      {
+       "claim": "the master-equation rates are parameter-free: alpha(T) of Table 4 (from trajectories), a single-exponential-down kernel, Lennard-Jones collision rates, microcanonical k(E,J) from a VRC-TST capture calculation, rigid-rotor harmonic-oscillator partition functions, solved with VariFlex",
+       "where": "Section II.A, p. 6441 (last paragraph before II.B); Section III.C, p. 6451"
+      },
+      {
+       "claim": "experimental comparison for four baths only, He, Ar, Kr and CH4; none for Ne, H2, N2 or CO (the eight-bath rate survey of Fig. 11 is prediction only). The Kr measurements are compared with the Ar prediction (Fig. 12a caption: CH4 in Ar against experimental results in Ar and Kr); no Kr-specific prediction panel was found",
+       "where": "abstract (p. 6438); Section III.C, p. 6451; Figs. 11-14"
+      },
+      {
+       "claim": "Ar, low-pressure limit. Compared with several groups' measurements (refs 61-65, including Kiefer and Kumaran, Hartig et al., Koike et al., Sutherland et al. in Kr, and the revised Davidson et al.) and the Baulch et al. recommendation (J. Phys. Chem. Ref. Data 34, 757, 2005). The prediction is about 25 % below the recommended value, called excellent agreement; the newest Kr and the revised Davidson data are somewhat lower and closer to the prediction",
+       "where": "Fig. 12a (p. 6452); text p. 6452, left column"
+      },
+      {
+       "claim": "Ar, falloff near 1100 K, against Barnes et al. (ref 67) and Baulch et al. The predicted k is lower than measured and recommended, by as much as a factor of 2",
+       "where": "Fig. 12b (p. 6452); text p. 6452, left column"
+      },
+      {
+       "claim": "CH4 bath falloff against Barnes et al. (ref 67), Chen et al. (ref 70) and Baulch et al.: good agreement, on average somewhat underpredicting the measurements",
+       "where": "Fig. 13 (p. 6452); text p. 6452, right column"
+      },
+      {
+       "claim": "He, association and dissociation at 300, 600 and 1150 K against two groups (Barnes et al. ref 67; Brouard et al. ref 71) and Baulch et al.: good agreement",
+       "where": "Fig. 14 (p. 6453); text p. 6452, right column to p. 6453"
+      },
+      {
+       "claim": "a harmonic-frequency scaling of 0.91 that doubles the threshold density of states raises the Ar k0 to about 50 % above the recommended value and improves the Ar falloff; worsens He; and raises the CH4 bath k by up to a factor of 2 with no clear gain. The paper states that RRHO density-of-states error can matter more than the energy-transfer error at intermediate and low pressures, and that agreement is good with or without the correction",
+       "where": "pp. 6452-6453 (text and Figs. 12-14); p. 6453, left column"
+      },
+      {
+       "claim": "the paper's own verdict. Agreement for He, Ar, Kr and CH4 is excellent and within the recommended factor of 2 experimental uncertainties as the paper words it (p. 6454), with the possible exception of the Ar falloff. Separately, for the CH4 bath the Baulch et al. uncertainty is quoted as printed 'Delta ln k0 = +-0.3' (p. 6452); that is not restated here as a factor. No error metric or table of agreement is given",
+       "where": "p. 6453 (end of Section III.C); Conclusions, p. 6454"
+      }
+     ],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "Jasper, A. W. and Miller, J. A., J. Phys. Chem. A 115, 6438-6455 (2011), https://pubs.acs.org/doi/abs/10.1021/jp200048n (final CH4 rates against experiment).",
+     "council_observation": "Read in full (owner-supplied copy, pinned as JASPER_MILLER_2011; the Supporting Information was not supplied). The paper compares one parameter-free master-equation prediction per bath with measurements and the Baulch et al. recommendations for four of its eight baths (He, Ar, Kr, CH4), by figure, with no stated error metric: Ar k0 about 25 % below the recommendation, Ar falloff low by up to a factor of 2, CH4 slightly low on average, He good. It does not rank alternative energy-transfer treatments by their rates, and it says density-of-states error can matter more than energy-transfer error. That is the only part of the paper that bears on physical accuracy.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "supplied by the owner and pinned as JASPER_MILLER_2011; anchored above. The Supporting Information is not needed for this rule, since it is described as fitted potential parameters and potential-comparison figures only (p. 6454)",
+       "source": "Jasper and Miller, J. Phys. Chem. A 115, 6438-6455 (2011), full text"
+      },
+      {
+       "items": "the measured rate coefficients, conditions and uncertainties for He, Ar, Kr and CH4, if a pinned reference set is wanted; none was read here",
+       "source": "the experimental papers (refs 61-67, 70, 71) and Baulch et al., J. Phys. Chem. Ref. Data 34, 757 (2005)"
+      },
+      {
+       "items": "the verification procedure that would turn a declared validation entry into a verified one",
+       "source": "owner decision"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "A transfer-treatment-only comparison (that is N-JM-CH4-TRANSFER, a model-fidelity claim).",
+      "Ne, H2, N2 and CO, for which the paper compares no experiment."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "agreement_is_qualitative_and_by_figure: The paper states agreement in words and figures (Ar k0 about 25 % low, Ar falloff low by up to a factor of 2, CH4 slightly low, He good) with no metric, no table of predicted and measured values and no per-point uncertainty. The experimental points belong to the cited papers (refs 61-67, 70, 71) and the Baulch et al. evaluation, none of which was read here, so no reference set or metric can be pinned.",
+      "paper_ranks_no_competing_solves: The paper gives agreement for one prediction per bath. It does not compare the rates of two energy-transfer treatments or two solves against experiment, so it gives no evidence that one solve's rates are better than another's.",
+      "density_of_states_confounds_the_comparison: The paper reports that density-of-states error can be larger than the energy-transfer error at intermediate and low pressure, and that the anharmonic scaling that doubles the threshold density of states makes the Ar k0 about 50 % too high (worse than the harmonic calculation, p. 6452), improves only the Ar falloff, worsens He (pp. 6452-6453) and is unclear for He, Ar and CH4 overall (p. 6453). A rate comparison is not an energy-transfer comparison unless the density of states is verified equal.",
+      "four_of_eight_baths: Only He, Ar, Kr and CH4 have an experimental comparison; the other four baths have none.",
+      "no_verified_evidence_state: TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified agreement with experiment cannot be satisfied.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "candidate",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "physical_accuracy",
+     "objective_key": "ch4_rate_agreement_with_experiment",
+     "observable": "rate_coefficient",
+     "open_access": false,
+     "owner_acceptance": null,
+     "proposed_statement": "For CH4 in He, Ar, Kr or CH4 over the experimental temperature and pressure ranges of the compared datasets, a solve whose rates agree with those measurements better than another's is preferred, on the objective of physical accuracy of the rate. The paper supplies agreement for one prediction per bath, not a comparison of two solves.",
+     "required_predicates": [
+      "The experimental reference data (the cited datasets and the Baulch et al. recommendation), their conditions and uncertainty are pinned for the compared bath (He, Ar, Kr or CH4) and range.",
+      "The candidates' rates are compared with that data on one stated metric inside the experimental domain.",
+      "The density-of-states treatment of the candidates is verified equal, since the paper shows it can dominate the difference."
+     ],
+     "rule_id": "N-JM-CH4-RATE",
+     "source_ids": [
+      "JASPER_MILLER_2011"
+     ],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.2.0"
+    },
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "no_source_comparison",
+       "text": "This is a proposed evidence rule. No source comparison or benchmark was audited, and no convergence reference is pinned."
+      },
+      {
+       "id": "no_verification_step",
+       "text": "A producer's convergence entry is stored as declared; TCKDB has no step that verifies it, so the prerequisite \"verified\" cannot be satisfied for any record."
+      },
+      {
+       "id": "same_model_not_expressible",
+       "text": "Two solves being of the same physical model is not a stated fact in the schema (no model identity beyond the network and the declared protocol), so the pair's compatibility cannot be verified."
+      }
+     ],
+     "anchors": [],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "proposed evidence rule; RMG master-equation theory documentation (https://reactionmechanismgenerator.github.io/RMG-Py/theory/pdep/master_equation.html) is background, not a comparison.",
+     "council_observation": "A verified converged determination may be preferred to a demonstrated inaccurate discretization or reduction of the same physical model, for the same objective, with reference uncertainty and fit error controlled. Grain count alone, a smaller training residual alone, or convergence to an inaccurate physical model establishes nothing.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "the convergence criterion, the reference (a pinned converged solve) and its uncertainty, and the verification procedure that would turn a declared entry into a verified one",
+       "source": "owner decision"
+      },
+      {
+       "items": "the grain, energy-ceiling and reduction sweeps with their error metric over the stated domain",
+       "source": "a controlled-convergence study of a real network (to be named by the owner)"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "A larger grain count or a lower fit residual without controlled convergence evidence."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "no_source_comparison: This is a proposed evidence rule. No source comparison or benchmark was audited, and no convergence reference is pinned.",
+      "no_verification_step: A producer's convergence entry is stored as declared; TCKDB has no step that verifies it, so the prerequisite \"verified\" cannot be satisfied for any record.",
+      "same_model_not_expressible: Two solves being of the same physical model is not a stated fact in the schema (no model identity beyond the network and the declared protocol), so the pair's compatibility cannot be verified.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "candidate",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "model_fidelity",
+     "objective_key": "same_model_numerical_convergence",
+     "observable": "rate_coefficient",
+     "open_access": null,
+     "owner_acceptance": null,
+     "proposed_statement": "Between two solves of the same pinned physical model, one with verified convergence evidence over the whole requested domain is preferred to one with demonstrated inadequate convergence, on the objective of fidelity to that model.",
+     "required_predicates": [
+      "Both solves carry the same pinned physical model, and differ only in discretization or reduction.",
+      "Convergence evidence is verified (not declared) for the preferred solve over the whole requested domain, with its reference and uncertainty.",
+      "Inadequate convergence is demonstrated for the yielding solve, not merely unstated.",
+      "The fit error of each representation is controlled."
+     ],
+     "rule_id": "N-ME-CONVERGENCE",
+     "source_ids": [],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.1.0"
+    },
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "no_pinned_heldout_set",
+       "text": "No held-out point set or supplied-output dataset is pinned for any stored solve."
+      },
+      {
+       "id": "no_verification_step",
+       "text": "A producer's representation-validation entry is stored as declared and is never verified, so the prerequisite cannot be satisfied."
+      }
+     ],
+     "anchors": [],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "proposed evidence rule (the Network-v1 council record, section 3, \"alternate fits of one solve\").",
+     "council_observation": "Demonstrated independent representation fidelity can select a better fit for a declared domain metric while retaining common-source dependence. Fit quality does not rank different physical solves.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "the held-out set and metric to pin for a named solve, and the procedure that verifies a representation-validation entry",
+       "source": "owner decision"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "Training-set residual alone."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "no_pinned_heldout_set: No held-out point set or supplied-output dataset is pinned for any stored solve.",
+      "no_verification_step: A producer's representation-validation entry is stored as declared and is never verified, so the prerequisite cannot be satisfied.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "representation",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "representation_fidelity",
+     "objective_key": "heldout_representation_validation",
+     "observable": "rate_coefficient",
+     "open_access": null,
+     "owner_acceptance": null,
+     "proposed_statement": "Between two alternate fits of one solve's output, the fit with a better held-out error under one declared metric over the requested domain is preferred, on the objective of fidelity to the supplied output. It ranks no physical solve and adds no independent confirmation.",
+     "required_predicates": [
+      "Both fits are representations of the same determination.",
+      "A held-out (independently checked) point set, its domain and its metric are pinned for the supplied output.",
+      "The error of each fit is verified on that set over the whole requested domain."
+     ],
+     "rule_id": "N-REP-HELDOUT",
+     "source_ids": [],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.1.0"
+    }
+   ],
+   "rules_applied": true,
+   "selected_ref": null,
+   "selection_basis": null,
+   "unused_edges": []
+  },
+  "declaration_versions": [
+   1
+  ],
+  "digest": {
+   "algorithm": "sha256",
+   "value": "1bef8dd5f632dd28197506cf7570dc54de5d4adb4370d9dee13412a1d1226eb4"
+  },
+  "disclosures": {
+   "notes": [],
+   "unresolved_refs": [],
+   "unsupported_refs": []
+  },
+  "manifest_format_version": 2,
+  "network": {
+   "channels": [
+    {
+     "channel_key": "assoc",
+     "kind": "association",
+     "mechanism": "elementary",
+     "sink_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+     "channel_key": "diss",
+     "kind": "dissociation",
+     "mechanism": "elementary",
+     "sink_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+     "channel_key": "elim",
+     "kind": "dissociation",
+     "mechanism": "elementary",
+     "sink_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+     "channel_key": "elim_alt",
+     "kind": "dissociation",
+     "mechanism": "elementary",
+     "sink_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+   ],
+   "network_ref": "net_ha7ixm6lpi4ikjnmp7qpkdypne",
+   "states": [
+    {
+     "composition_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "kind": "bimolecular",
+     "participants": [
+      [
+       "spe_e4n7jnlyns3qmpmkckoufxxzwe",
+       1
+      ],
+      [
+       "spe_kqbtukid4yqfisv4pwglsytiva",
+       1
+      ]
+     ]
+    },
+    {
+     "composition_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "kind": "well",
+     "participants": [
+      [
+       "spe_qp77zxjiejyoln2dmn6xa66x44",
+       1
+      ]
+     ]
+    },
+    {
+     "composition_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "kind": "bimolecular",
+     "participants": [
+      [
+       "spe_f6ldl7ugtu24pkijdzrs77ifdu",
+       1
+      ],
+      [
+       "spe_lxogdcr5irw6dsylinmnzcnsoa",
+       1
+      ]
+     ]
+    }
+   ]
+  },
+  "outcome": "incomparable_alternatives",
+  "policy": {
+   "assessment_version": "1",
+   "bounds_version": "1",
+   "name": "network_method_preferred",
+   "version": "1"
+  },
+  "population": {
+   "counts": {
+    "bundle_nodes": 0,
+    "channel_nodes": 2,
+    "channels": 4,
+    "evidence_entries": 2,
+    "kinetics_parents": 2,
+    "numeric_cells": 6,
+    "required_outputs": 1,
+    "solves": 2,
+    "states": 3
+   },
+   "excluded_by_review": [],
+   "excluded_by_review_withheld": true,
+   "excluded_count": 0
+  },
+  "replay_boundary": "Replay reproduces the reasoning from the captured inputs. It does not authenticate their scientific truth and cannot show that no authorized candidate was omitted from a forged document; the digest and provenance say where this manifest came from.",
+  "request": {
+   "administrative_policy": "default",
+   "apply_rules": true,
+   "bath": {
+    "mole_fractions": null,
+    "species_refs": [
+     "spe_qxamvwzpo7gxkh7tztixg7kfvm"
+    ]
+   },
+   "boundaries": [],
+   "bounds": {
+    "bundle_nodes": 500,
+    "channel_nodes": 500,
+    "channels": 2000,
+    "evidence_entries": 10000,
+    "kinetics_parents": 2000,
+    "numeric_cells": 100000,
+    "required_outputs": 200,
+    "snapshot_bytes": 8388608,
+    "solves": 200,
+    "states": 1000,
+    "version": "1"
+   },
+   "channel_key": "assoc",
+   "coefficient_basis": "kernel",
+   "degeneracy_applied": null,
+   "effective_review_statuses": [
+    "approved"
+   ],
+   "initial_state_hashes": [],
+   "min_review_status": null,
+   "network_ref": "net_ha7ixm6lpi4ikjnmp7qpkdypne",
+   "objective": "physical_accuracy",
+   "observable": "product_resolved_coefficient",
+   "outputs": [],
+   "partition": {
+    "eliminated": [],
+    "lumps": [],
+    "retained": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ]
+   },
+   "phase": "gas",
+   "pressure_max_bar": 5.0,
+   "pressure_min_bar": 0.5,
+   "profile": "curated",
+   "profile_recommendation": "approved_floor_only",
+   "profile_release_ref": null,
+   "quantity": "rate_coefficient",
+   "reference_model_ref": null,
+   "reference_outputs": null,
+   "regime_kind": "time_independent",
+   "result_mode": "all",
+   "scope": "single_channel",
+   "sink_composition_hash": null,
+   "source_composition_hash": null,
+   "temperature_max_k": 1500.0,
+   "temperature_min_k": 500.0
+  },
+  "snapshot_isolation": "read committed",
+  "solves": [
+   {
+    "bath": [
+     [
+      "spe_qxamvwzpo7gxkh7tztixg7kfvm",
+      1.0
+     ]
+    ],
+    "created_at": "2026-10-18T14:02:38.360246",
+    "determinations": [
+     {
+      "channel_key": "assoc",
+      "determination_key": "cites_hidden",
+      "determination_ref": "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+      "id_rank": 1,
+      "observable": {
+       "coefficient_basis": "kernel",
+       "degeneracy_applied": true,
+       "observable": "product_resolved_coefficient",
+       "reaction_order": 2,
+       "version": 1
+      },
+      "observable_state": "valid"
+     }
+    ],
+    "fits": [
+     {
+      "channel_key": "assoc",
+      "chebyshev": null,
+      "content_digest": "2de5326ba4ccd4e22703f2a50707223e56e0b4d14a5e3fdc13be80d6a4752b53",
+      "determination_ref": "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+      "fit_ref": "nkin_ct263ibhe5w3xg6ltuw5ntp4fi",
+      "id_rank": 1,
+      "model_kind": "plog",
+      "plog_finite": true,
+      "plog_pressures_bar": [
+       0.1,
+       1.0,
+       10.0
+      ],
+      "plog_units": [
+       "cm3_mol_s",
+       "cm3_mol_s",
+       "cm3_mol_s"
+      ],
+      "pmax_bar": 10.0,
+      "pmin_bar": 0.1,
+      "point_cells": [],
+      "point_values_finite": true,
+      "pressure_units": "bar",
+      "rate_units": "cm3_mol_s",
+      "representation": {
+       "fit_origin": "solver_output",
+       "key": "plog1",
+       "version": 1
+      },
+      "representation_role": "complete",
+      "representation_state": "valid",
+      "stores_log10_k": null,
+      "temperature_units": "kelvin",
+      "tmax_k": 2000.0,
+      "tmin_k": 300.0
+     }
+    ],
+    "id_rank": 1,
+    "kind": "computed",
+    "pmax_bar": 100.0,
+    "pmin_bar": 0.01,
+    "protocol": null,
+    "protocol_state": "absent",
+    "review_status": "approved",
+    "solve_ref": "nsolve_37c6m5gedd2ykcu35v5cyobt6q",
+    "target": {
+     "bath_scope": "specified_collider",
+     "boundaries": [
+      {
+       "kind": "absorbing",
+       "state_key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+     ],
+     "claim_origin": "source_publication",
+     "outputs": [],
+     "partition": {
+      "eliminated": [],
+      "lumps": [],
+      "retained": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      ]
+     },
+     "product_sets": [],
+     "regime": {
+      "initial_state_keys": [],
+      "kind": "time_independent"
+     },
+     "validity": {
+      "pressure_max_bar": 100.0,
+      "pressure_min_bar": 0.01,
+      "temperature_max_k": 2000.0,
+      "temperature_min_k": 300.0
+     },
+     "version": 1
+    },
+    "target_state": "valid",
+    "tmax_k": 2000.0,
+    "tmin_k": 300.0,
+    "validation": {
+     "entries": [
+      {
+       "channel_keys": [],
+       "domain": {
+        "pressure_max_bar": 100.0,
+        "pressure_min_bar": 0.01,
+        "temperature_max_k": 2000.0,
+        "temperature_min_k": 300.0
+       },
+       "initialization": null,
+       "kind": "model_fidelity",
+       "limitations": null,
+       "metric": null,
+       "reference_dataset": null,
+       "reference_solve_ref": null,
+       "reference_withheld": true,
+       "value": null,
+       "window": null
+      }
+     ],
+     "version": 1
+    },
+    "validation_state": "valid"
+   },
+   {
+    "bath": [
+     [
+      "spe_qxamvwzpo7gxkh7tztixg7kfvm",
+      1.0
+     ]
+    ],
+    "created_at": "2026-10-18T14:02:38.360246",
+    "determinations": [
+     {
+      "channel_key": "assoc",
+      "determination_key": "cites_nothing",
+      "determination_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+      "id_rank": 2,
+      "observable": {
+       "coefficient_basis": "kernel",
+       "degeneracy_applied": true,
+       "observable": "product_resolved_coefficient",
+       "reaction_order": 2,
+       "version": 1
+      },
+      "observable_state": "valid"
+     }
+    ],
+    "fits": [
+     {
+      "channel_key": "assoc",
+      "chebyshev": null,
+      "content_digest": "2de5326ba4ccd4e22703f2a50707223e56e0b4d14a5e3fdc13be80d6a4752b53",
+      "determination_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+      "fit_ref": "nkin_pagu5osd6kjhmydr7eso6gu62q",
+      "id_rank": 2,
+      "model_kind": "plog",
+      "plog_finite": true,
+      "plog_pressures_bar": [
+       0.1,
+       1.0,
+       10.0
+      ],
+      "plog_units": [
+       "cm3_mol_s",
+       "cm3_mol_s",
+       "cm3_mol_s"
+      ],
+      "pmax_bar": 10.0,
+      "pmin_bar": 0.1,
+      "point_cells": [],
+      "point_values_finite": true,
+      "pressure_units": "bar",
+      "rate_units": "cm3_mol_s",
+      "representation": {
+       "fit_origin": "solver_output",
+       "key": "plog1",
+       "version": 1
+      },
+      "representation_role": "complete",
+      "representation_state": "valid",
+      "stores_log10_k": null,
+      "temperature_units": "kelvin",
+      "tmax_k": 2000.0,
+      "tmin_k": 300.0
+     }
+    ],
+    "id_rank": 2,
+    "kind": "computed",
+    "pmax_bar": 100.0,
+    "pmin_bar": 0.01,
+    "protocol": null,
+    "protocol_state": "absent",
+    "review_status": "approved",
+    "solve_ref": "nsolve_n2an37rg5mrnry6ytwwi2rhgti",
+    "target": {
+     "bath_scope": "specified_collider",
+     "boundaries": [
+      {
+       "kind": "absorbing",
+       "state_key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+     ],
+     "claim_origin": "source_publication",
+     "outputs": [],
+     "partition": {
+      "eliminated": [],
+      "lumps": [],
+      "retained": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      ]
+     },
+     "product_sets": [],
+     "regime": {
+      "initial_state_keys": [],
+      "kind": "time_independent"
+     },
+     "validity": {
+      "pressure_max_bar": 100.0,
+      "pressure_min_bar": 0.01,
+      "temperature_max_k": 2000.0,
+      "temperature_min_k": 300.0
+     },
+     "version": 1
+    },
+    "target_state": "valid",
+    "tmax_k": 2000.0,
+    "tmin_k": 300.0,
+    "validation": {
+     "entries": [
+      {
+       "channel_keys": [],
+       "domain": {
+        "pressure_max_bar": 100.0,
+        "pressure_min_bar": 0.01,
+        "temperature_max_k": 2000.0,
+        "temperature_min_k": 300.0
+       },
+       "initialization": null,
+       "kind": "model_fidelity",
+       "limitations": null,
+       "metric": null,
+       "reference_dataset": null,
+       "reference_solve_ref": null,
+       "reference_withheld": true,
+       "value": null,
+       "window": null
+      }
+     ],
+     "version": 1
+    },
+    "validation_state": "valid"
+   }
+  ],
+  "visibility": {
+   "read_profile": "curated",
+   "recommendation": "approved_floor_only",
+   "review_statuses_observed": [
+    "approved"
+   ]
+  }
+ },
+ "exploratory": {
+  "assessments": {
+   "bundles": [],
+   "determinations": [
+    {
+     "advisory": [
+      "protocol_not_declared"
+     ],
+     "applicability": "applicable",
+     "blocking": [],
+     "channel_key": "assoc",
+     "determination_ref": "nkdet_eieypsiz5uykstvpqy26pogi7e",
+     "eligible_fit_refs": [
+      "nkin_m47ii4cvn7d6ueppokzo2kccxy"
+     ],
+     "evidence": {
+      "convergence": "unavailable",
+      "dependence": "unavailable",
+      "model_fidelity": "unavailable",
+      "physical_validation": "unavailable",
+      "representation_validation": "unavailable",
+      "uncertainty": "unavailable"
+     },
+     "physically_eligible": true,
+     "reasons": [],
+     "solve_ref": "nsolve_wfjeychoerzvp2yh3tmw7nkmpu"
+    },
+    {
+     "advisory": [
+      "protocol_not_declared"
+     ],
+     "applicability": "applicable",
+     "blocking": [],
+     "channel_key": "assoc",
+     "determination_ref": "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+     "eligible_fit_refs": [
+      "nkin_ct263ibhe5w3xg6ltuw5ntp4fi"
+     ],
+     "evidence": {
+      "convergence": "unavailable",
+      "dependence": "unavailable",
+      "model_fidelity": "declared",
+      "physical_validation": "unavailable",
+      "representation_validation": "unavailable",
+      "uncertainty": "unavailable"
+     },
+     "physically_eligible": true,
+     "reasons": [],
+     "solve_ref": "nsolve_37c6m5gedd2ykcu35v5cyobt6q"
+    },
+    {
+     "advisory": [
+      "protocol_not_declared"
+     ],
+     "applicability": "applicable",
+     "blocking": [],
+     "channel_key": "assoc",
+     "determination_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+     "eligible_fit_refs": [
+      "nkin_pagu5osd6kjhmydr7eso6gu62q"
+     ],
+     "evidence": {
+      "convergence": "unavailable",
+      "dependence": "unavailable",
+      "model_fidelity": "unavailable",
+      "physical_validation": "unavailable",
+      "representation_validation": "unavailable",
+      "uncertainty": "unavailable"
+     },
+     "physically_eligible": true,
+     "reasons": [],
+     "solve_ref": "nsolve_n2an37rg5mrnry6ytwwi2rhgti"
+    }
+   ],
+   "ungrouped_fit_refs": []
+  },
+  "decision": {
+   "administrative_first": {
+    "basis": "administrative order among unresolved first-front alternatives; not a claim that the record is method-superior",
+    "node_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u"
+   },
+   "administrative_order": [
+    "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+    "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+    "nkdet_eieypsiz5uykstvpqy26pogi7e"
+   ],
+   "basis": "no registered rule compares these eligible candidates; they are unranked, not equally accurate",
+   "cycles": [],
+   "edges": [],
+   "fronts": [
+    [
+     "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+     "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+     "nkdet_eieypsiz5uykstvpqy26pogi7e"
+    ]
+   ],
+   "opposing_pairs": [],
+   "outcome": "incomparable_alternatives",
+   "overridden_edges": [],
+   "pair_checks": [],
+   "representations": [
+    {
+     "administrative_first": null,
+     "administrative_order": [
+      "nkin_m47ii4cvn7d6ueppokzo2kccxy"
+     ],
+     "basis": "no representation rule applies to this request; the fits are in administrative order, which is not a claim that one fit is more accurate",
+     "chosen_fit_ref": "nkin_m47ii4cvn7d6ueppokzo2kccxy",
+     "determination_ref": "nkdet_eieypsiz5uykstvpqy26pogi7e",
+     "edges": [],
+     "fronts": [
+      [
+       "nkin_m47ii4cvn7d6ueppokzo2kccxy"
+      ]
+     ],
+     "independent_confirmation": false,
+     "node_ref": "nkdet_eieypsiz5uykstvpqy26pogi7e",
+     "outcome": "sole_eligible_candidate",
+     "shared_provenance": {
+      "solve_ref": "nsolve_wfjeychoerzvp2yh3tmw7nkmpu"
+     },
+     "unused_edges": []
+    },
+    {
+     "administrative_first": null,
+     "administrative_order": [
+      "nkin_ct263ibhe5w3xg6ltuw5ntp4fi"
+     ],
+     "basis": "no representation rule applies to this request; the fits are in administrative order, which is not a claim that one fit is more accurate",
+     "chosen_fit_ref": "nkin_ct263ibhe5w3xg6ltuw5ntp4fi",
+     "determination_ref": "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+     "edges": [],
+     "fronts": [
+      [
+       "nkin_ct263ibhe5w3xg6ltuw5ntp4fi"
+      ]
+     ],
+     "independent_confirmation": false,
+     "node_ref": "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+     "outcome": "sole_eligible_candidate",
+     "shared_provenance": {
+      "solve_ref": "nsolve_37c6m5gedd2ykcu35v5cyobt6q"
+     },
+     "unused_edges": []
+    },
+    {
+     "administrative_first": null,
+     "administrative_order": [
+      "nkin_pagu5osd6kjhmydr7eso6gu62q"
+     ],
+     "basis": "no representation rule applies to this request; the fits are in administrative order, which is not a claim that one fit is more accurate",
+     "chosen_fit_ref": "nkin_pagu5osd6kjhmydr7eso6gu62q",
+     "determination_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+     "edges": [],
+     "fronts": [
+      [
+       "nkin_pagu5osd6kjhmydr7eso6gu62q"
+      ]
+     ],
+     "independent_confirmation": false,
+     "node_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+     "outcome": "sole_eligible_candidate",
+     "shared_provenance": {
+      "solve_ref": "nsolve_n2an37rg5mrnry6ytwwi2rhgti"
+     },
+     "unused_edges": []
+    }
+   ],
+   "rule_matches": [
+    {
+     "applied": false,
+     "level": "candidate",
+     "reasons": [
+      "compared_objects_are_falloff_fits: The compared objects are Troe falloff fits (an elementary kinetics model with a broadening factor Fc). Network selection compares Chebyshev and PLOG products of one solve; a Troe-form pair is not a pair of network fits, so no network rule can be stated until the owner decides whether such a comparison belongs to elementary kinetics only.",
+      "dataset_members_not_extracted: Table 1 (the He measurements, open access, with 2-sigma uncertainties) has been located but its points were not extracted into the manifest, so the reproduction metric, the domain and the member list the rule needs are not pinned.",
+      "fit_audit_is_partial: Only the two He fits (Fc = 0.32 and 0.39) and their stated percent deviations were read, from section 3.1 and the Fig. S2 caption. The measured-to-fitted ratios behind the 5 % and 10 % figures were not reconstructed, and the fitting procedure was not audited beyond what those passages say.",
+      "no_verified_evidence_state: TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified dataset-reproduction evidence cannot be satisfied.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "rule_id": "N-AMEDRO-HE-FC",
+     "rule_version": "0.1.0",
+     "why": "rule_status_inactive"
+    },
+    {
+     "applied": false,
+     "level": "candidate",
+     "reasons": [
+      "exact_cells_and_metric_unaudited: The tested PES variants, bath composition, temperature and pressure cells, initial and source conditions, observation time and metric were seen only through indexed passages; detailed figures and data are unaudited.",
+      "article_not_read: The article is open access (CC BY 3.0), and the earlier 403 was the publisher blocking automated requests, not a paywall. It has not been read here yet, so the full text, figures and supplement remain unaudited.",
+      "reduction_vocabulary_one_open_name: TCKDB's NetworkReductionMethod already has the chemically significant eigenvalue, modified strong collision and reservoir-state methods. The one open naming decision is whether to add simulation_least_squares (the abstract defines SLS as simulation least-squares); that mapping must not be guessed.",
+      "transient_flux_is_not_a_phenomenological_coefficient: Fidelity of a transient flux does not independently validate the physical chemistry or identify a unique phenomenological coefficient; a time-regime mapping for the requested observable is not defined.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "rule_id": "N-JG-REDUCTION-FIDELITY",
+     "rule_version": "0.1.0",
+     "why": "rule_status_inactive"
+    },
+    {
+     "applied": false,
+     "level": "candidate",
+     "reasons": [
+      "reference_values_only_as_curves: The article gives the direct-dynamics and pairwise deactivating-collision averages as plotted curves (Figs. 3-6, 7 and 9), not as a table; the only tabulated numbers are the fitted alpha300 and n of Table 4 and a few values quoted in the text. A numeric reference with its uncertainty cannot be pinned from the main article, and the Supporting Information, as the article describes it, holds the fitted V_TM parameters and the approach-geometry and potential-comparison figures, not transfer averages. Reading values off the figures was not done here.",
+      "reference_is_a_validated_low_level_surface: The reference is MP2/aug'-cc-pVDZ (SAC for H2) direct dynamics, itself checked against QCISD(T)/CBS interaction energies (Table 2, p. 6441) with an estimated 10 % statistical uncertainty in the average, so a preference is for agreement with that model, not with a converged or measured energy transfer. The H2 comparison is the only one that uses the SAC surface.",
+      "preference_holds_for_he_only: The one supported preference (exp/6 over Lennard-Jones) was tested for He only, at 300, 1150 and 2000 K (Fig. 3); the paper did not consider Lennard-Jones for any other bath (p. 6444). For Ne exp/6 reproduces MP2 direct dynamics but no competitor was tested, so any Ne extension would rest only on the authors' expectation (p. 6447) that the deficiency is general. For H2 the best exp/6 fit is called accidental, and N2, CO, Ar and Kr have no direct dynamics, so the rule's domain is one bath.",
+      "transfer_treatment_not_typed: network_solve_energy_transfer.model exists as free text. What is missing is a typed field for how the parameters were obtained (which interaction potential or fitted kernel), so a candidate cannot state the property the rule would compare. A stored solve carries a fitted alpha300 and n (Table 4's form), not the trajectory potential. This is an owner decision and has not been added.",
+      "whole_rate_comparison_not_supported: A comparison of the transfer treatment alone says nothing about the rate unless every other contribution is verified equal, which needs typed protocol fields. The paper itself finds density-of-states error can matter more than energy-transfer error at intermediate and low pressure (p. 6453).",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "rule_id": "N-JM-CH4-TRANSFER",
+     "rule_version": "0.2.0",
+     "why": "rule_status_inactive"
+    },
+    {
+     "applied": false,
+     "level": "candidate",
+     "reasons": [
+      "agreement_is_qualitative_and_by_figure: The paper states agreement in words and figures (Ar k0 about 25 % low, Ar falloff low by up to a factor of 2, CH4 slightly low, He good) with no metric, no table of predicted and measured values and no per-point uncertainty. The experimental points belong to the cited papers (refs 61-67, 70, 71) and the Baulch et al. evaluation, none of which was read here, so no reference set or metric can be pinned.",
+      "paper_ranks_no_competing_solves: The paper gives agreement for one prediction per bath. It does not compare the rates of two energy-transfer treatments or two solves against experiment, so it gives no evidence that one solve's rates are better than another's.",
+      "density_of_states_confounds_the_comparison: The paper reports that density-of-states error can be larger than the energy-transfer error at intermediate and low pressure, and that the anharmonic scaling that doubles the threshold density of states makes the Ar k0 about 50 % too high (worse than the harmonic calculation, p. 6452), improves only the Ar falloff, worsens He (pp. 6452-6453) and is unclear for He, Ar and CH4 overall (p. 6453). A rate comparison is not an energy-transfer comparison unless the density of states is verified equal.",
+      "four_of_eight_baths: Only He, Ar, Kr and CH4 have an experimental comparison; the other four baths have none.",
+      "no_verified_evidence_state: TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified agreement with experiment cannot be satisfied.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "rule_id": "N-JM-CH4-RATE",
+     "rule_version": "0.2.0",
+     "why": "rule_status_inactive"
+    },
+    {
+     "applied": false,
+     "level": "candidate",
+     "reasons": [
+      "no_source_comparison: This is a proposed evidence rule. No source comparison or benchmark was audited, and no convergence reference is pinned.",
+      "no_verification_step: A producer's convergence entry is stored as declared; TCKDB has no step that verifies it, so the prerequisite \"verified\" cannot be satisfied for any record.",
+      "same_model_not_expressible: Two solves being of the same physical model is not a stated fact in the schema (no model identity beyond the network and the declared protocol), so the pair's compatibility cannot be verified.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "rule_id": "N-ME-CONVERGENCE",
+     "rule_version": "0.1.0",
+     "why": "rule_status_inactive"
+    },
+    {
+     "applied": false,
+     "level": "representation",
+     "rule_id": "N-REP-HELDOUT",
+     "rule_version": "0.1.0",
+     "why": "request_is_not_representation_fidelity"
+    }
+   ],
+   "rules": [
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "compared_objects_are_falloff_fits",
+       "text": "The compared objects are Troe falloff fits (an elementary kinetics model with a broadening factor Fc). Network selection compares Chebyshev and PLOG products of one solve; a Troe-form pair is not a pair of network fits, so no network rule can be stated until the owner decides whether such a comparison belongs to elementary kinetics only."
+      },
+      {
+       "id": "dataset_members_not_extracted",
+       "text": "Table 1 (the He measurements, open access, with 2-sigma uncertainties) has been located but its points were not extracted into the manifest, so the reproduction metric, the domain and the member list the rule needs are not pinned."
+      },
+      {
+       "id": "fit_audit_is_partial",
+       "text": "Only the two He fits (Fc = 0.32 and 0.39) and their stated percent deviations were read, from section 3.1 and the Fig. S2 caption. The measured-to-fitted ratios behind the 5 % and 10 % figures were not reconstructed, and the fitting procedure was not audited beyond what those passages say."
+      },
+      {
+       "id": "no_verified_evidence_state",
+       "text": "TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified dataset-reproduction evidence cannot be satisfied."
+      }
+     ],
+     "anchors": [
+      {
+       "claim": "best He fit Fc = 0.32, k0He = 1.4e-30 cm6 molecule-2 s-1 (kinf fixed 6.3e-11, n = 0)",
+       "where": "ACP 20, p. 3095, section 3.1; Fig. 1 caption, p. 3094; Fig. S2 caption (supplement)"
+      },
+      {
+       "claim": "with Fc = 0.39 (the N2 value) the fit overestimates by about 5 % above about 300 Torr and underestimates by about 10 % below; k0He becomes 1.0e-30",
+       "where": "ACP 20, p. 3095, section 3.1; Fig. S2 (ratio panel)"
+      },
+      {
+       "claim": "the He dataset is Table 1 (T, p, M, k1 with 2-sigma total uncertainty), and Table 1 is the dataset the Data availability statement names",
+       "where": "ACP 20, Table 1, p. 3092; Data availability statement"
+      }
+     ],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "Amedro, D. et al., Atmos. Chem. Phys. 20, 3091-3105 (2020), OH + NO2 (+M) total loss in He, N2 and humid mixtures. https://acp.copernicus.org/articles/20/3091/2020/",
+     "council_observation": "The study distinguishes product-summed loss from HNO3-only formation and shows bath-sensitive falloff. Its He fit with Fc = 0.32 reproduces the stated dataset better than imposing the N2 value 0.39. This is the paper's own statement of the comparison (section 3.1 and Fig. S2), verified against the open article.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "extract the Table 1 points (temperature, pressure, M, k1, 2-sigma) with page and table anchors; open, not yet extracted",
+       "source": "Amedro et al., Atmos. Chem. Phys. 20, 3091 (2020), Table 1, open access (CC BY 4.0), already pinned above"
+      },
+      {
+       "items": "whether a Troe-falloff comparison is in scope for network selection at all",
+       "source": "owner decision"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "A request for HNO3-only formation (needs branching evidence this study does not give for the requested form).",
+      "A humid or composition-dependent bath."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "compared_objects_are_falloff_fits: The compared objects are Troe falloff fits (an elementary kinetics model with a broadening factor Fc). Network selection compares Chebyshev and PLOG products of one solve; a Troe-form pair is not a pair of network fits, so no network rule can be stated until the owner decides whether such a comparison belongs to elementary kinetics only.",
+      "dataset_members_not_extracted: Table 1 (the He measurements, open access, with 2-sigma uncertainties) has been located but its points were not extracted into the manifest, so the reproduction metric, the domain and the member list the rule needs are not pinned.",
+      "fit_audit_is_partial: Only the two He fits (Fc = 0.32 and 0.39) and their stated percent deviations were read, from section 3.1 and the Fig. S2 caption. The measured-to-fitted ratios behind the 5 % and 10 % figures were not reconstructed, and the fitting procedure was not audited beyond what those passages say.",
+      "no_verified_evidence_state: TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified dataset-reproduction evidence cannot be satisfied.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "candidate",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "representation_fidelity",
+     "objective_key": "named_dataset_reproduction_falloff_broadening",
+     "observable": "rate_coefficient",
+     "open_access": true,
+     "owner_acceptance": null,
+     "proposed_statement": "For the named OH + NO2 dataset in He, a representation fitted with the He-specific broadening factor is preferred over one that imposes the N2 factor, on the objective of reproducing that dataset. A named-dataset reproduction objective, not independent physical validation and not a universal predictive-accuracy claim.",
+     "required_predicates": [
+      "The candidate's observable is total loss of OH + NO2 (not HNO3-only formation) and its coefficient basis states the bath.",
+      "The candidate's bath is He (a specified collider); a humid or mixed bath needs an applicable mixture treatment.",
+      "The two representations being compared are fits of the same pinned dataset, with the dataset members named.",
+      "The temperature and pressure domain of the request lies inside the dataset's domain."
+     ],
+     "rule_id": "N-AMEDRO-HE-FC",
+     "source_ids": [
+      "AMEDRO_2020",
+      "AMEDRO_2020_SUPPLEMENT"
+     ],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.1.0"
+    },
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "exact_cells_and_metric_unaudited",
+       "text": "The tested PES variants, bath composition, temperature and pressure cells, initial and source conditions, observation time and metric were seen only through indexed passages; detailed figures and data are unaudited."
+      },
+      {
+       "id": "article_not_read",
+       "text": "The article is open access (CC BY 3.0), and the earlier 403 was the publisher blocking automated requests, not a paywall. It has not been read here yet, so the full text, figures and supplement remain unaudited."
+      },
+      {
+       "id": "reduction_vocabulary_one_open_name",
+       "text": "TCKDB's NetworkReductionMethod already has the chemically significant eigenvalue, modified strong collision and reservoir-state methods. The one open naming decision is whether to add simulation_least_squares (the abstract defines SLS as simulation least-squares); that mapping must not be guessed."
+      },
+      {
+       "id": "transient_flux_is_not_a_phenomenological_coefficient",
+       "text": "Fidelity of a transient flux does not independently validate the physical chemistry or identify a unique phenomenological coefficient; a time-regime mapping for the requested observable is not defined."
+      }
+     ],
+     "anchors": [],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "Johnson, M. S. and Green, W. H., Faraday Discuss. 238, 380-404 (2022), https://pubs.rsc.org/en/content/articlehtml/2022/fd/d2fd00040g. CC BY 3.0; open copies at MIT DSpace (hdl 1721.1/143677) and OSTI.",
+     "council_observation": "Council-reported, NOT verified here (the full text was not read): controlled reductions are compared against energy-grained master-equation fluxes, with the system acetyl + O2 in N2; SLS variants improve some tested low-pressure cases, while every tested reduction fails in some conditions and a modified-barrier case defeats a universal hierarchy. The abstract defines SLS as simulation least-squares.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "the definition of each reduction variant, the PES variants, the bath, every temperature and pressure cell tested, initial conditions, observation time, the error metric and the per-cell results",
+       "source": "Johnson and Green, Faraday Discuss. 238, 380-404 (2022), d2fd00040g, full text (open access; a browser fetch from RSC, MIT DSpace or OSTI is needed only if a reduction-fidelity rule is wanted)"
+      },
+      {
+       "items": "the numerical data behind the comparison figures",
+       "source": "the same article's electronic supplementary information"
+      },
+      {
+       "items": "whether to add simulation_least_squares to the reduction_method vocabulary, and a time-regime mapping",
+       "source": "owner decision"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "The modified-barrier case, where the council reports (unverified) that no universal reduction hierarchy holds.",
+      "Any condition the study reports as a failure of every tested reduction."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "exact_cells_and_metric_unaudited: The tested PES variants, bath composition, temperature and pressure cells, initial and source conditions, observation time and metric were seen only through indexed passages; detailed figures and data are unaudited.",
+      "article_not_read: The article is open access (CC BY 3.0), and the earlier 403 was the publisher blocking automated requests, not a paywall. It has not been read here yet, so the full text, figures and supplement remain unaudited.",
+      "reduction_vocabulary_one_open_name: TCKDB's NetworkReductionMethod already has the chemically significant eigenvalue, modified strong collision and reservoir-state methods. The one open naming decision is whether to add simulation_least_squares (the abstract defines SLS as simulation least-squares); that mapping must not be guessed.",
+      "transient_flux_is_not_a_phenomenological_coefficient: Fidelity of a transient flux does not independently validate the physical chemistry or identify a unique phenomenological coefficient; a time-regime mapping for the requested observable is not defined.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "candidate",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "model_fidelity",
+     "objective_key": "reduction_fidelity_to_energy_grained_flux",
+     "observable": "rate_coefficient",
+     "open_access": true,
+     "owner_acceptance": null,
+     "proposed_statement": "For one pinned PES variant, bath, temperature and pressure cell set, initialization, observation window and error metric, a reduction shown to track the energy-grained flux more closely is preferred over one shown to track it less closely, on the objective of fidelity to that pinned master-equation model.",
+     "required_predicates": [
+      "Both candidates carry the same pinned physical model (PES variant and inputs) and differ only in the reduction.",
+      "The request lies inside the tested temperature and pressure cells, with the same initialization and observation window.",
+      "The reference model is a pinned energy-grained solve of that PES, named in the request.",
+      "The comparison metric and its reference uncertainty are stated."
+     ],
+     "rule_id": "N-JG-REDUCTION-FIDELITY",
+     "source_ids": [],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.1.0"
+    },
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "reference_values_only_as_curves",
+       "text": "The article gives the direct-dynamics and pairwise deactivating-collision averages as plotted curves (Figs. 3-6, 7 and 9), not as a table; the only tabulated numbers are the fitted alpha300 and n of Table 4 and a few values quoted in the text. A numeric reference with its uncertainty cannot be pinned from the main article, and the Supporting Information, as the article describes it, holds the fitted V_TM parameters and the approach-geometry and potential-comparison figures, not transfer averages. Reading values off the figures was not done here."
+      },
+      {
+       "id": "reference_is_a_validated_low_level_surface",
+       "text": "The reference is MP2/aug'-cc-pVDZ (SAC for H2) direct dynamics, itself checked against QCISD(T)/CBS interaction energies (Table 2, p. 6441) with an estimated 10 % statistical uncertainty in the average, so a preference is for agreement with that model, not with a converged or measured energy transfer. The H2 comparison is the only one that uses the SAC surface."
+      },
+      {
+       "id": "preference_holds_for_he_only",
+       "text": "The one supported preference (exp/6 over Lennard-Jones) was tested for He only, at 300, 1150 and 2000 K (Fig. 3); the paper did not consider Lennard-Jones for any other bath (p. 6444). For Ne exp/6 reproduces MP2 direct dynamics but no competitor was tested, so any Ne extension would rest only on the authors' expectation (p. 6447) that the deficiency is general. For H2 the best exp/6 fit is called accidental, and N2, CO, Ar and Kr have no direct dynamics, so the rule's domain is one bath."
+      },
+      {
+       "id": "transfer_treatment_not_typed",
+       "text": "network_solve_energy_transfer.model exists as free text. What is missing is a typed field for how the parameters were obtained (which interaction potential or fitted kernel), so a candidate cannot state the property the rule would compare. A stored solve carries a fitted alpha300 and n (Table 4's form), not the trajectory potential. This is an owner decision and has not been added."
+      },
+      {
+       "id": "whole_rate_comparison_not_supported",
+       "text": "A comparison of the transfer treatment alone says nothing about the rate unless every other contribution is verified equal, which needs typed protocol fields. The paper itself finds density-of-states error can matter more than energy-transfer error at intermediate and low pressure (p. 6453)."
+      }
+     ],
+     "anchors": [
+      {
+       "claim": "eight baths, M = He, Ne, Ar, Kr, H2, N2, CO, CH4",
+       "where": "J. Phys. Chem. A 115, title, p. 6438; Lennard-Jones collision parameters for all eight, Table 1, p. 6441"
+      },
+      {
+       "claim": "full-dimensional direct dynamics was run for four baths, He, Ne, H2 and CH4. The interaction-potential approximations were tested against it for He, Ne and H2 only. No separable-pairwise potential was fitted for CH4, so CH4 has direct dynamics and no comparison. N2 and CO have no full-dimensional direct dynamics. Ar and Kr have none either (their exp/6 parameters are taken from Alexander and Troya)",
+       "where": "p. 6439 (last paragraph of the introduction), p. 6441 (Direct Dynamics), p. 6443 (Ar and Kr parameters), p. 6445 (no CH4 fit), p. 6448 (no MP2 results for N2 and CO), p. 6453 (Conclusions)"
+      },
+      {
+       "claim": "the direct-dynamics reference is not exact. It is MP2/aug'-cc-pVDZ for He, Ne and CH4 and the same method with correlation scaled (SAC, F = 0.8, empirically fitted) for H2, each checked against counterpoise-corrected QCISD(T)/CBS interaction energies. The paper says the good accuracy of the MP2 level is likely due to a cancellation of errors and that its general accuracy is unknown",
+       "where": "Table 2, 'Direct Dynamics' block (p. 6441), eps_min 3.9, 4.9, 10.3 and 24.3 cm-1 for He, Ne, CH4 and H2 (MP2), 11.1 cm-1 for H2 (SAC); pp. 6442-6443"
+      },
+      {
+       "claim": "direct-dynamics ensembles have about 10 % relative 1-sigma uncertainty in the deactivating-collision average (100-2000 trajectories); the cheaper TB+exp/6 ensembles a few percent (5000-20000 trajectories)",
+       "where": "p. 6446, last paragraph"
+      },
+      {
+       "claim": "potential forms compared for the bath interaction V_TM, as a separable sum of atom-atom pairs. Lennard-Jones (eq 23; LJ-A fitted to QCISD(T)/CBS and LJ-B from tabulated parameters, He only) and a modified Buckingham exp/6 (eq 24). For the diatomic baths three exp/6 fits each (compromise RP, radial-only R, perpendicular-only P; CO has two radial sets, O-in and C-in). Intramolecular CH4 potential V_T compared as MP2/aug'-cc-pVDZ against a semiempirical tight-binding model (Wang and Mak). Results are labelled A+B (V_T + V_TM)",
+       "where": "eqs 21-24 and following text, pp. 6443-6445; Table 2, 'Separable Pairwise' block, p. 6441; labelling convention p. 6445"
+      },
+      {
+       "claim": "He, deactivating-collision average against MP2 direct dynamics. LJ-A overestimates by 120-150 %; LJ-B by 70 % at 300 K and almost a factor 3 at 1150 and 2000 K; MP2+exp/6 within 15 % of MP2 at 1150 and 2000 K and about 30 % apart at 300 K (said to be near the 1-sigma statistical uncertainty); TB+exp/6 differs from MP2+exp/6 by 5-15 % for He and Ne. Fig. 3 (five surfaces: MP2, MP2+exp/6, TB+exp/6, MP2+LJ A, MP2+LJ B). LJ points exist only at 300, 1150 and 2000 K, so the exp/6-over-LJ comparison covers 300-2000 K. LJ was tested for He only: the paper says eq 23 was not considered for the other baths",
+       "where": "Fig. 3 (p. 6447); text p. 6447, left and right columns; p. 6444 (LJ form not considered for the other baths)"
+      },
+      {
+       "claim": "Ne, Fig. 4 plots only MP2, MP2+exp/6 and TB+exp/6. exp/6 reproduces MP2 direct dynamics and TB and MP2 intramolecular choices differ by 5-15 %, but no competitor to exp/6 (no LJ) was tested for Ne, so there is no preference result for Ne. The authors expect the LJ deficiencies to be general (p. 6447: 'likely ... general'); that is their expectation, not a Ne result",
+       "where": "Fig. 4 (p. 6447); text p. 6447; p. 6444"
+      },
+      {
+       "claim": "H2, against SAC direct dynamics. exp/6 RP is about 25 % low; exp/6 R agrees well but the authors call that agreement likely accidental; exp/6 P is accurate at high temperature and worse at 300 K. The spread of the three fits is taken as an additional uncertainty of the separable-pairwise approximation",
+       "where": "Fig. 5 (p. 6448); text p. 6448, left column"
+      },
+      {
+       "claim": "N2 fits differ from each other by about 10 % and CO fits by 25-50 %, with no direct-dynamics reference for either. The additional uncertainty for the diatomic baths is stated three ways, 20-40 % (abstract and Table 4 footnote), up to 50 % (p. 6448) and 10-50 % (pp. 6449 and 6453)",
+       "where": "Fig. 6 and text (p. 6448); Table 4 footnote (p. 6450); Conclusions (p. 6453)"
+      },
+      {
+       "claim": "the transfer averages are insensitive to the intramolecular CH4 potential. Shown for He and Ne only (TB against MP2); the TB harmonic density of states at threshold is 40 % smaller than MP2's. The paper does not test the diatomic baths this way",
+       "where": "p. 6447, right column"
+      },
+      {
+       "claim": "temperature range of the trajectory ensembles 300-4000 K (single-temperature He ensembles at 300, 1150, 2000 and 4000 K; multitemperature sampling for the atomic baths). The Table 4 fit covers 300-2000 K. The Ne, H2 and N2/CO figures plot to about 2500 K on the axis; the temperatures of their individual ensembles are not stated in the text (not found)",
+       "where": "p. 6445 (Initial Conditions), p. 6448 (He ensembles at 300, 1150, 2000, 4000 K; multitemperature sampling 300-4000 K), p. 6450 (fit range), Figs. 4-6 axes"
+      },
+      {
+       "claim": "quantities reported. Per-collision averages <dE>, <dE^2>^1/2 and <dE_d> (eqs 26-28, scaled to the Lennard-Jones collision rate) and first-order rates <r>, <r_d>, <r^2>^1/2 (eqs 30-32). <dE> is negative or near zero and no better than its statistical uncertainty. The master equation uses a single-exponential-down kernel (eq 14) with alpha = <dE_d>, alpha(T) = alpha300 (T/300 K)^n (eq 1), rotational dependence by an empirical factor (eq 15)",
+       "where": "pp. 6439-6440 (eqs 1, 14, 15), p. 6446 (eqs 26-32), p. 6451 (<dE>)"
+      },
+      {
+       "claim": "tabulated parameters, Table 4, alpha300 in cm-1 and n. He 117, 0.95; Ne 104, 0.86; Ar 115, 0.75; Kr 123, 0.67; H2 162, 0.83; N2 130, 0.76; CO 130, 0.76; CH4 390, 0.60. Stated 1-sigma 15 % (statistics and the limits of the functional form), with an additional 20-40 % for the diatomic baths. The fit minimises the mean unsigned error over the Fig. 9 data. It underpredicts 300 K by 10-20 % for the atomic baths and overpredicts 1150 K by up to 15 % for the polyatomic baths. Fig. 9 surfaces by bath, TB+exp/6 for He, Ne, Ar, Kr; SAC for H2; MP2 for CH4; the several TB+exp/6 fits averaged for N2 and CO",
+       "where": "Table 4 and footnote (p. 6450); Fig. 9 and text (p. 6450)"
+      },
+      {
+       "claim": "the deactivating-collision averages as functions of temperature are plotted (Figs. 3-7 and 9) in the article, not tabulated. Only Table 4 gives transfer parameters. A few values are quoted in text, for example <dE^2>^1/2 at 2000 K of 940, 716, 604, 572, 839, 702, 712 and 1146 cm-1 for He, Ne, Ar, Kr, H2, N2, CO and CH4",
+       "where": "p. 6451, left column; Figs. 3-7, 9"
+      },
+      {
+       "claim": "the paper's limits on its own transfer results. Classical trajectories with no zero-point-energy enforcement; the dependence of alpha on the initial energy is neglected; relative bath efficiencies change with temperature (crossover near 500 K) so room-temperature ranks do not carry to combustion; per-collision averages depend on an arbitrary Lennard-Jones scaling; the separable-pairwise approach may be worse for less spherical targets",
+       "where": "p. 6446 (zero-point energy), p. 6440 (initial-energy dependence), p. 6449 (efficiencies, scaling), p. 6448 (less spherical targets)"
+      }
+     ],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "Jasper, A. W. and Miller, J. A., J. Phys. Chem. A 115, 6438-6455 (2011), https://pubs.acs.org/doi/abs/10.1021/jp200048n (CH4 collisional energy transfer).",
+     "council_observation": "Read in full (owner-supplied copy, pinned as JASPER_MILLER_2011; the Supporting Information was not supplied). The paper compares ways of modelling the CH4 + M interaction against full-dimensional direct dynamics for He, Ne and H2 (direct dynamics was also run for CH4, with nothing to compare it to). The reference is a validated low-level surface (MP2, or scaled-correlation SAC for H2), not an exact one. For He and Ne an exp/6 pairwise potential reproduces the direct-dynamics deactivating-collision average closely; a Lennard-Jones one overshoots it, tested for He only, at 300-2000 K (the paper expects the deficiency to be general, p. 6447); for H2, N2 and CO the pairwise form is too inflexible and its parametrisation adds an uncertainty the paper states as 20-40 %, 10-50 % or up to 50 % in different places. The transfer averages did not depend on the intramolecular potential (shown for He and Ne only). The comparison is a fidelity-to-a-model claim: only the paper's final CH4 rates against experiment are physical accuracy, registered separately as N-JM-CH4-RATE.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "supplied by the owner and pinned as JASPER_MILLER_2011; every number above is anchored to a page, table or figure. Nothing further is needed from the article body",
+       "source": "Jasper and Miller, J. Phys. Chem. A 115, 6438-6455 (2011), jp200048n, full text"
+      },
+      {
+       "items": "fitted exp/6 and LJ intermolecular parameters per bath and fit, and the QCISD(T)/CBS comparison figures. Needed only if a rule must identify a fitted potential by its parameters or reproduce a surface; not needed for a rule built on a declared treatment label. No tabulated transfer averages are described there, and none are available from the main article (the averages are plotted)",
+       "source": "the same article's supporting information (NOT supplied; described on p. 6454)"
+      },
+      {
+       "items": "not found in the article; would have to come from the authors or from digitising the figures, which was not done",
+       "source": "a numeric deactivating-collision average per surface, bath and temperature (the plotted values of Figs. 3-5)"
+      },
+      {
+       "items": "a typed energy-transfer treatment declaration (a new protocol vocabulary entry)",
+       "source": "owner decision"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "A claim that a better intramolecular electronic treatment improves energy transfer (shown for He and Ne only, and the TB and MP2 surfaces differ in density of states).",
+      "A diatomic bath treated with the separable pairwise approximation (20-40 %, 10-50 % or up to 50 % additional uncertainty depending on the page).",
+      "H2, where the paper calls the agreement of its best exp/6 fit accidental.",
+      "Ne, where no competitor to exp/6 was tested; any extension to Ne rests only on the authors' p. 6447 expectation that the Lennard-Jones deficiency is general.",
+      "N2, CO, Ar and Kr, which carry no direct-dynamics reference."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "reference_values_only_as_curves: The article gives the direct-dynamics and pairwise deactivating-collision averages as plotted curves (Figs. 3-6, 7 and 9), not as a table; the only tabulated numbers are the fitted alpha300 and n of Table 4 and a few values quoted in the text. A numeric reference with its uncertainty cannot be pinned from the main article, and the Supporting Information, as the article describes it, holds the fitted V_TM parameters and the approach-geometry and potential-comparison figures, not transfer averages. Reading values off the figures was not done here.",
+      "reference_is_a_validated_low_level_surface: The reference is MP2/aug'-cc-pVDZ (SAC for H2) direct dynamics, itself checked against QCISD(T)/CBS interaction energies (Table 2, p. 6441) with an estimated 10 % statistical uncertainty in the average, so a preference is for agreement with that model, not with a converged or measured energy transfer. The H2 comparison is the only one that uses the SAC surface.",
+      "preference_holds_for_he_only: The one supported preference (exp/6 over Lennard-Jones) was tested for He only, at 300, 1150 and 2000 K (Fig. 3); the paper did not consider Lennard-Jones for any other bath (p. 6444). For Ne exp/6 reproduces MP2 direct dynamics but no competitor was tested, so any Ne extension would rest only on the authors' expectation (p. 6447) that the deficiency is general. For H2 the best exp/6 fit is called accidental, and N2, CO, Ar and Kr have no direct dynamics, so the rule's domain is one bath.",
+      "transfer_treatment_not_typed: network_solve_energy_transfer.model exists as free text. What is missing is a typed field for how the parameters were obtained (which interaction potential or fitted kernel), so a candidate cannot state the property the rule would compare. A stored solve carries a fitted alpha300 and n (Table 4's form), not the trajectory potential. This is an owner decision and has not been added.",
+      "whole_rate_comparison_not_supported: A comparison of the transfer treatment alone says nothing about the rate unless every other contribution is verified equal, which needs typed protocol fields. The paper itself finds density-of-states error can matter more than energy-transfer error at intermediate and low pressure (p. 6453).",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "candidate",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "model_fidelity",
+     "objective_key": "energy_transfer_fidelity_to_direct_dynamics",
+     "observable": "rate_coefficient",
+     "open_access": false,
+     "owner_acceptance": null,
+     "proposed_statement": "For CH4 in He, between 300 and 2000 K, an exponential-6 pairwise interaction treatment is preferred over a Lennard-Jones one, on the objective of agreement with the paper's MP2 direct-dynamics deactivating-collision average. For Ne, exp/6 reproduces MP2 direct dynamics but no competitor was tested, so no preference is stated; any Ne extension would rest only on the authors' expectation (p. 6447) that the Lennard-Jones deficiency is general. For H2 the paper supports no preference among its three exp/6 fits (the best agreement is called accidental) and for N2, CO, Ar and Kr there is no direct-dynamics reference. A fidelity claim about a trajectory interaction potential, not a whole-rate or level-of-theory preference.",
+     "required_predicates": [
+      "The candidates differ only in the energy-transfer treatment (the interaction potential), the rest of the coupled protocol verified equal.",
+      "The bath is He (the only bath for which the paper tests a competitor to exp/6 against direct dynamics) and the temperature range lies inside 300-2000 K, where the Lennard-Jones points of Fig. 3 lie.",
+      "The reference direct-dynamics transfer data and their uncertainty (about 10 % relative 1-sigma in the paper) are pinned in a form that can be compared, which the article gives only as curves."
+     ],
+     "rule_id": "N-JM-CH4-TRANSFER",
+     "source_ids": [
+      "JASPER_MILLER_2011"
+     ],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.2.0"
+    },
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "agreement_is_qualitative_and_by_figure",
+       "text": "The paper states agreement in words and figures (Ar k0 about 25 % low, Ar falloff low by up to a factor of 2, CH4 slightly low, He good) with no metric, no table of predicted and measured values and no per-point uncertainty. The experimental points belong to the cited papers (refs 61-67, 70, 71) and the Baulch et al. evaluation, none of which was read here, so no reference set or metric can be pinned."
+      },
+      {
+       "id": "paper_ranks_no_competing_solves",
+       "text": "The paper gives agreement for one prediction per bath. It does not compare the rates of two energy-transfer treatments or two solves against experiment, so it gives no evidence that one solve's rates are better than another's."
+      },
+      {
+       "id": "density_of_states_confounds_the_comparison",
+       "text": "The paper reports that density-of-states error can be larger than the energy-transfer error at intermediate and low pressure, and that the anharmonic scaling that doubles the threshold density of states makes the Ar k0 about 50 % too high (worse than the harmonic calculation, p. 6452), improves only the Ar falloff, worsens He (pp. 6452-6453) and is unclear for He, Ar and CH4 overall (p. 6453). A rate comparison is not an energy-transfer comparison unless the density of states is verified equal."
+      },
+      {
+       "id": "four_of_eight_baths",
+       "text": "Only He, Ar, Kr and CH4 have an experimental comparison; the other four baths have none."
+      },
+      {
+       "id": "no_verified_evidence_state",
+       "text": "TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified agreement with experiment cannot be satisfied."
+      }
+     ],
+     "anchors": [
+      {
+       "claim": "the master-equation rates are parameter-free: alpha(T) of Table 4 (from trajectories), a single-exponential-down kernel, Lennard-Jones collision rates, microcanonical k(E,J) from a VRC-TST capture calculation, rigid-rotor harmonic-oscillator partition functions, solved with VariFlex",
+       "where": "Section II.A, p. 6441 (last paragraph before II.B); Section III.C, p. 6451"
+      },
+      {
+       "claim": "experimental comparison for four baths only, He, Ar, Kr and CH4; none for Ne, H2, N2 or CO (the eight-bath rate survey of Fig. 11 is prediction only). The Kr measurements are compared with the Ar prediction (Fig. 12a caption: CH4 in Ar against experimental results in Ar and Kr); no Kr-specific prediction panel was found",
+       "where": "abstract (p. 6438); Section III.C, p. 6451; Figs. 11-14"
+      },
+      {
+       "claim": "Ar, low-pressure limit. Compared with several groups' measurements (refs 61-65, including Kiefer and Kumaran, Hartig et al., Koike et al., Sutherland et al. in Kr, and the revised Davidson et al.) and the Baulch et al. recommendation (J. Phys. Chem. Ref. Data 34, 757, 2005). The prediction is about 25 % below the recommended value, called excellent agreement; the newest Kr and the revised Davidson data are somewhat lower and closer to the prediction",
+       "where": "Fig. 12a (p. 6452); text p. 6452, left column"
+      },
+      {
+       "claim": "Ar, falloff near 1100 K, against Barnes et al. (ref 67) and Baulch et al. The predicted k is lower than measured and recommended, by as much as a factor of 2",
+       "where": "Fig. 12b (p. 6452); text p. 6452, left column"
+      },
+      {
+       "claim": "CH4 bath falloff against Barnes et al. (ref 67), Chen et al. (ref 70) and Baulch et al.: good agreement, on average somewhat underpredicting the measurements",
+       "where": "Fig. 13 (p. 6452); text p. 6452, right column"
+      },
+      {
+       "claim": "He, association and dissociation at 300, 600 and 1150 K against two groups (Barnes et al. ref 67; Brouard et al. ref 71) and Baulch et al.: good agreement",
+       "where": "Fig. 14 (p. 6453); text p. 6452, right column to p. 6453"
+      },
+      {
+       "claim": "a harmonic-frequency scaling of 0.91 that doubles the threshold density of states raises the Ar k0 to about 50 % above the recommended value and improves the Ar falloff; worsens He; and raises the CH4 bath k by up to a factor of 2 with no clear gain. The paper states that RRHO density-of-states error can matter more than the energy-transfer error at intermediate and low pressures, and that agreement is good with or without the correction",
+       "where": "pp. 6452-6453 (text and Figs. 12-14); p. 6453, left column"
+      },
+      {
+       "claim": "the paper's own verdict. Agreement for He, Ar, Kr and CH4 is excellent and within the recommended factor of 2 experimental uncertainties as the paper words it (p. 6454), with the possible exception of the Ar falloff. Separately, for the CH4 bath the Baulch et al. uncertainty is quoted as printed 'Delta ln k0 = +-0.3' (p. 6452); that is not restated here as a factor. No error metric or table of agreement is given",
+       "where": "p. 6453 (end of Section III.C); Conclusions, p. 6454"
+      }
+     ],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "Jasper, A. W. and Miller, J. A., J. Phys. Chem. A 115, 6438-6455 (2011), https://pubs.acs.org/doi/abs/10.1021/jp200048n (final CH4 rates against experiment).",
+     "council_observation": "Read in full (owner-supplied copy, pinned as JASPER_MILLER_2011; the Supporting Information was not supplied). The paper compares one parameter-free master-equation prediction per bath with measurements and the Baulch et al. recommendations for four of its eight baths (He, Ar, Kr, CH4), by figure, with no stated error metric: Ar k0 about 25 % below the recommendation, Ar falloff low by up to a factor of 2, CH4 slightly low on average, He good. It does not rank alternative energy-transfer treatments by their rates, and it says density-of-states error can matter more than energy-transfer error. That is the only part of the paper that bears on physical accuracy.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "supplied by the owner and pinned as JASPER_MILLER_2011; anchored above. The Supporting Information is not needed for this rule, since it is described as fitted potential parameters and potential-comparison figures only (p. 6454)",
+       "source": "Jasper and Miller, J. Phys. Chem. A 115, 6438-6455 (2011), full text"
+      },
+      {
+       "items": "the measured rate coefficients, conditions and uncertainties for He, Ar, Kr and CH4, if a pinned reference set is wanted; none was read here",
+       "source": "the experimental papers (refs 61-67, 70, 71) and Baulch et al., J. Phys. Chem. Ref. Data 34, 757 (2005)"
+      },
+      {
+       "items": "the verification procedure that would turn a declared validation entry into a verified one",
+       "source": "owner decision"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "A transfer-treatment-only comparison (that is N-JM-CH4-TRANSFER, a model-fidelity claim).",
+      "Ne, H2, N2 and CO, for which the paper compares no experiment."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "agreement_is_qualitative_and_by_figure: The paper states agreement in words and figures (Ar k0 about 25 % low, Ar falloff low by up to a factor of 2, CH4 slightly low, He good) with no metric, no table of predicted and measured values and no per-point uncertainty. The experimental points belong to the cited papers (refs 61-67, 70, 71) and the Baulch et al. evaluation, none of which was read here, so no reference set or metric can be pinned.",
+      "paper_ranks_no_competing_solves: The paper gives agreement for one prediction per bath. It does not compare the rates of two energy-transfer treatments or two solves against experiment, so it gives no evidence that one solve's rates are better than another's.",
+      "density_of_states_confounds_the_comparison: The paper reports that density-of-states error can be larger than the energy-transfer error at intermediate and low pressure, and that the anharmonic scaling that doubles the threshold density of states makes the Ar k0 about 50 % too high (worse than the harmonic calculation, p. 6452), improves only the Ar falloff, worsens He (pp. 6452-6453) and is unclear for He, Ar and CH4 overall (p. 6453). A rate comparison is not an energy-transfer comparison unless the density of states is verified equal.",
+      "four_of_eight_baths: Only He, Ar, Kr and CH4 have an experimental comparison; the other four baths have none.",
+      "no_verified_evidence_state: TCKDB stores a producer's validation entry as declared and has no verification step, so a prerequisite that needs verified agreement with experiment cannot be satisfied.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "candidate",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "physical_accuracy",
+     "objective_key": "ch4_rate_agreement_with_experiment",
+     "observable": "rate_coefficient",
+     "open_access": false,
+     "owner_acceptance": null,
+     "proposed_statement": "For CH4 in He, Ar, Kr or CH4 over the experimental temperature and pressure ranges of the compared datasets, a solve whose rates agree with those measurements better than another's is preferred, on the objective of physical accuracy of the rate. The paper supplies agreement for one prediction per bath, not a comparison of two solves.",
+     "required_predicates": [
+      "The experimental reference data (the cited datasets and the Baulch et al. recommendation), their conditions and uncertainty are pinned for the compared bath (He, Ar, Kr or CH4) and range.",
+      "The candidates' rates are compared with that data on one stated metric inside the experimental domain.",
+      "The density-of-states treatment of the candidates is verified equal, since the paper shows it can dominate the difference."
+     ],
+     "rule_id": "N-JM-CH4-RATE",
+     "source_ids": [
+      "JASPER_MILLER_2011"
+     ],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.2.0"
+    },
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "no_source_comparison",
+       "text": "This is a proposed evidence rule. No source comparison or benchmark was audited, and no convergence reference is pinned."
+      },
+      {
+       "id": "no_verification_step",
+       "text": "A producer's convergence entry is stored as declared; TCKDB has no step that verifies it, so the prerequisite \"verified\" cannot be satisfied for any record."
+      },
+      {
+       "id": "same_model_not_expressible",
+       "text": "Two solves being of the same physical model is not a stated fact in the schema (no model identity beyond the network and the declared protocol), so the pair's compatibility cannot be verified."
+      }
+     ],
+     "anchors": [],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "proposed evidence rule; RMG master-equation theory documentation (https://reactionmechanismgenerator.github.io/RMG-Py/theory/pdep/master_equation.html) is background, not a comparison.",
+     "council_observation": "A verified converged determination may be preferred to a demonstrated inaccurate discretization or reduction of the same physical model, for the same objective, with reference uncertainty and fit error controlled. Grain count alone, a smaller training residual alone, or convergence to an inaccurate physical model establishes nothing.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "the convergence criterion, the reference (a pinned converged solve) and its uncertainty, and the verification procedure that would turn a declared entry into a verified one",
+       "source": "owner decision"
+      },
+      {
+       "items": "the grain, energy-ceiling and reduction sweeps with their error metric over the stated domain",
+       "source": "a controlled-convergence study of a real network (to be named by the owner)"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "A larger grain count or a lower fit residual without controlled convergence evidence."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "no_source_comparison: This is a proposed evidence rule. No source comparison or benchmark was audited, and no convergence reference is pinned.",
+      "no_verification_step: A producer's convergence entry is stored as declared; TCKDB has no step that verifies it, so the prerequisite \"verified\" cannot be satisfied for any record.",
+      "same_model_not_expressible: Two solves being of the same physical model is not a stated fact in the schema (no model identity beyond the network and the declared protocol), so the pair's compatibility cannot be verified.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "candidate",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "model_fidelity",
+     "objective_key": "same_model_numerical_convergence",
+     "observable": "rate_coefficient",
+     "open_access": null,
+     "owner_acceptance": null,
+     "proposed_statement": "Between two solves of the same pinned physical model, one with verified convergence evidence over the whole requested domain is preferred to one with demonstrated inadequate convergence, on the objective of fidelity to that model.",
+     "required_predicates": [
+      "Both solves carry the same pinned physical model, and differ only in discretization or reduction.",
+      "Convergence evidence is verified (not declared) for the preferred solve over the whole requested domain, with its reference and uncertainty.",
+      "Inadequate convergence is demonstrated for the yielding solve, not merely unstated.",
+      "The fit error of each representation is controlled."
+     ],
+     "rule_id": "N-ME-CONVERGENCE",
+     "source_ids": [],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.1.0"
+    },
+    {
+     "activation_approved": false,
+     "activation_blockers": [
+      {
+       "id": "no_pinned_heldout_set",
+       "text": "No held-out point set or supplied-output dataset is pinned for any stored solve."
+      },
+      {
+       "id": "no_verification_step",
+       "text": "A producer's representation-validation entry is stored as declared and is never verified, so the prerequisite cannot be satisfied."
+      }
+     ],
+     "anchors": [],
+     "authority": "none: not approved (manifest 0.2.0)",
+     "citation": "proposed evidence rule (the Network-v1 council record, section 3, \"alternate fits of one solve\").",
+     "council_observation": "Demonstrated independent representation fidelity can select a better fit for a declared domain metric while retaining common-source dependence. Fit quality does not rank different physical solves.",
+     "edge_label": "expected-performance inference",
+     "evidence_limits": [],
+     "evidence_needed": [
+      {
+       "items": "the held-out set and metric to pin for a named solve, and the procedure that verifies a representation-validation entry",
+       "source": "owner decision"
+      }
+     ],
+     "evidence_type": "audited_candidate_inactive",
+     "exceptions": [
+      "Training-set residual alone."
+     ],
+     "exclusions": [],
+     "inactive_reasons": [
+      "no_pinned_heldout_set: No held-out point set or supplied-output dataset is pinned for any stored solve.",
+      "no_verification_step: A producer's representation-validation entry is stored as declared and is never verified, so the prerequisite cannot be satisfied.",
+      "not approved for activation by the owner",
+      "the rule's predicates are not implemented"
+     ],
+     "interpretation": "Not applied: no comparison is made until the owner signs the manifest entry and the predicates exist.",
+     "level": "representation",
+     "manifest_sha256": "db824e84dbd6eee0772967b14c65ad7bdee2ac52d18d290acdfd961b65bdbdd5",
+     "manifest_version": "0.2.0",
+     "objective": "representation_fidelity",
+     "objective_key": "heldout_representation_validation",
+     "observable": "rate_coefficient",
+     "open_access": null,
+     "owner_acceptance": null,
+     "proposed_statement": "Between two alternate fits of one solve's output, the fit with a better held-out error under one declared metric over the requested domain is preferred, on the objective of fidelity to the supplied output. It ranks no physical solve and adds no independent confirmation.",
+     "required_predicates": [
+      "Both fits are representations of the same determination.",
+      "A held-out (independently checked) point set, its domain and its metric are pinned for the supplied output.",
+      "The error of each fit is verified on that set over the whole requested domain."
+     ],
+     "rule_id": "N-REP-HELDOUT",
+     "source_ids": [],
+     "status": "inactive",
+     "supersedes": [],
+     "version": "0.1.0"
+    }
+   ],
+   "rules_applied": true,
+   "selected_ref": null,
+   "selection_basis": null,
+   "unused_edges": []
+  },
+  "declaration_versions": [
+   1
+  ],
+  "digest": {
+   "algorithm": "sha256",
+   "value": "e934f878d9ef0caa6521a7cb44a042747ebbe6b3b8efce919f0c52dccea5274f"
+  },
+  "disclosures": {
+   "notes": [],
+   "unresolved_refs": [],
+   "unsupported_refs": []
+  },
+  "manifest_format_version": 2,
+  "network": {
+   "channels": [
+    {
+     "channel_key": "assoc",
+     "kind": "association",
+     "mechanism": "elementary",
+     "sink_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+     "channel_key": "diss",
+     "kind": "dissociation",
+     "mechanism": "elementary",
+     "sink_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+     "channel_key": "elim",
+     "kind": "dissociation",
+     "mechanism": "elementary",
+     "sink_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+     "channel_key": "elim_alt",
+     "kind": "dissociation",
+     "mechanism": "elementary",
+     "sink_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+   ],
+   "network_ref": "net_ha7ixm6lpi4ikjnmp7qpkdypne",
+   "states": [
+    {
+     "composition_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "kind": "bimolecular",
+     "participants": [
+      [
+       "spe_e4n7jnlyns3qmpmkckoufxxzwe",
+       1
+      ],
+      [
+       "spe_kqbtukid4yqfisv4pwglsytiva",
+       1
+      ]
+     ]
+    },
+    {
+     "composition_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "kind": "well",
+     "participants": [
+      [
+       "spe_qp77zxjiejyoln2dmn6xa66x44",
+       1
+      ]
+     ]
+    },
+    {
+     "composition_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "kind": "bimolecular",
+     "participants": [
+      [
+       "spe_f6ldl7ugtu24pkijdzrs77ifdu",
+       1
+      ],
+      [
+       "spe_lxogdcr5irw6dsylinmnzcnsoa",
+       1
+      ]
+     ]
+    }
+   ]
+  },
+  "outcome": "incomparable_alternatives",
+  "policy": {
+   "assessment_version": "1",
+   "bounds_version": "1",
+   "name": "network_method_preferred",
+   "version": "1"
+  },
+  "population": {
+   "counts": {
+    "bundle_nodes": 0,
+    "channel_nodes": 3,
+    "channels": 4,
+    "evidence_entries": 2,
+    "kinetics_parents": 3,
+    "numeric_cells": 9,
+    "required_outputs": 1,
+    "solves": 3,
+    "states": 3
+   },
+   "excluded_by_review": [],
+   "excluded_by_review_withheld": false,
+   "excluded_count": 0
+  },
+  "replay_boundary": "Replay reproduces the reasoning from the captured inputs. It does not authenticate their scientific truth and cannot show that no authorized candidate was omitted from a forged document; the digest and provenance say where this manifest came from.",
+  "request": {
+   "administrative_policy": "default",
+   "apply_rules": true,
+   "bath": {
+    "mole_fractions": null,
+    "species_refs": [
+     "spe_qxamvwzpo7gxkh7tztixg7kfvm"
+    ]
+   },
+   "boundaries": [],
+   "bounds": {
+    "bundle_nodes": 500,
+    "channel_nodes": 500,
+    "channels": 2000,
+    "evidence_entries": 10000,
+    "kinetics_parents": 2000,
+    "numeric_cells": 100000,
+    "required_outputs": 200,
+    "snapshot_bytes": 8388608,
+    "solves": 200,
+    "states": 1000,
+    "version": "1"
+   },
+   "channel_key": "assoc",
+   "coefficient_basis": "kernel",
+   "degeneracy_applied": null,
+   "effective_review_statuses": [
+    "approved",
+    "not_reviewed",
+    "under_review"
+   ],
+   "initial_state_hashes": [],
+   "min_review_status": null,
+   "network_ref": "net_ha7ixm6lpi4ikjnmp7qpkdypne",
+   "objective": "physical_accuracy",
+   "observable": "product_resolved_coefficient",
+   "outputs": [],
+   "partition": {
+    "eliminated": [],
+    "lumps": [],
+    "retained": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ]
+   },
+   "phase": "gas",
+   "pressure_max_bar": 5.0,
+   "pressure_min_bar": 0.5,
+   "profile": "exploratory",
+   "profile_recommendation": "none",
+   "profile_release_ref": null,
+   "quantity": "rate_coefficient",
+   "reference_model_ref": null,
+   "reference_outputs": null,
+   "regime_kind": "time_independent",
+   "result_mode": "all",
+   "scope": "single_channel",
+   "sink_composition_hash": null,
+   "source_composition_hash": null,
+   "temperature_max_k": 1500.0,
+   "temperature_min_k": 500.0
+  },
+  "snapshot_isolation": "read committed",
+  "solves": [
+   {
+    "bath": [
+     [
+      "spe_qxamvwzpo7gxkh7tztixg7kfvm",
+      1.0
+     ]
+    ],
+    "created_at": "2026-10-18T14:02:38.360246",
+    "determinations": [
+     {
+      "channel_key": "assoc",
+      "determination_key": "hid",
+      "determination_ref": "nkdet_eieypsiz5uykstvpqy26pogi7e",
+      "id_rank": 1,
+      "observable": {
+       "coefficient_basis": "kernel",
+       "degeneracy_applied": true,
+       "observable": "product_resolved_coefficient",
+       "reaction_order": 2,
+       "version": 1
+      },
+      "observable_state": "valid"
+     }
+    ],
+    "fits": [
+     {
+      "channel_key": "assoc",
+      "chebyshev": null,
+      "content_digest": "2de5326ba4ccd4e22703f2a50707223e56e0b4d14a5e3fdc13be80d6a4752b53",
+      "determination_ref": "nkdet_eieypsiz5uykstvpqy26pogi7e",
+      "fit_ref": "nkin_m47ii4cvn7d6ueppokzo2kccxy",
+      "id_rank": 1,
+      "model_kind": "plog",
+      "plog_finite": true,
+      "plog_pressures_bar": [
+       0.1,
+       1.0,
+       10.0
+      ],
+      "plog_units": [
+       "cm3_mol_s",
+       "cm3_mol_s",
+       "cm3_mol_s"
+      ],
+      "pmax_bar": 10.0,
+      "pmin_bar": 0.1,
+      "point_cells": [],
+      "point_values_finite": true,
+      "pressure_units": "bar",
+      "rate_units": "cm3_mol_s",
+      "representation": {
+       "fit_origin": "solver_output",
+       "key": "plog1",
+       "version": 1
+      },
+      "representation_role": "complete",
+      "representation_state": "valid",
+      "stores_log10_k": null,
+      "temperature_units": "kelvin",
+      "tmax_k": 2000.0,
+      "tmin_k": 300.0
+     }
+    ],
+    "id_rank": 1,
+    "kind": "computed",
+    "pmax_bar": 100.0,
+    "pmin_bar": 0.01,
+    "protocol": null,
+    "protocol_state": "absent",
+    "review_status": "not_reviewed",
+    "solve_ref": "nsolve_wfjeychoerzvp2yh3tmw7nkmpu",
+    "target": {
+     "bath_scope": "specified_collider",
+     "boundaries": [
+      {
+       "kind": "absorbing",
+       "state_key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+     ],
+     "claim_origin": "source_publication",
+     "outputs": [],
+     "partition": {
+      "eliminated": [],
+      "lumps": [],
+      "retained": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      ]
+     },
+     "product_sets": [],
+     "regime": {
+      "initial_state_keys": [],
+      "kind": "time_independent"
+     },
+     "validity": {
+      "pressure_max_bar": 100.0,
+      "pressure_min_bar": 0.01,
+      "temperature_max_k": 2000.0,
+      "temperature_min_k": 300.0
+     },
+     "version": 1
+    },
+    "target_state": "valid",
+    "tmax_k": 2000.0,
+    "tmin_k": 300.0,
+    "validation": null,
+    "validation_state": "absent"
+   },
+   {
+    "bath": [
+     [
+      "spe_qxamvwzpo7gxkh7tztixg7kfvm",
+      1.0
+     ]
+    ],
+    "created_at": "2026-10-18T14:02:38.360246",
+    "determinations": [
+     {
+      "channel_key": "assoc",
+      "determination_key": "cites_hidden",
+      "determination_ref": "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+      "id_rank": 2,
+      "observable": {
+       "coefficient_basis": "kernel",
+       "degeneracy_applied": true,
+       "observable": "product_resolved_coefficient",
+       "reaction_order": 2,
+       "version": 1
+      },
+      "observable_state": "valid"
+     }
+    ],
+    "fits": [
+     {
+      "channel_key": "assoc",
+      "chebyshev": null,
+      "content_digest": "2de5326ba4ccd4e22703f2a50707223e56e0b4d14a5e3fdc13be80d6a4752b53",
+      "determination_ref": "nkdet_pqceiyah6mzkykcbm5b6e2urte",
+      "fit_ref": "nkin_ct263ibhe5w3xg6ltuw5ntp4fi",
+      "id_rank": 2,
+      "model_kind": "plog",
+      "plog_finite": true,
+      "plog_pressures_bar": [
+       0.1,
+       1.0,
+       10.0
+      ],
+      "plog_units": [
+       "cm3_mol_s",
+       "cm3_mol_s",
+       "cm3_mol_s"
+      ],
+      "pmax_bar": 10.0,
+      "pmin_bar": 0.1,
+      "point_cells": [],
+      "point_values_finite": true,
+      "pressure_units": "bar",
+      "rate_units": "cm3_mol_s",
+      "representation": {
+       "fit_origin": "solver_output",
+       "key": "plog1",
+       "version": 1
+      },
+      "representation_role": "complete",
+      "representation_state": "valid",
+      "stores_log10_k": null,
+      "temperature_units": "kelvin",
+      "tmax_k": 2000.0,
+      "tmin_k": 300.0
+     }
+    ],
+    "id_rank": 2,
+    "kind": "computed",
+    "pmax_bar": 100.0,
+    "pmin_bar": 0.01,
+    "protocol": null,
+    "protocol_state": "absent",
+    "review_status": "approved",
+    "solve_ref": "nsolve_37c6m5gedd2ykcu35v5cyobt6q",
+    "target": {
+     "bath_scope": "specified_collider",
+     "boundaries": [
+      {
+       "kind": "absorbing",
+       "state_key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+     ],
+     "claim_origin": "source_publication",
+     "outputs": [],
+     "partition": {
+      "eliminated": [],
+      "lumps": [],
+      "retained": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      ]
+     },
+     "product_sets": [],
+     "regime": {
+      "initial_state_keys": [],
+      "kind": "time_independent"
+     },
+     "validity": {
+      "pressure_max_bar": 100.0,
+      "pressure_min_bar": 0.01,
+      "temperature_max_k": 2000.0,
+      "temperature_min_k": 300.0
+     },
+     "version": 1
+    },
+    "target_state": "valid",
+    "tmax_k": 2000.0,
+    "tmin_k": 300.0,
+    "validation": {
+     "entries": [
+      {
+       "channel_keys": [],
+       "domain": {
+        "pressure_max_bar": 100.0,
+        "pressure_min_bar": 0.01,
+        "temperature_max_k": 2000.0,
+        "temperature_min_k": 300.0
+       },
+       "initialization": null,
+       "kind": "model_fidelity",
+       "limitations": null,
+       "metric": null,
+       "reference_dataset": null,
+       "reference_solve_ref": "nsolve_wfjeychoerzvp2yh3tmw7nkmpu",
+       "value": null,
+       "window": null
+      }
+     ],
+     "version": 1
+    },
+    "validation_state": "valid"
+   },
+   {
+    "bath": [
+     [
+      "spe_qxamvwzpo7gxkh7tztixg7kfvm",
+      1.0
+     ]
+    ],
+    "created_at": "2026-10-18T14:02:38.360246",
+    "determinations": [
+     {
+      "channel_key": "assoc",
+      "determination_key": "cites_nothing",
+      "determination_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+      "id_rank": 3,
+      "observable": {
+       "coefficient_basis": "kernel",
+       "degeneracy_applied": true,
+       "observable": "product_resolved_coefficient",
+       "reaction_order": 2,
+       "version": 1
+      },
+      "observable_state": "valid"
+     }
+    ],
+    "fits": [
+     {
+      "channel_key": "assoc",
+      "chebyshev": null,
+      "content_digest": "2de5326ba4ccd4e22703f2a50707223e56e0b4d14a5e3fdc13be80d6a4752b53",
+      "determination_ref": "nkdet_njrkbhfuussdr2vnojffgx7p4u",
+      "fit_ref": "nkin_pagu5osd6kjhmydr7eso6gu62q",
+      "id_rank": 3,
+      "model_kind": "plog",
+      "plog_finite": true,
+      "plog_pressures_bar": [
+       0.1,
+       1.0,
+       10.0
+      ],
+      "plog_units": [
+       "cm3_mol_s",
+       "cm3_mol_s",
+       "cm3_mol_s"
+      ],
+      "pmax_bar": 10.0,
+      "pmin_bar": 0.1,
+      "point_cells": [],
+      "point_values_finite": true,
+      "pressure_units": "bar",
+      "rate_units": "cm3_mol_s",
+      "representation": {
+       "fit_origin": "solver_output",
+       "key": "plog1",
+       "version": 1
+      },
+      "representation_role": "complete",
+      "representation_state": "valid",
+      "stores_log10_k": null,
+      "temperature_units": "kelvin",
+      "tmax_k": 2000.0,
+      "tmin_k": 300.0
+     }
+    ],
+    "id_rank": 3,
+    "kind": "computed",
+    "pmax_bar": 100.0,
+    "pmin_bar": 0.01,
+    "protocol": null,
+    "protocol_state": "absent",
+    "review_status": "approved",
+    "solve_ref": "nsolve_n2an37rg5mrnry6ytwwi2rhgti",
+    "target": {
+     "bath_scope": "specified_collider",
+     "boundaries": [
+      {
+       "kind": "absorbing",
+       "state_key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+     ],
+     "claim_origin": "source_publication",
+     "outputs": [],
+     "partition": {
+      "eliminated": [],
+      "lumps": [],
+      "retained": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      ]
+     },
+     "product_sets": [],
+     "regime": {
+      "initial_state_keys": [],
+      "kind": "time_independent"
+     },
+     "validity": {
+      "pressure_max_bar": 100.0,
+      "pressure_min_bar": 0.01,
+      "temperature_max_k": 2000.0,
+      "temperature_min_k": 300.0
+     },
+     "version": 1
+    },
+    "target_state": "valid",
+    "tmax_k": 2000.0,
+    "tmin_k": 300.0,
+    "validation": {
+     "entries": [
+      {
+       "channel_keys": [],
+       "domain": {
+        "pressure_max_bar": 100.0,
+        "pressure_min_bar": 0.01,
+        "temperature_max_k": 2000.0,
+        "temperature_min_k": 300.0
+       },
+       "initialization": null,
+       "kind": "model_fidelity",
+       "limitations": null,
+       "metric": null,
+       "reference_dataset": null,
+       "reference_solve_ref": null,
+       "reference_withheld": true,
+       "value": null,
+       "window": null
+      }
+     ],
+     "version": 1
+    },
+    "validation_state": "valid"
+   }
+  ],
+  "visibility": {
+   "read_profile": "exploratory",
+   "recommendation": "none",
+   "review_statuses_observed": [
+    "approved",
+    "not_reviewed"
+   ]
+  }
+ },
+ "hidden_solve_ref": "nsolve_wfjeychoerzvp2yh3tmw7nkmpu"
+}

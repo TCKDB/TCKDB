@@ -43,6 +43,7 @@ from app.db.models.structure_determination import StructureDetermination, Struct
 from app.db.models.transition_state import TransitionStateEntry
 from app.services.monatomic import subject_atom_count
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.ref_guard import unavailable_refs
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.statmech_selection.bounds import (
     check_candidates,
@@ -451,6 +452,10 @@ def load_population(session: Session, scan: PopulationScan, request: StatmechReq
         m.conformer_group_id for d in declarations for m in d.members if m.conformer_group_id is not None
     }
     group_refs.update(_refs(session, ConformerGroup, declared_group_ids - set(group_refs)))
+    # Hidden == unknown. A group the reader cannot open is not evidence of anything: a record anchored only in it reads as
+    # unanchored and a member declared in it reads as stating no group (as a reference to nothing does). The group a
+    # declaration is ABOUT is its target, not evidence; that one stays and is a placeholder token.
+    unavailable_groups = unavailable_refs(session, set(group_refs.values()))
     fsf_ids = {s.frequency_scale_factor_id for d in declarations for s in d.sources if s.frequency_scale_factor_id is not None}
     fsfs = {f.id: f for f in session.scalars(select(FrequencyScaleFactor).where(FrequencyScaleFactor.id.in_(fsf_ids)))} if fsf_ids else {}
     literature_ids = {s.literature_id for d in declarations for s in d.sources if s.literature_id is not None}
@@ -500,7 +505,9 @@ def load_population(session: Session, scan: PopulationScan, request: StatmechReq
             {
                 group_refs[observation_group[cid]]
                 for _, cid in ((s.role, s.calculation_id) for s in r.source_calculations)
-                if cid in observation_group and observation_group[cid] in group_refs
+                if cid in observation_group
+                and observation_group[cid] in group_refs
+                and group_refs[observation_group[cid]] not in unavailable_groups
             }
         )
         record = RecordFacts(
@@ -538,7 +545,11 @@ def load_population(session: Session, scan: PopulationScan, request: StatmechReq
                 MemberFacts(
                     member_key=m.member_key,
                     statmech_ref=member_refs.get(m.member_statmech_id),
-                    conformer_group_ref=group_refs.get(m.conformer_group_id) if m.conformer_group_id else None,
+                    conformer_group_ref=(
+                        group_refs.get(m.conformer_group_id)
+                        if m.conformer_group_id and group_refs.get(m.conformer_group_id) not in unavailable_groups
+                        else None
+                    ),
                     counting_multiplicity=m.counting_multiplicity,
                     relative_energy_kj_mol=m.relative_energy_kj_mol,
                     region_key=m.region_key,

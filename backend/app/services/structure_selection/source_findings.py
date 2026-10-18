@@ -38,7 +38,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import CalculationInputGeometry, CalculationOutputGeometry
+from app.db.models.common import SubmissionRecordType
 from app.db.models.structure_determination import StructureDetermination, StructureDeterminationSource
+from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.profile import current_read_profile
 from app.services.structure_selection.assessment import (
     CURVATURE_SIDE,
     ENERGY_SIDE,
@@ -95,22 +98,22 @@ class _Context:
     determinations: dict[int, list[tuple[int, str, int]]] = field(default_factory=lambda: defaultdict(list))
 
 
-def thermo_uses(thermo) -> list[SourceUse]:
-    """The uses a loaded thermo record's source links make of their calculations."""
+def thermo_uses(thermo, unavailable: frozenset[str] = frozenset()) -> list[SourceUse]:
+    """The uses a loaded thermo record's source links make of their calculations (not of an unavailable one)."""
     out: list[SourceUse] = []
     for link in thermo.source_calculations:
         roles = THERMO_ROLES.get(link.role.value)
-        if roles is not None and link.calculation is not None:
+        if roles is not None and link.calculation is not None and link.calculation.public_ref not in unavailable:
             out.append(SourceUse(link.calculation_id, link.calculation.type.value, link.role.value, roles))
     return out
 
 
-def kinetics_uses(kinetics) -> list[SourceUse]:
+def kinetics_uses(kinetics, unavailable: frozenset[str] = frozenset()) -> list[SourceUse]:
     """The uses a loaded kinetics record's source links make of their calculations."""
     out: list[SourceUse] = []
     for link in kinetics.source_calculations:
         roles = KINETICS_ROLES.get(link.role.value)
-        if roles is not None and link.calculation is not None:
+        if roles is not None and link.calculation is not None and link.calculation.public_ref not in unavailable:
             out.append(SourceUse(link.calculation_id, link.calculation.type.value, link.role.value, roles))
     return out
 
@@ -148,18 +151,57 @@ def _context(session: Session, calc_ids: set[int]) -> _Context:
         )
     ):
         ctx.geometries[calc_id]["output"].add(geometry_id)
-    for calc_id, determination_id, role, evaluated in session.execute(
+    rows = session.execute(
         select(
             StructureDeterminationSource.calculation_id,
             StructureDeterminationSource.determination_id,
             StructureDeterminationSource.role,
             StructureDetermination.evaluated_geometry_id,
+            StructureDetermination.conformer_observation_id,
+            StructureDetermination.transition_state_entry_id,
         )
         .join(StructureDetermination, StructureDetermination.id == StructureDeterminationSource.determination_id)
         .where(StructureDeterminationSource.calculation_id.in_(calc_ids))
-    ):
-        ctx.determinations[calc_id].append((determination_id, role.value, evaluated))
+    ).all()
+    shown = _determinations_the_profile_shows(session, rows)
+    for calc_id, determination_id, role, evaluated, _observation, _entry in rows:
+        if determination_id in shown:
+            ctx.determinations[calc_id].append((determination_id, role.value, evaluated))
     return ctx
+
+
+def _determinations_the_profile_shows(session: Session, rows) -> set[int]:
+    """The determinations among ``rows`` the read profile lets the reader open (hidden == unknown).
+
+    A determination the profile hides is no evidence about its source calculation: a live finding on it must not block a
+    visible record that merely shares that calculation. A determination belongs to its conformer observation (a basin)
+    or its transition-state entry (a saddle); either being hidden hides it, the same rule the structure loader and the
+    relative-energy population apply. Without a review floor every determination is shown (nothing is queried).
+    """
+    everything = {determination_id for _, determination_id, *_ in rows}
+    if current_read_profile().review_floor is None:
+        return everything
+    shown = frozenset(visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True))
+    observations = {o for *_, o, _ in rows if o is not None}
+    entries = {e for *_, e in rows if e is not None}
+    seen_observation = (
+        fetch_review_badges(session, record_type=SubmissionRecordType.conformer_observation, record_ids=observations)
+        if observations
+        else {}
+    )
+    seen_entry = (
+        fetch_review_badges(session, record_type=SubmissionRecordType.transition_state_entry, record_ids=entries)
+        if entries
+        else {}
+    )
+    out: set[int] = set()
+    for _, determination_id, _role, _evaluated, observation, entry in rows:
+        if observation is not None and seen_observation[observation].status not in shown:
+            continue
+        if entry is not None and seen_entry[entry].status not in shown:
+            continue
+        out.add(determination_id)
+    return out
 
 
 def assess_source_findings(

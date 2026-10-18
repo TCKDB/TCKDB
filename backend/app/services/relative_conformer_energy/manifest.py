@@ -293,6 +293,9 @@ def replay_matches(manifest: dict[str, Any]) -> bool:
 
 COMPARISON_MANIFEST_FORMAT = "relative_conformer_energy_comparison_manifest"
 COMPARISON_MANIFEST_FORMAT_VERSION = 1
+#: Earlier relative-energy versions a comparison manifest may record and still replay (its two runs are manifests of that
+#: version). Version 1 is not among them: a comparison never existed under it.
+_COMPARISON_LEGACY_VERSIONS = frozenset({"2"})
 _RUNS = ("candidate", "reference")
 
 
@@ -347,6 +350,8 @@ def replay_comparison(manifest: dict[str, Any]) -> dict[str, Any]:
         raise ReplayError("unsupported_manifest_format", f"unknown manifest format {manifest.get('manifest_format')!r}")
     versions = manifest.get("versions") or {}
     for name, value in {**_versions(), "comparison": COMPARISON_VERSION}.items():
+        if name == "relative_energy" and versions.get(name) in _COMPARISON_LEGACY_VERSIONS:
+            continue  # the previous version, whose runs are version-2 manifests (checked against it below)
         if versions.get(name) != value:
             raise ReplayError(
                 "unsupported_semantic_version",
@@ -377,7 +382,8 @@ def replay_comparison(manifest: dict[str, Any]) -> dict[str, Any]:
         if first["population"].get(key) != second["population"].get(key):
             raise ReplayError("inconsistent_manifest", "the two runs were not made over one population")
     for name in _RUNS:
-        if runs[name].get("versions") != _canon(_versions()):
+        # Both runs are made under the comparison's own relative-energy version (the current one, or the previous one).
+        if runs[name].get("versions") != _canon({**_versions(), "relative_energy": versions["relative_energy"]}):
             raise ReplayError("inconsistent_manifest", f"the {name} run was made under another semantic version")
     replayed = {name: replay_relative_energies(runs[name]) for name in _RUNS}
     result = _canon(

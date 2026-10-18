@@ -42,7 +42,12 @@ from app.db.models.common import (
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import ReactionEntry
 from app.services.kinetics_selection.assessment import assess_candidate
-from app.services.kinetics_selection.loader import _LOAD_OPTIONS, load_subject, normalize_rows
+from app.services.kinetics_selection.loader import (
+    _LOAD_OPTIONS,
+    load_subject,
+    normalize_rows,
+    unavailable_evidence,
+)
 from app.services.kinetics_selection.models import (
     MAX_CANDIDATES,
     ColliderRequest,
@@ -55,6 +60,7 @@ from app.services.kinetics_selection.models import (
 from app.services.kinetics_selection.rules import default_rules
 from app.services.scientific_read.common import fetch_review_badges
 from app.services.selection_kernel import Applicability
+from app.services.selection_kernel.evidence_view import evidence_subject
 from app.services.structure_selection.source_findings import assess_source_findings, kinetics_uses
 from app.services.trust import evaluate_loaded_kinetics
 
@@ -194,8 +200,9 @@ def kinetics_coverage_inventory(session: Session, *, batch_size: int = 100) -> d
             ids = [k.id for k in rows]
             badges = fetch_review_badges(session, record_type=SubmissionRecordType.kinetics, record_ids=ids)
             statuses: dict[int, RecordReviewStatus] = {i: badges[i].status for i in ids}
-            normalized = normalize_rows(session, entry, rows, statuses)
-            source_findings = assess_source_findings(session, {k.id: kinetics_uses(k) for k in rows})
+            unavailable = unavailable_evidence(session, rows)
+            normalized = normalize_rows(session, entry, rows, statuses, unavailable)
+            source_findings = assess_source_findings(session, {k.id: kinetics_uses(k, unavailable) for k in rows})
             entries += 1
             any_applicable = False
             subject = None
@@ -219,7 +226,7 @@ def kinetics_coverage_inventory(session: Session, *, batch_size: int = 100) -> d
                     reasons[NOT_STATED] += 1
                     continue
                 evidence = (
-                    evaluate_loaded_kinetics(k) if k.scientific_origin is ScientificOriginKind.computed else None
+                    evaluate_loaded_kinetics(evidence_subject(k, unavailable)) if k.scientific_origin is ScientificOriginKind.computed else None
                 )
                 assessment = assess_candidate(c, request=request, evidence=evidence, source_findings=source_findings[k.id])
                 applicability[assessment.applicability.value] += 1

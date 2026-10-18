@@ -20,12 +20,15 @@ class GuardSpy:
         self.unplaceable: tuple[str, str, str] | None = None
         self.route_paths: list[str] = []
         self.applied_reports: list[ref_guard.WithholdReport] = []
+        #: The request's guard context, so the selection documents that passed the loader to engine seam are counted.
+        self.context: ref_guard.RefGuardContext | None = None
 
     def reset(self) -> None:
         self.reached = False
         self.unplaceable = None
         self.route_paths = []
         self.applied_reports = []
+        self.context = None
 
 
 def install_spy(monkeypatch) -> GuardSpy:
@@ -66,6 +69,18 @@ def install_spy(monkeypatch) -> GuardSpy:
         return report
 
     monkeypatch.setattr(ref_guard, "withhold_in_document", document_wrapper)
+
+    # A selection document never reaches that hook: it passes the loader to engine seam inside the service. The request's
+    # own context counts those, so the spy keeps a handle on it.
+    from app.api.routes.scientific import _profile
+
+    real_set = _profile.set_ref_guard_context
+
+    def record_context(ctx):
+        spy.context = ctx
+        return real_set(ctx)
+
+    monkeypatch.setattr(_profile, "set_ref_guard_context", record_context)
     return spy
 
 
@@ -109,7 +124,12 @@ def run_pass(client, db_session, specs, world, spy: GuardSpy, *, profile: str, w
                 except ref_guard.RefGuardUnplaceable:
                     result = Result(500, "")
                 result.statements = len(statements) - before
-                result.reached = spy.reached
+                documents = spy.context.documents if spy.context is not None else 0
+                result.documents = documents
+                result.document_tokens = sorted(
+                    token for report in (spy.context.document_reports if spy.context is not None else []) for token in report.tokens.values()
+                )
+                result.reached = spy.reached or documents > 0
                 result.unplaceable = spy.unplaceable
                 result.spy_paths = list(spy.route_paths)
                 result.applied_sites = [site for report in spy.applied_reports for site in report.sites]

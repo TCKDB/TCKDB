@@ -243,7 +243,7 @@ def test_a_forged_input_is_caught_by_its_checksum_and_a_resealed_one_by_the_reco
 @pytest.mark.parametrize(
     ("path", "value", "code"),
     [
-        (("manifest_format_version",), 2, "unsupported_manifest_format"),
+        (("manifest_format_version",), 99, "unsupported_manifest_format"),
         (("versions", "assessment"), "2", "unsupported_semantic_version"),
         (("versions", "normalizer"), "9", "unsupported_semantic_version"),
         (("versions", "decision"), "2", "unsupported_semantic_version"),

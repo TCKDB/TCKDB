@@ -35,7 +35,9 @@ from app.services.kinetics_selection.models import (
     Reason,
 )
 from app.services.read_snapshot import begin_read_snapshot
+from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.selection_kernel import Applicability
+from app.services.selection_kernel.evidence_view import evidence_subject
 from app.services.structure_selection.source_findings import assess_source_findings, kinetics_uses
 from app.services.trust import evaluate_loaded_kinetics
 
@@ -104,13 +106,17 @@ def assess_reaction_entry_kinetics(
     scan = scan_population(session, reaction_entry_id=reaction_entry_id, request=request)
     excluded = _excluded_refs(session, scan)
     loaded = load_population(session, scan)
+    # The loader to engine seam (guard PR-3): a hidden ref in the captured facts becomes a placeholder token BEFORE any
+    # record is assessed, grouped or decided, so every equality the assessment reads (the determination's network and
+    # the record's own channel, a solve shared by alternate fits) survives under the tokens.
+    loaded.subject, loaded.candidates = withhold_selection_facts(session, (loaded.subject, loaded.candidates))
 
     assessments: list[KineticsAssessment] = []
     eligible = []
-    source_findings = assess_source_findings(session, {k.id: kinetics_uses(k) for k in loaded.rows})
+    source_findings = assess_source_findings(session, {k.id: kinetics_uses(k, loaded.unavailable) for k in loaded.rows})
     for kinetics in loaded.rows:
         evidence = (
-            evaluate_loaded_kinetics(kinetics) if kinetics.scientific_origin is ScientificOriginKind.computed else None
+            evaluate_loaded_kinetics(evidence_subject(kinetics, loaded.unavailable)) if kinetics.scientific_origin is ScientificOriginKind.computed else None
         )
         normalized = loaded.candidates[kinetics.id]
         assessment = assess_candidate(

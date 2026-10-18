@@ -45,7 +45,10 @@ POLICY_VERSION = "2"
 #: (``structure_selection.source_findings``). A manifest with no block was made under ``pre_v2_assessment``.
 ASSESSMENT_SEMANTICS_VERSION = "2"
 SUPPORTED_ASSESSMENT_SEMANTICS = frozenset({"pre_v2_assessment", ASSESSMENT_SEMANTICS_VERSION})
-MANIFEST_FORMAT_VERSION = 1
+#: 2: a hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor (guard
+#: PR-3). A format-1 manifest, made before that, still replays: its refs are the real ones and replay never reads them.
+MANIFEST_FORMAT_VERSION = 2
+SUPPORTED_MANIFEST_FORMATS = frozenset({1, MANIFEST_FORMAT_VERSION})
 
 
 @dataclass(frozen=True)

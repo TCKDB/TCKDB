@@ -63,6 +63,7 @@ from app.db.models.common import (
 )
 from app.services.record_review import ensure_record_review, set_record_review_status
 from app.services.scientific_record_supersession import supersede_scientific_record
+from tests.api.scientific._curated_sweep_selection_world import extend_for_selection_documents
 from tests.services.scientific_read._factories import (
     attach_artifact,
     attach_conformer_selection,
@@ -477,8 +478,12 @@ def build_sweep_world(session) -> SweepWorld:
     # ---- PR-4: the export streams ---------------------------------------------------------------------------------------
     _extend_for_export_family(session, w, lot=lot, rxe=rxe, r1=r1, r2=r2, tse_v2=tse_v2)
 
+    # ---- guard PR-3: the selection documents (thermo, kinetics, network, structure, statmech, relative energies) ------
+    ext["session"] = session
+    extend_for_selection_documents(session, w, lot=lot, lit=lit, sa=sa)
+
     # ---- review states: hidden ones first (under_review for some), approvals last ---------------------------------
-    under_review_keys = {"cg_h", "ts_h", "sm_h", "net_h", "kin_h", "tse_h"}
+    under_review_keys = {"cg_h", "ts_h", "sm_h", "net_h", "kin_h", "tse_h", "nsolve_hsel"}
     kind_to_type = {
         "calc": R.calculation,
         "sm": R.statmech,
@@ -495,8 +500,8 @@ def build_sweep_world(session) -> SweepWorld:
     }
     for key, row in hid.items():
         kind = key.split("_", 1)[0]
-        if kind == "nkin" or key in ("thm_h", "kin_h"):
-            continue  # nkin is reviewed through its solve; thm_h and kin_h are moved by the supersession blocks below
+        if kind == "nkin" or key in ("thm_h", "kin_h", "sm_hsucc"):
+            continue  # nkin is reviewed through its solve; thm_h, kin_h and sm_hsucc are moved by the supersession blocks below
         _hide(session, kind_to_type[kind], row, under_review=key in under_review_keys)
 
     # Scoping parents are approved too: some reads (structure selection) gate the entry they are scoped to.
@@ -515,7 +520,7 @@ def build_sweep_world(session) -> SweepWorld:
     # service, because it is also the legacy superseded record.
     for key, row in vis.items():
         kind = key.split("_", 1)[0]
-        if kind == "nkin" or key in ("thm_v", "kin_vs"):
+        if kind == "nkin" or key in ("thm_v", "kin_vs", "sm_vsup"):
             continue
         _approve(session, kind_to_type[kind], row)
 
@@ -565,6 +570,27 @@ def build_sweep_world(session) -> SweepWorld:
     )
     session.expire_all()
     set_record_review_status(session, record_type=R.kinetics, record_id=kin_h.id, status=UNDER_REVIEW, actor=curator)
+
+    # The same legacy edge for statmech (guard PR-3): an approved predecessor whose supersession notice names a hidden
+    # successor, so a statmech selection candidate carries that ref in its notice.
+    sm_vsup, sm_hsucc = vis["sm_vsup"], hid["sm_hsucc"]
+    for row in (sm_vsup, sm_hsucc):
+        ensure_record_review(session, record_type=R.statmech, record_id=row.id)
+        set_record_review_status(session, record_type=R.statmech, record_id=row.id, status=APPROVED, actor=curator)
+    supersede_scientific_record(
+        session,
+        record_type=R.statmech,
+        superseded_record_id=sm_vsup.id,
+        superseding_record_id=sm_hsucc.id,
+        actor=curator,
+        reason="legacy edge: approved predecessor names a hidden successor",
+    )
+    session.execute(
+        text("UPDATE record_review SET status = 'approved' WHERE record_type = 'statmech' AND record_id = :id"),
+        {"id": sm_vsup.id},
+    )
+    session.expire_all()
+    set_record_review_status(session, record_type=R.statmech, record_id=sm_hsucc.id, status=UNDER_REVIEW, actor=curator)
     return w
 
 

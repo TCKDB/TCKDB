@@ -63,7 +63,10 @@ from app.services.structure_selection.rules import (
     validate_replay_rules,
 )
 
-MANIFEST_FORMAT_VERSION = 1
+#: 2: a hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor (guard
+#: PR-3). A format-1 manifest, made before that, still replays: replay only compares the refs it is given with each other.
+MANIFEST_FORMAT_VERSION = 2
+SUPPORTED_MANIFEST_FORMATS = frozenset({1, MANIFEST_FORMAT_VERSION})
 
 INTEGRITY_NOTE = (
     "sha256 checksums over the canonical JSON of each normalised input and of the whole manifest; they detect "
@@ -194,7 +197,7 @@ def build_manifest(
 
 
 def _check_versions(manifest: dict[str, Any]) -> None:
-    if manifest.get("manifest_format_version") != MANIFEST_FORMAT_VERSION:
+    if manifest.get("manifest_format_version") not in SUPPORTED_MANIFEST_FORMATS:
         raise ReplayError("unsupported_manifest_format", f"unknown manifest format {manifest.get('manifest_format_version')!r}")
     versions = manifest.get("versions") or {}
     running = {

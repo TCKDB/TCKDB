@@ -168,7 +168,7 @@ def test_the_manifest_records_what_a_reader_needs_to_audit_the_decision(db_sessi
 @pytest.mark.parametrize(
     "tamper,message",
     [
-        (lambda m: m.update(manifest_format_version=2), "unknown manifest format"),
+        (lambda m: m.update(manifest_format_version=99), "unknown manifest format"),
         (lambda m: m["policy"].update(version="2"), "this registry replays"),
         (lambda m: m["policy"].update(name="h298_method_preferred"), "this registry replays"),
         (lambda m: m["decision"]["rules"][0].update(version="9"), "not in the running registry"),

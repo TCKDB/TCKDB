@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from app.services.scientific_read import ref_guard
 from tests.api.scientific._curated_sweep_world import SweepWorld
 
 BASELINE_PATH = Path(__file__).with_name("curated_ref_sweep_baseline.json")
@@ -95,6 +97,9 @@ POPULATION_KEYS = frozenset(
         "distinct_software_count",
         "partial_sources",
         "has_channel_barriers",
+        # A candidate's ordinal among the population's own (guard PR-3): it stands in for the database id as the last
+        # tie-break. The population is the profile's, so the same record has another ordinal under curated.
+        "id_rank",
     }
 )
 
@@ -307,7 +312,24 @@ def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
                 return [f"{path}[*]<element not in exploratory list>"]
             i += 1
         return []
-    return [] if exp == cur else [f"{path}<value changed>"]
+    return [] if _same_modulo_placeholders(exp, cur) else [f"{path}<value changed>"]
+
+
+#: A hidden ref inside a selection document is a placeholder token (guard PR-3), so a curated string that differs from
+#: the exploratory one only where a token stands in a ref's place is a withholding, not a different value.
+_TOKEN = re.compile(r"withheld:[1-9][0-9]*")
+_GATED_REF = re.compile("(?:" + "|".join(ref_guard.GATED_TYPES) + ")_[a-z0-9]{26}")
+
+
+def _same_modulo_placeholders(exp: Any, cur: Any) -> bool:
+    if exp == cur:
+        return True
+    if isinstance(exp, str) and isinstance(cur, str):
+        if cur == "":
+            return _GATED_REF.search(exp) is not None  # free text that named a hidden ref is blanked whole
+        masked = _TOKEN.sub("<ref>", cur)
+        return masked != cur and masked == _GATED_REF.sub("<ref>", exp)
+    return False
 
 
 #: Routes whose default order sorts on the availability flags (``has_kinetics``, ``has_transition_state``). Those flags

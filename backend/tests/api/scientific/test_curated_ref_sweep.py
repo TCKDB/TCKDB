@@ -52,36 +52,35 @@ from tests.api.scientific._curated_sweep_world import GATED_KINDS, build_sweep_w
 
 BASE = "/api/v1/scientific"
 
-#: Routes in the sweep that do not return through ``apply_internal_ids_visibility``, so the boundary hook never sees
-#: them today. Each names the PR that gives it a seam. A route that starts reaching the hook while listed here fails
-#: the test (delete the entry); one that stops reaching it without being listed fails too.
-KNOWN_UNGUARDED: dict[tuple[str, str], str] = {
-    **{
-        ("POST", f"{BASE}/{root}/select{suffix}"): "stamps the profile and returns; PR-3 adds the selection seam"
+#: Routes in the sweep that reach neither the response boundary nor a document seam, each with the PR that gives it one.
+#: Empty since guard PR-3 (the selection documents) and PR-4 (the export streams). A route that starts reaching the guard
+#: while listed here fails the test (delete the entry); one that stops reaching it without being listed fails too.
+KNOWN_UNGUARDED: dict[tuple[str, str], str] = {}
+
+#: Routes whose answer is a DECISION over a population: a selection, its manifest, and what is exported from one. The
+#: population is the profile's, and evidence that points at a record the reader cannot open reads as unavailable (hidden
+#: == unknown), so under curated the decision itself (outcome, selected node, ordinals, checksums, advisories keyed by
+#: candidate) legitimately differs from the exploratory one, and "curated is a withholding of exploratory" is not the
+#: property. The property for these is hidden == absent: the curated selection over a world equals the exploratory
+#: selection over the same world with the hidden records never created, which
+#: ``tests/services/scientific_read/test_selection_hidden_equals_absent.py`` proves per engine. What stays checked here,
+#: for these routes too: no hidden ref anywhere (the ref ratchet), and the seam was crossed.
+SELECTION_DOCUMENT_ROUTES = frozenset(
+    {
+        ("POST", f"{BASE}/{root}/select{suffix}")
         for root in (
             "reaction-entries/{reaction_entry_ref}/kinetics",
             "species-entries/{species_entry_ref}/thermo",
             "species-entries/{species_entry_ref}/calculations",
             "species-entries/{species_entry_ref}/conformers",
             "transition-state-entries/{transition_state_entry_ref}/evidence",
+            "networks/{network_ref}/kinetics",
+            "statmech",
         )
         for suffix in ("", "/manifest")
-    },
-    **{
-        (
-            "POST",
-            f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies{suffix}",
-        ): "stamps the profile and returns; guard PR-3 adds run_relative_energies to the selection seam"
-        for suffix in ("", "/manifest")
-    },
-    **{
-        (
-            "POST",
-            f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/compare{suffix}",
-        ): "stamps the profile and returns; guard PR-3 withholds at the engine seam (the comparison runs the same engine)"
-        for suffix in ("", "/manifest")
-    },
-}
+    }
+    | {("POST", f"{BASE}/networks/{{network_ref}}/kinetics/export-selected")}
+)
 
 #: The relative-energy routes, and the only two coverage counts that differ between profiles there: a hidden conformer
 #: group is not in the compared population under curated, so it is not counted. Scoped to these routes and these keys
@@ -222,6 +221,23 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     "thm_h_g": {_X_ND},
     "kin_h": {f"{BASE}/reaction-entries/{{reaction_entry_id}}/kinetics", _FULL, _LIT, _X_MLR, _X_ND},
     "mpo_h": {f"{_SPE}/observations"},
+    # The selection world (guard PR-3): the hidden solve a visible solve cites as its model-fidelity reference, and the
+    # hidden successor a visible statmech's supersession notice names.
+    "nsolve_hsel": {
+        f"{BASE}/network-kinetics/search",
+        f"{BASE}/network-solves/search",
+        f"{BASE}/networks/browse",
+        f"{BASE}/networks/search",
+        f"{BASE}/networks/{{network_ref}}/kinetics/select",
+        f"{BASE}/networks/{{network_ref}}/kinetics/select/manifest",
+    },
+    "sm_hsucc": {
+        f"{BASE}/analytics/statmech",
+        f"{_SPE}/statmech",
+        f"{BASE}/statmech/search",
+        f"{BASE}/statmech/select",
+        f"{BASE}/statmech/select/manifest",
+    },
 }
 
 
@@ -380,6 +396,8 @@ def test_curated_sweep_report_and_ratchet(client, db_session, login_as, monkeypa
     for (route, label), c in curated.items():
         if route in EXPECTED_CURATED_STATUS:
             continue  # the curated answer is a different status by design; its leak is in the ref ratchet
+        if route in SELECTION_DOCUMENT_ROUTES:
+            continue  # see SELECTION_DOCUMENT_ROUTES: the substitution check for these is made at the engine
         e = exploratory[(route, label)]
         ekind, eobj = parse_body(e.text)
         ckind, cobj = parse_body(c.text)
