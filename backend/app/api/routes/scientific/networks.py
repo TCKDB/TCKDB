@@ -47,6 +47,7 @@ from app.schemas.reads.scientific_network_solve_search import (
     NetworkSolveSearchRequest,
     ScientificNetworkSolveSearchResponse,
 )
+from app.services.scientific_read import internal_ids
 from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
@@ -292,12 +293,15 @@ def scientific_network_kinetics_batch_evaluate(
                 "temperature_k / pressure_bar in the JSON body."
             ),
         )
-    return evaluate_network_kinetics_batch(
+    payload = evaluate_network_kinetics_batch(
         session,
         network_handle=network_ref_or_id,
         temperatures_k=body.temperature_k,
         pressures_bar=body.pressure_bar,
     )
+    # The response has no envelope, so it does not pass ``apply_internal_ids_visibility``; the guard is called here.
+    internal_ids.withhold_for_current_request(payload)
+    return payload
 
 
 @solve_router.get(
@@ -639,9 +643,12 @@ def scientific_network_kinetics_evaluate(
     ``NetworkKineticsEvaluatedPoint`` for why), with temperature judged
     against the same ``tmin_k``/``tmax_k``.
     """
-    return evaluate_network_kinetics(
+    payload = evaluate_network_kinetics(
         session,
         network_kinetics_handle=network_kinetics_ref_or_id,
         temperatures_k=temperature_k,
         pressures_bar=pressure_bar,
     )
+    # The response has no envelope, so it does not pass ``apply_internal_ids_visibility``; the guard is called here.
+    internal_ids.withhold_for_current_request(payload)
+    return payload

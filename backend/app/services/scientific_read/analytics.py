@@ -55,7 +55,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Select, exists, func, select
+from sqlalchemy import Select, and_, exists, func, select
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError
@@ -102,10 +102,12 @@ from app.schemas.reads.scientific_common import ReviewStatusSummary
 from app.services.scientific_read.common import (
     build_pagination,
     reject_client_sort,
+    review_floor_predicate,
     validate_includes,
     validate_pagination,
     validate_temperature_range,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.handles import level_of_theory_ref_clause
 from app.services.scientific_read.internal_ids import (
@@ -440,17 +442,34 @@ _KINETICS_FILTER_FIELDS: tuple[str, ...] = (
 #: ``kinetics_interpretation_assignment.statmech_id`` is NOT NULL, so the
 #: existence of any assignment is the signal. TS provenance is the same
 #: table restricted to assignments that name a transition-state entry.
+#:
+#: Both flags rest on records the read profile may hide, so under ``profile=curated`` they are true only when the
+#: statmech (or the transition-state entry) the assignment names is shown (owner decision D5): a flag that counted a
+#: hidden one would say it exists. The default profile adds no condition.
 def _kinetics_has_statmech():
-    return exists().where(
-        KineticsInterpretationAssignment.kinetics_id == Kinetics.id
+    return where_visible(
+        exists().where(KineticsInterpretationAssignment.kinetics_id == Kinetics.id),
+        review_floor_predicate(KineticsInterpretationAssignment.statmech_id, SubmissionRecordType.statmech),
     )
 
 
 def _kinetics_has_ts():
-    return exists().where(
-        KineticsInterpretationAssignment.kinetics_id == Kinetics.id,
-        KineticsInterpretationAssignment.transition_state_entry_id.is_not(None),
+    return where_visible(
+        exists().where(
+            KineticsInterpretationAssignment.kinetics_id == Kinetics.id,
+            KineticsInterpretationAssignment.transition_state_entry_id.is_not(None),
+        ),
+        review_floor_predicate(
+            KineticsInterpretationAssignment.transition_state_entry_id, SubmissionRecordType.transition_state_entry
+        ),
     )
+
+
+def _thermo_has_statmech():
+    """``thermo.statmech_id`` names a statmech the read profile shows (the column alone under the default profile)."""
+    present = Thermo.statmech_id.is_not(None)
+    visible = review_floor_predicate(Thermo.statmech_id, SubmissionRecordType.statmech)
+    return present if visible is None else and_(present, visible)
 
 
 def search_kinetics_analytics(
@@ -782,9 +801,7 @@ def search_thermo_analytics(
         )
     if request.has_statmech_provenance is not None:
         stmt = stmt.where(
-            Thermo.statmech_id.is_not(None)
-            if request.has_statmech_provenance
-            else Thermo.statmech_id.is_(None)
+            _thermo_has_statmech() if request.has_statmech_provenance else ~_thermo_has_statmech()
         )
 
     filter_echo = _filter_echo(request, _THERMO_FILTER_FIELDS)
@@ -837,7 +854,7 @@ def _project_thermo(session: Session, page: _Page) -> list[ThermoAnalyticsRecord
             Thermo.tmax_k,
             Thermo.literature_id.is_not(None).label("has_literature"),
             Thermo.workflow_tool_release_id.is_not(None).label("has_workflow_tool"),
-            Thermo.statmech_id.is_not(None).label("has_statmech"),
+            _thermo_has_statmech().label("has_statmech"),
             Thermo.created_at,
         )
         .join(SpeciesEntry, Thermo.species_entry_id == SpeciesEntry.id)

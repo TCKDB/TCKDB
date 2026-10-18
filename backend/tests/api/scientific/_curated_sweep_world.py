@@ -71,6 +71,7 @@ from tests.services.scientific_read._factories import (
     attach_geometry_atoms,
     attach_geometry_validation,
     attach_network_kinetics_chebyshev,
+    attach_network_kinetics_plog,
     attach_network_reaction,
     attach_network_solve_source_calculation,
     attach_network_species,
@@ -467,6 +468,9 @@ def build_sweep_world(session) -> SweepWorld:
         nkin_vh=nkin_vh,
         geom_ts=geom_ts,
     )
+
+    # ---- PR-2c: the network, literature, level-of-theory, correction and analytics families -------------------------
+    _extend_for_network_and_provenance_family(session, w, lot=lot, lit=lit, sa=sa, rxe=rxe)
 
     # ---- review states: hidden ones first (under_review for some), approvals last ---------------------------------
     under_review_keys = {"cg_h", "ts_h", "sm_h", "net_h", "kin_h", "tse_h"}
@@ -988,3 +992,312 @@ def _extend_for_ts_and_reaction_family(
     attach_dependency(session, parent=calc_h_psp, child=calc_vp_opt, role=CalculationDependencyRole.optimized_from)
     vis["ts_vp"], vis["tse_vp"], vis["calc_vp_opt"] = ts_vp, tse_vp, calc_vp_opt
     hid["calc_h_psp"] = calc_h_psp
+
+
+def _extend_for_network_and_provenance_family(session, w: SweepWorld, *, lot, lit, sa, rxe) -> None:
+    """Every response shape of the network, literature, level-of-theory, correction and analytics routes (PR-2c).
+
+    Before this the world held one hidden solve under a visible network, one visible solve under a hidden network and
+    one fit on each, and every one of the family's routes "answered 200" without ever meeting the shapes the guard has
+    to place. So the world now holds, for this family:
+
+    * a hidden solve on a visible network, a visible solve on a hidden network, and a hidden solve whose fits are the
+      only ones of their kind (a PLOG fit) and whose temperature/pressure envelope reaches past every visible solve;
+      a fit is reviewed through its solve, so a hidden fit on a VISIBLE solve cannot exist (the brief's shape list
+      has one, the data model does not);
+    * channels whose microreactions and solve barriers cite a hidden transition-state entry beside a visible one and a
+      barrierless path, and a state energy whose sources are hidden calculations (the per-participant rows, the
+      zero-point calculation and the older single slot) beside visible ones;
+    * a solve's validation entry that pins a hidden solve as its reference, and source calculations that are hidden;
+    * literature cited only by hidden records, a level of theory used only by hidden calculations, an
+      energy-correction scheme and a frequency scale factor applied only to hidden records, a composite scheme bound
+      to a level of theory used only by a hidden calculation, and a visible application whose source calculation is
+      hidden;
+    * analytics rows whose provenance flags rest on hidden statmech and hidden entries.
+
+    A hidden-only level of theory is a vocabulary row (no review gate, no 404); what the guard owes it is that nothing
+    about the hidden calculations is counted or listed under it.
+    """
+    from app.db.models.common import (
+        CompositeBindingSource,
+        CompositeExtrapolationFormula,
+        CompositeSchemeKind,
+        CompositeTermOperation,
+        EnergyComponentKind,
+        EnergyCorrectionApplicationRole,
+        EnergyCorrectionConvention,
+        EnergyZeroConvention,
+    )
+    from app.db.models.composite_scheme import (
+        CompositeScheme,
+        CompositeSchemeTerm,
+        CompositeSchemeTermInput,
+        LevelOfTheoryComposite,
+    )
+    from app.db.models.kinetics import KineticsInterpretationAssignment
+    from app.db.models.network_pdep import (
+        NetworkChannel,
+        NetworkChannelMicroReaction,
+        NetworkSolveChannelBarrier,
+        NetworkSolveStateEnergy,
+        NetworkSolveStateEnergySource,
+        NetworkState,
+    )
+
+    vis, hid, ext = w.visible, w.hidden, w.extra
+    tse_h, tse_v2 = hid["tse_h"], vis["tse_v2"]
+    calc_h, calc_vopt, calc_vf = hid["calc_h"], vis["calc_vopt"], vis["calc_vf"]
+    net_v = vis["net_v"]
+    nsolve_v, nsolve_h = vis["nsolve_v"], hid["nsolve_h"]
+
+    # -- networks --------------------------------------------------------------------------------------------------
+    channel_v = session.get(NetworkChannel, vis["nkin_v"].channel_id)
+    channel_h = session.get(NetworkChannel, hid["nkin_h"].channel_id)
+    channel_vh = session.get(NetworkChannel, vis["nkin_v_under_hidden_net"].channel_id)
+    for channel in (channel_v, channel_h, channel_vh):
+        session.add_all(
+            [
+                NetworkChannelMicroReaction(
+                    channel_id=channel.id, reaction_entry_id=rxe.id, transition_state_entry_id=tse_v2.id
+                ),
+                NetworkChannelMicroReaction(
+                    channel_id=channel.id, reaction_entry_id=rxe.id, transition_state_entry_id=tse_h.id
+                ),
+                NetworkChannelMicroReaction(
+                    channel_id=channel.id, reaction_entry_id=rxe.id, transition_state_entry_id=None
+                ),
+            ]
+        )
+    session.flush()
+
+    # Barriers of the visible solve: one on a visible entry whose energy rests on a hidden calculation, one on the
+    # hidden entry.
+    for entry, source in ((tse_v2, calc_h), (tse_h, calc_vopt)):
+        session.add(
+            NetworkSolveChannelBarrier(
+                solve_id=nsolve_v.id,
+                channel_id=channel_v.id,
+                reaction_entry_id=rxe.id,
+                transition_state_entry_id=entry.id,
+                forward_barrier_kj_mol=100.0,
+                reverse_barrier_kj_mol=80.0,
+                energy_zero_convention=EnergyZeroConvention.lowest_state,
+                correction_convention=EnergyCorrectionConvention.electronic_only,
+                source_calculation_id=source.id,
+            )
+        )
+    session.flush()
+
+    # State energies of the visible solve. A: the participant's source is hidden and its zero-point calculation
+    # visible; B: the source is visible and the zero-point calculation hidden; C: only the older single slot, hidden;
+    # D: all visible.
+    state_a = session.get(NetworkState, channel_v.source_state_id)
+    state_b = session.get(NetworkState, channel_v.sink_state_id)
+    state_c = make_network_state(session, network=net_v, kind=NetworkStateKind.well, composition_hash=_hash("c-state"))
+    state_d = make_network_state(session, network=net_v, kind=NetworkStateKind.well, composition_hash=_hash("d-state"))
+    attach_network_state_participant(session, state=state_c, species_entry=sa)
+    attach_network_state_participant(session, state=state_d, species_entry=sa)
+    for state, single in ((state_a, None), (state_b, None), (state_c, calc_h), (state_d, None)):
+        session.add(
+            NetworkSolveStateEnergy(
+                solve_id=nsolve_v.id,
+                state_id=state.id,
+                energy_kj_mol=-10.0,
+                energy_zero_convention=EnergyZeroConvention.lowest_state,
+                correction_convention=EnergyCorrectionConvention.electronic_plus_zpe,
+                source_calculation_id=None if single is None else single.id,
+            )
+        )
+    session.flush()
+    for state, calc, zpe in ((state_a, calc_h, calc_vf), (state_b, calc_vopt, calc_h), (state_d, calc_vopt, calc_vf)):
+        session.add(
+            NetworkSolveStateEnergySource(
+                solve_id=nsolve_v.id,
+                state_id=state.id,
+                species_entry_id=sa.id,
+                calculation_id=calc.id,
+                zpe_calculation_id=zpe.id,
+            )
+        )
+    session.flush()
+
+    # A validation entry pinning the hidden solve; hidden and visible source calculations of the visible solve.
+    nsolve_v.validation_declaration = {
+        "version": 1,
+        "entries": [
+            {
+                "kind": "model_fidelity",
+                "metric": "max_relative_error",
+                "value": 0.1,
+                "domain": {
+                    "temperature_min_k": 300.0,
+                    "temperature_max_k": 2000.0,
+                    "pressure_min_bar": 0.01,
+                    "pressure_max_bar": 100.0,
+                },
+                "reference_solve_ref": nsolve_h.public_ref,
+            }
+        ],
+    }
+    attach_network_solve_source_calculation(
+        session, solve=nsolve_v, calculation=calc_h, role=NetworkSolveCalculationRole.fit_source
+    )
+    attach_network_solve_source_calculation(
+        session, solve=nsolve_v, calculation=calc_vf, role=NetworkSolveCalculationRole.fit_source
+    )
+    attach_network_solve_source_calculation(
+        session, solve=nsolve_h, calculation=calc_vf, role=NetworkSolveCalculationRole.fit_source
+    )
+
+    # The hidden solve alone carries a PLOG fit and the widest envelope: nothing about either may reach the network.
+    nsolve_h.tmax_k, nsolve_h.pmax_bar = 5000.0, 1000.0
+    nkin_h_plog = make_network_kinetics(
+        session,
+        channel=channel_h,
+        solve=nsolve_h,
+        model_kind=NetworkKineticsModelKind.plog,
+        rate_units=ArrheniusAUnits.cm3_mol_s,
+    )
+    attach_network_kinetics_plog(session, kinetics=nkin_h_plog)
+    hid["nkin_h_plog"] = nkin_h_plog
+    session.flush()
+
+    # A second visible solve of the visible network, with a fit, whose ONLY source calculation is hidden; and free text
+    # on the visible solve and network that names hidden records.
+    nsolve_v2 = make_network_solve(session, network=net_v, literature_id=lit.id)
+    nkin_v2 = make_network_kinetics(
+        session,
+        channel=channel_v,
+        solve=nsolve_v2,
+        model_kind=NetworkKineticsModelKind.chebyshev,
+        rate_units=ArrheniusAUnits.cm3_mol_s,
+    )
+    attach_network_kinetics_chebyshev(session, kinetics=nkin_v2)
+    vis["nsolve_v_hidden_sources"], vis["nkin_v_hidden_sources"] = nsolve_v2, nkin_v2
+    nsolve_v.note = f"fit compared with {calc_h.public_ref}"
+    net_v.description = f"see also {nsolve_h.public_ref}"
+    session.flush()
+
+    # -- levels of theory, literature, corrections, composite scheme ---------------------------------------------------
+    lot_ho = make_lot(session, method="hiddenonly", basis="def2svp")
+    lit_ho = make_literature(session, title="Cited only by hidden records")
+    ext["lot_hidden_only"], ext["literature_hidden_only"] = lot_ho, lit_ho
+    calc_h_lot = make_calculation(session, type=CalculationType.sp, species_entry_id=sa.id, lot_id=lot_ho.id)
+    calc_h_lot.literature_id = lit_ho.id
+    calc_h_lot_ts = make_calculation(
+        session, type=CalculationType.sp, transition_state_entry_id=tse_v2.id, lot_id=lot_ho.id
+    )
+    hid["calc_h_lot"], hid["calc_h_lot_ts"] = calc_h_lot, calc_h_lot_ts
+    for solve in (nsolve_v, nsolve_v2):
+        attach_network_solve_source_calculation(
+            session, solve=solve, calculation=calc_h_lot, role=NetworkSolveCalculationRole.well_energy
+        )
+    hid["trn_h"].literature_id = lit_ho.id
+    hid["sm_h"].literature_id = lit_ho.id
+
+    ecs_ho = make_energy_correction_scheme(session, name="hidden_only_scheme", lot=lot_ho, source_literature=lit_ho)
+    ext["ecs_hidden_only"] = ecs_ho
+    # Free text on the vocabulary rows that names hidden records.
+    ext["ecs"].note = f"parameters fitted on {hid['sm_h'].public_ref}"
+    ext["fsf"].note = f"derived at {tse_h.public_ref}"
+    make_applied_energy_correction(
+        session, target_transition_state_entry=tse_h, scheme=ecs_ho, source_calculation=calc_h_lot
+    )
+    # A VISIBLE application of the shared scheme whose source calculation is hidden: the application stays, the source
+    # goes.
+    make_applied_energy_correction(
+        session, target_species_entry=sa, scheme=ext["ecs"], source_calculation=calc_h, value=0.002
+    )
+
+    fsf_ho = make_frequency_scale_factor(session, lot=lot_ho, source_literature=lit_ho)
+    ext["fsf_hidden_only"] = fsf_ho
+    hid["sm_h"].frequency_scale_factor_id = ext["fsf"].id
+    vis["sm_v2"].frequency_scale_factor_id = ext["fsf"].id
+    hid["sm_ts_h"].frequency_scale_factor_id = fsf_ho.id
+    make_applied_energy_correction(
+        session,
+        target_transition_state_entry=tse_h,
+        frequency_scale_factor=fsf_ho,
+        application_role=EnergyCorrectionApplicationRole.zpe,
+    )
+
+    lot_comp = make_lot(session, method="sweepcomposite", basis=None)
+    calc_h_comp = make_calculation(session, type=CalculationType.sp, species_entry_id=sa.id, lot_id=lot_comp.id)
+    hid["calc_h_comp"] = calc_h_comp
+    scheme = CompositeScheme(
+        kind=CompositeSchemeKind.extrapolation,
+        name="sweep-scheme",
+        definition_hash=_hash("sweep-scheme"),
+        source_literature_id=lit_ho.id,
+    )
+    session.add(scheme)
+    session.flush()
+    base_term = CompositeSchemeTerm(
+        scheme_id=scheme.id,
+        position=0,
+        operation=CompositeTermOperation.base,
+        energy_component=EnergyComponentKind.reference,
+    )
+    extrapolated = CompositeSchemeTerm(
+        scheme_id=scheme.id,
+        position=1,
+        operation=CompositeTermOperation.extrapolation,
+        energy_component=EnergyComponentKind.correlation,
+        formula=CompositeExtrapolationFormula.inverse_power,
+        exponent=3.0,
+    )
+    session.add_all([base_term, extrapolated])
+    session.flush()
+    session.add_all(
+        [
+            CompositeSchemeTermInput(term_id=base_term.id, slot=CompositeInputSlot.value, level_of_theory_id=lot.id),
+            CompositeSchemeTermInput(
+                term_id=extrapolated.id, slot=CompositeInputSlot.cardinal, level_of_theory_id=lot.id, cardinal_number=3
+            ),
+            CompositeSchemeTermInput(
+                term_id=extrapolated.id,
+                slot=CompositeInputSlot.cardinal,
+                level_of_theory_id=lot_ho.id,
+                cardinal_number=4,
+            ),
+        ]
+    )
+    session.add(
+        LevelOfTheoryComposite(
+            level_of_theory_id=lot_comp.id, scheme_id=scheme.id, binding_source=CompositeBindingSource.declared
+        )
+    )
+    ext["composite_scheme"] = scheme
+    session.flush()
+
+    # -- analytics: a visible kinetics whose only interpretation assignment names a hidden statmech and a hidden entry --
+    kin_vh = make_kinetics(session, reaction_entry=rxe, a=4.0e-12, ea_kj_mol=14.0)
+    session.add(
+        KineticsInterpretationAssignment(
+            kinetics_id=kin_vh.id,
+            subject_key="transition_state",
+            role="transition_state",
+            statmech_id=hid["sm_h"].id,
+            transition_state_entry_id=tse_h.id,
+            ensemble_policy="lowest_energy_conformer",
+            standard_state_convention="ideal_gas_1_bar",
+            degeneracy_interpretation="reaction_path_degeneracy",
+        )
+    )
+    vis["kin_vh"] = kin_vh
+    # ... and one whose assignment names a VISIBLE statmech and a VISIBLE entry (the flags stay true).
+    kin_vt = make_kinetics(session, reaction_entry=rxe, a=6.0e-12, ea_kj_mol=16.0)
+    session.add(
+        KineticsInterpretationAssignment(
+            kinetics_id=kin_vt.id,
+            subject_key="transition_state",
+            role="transition_state",
+            statmech_id=vis["sm_ts_v"].id,
+            transition_state_entry_id=tse_v2.id,
+            ensemble_policy="lowest_energy_conformer",
+            standard_state_convention="ideal_gas_1_bar",
+            degeneracy_interpretation="reaction_path_degeneracy",
+        )
+    )
+    vis["kin_vt"] = kin_vt
+    session.flush()

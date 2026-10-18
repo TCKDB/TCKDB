@@ -56,18 +56,10 @@ BASE = "/api/v1/scientific"
 #: them today. Each names the PR that gives it a seam. A route that starts reaching the hook while listed here fails
 #: the test (delete the entry); one that stops reaching it without being listed fails too.
 KNOWN_UNGUARDED: dict[tuple[str, str], str] = {
-    (
-        "GET",
-        f"{BASE}/network-kinetics/{{network_kinetics_ref_or_id}}/evaluate",
-    ): "returns the model directly; PR-2c calls the hook",
     ("GET", f"{BASE}/export/ndjson"): "StreamingResponse; PR-4 adds the stream seam",
     ("GET", f"{BASE}/export/ml/species.ndjson"): "StreamingResponse; PR-4 adds the stream seam",
     ("GET", f"{BASE}/export/ml/reactions.ndjson"): "StreamingResponse; PR-4 adds the stream seam",
     ("POST", f"{BASE}/export/chemkin"): "StreamingResponse (text); PR-4 adds the stream seam",
-    (
-        "POST",
-        f"{BASE}/networks/{{network_ref_or_id}}/kinetics/evaluate",
-    ): "returns the model directly; PR-2c calls the hook",
     **{
         ("POST", f"{BASE}/{root}/select{suffix}"): "stamps the profile and returns; PR-3 adds the selection seam"
         for root in (
@@ -124,15 +116,11 @@ RELATIVE_ENERGY_COMPARE_POPULATION_PATHS = frozenset(
     for name in ("absent", "requested_members")
 )
 
-#: Routes that answer something other than 200 to a visible subject under the curated profile, and why. The batch
-#: evaluate route evaluates every fit of the network, including those of a hidden solve, and then 404s naming the
-#: hidden fit (design 2.8, an existence oracle fixed by a service filter in PR-2c).
-EXPECTED_CURATED_STATUS: dict[tuple[str, str], tuple[int, str]] = {
-    ("POST", f"{BASE}/networks/{{network_ref_or_id}}/kinetics/evaluate"): (
-        404,
-        "design 2.8: names a hidden fit; PR-2c",
-    ),
-}
+#: Routes that answer something other than 200 to a visible subject under the curated profile, and why. Empty since
+#: PR-2c: the network batch evaluate used to evaluate every fit of the network, including those of a hidden solve, and
+#: then 404 naming the hidden fit (design 2.8, an existence oracle); it now evaluates only the fits of the solves the
+#: profile shows.
+EXPECTED_CURATED_STATUS: dict[tuple[str, str], tuple[int, str]] = {}
 
 _LIT = f"{BASE}/literature/{{literature_ref_or_id}}/records"
 _FULL = f"{BASE}/reaction-entries/{{reaction_entry_id}}/full"
@@ -206,7 +194,17 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
         _FULL,
     },
     "nsolve_h": {_NET, _LIT},
-    "nkin_h": {f"{_NET}/kinetics/evaluate"},
+    "nkin_h": {f"{_NET}/kinetics/evaluate", f"{BASE}/network-kinetics/search"},
+    # PR-2c: a hidden solve's PLOG fit (the only one of its kind), and the hidden calculations of a level of theory,
+    # a composite-scheme binding and a literature record that nothing visible uses.
+    "nkin_h_plog": {f"{_NET}/kinetics/evaluate", f"{BASE}/network-kinetics/search"},
+    "calc_h_lot": {
+        f"{BASE}/level-of-theories/{{level_of_theory_ref_or_id}}",
+        f"{BASE}/energy-correction-schemes/{{energy_correction_scheme_ref_or_id}}",
+        _LIT,
+    },
+    "calc_h_lot_ts": {f"{BASE}/level-of-theories/{{level_of_theory_ref_or_id}}", _TSE},
+    "calc_h_comp": {f"{BASE}/level-of-theories/browse", f"{BASE}/analytics/calculations"},
     "thm_h": {f"{_SPE}/thermo", _LIT},
     "kin_h": {f"{BASE}/reaction-entries/{{reaction_entry_id}}/kinetics", _FULL, _LIT},
     "mpo_h": {f"{_SPE}/observations"},

@@ -14,6 +14,7 @@ from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import reject_unsupported_filters
+from app.db.models.common import SubmissionRecordType
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     EnergyCorrectionScheme,
@@ -36,12 +37,15 @@ from app.schemas.reads.scientific_energy_correction_scheme_search import (
 from app.services.scientific_read.common import (
     build_pagination,
     reject_client_sort,
+    review_floor_predicate,
     validate_includes,
     validate_pagination,
+    where_visible,
 )
 from app.services.scientific_read.energy_correction_schemes import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
+    applied_target_visible,
     build_energy_correction_scheme_record,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
@@ -172,9 +176,16 @@ def search_energy_correction_schemes(
         )
         stmt = stmt.where(ex if request.has_corrections else ~ex)
     if request.used_by_calculation is not None:
-        ex = exists().where(
-            AppliedEnergyCorrection.scheme_id == EnergyCorrectionScheme.id,
-            AppliedEnergyCorrection.source_calculation_id.is_not(None),
+        # An application counts when its target and its source calculation are shown by the read profile.
+        ex = where_visible(
+            where_visible(
+                exists().where(
+                    AppliedEnergyCorrection.scheme_id == EnergyCorrectionScheme.id,
+                    AppliedEnergyCorrection.source_calculation_id.is_not(None),
+                ),
+                applied_target_visible(),
+            ),
+            review_floor_predicate(AppliedEnergyCorrection.source_calculation_id, SubmissionRecordType.calculation),
         )
         stmt = stmt.where(ex if request.used_by_calculation else ~ex)
 

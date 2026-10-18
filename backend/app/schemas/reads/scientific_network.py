@@ -621,10 +621,19 @@ class ScientificNetworkSolveRecord(BaseModel):
     summaries, kinetics summaries (model_kind + shape metadata only —
     coefficient payloads are deferred to a future
     ``/scientific/network-kinetics/{ref}`` endpoint).
+
+    ``network`` is the owner of the solve. It is never ``null`` under the default (exploratory) profile. Under
+    ``profile=curated`` it is ``null`` when that network is below the review floor: the solve stays visible, the
+    network it solves is withheld, and nothing about the solve is hidden on the network's account. The key is
+    always present.
     """
 
     network_solve: NetworkSolveCoreBlock
-    network: NetworkContextSummary
+    #: The network this solve belongs to. Never ``null`` under the default (exploratory) profile. Under
+    #: ``profile=curated`` it is ``null`` when that network is below the review floor: the solve stays visible
+    #: and the network it solves is withheld; nothing about the solve is hidden on the network's account.
+    #: The key is always present.
+    network: NetworkContextSummary | None
     software_release: SoftwareReleaseSummary | None = None
     workflow_tool_release: WorkflowToolReleaseSummary | None = None
     literature: LiteratureSummary | None = None

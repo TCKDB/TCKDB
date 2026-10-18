@@ -34,7 +34,8 @@ Rollout
 -------
 :data:`_ENABLED_ROUTE_PREFIXES` lists the route families on which the hook withholds. PR-2a enables the
 species-side families (:data:`SPECIES_SIDE_PREFIXES`) and PR-2b the transition-state and reaction families
-(:data:`TS_REACTION_PREFIXES`); the network and remaining families follow.
+(:data:`TS_REACTION_PREFIXES`); PR-2c the network, literature, analytics and provenance-vocabulary families
+(:data:`NETWORK_PROVENANCE_PREFIXES`). The selection documents and the exports follow.
 """
 
 from __future__ import annotations
@@ -83,6 +84,7 @@ from app.schemas.reads.scientific_conformer import (
     ConformerObservationGroupSummary,
     ConformerObservationSiblingSummary,
 )
+from app.schemas.reads.scientific_frequency_scale_factor import FrequencyScaleFactorUsageSummary
 from app.schemas.reads.scientific_geometry import (
     GeometryIdentity,
     GeometryIdentityOwnerRef,
@@ -95,6 +97,16 @@ from app.schemas.reads.scientific_kinetics import (
     KineticsProvenance,
     KineticsTunnelingApplicationBlock,
 )
+from app.schemas.reads.scientific_network import (
+    NetworkChannelMicroreactionSummary,
+    NetworkContextSummary,
+    NetworkKineticsSummary,
+    NetworkSolveStateEnergySourceSummary,
+    NetworkSolveSummary,
+    NetworkSourceCalculationSummary,
+)
+from app.schemas.reads.scientific_network_kinetics import NetworkKineticsNetworkContext
+from app.schemas.reads.scientific_network_kinetics_batch_evaluate import NetworkKineticsBatchFitEvaluation
 from app.schemas.reads.scientific_provenance import (
     ReactionAtomMapBadge,
     ReactionAtomMapDetail,
@@ -284,6 +296,22 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         ValidationSummary,
         SCFStabilitySummary,
         StoredKineticsProtocolCalculationRef,
+        # PR-2c: the network, provenance (level of theory, corrections, literature) and analytics families.
+        #
+        # Owner decision D1: a visible solve (or fit) whose network is hidden stays visible with the network block
+        # blanked. Registering each owner block is what lets the guard blank it; widening the field alone is not enough.
+        NetworkContextSummary,
+        NetworkKineticsNetworkContext,
+        # Blocks whose subject is the linked record: a solve or fit of the network, a calculation a solve rests on, a
+        # microreaction's transition-state entry, a per-participant energy source, one fit of a batch evaluation, a
+        # record that uses a scale factor.
+        NetworkSolveSummary,
+        NetworkKineticsSummary,
+        NetworkSourceCalculationSummary,
+        NetworkChannelMicroreactionSummary,
+        NetworkSolveStateEnergySourceSummary,
+        NetworkKineticsBatchFitEvaluation,
+        FrequencyScaleFactorUsageSummary,
     }
 )
 
@@ -341,7 +369,25 @@ TS_REACTION_PREFIXES: frozenset[str] = frozenset(
     )
 )
 
-_ENABLED_ROUTE_PREFIXES: frozenset[str] = SPECIES_SIDE_PREFIXES | TS_REACTION_PREFIXES
+#: PR-2c: the network family (pressure-dependent networks, their solves and fits), literature, analytics and the
+#: provenance vocabulary reads (levels of theory, frequency scale factors, energy-correction and composite schemes).
+#: ``/network-solves`` is not a sub-path of ``/networks``, so each is listed.
+NETWORK_PROVENANCE_PREFIXES: frozenset[str] = frozenset(
+    f"{_SCIENTIFIC_BASE}/{segment}"
+    for segment in (
+        "networks",
+        "network-solves",
+        "network-kinetics",
+        "literature",
+        "analytics",
+        "level-of-theories",
+        "frequency-scale-factors",
+        "energy-correction-schemes",
+        "composite-schemes",
+    )
+)
+
+_ENABLED_ROUTE_PREFIXES: frozenset[str] = SPECIES_SIDE_PREFIXES | TS_REACTION_PREFIXES | NETWORK_PROVENANCE_PREFIXES
 
 
 class RefGuardUnplaceable(RuntimeError):
@@ -942,6 +988,7 @@ __all__ = [
     "EXEMPT_ROUTE_PREFIXES",
     "GATED_REF_RE",
     "GATED_TYPES",
+    "NETWORK_PROVENANCE_PREFIXES",
     "POINTER_FIELDS",
     "POINTER_MODELS",
     "SPECIES_SIDE_PREFIXES",

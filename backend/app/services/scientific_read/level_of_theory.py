@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import not_found
 from app.db.models.calculation import Calculation
+from app.db.models.common import SubmissionRecordType
 from app.db.models.energy_correction import EnergyCorrectionScheme, FrequencyScaleFactor
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
@@ -60,7 +61,7 @@ from app.schemas.reads.scientific_level_of_theory import (
     ScientificLevelOfTheoryDetailResponse,
     ScientificLevelOfTheoryRecord,
 )
-from app.services.scientific_read.common import validate_includes
+from app.services.scientific_read.common import review_floor_predicate, validate_includes, where_visible
 from app.services.scientific_read.composite_binding import composite_scheme_summary
 from app.services.scientific_read.energy_correction_schemes import (
     build_energy_correction_scheme_record,
@@ -233,6 +234,16 @@ def build_level_of_theory_record(
 # ---------------------------------------------------------------------------
 
 
+def _calculation_visible():
+    """The calculations the read profile shows, or ``None`` under the default profile (owner decision D5)."""
+    return review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
+
+
+def _calculation_visible_or_true():
+    visible = _calculation_visible()
+    return True if visible is None else visible
+
+
 def _count_calculation_usage(session: Session, lot_id: int) -> int:
     """Number of calculations attributing *lot_id*.
 
@@ -245,9 +256,10 @@ def _count_calculation_usage(session: Session, lot_id: int) -> int:
     """
     return int(
         session.scalar(
-            select(func.count())
-            .select_from(Calculation)
-            .where(Calculation.lot_id == lot_id)
+            where_visible(
+                select(func.count()).select_from(Calculation).where(Calculation.lot_id == lot_id),
+                _calculation_visible(),
+            )
         )
         or 0
     )
@@ -322,6 +334,7 @@ def _software_usage_rows(session: Session, lot_id: int) -> list[tuple[str, str |
         )
         .join(Software, Software.id == SoftwareRelease.software_id)
         .where(Calculation.lot_id == lot_id)
+        .where(_calculation_visible_or_true())
         .group_by(Software.name, SoftwareRelease.version)
         .order_by(
             func.count(Calculation.id).desc(),
@@ -354,6 +367,7 @@ def _workflow_tool_usage_rows(
         )
         .join(WorkflowTool, WorkflowTool.id == WorkflowToolRelease.workflow_tool_id)
         .where(Calculation.lot_id == lot_id)
+        .where(_calculation_visible_or_true())
         .group_by(WorkflowTool.name, WorkflowToolRelease.version)
         .order_by(
             func.count(Calculation.id).desc(),
@@ -523,6 +537,7 @@ def _build_used_by(
             Calculation.transition_state_entry_id,
         )
         .where(Calculation.lot_id == lot_id)
+        .where(_calculation_visible_or_true())
         .order_by(Calculation.id.asc())
         .limit(_USAGE_LIMIT)
     ).all()

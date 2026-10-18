@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.156.0 - 2026-10-18
+
+`NetworkSolveRecord.network` and `NetworkKineticsRecord.network` are `JSONDict | None`: under `profile="curated"` a visible
+network solve (or fit) whose network is not approved comes back with `network` null instead of naming the network (the key is
+always present). Code that indexes `record["network"]["network_ref"]` under a type checker now needs a `None` check; the default
+profile never returns `None`. No method changed, and `tckdb-schemas` is unchanged.
+
 ## 0.155.0 - 2026-10-18
 
 `TransitionStateEntryRecord.transition_state` is `JSONDict | None`: under `profile="curated"` a visible transition-state entry whose

@@ -14,6 +14,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import reject_unsupported_filters
+from app.db.models.common import SubmissionRecordType
 from app.db.models.energy_correction import FrequencyScaleFactor
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
@@ -33,8 +34,10 @@ from app.schemas.reads.scientific_frequency_scale_factor_search import (
 from app.services.scientific_read.common import (
     build_pagination,
     reject_client_sort,
+    review_floor_predicate,
     validate_includes,
     validate_pagination,
+    where_visible,
 )
 from app.services.scientific_read.frequency_scale_factors import (
     _INTERNAL_INCLUDE_TOKENS,
@@ -150,8 +153,9 @@ def search_frequency_scale_factors(
         if request.software_version is not None:
             stmt = stmt.where(SoftwareRelease.version == request.software_version)
     if request.used_by_statmech is not None:
-        ex = exists().where(
-            Statmech.frequency_scale_factor_id == FrequencyScaleFactor.id
+        ex = where_visible(
+            exists().where(Statmech.frequency_scale_factor_id == FrequencyScaleFactor.id),
+            review_floor_predicate(Statmech.id, SubmissionRecordType.statmech),
         )
         stmt = stmt.where(ex if request.used_by_statmech else ~ex)
 

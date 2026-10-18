@@ -80,8 +80,10 @@ from app.schemas.reads.scientific_network_kinetics_evaluate import (
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    review_floor_predicate,
     review_summary,
     validate_includes,
+    where_visible,
 )
 from app.services.scientific_read.handles import (
     resolve_network_kinetics_handle,
@@ -540,10 +542,16 @@ def _build_network_kinetics_record(
         NetworkKineticsPoint,
         NetworkKineticsPoint.network_kinetics_id == nk.id,
     )
-    source_calc_count = _count(
-        session,
-        NetworkSolveSourceCalculation,
-        NetworkSolveSourceCalculation.solve_id == solve.id,
+    source_calc_count = int(
+        session.scalar(
+            where_visible(
+                select(func.count())
+                .select_from(NetworkSolveSourceCalculation)
+                .where(NetworkSolveSourceCalculation.solve_id == solve.id),
+                review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
+            )
+        )
+        or 0
     )
 
     cheb_n_t = cheb_row.n_temperature if cheb_row is not None else None
@@ -620,6 +628,8 @@ def _build_network_kinetics_record(
     )
 
     # ---- parent contexts ---------------------------------------------------
+    # Owner decision D1: always built here; under ``profile=curated`` the ref guard blanks it when the network is hidden
+    # (``NetworkKineticsNetworkContext`` is a registered pointer and the field is nullable).
     network_ctx = NetworkKineticsNetworkContext(
         network_id=network.id if network is not None else None,
         network_ref=network.public_ref if network is not None else "",

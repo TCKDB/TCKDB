@@ -436,10 +436,12 @@ def test_the_hook_counts_that_it_was_reached_but_withholds_nothing_while_no_fami
     assert (ctx.reached, ctx.applied, calls) == (1, 0, [])
 
 
-def test_pr_2b_enables_exactly_the_species_side_and_ts_reaction_families():
-    """Kills: enabling a network or other family early (their wire changes belong to PR-2c); dropping a family."""
+def test_pr_2c_enables_exactly_the_species_side_ts_reaction_and_network_provenance_families():
+    """Kills: enabling an export or selection family early (their wire changes belong to PR-3/PR-4); dropping a family."""
     base = "/api/v1/scientific/"
-    assert ref_guard._ENABLED_ROUTE_PREFIXES == ref_guard.SPECIES_SIDE_PREFIXES | ref_guard.TS_REACTION_PREFIXES
+    assert ref_guard._ENABLED_ROUTE_PREFIXES == (
+        ref_guard.SPECIES_SIDE_PREFIXES | ref_guard.TS_REACTION_PREFIXES | ref_guard.NETWORK_PROVENANCE_PREFIXES
+    )
     assert {p.removeprefix(base) for p in ref_guard.SPECIES_SIDE_PREFIXES} == {
         "statmech",
         "thermo",
@@ -461,14 +463,19 @@ def test_pr_2b_enables_exactly_the_species_side_and_ts_reaction_families():
         "reactions",
         "kinetics",
     }
-    # Whole-segment matching: no later family rides in on a shared string prefix.
-    for route in (
+    assert {p.removeprefix(base) for p in ref_guard.NETWORK_PROVENANCE_PREFIXES} == {
         "networks",
         "network-solves",
         "network-kinetics",
         "literature",
         "analytics",
         "level-of-theories",
+        "frequency-scale-factors",
+        "energy-correction-schemes",
+        "composite-schemes",
+    }
+    # Whole-segment matching: no later family rides in on a shared string prefix.
+    for route in (
         "meta",
         "releases",
         "export",
@@ -479,6 +486,8 @@ def test_pr_2b_enables_exactly_the_species_side_and_ts_reaction_families():
     assert ref_guard.route_matches(f"{base}species-entries/{{id}}/thermo", ref_guard._ENABLED_ROUTE_PREFIXES)
     assert ref_guard.route_matches(f"{base}reaction-entries/{{id}}/full", ref_guard._ENABLED_ROUTE_PREFIXES)
     assert ref_guard.route_matches(f"{base}kinetics/search", ref_guard._ENABLED_ROUTE_PREFIXES)
+    for route in ("networks/{ref}", "network-solves/search", "network-kinetics/{ref}/evaluate", "literature/{ref}/records"):
+        assert ref_guard.route_matches(f"{base}{route}", ref_guard._ENABLED_ROUTE_PREFIXES), route
 
 
 def test_the_hook_withholds_on_an_enabled_curated_route(hook_env, monkeypatch):
@@ -605,6 +614,16 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "ValidationSummary",
         "SCFStabilitySummary",
         "StoredKineticsProtocolCalculationRef",
+        # PR-2c
+        "NetworkContextSummary",
+        "NetworkKineticsNetworkContext",
+        "NetworkSolveSummary",
+        "NetworkKineticsSummary",
+        "NetworkSourceCalculationSummary",
+        "NetworkChannelMicroreactionSummary",
+        "NetworkSolveStateEnergySourceSummary",
+        "NetworkKineticsBatchFitEvaluation",
+        "FrequencyScaleFactorUsageSummary",
     }
 
 

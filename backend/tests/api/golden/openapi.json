@@ -47297,7 +47297,7 @@
         "type": "object"
       },
       "ScientificNetworkKineticsRecord": {
-        "description": "One ``network_kinetics`` projected as a scientific record.\n\nDefault response: kinetics core block + parent network / solve /\nchannel context + bounded evidence and available_sections\nsummaries. Include tokens expand the response:\n\n- ``coefficients`` — Chebyshev coefficient rows (None for\n  non-Chebyshev kinds). The payload is capped at\n  ``public_max_limit`` rows and exposes\n  ``coefficient_count_total`` + ``coefficients_truncated``.\n- ``plog`` — pressure-specific Arrhenius rows as a bare list,\n  capped at ``public_max_limit`` rows. Sibling fields\n  ``plog_entry_count_total`` + ``plog_entries_truncated`` on the\n  record carry the truncation metadata. Empty list / zero count /\n  ``False`` for non-PLOG kinds when requested.\n- ``points`` — tabulated (T, P, k) entries, capped at\n  ``public_max_limit`` rows. When the count exceeds the cap,\n  ``points_truncated`` is True and ``point_count_total`` reports\n  the full count.\n- ``source_calculations`` — compact source-calc summaries from the\n  parent solve.\n- ``review`` — review history rows (only when the parent solve is\n  reviewable; ``NetworkKinetics`` itself is not in\n  ``SubmissionRecordType``).",
+        "description": "One ``network_kinetics`` projected as a scientific record.\n\nDefault response: kinetics core block + parent network / solve /\nchannel context + bounded evidence and available_sections\nsummaries. Include tokens expand the response:\n\n- ``coefficients`` — Chebyshev coefficient rows (None for\n  non-Chebyshev kinds). The payload is capped at\n  ``public_max_limit`` rows and exposes\n  ``coefficient_count_total`` + ``coefficients_truncated``.\n- ``plog`` — pressure-specific Arrhenius rows as a bare list,\n  capped at ``public_max_limit`` rows. Sibling fields\n  ``plog_entry_count_total`` + ``plog_entries_truncated`` on the\n  record carry the truncation metadata. Empty list / zero count /\n  ``False`` for non-PLOG kinds when requested.\n- ``points`` — tabulated (T, P, k) entries, capped at\n  ``public_max_limit`` rows. When the count exceeds the cap,\n  ``points_truncated`` is True and ``point_count_total`` reports\n  the full count.\n- ``source_calculations`` — compact source-calc summaries from the\n  parent solve.\n- ``review`` — review history rows (only when the parent solve is\n  reviewable; ``NetworkKinetics`` itself is not in\n  ``SubmissionRecordType``).\n\n``network`` is the owner of the fit's solve. It is never ``null`` under the default (exploratory) profile.\nUnder ``profile=curated`` it is ``null`` when that network is below the review floor: the fit (reviewed\nthrough its solve) stays visible, the network it belongs to is withheld, and nothing about the fit is hidden\non the network's account. The key is always present.",
         "properties": {
           "available_sections": {
             "$ref": "#/components/schemas/AvailableNetworkKineticsSections"
@@ -47317,7 +47317,14 @@
             "$ref": "#/components/schemas/NetworkKineticsEvidenceSummary"
           },
           "network": {
-            "$ref": "#/components/schemas/NetworkKineticsNetworkContext"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkKineticsNetworkContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "network_channel": {
             "$ref": "#/components/schemas/NetworkKineticsChannelContext"
@@ -47698,7 +47705,7 @@
         "type": "object"
       },
       "ScientificNetworkSolveRecord": {
-        "description": "One ``network_solve`` projected as a scientific record.\n\nDefault response: solve core block + parent-network context +\nbounded evidence and available_sections summaries. Include tokens\nexpand to bath-gas list, energy-transfer rows, source calculation\nsummaries, kinetics summaries (model_kind + shape metadata only —\ncoefficient payloads are deferred to a future\n``/scientific/network-kinetics/{ref}`` endpoint).",
+        "description": "One ``network_solve`` projected as a scientific record.\n\nDefault response: solve core block + parent-network context +\nbounded evidence and available_sections summaries. Include tokens\nexpand to bath-gas list, energy-transfer rows, source calculation\nsummaries, kinetics summaries (model_kind + shape metadata only —\ncoefficient payloads are deferred to a future\n``/scientific/network-kinetics/{ref}`` endpoint).\n\n``network`` is the owner of the solve. It is never ``null`` under the default (exploratory) profile. Under\n``profile=curated`` it is ``null`` when that network is below the review floor: the solve stays visible, the\nnetwork it solves is withheld, and nothing about the solve is hidden on the network's account. The key is\nalways present.",
         "properties": {
           "available_sections": {
             "$ref": "#/components/schemas/AvailableNetworkSolveSections"
@@ -47777,7 +47784,14 @@
             ]
           },
           "network": {
-            "$ref": "#/components/schemas/NetworkContextSummary"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkContextSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "network_solve": {
             "$ref": "#/components/schemas/NetworkSolveCoreBlock"
