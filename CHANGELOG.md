@@ -22,6 +22,24 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Structure rule manifest 0.2.0, with 0.1.0 kept for replay (2026-10-18)
+
+**Audit record only; no rule is activated.** Migration: none. New environment variable: none. Package versions: unchanged. OpenAPI
+golden: unchanged.
+
+- Manifest 0.2.0 records owner decision O5 (2026-10-13): relative conformer energies are a named-reference operation, descriptive
+  MADs are useful without a numeric reference uncertainty, and a superiority claim or a near-tie ranking needs stronger evidence.
+  Both `S-ACONFL-*` rules gain the blocker `descriptive_mad_is_not_preference_evidence` listing E1 to E7, and their blocker
+  `relative_energy_is_not_a_supported_quantity` is renamed `no_preference_stage_consumes_relative_conformer_energy` (a relative-energy
+  read exists now; no preference stage consumes it). Their owner-decision evidence items are marked answered.
+  `S-FIXED-MODEL-CONVERGENCE` gains `owner_declined_universal_form`. Every rule is version 0.2.0 and still `activation_approved: false`.
+- Source correction: the open-access reprint of Santra and Martin (2022) is recorded (URL and SHA-256 as supplied; nothing was fetched).
+  Table 4 prints the per-conformer best-estimate values, which 0.1.0 had said were located but not extracted. A footnote-marker
+  slip on the ACONF20 column is recorded as an unresolved noted discrepancy.
+- Dual pin, as for the kinetics XYG3 rule: manifest 0.1.0 is preserved byte for byte and `replay_rules()` loads its rules for replay
+  only. A structure manifest recorded under 0.1.0 still replays and `replay_provenance` labels it `historical`; new decisions carry
+  0.2.0. A version in neither registry is still refused, and `replay_provenance` (structure and kinetics) refuses it rather than labelling it historical. The live validator stays strict on rule id; only replay holds one rule at two versions, and a manifest naming two versions of a rule is refused.
+
 ## A descriptive comparison of two stored protocols (2026-10-18)
 
 **New read routes.** Migration: none. New environment variable: none. Package versions: `tckdb-schemas` 0.125.0 (one new refusal

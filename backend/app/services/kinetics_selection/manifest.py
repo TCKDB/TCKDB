@@ -191,11 +191,16 @@ def replay_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
     except UnsupportedAssessmentSemantics as exc:
         raise ReplayError(str(exc)) from exc
     live = {(r.rule_id, r.version) for r in default_rules()}
-    superseded = [
-        f"{e['rule_id']} {e['version']}"
-        for e in manifest["decision"]["rules"]
-        if (e["rule_id"], e["version"]) not in live
-    ]
+    replayable = {(r.rule_id, r.version) for r in replay_rules()}
+    superseded = []
+    for e in manifest["decision"]["rules"]:
+        key = (e["rule_id"], e["version"])
+        if key in live:
+            continue
+        if key not in replayable:
+            # Neither live nor kept for replay: never labelled "historical", which would suggest it can be replayed.
+            raise ReplayError(f"rule {key[0]} version {key[1]} is not in the running registry")
+        superseded.append(f"{key[0]} {key[1]}")
     label["superseded_rule_versions"] = superseded
     if superseded:
         label["kind"] = "historical"

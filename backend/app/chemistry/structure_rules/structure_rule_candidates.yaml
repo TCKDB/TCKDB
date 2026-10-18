@@ -1,4 +1,4 @@
-# Candidate structure-energy preference rules, audit manifest version 0.1.0 (2026-10-05).
+# Candidate structure-energy preference rules, audit manifest version 0.2.0 (2026-10-18).
 #
 # NOTHING HERE IS ACTIVE. Every entry has activation_approved: false, no owner acceptance and a list of blockers, and
 # the registry (app.services.structure_selection.rules) loads this file only against its pinned SHA-256 and registers
@@ -9,18 +9,21 @@
 # Provenance of what follows. The council's relative-conformer-energy example (council rationale of 2026-10-04,
 # section 3: "Revised ACONFL, Santra/Martin") was audited against Santra and Martin, J. Phys. Chem. A 126, 9375-9391
 # (2022), doi:10.1021/acs.jpca.2c06407, which is open access (PMC9791657; arXiv 2209.03285). Which version each number
-# was read from is stated in the sources below. The published PDF could not be downloaded (PMC and the publisher serve
-# it behind a bot challenge); what was read is (1) the published open-access full text as Europe PMC serves it
-# (JATS XML: text, tables and table footnotes of the journal version), (2) the arXiv v2 PDF, whose page numbers are
-# the page anchors used here, and (3) the published Supporting Information PDF and data archive, both from Europe PMC.
-# The numbers quoted below were compared between (1) and (2) and agree. Nothing was digitised from a figure.
+# was read from is stated in the sources below. Manifest 0.1.0 said the published PDF could not be downloaded and that
+# the per-conformer references were located in the Supporting Information archive but not extracted. That was a gap in
+# how the article was read, not a gap in what the article prints: Table 4 of the article itself (p. 9378) prints the
+# per-conformer best-estimate conformer energy in kcal/mol to two decimals. The open-access reprint is recorded as a
+# source below (URL and SHA-256 as supplied by the owner; this change fetched nothing). What was read in 0.1.0 is
+# unchanged: (1) the published open-access full text as Europe PMC serves it (JATS XML), (2) the arXiv v2 PDF, whose
+# page numbers are the page anchors used for the numbers below, and (3) the published Supporting Information PDF and
+# data archive. Nothing was digitised from a figure.
 #
 # The other two council examples that could have become a preference rule are registered here too: the one proposed
 # form with no source ("controlled convergence on one fixed model") as an inactive candidate with its missing
 # prerequisites, and the three examples that support distinctions but are not preferences are listed under
 # considered_not_rules so that their absence from the rules is a recorded decision.
-manifest_version: 0.1.0
-manifest_date: '2026-10-05'
+manifest_version: 0.2.0
+manifest_date: '2026-10-18'
 history:
 - version: 0.1.0
   date: '2026-10-05'
@@ -29,6 +32,22 @@ history:
     article and its Supporting Information. Two candidate rules were derived from it, each narrowly scoped to
     relative conformer energies of the three n-alkanes in the dataset. The fixed-model convergence form was registered
     with no source. All rules inactive.
+- version: 0.2.0
+  date: '2026-10-18'
+  change: >-
+    Records owner decision D (O5, 2026-10-13): relative conformer energies are a named-reference operation; descriptive
+    mean absolute deviations are useful without a numeric reference uncertainty; a claim of physical superiority, or a
+    ranking of near-tied protocols, needs stronger evidence. A relative-energy read now exists
+    (/conformers/relative-energies and /conformers/relative-energies/compare); what still blocks both ACONFL rules is
+    that no preference stage consumes the relative_conformer_energy observable. The blocker
+    relative_energy_is_not_a_supported_quantity (its premise, that no relative-energy read exists, is no longer true) is
+    renamed no_preference_stage_consumes_relative_conformer_energy. The new blocker
+    descriptive_mad_is_not_preference_evidence lists the seven things (E1-E7) a preference claim would need. The owner
+    decision items of the two ACONFL rules are marked answered. The source is corrected: the open-access reprint is
+    recorded, and Table 4 of the article prints the per-conformer best-estimate values (0.1.0 said they were located
+    but not extracted). A footnote-marker discrepancy in that table is recorded in noted_discrepancies, not resolved, and no blocker relies on either reading for ACONF20.
+    S-FIXED-MODEL-CONVERGENCE gains owner_declined_universal_form. All three rules stay inactive and unapproved; every
+    entry is version 0.2.0. Manifest 0.1.0 stays loadable for replay only (structure_rule_candidates_0_1_0.yaml).
 audit_status: inactive_registered_with_missing_prerequisites
 sources:
 - id: SANTRA_MARTIN_2022_PUBLISHED_TEXT
@@ -49,6 +68,15 @@ sources:
   sha256: 897ccc1a10d44ec963fa1df5eb2c9ebc068495dd25b386f15c92797f9eafb11d
   accessed: '2026-10-05'
   used_for: "Page anchors for every number quoted: abstract p. 1; ACONFL definition pp. 2-3; software p. 4; accuracy thresholds, basis sets p. 5; extrapolation exponents and geometries (ref 24) p. 6; 'silver' standard and Table 1 p. 7; Table 2 p. 10; Table 3 (HLC1-HLC22, HLC14) p. 11; Table 4 and its caption p. 12; selection of HLC14, reference shifts +0.60/-0.67 kcal/mol p. 13; Table 5 and the 'indistinguishable' sentence p. 14; Table 6 and the DLPNO-CCSD(T1)-F12 statements p. 19-20; Conclusions (silver, 0.31 kcal/mol upper limit) p. 25-26. Table 5 and Table 6 rows quoted below were compared with the published text and agree"
+- id: SANTRA_MARTIN_2022_OA_REPRINT
+  citation: Santra, G. and Martin, J. M. L., J. Phys. Chem. A 126(50), 9375-9391 (2022), doi:10.1021/acs.jpca.2c06407 (open-access reprint of the published article)
+  version: open-access reprint of the published journal version, with the journal's pagination (pp. 9375-9391)
+  license: stated on the reprint; not checked here, and the file is not committed to this repository
+  open_access: true
+  read_from: https://webhome.weizmann.ac.il/home/comartin/OAreprints/320.pdf
+  sha256: ef5ebc990d49a2b2569e4826966b20203206002024d4b9493c88871540bb190e
+  accessed: 'not fetched in this change: the URL and the SHA-256 are recorded as supplied by the owner (owner decision O5, 2026-10-13); the digest was not re-computed here'
+  used_for: "Corrects manifest 0.1.0, which said the published PDF could not be downloaded and that the per-conformer references were located but not extracted. Table 4 (p. 9378) prints the per-conformer best-estimate conformer energy in kcal/mol to two decimals, in the article itself; no number from it is quoted in this manifest. The text on p. 9382 and the Table 4 footnote markers (see noted_discrepancies). The page numbers of the other quoted numbers remain those of arXiv v2"
 - id: SANTRA_MARTIN_2022_SI_PDF
   citation: Supporting Information (PDF) to Santra and Martin, J. Phys. Chem. A 126, 9375-9391 (2022), file jp2c06407_si_001.pdf
   version: published Supporting Information
@@ -57,7 +85,7 @@ sources:
   read_from: Europe PMC supplementary files of PMC9791657 (jp2c06407_si_001.pdf)
   sha256: 3d0329d9c4f512b16aad64adbc9c17e120bced9979e531d5299444fa4626246f
   accessed: '2026-10-05'
-  used_for: "Table S1 read (RI-MP2 and RI-MP2-F12 conformer energies of n-dodecane against the revised reference, with MAD, RMSD and MSD rows). Tables S2-S9 (HLC components, HLC energies of individual species, the same statistics with HLC8, composite-method coefficients, PNO-LCCSD(T) with the default REXT) were located and NOT extracted"
+  used_for: "Table S1 read (RI-MP2 and RI-MP2-F12 conformer energies of n-dodecane against the revised reference, with MAD, RMSD and MSD rows). Tables S2-S9 (HLC components, HLC energies of individual species, the same statistics with HLC8, composite-method coefficients, PNO-LCCSD(T) with the default REXT) were located and NOT extracted. The per-conformer best-estimate values themselves are printed in Table 4 of the article (SANTRA_MARTIN_2022_OA_REPRINT)"
 - id: SANTRA_MARTIN_2022_SI_DATA
   citation: Supporting Information data archive (spreadsheets) to the same article, file jp2c06407_si_002.zip
   version: published Supporting Information
@@ -66,7 +94,39 @@ sources:
   read_from: Europe PMC supplementary files of PMC9791657 (jp2c06407_si_002.zip)
   sha256: dc0a4157b28507c983fcd0ab9243670e3540eae5b0139bbcff1127845e6f99b5
   accessed: '2026-10-05'
-  used_for: "Located only (spreadsheets: ACONF12 HLCs, DFT results, L-F12 results, among others); NOT opened. Per-conformer reference and method energies, which a per-conformer error or an uncertainty estimate would need, are here and have not been extracted"
+  used_for: "Located only (spreadsheets: ACONF12 HLCs, DFT results, L-F12 results, among others); NOT opened. The per-conformer METHOD energies, which a per-conformer error or an uncertainty estimate would need, are here and have not been extracted (the best-estimate reference values are printed in Table 4 of the article, SANTRA_MARTIN_2022_OA_REPRINT)"
+noted_discrepancies:
+- id: ACONF20_REFERENCE_FOOTNOTE_MARKER
+  where: Table 4 of the open-access reprint (p. 9378), against the text on p. 9382 and manifest 0.1.0
+  observation: >-
+    The footnote marker printed on the ACONF20 column of Table 4 differs from the reference the text names for that set.
+    No blocker or anchor of this manifest relies on either reading for ACONF20.
+  table_markers:
+  - set: ACONF16
+    marker: c
+    footnote_recipe: HLC14
+  - set: ACONF20
+    marker: b
+    footnote_recipe: CCSD(F12*) silver recipe
+  text_says:
+    where: p. 9382
+    ACONF16: HLC14
+    ACONF20: HLC14
+  readings:
+  - id: text
+    says: The ACONF20 reference is HLC14 (the text on p. 9382, and manifest 0.1.0).
+    consequence: The reference shares the LNO-CCSD(T)/vTight/AV{Q,5}Z localized component with one preferred protocol, so agreement on ACONF20 is partly circular.
+  - id: table_marker
+    says: The ACONF20 reference is the CCSD(F12*) silver recipe (the Table 4 marker b).
+    consequence: The reference shares no LNO component with the candidates, so ACONF20 would be an independent comparison.
+  judgement:
+    kind: judgement
+    text: The ACONF20 marker is most likely a typesetting slip.
+    followed_by_manifest: false
+  followed_reading: none
+  resolved: false
+  settled_by: the authors, or the per-conformer data of the Supporting Information
+  affects: [S-ACONFL-LNO-LARGE-BASIS, S-ACONFL-DLPNO-F12-VERYTIGHT]
 considered_not_rules:
 - id: ORCA_THERMOCHEMISTRY_DECOMPOSITION
   source: ORCA 6.1 manual, thermochemistry (indexed by the council)
@@ -89,13 +149,13 @@ considered_not_rules:
 rules:
 
 - rule_id: S-ACONFL-LNO-LARGE-BASIS
-  version: 0.1.0
+  version: 0.2.0
   objective: expected_accuracy
   objective_key: relative_conformer_energy_benchmark_mad
   observable: relative_conformer_energy
   activation_approved: false
   owner_acceptance: null
-  source_ids: [SANTRA_MARTIN_2022_PUBLISHED_TEXT, SANTRA_MARTIN_2022_ARXIV_V2, SANTRA_MARTIN_2022_SI_PDF]
+  source_ids: [SANTRA_MARTIN_2022_PUBLISHED_TEXT, SANTRA_MARTIN_2022_ARXIV_V2, SANTRA_MARTIN_2022_OA_REPRINT, SANTRA_MARTIN_2022_SI_PDF]
   open_access: true
   citation: Santra, G. and Martin, J. M. L., J. Phys. Chem. A 126, 9375-9391 (2022), doi:10.1021/acs.jpca.2c06407 (revised ACONFL, localized-orbital LNO-CCSD(T) conformer energies of n-dodecane, n-hexadecane and n-icosane).
   protocols:
@@ -123,7 +183,7 @@ rules:
     where: Table 5, arXiv v2 p. 14
   - claim: considering the statistical uncertainty of the reference energies, the performance of LNO-CCSD(T,Tight)/AV{Q,5}Z, LNO-CCSD(T,vTight)/AV{Q,5}Z and LNO-CCSD(T,vTight)/AV5Z is 'actually indistinguishable'; the excellent LNO-CCSD(T,Normal)/AV{T,Q}Z (MAD 0.05) is attributed to fortunate error compensation between the localized-orbital error and the basis set incompleteness error
     where: Results (c), arXiv v2 pp. 13-14
-  - claim: the reference for ACONF12 is MP2-F12/V{T,Q}Z-F12 + [CCSD(F12*) - MP2-F12]/VTZ-F12 + (T)/AV{D,T}Z, which the authors call a 'silver' standard; for ACONF16 and ACONF20 it is MP2-F12/V{T,Q}Z-F12 + [LNO-CCSD(T) - LMP2]/vTight/AV{Q,5}Z (HLC14), a correction whose localized-orbital part is the same LNO-CCSD(T)/vTight/AV{Q,5}Z calculation that one of the preferred protocols is
+  - claim: the reference for ACONF12 is MP2-F12/V{T,Q}Z-F12 + [CCSD(F12*) - MP2-F12]/VTZ-F12 + (T)/AV{D,T}Z, which the authors call a 'silver' standard; for ACONF16 it is MP2-F12/V{T,Q}Z-F12 + [LNO-CCSD(T) - LMP2]/vTight/AV{Q,5}Z (HLC14), a correction whose localized-orbital part is the same LNO-CCSD(T)/vTight/AV{Q,5}Z calculation that one of the preferred protocols is; for ACONF20 the text says HLC14 and the Table 4 marker says the silver recipe (unresolved, see noted_discrepancies)
     where: Results (a), arXiv v2 p. 7 ('silver'); Results (b) and Table 3 (HLC14), arXiv v2 pp. 11-13; Table 4 footnotes [a] and [b], arXiv v2 p. 12
   - claim: the revised reference differs from the original ACONFL reference energies by up to +0.60 and down to -0.67 kcal/mol, multiple n-icosane conformers change order, and the MAD between the old and the revised reference sets is 0.31 kcal/mol (an upper limit for the change in a method's MAD)
     where: arXiv v2 p. 13 and p. 26 (Conclusions)
@@ -146,11 +206,16 @@ rules:
   - A request for an absolute energy, a free energy or a barrier.
   activation_blockers:
   - id: reference_is_silver_and_partly_circular
-    text: The ACONF12 reference is a 'silver' standard (canonical MP2-F12 plus a CCSD(F12*) and (T) correction) and is the only
-      independent comparison; the ACONF16 and ACONF20 reference is canonical MP2-F12/CBS plus the
-      [LNO-CCSD(T) - LMP2]/vTight/AV{Q,5}Z correction (HLC14), whose localized-orbital part is the same calculation one preferred
-      protocol is, so that protocol's agreement with the reference on those two subsets (MAD 0.06 and 0.09 kcal/mol, against 0.05 on
-      ACONF12) shares a component with the reference and is not independent evidence. The rule can lean only on the 12 ACONF12 conformers of one molecule.
+    text: The ACONF12 reference is a 'silver' standard (canonical MP2-F12 plus a CCSD(F12*) and (T) correction) and is an
+      independent comparison. The ACONF16 reference is canonical MP2-F12/CBS plus the [LNO-CCSD(T) - LMP2]/vTight/AV{Q,5}Z
+      correction (HLC14; its Table 4 marker and the text agree), whose localized-orbital part is the same calculation one
+      preferred protocol is, so that protocol's agreement with the reference on ACONF16 (MAD 0.06 kcal/mol, against 0.05 on
+      ACONF12) shares a component with the reference and is not independent evidence. For ACONF20 the sources disagree and
+      this rule follows neither reading. The text on p. 9382 says HLC14, which would make it partly circular as ACONF16 is.
+      The Table 4 marker says b, the CCSD(F12*) silver recipe, which shares no LNO component. This is unresolved (see
+      noted_discrepancies). The rule stays blocked either way, because the other blockers (no numeric reference uncertainty,
+      MAD is not a per-conformer error, unstated core and geometry, a domain of three molecules, no consumer of the
+      observable, no owner acceptance) hold under both readings.
   - id: no_numeric_reference_uncertainty
     text: The article states no numeric uncertainty for the reference energies. It says only that the three best LNO variants are
       'indistinguishable' given the statistical uncertainty, and that the revision moved conformer energies by up to
@@ -167,11 +232,14 @@ rules:
   - id: geometry_level_not_stated
     text: The conformer geometries are 'extracted from ref 24'; the level at which they were optimised is not stated in this
       article, so the geometry facts a cohort needs cannot be established from it.
-  - id: relative_energy_is_not_a_supported_quantity
-    text: TCKDB's structure selection compares an electronic energy or a zero-kelvin energy. A relative conformer energy against
-      a named reference conformer (which is the all-trans conformer for two sets and the hairpin for the third, and is
-      not the lowest conformer for n-hexadecane, where conformer 00 is 0.49 kcal/mol lower) is a derived quantity with no
-      intent of its own yet. Until one exists the rule's observable never matches and it cannot make an edge.
+  - id: no_preference_stage_consumes_relative_conformer_energy
+    text: A relative conformer energy read now exists (/conformers/relative-energies and /conformers/relative-energies/compare),
+      against a named reference conformer (the all-trans conformer for two sets and the hairpin for the third; not the lowest
+      conformer for n-hexadecane, where conformer 00 is 0.49 kcal/mol lower). What still blocks this rule is that nothing
+      consumes it as a preference. The protocol-preference stage applies only rules whose observable is structure_energy, and
+      the comparison endpoint is descriptive only and never builds an edge. Until a preference stage consumes the
+      relative_conformer_energy observable the rule's observable never matches and it cannot make an edge. (Renamed in 0.2.0
+      from relative_energy_is_not_a_supported_quantity, whose premise, that no relative-energy read exists, is no longer true.)
   - id: localized_orbital_settings_need_vocabulary
     text: The actual-protocol declaration can carry local_correlation and pair_natural_orbital approximations with a free
       setting, but the LNO accuracy threshold, the extrapolation exponents, the (T) treatment and the program-specific
@@ -179,26 +247,52 @@ rules:
   - id: domain_is_three_molecules
     text: The evidence is the conformer sets of three n-alkanes. Nothing in the article supports a statement for other alkanes,
       branched or functionalised molecules, other conformer counts or other geometries.
+  - id: descriptive_mad_is_not_preference_evidence
+    text: Owner decision D (O5, 2026-10-13) makes a descriptive mean absolute deviation useful without a numeric reference
+      uncertainty, but a claim of physical superiority, or a ranking of near-tied protocols, needs stronger evidence. A
+      benchmark MAD reported for a protocol is description, not preference evidence, until E1 to E7 below are each met.
+    evidence_needed:
+    - id: E1
+      text: A numeric uncertainty for the reference values, per member or as a stated set-level bound, with its source.
+    - id: E2
+      text: "Independence: the reference shares no computed component with the candidate, shown from recorded composition, not asserted."
+    - id: E3
+      text: "A resolved margin: for superiority, the paired difference in the error metric between two candidates exceeds its combined uncertainty (reference uncertainty plus paired sampling uncertainty by a stated method with stated n). For a near-tie ranking, every adjacent pair in the ranking is resolved this way; unresolved neighbours are reported as indistinguishable, not ordered."
+    - id: E4
+      text: "Coverage and sameness: the full named member set, the same geometries for both candidates, the same named reference conformer as the source."
+    - id: E5
+      text: "Domain: the claim is scoped to the member set measured; transfer to other molecules needs evidence on them."
+    - id: E6
+      text: "Established protocol facts: every setting that defines the protocol (thresholds, PNO cut-offs, extrapolation, core treatment, corrections) is typed and established, not read from a label."
+    - id: E7
+      text: "Owner acceptance of the rule that would carry the claim, and its predicates implemented and reviewed."
   - id: owner_acceptance_and_predicates
     text: The rule is not approved by the owner and its predicates are not implemented or reviewed.
   evidence_needed:
   - source: Santra and Martin Supporting Information data archive (jp2c06407_si_002.zip), already pinned above
-    items: the per-conformer reference and method energies behind Table 5, so the ACONF12-only (independent) comparison and a per-conformer scatter can be computed and cited; open, located but not extracted
+    items: the per-conformer method energies behind Table 5, so the ACONF12-only (independent) comparison and a per-conformer scatter can be computed and cited; open, located but not extracted. The per-conformer best-estimate reference values are printed in Table 4 of the article (p. 9378, SANTRA_MARTIN_2022_OA_REPRINT)
   - source: Ehlert, S., Grimme, S. and Hansen, A., J. Phys. Chem. A 126, 3521-3535 (2022) (ref 24 of the article; the article's own citation). Closed access. DOI 10.1021/acs.jpca.2c02439 and a ChemRxiv preprint, doi 10.26434/chemrxiv-2022-cfqhh (v2, CC BY-NC 4.0), as identified in review; those two identifiers are not printed in the files read here and were not independently opened
     items: the geometry level of the conformers and the original DLPNO reference, which this article does not state
   - source: the article's Computational Details beyond the text read, or the program inputs
     items: the frozen-core or all-electron setting and whether any zero-point or thermal term is in the conformer energies
   - source: owner decision
     items: whether a relative-energy intent belongs in structure selection and which conformer is the reference; whether a benchmark MAD may order protocols at all without a numeric reference uncertainty
+    status: answered
+    answered_by: owner decision D (O5)
+    answered_on: '2026-10-13'
+    answer: >-
+      Relative conformer energies are a named-reference operation. Descriptive MADs are useful without a numeric reference
+      uncertainty. Physical superiority and near-tie rankings need stronger evidence, now listed as blocker
+      descriptive_mad_is_not_preference_evidence (E1 to E7).
 
 - rule_id: S-ACONFL-DLPNO-F12-VERYTIGHT
-  version: 0.1.0
+  version: 0.2.0
   objective: expected_accuracy
   objective_key: relative_conformer_energy_benchmark_mad
   observable: relative_conformer_energy
   activation_approved: false
   owner_acceptance: null
-  source_ids: [SANTRA_MARTIN_2022_PUBLISHED_TEXT, SANTRA_MARTIN_2022_ARXIV_V2]
+  source_ids: [SANTRA_MARTIN_2022_PUBLISHED_TEXT, SANTRA_MARTIN_2022_ARXIV_V2, SANTRA_MARTIN_2022_OA_REPRINT]
   open_access: true
   citation: Santra, G. and Martin, J. M. L., J. Phys. Chem. A 126, 9375-9391 (2022), doi:10.1021/acs.jpca.2c06407 (revised ACONFL, explicitly correlated DLPNO-CCSD(T1)-F12 conformer energies).
   protocols:
@@ -219,7 +313,7 @@ rules:
     where: Table 6, arXiv v2 p. 19; the fortuitous-error-compensation sentence, arXiv v2 p. 18; Table 5, arXiv v2 p. 15
   - claim: for a given accuracy threshold and basis set DLPNO-CCSD(T1) and DLPNO-CCSD(T0) perform comparably, and the improvement from TightPNO to VeryTightPNO is not statistically significant for the twelve n-dodecane conformers
     where: abstract p. 1; Results (c), arXiv v2 p. 17
-  - claim: the reference energies are those of the first entry (silver for ACONF12; MP2-F12/CBS plus the LNO-based HLC14 for ACONF16 and ACONF20); the revised and original references differ by a MAD of 0.31 kcal/mol
+  - claim: the reference energies are those of the first entry (silver for ACONF12; MP2-F12/CBS plus the LNO-based HLC14 for ACONF16; for ACONF20 the text and the Table 4 marker disagree, unresolved, see noted_discrepancies); the revised and original references differ by a MAD of 0.31 kcal/mol
     where: arXiv v2 pp. 7, 11-13 and 26
   proposed_statement: >-
     For the named relative conformer energies of the 12, 16 and 20 conformers of the three alkanes of the revised ACONFL
@@ -237,9 +331,12 @@ rules:
   - Any candidate whose PNO cutoffs, basis or program are not established, including 'VeryTightPNO' from another program or version.
   activation_blockers:
   - id: reference_is_silver_and_not_canonical_beyond_dodecane
-    text: The ACONF12 reference is a 'silver' standard; for ACONF16 and ACONF20 the reference is canonical MP2-F12/CBS plus a
-      localized LNO-CCSD(T) correction, not a canonical coupled-cluster result, so the MAD on those two subsets measures
-      agreement with another localized method.
+    text: The ACONF12 reference is a 'silver' standard. The ACONF16 reference is canonical MP2-F12/CBS plus a localized
+      LNO-CCSD(T) correction, not a canonical coupled-cluster result, so the MAD on ACONF16 measures agreement with another
+      localized method (its Table 4 marker and the text agree). For ACONF20 the sources disagree and this rule follows neither
+      reading. The text on p. 9382 says the same localized-correction reference, the Table 4 marker says the CCSD(F12*) silver
+      recipe; unresolved (see noted_discrepancies). The rule stays blocked either way, because the other blockers hold under
+      both readings.
   - id: no_numeric_reference_uncertainty
     text: No numeric reference uncertainty is stated, and the revision moved reference energies by up to +0.60/-0.67 kcal/mol
       (MAD 0.31 between old and new references), so a 0.04 MAD cannot be separated from the reference's own uncertainty
@@ -252,8 +349,10 @@ rules:
   - id: the_explicitly_correlated_variants_are_a_subset
     text: The VDZ-F12 VeryTightPNO variant was computed for all three sets, its VTZ-F12 and VQZ-F12 variants for ACONF12 only,
       so the comparison across basis sets within VeryTightPNO is a one-molecule statement.
-  - id: relative_energy_is_not_a_supported_quantity
-    text: As for the entry above, a relative conformer energy against a named reference conformer has no intent in structure selection yet.
+  - id: no_preference_stage_consumes_relative_conformer_energy
+    text: As for the entry above. A relative conformer energy read exists, but no preference stage consumes the
+      relative_conformer_energy observable (the protocol-preference stage applies only structure_energy rules, and the comparison
+      endpoint never builds an edge). Renamed in 0.2.0 from relative_energy_is_not_a_supported_quantity.
   - id: core_geometry_and_corrections_not_stated
     text: The frozen-core or all-electron treatment, the geometry level and whether the energies contain zero-point or thermal
       terms are not stated in the text read.
@@ -263,18 +362,44 @@ rules:
       type PNO cutoffs.
   - id: domain_is_three_molecules
     text: The evidence is the conformer sets of three n-alkanes only.
+  - id: descriptive_mad_is_not_preference_evidence
+    text: Owner decision D (O5, 2026-10-13) makes a descriptive mean absolute deviation useful without a numeric reference
+      uncertainty, but a claim of physical superiority, or a ranking of near-tied protocols, needs stronger evidence. A
+      benchmark MAD reported for a protocol is description, not preference evidence, until E1 to E7 below are each met.
+    evidence_needed:
+    - id: E1
+      text: A numeric uncertainty for the reference values, per member or as a stated set-level bound, with its source.
+    - id: E2
+      text: "Independence: the reference shares no computed component with the candidate, shown from recorded composition, not asserted."
+    - id: E3
+      text: "A resolved margin: for superiority, the paired difference in the error metric between two candidates exceeds its combined uncertainty (reference uncertainty plus paired sampling uncertainty by a stated method with stated n). For a near-tie ranking, every adjacent pair in the ranking is resolved this way; unresolved neighbours are reported as indistinguishable, not ordered."
+    - id: E4
+      text: "Coverage and sameness: the full named member set, the same geometries for both candidates, the same named reference conformer as the source."
+    - id: E5
+      text: "Domain: the claim is scoped to the member set measured; transfer to other molecules needs evidence on them."
+    - id: E6
+      text: "Established protocol facts: every setting that defines the protocol (thresholds, PNO cut-offs, extrapolation, core treatment, corrections) is typed and established, not read from a label."
+    - id: E7
+      text: "Owner acceptance of the rule that would carry the claim, and its predicates implemented and reviewed."
   - id: owner_acceptance_and_predicates
     text: The rule is not approved by the owner and its predicates are not implemented or reviewed.
   evidence_needed:
   - source: Santra and Martin Supporting Information data archive (jp2c06407_si_002.zip, L-F12 results spreadsheet), already pinned above
-    items: the per-conformer DLPNO-CCSD(T1)-F12 energies and reference, to compute a per-conformer scatter and an ACONF12-only comparison; located, not extracted
+    items: the per-conformer DLPNO-CCSD(T1)-F12 energies, to compute a per-conformer scatter and an ACONF12-only comparison; located, not extracted. The per-conformer reference values are printed in Table 4 of the article (p. 9378, SANTRA_MARTIN_2022_OA_REPRINT)
   - source: Ehlert, Grimme and Hansen, J. Phys. Chem. A 126, 3521-3535 (2022) (ref 24; closed access; ChemRxiv preprint doi 10.26434/chemrxiv-2022-cfqhh, v2, CC BY-NC 4.0)
     items: the geometry level of the conformers
   - source: owner decision
     items: whether a relative-energy intent belongs in structure selection; whether a benchmark MAD may order protocols without a numeric reference uncertainty
+    status: answered
+    answered_by: owner decision D (O5)
+    answered_on: '2026-10-13'
+    answer: >-
+      Relative conformer energies are a named-reference operation. Descriptive MADs are useful without a numeric reference
+      uncertainty. Physical superiority and near-tie rankings need stronger evidence, now listed as blocker
+      descriptive_mad_is_not_preference_evidence (E1 to E7).
 
 - rule_id: S-FIXED-MODEL-CONVERGENCE
-  version: 0.1.0
+  version: 0.2.0
   objective: model_fidelity
   objective_key: numerical_convergence_on_one_fixed_model
   observable: structure_energy
@@ -322,6 +447,10 @@ rules:
   - id: setting_names_do_not_imply_accuracy
     text: A tighter keyword (a tighter cutoff, a larger grid, a bigger basis) is not evidence of accuracy by itself, and the
       declared numerical approximations are descriptions, not demonstrated errors.
+  - id: owner_declined_universal_form
+    text: The owner has said this is "not a universal tighter-settings rule" (owner decision O5, 2026-10-13). A rule of this form
+      cannot be written as a general preference for tighter settings; any form it takes is scoped to a pinned reference and a
+      demonstrated error.
   - id: owner_acceptance_and_predicates
     text: The rule is not approved by the owner and its predicates are not implemented or reviewed.
   evidence_needed:

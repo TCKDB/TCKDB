@@ -33,11 +33,39 @@ from app.chemistry.manifest_attestation import attest
 
 MANIFEST_PATH = Path(__file__).with_name("structure_rule_candidates.yaml")
 
+#: The preserved bytes of manifest 0.1.0, which rule version 0.1.0 rests on. Kept for replay only: a decision recorded
+#: before manifest 0.2.0 names the digest of these bytes, and replay must be able to load them. Never edit this file.
+MANIFEST_0_1_0_PATH = Path(__file__).with_name("structure_rule_candidates_0_1_0.yaml")
+
 #: The objectives a structure rule may compare on (the request's ``Objective`` values).
 OBJECTIVES = ("physical_accuracy", "expected_accuracy", "model_fidelity")
 
 #: The scope facts every entry must state, so no rule is silent about where it stops.
 SCOPE_FIELDS = ("observable", "chemistry", "state_and_geometry", "domain")
+
+
+#: Keys a blocker, a blocker's evidence item, a rule-level evidence item and a noted discrepancy may carry. An unknown key is
+#: refused: a misspelt ``status`` or ``resolved`` must not read as "nothing said".
+BLOCKER_KEYS = frozenset({"id", "text", "evidence_needed"})
+BLOCKER_EVIDENCE_KEYS = frozenset({"id", "text"})
+EVIDENCE_KEYS = frozenset({"source", "items", "status", "answered_by", "answered_on", "answer"})
+EVIDENCE_STATUSES = frozenset({"answered"})
+DISCREPANCY_REQUIRED = frozenset(
+    {
+        "id",
+        "where",
+        "observation",
+        "table_markers",
+        "text_says",
+        "readings",
+        "judgement",
+        "followed_reading",
+        "resolved",
+        "affects",
+    }
+)
+DISCREPANCY_KEYS = DISCREPANCY_REQUIRED | {"settled_by"}
+FOLLOWED_READINGS = frozenset({"none", "text", "table_marker"})
 
 
 class ManifestError(ValueError):
@@ -108,6 +136,8 @@ class StructureRuleManifest:
     sources: tuple[dict[str, Any], ...] = ()
     #: Examples the council raised that support a distinction but are deliberately not preference rules.
     considered_not_rules: tuple[dict[str, str], ...] = ()
+    #: Places where the sources disagree with each other or with an earlier reading, recorded and not silently resolved.
+    noted_discrepancies: tuple[dict[str, Any], ...] = ()
     #: SHA-256 of the bytes this manifest was parsed from; ``None`` when built from a parsed document alone.
     sha256: str | None = None
 
@@ -151,6 +181,35 @@ def _candidate(raw: dict[str, Any]) -> RuleCandidate:
         _require(bool(anchor.get("claim")) and bool(anchor.get("where")), f"{name}: an anchor has no claim or no location")
     for blocker in blockers:
         _require(bool(blocker.get("id")) and bool(blocker.get("text")), f"{name}: a blocker has no id or text")
+        _require(
+            set(blocker) <= BLOCKER_KEYS,
+            f"{name}: blocker {blocker['id']} has unknown keys {sorted(set(blocker) - BLOCKER_KEYS)}",
+        )
+        for need in blocker.get("evidence_needed") or ():
+            _require(
+                isinstance(need, dict) and bool(need.get("id")) and bool(need.get("text")),
+                f"{name}: blocker {blocker['id']} lists evidence with no id or text",
+            )
+            _require(
+                set(need) <= BLOCKER_EVIDENCE_KEYS,
+                f"{name}: blocker {blocker['id']} evidence {need['id']} has unknown keys "
+                f"{sorted(set(need) - BLOCKER_EVIDENCE_KEYS)}",
+            )
+    for need in needed:
+        _require(set(need) <= EVIDENCE_KEYS, f"{name}: an evidence item has unknown keys {sorted(set(need) - EVIDENCE_KEYS)}")
+        status = need.get("status")
+        answer_fields = ("answered_by", "answered_on", "answer")
+        if status is None:
+            _require(not any(k in need for k in answer_fields), f"{name}: an evidence item carries an answer but no status")
+        else:
+            _require(
+                status in EVIDENCE_STATUSES,
+                f"{name}: an evidence item has status {status!r}, not one of {sorted(EVIDENCE_STATUSES)}",
+            )
+            _require(
+                all(bool(need.get(k)) for k in answer_fields),
+                f"{name}: an answered evidence item names no decision, date or answer",
+            )
     if approved:
         _require(
             isinstance(acceptance, dict) and bool(acceptance.get("accepted_by")) and bool(acceptance.get("date")),
@@ -210,8 +269,45 @@ def parse_structure_rule_manifest(raw: dict[str, Any]) -> StructureRuleManifest:
     declined = tuple(dict(x) for x in raw.get("considered_not_rules") or ())
     for item in declined:
         _require(all(bool(item.get(k)) for k in ("id", "source", "why")), f"considered_not_rules entry {item.get('id')!r} is incomplete")
+    noted = tuple(dict(x) for x in raw.get("noted_discrepancies") or ())
+    rule_ids = {c.rule_id for c in candidates}
+    for item in noted:
+        label = item.get("id")
+        _require(
+            set(item) <= DISCREPANCY_KEYS,
+            f"noted_discrepancies entry {label!r} has unknown keys {sorted(set(item) - DISCREPANCY_KEYS)}",
+        )
+        _require(
+            "resolved" in item and all(bool(item.get(k)) for k in DISCREPANCY_REQUIRED - {"resolved"}),
+            f"noted_discrepancies entry {label!r} is incomplete",
+        )
+        _require(isinstance(item["resolved"], bool), f"noted_discrepancies entry {label!r}: resolved must be true or false")
+        _require(
+            item["followed_reading"] in FOLLOWED_READINGS,
+            f"noted_discrepancies entry {label!r}: followed_reading must be one of {sorted(FOLLOWED_READINGS)}",
+        )
+        if not item["resolved"]:
+            _require(
+                item["followed_reading"] == "none",
+                f"noted_discrepancies entry {label!r} is unresolved, so it must follow neither reading",
+            )
+        judgement = item["judgement"]
+        _require(
+            isinstance(judgement, dict)
+            and judgement.get("kind") == "judgement"
+            and isinstance(judgement.get("followed_by_manifest"), bool),
+            f"noted_discrepancies entry {label!r}: the judgement must be marked kind: judgement with followed_by_manifest set",
+        )
+        _require(
+            set(item.get("affects") or ()) <= rule_ids,
+            f"noted_discrepancies entry {label!r} names a rule that is not an entry",
+        )
     return StructureRuleManifest(
-        version=str(raw["manifest_version"]), candidates=candidates, sources=sources, considered_not_rules=declined
+        version=str(raw["manifest_version"]),
+        candidates=candidates,
+        sources=sources,
+        considered_not_rules=declined,
+        noted_discrepancies=noted,
     )
 
 
@@ -228,6 +324,9 @@ def parse_structure_rule_manifest_bytes(data: bytes, *, expected_sha256: str | N
     return attest(dataclasses.replace(parse_structure_rule_manifest(yaml.safe_load(data)), sha256=actual))
 
 
-def load_structure_rule_manifest(*, expected_sha256: str) -> StructureRuleManifest:
-    """The shipped manifest, which must be exactly the bytes the registry pins."""
-    return parse_structure_rule_manifest_bytes(MANIFEST_PATH.read_bytes(), expected_sha256=expected_sha256)
+def load_structure_rule_manifest(*, expected_sha256: str, path: Path | None = None) -> StructureRuleManifest:
+    """A shipped manifest, which must be exactly the bytes the registry pins.
+
+    :param path: Another shipped manifest file (the preserved 0.1.0 bytes, for replay); default is the current one.
+    """
+    return parse_structure_rule_manifest_bytes((path or MANIFEST_PATH).read_bytes(), expected_sha256=expected_sha256)

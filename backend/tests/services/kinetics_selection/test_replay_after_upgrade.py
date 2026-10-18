@@ -176,3 +176,13 @@ def test_a_v2_manifest_naming_a_replay_only_rule_version_is_labelled_historical(
     assert label["kind"] == "historical"
     assert label["superseded_rule_versions"] == ["K-XYG3-B3LYP-BARRIER 0.2.0"]
     assert "K-XYG3-B3LYP-BARRIER 0.2.0" in label["statement"]
+
+
+@pytest.mark.parametrize("version", ["9.9.9", "0.1.9"])
+def test_a_rule_version_in_neither_set_is_refused_by_the_label_not_called_historical(version):
+    """Historical means "kept for replay only", which a version that is nowhere is not."""
+    old = json.loads(OLD_RULE_FIXTURE.read_text(encoding="utf-8"))
+    assert replay_provenance(old)["kind"] == "historical"  # the real replay-only version is labelled
+    _xyg3_entry(old)["version"] = version
+    with pytest.raises(ReplayError, match=version):
+        replay_provenance(old)
