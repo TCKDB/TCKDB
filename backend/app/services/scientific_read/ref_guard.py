@@ -40,6 +40,7 @@ species-side families (:data:`SPECIES_SIDE_PREFIXES`) and PR-2b the transition-s
 
 from __future__ import annotations
 
+import copy
 import functools
 import logging
 import re
@@ -49,7 +50,7 @@ import unicodedata
 from collections.abc import Collection, Mapping
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Union, get_args, get_origin
+from typing import Annotated, Any, Literal, Union, get_args, get_origin
 from urllib.parse import unquote, urlsplit
 
 from pydantic import BaseModel
@@ -444,8 +445,36 @@ def current_ref_guard_context() -> RefGuardContext | None:
 # ---------------------------------------------------------------------------
 
 
-def hidden_refs(session: Session, refs: Collection[str], *, profile: ResolvedReadProfile) -> set[str]:
-    """The subset of ``refs`` the profile hides. At most one statement; none when nothing can be hidden."""
+def guard_active(profile: ResolvedReadProfile) -> bool:
+    """Is the guard in force for this profile? The one predicate every entry point asks (boundary hook, document mode,
+    text refusal, the export batcher).
+
+    It is when the profile has a review floor (``curated``) and is not release-backed. A release-backed profile
+    (``tckdb_curated_release``) is short-circuited: a release is an attributed, immutable selection that names exactly
+    the records its curators chose, with their provenance, so withholding refs from it would change a published,
+    checksummed artifact. The general routes cannot take a release (``?release=`` is a 422), so only the release
+    projections and artifacts, which are exempt by route as well, ever carry that profile. Under the exploratory
+    profile there is no floor and nothing is hidden.
+    """
+    return (
+        profile.review_floor is not None and profile.recommendation is not ProfileRecommendation.tckdb_curated_release
+    )
+
+
+def hidden_refs(
+    session: Session,
+    refs: Collection[str],
+    *,
+    profile: ResolvedReadProfile,
+    unknown_is_hidden: bool = False,
+) -> set[str]:
+    """The subset of ``refs`` the profile hides. At most one statement; none when nothing can be hidden.
+
+    With ``unknown_is_hidden`` a gated-looking ref that names no row at all is hidden too: hidden equals unknown, so a
+    ref the database does not know must be treated exactly as one it hides (it is a ref to nothing visible, and its
+    shape alone says nothing the reader can use). The document mode and the text refusal ask this; the typed hook does
+    not (its refs come from rows the service just read).
+    """
     if profile.review_floor is None or not refs:
         return set()
     hidden_statuses = [s for s in RecordReviewStatus if status_hidden_under_profile(s, profile=profile)]
@@ -473,18 +502,23 @@ def hidden_refs(session: Session, refs: Collection[str], *, profile: ResolvedRea
         if missing_row_hidden:
             status_hidden = or_(status_hidden, RecordReview.id.is_(None))
         parts.append(
-            select(model.public_ref)
+            select(model.public_ref, status_hidden.label("is_hidden"))
             .select_from(model)
             .outerjoin(
                 RecordReview,
                 and_(RecordReview.record_type == record_type, RecordReview.record_id == join_id),
             )
-            .where(model.public_ref.in_(group), status_hidden)
+            .where(model.public_ref.in_(group))
         )
     if not parts:
         return set()
     stmt = parts[0] if len(parts) == 1 else union_all(*parts)
-    return set(session.execute(stmt).scalars())
+    rows = session.execute(stmt).all()
+    hidden = {ref for ref, is_hidden in rows if is_hidden}
+    if unknown_is_hidden:
+        known = {ref for ref, _ in rows}
+        hidden |= {ref for group in by_prefix.values() for ref in group if ref not in known}
+    return hidden
 
 
 # ---------------------------------------------------------------------------
@@ -506,6 +540,13 @@ class WithheldSite:
 
 @dataclass
 class WithholdReport:
+    #: Document mode only: the withheld copy of the facts passed in (the input is never modified).
+    facts: list[dict] | None = None
+    #: Document mode only: ``hidden ref -> token`` for the modes that replace a ref by a stand-in. Always empty in
+    #: ``"null"`` mode (guard PR-3 fills it in ``"placeholder"`` mode).
+    tokens: dict[str, str] = field(default_factory=dict)
+    #: Document mode only: the sites where free text was blanked whole (a subset of ``sites``).
+    blanked: list[WithheldSite] = field(default_factory=list)
     refs_seen: int = 0
     hidden: set[str] = field(default_factory=set)
     sites: list[WithheldSite] = field(default_factory=list)
@@ -682,7 +723,7 @@ def _refs_named_by(value: str, *, url_valued: bool = False) -> list[str]:
     return found
 
 
-def _collect_sites(root: BaseModel) -> list[tuple[tuple[_Frame, ...], str]]:
+def _collect_sites(root: BaseModel | dict) -> list[tuple[tuple[_Frame, ...], str]]:
     sites: list[tuple[tuple[_Frame, ...], str]] = []
     stack: list[tuple[Any, tuple[_Frame, ...]]] = [(root, ())]
     while stack:
@@ -939,6 +980,139 @@ def withhold_in_model(
 
 
 # ---------------------------------------------------------------------------
+# Untyped documents (the export streams)
+# ---------------------------------------------------------------------------
+
+
+def _plan_document_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], WithheldSite]:
+    """Untyped mode: a plain dict/list has no pointer registry and no field traits, so only two removals exist.
+
+    * a hidden ref that is a VALUE becomes ``None`` (free text that names one is blanked whole, to ``None``);
+    * a hidden ref that is a string ELEMENT of a list is dropped from the list.
+
+    A hidden ref used as a dict KEY has nowhere to go and fails closed (:class:`RefGuardUnplaceable`).
+    """
+    text = _path_text(path)
+    holder, key = path[-1]
+    if isinstance(key, _DictKey):
+        raise RefGuardUnplaceable(type(holder).__name__, f"{text}<dict key>", ref.split("_", 1)[0])
+    if isinstance(ref, _FreeRef):
+        if isinstance(holder, dict):
+            return [_Action("null", holder, key)], WithheldSite(ref, text, "blank_free_text")
+        if isinstance(holder, list):
+            return [_Action("delete", holder, key)], WithheldSite(ref, text, "blank_free_text")
+        raise RefGuardUnplaceable(type(holder).__name__, text, ref.split("_", 1)[0])
+    if isinstance(holder, dict):
+        return [_Action("null", holder, key)], WithheldSite(ref, text, "null_untyped")
+    if isinstance(holder, list):
+        return [_Action("delete", holder, key)], WithheldSite(ref, text, "delete_list_element")
+    raise RefGuardUnplaceable(type(holder).__name__, text, ref.split("_", 1)[0])
+
+
+def withhold_in_document(
+    session: Session,
+    facts: list[dict],
+    *,
+    profile: ResolvedReadProfile,
+    mode: Literal["null", "placeholder"],
+) -> WithholdReport:
+    """Withhold every ref the profile hides from plain documents, returning a withheld COPY.
+
+    For documents that are not response models: the export streams' records (guard PR-4) and the selection documents
+    (guard PR-3). ``facts`` is a list of plain dicts; it is **not** modified. The withheld copy is
+    ``report.facts`` (same order, same length), and a caller must use it: ignoring the return value withholds
+    nothing. The report also carries ``tokens`` (always empty in ``"null"`` mode) and ``blanked`` (the free-text sites
+    that were blanked whole). ``session`` is the leading positional argument and is always passed explicitly: the
+    caller reads visibility on the session that read the rows (for a placeholder, the engine's snapshot session). ``profile`` is passed in, never read from the request context, because a stream outlives the request;
+    ``session`` is the one that read the rows, so visibility is judged from the same snapshot. One visibility
+    statement per call, however many documents, and none when no document names a gated ref.
+
+    ``mode`` is required (no default) and says what a withheld ref becomes:
+
+    - ``"null"`` (exports): a ref that is a *value* becomes ``None``; a ref that is a string *element of a list* is
+      dropped from the list.
+    - ``"placeholder"`` (selection documents, PR-3): not implemented here; raises ``NotImplementedError``.
+
+    Rules every mode shares, so PR-3 inherits them:
+
+    - **Dict key.** A ref used as a dict key has nowhere to go. In ``"null"`` mode it fails closed
+      (:class:`RefGuardUnplaceable`); ``"placeholder"`` mode defines its own rule.
+    - **Free text.** A string that merely names a hidden ref anywhere in it (a note, a label, a file name, a URL) is
+      blanked whole (never token by token: what was removed would show), and in a list the element is dropped. Text
+      whose percent-encoding never settles is blanked too. The blanking rule is the one PR-2a set for typed models:
+      ``None`` when the field is nullable, ``""`` when it is a required ``str``. Untyped documents such as the
+      exports carry no type information, so they always get ``None``.
+    - **Unknown refs.** A gated-looking ref that names no row is treated as hidden (``unknown_is_hidden``): hidden
+      equals unknown, so the two must read the same.
+    - **Release-backed profiles.** Short-circuited with the exploratory profile (:func:`guard_active`): the copy is
+      returned unchanged and no statement is issued, because a release is an attributed, immutable selection.
+    """
+    if mode not in ("null", "placeholder"):
+        raise ValueError(f"mode must be 'null' or 'placeholder', not {mode!r}")
+    if mode == "placeholder":
+        raise NotImplementedError(
+            "withhold_in_document(mode='placeholder') belongs to curated-guard PR-3 (selection documents); "
+            "this PR implements mode='null' for the export streams"
+        )
+    report = WithholdReport()
+    withheld = copy.deepcopy(facts)
+    report.facts = withheld
+    if not guard_active(profile):
+        return report
+    sites: list[tuple[tuple[_Frame, ...], str]] = []
+    for document in withheld:
+        sites.extend(_collect_sites(document))
+    report.refs_seen = len(sites)
+    if not sites:
+        return report
+    report.hidden = hidden_refs(session, {ref for _, ref in sites}, profile=profile, unknown_is_hidden=True)
+    report.hidden |= {ref for _, ref in sites if ref == UNSETTLED_TEXT}
+    if not report.hidden:
+        return report
+    planned: dict[tuple[int, Any, str], _Action] = {}
+    for path, ref in sites:
+        if ref not in report.hidden:
+            continue
+        actions, site = _plan_document_site(path, ref)
+        report.sites.append(site)
+        if site.action == "blank_free_text":
+            report.blanked.append(site)
+        for action in actions:
+            planned.setdefault((id(action.container), action.key, action.kind), action)
+    _apply(list(planned.values()))
+    return report
+
+
+def refuse_hidden_refs_in_text(session: Session, texts: Mapping[str, str], *, profile: ResolvedReadProfile) -> None:
+    """Fail closed when generated text (the CHEMKIN files) names a hidden ref.
+
+    Text has no structure to withhold from, so a hidden ref in it is a bug in whatever produced it (a source that
+    should have been filtered), and the export is refused rather than emitted. ``texts`` maps a file name to its text.
+    """
+    if not guard_active(profile):
+        return
+    found: dict[str, str] = {}
+    for name, text in texts.items():
+        if not (_REF_ANYWHERE.search(text) or "%" in text):
+            continue
+        try:
+            refs = _refs_in_text(text)
+        except ValueError as exc:
+            # Percent-encoding that never settles: the text cannot be read, so it is refused, never kept (D4).
+            logger.error("ref_guard_unplaceable_text file=%s prefix=unsettled", name)
+            raise RefGuardUnplaceable("text", f"{name}<unsettled encoding>", "text") from exc
+        for ref in refs:
+            found.setdefault(ref, name)
+    if not found:
+        return
+    hidden = hidden_refs(session, set(found), profile=profile, unknown_is_hidden=True)
+    if hidden:
+        ref = sorted(hidden)[0]
+        logger.error("ref_guard_unplaceable_text file=%s prefix=%s", found[ref], ref.split("_", 1)[0])
+        raise RefGuardUnplaceable("text", found[ref], ref.split("_", 1)[0])
+
+
+# ---------------------------------------------------------------------------
 # Boundary hook
 # ---------------------------------------------------------------------------
 
@@ -960,9 +1134,7 @@ def withhold_for_current_request(payload: BaseModel) -> None:
         return
     ctx.reached += 1
     profile = current_read_profile()
-    if profile.review_floor is None:
-        return
-    if profile.recommendation is ProfileRecommendation.tckdb_curated_release:
+    if not guard_active(profile):
         return
     if route_matches(ctx.route_path, EXEMPT_ROUTE_PREFIXES):
         return
@@ -1000,10 +1172,13 @@ __all__ = [
     "WithheldSite",
     "WithholdReport",
     "current_ref_guard_context",
+    "guard_active",
     "hidden_refs",
+    "refuse_hidden_refs_in_text",
     "reset_ref_guard_context",
     "route_matches",
     "set_ref_guard_context",
     "withhold_for_current_request",
+    "withhold_in_document",
     "withhold_in_model",
 ]

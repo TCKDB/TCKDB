@@ -105,6 +105,18 @@ report the profile:
   in every dataset manifest" means for them. They capture the profile
   *eagerly*, because a streaming generator can outlive the request-scoped
   context that holds it.
+  Under `curated` the exports also withhold hidden refs, in untyped (`null`)
+  mode, a batch of 200 records at a time: **a withheld ref is `null`**, **a
+  hidden member of a list of refs is dropped** from the list, free text that
+  names a hidden record is blanked whole to `null`, and a ref that names no row
+  is treated as hidden. **Exports have no placeholders**; those belong to
+  selection documents. Where a hidden record would supply a *value* (a linearity
+  witness, a calculation's energy, a barrier) it is left out before anything is
+  derived from it, so no value stands beside a `null`. A hidden ref with nowhere
+  to go (a dict key, or generated CHEMKIN text) aborts the stream or the request
+  rather than being emitted. Because a stream cannot change its status once it
+  has started, **a missing `export_summary` line means the stream was
+  truncated** and the file must not be used. Exploratory output is unchanged.
 * **2 binary downloads** (`/scientific/artifacts/{sha256}/download` and
   `/scientific/releases/{handle}/artifacts/{path}`) have no JSON envelope and
   report `X-TCKDB-Read-Profile` as a response header.

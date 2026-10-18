@@ -56,10 +56,6 @@ BASE = "/api/v1/scientific"
 #: them today. Each names the PR that gives it a seam. A route that starts reaching the hook while listed here fails
 #: the test (delete the entry); one that stops reaching it without being listed fails too.
 KNOWN_UNGUARDED: dict[tuple[str, str], str] = {
-    ("GET", f"{BASE}/export/ndjson"): "StreamingResponse; PR-4 adds the stream seam",
-    ("GET", f"{BASE}/export/ml/species.ndjson"): "StreamingResponse; PR-4 adds the stream seam",
-    ("GET", f"{BASE}/export/ml/reactions.ndjson"): "StreamingResponse; PR-4 adds the stream seam",
-    ("POST", f"{BASE}/export/chemkin"): "StreamingResponse (text); PR-4 adds the stream seam",
     **{
         ("POST", f"{BASE}/{root}/select{suffix}"): "stamps the profile and returns; PR-3 adds the selection seam"
         for root in (
@@ -132,6 +128,10 @@ _NET = f"{BASE}/networks/{{network_ref_or_id}}"
 _KIN = f"{BASE}/reaction-entries/{{reaction_entry_id}}/kinetics"
 _KSEARCH = f"{BASE}/kinetics/search"
 _TSBROWSE = f"{BASE}/transition-states/browse"
+_X_ND = f"{BASE}/export/ndjson"
+_X_CK = f"{BASE}/export/chemkin"
+_X_MLS = f"{BASE}/export/ml/species.ndjson"
+_X_MLR = f"{BASE}/export/ml/reactions.ndjson"
 
 #: Hidden record -> route templates where the exploratory profile names it today (the inventory's paths). The positive
 #: control. Every pair must be seen by the exploratory crawl.
@@ -166,12 +166,20 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     "tse_hw2": {_TS, _TSBROWSE},
     "calc_h_w1": {_TSE, _TS, _TSBROWSE},
     "calc_h_w2": {_TSE, _TS, _TSBROWSE},
-    "ts_hw": {_TSBROWSE},
-    "tse_hw": {_TSBROWSE},
+    "ts_hw": {_TSBROWSE, _X_MLR},
+    "tse_hw": {_TSBROWSE, _X_MLR},
     "calc_h_psw": {_TSBROWSE},
-    "kin_hw": {_KIN},
+    "kin_hw": {_KIN, _X_ND, _X_MLR},
     "calc_h_psp": {_TSE, _TS, _TSBROWSE, _FULL},
+    # PR-4: hidden records in every position the four export streams can name one.
+    "calc_h_xlin": {_X_ND, _X_CK, _X_MLS, f"{BASE}/transport/search"},
+    "calc_h_xsp": {_X_MLS},
+    "sm_h_y": {_X_ND, _X_CK},
+    "calc_h_zh": {f"{BASE}/transport/search"},
+    "calc_h_xts": {_X_MLR},
+    "ts_h_x": {_X_MLR},
     "cg_h": {
+        _X_MLS,
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies",
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/manifest",
         f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies/compare",
@@ -210,8 +218,9 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     },
     "calc_h_lot_ts": {f"{BASE}/level-of-theories/{{level_of_theory_ref_or_id}}", _TSE},
     "calc_h_comp": {f"{BASE}/level-of-theories/browse", f"{BASE}/analytics/calculations"},
-    "thm_h": {f"{_SPE}/thermo", _LIT},
-    "kin_h": {f"{BASE}/reaction-entries/{{reaction_entry_id}}/kinetics", _FULL, _LIT},
+    "thm_h": {f"{_SPE}/thermo", _LIT, _X_ND},
+    "thm_h_g": {_X_ND},
+    "kin_h": {f"{BASE}/reaction-entries/{{reaction_entry_id}}/kinetics", _FULL, _LIT, _X_MLR, _X_ND},
     "mpo_h": {f"{_SPE}/observations"},
 }
 

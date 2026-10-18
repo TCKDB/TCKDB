@@ -29,7 +29,7 @@ class GuardSpy:
 
 
 def install_spy(monkeypatch) -> GuardSpy:
-    """Replace the hook name ``internal_ids`` calls with a recording wrapper around the real hook."""
+    """Replace the hook names the guard is reached through with recording wrappers around the real ones."""
     from app.services.scientific_read import internal_ids
 
     spy = GuardSpy()
@@ -50,6 +50,22 @@ def install_spy(monkeypatch) -> GuardSpy:
                 spy.applied_reports.extend(ctx.reports)
 
     monkeypatch.setattr(internal_ids, "withhold_for_current_request", wrapper)
+
+    # The export streams do not return through the response boundary. They reach the guard through the document
+    # seam (``ref_guard.withhold_in_document``, looked up on the module at call time), which is spied the same way.
+    real_document = ref_guard.withhold_in_document
+
+    def document_wrapper(session, documents, *, profile, mode):
+        spy.reached = True
+        try:
+            report = real_document(session, documents, profile=profile, mode=mode)
+        except ref_guard.RefGuardUnplaceable as exc:
+            spy.unplaceable = (exc.model_name, exc.field_path, exc.ref_prefix)
+            raise
+        spy.applied_reports.append(report)
+        return report
+
+    monkeypatch.setattr(ref_guard, "withhold_in_document", document_wrapper)
     return spy
 
 

@@ -84,8 +84,12 @@ from app.services.frequency_geometry_linearity import (
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    review_floor_predicate,
     visible_statuses,
+    where_visible,
 )
+from app.services.scientific_read.export_withhold import WithheldBatcher
+from app.services.scientific_read.handles import status_hidden_under_profile
 from app.services.scientific_read.profile import (
     ResolvedReadProfile,
     current_read_profile,
@@ -746,8 +750,13 @@ def select_candidate_ids(
     min_review_status: RecordReviewStatus | None,
     collapse: CollapseMode,
     selection_policy: SelectionPolicy,
+    profile: ResolvedReadProfile | None = None,
 ) -> tuple[list[int], dict[int, RecordReviewStatus]]:
     """Return the ranked, trust-filtered candidate ids for one parent.
+
+    ``profile`` is the read profile whose review floor applies. Callers that run inside a streaming generator pass
+    the one they captured while the request was alive: the context variable cannot be trusted there. ``None`` reads
+    the request's profile (fine for eager callers).
 
     Mirrors ``species_transport.get_species_transport``: fetch candidate
     ids + created_at, filter by visibility, rank with
@@ -770,6 +779,10 @@ def select_candidate_ids(
         include_rejected=False,
         include_deprecated=False,
     )
+    # The floor is applied from the explicit profile as well, so a stream consumed after the request context is gone
+    # still selects only what the profile shows (``visible_statuses`` reads the context variable).
+    floor_profile = profile if profile is not None else current_read_profile()
+    visible = {s for s in visible if not status_hidden_under_profile(s, profile=floor_profile)}
     visible_ids = [i for i in ids if badges[i].status in visible]
     if not visible_ids:
         return [], {}
@@ -930,7 +943,11 @@ def _calculation_geometry_texts(
 
 
 def _transport_linearity_witness(
-    session: Session, species_entry_id: int, transport_id: int
+    session: Session,
+    species_entry_id: int,
+    transport_id: int,
+    *,
+    profile: ResolvedReadProfile | None = None,
 ) -> tuple[LinearityWitness | None, LinearityConflict | None]:
     """The attributed statement of the selected transport's linearity, if any.
 
@@ -952,15 +969,30 @@ def _transport_linearity_witness(
     disagreement between the transport's own geometries. Never a sibling
     statmech record the transport does not link to. Returns ``(None, None)``
     when neither source states it.
+
+    **Hidden records are not witnesses.** The answer names its source, and the
+    source can be a calculation or statmech record the profile hides (its own
+    route answers 404). Such a record is left out before anything is derived
+    from it, so neither its ref nor the linearity it states reaches the export:
+    hidden equals unknown. ``profile`` is the read profile whose floor applies
+    (a streaming caller passes the one it captured); ``None`` reads the
+    request's. Under the exploratory profile nothing is left out.
     """
+    floor_profile = profile if profile is not None else current_read_profile()
+    # The floor is a subquery of the statements that read the sources, never a statement of its own (a lookup per
+    # transport would be one visibility statement per record, outside the batch). No floor: ``None``, nothing added.
+    calc_shown = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=floor_profile)
+    statmech_shown = review_floor_predicate(Statmech.id, SubmissionRecordType.statmech, profile=floor_profile)
     calc_rows = session.execute(
-        select(Calculation.id, Calculation.public_ref, Calculation.type)
-        .join(
-            TransportSourceCalculation,
-            TransportSourceCalculation.calculation_id == Calculation.id,
-        )
-        .where(TransportSourceCalculation.transport_id == transport_id)
-        .order_by(Calculation.id)
+        where_visible(
+            select(Calculation.id, Calculation.public_ref, Calculation.type)
+            .join(
+                TransportSourceCalculation,
+                TransportSourceCalculation.calculation_id == Calculation.id,
+            )
+            .where(TransportSourceCalculation.transport_id == transport_id),
+            calc_shown,
+        ).order_by(Calculation.id)
     ).all()
 
     verdicts: dict[str, set[bool]] = {}
@@ -985,8 +1017,10 @@ def _transport_linearity_witness(
             )
         return None, LinearityConflict("calculation_geometry", tuple(sorted(verdicts)))
 
-    stat_rows = session.execute(
+    # A statmech record is a witness only if it and the calculation that links it to this transport are both shown.
+    stat_query = (
         select(Statmech.public_ref, Statmech.is_linear)
+        .select_from(Statmech)
         .join(
             StatmechSourceCalculation,
             StatmechSourceCalculation.statmech_id == Statmech.id,
@@ -996,14 +1030,16 @@ def _transport_linearity_witness(
             TransportSourceCalculation.calculation_id
             == StatmechSourceCalculation.calculation_id,
         )
+        .join(Calculation, Calculation.id == StatmechSourceCalculation.calculation_id)
         .where(
             Statmech.species_entry_id == species_entry_id,
             TransportSourceCalculation.transport_id == transport_id,
             StatmechSourceCalculation.role.in_(_STATMECH_GEOMETRY_ROLES),
             Statmech.is_linear.is_not(None),
         )
-        .distinct()
-        .order_by(Statmech.public_ref)
+    )
+    stat_rows = session.execute(
+        where_visible(where_visible(stat_query, statmech_shown), calc_shown).distinct().order_by(Statmech.public_ref)
     ).all()
     if stat_rows:
         if len({is_linear for _ref, is_linear in stat_rows}) == 1:
@@ -1025,6 +1061,7 @@ def _build_species_record(
     min_review_status: RecordReviewStatus | None,
     collapse: CollapseMode,
     selection_policy: SelectionPolicy,
+    profile: ResolvedReadProfile,
 ) -> tuple[SpeciesExportRecord | None, list[ExportGap]]:
     entry = session.get(SpeciesEntry, species_entry_id)
     if entry is None:  # pragma: no cover - race with delete
@@ -1044,6 +1081,7 @@ def _build_species_record(
         min_review_status=min_review_status,
         collapse=collapse,
         selection_policy=selection_policy,
+        profile=profile,
     )
     thermos = _load_selected_thermos(session, thermo_ids, thermo_status)
     if not thermos:
@@ -1064,6 +1102,7 @@ def _build_species_record(
         min_review_status=min_review_status,
         collapse=collapse,
         selection_policy=selection_policy,
+        profile=profile,
     )
     transports = [
         SelectedTransport(
@@ -1078,7 +1117,7 @@ def _build_species_record(
     linearity_conflict: LinearityConflict | None = None
     if transports:
         linearity, linearity_conflict = _transport_linearity_witness(
-            session, species_entry_id, transports[0].transport.id
+            session, species_entry_id, transports[0].transport.id, profile=profile
         )
 
     record = SpeciesExportRecord(
@@ -1101,6 +1140,7 @@ def _build_reaction_record(
     collapse: CollapseMode,
     selection_policy: SelectionPolicy,
     species_entry_ref_by_id: dict[int, str],
+    profile: ResolvedReadProfile,
 ) -> tuple[ReactionExportRecord | None, list[ExportGap]]:
     entry = session.get(ReactionEntry, reaction_entry_id)
     if entry is None:  # pragma: no cover - race with delete
@@ -1135,6 +1175,7 @@ def _build_reaction_record(
         min_review_status=min_review_status,
         collapse=collapse,
         selection_policy=selection_policy,
+        profile=profile,
     )
     # Batch-load the chosen kinetics rows WITH their pressure-dependent /
     # third-body children (and collider species) eager-loaded, so the
@@ -1207,6 +1248,8 @@ def build_export_record_set(
     :raises ValueError: 422 for an empty/unresolvable seed or an ``all``
         request over the cap.
     """
+    # Captured now, while the request context is still live, and passed down explicitly.
+    profile = current_read_profile()
     reaction_entry_ids, standalone_species_ids = resolve_seed(
         session, seed, all_cap=all_cap
     )
@@ -1233,8 +1276,7 @@ def build_export_record_set(
         collapse=collapse,
         selection_policy=selection_policy,
         generated_at=datetime.now(timezone.utc),
-        # Capture the profile now, while the request context is still live.
-        read_profile=current_read_profile(),
+        read_profile=profile,
     )
 
     for se_id in ordered_species_ids:
@@ -1244,6 +1286,7 @@ def build_export_record_set(
             min_review_status=min_review_status,
             collapse=collapse,
             selection_policy=selection_policy,
+            profile=profile,
         )
         if record is not None:
             record_set.species_records.append(record)
@@ -1258,6 +1301,7 @@ def build_export_record_set(
             collapse=collapse,
             selection_policy=selection_policy,
             species_entry_ref_by_id=species_entry_ref_by_id,
+            profile=profile,
         )
         if record is not None:
             record_set.reaction_records.append(record)
@@ -1359,6 +1403,8 @@ def _stream_ndjson(
     gaps: list[ExportGap] = []
     n_species = 0
     n_reactions = 0
+    # ``read_profile`` was captured before the generator was returned; the context variable is not read in here.
+    batcher = WithheldBatcher(session, read_profile)
 
     for se_id in ordered_species_ids:
         record, rec_gaps = _build_species_record(
@@ -1367,11 +1413,12 @@ def _stream_ndjson(
             min_review_status=min_review_status,
             collapse=collapse,
             selection_policy=selection_policy,
+            profile=read_profile,
         )
         gaps.extend(rec_gaps)
         if record is not None:
             n_species += 1
-            yield _dumps(record.to_ndjson()) + "\n"
+            yield from batcher.add(record.to_ndjson())
 
     for re_id in reaction_entry_ids:
         record, rec_gaps = _build_reaction_record(
@@ -1382,11 +1429,14 @@ def _stream_ndjson(
             collapse=collapse,
             selection_policy=selection_policy,
             species_entry_ref_by_id=species_entry_ref_by_id,
+            profile=read_profile,
         )
         gaps.extend(rec_gaps)
         if record is not None:
             n_reactions += 1
-            yield _dumps(record.to_ndjson()) + "\n"
+            yield from batcher.add(record.to_ndjson())
+
+    yield from batcher.flush()
 
     summary = {
         "record_type": "export_summary",
