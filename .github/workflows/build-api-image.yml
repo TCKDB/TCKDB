@@ -24,20 +24,39 @@ on:
       - 'v*'
   workflow_dispatch:
 
+
+# One image, two native builds. amd64 builds on an amd64 runner and arm64 on
+# GitHub's free native arm64 runner (public repos only), then a merge job
+# stitches the two by-digest images into one multi-arch manifest list. No step
+# runs under QEMU: the emulated arm64 `micromamba install` hung intermittently
+# (log stops at "Transaction starting"), blocking the deploy. This is the
+# pattern documented at
+# https://docs.docker.com/build/ci/github-actions/multi-platform/
+
+env:
+  REGISTRY_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tckdb-api
+
 jobs:
-  build-and-push:
+  build:
     if: github.repository == 'TCKDB/TCKDB'
-    runs-on: ubuntu-latest
+    name: build (${{ matrix.platform }})
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v7
 
-      # QEMU lets an amd64 runner build the arm64 image via emulation. This is
-      # correct but SLOW for a heavy scientific stack. For faster arm64 builds,
-      # switch this job to a native arm64 runner (e.g. a self-hosted arm64
-      # runner, or GitHub-hosted arm runners) and drop the arm64 QEMU path.
-      - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
 
       - uses: docker/login-action@v4
@@ -46,10 +65,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Labels only. Tags are computed once, in the merge job, because the
+      # per-platform images are pushed by digest and carry no tag. The
+      # tags: block is repeated here only so the labels (notably
+      # org.opencontainers.image.version) match the merge job's.
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          images: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tckdb-api
+          images: ${{ env.REGISTRY_IMAGE }}
           tags: |
             # Mutable pointer at the newest main build. Convenient for a
             # scratch pull; never pin a deployment to it -- it moves.
@@ -63,25 +86,32 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      # Build the native arch first and load it locally so it can be RUN before
-      # anything is published. `docker build` succeeding only proves the layers
-      # assembled -- not that Python can import the app, that RDKit's shared
-      # libraries resolve, or that uvicorn binds. The Dockerfile has carried
-      # "STATUS: scaffold, must be validated by an actual build" since it was
-      # written; publishing an image nobody has run is how that stays true.
-      - name: Build amd64 image for smoke testing
+      # Build this leg's native arch and load it locally so it can be RUN
+      # before anything is published. `docker build` succeeding only proves the
+      # layers assembled -- not that Python can import the app, that RDKit's
+      # shared libraries resolve, or that uvicorn binds. The Dockerfile has
+      # carried "STATUS: scaffold, must be validated by an actual build" since
+      # it was written; publishing an image nobody has run is how that stays
+      # true. Each platform has its own gha cache scope so the two legs never
+      # evict each other's conda layers. This must be the build-push-action:
+      # a plain `run:` step has no Actions runtime token, so gha cache flags
+      # there are silently dropped.
+      - name: Build image for smoke testing
+        timeout-minutes: 45
         uses: docker/build-push-action@v7
         with:
           context: .
           file: backend/Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           push: false
           load: true
           tags: tckdb-api:smoketest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=api-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=api-${{ matrix.arch }}
 
       - name: Smoke test — the image must import and serve
+        if: matrix.platform == 'linux/amd64'
+        timeout-minutes: 20
         env:
           PGPASSWORD: tckdb
         run: |
@@ -190,33 +220,111 @@ jobs:
           docker rm -f smoke-api smoke-db >/dev/null
           docker network rm smoke-net >/dev/null
 
-      # arm64 is the deployment target (Raspberry Pi) but cannot be booted on
-      # an amd64 runner without QEMU, which is far too slow for a full server
-      # start. An import check under emulation is cheap and catches what
-      # actually differs between architectures: a dependency with no arm64
-      # build, or a shared library that fails to load.
-      # A healthy run takes about 6 minutes. QEMU emulation has hung twice
-      # with no output; without a limit the job only fails at GitHub's
-      # 6-hour default. Fail fast and re-run instead.
-      - name: Smoke test — arm64 imports under emulation
-        timeout-minutes: 20
+      # The import check runs on BOTH legs, natively. arm64 is the deployment
+      # target (Raspberry Pi); this catches what differs between architectures:
+      # a dependency with no arm64 build, or a shared library that fails to
+      # load. The full serve test above runs on amd64 only for now; enabling it
+      # on arm64 is a one-line change (drop the `if`) once a main run shows it
+      # is clean there.
+      - name: Smoke test — imports on ${{ matrix.platform }}
+        timeout-minutes: 10
         run: |
           set -euo pipefail
-          docker buildx build --platform linux/arm64 \
-            -f backend/Dockerfile -t tckdb-api:arm64-smoke --load \
-            --cache-from type=gha .
-          docker run --rm --platform linux/arm64 tckdb-api:arm64-smoke \
-            python -c "import rdkit, tckdb_schemas; from app.api.app import create_app; print('arm64 imports ok', rdkit.__version__)"
+          docker run --rm tckdb-api:smoketest \
+            python -c "import rdkit, tckdb_schemas; from app.api.app import create_app; print('${{ matrix.arch }} imports ok', rdkit.__version__)"
 
-      - name: Build and push multi-arch
+      # Push this platform's image by digest only (no tag). Layers come from
+      # the gha cache populated by the smoke build, so this is fast.
+      - name: Push by digest
+        id: push
+        timeout-minutes: 45
         uses: docker/build-push-action@v7
         with:
           context: .
           file: backend/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          # gha cache keeps rebuilds fast (esp. the conda solve/download layer).
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=api-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=api-${{ matrix.arch }}
+
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.push.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    if: github.repository == 'TCKDB/TCKDB'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Same images: and tags: block as before the split, so every tag
+      # (latest, sha-<full sha>, semver) is unchanged. The Pi deploy pulls
+      # sha-<full commit sha>.
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            # Mutable pointer at the newest main build. Convenient for a
+            # scratch pull; never pin a deployment to it -- it moves.
+            type=raw,value=latest,enable={{is_default_branch}}
+            # Immutable, one per commit. This is what a deployment pins to and
+            # what makes "which code is running" answerable.
+            type=sha,format=long
+            # Immutable, human-meaningful, cut from a `v*` git tag. This is the
+            # one a paper cites, and the one stage 5's "Pi is reproducible from
+            # tagged release" means.
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          META_JSON: ${{ steps.meta.outputs.json }}
+        run: |
+          set -euo pipefail
+          # Both platforms must be present: a merge of one is a silent
+          # single-arch publish, which the Pi (arm64) could not pull.
+          [ "$(ls | wc -l)" = "2" ] || { echo "::error::expected 2 digests, got: $(ls)"; exit 1; }
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$META_JSON") \
+            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect manifest list
+        env:
+          IMAGE_REF: ${{ env.REGISTRY_IMAGE }}:sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          out="$(docker buildx imagetools inspect "$IMAGE_REF")"
+          echo "$out"
+          for platform in linux/amd64 linux/arm64; do
+            echo "$out" | grep -Eq "^ *Platform: +${platform}$" || {
+              echo "::error::manifest list is missing ${platform}"
+              exit 1
+            }
+          done

@@ -14,42 +14,67 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# Each platform is built natively (amd64 on ubuntu-latest, arm64 on GitHub's
+# free native arm64 runner), pushed by digest, and joined into one multi-arch
+# manifest list by the merge job. No step runs under QEMU: the emulated arm64
+# build once hung until GitHub's 6-hour default timeout (run 36822906978).
+# Pattern: https://docs.docker.com/build/ci/github-actions/multi-platform/
+env:
+  REGISTRY_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tckdb-frontend
+
 jobs:
-  build-and-push:
+  build:
     if: github.repository == 'TCKDB/TCKDB'
-    runs-on: ubuntu-latest
+    name: build (${{ matrix.platform }})
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
 
+      # Labels only; tags are computed once in the merge job.
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          images: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tckdb-frontend
+          images: ${{ env.REGISTRY_IMAGE }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=long
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - name: Build amd64 image for smoke testing
+      - name: Build image for smoke testing
+        timeout-minutes: 25
         uses: docker/build-push-action@v7
         with:
           context: frontend
           file: frontend/Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           push: false
           load: true
           tags: tckdb-frontend:smoketest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=frontend-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=frontend-${{ matrix.arch }}
 
       - name: Smoke test — SPA fallback and same-origin API proxy
+        timeout-minutes: 10
         run: |
           set -euo pipefail
+          # The arm64 runner image may not ship jq/curl; install if missing.
+          command -v jq >/dev/null && command -v curl >/dev/null \
+            || { sudo apt-get update && sudo apt-get install -y jq curl; }
           docker network create --subnet 172.30.252.0/24 frontend-smoke-net
           docker run -d --name tckdb-api --network frontend-smoke-net \
             -v "$PWD/frontend/scripts/ops/smoke_api.py:/app/smoke_api.py:ro" \
@@ -99,14 +124,85 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push multi-arch image
+      - name: Push by digest
+        id: push
+        timeout-minutes: 25
         uses: docker/build-push-action@v7
         with:
           context: frontend
           file: frontend/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=frontend-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=frontend-${{ matrix.arch }}
+
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.push.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    if: github.repository == 'TCKDB/TCKDB'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Same tags: block as before the split, so every tag is unchanged.
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          META_JSON: ${{ steps.meta.outputs.json }}
+        run: |
+          set -euo pipefail
+          [ "$(ls | wc -l)" = "2" ] || { echo "::error::expected 2 digests, got: $(ls)"; exit 1; }
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$META_JSON") \
+            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect manifest list
+        env:
+          IMAGE_REF: ${{ env.REGISTRY_IMAGE }}:sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          out="$(docker buildx imagetools inspect "$IMAGE_REF")"
+          echo "$out"
+          for platform in linux/amd64 linux/arm64; do
+            echo "$out" | grep -Eq "^ *Platform: +${platform}$" || {
+              echo "::error::manifest list is missing ${platform}"
+              exit 1
+            }
+          done
