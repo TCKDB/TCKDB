@@ -102,12 +102,109 @@ and then the result, and refuses any difference. The digests are checksums, not 
 snapshot of the current data, not a retrieval of a stored answer. `tckdb_client` has no replay function for this
 manifest (nor for structure manifests).
 
+**Versions and old manifests.** `versions.relative_energy` is `"2"`. Version `"1"`, the first release of the route, did not
+record `value_geometry_ref` on a member. A version-1 manifest still replays: every assessment is recomputed and
+compared as before, and the recorded `result` is compared with the recomputed one **projected onto the fields version 1
+carried** (the member field removed, `relative_energy_version` set to `"1"`). The projection is keyed to the recorded
+version, never to what happens to be missing: a manifest that claims version 2 and lacks `value_geometry_ref` is refused
+with `result_mismatch`, as is any other difference. A version the release does not know is `unsupported_semantic_version`.
+A comparison manifest is made, and replayed, under version 2 only, and so are the two runs inside it.
+
+## Descriptive benchmark comparison (`/compare`)
+
+`POST .../conformers/relative-energies/compare` and `.../compare/manifest`. It describes how far two **stored protocols**
+of one species entry deviate from each other, for the same named reference conformer, energy kind and certificate. It
+does not say which protocol is better.
+
+**Request** (`extra="forbid"`): the shared choices of the operation above (`reference_conformer_ref`, `energy_kind`,
+`certificate`, and the optional `member_refs`, `coverage_requirement`, `repeat_policy`, `min_review_status`,
+`permitted_quality`, `require_stable_reference`), plus `candidate` and `reference` (each `{level, recipe?}`, the shapes
+of the level and recipe above) and `pairing`. `pairing` is required and has no default:
+
+- `same_geometry`: both values of a conformer must be evaluated at the same `geom_` ref (the sets of evaluated
+  geometries are equal and recorded). The geometry is the one each stored value was evaluated at
+  (`value_geometry_ref`, set only when every record giving that value names the same geometry), not the set over all
+  repeats; a value not tied to one geometry cannot satisfy `same_geometry`. The reference conformer's value must also be
+  evaluated at the same geometry on both sides, because every relative energy is taken from it;
+- `same_basin`: each protocol's own geometry of the basin, so only the conformer group is matched.
+
+External or published relative references are not supported. Enthalpy, Gibbs energy and `certificate: none` are refused
+as above, before the first query.
+
+**What runs.** The relative-energy computation runs twice in **one** snapshot, over **one** population, once per
+protocol. Members are paired by `conformer_ref`; the deviation is `candidate - reference`, in kJ/mol, of the two
+relative energies (each against the one named reference conformer). The reference conformer is **not a pair**: its
+deviation is zero by construction.
+
+**Response.** `outcome` (`compared`, `no_pairs`, `incomplete_pairing`), `statistics`, `pairs`, each protocol's block
+(level, recipe cohort, the engine's own outcome, reference-conformer value, coverage, unresolved), `claims` and the
+manifest's integrity. `statistics`: `n`, `msd_kj_mol`, `mad_kj_mol`, `rmsd_kj_mol`, `max_abs_deviation_kj_mol` with
+`max_abs_deviation_conformer_ref` (a tie goes to the lowest ref), `sign_convention` (`candidate minus reference`),
+`reference_conformer_ref` and `reference_conformer_dependence` (the figures change with the named conformer; compare
+them only with figures measured from the same one). `pairs` are ordered by ref and carry no rank:
+`conformer_ref`, `candidate_kj_mol`, `reference_kj_mol`, `deviation_kj_mol`, `excluded_reason`, each side's stored
+uncertainty (hartree, echoed, never combined) and the one geometry each side's value came from
+(`candidate_geometry_ref`, `reference_geometry_ref`; null when the value is tied to none or several, never borrowed from
+a sibling record). The top-level `reference_conformer` block names the anchor, each side's value and geometry, and a
+`problem` (null, or one of the three codes below) that applies to every pair.
+
+**Rules.**
+
+- A pair missing on either side, or failing `pairing`, is listed with a coded `excluded_reason` and does not enter any
+  statistic. It is never a zero deviation. The closed vocabulary: `neither_protocol_has_value`,
+  `candidate_value_missing`, `reference_protocol_value_missing`, `geometry_not_recorded` and `geometry_differs` (the last
+  two only under `same_geometry`), and the reference-conformer reasons `reference_conformer_value_missing`,
+  `reference_conformer_geometry_not_recorded` and `reference_conformer_geometry_differs` (the last two only under
+  `same_geometry`). When the reference conformer has a problem, every pair whose member value exists on both sides is
+  excluded with that reason (the members are not blamed); a pair already missing a value keeps its own reason.
+- `n == 0` (which includes any reference-conformer problem under `known_values`, since every deviation needs the
+  anchor): `outcome` is `no_pairs` and every statistic is `null`, not 0 (`n` is the integer 0).
+- `coverage_requirement: all_requested_members` with any excluded pair, or with any reference-conformer problem: `outcome` is `incomplete_pairing` and `statistics` is `null`. No statistic is given over a subset.
+- A candidate identical to the reference (the same canonical level, after a merged `lot_` is resolved to the kept row,
+  and the same effective narrowing: the same known recipe facts; a fact stated `unknown`, and `source` or
+  `supporting_dois`, narrow nothing) is 422 `relative_conformer_energy_compare_identical_protocols`. It is decided after
+  the entry, the levels and the conformer refs are resolved (an unknown or hidden one is its usual 404 first, so the
+  refusal never answers for a record the caller cannot see) and before any energy is read.
+- Two stored uncertainties are never combined; each side's is echoed.
+
+**Claims.** `claims.kind` is `descriptive`; `claims.superiority` and `claims.ranking` are `not_licensed`; and
+`claims.missing_evidence` is always `["E1", ..., "E7"]` in this version. These are the named prerequisites of any future
+claim that one protocol is more accurate; none is evaluated yet, so all seven are always listed as missing:
+
+| Code | Prerequisite |
+|---|---|
+| E1 | A numeric uncertainty for the reference values, per member or as a stated set-level bound, with its source. |
+| E2 | Independence: the reference shares no computed component with the candidate, shown from recorded composition, not asserted. |
+| E3 | A resolved margin: for superiority, the paired difference in the error metric between two candidates exceeds its combined uncertainty (reference uncertainty plus paired sampling uncertainty by a stated method with stated n). For a near-tie ranking, every adjacent pair in the ranking is resolved this way; unresolved neighbours are reported as indistinguishable, not ordered. |
+| E4 | Coverage and sameness: the full named member set, the same geometries for both candidates, the same named reference conformer as the source. |
+| E5 | Domain: the claim is scoped to the member set measured; transfer to other molecules needs evidence on them. |
+| E6 | Established protocol facts: every setting that defines the protocol (thresholds, PNO cut-offs, extrapolation, core treatment, corrections) is typed and established, not read from a label. |
+| E7 | Owner acceptance of the rule that would carry the claim, and its predicates implemented and reviewed. |
+
+Even with E1–E7 met, a preference is an audited rule edge through the selection kernel, never a by-product of this comparison.
+
+**Boundary.** The comparison never builds a selection-kernel `Edge` and never consults the rule registry: none of
+`compare.py`, `service.py`, `manifest.py` or `public.py` directly imports `structure_selection.rules` or
+`selection_kernel`, and none references `Edge` (a test reads their imports and names; it does not cover transitive
+imports, and the certificate legitimately comes through `structure_selection.public`). A
+mean absolute deviation is a description and cannot become a rule input.
+
+**Manifest.** `format: relative_conformer_energy_comparison_manifest`, version 1. It holds the shared request, both
+protocols, the pairing, the read profile and snapshot isolation, **both runs' complete relative-energy manifests** (each
+with its inputs, assessments, answer and checksums), the `result` and a whole-manifest digest. The combined manifest is checked against the manifest size bound (422
+`structure_selection_manifest_too_large`), not only each run. The response is built
+from it. `replay_comparison(manifest)` replays both runs (recomputing every assessment, never trusting a recorded flag),
+checks the runs were made for the recorded request, profile, snapshot and one population, then recomputes the pairing
+and statistics from the *replayed* answers and refuses any difference. The digests are checksums, not signatures.
+
+**Disclosure.** As above: a hidden group is not in the world, and the engine's refusals (unknown or hidden ref is the
+same 404) apply to the comparison unchanged.
+
 ## Deferred
 
 Enthalpy and Gibbs energy (needs per-conformer thermo at exactly `temperature_k`), `certificate: none` (needs a structure
-intent that states no claim), published relative-only references, and the descriptive benchmark comparison (`/compare`)
-are not part of this release. Owner decisions O2, O3 and O4 of 2026-10-13 defer the first three until a real deposit needs
-them.
+intent that states no claim) and published relative-only references (also not supported by `/compare`) are not part of
+this release. Owner decisions O2, O3 and O4 of 2026-10-13 defer them until a real deposit needs them.
 
 ## Related
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.153.0 - 2026-10-18
+
+`RejectionCode` gains `relative_conformer_energy_compare_identical_protocols` (`tckdb-schemas` 0.125.0): the code of the new server read
+`POST /scientific/species-entries/{ref}/conformers/relative-energies/compare` (a descriptive comparison of two stored protocols). No
+method changed; a client method for the route is a separate release.
+
 ## 0.152.0 - 2026-10-17
 
 `ConformerObservationRecord.conformer_group` is `JSONDict | None`: under `profile="curated"` a visible observation whose conformer

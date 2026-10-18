@@ -11156,6 +11156,15 @@
         "title": "CollapseMode",
         "type": "string"
       },
+      "ComparisonOutcome": {
+        "enum": [
+          "compared",
+          "no_pairs",
+          "incomplete_pairing"
+        ],
+        "title": "ComparisonOutcome",
+        "type": "string"
+      },
       "CompositeAssembly": {
         "enum": [
           "program_run",
@@ -38792,6 +38801,15 @@
         "title": "Pagination",
         "type": "object"
       },
+      "Pairing": {
+        "description": "How the two protocols' values of one member are matched. Required; there is no default.",
+        "enum": [
+          "same_geometry",
+          "same_basin"
+        ],
+        "title": "Pairing",
+        "type": "string"
+      },
       "PathSearchMethod-Input": {
         "enum": [
           "neb",
@@ -41401,6 +41419,278 @@
         "title": "RegisterRequest",
         "type": "object"
       },
+      "RelativeConformerEnergyCompareManifest": {
+        "additionalProperties": true,
+        "description": "The replayable manifest of the ``/compare/manifest`` download.\n\nBoth runs' complete relative-energy manifests, the shared request, the pairing and the comparison. The digests are\nchecksums, not signatures; replay recomputes both runs and the pairing and never trusts a recorded flag. Replay it\nwith ``app.services.relative_conformer_energy.replay_comparison``.",
+        "properties": {
+          "integrity": {
+            "$ref": "#/components/schemas/RelativeEnergyIntegrity"
+          },
+          "manifest_format": {
+            "title": "Manifest Format",
+            "type": "string"
+          },
+          "manifest_format_version": {
+            "title": "Manifest Format Version",
+            "type": "integer"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ComparisonOutcome"
+          },
+          "read_profile": {
+            "additionalProperties": true,
+            "title": "Read Profile",
+            "type": "object"
+          },
+          "request": {
+            "$ref": "#/components/schemas/RelativeEnergyCompareManifestRequest"
+          },
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          },
+          "runs": {
+            "additionalProperties": true,
+            "title": "Runs",
+            "type": "object"
+          },
+          "snapshot_isolation": {
+            "title": "Snapshot Isolation",
+            "type": "string"
+          },
+          "versions": {
+            "additionalProperties": true,
+            "title": "Versions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "manifest_format",
+          "manifest_format_version",
+          "versions",
+          "request",
+          "read_profile",
+          "snapshot_isolation",
+          "runs",
+          "result",
+          "outcome",
+          "integrity"
+        ],
+        "title": "RelativeConformerEnergyCompareManifest",
+        "type": "object"
+      },
+      "RelativeConformerEnergyCompareRequest": {
+        "additionalProperties": false,
+        "description": "A descriptive comparison of two stored protocols on one species entry, against one named reference conformer.\n\nEverything but the two protocols is shared: the reference conformer, the energy kind and the certificate are the\nsame for both. ``pairing`` is required and has no default. External or published relative references are not\nsupported.",
+        "properties": {
+          "candidate": {
+            "$ref": "#/components/schemas/RelativeEnergyProtocol",
+            "description": "The protocol under description. Deviations are candidate minus reference."
+          },
+          "certificate": {
+            "$ref": "#/components/schemas/Certificate",
+            "description": "The curvature evidence each member needs. Required."
+          },
+          "coverage_requirement": {
+            "$ref": "#/components/schemas/app__services__structure_selection__models__CoverageRequirement",
+            "default": "known_values"
+          },
+          "energy_kind": {
+            "$ref": "#/components/schemas/EnergyKind",
+            "description": "electronic_energy or zero_kelvin_energy. Required; enthalpy and gibbs_energy are refused."
+          },
+          "member_refs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Refs"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pairing": {
+            "$ref": "#/components/schemas/Pairing",
+            "description": "same_geometry: both values must be evaluated at the same geom_ ref. same_basin: each protocol's own geometry of the basin. Required; there is no default."
+          },
+          "permitted_quality": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CalculationQuality"
+                },
+                "maxItems": 3,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permitted Quality"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/RelativeEnergyProtocol",
+            "description": "The protocol the candidate's values are set against."
+          },
+          "reference_conformer_ref": {
+            "description": "The named reference conformer group (cg_ ref) of this entry. Required.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Reference Conformer Ref",
+            "type": "string"
+          },
+          "repeat_policy": {
+            "$ref": "#/components/schemas/RepeatPolicy",
+            "default": "retain_alternates"
+          },
+          "require_stable_reference": {
+            "default": false,
+            "title": "Require Stable Reference",
+            "type": "boolean"
+          },
+          "temperature_k": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For the refused kinds only.",
+            "title": "Temperature K"
+          }
+        },
+        "required": [
+          "reference_conformer_ref",
+          "energy_kind",
+          "certificate",
+          "candidate",
+          "reference",
+          "pairing"
+        ],
+        "title": "RelativeConformerEnergyCompareRequest",
+        "type": "object"
+      },
+      "RelativeConformerEnergyCompareResponse": {
+        "description": "The descriptive comparison, built from the replayable manifest so the two cannot disagree.",
+        "properties": {
+          "candidate": {
+            "additionalProperties": true,
+            "title": "Candidate",
+            "type": "object"
+          },
+          "claims": {
+            "$ref": "#/components/schemas/RelativeEnergyCompareClaims"
+          },
+          "comparison_version": {
+            "title": "Comparison Version",
+            "type": "string"
+          },
+          "coverage_requirement": {
+            "$ref": "#/components/schemas/CoverageRequirement-Output"
+          },
+          "integrity": {
+            "$ref": "#/components/schemas/RelativeEnergyIntegrity"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ComparisonOutcome"
+          },
+          "pairing": {
+            "$ref": "#/components/schemas/Pairing"
+          },
+          "pairs": {
+            "items": {
+              "$ref": "#/components/schemas/RelativeEnergyComparePair"
+            },
+            "title": "Pairs",
+            "type": "array"
+          },
+          "reference": {
+            "additionalProperties": true,
+            "title": "Reference",
+            "type": "object"
+          },
+          "reference_conformer": {
+            "$ref": "#/components/schemas/RelativeEnergyCompareReferenceConformer"
+          },
+          "request": {
+            "$ref": "#/components/schemas/RelativeEnergyCompareRequestEcho"
+          },
+          "review": {
+            "$ref": "#/components/schemas/RelativeEnergyReview"
+          },
+          "snapshot_isolation": {
+            "title": "Snapshot Isolation",
+            "type": "string"
+          },
+          "statistics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelativeEnergyCompareStatistics"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the outcome is incomplete_pairing: no statistic is given over a subset."
+          },
+          "units": {
+            "$ref": "#/components/schemas/RelativeEnergyCompareUnits"
+          },
+          "versions": {
+            "additionalProperties": true,
+            "title": "Versions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "request",
+          "review",
+          "outcome",
+          "pairing",
+          "coverage_requirement",
+          "units",
+          "statistics",
+          "reference_conformer",
+          "pairs",
+          "candidate",
+          "reference",
+          "claims",
+          "comparison_version",
+          "notes",
+          "versions",
+          "snapshot_isolation",
+          "integrity"
+        ],
+        "title": "RelativeConformerEnergyCompareResponse",
+        "type": "object"
+      },
       "RelativeConformerEnergyManifest": {
         "additionalProperties": true,
         "description": "The replayable manifest of the ``/manifest`` download.\n\nPublic refs only: the normalised request, read profile, snapshot isolation, subject, the compared groups and\ndeterminations, every normalised calculation and determination, each assessment and the computed answer. The\ndigests in ``integrity`` are checksums, not signatures. The download is a new snapshot of the current data, not a\nretrieval of an earlier answer. Replay it with ``app.services.relative_conformer_energy.replay_relative_energies``.",
@@ -41795,6 +42085,480 @@
         "title": "RelativeEnergyCertificate",
         "type": "object"
       },
+      "RelativeEnergyCompareClaims": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "missing_evidence": {
+            "description": "E1 to E7: what a superiority claim would need. Always all seven in this version.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Evidence",
+            "type": "array"
+          },
+          "ranking": {
+            "title": "Ranking",
+            "type": "string"
+          },
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          },
+          "superiority": {
+            "title": "Superiority",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "superiority",
+          "ranking",
+          "missing_evidence",
+          "statement"
+        ],
+        "title": "RelativeEnergyCompareClaims",
+        "type": "object"
+      },
+      "RelativeEnergyCompareManifestRequest": {
+        "additionalProperties": true,
+        "description": "The comparison manifest's normalised request (``shared``, ``candidate``, ``reference``, ``pairing``), all kept.\n\nAs for the relative-energy manifest (:class:`RelativeEnergyManifestRequest`): the manifest is served as a download\nand replayed offline, so the profile it was made under is the manifest's own ``read_profile`` block; the profile echo\nfields here keep the published shape uniform with every other scientific envelope and are not part of the digested\ncontent.",
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          }
+        },
+        "title": "RelativeEnergyCompareManifestRequest",
+        "type": "object"
+      },
+      "RelativeEnergyComparePair": {
+        "description": "One conformer's two values and their deviation. An unusable pair has ``excluded_reason`` and no deviation.",
+        "properties": {
+          "candidate_geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one geometry the candidate's value was evaluated at; null when it is tied to none or several.",
+            "title": "Candidate Geometry Ref"
+          },
+          "candidate_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Kj Mol"
+          },
+          "candidate_uncertainty_hartree": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As stored with the candidate's value; never combined.",
+            "title": "Candidate Uncertainty Hartree"
+          },
+          "conformer_ref": {
+            "title": "Conformer Ref",
+            "type": "string"
+          },
+          "deviation_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Candidate minus reference; null when the pair is excluded.",
+            "title": "Deviation Kj Mol"
+          },
+          "excluded_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A coded reason from a closed vocabulary; never a zero deviation.",
+            "title": "Excluded Reason"
+          },
+          "reference_geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one geometry the reference protocol's value was evaluated at; null when it is tied to none or several.",
+            "title": "Reference Geometry Ref"
+          },
+          "reference_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Kj Mol"
+          },
+          "reference_uncertainty_hartree": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As stored with the reference protocol's value; never combined.",
+            "title": "Reference Uncertainty Hartree"
+          }
+        },
+        "required": [
+          "conformer_ref",
+          "candidate_kj_mol",
+          "reference_kj_mol",
+          "deviation_kj_mol",
+          "excluded_reason",
+          "candidate_uncertainty_hartree",
+          "reference_uncertainty_hartree",
+          "candidate_geometry_ref",
+          "reference_geometry_ref"
+        ],
+        "title": "RelativeEnergyComparePair",
+        "type": "object"
+      },
+      "RelativeEnergyCompareReferenceConformer": {
+        "description": "What the named reference conformer allows. Every relative energy is taken from it, so a problem here is every pair's.",
+        "properties": {
+          "candidate_geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Geometry Ref"
+          },
+          "candidate_value_present": {
+            "title": "Candidate Value Present",
+            "type": "boolean"
+          },
+          "conformer_ref": {
+            "title": "Conformer Ref",
+            "type": "string"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null, or reference_conformer_value_missing, reference_conformer_geometry_not_recorded or reference_conformer_geometry_differs (the last two under same_geometry only). With a problem no pair is usable.",
+            "title": "Problem"
+          },
+          "reference_geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Geometry Ref"
+          },
+          "reference_value_present": {
+            "title": "Reference Value Present",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conformer_ref",
+          "problem",
+          "candidate_value_present",
+          "reference_value_present",
+          "candidate_geometry_ref",
+          "reference_geometry_ref"
+        ],
+        "title": "RelativeEnergyCompareReferenceConformer",
+        "type": "object"
+      },
+      "RelativeEnergyCompareRequestEcho": {
+        "description": "The normalised request: the shared choices, the two protocols with canonical level refs, and the pairing.",
+        "properties": {
+          "candidate": {
+            "additionalProperties": true,
+            "title": "Candidate",
+            "type": "object"
+          },
+          "certificate": {
+            "$ref": "#/components/schemas/Certificate"
+          },
+          "coverage_requirement": {
+            "$ref": "#/components/schemas/CoverageRequirement-Output"
+          },
+          "energy_kind": {
+            "$ref": "#/components/schemas/EnergyKind"
+          },
+          "entry_ref": {
+            "title": "Entry Ref",
+            "type": "string"
+          },
+          "member_refs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Refs"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pairing": {
+            "$ref": "#/components/schemas/Pairing"
+          },
+          "permitted_quality": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CalculationQuality"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permitted Quality"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "reference": {
+            "additionalProperties": true,
+            "title": "Reference",
+            "type": "object"
+          },
+          "reference_conformer_ref": {
+            "title": "Reference Conformer Ref",
+            "type": "string"
+          },
+          "repeat_policy": {
+            "$ref": "#/components/schemas/RepeatPolicy"
+          },
+          "require_stable_reference": {
+            "title": "Require Stable Reference",
+            "type": "boolean"
+          },
+          "temperature_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature K"
+          }
+        },
+        "required": [
+          "entry_ref",
+          "pairing",
+          "candidate",
+          "reference",
+          "reference_conformer_ref",
+          "energy_kind",
+          "certificate",
+          "member_refs",
+          "coverage_requirement",
+          "repeat_policy",
+          "min_review_status",
+          "permitted_quality",
+          "require_stable_reference"
+        ],
+        "title": "RelativeEnergyCompareRequestEcho",
+        "type": "object"
+      },
+      "RelativeEnergyCompareStatistics": {
+        "description": "Descriptive statistics of the deviations, candidate minus reference, over the paired members.\n\nThe reference conformer is not a pair. Every figure is ``null`` when ``n`` is 0.",
+        "properties": {
+          "mad_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mean absolute deviation.",
+            "title": "Mad Kj Mol"
+          },
+          "max_abs_deviation_conformer_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Abs Deviation Conformer Ref"
+          },
+          "max_abs_deviation_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Abs Deviation Kj Mol"
+          },
+          "msd_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mean signed deviation.",
+            "title": "Msd Kj Mol"
+          },
+          "n": {
+            "description": "Paired members; the reference conformer is excluded (its deviation is 0 by construction).",
+            "title": "N",
+            "type": "integer"
+          },
+          "reference_conformer_dependence": {
+            "title": "Reference Conformer Dependence",
+            "type": "string"
+          },
+          "reference_conformer_ref": {
+            "title": "Reference Conformer Ref",
+            "type": "string"
+          },
+          "rmsd_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Root-mean-square deviation.",
+            "title": "Rmsd Kj Mol"
+          },
+          "sign_convention": {
+            "title": "Sign Convention",
+            "type": "string"
+          }
+        },
+        "required": [
+          "n",
+          "msd_kj_mol",
+          "mad_kj_mol",
+          "rmsd_kj_mol",
+          "max_abs_deviation_kj_mol",
+          "max_abs_deviation_conformer_ref",
+          "sign_convention",
+          "reference_conformer_ref",
+          "reference_conformer_dependence"
+        ],
+        "title": "RelativeEnergyCompareStatistics",
+        "type": "object"
+      },
+      "RelativeEnergyCompareUnits": {
+        "properties": {
+          "deviation": {
+            "title": "Deviation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deviation"
+        ],
+        "title": "RelativeEnergyCompareUnits",
+        "type": "object"
+      },
       "RelativeEnergyIntegrity": {
         "properties": {
           "algorithm": {
@@ -42030,6 +42794,18 @@
             "title": "Status",
             "type": "string"
           },
+          "value_geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one geometry the stored value was evaluated at; null when the records of the value name several or none.",
+            "title": "Value Geometry Ref"
+          },
           "value_hartree": {
             "anyOf": [
               {
@@ -42066,6 +42842,7 @@
           "determination_refs",
           "energy_calculation_refs",
           "evaluated_geometry_refs",
+          "value_geometry_ref",
           "certificate",
           "alternates",
           "absent_reason",
@@ -42086,6 +42863,32 @@
         ],
         "title": "RelativeEnergyOutcome",
         "type": "string"
+      },
+      "RelativeEnergyProtocol": {
+        "additionalProperties": false,
+        "description": "One stored protocol: a level, and optionally a recipe that narrows within it.",
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/RelativeEnergyLevel",
+            "description": "The one level of theory (or composite scheme) of this protocol. Required."
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActualProtocolDeclaration-Input"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Narrows within the level. The units' own stated facts must establish it; a request never fills a missing fact."
+          }
+        },
+        "required": [
+          "level"
+        ],
+        "title": "RelativeEnergyProtocol",
+        "type": "object"
       },
       "RelativeEnergyReference": {
         "properties": {
@@ -95629,6 +96432,174 @@
           }
         },
         "summary": "Relative energies of one species entry's conformers against a named reference conformer",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare": {
+      "post": {
+        "description": "Deviations, candidate minus reference, in kJ/mol, of two stored protocols against one named reference conformer.\n\nBoth protocols are evaluated over one population in one snapshot and paired by conformer; ``pairing`` is required\n(``same_geometry`` or ``same_basin``). The reference conformer is not a pair. A pair that is missing on either side,\nor fails the pairing, is listed with a coded ``excluded_reason`` and never counted as a zero deviation. With no\npair every statistic is null; under ``all_requested_members`` any excluded pair gives ``incomplete_pairing`` and no\nstatistics. The answer is descriptive: ``claims.superiority`` and ``claims.ranking`` are ``not_licensed``, and the\nevidence a superiority claim would need (E1 to E7) is listed as missing. Naming the same level with the same recipe facts twice is\n422 ``relative_conformer_energy_compare_identical_protocols``; enthalpy, Gibbs energy and no certificate are 422\n``relative_conformer_energy_unsupported``. External or published references are not supported.",
+        "operationId": "relative_conformer_energies_compare_api_v1_scientific_species_entries__species_entry_ref__conformers_relative_energies_compare_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "species_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Species Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelativeConformerEnergyCompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelativeConformerEnergyCompareResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Describe the deviations between two stored protocols' relative conformer energies",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare/manifest": {
+      "post": {
+        "description": "The same request, answered with the replayable manifest as a download (a new snapshot, not a saved answer).",
+        "operationId": "relative_conformer_energies_compare_manifest_api_v1_scientific_species_entries__species_entry_ref__conformers_relative_energies_compare_manifest_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "species_entry_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Species Entry Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelativeConformerEnergyCompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelativeConformerEnergyCompareManifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download the replayable manifest for a relative conformer energy comparison",
         "tags": [
           "scientific"
         ]

@@ -22,7 +22,12 @@ from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.services.structure_selection.models import CoverageRequirement, RepeatPolicy
 
 #: Version of the relative-energy semantics (grouping, level filter, repeats, differencing).
-RELATIVE_ENERGY_VERSION = "1"
+RELATIVE_ENERGY_VERSION = "2"
+#: Earlier semantic versions whose manifests still replay, and the member fields each did not carry. Version 1 (the
+#: first release of the route) recorded no ``value_geometry_ref``; replay compares such a manifest's recorded answer with
+#: the recomputed one projected onto the fields that version carried. The rule is keyed to the recorded version: a
+#: manifest that claims the current version and lacks a field is refused, not projected.
+LEGACY_MEMBER_FIELDS: dict[str, tuple[str, ...]] = {"1": ("value_geometry_ref",)}
 #: Version of the engineering bounds below.
 BOUNDS_VERSION = "1"
 #: The most conformer groups one request is answered for. Same number as the structure candidate bound.
@@ -291,6 +296,9 @@ class MemberResult:
     determination_refs: tuple[str, ...] = ()
     energy_calculation_refs: tuple[str, ...] = ()
     evaluated_geometry_refs: tuple[str, ...] = ()
+    #: The one geometry the stored value was evaluated at: set only when every record that gives this value names the
+    #: same geometry. ``None`` when the records of the value name several or none (it is never taken from a sibling).
+    value_geometry_ref: str | None = None
     certificate: MemberCertificate | None = None
     alternates: tuple[Alternate, ...] = ()
     absent_reason: str | None = None
@@ -312,6 +320,7 @@ class MemberResult:
             "determination_refs": list(self.determination_refs),
             "energy_calculation_refs": list(self.energy_calculation_refs),
             "evaluated_geometry_refs": list(self.evaluated_geometry_refs),
+            "value_geometry_ref": self.value_geometry_ref,
             "certificate": self.certificate.to_dict() if self.certificate is not None else None,
             "alternates": [a.to_dict() for a in self.alternates],
             "absent_reason": self.absent_reason,

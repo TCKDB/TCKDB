@@ -12,9 +12,9 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 | Classification | Operations |
 |---|---|
 | typed | 123 |
-| raw_only | 109 |
+| raw_only | 111 |
 | not_applicable | 45 |
-| **total** | **277** |
+| **total** | **279** |
 
 ## Typed coverage
 
@@ -298,6 +298,8 @@ Deliberately reachable only through the generic request helpers. Each group stat
 | Operation | raw HTTP | typed client | iterator | example | contract test |
 |---|---|---|---|---|---|
 | `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies` | yes | — | — | — | — |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare` | yes | — | — | — | — |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare/manifest` | yes | — | — | — | — |
 | `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/manifest` | yes | — | — | — | — |
 
 > Single-record read of a row already returned in full by search_statmech(statmech_ref=...). Reachable via get_json() when only the ref is known.

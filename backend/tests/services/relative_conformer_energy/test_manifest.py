@@ -73,3 +73,44 @@ def test_a_manifest_of_another_semantic_version_is_refused_not_substituted(manif
     with pytest.raises(ReplayError) as raised:
         replay_relative_energies(reseal(forged))
     assert raised.value.code == "unsupported_semantic_version"
+
+
+def as_recorded_by_version_1(manifest):
+    """A manifest shaped like one the first release of the route downloaded: no ``value_geometry_ref``, version 1."""
+    old = copy.deepcopy(manifest)
+    for member in old["result"]["members"]:
+        del member["value_geometry_ref"]
+    old["result"]["relative_energy_version"] = "1"
+    old["versions"]["relative_energy"] = "1"
+    return reseal(old)
+
+
+def test_a_manifest_recorded_by_version_1_still_replays(manifest):
+    assert any(m["value_geometry_ref"] is not None for m in manifest["result"]["members"])  # the field is real
+    old = as_recorded_by_version_1(manifest)
+    assert all("value_geometry_ref" not in m for m in old["result"]["members"])
+    assert replay_matches(old)
+    assert replay_relative_energies(old) == old["result"]
+
+
+def test_a_current_version_manifest_missing_the_field_is_refused_not_projected(manifest):
+    forged = copy.deepcopy(manifest)
+    for member in forged["result"]["members"]:
+        del member["value_geometry_ref"]
+    with pytest.raises(ReplayError) as raised:
+        replay_relative_energies(reseal(forged))
+    assert raised.value.code == "result_mismatch"
+
+
+def test_the_version_1_projection_does_not_excuse_any_other_difference(manifest):
+    old = as_recorded_by_version_1(manifest)
+    target = next(m for m in old["result"]["members"] if m["status"] == "present")
+    target["relative_energy_kj_mol"] += 1.0
+    with pytest.raises(ReplayError) as raised:
+        replay_relative_energies(reseal(old))
+    assert raised.value.code == "result_mismatch"
+    wrong_marker = as_recorded_by_version_1(manifest)
+    wrong_marker["result"]["relative_energy_version"] = "2"  # the answer claims a version its manifest does not
+    with pytest.raises(ReplayError) as raised:
+        replay_relative_energies(reseal(wrong_marker))
+    assert raised.value.code == "result_mismatch"
