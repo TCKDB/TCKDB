@@ -307,7 +307,7 @@ def _trust_check_section(checks: tuple[RubricCheck, ...]) -> str:
         explain = _md(check.explain) or "*(the rubric carries no explanation)*"
         lines.append(
             f"| `{check.name}` | `{check.rubric}` | {check.kind} | "
-            f"{check.weight} | {explain} |"
+            f"{0 if check.kind == EvidenceCheckKind.warning else check.weight} | {explain} |"
         )
     lines.append("")
     return "\n".join(lines)

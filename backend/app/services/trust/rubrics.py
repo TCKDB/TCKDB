@@ -3034,14 +3034,17 @@ def _check_ts_no_frequency_result_has_undesignated_imaginary_modes(
     is in that state; it certifies nothing, and a warning means that attached result needs investigation, not that the
     transition state is disproved. The required completeness check ``reaction_coordinate_designated_for_ts`` is unchanged.
     """
-    recorded = [
-        (calc.freq_result.n_imag, calc.freq_result.reaction_coordinate_mode_index)
-        for calc in _ts_source_calculations(ts_entry)
-        if calc.freq_result is not None and calc.freq_result.n_imag is not None
-    ]
+    recorded = False
+    undesignated = False
+    for calc in _ts_source_calculations(ts_entry):
+        freq = calc.freq_result
+        if freq is None or freq.n_imag is None:
+            continue
+        recorded = True
+        if freq.n_imag >= 2 and freq.reaction_coordinate_mode_index is None:
+            undesignated = True
     if not recorded:
         return EvidenceOutcome.not_applicable
-    undesignated = any(n_imag >= 2 and mode_index is None for n_imag, mode_index in recorded if n_imag is not None)
     return EvidenceOutcome.warning if undesignated else EvidenceOutcome.passed
 
 

@@ -153,14 +153,15 @@ const saddlePointSchema = z.object({
 // `checks` is typed as the map it is: check name -> outcome. A warning-kind check
 // appears in it only when it fires; the map is optional so a deployment that does
 // not serve it still renders.
-const trustCheckOutcomeSchema = z.enum(["passed", "missing", "warning", "not_applicable"])
+// Outcome values are read as plain strings (the page only tests `=== "warning"`), so a future outcome token
+// never turns the whole page into a "malformed data" error.
 
 const trustSchema = z.object({
     trust_status: z.string(),
     evidence: z.object({
         passed_count: z.number(),
         possible_count: z.number(),
-        checks: z.record(z.string(), trustCheckOutcomeSchema).optional(),
+        checks: z.record(z.string(), z.string()).optional(),
     }).passthrough(),
 }).passthrough()
 

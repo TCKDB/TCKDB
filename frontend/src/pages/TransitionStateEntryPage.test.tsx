@@ -405,6 +405,14 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.getByText("some_future_server_warning — needs investigation")).toBeVisible()
     })
 
+    it("trust warnings: an unknown outcome value still renders the page and the known warnings", async () => {
+        trustWith({ some_future_check: "needs_review", no_frequency_result_has_undesignated_imaginary_modes: "warning" })
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.queryByText(/malformed/i)).not.toBeInTheDocument()
+        expect(within(screen.getByRole("list", { name: "Trust warnings" })).getAllByRole("listitem")).toHaveLength(1)
+    })
+
     it("trust warnings: renders no list when nothing is a warning, or when the check map is not served", async () => {
         trustWith({ transition_state_entry_present: "passed", imaginary_frequency_value_present: "not_applicable" })
         page()
