@@ -73,7 +73,7 @@ def _classify(record_type, stored, active):
 
 
 #: Families whose rubric has moved on since this change. ``_NOW`` stays as the history of what this change stored;
-#: the transition-state rubric went to version 4 (#729), pinned in ``test_ts_rubric_v4_currency.py``.
+#: the transition-state rubric went to version 5 (#723), pinned in ``test_ts_rubric_v5_currency.py``.
 _SUPERSEDED_SINCE = {"transition_state_entry"}
 
 

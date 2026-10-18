@@ -156,6 +156,18 @@ const saddlePointSchema = z.object({
 // Outcome values are read as plain strings (the page only tests `=== "warning"`), so a future outcome token
 // never turns the whole page into a "malformed data" error.
 
+// `structure_assessment` (`TransitionStateScopedAssessment`) is the structure assessment's own answer to one fixed question, for
+// the saddle targets the entry declares. Its tokens (`status`, `outcome`) are read as plain strings, so a token this client has
+// not been taught never turns the page into a "malformed data" error; the page renders an unknown one as itself. The block is
+// optional: an older deployment does not serve it. Only the facts the page words are pulled out.
+const structureAssessmentSchema = z.object({
+    status: z.string(),
+    outcome: z.string().nullable().optional(),
+    declared_targets: z.number().nullable().optional(),
+    contested_target_count: z.number().optional(),
+    refusal_code: z.string().nullable().optional(),
+}).passthrough()
+
 const trustSchema = z.object({
     trust_status: z.string(),
     evidence: z.object({
@@ -163,7 +175,10 @@ const trustSchema = z.object({
         possible_count: z.number(),
         checks: z.record(z.string(), z.string()).optional(),
     }).passthrough(),
+    structure_assessment: structureAssessmentSchema.nullable().optional(),
 }).passthrough()
+
+export type StructureAssessment = z.infer<typeof structureAssessmentSchema>
 
 const responseSchema = z.object({
     record: z.object({

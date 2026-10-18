@@ -113,9 +113,11 @@ from app.services.scientific_read.species_calculations_search import (
 )
 from app.services.scientific_read.trust_floor import evaluate_shown_transition_state_entry
 from app.services.trust import (
-    TrustFragment,
-    build_trust_fragment,
+    TransitionStateTrustContext,
+    TransitionStateTrustFragment,
+    build_transition_state_trust_fragment,
 )
+from app.services.trust.ts_scoped import not_assessed_on_lists_context, scoped_ts_context
 
 # ---------------------------------------------------------------------------
 # Include policy
@@ -385,6 +387,7 @@ def get_transition_state(
                     RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
                 ),
                 includes=nested_includes,
+                assess_structures=False,
                 levels_index=levels_index,
                 saddle_point_index=saddle_point_index,
             )
@@ -525,6 +528,7 @@ def get_transition_state_entry(
         reaction=reaction,
         entry_badge=tse_badge,
         includes=includes,
+        assess_structures=True,
     )
 
     return ScientificTransitionStateEntryDetailResponse(
@@ -547,6 +551,7 @@ def build_entry_record(
     reaction: TransitionStateReactionContext,
     entry_badge: RecordReviewBadge,
     includes: set[str],
+    assess_structures: bool,
     entries_block: list[ScientificTransitionStateEntryRecord] | None = None,
     levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
     saddle_point_index: (
@@ -565,6 +570,7 @@ def build_entry_record(
         reaction=reaction,
         entry_badge=entry_badge,
         includes=includes,
+        assess_structures=assess_structures,
         entries_block=entries_block,
         levels_index=levels_index,
         saddle_point_index=saddle_point_index,
@@ -579,6 +585,7 @@ def _build_entry_record(
     reaction: TransitionStateReactionContext,
     entry_badge: RecordReviewBadge,
     includes: set[str],
+    assess_structures: bool,
     entries_block: list[ScientificTransitionStateEntryRecord] | None = None,
     levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
     saddle_point_index: (
@@ -604,6 +611,11 @@ def _build_entry_record(
     ``saddle_point`` block — see :func:`_build_saddle_point_index`. ``None``
     means "resolve it for this entry alone" (the single-entry detail path);
     every loop over more than one entry in this module hands one in.
+
+    ``assess_structures`` is required, with no default (#723): ``True`` only for a single transition-state-entry
+    detail read, where ``include=trust`` also runs the scoped structure assessment for this one entry; ``False`` on
+    every surface that lists entries, which then carries the coded status ``not_assessed_on_lists`` and issues no
+    statement for it, so the same entry renders the same on every list page.
     """
     evidence = _build_entry_evidence_summary(
         session, entry.id, levels_index=levels_index
@@ -681,12 +693,17 @@ def _build_entry_record(
     # row, the search path for the whole page. Nothing here issues that load
     # itself, because anything this function loads is multiplied by the page
     # size.
-    trust_block: TrustFragment | None = None
+    trust_block: TransitionStateTrustFragment | None = None
     if "trust" in includes:
         trust_block = build_transition_state_entry_trust_fragment(
             entry,
             review_status=entry_badge.status,
             include_internal_ids="internal_ids" in includes,
+            context=(
+                scoped_ts_context(session, entry)
+                if assess_structures
+                else not_assessed_on_lists_context()
+            ),
         )
 
     return ScientificTransitionStateEntryRecord(
@@ -794,6 +811,7 @@ def _build_sibling_entry_records(
                 RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
             ),
             includes=nested_includes,
+            assess_structures=False,
             levels_index=levels_index,
             saddle_point_index=saddle_point_index,
         )
@@ -805,7 +823,9 @@ def build_transition_state_entry_trust_fragment(
     transition_state_entry: TransitionStateEntry,
     review_status: RecordReviewStatus | None = None,
     include_internal_ids: bool = False,
-) -> TrustFragment:
+    *,
+    context: TransitionStateTrustContext,
+) -> TransitionStateTrustFragment:
     """Build a read-layer trust fragment for a transition-state entry.
 
     Calls the *loaded* evaluator
@@ -816,6 +836,10 @@ def build_transition_state_entry_trust_fragment(
     status, the disabled LLM-precheck default, and certification default
     (all supplied by :func:`build_trust_fragment`).
 
+    ``context`` is required (#723): the scoped assessment the caller ran, or
+    :func:`~app.services.trust.ts_scoped.not_assessed_on_lists_context` on a surface that lists entries.
+    The fragment carries it as ``structure_assessment``; it never changes the badge.
+
     ``include_internal_ids`` mirrors the resolved include set so callers
     can reason about ID exposure at this layer, but the canonical gate
     for ``trust.evidence.record_id`` is the response boundary
@@ -825,8 +849,10 @@ def build_transition_state_entry_trust_fragment(
     advisory here — the fragment always carries the evaluator's
     ``record_id`` and the boundary removes it when policy disallows it.
     """
-    evaluation = evaluate_shown_transition_state_entry(transition_state_entry)
-    return build_trust_fragment(evaluation, review_status=review_status)
+    evaluation = evaluate_shown_transition_state_entry(transition_state_entry, context=context)
+    return build_transition_state_trust_fragment(
+        evaluation, review_status=review_status, structure_assessment=context.assessment
+    )
 
 
 # ---------------------------------------------------------------------------

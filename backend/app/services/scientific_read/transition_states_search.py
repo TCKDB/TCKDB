@@ -788,6 +788,8 @@ def _materialize_records(
             reaction=reaction,
             entry_badge=badges[cid],
             includes=includes,
+            # A list never runs the structure assessment (#723, O3): the same entry renders the same on every page.
+            assess_structures=False,
             entries_block=entries_block,
             levels_index=levels_index,
             saddle_point_index=saddle_point_index,

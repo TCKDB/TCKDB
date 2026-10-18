@@ -54,7 +54,7 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.services.trust import (
-    COMPUTED_TRANSITION_STATE_V4,
+    COMPUTED_TRANSITION_STATE_V5,
     EvidenceBadge,
     EvidenceCheckKind,
     EvidenceOutcome,
@@ -62,8 +62,13 @@ from app.services.trust import (
     evaluate_computed_transition_state_entry,
     evaluate_loaded_transition_state_entry,
 )
+from app.services.trust.ts_scoped import not_assessed_on_lists_context
 
 _TS_COUNTER = itertools.count(1)
+
+
+#: The evaluator's context on a surface that lists entries: no declared target, no scoped assessment.
+_LIST = not_assessed_on_lists_context()
 
 
 def _next_token() -> str:
@@ -548,11 +553,11 @@ def _attach_irc_followup(
 
 
 def test_none_input_hard_fails():
-    result = evaluate_loaded_transition_state_entry(None)
+    result = evaluate_loaded_transition_state_entry(None, context=_LIST)
     assert result.label is EvidenceBadge.hard_failed
     assert result.hard_fail_reason is HardFailReason.transition_state_entry_missing
     assert result.rubric == "computed_transition_state"
-    assert result.rubric_version == 4
+    assert result.rubric_version == 5
     assert result.record_type == "transition_state_entry"
     assert result.record_id is None
 
@@ -561,7 +566,7 @@ def test_rejected_status_hard_fails(db_session: Session):
     ts_entry = _make_ts_entry(
         db_session, status=TransitionStateEntryStatus.rejected
     )
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.label is EvidenceBadge.hard_failed
     assert result.hard_fail_reason is HardFailReason.ts_entry_status_rejected
     # The ts_status_not_rejected check still ran and reports the contradiction.
@@ -589,7 +594,7 @@ def test_invalid_multiplicity_hard_fails(db_session: Session):
         unmapped_smiles=None,
     )
     with db_session.no_autoflush:
-        result = evaluate_loaded_transition_state_entry(ts_entry)
+        result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.label is EvidenceBadge.hard_failed
     assert result.hard_fail_reason is HardFailReason.multiplicity_invalid
 
@@ -598,7 +603,7 @@ def test_sparse_entry_low_completeness_no_hard_fail(db_session: Session):
     ts_entry = _make_ts_entry(
         db_session, status=TransitionStateEntryStatus.guess, unmapped_smiles=None
     )
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.hard_fail_reason is None
     assert result.label is not EvidenceBadge.hard_failed
     # Identity facts pass; supporting calculations missing → low ratio.
@@ -617,7 +622,7 @@ def test_guess_with_n_imag_zero_warns_not_hard_fail(db_session: Session):
     _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=0, imag_freq_cm1=None)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.hard_fail_reason is None
     # No imaginary mode means no reaction coordinate, so the designation
     # check is missing — but the rubric does not collapse to hard_failed
@@ -631,7 +636,7 @@ def test_guess_with_n_imag_two_warns_not_hard_fail(db_session: Session):
     _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=2, imag_freq_cm1=-300.0)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.hard_fail_reason is None
 
 
@@ -647,7 +652,7 @@ def test_validated_with_n_imag_one_passes_freq_check(
     _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=1, imag_freq_cm1=-550.0)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.hard_fail_reason is None
     # One imaginary mode needs no designation: there is nothing to
     # disambiguate, so the contract is satisfied trivially.
@@ -668,7 +673,7 @@ def test_validated_with_n_imag_zero_is_a_visible_warning_not_a_hard_fail_and_not
     _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=0, imag_freq_cm1=None)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.label is not EvidenceBadge.hard_failed and result.hard_fail_reason is None
     assert result.checks["no_frequency_result_lacks_an_imaginary_mode"] is EvidenceOutcome.warning
     # presence is not certification: the count check still says only that a count was recorded
@@ -688,7 +693,7 @@ def test_undesignated_extra_modes_are_a_missing_designation_not_a_hard_fail(db_s
     _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=3, imag_freq_cm1=-100.0)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.label is not EvidenceBadge.hard_failed and result.hard_fail_reason is None
     assert result.checks["reaction_coordinate_designated_for_ts"] is EvidenceOutcome.missing
     assert "no_frequency_result_lacks_an_imaginary_mode" not in result.checks  # a warning check is recorded only when it fires
@@ -725,7 +730,7 @@ def test_the_motivating_record_is_not_hard_failed_at_read_time(
     )
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.hard_fail_reason is None
     assert result.label is not EvidenceBadge.hard_failed
     assert result.checks["reaction_coordinate_designated_for_ts"] is EvidenceOutcome.passed
@@ -754,7 +759,7 @@ def test_a_recorded_structural_flag_warns_without_hard_failing(
     )
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.hard_fail_reason is None
     assert result.checks["extra_imaginary_modes_not_flagged"] is EvidenceOutcome.warning
 
@@ -766,7 +771,7 @@ def test_missing_freq_is_missing_not_hard_fail(db_session: Session):
     _attach_ts_opt_calc(db_session, ts_entry)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.hard_fail_reason is None
     assert result.checks["ts_frequency_present"] is EvidenceOutcome.missing
     # n_imag checks become not_applicable when no freq result is in the set.
@@ -779,7 +784,7 @@ def test_irc_raises_completeness(db_session: Session):
     opt_base = _attach_ts_opt_calc(db_session, ts_entry_base)
     _attach_ts_freq_calc(db_session, ts_entry_base, opt_base)
     db_session.refresh(ts_entry_base)
-    baseline = evaluate_loaded_transition_state_entry(ts_entry_base)
+    baseline = evaluate_loaded_transition_state_entry(ts_entry_base, context=_LIST)
 
     # With IRC: same identity + opt + freq + irc.
     ts_entry_irc = _make_ts_entry(db_session)
@@ -787,7 +792,7 @@ def test_irc_raises_completeness(db_session: Session):
     _attach_ts_freq_calc(db_session, ts_entry_irc, opt_irc)
     _attach_ts_irc_calc(db_session, ts_entry_irc, opt_irc)
     db_session.refresh(ts_entry_irc)
-    with_irc = evaluate_loaded_transition_state_entry(ts_entry_irc)
+    with_irc = evaluate_loaded_transition_state_entry(ts_entry_irc, context=_LIST)
 
     assert with_irc.evidence_completeness > baseline.evidence_completeness
     assert with_irc.checks["irc_evidence_present"] is EvidenceOutcome.passed
@@ -811,7 +816,7 @@ def test_irc_evidence_present_check_label_names_calculation_not_validation(
     _attach_ts_irc_calc(db_session, ts_entry, opt)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     (irc_check,) = [
         c for c in result.check_results if c.name == "irc_evidence_present"
     ]
@@ -826,14 +831,14 @@ def test_path_search_raises_completeness(db_session: Session):
     opt_base = _attach_ts_opt_calc(db_session, ts_entry_base)
     _attach_ts_freq_calc(db_session, ts_entry_base, opt_base)
     db_session.refresh(ts_entry_base)
-    baseline = evaluate_loaded_transition_state_entry(ts_entry_base)
+    baseline = evaluate_loaded_transition_state_entry(ts_entry_base, context=_LIST)
 
     ts_entry_ps = _make_ts_entry(db_session)
     opt_ps = _attach_ts_opt_calc(db_session, ts_entry_ps)
     _attach_ts_freq_calc(db_session, ts_entry_ps, opt_ps)
     _attach_path_search_parent(db_session, ts_entry_ps, opt_ps)
     db_session.refresh(ts_entry_ps)
-    with_ps = evaluate_loaded_transition_state_entry(ts_entry_ps)
+    with_ps = evaluate_loaded_transition_state_entry(ts_entry_ps, context=_LIST)
 
     assert with_ps.evidence_completeness > baseline.evidence_completeness
     assert with_ps.checks["path_search_evidence_present"] is EvidenceOutcome.passed
@@ -845,7 +850,7 @@ def test_no_irc_no_path_search_not_hard_fail(db_session: Session):
     _attach_ts_freq_calc(db_session, ts_entry, opt)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.hard_fail_reason is None
     assert result.checks["irc_evidence_present"] is EvidenceOutcome.missing
     assert result.checks["path_search_evidence_present"] is EvidenceOutcome.missing
@@ -869,7 +874,7 @@ def test_scan_child_of_ts_opt_counts_as_path_search_evidence(db_session: Session
     opt_base = _attach_ts_opt_calc(db_session, ts_entry_base)
     _attach_ts_freq_calc(db_session, ts_entry_base, opt_base)
     db_session.refresh(ts_entry_base)
-    baseline = evaluate_loaded_transition_state_entry(ts_entry_base)
+    baseline = evaluate_loaded_transition_state_entry(ts_entry_base, context=_LIST)
     assert baseline.checks["path_search_evidence_present"] is EvidenceOutcome.missing
 
     ts_entry_scan = _make_ts_entry(db_session)
@@ -877,7 +882,7 @@ def test_scan_child_of_ts_opt_counts_as_path_search_evidence(db_session: Session
     _attach_ts_freq_calc(db_session, ts_entry_scan, opt_scan)
     _attach_scan_child_of_opt(db_session, opt_scan)
     db_session.refresh(ts_entry_scan)
-    with_scan = evaluate_loaded_transition_state_entry(ts_entry_scan)
+    with_scan = evaluate_loaded_transition_state_entry(ts_entry_scan, context=_LIST)
 
     assert with_scan.checks["path_search_evidence_present"] is EvidenceOutcome.passed
     assert with_scan.evidence_completeness > baseline.evidence_completeness
@@ -907,7 +912,7 @@ def test_scan_child_of_ts_opt_lands_in_source_set(db_session: Session):
     opt_base = _attach_ts_opt_calc(db_session, ts_entry_base)
     _attach_ts_freq_calc(db_session, ts_entry_base, opt_base)
     db_session.refresh(ts_entry_base)
-    baseline = evaluate_loaded_transition_state_entry(ts_entry_base)
+    baseline = evaluate_loaded_transition_state_entry(ts_entry_base, context=_LIST)
     assert (
         baseline.checks["source_calculation_software_present"]
         is EvidenceOutcome.passed
@@ -918,7 +923,7 @@ def test_scan_child_of_ts_opt_lands_in_source_set(db_session: Session):
     _attach_ts_freq_calc(db_session, ts_entry_scan, opt_scan)
     _attach_scan_child_of_opt(db_session, opt_scan, software_release_id=None)
     db_session.refresh(ts_entry_scan)
-    with_scan = evaluate_loaded_transition_state_entry(ts_entry_scan)
+    with_scan = evaluate_loaded_transition_state_entry(ts_entry_scan, context=_LIST)
 
     assert (
         with_scan.checks["source_calculation_software_present"]
@@ -938,7 +943,7 @@ def test_path_search_parent_still_counts_as_path_search_evidence(db_session: Ses
     _attach_path_search_parent(db_session, ts_entry, opt)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.checks["path_search_evidence_present"] is EvidenceOutcome.passed
 
 
@@ -958,7 +963,7 @@ def test_irc_followup_lands_in_source_set(db_session: Session):
     _attach_ts_freq_calc(db_session, ts_entry_base, opt_base)
     _attach_ts_irc_calc(db_session, ts_entry_base, opt_base)
     db_session.refresh(ts_entry_base)
-    baseline = evaluate_loaded_transition_state_entry(ts_entry_base)
+    baseline = evaluate_loaded_transition_state_entry(ts_entry_base, context=_LIST)
     assert (
         baseline.checks["source_calculation_software_present"]
         is EvidenceOutcome.passed
@@ -970,7 +975,7 @@ def test_irc_followup_lands_in_source_set(db_session: Session):
     irc_fu = _attach_ts_irc_calc(db_session, ts_entry_fu, opt_fu)
     _attach_irc_followup(db_session, irc_fu, software_release_id=None)
     db_session.refresh(ts_entry_fu)
-    with_followup = evaluate_loaded_transition_state_entry(ts_entry_fu)
+    with_followup = evaluate_loaded_transition_state_entry(ts_entry_fu, context=_LIST)
 
     assert (
         with_followup.checks["source_calculation_software_present"]
@@ -985,7 +990,7 @@ def test_source_calc_artifacts_lot_software(db_session: Session):
     _attach_ts_sp_calc(db_session, ts_entry, opt)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.checks["source_calculation_lot_present"] is EvidenceOutcome.passed
     assert result.checks["source_calculation_software_present"] is EvidenceOutcome.passed
     assert result.checks["source_calculation_artifacts_present"] is EvidenceOutcome.passed
@@ -997,7 +1002,7 @@ def test_source_calc_failed_geometry_validation_is_a_warning_not_a_hard_fail(db_
     _attach_ts_opt_calc(db_session, ts_entry, geom_validation=ValidationStatus.fail)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.label is not EvidenceBadge.hard_failed
     assert result.hard_fail_reason is None
     # The signal is demoted, not erased: it stays visible as a warning outcome on the geometry check.
@@ -1015,7 +1020,7 @@ def test_all_source_calcs_hard_failed_collapses_to_hard_fail(db_session: Session
     db_session.flush()
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.label is EvidenceBadge.hard_failed
     assert (
         result.hard_fail_reason
@@ -1029,7 +1034,7 @@ def test_loaded_matches_session_wrapper(db_session: Session):
     _attach_ts_freq_calc(db_session, ts_entry, opt)
     db_session.refresh(ts_entry)
 
-    loaded = evaluate_loaded_transition_state_entry(ts_entry)
+    loaded = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     via_wrapper = evaluate_computed_transition_state_entry(db_session, ts_entry.id)
 
     # Compare the public envelope (check_results contain non-comparable runner
@@ -1054,7 +1059,7 @@ def test_evaluator_does_not_mutate_records(db_session: Session):
     pre_charge = ts_entry.charge
     pre_calc_quality = opt.quality
 
-    evaluate_loaded_transition_state_entry(ts_entry)
+    evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
 
     assert ts_entry.status is pre_status
     assert ts_entry.multiplicity == pre_multiplicity
@@ -1072,7 +1077,7 @@ def test_session_wrapper_returns_hard_fail_for_missing_id(db_session: Session):
 
 def test_rubric_metadata_pinned():
     """Pin the public contract of the rubric metadata."""
-    assert COMPUTED_TRANSITION_STATE_V4.name == "computed_transition_state"
+    assert COMPUTED_TRANSITION_STATE_V5.name == "computed_transition_state"
     # Bumped by ADR 0012: the required imaginary-mode check changed from
     # counting to citing the recorded designation, and a new advisory
     # check surfaces the structural flag. A machine review performed
@@ -1081,14 +1086,17 @@ def test_rubric_metadata_pinned():
     # automated geometry-validation fail is advisory (a warning), not a hard
     # fail, and the frequency contradiction is judged over every source
     # frequency result, not the one the rubric calls representative.
-    assert COMPUTED_TRANSITION_STATE_V4.version == 4
-    assert COMPUTED_TRANSITION_STATE_V4.record_type == "transition_state_entry"
-    assert len(COMPUTED_TRANSITION_STATE_V4.checks) == 31
+    assert COMPUTED_TRANSITION_STATE_V5.version == 5
+    assert COMPUTED_TRANSITION_STATE_V5.record_type == "transition_state_entry"
+    assert len(COMPUTED_TRANSITION_STATE_V5.checks) == 32
     # v4 (#729): the undesignated-modes warning sits right after the zero-mode warning and carries no weight.
-    names = [c.name for c in COMPUTED_TRANSITION_STATE_V4.checks]
+    names = [c.name for c in COMPUTED_TRANSITION_STATE_V5.checks]
     i = names.index("no_frequency_result_lacks_an_imaginary_mode")
     assert names[i + 1] == "no_frequency_result_has_undesignated_imaginary_modes"
-    assert COMPUTED_TRANSITION_STATE_V4.checks[i + 1].kind is EvidenceCheckKind.warning
+    assert COMPUTED_TRANSITION_STATE_V5.checks[i + 1].kind is EvidenceCheckKind.warning
+    # v5 (#723): the scoped-assessment warning follows, carries no weight, and is the only check that reads the assessment.
+    assert names[i + 2] == "declared_saddle_target_qualifies"
+    assert COMPUTED_TRANSITION_STATE_V5.checks[i + 2].kind is EvidenceCheckKind.warning
 
 
 def test_calculation_dependencies_check_passes_when_freq_linked(db_session: Session):
@@ -1097,7 +1105,7 @@ def test_calculation_dependencies_check_passes_when_freq_linked(db_session: Sess
     _attach_ts_freq_calc(db_session, ts_entry, opt)
     db_session.refresh(ts_entry)
 
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.checks["calculation_dependencies_present"] is EvidenceOutcome.passed
 
 
@@ -1110,7 +1118,7 @@ def test_a_contradicting_result_stays_visible_whether_it_is_older_newer_or_alone
         for n in counts:
             _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=n, imag_freq_cm1=-500.0 if n else None)
         db_session.refresh(ts_entry)
-        result = evaluate_loaded_transition_state_entry(ts_entry)
+        result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
         assert result.hard_fail_reason is None, order
         assert result.checks["no_frequency_result_lacks_an_imaginary_mode"] is EvidenceOutcome.warning, order
 
@@ -1124,7 +1132,7 @@ def test_a_null_count_is_unknown_it_neither_rescues_nor_condemns(db_session: Ses
     _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=0, imag_freq_cm1=None)
     _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=None, imag_freq_cm1=None)
     db_session.refresh(ts_entry)
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.label is not EvidenceBadge.hard_failed and result.hard_fail_reason is None
     assert result.checks["no_frequency_result_lacks_an_imaginary_mode"] is EvidenceOutcome.warning
 
@@ -1134,7 +1142,7 @@ def test_only_null_counts_say_nothing(db_session: Session):
     opt = _attach_ts_opt_calc(db_session, ts_entry)
     _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=None, imag_freq_cm1=None)
     db_session.refresh(ts_entry)
-    result = evaluate_loaded_transition_state_entry(ts_entry)
+    result = evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
     assert result.checks["no_frequency_result_lacks_an_imaginary_mode"] is EvidenceOutcome.not_applicable
 
 
@@ -1147,7 +1155,7 @@ def _evaluate_with_freqs(db_session: Session, freqs: list[dict]):
     for kwargs in freqs:
         _attach_ts_freq_calc(db_session, ts_entry, opt, **kwargs)
     db_session.refresh(ts_entry)
-    return evaluate_loaded_transition_state_entry(ts_entry)
+    return evaluate_loaded_transition_state_entry(ts_entry, context=_LIST)
 
 
 def test_an_older_undesignated_result_warns_even_when_a_newer_one_is_clean(db_session: Session):
@@ -1250,7 +1258,7 @@ def test_the_badge_never_hard_fails_on_a_frequency_result_of_any_shape(db_sessio
         for n in counts:
             _attach_ts_freq_calc(db_session, ts_entry, opt, n_imag=n, imag_freq_cm1=None)
         db_session.refresh(ts_entry)
-        assert evaluate_loaded_transition_state_entry(ts_entry).hard_fail_reason not in retired, counts
+        assert evaluate_loaded_transition_state_entry(ts_entry, context=_LIST).hard_fail_reason not in retired, counts
 
 
 def test_ts_dependency_role_buckets_agree_with_enforcement_table():

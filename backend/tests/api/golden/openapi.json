@@ -49306,7 +49306,7 @@
           "trust": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/TrustFragment"
+                "$ref": "#/components/schemas/TransitionStateTrustFragment"
               },
               {
                 "type": "null"
@@ -63733,7 +63733,7 @@
         "type": "object"
       },
       "TransitionStateInFull": {
-        "description": "Transition-state record embedded in /full.\n\nCarries the public refs that let a caller navigate to the new\nscientific TS read surface:\n\n- ``transition_state_ref`` → ``GET /scientific/transition-states/{ref}``\n- ``transition_state_entry_ref`` →\n  ``GET /scientific/transition-state-entries/{ref}``\n- ``calculations[*].calculation_ref`` →\n  ``GET /scientific/calculations/{ref}``\n\n``transition_state_ref`` is ``null`` under ``?profile=curated`` when the owning transition state is below the review\nfloor: the entry stays in the response and only its owner ref (and id) is withheld (owner decision D1).\n\nInteger ``*_id`` siblings are Phase D policy-gated. ``status``\nand ``evidence_summary`` mirror the corresponding fields on\n:class:`ScientificTransitionStateEntryRecord` so the\nfull-response block lines up byte-for-byte with the per-entry\ndetail endpoint (same counts, same booleans, same status enum).\n\n``trust`` is populated only when the caller passes ``include=trust``\nto ``/reaction-entries/{id}/full``. It reuses :class:`TrustFragment`\nso a trust block embedded here is structurally identical to the one\nreturned by\n``GET /scientific/transition-state-entries/{ref}?include=trust``\n(rubric ``computed_transition_state_v2``).",
+        "description": "Transition-state record embedded in /full.\n\nCarries the public refs that let a caller navigate to the new\nscientific TS read surface:\n\n- ``transition_state_ref`` → ``GET /scientific/transition-states/{ref}``\n- ``transition_state_entry_ref`` →\n  ``GET /scientific/transition-state-entries/{ref}``\n- ``calculations[*].calculation_ref`` →\n  ``GET /scientific/calculations/{ref}``\n\n``transition_state_ref`` is ``null`` under ``?profile=curated`` when the owning transition state is below the review\nfloor: the entry stays in the response and only its owner ref (and id) is withheld (owner decision D1).\n\nInteger ``*_id`` siblings are Phase D policy-gated. ``status``\nand ``evidence_summary`` mirror the corresponding fields on\n:class:`ScientificTransitionStateEntryRecord` so the\nfull-response block lines up byte-for-byte with the per-entry\ndetail endpoint (same counts, same booleans, same status enum).\n\n``trust`` is populated only when the caller passes ``include=trust``\nto ``/reaction-entries/{id}/full``. It reuses\n:class:`TransitionStateTrustFragment` so a trust block embedded here is\nstructurally identical to the one returned by\n``GET /scientific/transition-state-entries/{ref}?include=trust``\n(rubric ``computed_transition_state_v5``), with one difference by design:\nthis document lists the reaction's entries, so its\n``structure_assessment.status`` is ``not_assessed_on_lists`` where the\nsingle-entry detail read runs the assessment.",
         "properties": {
           "calculations": {
             "additionalProperties": {
@@ -63800,7 +63800,7 @@
           "trust": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/TrustFragment"
+                "$ref": "#/components/schemas/TransitionStateTrustFragment"
               },
               {
                 "type": "null"
@@ -64091,6 +64091,179 @@
         "title": "TransitionStateSaddlePointEvidence",
         "type": "object"
       },
+      "TransitionStateScopedAssessment": {
+        "description": "The structure assessment's answer for the badge's fixed question, as part of the transition-state trust fragment.\n\nRead-only and advisory. It never moves the badge, the completeness numbers or ``is_certified``; the only thing it\nchanges in the checks is the zero-weight warning ``declared_saddle_target_qualifies``. ``outcome`` is the\nassessment's own outcome: ``qualified_evidence`` says a declared target is supported for the question asked,\nnothing more, and any other outcome says the declared target needs investigation, not that the transition state is\ndisproved.",
+        "properties": {
+          "contested_target_count": {
+            "default": 0,
+            "title": "Contested Target Count",
+            "type": "integer"
+          },
+          "declared_targets": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Targets"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransitionStateScopedAssessmentOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "qualifying_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Qualifying Refs",
+            "type": "array"
+          },
+          "refusal_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refusal Code"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TransitionStateScopedAssessmentStatus"
+          },
+          "task": {
+            "$ref": "#/components/schemas/TransitionStateScopedAssessmentTask"
+          },
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/TransitionStateScopedAssessmentUnit"
+            },
+            "title": "Units",
+            "type": "array"
+          },
+          "versions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versions"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "TransitionStateScopedAssessment",
+        "type": "object"
+      },
+      "TransitionStateScopedAssessmentOutcome": {
+        "description": "The decision's outcome for the badge's evidence-only question: the three the question can return.\n\nThe structure-selection outcome vocabulary, narrowed to what ``qualify_evidence`` over known values can produce\n(the other outcomes need an energy, an ordering or a complete-profile claim, none of which the badge asks). Mirrored\nhere because this module must not import the structure-selection package (a cycle through the read schemas); a\ntest pins every member to a ``StructureOutcome`` of the same value.",
+        "enum": [
+          "qualified_evidence",
+          "no_applicable_candidate",
+          "evidence_conflict"
+        ],
+        "title": "TransitionStateScopedAssessmentOutcome",
+        "type": "string"
+      },
+      "TransitionStateScopedAssessmentStatus": {
+        "description": "Whether, and how, the structure assessment was run for the transition-state badge (#723).\n\n* ``assessed`` -- the entry declares at least one saddle or geometry target and the assessment ran.\n* ``no_declared_target`` -- the entry declares none, so there is nothing to assess. Not a missing check.\n* ``not_assessed_on_lists`` -- this surface lists several entries (browse, search, a reaction document, the\n  sibling entries of a detail read). The assessment runs on a single-entry detail read only, so the same entry\n  renders the same on every list page.\n* ``not_assessed_over_bound`` -- the assessment refused on the server's fixed bounds; nothing is inferred from a\n  subset. ``refusal_code`` names the bound.",
+        "enum": [
+          "assessed",
+          "no_declared_target",
+          "not_assessed_on_lists",
+          "not_assessed_over_bound"
+        ],
+        "title": "TransitionStateScopedAssessmentStatus",
+        "type": "string"
+      },
+      "TransitionStateScopedAssessmentTask": {
+        "description": "The one fixed question the badge asks, as the request body ``POST .../evidence/select`` takes.\n\nEvidence only (owner decision O1): which declared saddle targets are supported by the evidence for a conventional\nfirst-order saddle, with no energy asked and no reactive-connectivity requirement. Send these fields to the\nevidence-selection endpoint of the same entry and the answer is the one in ``outcome`` and ``units``.",
+        "properties": {
+          "coverage_requirement": {
+            "default": "known_values",
+            "title": "Coverage Requirement",
+            "type": "string"
+          },
+          "intent": {
+            "default": "qualify_evidence",
+            "title": "Intent",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "require_connectivity": {
+            "default": false,
+            "title": "Require Connectivity",
+            "type": "boolean"
+          },
+          "validation_claim": {
+            "default": "first_order_saddle",
+            "title": "Validation Claim",
+            "type": "string"
+          }
+        },
+        "title": "TransitionStateScopedAssessmentTask",
+        "type": "object"
+      },
+      "TransitionStateScopedAssessmentUnit": {
+        "description": "One assessed declared target: its public ref and the codes the assessment gave it. Codes only.",
+        "properties": {
+          "applicability": {
+            "title": "Applicability",
+            "type": "string"
+          },
+          "blocking": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocking",
+            "type": "array"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "unit_ref": {
+            "title": "Unit Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit_ref",
+          "applicability"
+        ],
+        "title": "TransitionStateScopedAssessmentUnit",
+        "type": "object"
+      },
       "TransitionStateStatmechSourceCalculation": {
         "description": "One calculation a transition state's statmech record was computed from.",
         "properties": {
@@ -64255,6 +64428,43 @@
           "scientific_origin"
         ],
         "title": "TransitionStateStatmechSummary",
+        "type": "object"
+      },
+      "TransitionStateTrustFragment": {
+        "description": ":class:`TrustFragment` for a transition-state entry: the badge plus the scoped structure assessment (#723).\n\nA subclass, not a field on :class:`TrustFragment`, so every other record type's fragment is unchanged.",
+        "properties": {
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          },
+          "is_certified": {
+            "default": false,
+            "title": "Is Certified",
+            "type": "boolean"
+          },
+          "llm_precheck": {
+            "$ref": "#/components/schemas/TrustLLMPrecheck"
+          },
+          "review_status": {
+            "default": "not_reviewed",
+            "title": "Review Status",
+            "type": "string"
+          },
+          "structure_assessment": {
+            "$ref": "#/components/schemas/TransitionStateScopedAssessment"
+          },
+          "trust_status": {
+            "title": "Trust Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trust_status",
+          "evidence",
+          "structure_assessment"
+        ],
+        "title": "TransitionStateTrustFragment",
         "type": "object"
       },
       "TransitionStateUploadRequest": {

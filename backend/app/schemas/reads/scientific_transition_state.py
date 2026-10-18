@@ -40,7 +40,7 @@ from app.schemas.reads.scientific_common import (
 from app.schemas.reads.scientific_species_calculations import (
     CalculationEnergyBlock,
 )
-from app.services.trust.models import TrustFragment
+from app.services.trust.models import TransitionStateTrustFragment
 
 # ---------------------------------------------------------------------------
 # Request
@@ -603,7 +603,7 @@ class ScientificTransitionStateEntryRecord(BaseModel):
     # "there is no verdict". A record nested inside another record's
     # ``entries`` block carries it on the same terms as its parent: the
     # token governs the whole response, not one depth of it.
-    trust: TrustFragment | None = None
+    trust: TransitionStateTrustFragment | None = None
 
 
 # ---------------------------------------------------------------------------

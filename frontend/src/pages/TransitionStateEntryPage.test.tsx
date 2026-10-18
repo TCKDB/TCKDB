@@ -368,6 +368,88 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.getByText(/24\/26/)).toBeVisible()
     })
 
+    function assessmentWith(structure_assessment: Record<string, unknown> | undefined, checks?: Record<string, string>) {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    trust: {
+                        trust_status: "partial",
+                        evidence: { passed_count: 10, possible_count: 20, ...(checks ? { checks } : {}) },
+                        ...(structure_assessment ? { structure_assessment } : {}),
+                    },
+                }),
+            })
+        )))
+    }
+
+    // The structure assessment row (#723): the assessment's own answer to a fixed question, in plain words.
+    it.each([
+        [{ status: "assessed", outcome: "qualified_evidence", declared_targets: 1, contested_target_count: 0 },
+            /a declared target has the evidence for a first-order saddle\. Scoped to this question\./],
+        [{ status: "assessed", outcome: "no_applicable_candidate", declared_targets: 1 },
+            /no declared target qualifies for a first-order saddle — needs investigation/],
+        [{ status: "assessed", outcome: "evidence_conflict", declared_targets: 2 },
+            /the declared evidence conflicts — needs investigation/],
+        [{ status: "assessed", outcome: "qualified_evidence", contested_target_count: 1 },
+            /A declared target is contested — needs investigation\./],
+        [{ status: "no_declared_target", declared_targets: 0 },
+            /No saddle target is declared, so the structure assessment has nothing to assess\./],
+        [{ status: "not_assessed_over_bound", refusal_code: "structure_selection_evidence_too_large" },
+            /Not run: the evidence is over the server's size limits/],
+        [{ status: "not_assessed_on_lists" }, /Not assessed on lists\./],
+    ])("structure assessment: %j renders its sentence", async (block, sentence) => {
+        assessmentWith(block)
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText("Structure assessment")).toBeVisible()
+        expect(screen.getByText(sentence)).toBeVisible()
+    })
+
+    it("structure assessment: a status token this page was not taught renders as itself and the page still loads", async () => {
+        assessmentWith({ status: "some_future_status" })
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText("some_future_status")).toBeVisible()
+        expect(screen.queryByText(/malformed/i)).not.toBeInTheDocument()
+    })
+
+    it("structure assessment: an outcome token this page was not taught renders as itself and the page still loads", async () => {
+        assessmentWith({ status: "assessed", outcome: "some_future_outcome" })
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText(/some_future_outcome/)).toBeVisible()
+        expect(screen.queryByText(/malformed/i)).not.toBeInTheDocument()
+    })
+
+    it("structure assessment: an older deployment that does not serve the block renders no row", async () => {
+        assessmentWith(undefined)
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.queryByText("Structure assessment")).not.toBeInTheDocument()
+    })
+
+    it.each([
+        [{ status: "assessed", outcome: "qualified_evidence", contested_target_count: 1 }],
+        [{ status: "assessed", outcome: "no_applicable_candidate" }],
+        [{ status: "assessed", outcome: "evidence_conflict" }],
+        [{ status: "no_declared_target" }],
+        [{ status: "not_assessed_over_bound" }],
+        [{ status: "not_assessed_on_lists" }],
+    ])("structure assessment: %j beside the declared-target warning claims no disproof and no certificate", async (block) => {
+        assessmentWith(block, { declared_saddle_target_qualifies: "warning" })
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText("Structure assessment")).toBeVisible() // this block rendered, not a cached one
+        expect(screen.getByText(
+            "The structure assessment finds no declared saddle target that qualifies, or a declared target is contested — needs investigation",
+        )).toBeVisible()
+        const text = (document.body.textContent ?? "").toLowerCase()
+        expect(text.length).toBeGreaterThan(200)
+        for (const banned of ["not a saddle point", "validated", "certified", "certificate", "disproved"]) {
+            expect(text).not.toContain(banned)
+        }
+    })
+
     function trustWith(checks: Record<string, string> | undefined) {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({

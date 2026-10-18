@@ -66,7 +66,7 @@ _REVIEWER_RECIPES = {
     "thermo": {"computed_thermo_v2": "2"},
     "statmech": {"computed_statmech_v2": "2"},
     "transport": {"computed_transport_v2": "2"},
-    "transition_state_entry": {"computed_transition_state_v4": "4"},
+    "transition_state_entry": {"computed_transition_state_v5": "5"},
 }
 
 #: Owner-scoped reviewer rubrics: selected per record by the rubric that evaluated it, so

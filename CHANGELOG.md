@@ -22,6 +22,27 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Transition-state trust carries the scoped structure assessment (2026-10-19, #723)
+
+**Additive field and a rubric bump.** Migration: none. New environment variable: none. `tckdb-schemas` and `tckdb-client` unchanged
+(the client types `trust` as `JSONDict`). `computed_transition_state` is version 5; machine reviews stamped version 4 or 3 read as stale
+and are re-planned, none is rewritten.
+
+- `trust` on a transition-state entry (detail, search, the sibling `entries`, and `/reaction-entries/{id}/full`) gains
+  `structure_assessment`: the structure assessment's own answer to one fixed, evidence-only question (`qualify_evidence`,
+  `first_order_saddle`, `known_values`, no connectivity requirement), echoed as `task` so the same request to
+  `POST /scientific/transition-state-entries/{ref}/evidence/select` returns the same answer. Other record types are unchanged.
+- It runs on a single transition-state-entry detail read only. Every list surface carries the status `not_assessed_on_lists` and
+  issues no statement for it. An entry with no declared saddle target reads `no_declared_target` and costs one statement.
+- New zero-weight warning `declared_saddle_target_qualifies`: it fires when a declared target does not qualify or is contested. It
+  means the declared target needs investigation, not that the transition state is disproved. Label, completeness, score and
+  `is_certified` never read the assessment.
+- The frequency-presence checks read the frequency result a declared target pins in role `curvature` (an entry that declares nothing
+  keeps reading the newest attached result). A list does not look at declarations, so a declared entry's completeness can differ
+  between a list and its own page.
+- Under `profile=curated` the assessment runs under that profile: a target resting on a hidden calculation is unresolved and warns.
+- The TS-entry page shows the assessment in plain words.
+
 ## Curated exports no longer name hidden records (2026-10-18)
 
 **Narrowing under `profile=curated` only; the default (exploratory) output is byte-identical.** Migration: none. New environment variable:

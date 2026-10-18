@@ -1,5 +1,23 @@
 # Transition-State Trust Rubric — `computed_transition_state_v2`
 
+> **Version 5 (#723, 2026-10).** `computed_transition_state` is now version 5. It brings the scoped structure assessment into the
+> TS trust projection without moving the badge. (1) The block `trust.structure_assessment` carries the assessment's own answer to
+> one fixed, evidence-only question, echoed as `task` (`qualify_evidence`, `first_order_saddle`, `known_values`, no connectivity
+> requirement); sending `task` to `POST /scientific/transition-state-entries/{ref}/evidence/select` returns the same answer.
+> (2) A zero-weight warning, `declared_saddle_target_qualifies`, fires when the entry declares a saddle target and the assessment
+> finds none that qualifies, or finds a contested target; it is `not_applicable` when nothing is declared, on lists, and over the
+> selection bounds. It means the declared target needs investigation, not that the transition state is disproved. (3) The
+> frequency-presence checks (`imaginary_frequency_count_recorded`, `reaction_coordinate_designated_for_ts`,
+> `extra_imaginary_modes_not_flagged`, `imaginary_frequency_value_present`) read the frequency result a declared target pins in
+> role `curvature`; an entry that declares nothing, or none of whose pins is a visible frequency result, keeps reading the newest
+> attached result. The unscoped warnings still read every attached result. **Where it runs:** on a single transition-state-entry
+> detail read only. Lists (search, the sibling entries of a detail read, the `/reaction-entries/{id}/full` document) carry
+> `structure_assessment.status = "not_assessed_on_lists"`, issue no statement for it, and read the newest attached result, so the
+> same entry renders the same on every list; its completeness can therefore differ between a list and its own page when it
+> declares a target. Under `profile=curated` the assessment runs under that profile: a target resting on a hidden calculation is
+> unresolved and warns, and nothing is cached across profiles. Label, completeness, score and `is_certified` never read the
+> assessment. Machine reviews stamped version 4 (or 3) read as stale and are re-planned, never rewritten.
+
 > **Version 4 (#729, 2026-10).** `computed_transition_state` is now version 4. It adds one zero-weight warning,
 > `no_frequency_result_has_undesignated_imaginary_modes`: it fires when any attached frequency result with a recorded count
 > reports two or more imaginary modes and does not designate the reaction coordinate (the same source set and the same null rule

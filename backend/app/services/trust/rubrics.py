@@ -51,6 +51,9 @@ from app.services.trust.models import (
     EvidenceCheckSpec,
     EvidenceOutcome,
     EvidenceRubric,
+    TransitionStateScopedAssessmentOutcome,
+    TransitionStateScopedAssessmentStatus,
+    TransitionStateTrustContext,
 )
 
 _TYPES_WITH_OUTPUT_GEOMETRY: frozenset[CalculationType] = frozenset(
@@ -2648,12 +2651,20 @@ def _ts_source_dependencies_present(ts_entry: TransitionStateEntry) -> bool:
     return False
 
 
-def _ts_representative_freq_result(ts_entry: TransitionStateEntry):
+def _ts_representative_freq_result(ts_entry: TransitionStateEntry, context: TransitionStateTrustContext):
     """Return the deterministically-selected representative freq result.
 
     Selection rule per spec §8.5: latest ``calculation.created_at`` with
     ``calculation.id DESC`` tie-break. Returns ``None`` when no freq calc
     in the source set carries a ``calc_freq_result`` row.
+
+    Rubric v5 (#723, owner decision O2): when the entry declares a saddle target, the pool is first narrowed to the
+    frequency calculations a declared target pins in role ``curvature`` (``context.declared_curvature_refs``), so the
+    frequency-presence checks read the result the declaration points at and an unrelated newer rerun cannot fail a
+    required check of a qualifying declared saddle. This stays a presence read: it chooses which result to look at, and
+    never asks whether that result is eligible. When no declared pin is a frequency calculation in the shown graph (the
+    entry declares nothing, the pins are other calculation types, or every pin is hidden by the read profile) the pool is
+    unchanged: the latest attached result, as before.
     """
     freq_calcs = [
         calc
@@ -2662,8 +2673,16 @@ def _ts_representative_freq_result(ts_entry: TransitionStateEntry):
     ]
     if not freq_calcs:
         return None
-    chosen = max(freq_calcs, key=lambda c: (c.created_at, c.id))
+    pinned = [calc for calc in freq_calcs if calc.public_ref in context.declared_curvature_refs]
+    pool = pinned or freq_calcs
+    chosen = max(pool, key=lambda c: (c.created_at, c.id))
     return chosen.freq_result
+
+
+#: The structure-selection semantics the badge's fixed question is asked under. ``scoped_ts_context`` refuses to run
+#: when the live versions differ, and a test pins the same equality, so a change to the assessor, the normaliser or
+#: the decision rules forces a deliberate TS rubric bump instead of silently changing what the badge's warning means.
+TS_SCOPED_STRUCTURE_VERSIONS: dict[str, str] = {"assessment": "1", "normalizer": "1", "decision": "1"}
 
 
 def _ts_has_calc_type(
@@ -2697,12 +2716,16 @@ def _ts_has_dependency_role_link(
     return False
 
 
-def _check_ts_entry_present(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+def _check_ts_entry_present(
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
+) -> EvidenceOutcome:
     """Trivially passes inside the runner (None is handled by the evaluator)."""
     return EvidenceOutcome.passed
 
 
-def _check_ts_parent_present(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+def _check_ts_parent_present(
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
+) -> EvidenceOutcome:
     """Return passed when the TS entry resolves to its parent TS concept."""
     return _bool_outcome(
         ts_entry.transition_state_id is not None
@@ -2711,7 +2734,7 @@ def _check_ts_parent_present(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
 
 
 def _check_ts_reaction_entry_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when the parent TS resolves to a reaction_entry."""
     parent = ts_entry.transition_state
@@ -2723,7 +2746,7 @@ def _check_ts_reaction_entry_present(
 
 
 def _check_ts_chem_reaction_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when the parent reaction_entry resolves to a chem_reaction."""
     parent = ts_entry.transition_state
@@ -2735,12 +2758,16 @@ def _check_ts_chem_reaction_present(
     )
 
 
-def _check_ts_status_recorded(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+def _check_ts_status_recorded(
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
+) -> EvidenceOutcome:
     """Return passed when ``status`` is set (NOT NULL by schema)."""
     return _bool_outcome(ts_entry.status is not None)
 
 
-def _check_ts_status_not_rejected(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+def _check_ts_status_not_rejected(
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
+) -> EvidenceOutcome:
     """Return passed when status is anything other than ``rejected``.
 
     Rejected entries also trigger a hard fail in the evaluator; this check
@@ -2751,17 +2778,23 @@ def _check_ts_status_not_rejected(ts_entry: TransitionStateEntry) -> EvidenceOut
     return _bool_outcome(ts_entry.status is not TransitionStateEntryStatus.rejected)
 
 
-def _check_ts_charge_present(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+def _check_ts_charge_present(
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
+) -> EvidenceOutcome:
     """Return passed when ``charge`` is populated (NOT NULL by schema)."""
     return _bool_outcome(ts_entry.charge is not None)
 
 
-def _check_ts_multiplicity_present(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+def _check_ts_multiplicity_present(
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
+) -> EvidenceOutcome:
     """Return passed when ``multiplicity`` is populated (NOT NULL by schema)."""
     return _bool_outcome(ts_entry.multiplicity is not None)
 
 
-def _check_ts_multiplicity_valid(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+def _check_ts_multiplicity_valid(
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
+) -> EvidenceOutcome:
     """Return passed when ``multiplicity >= 1`` (mirrors the CheckConstraint)."""
     if ts_entry.multiplicity is None:
         return EvidenceOutcome.missing
@@ -2769,7 +2802,7 @@ def _check_ts_multiplicity_valid(ts_entry: TransitionStateEntry) -> EvidenceOutc
 
 
 def _check_ts_graph_or_smiles_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when SMILES or a mol blob is attached on the entry."""
     return _bool_outcome(
@@ -2778,33 +2811,35 @@ def _check_ts_graph_or_smiles_present(
 
 
 def _check_ts_supporting_calculations_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when at least one source calc is discoverable."""
     return _bool_outcome(len(_ts_source_calculations(ts_entry)) >= 1)
 
 
 def _check_ts_optimization_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when an opt calc is in the source set."""
     return _bool_outcome(_ts_has_calc_type(ts_entry, CalculationType.opt))
 
 
-def _check_ts_frequency_present(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+def _check_ts_frequency_present(
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
+) -> EvidenceOutcome:
     """Return passed when a freq calc is in the source set."""
     return _bool_outcome(_ts_has_calc_type(ts_entry, CalculationType.freq))
 
 
 def _check_ts_single_point_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when an sp calc is in the source set."""
     return _bool_outcome(_ts_has_calc_type(ts_entry, CalculationType.sp))
 
 
 def _check_ts_irc_evidence_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when an irc calc is in the source set.
 
@@ -2815,7 +2850,7 @@ def _check_ts_irc_evidence_present(
 
 
 def _check_ts_path_search_evidence_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when a path_search calc or a scan child of the TS opt
     is in the source set.
@@ -2837,14 +2872,14 @@ def _check_ts_path_search_evidence_present(
 
 
 def _check_ts_calculation_dependencies_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when at least one dependency edge spans the source set."""
     return _bool_outcome(_ts_source_dependencies_present(ts_entry))
 
 
 def _check_ts_source_calculation_lot_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when every source calc resolves to a level_of_theory.
 
@@ -2858,7 +2893,7 @@ def _check_ts_source_calculation_lot_present(
 
 
 def _check_ts_source_calculation_software_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when every source calc resolves to a software_release."""
     source = _ts_source_calculations(ts_entry)
@@ -2868,7 +2903,7 @@ def _check_ts_source_calculation_software_present(
 
 
 def _check_ts_source_calculation_workflow_tool_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when at least one source calc has a workflow_tool_release."""
     source = _ts_source_calculations(ts_entry)
@@ -2880,7 +2915,7 @@ def _check_ts_source_calculation_workflow_tool_present(
 
 
 def _check_ts_source_calculation_artifacts_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when at least one source calc has any calculation_artifact."""
     source = _ts_source_calculations(ts_entry)
@@ -2890,7 +2925,7 @@ def _check_ts_source_calculation_artifacts_present(
 
 
 def _check_ts_source_calculation_has_non_hard_failed_evidence(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when at least one source calc is not deterministically hard-failed.
 
@@ -2919,7 +2954,7 @@ _TS_GEOMETRY_VALIDATION_TYPES: frozenset[CalculationType] = frozenset(
 
 
 def _check_ts_geometry_validation_present_for_source_calculations(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when at least one geometry-bearing source calc has validation."""
     eligible = [
@@ -2933,7 +2968,7 @@ def _check_ts_geometry_validation_present_for_source_calculations(
 
 
 def _check_ts_geometry_validation_not_failed_for_source_calculations(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return warning when any source calc carries a ``warning`` or ``fail`` geometry status.
 
@@ -2956,17 +2991,17 @@ def _check_ts_geometry_validation_not_failed_for_source_calculations(
 
 
 def _check_ts_imaginary_frequency_count_recorded(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when the representative freq result records ``n_imag``."""
-    freq = _ts_representative_freq_result(ts_entry)
+    freq = _ts_representative_freq_result(ts_entry, context)
     if freq is None:
         return EvidenceOutcome.not_applicable
     return _bool_outcome(freq.n_imag is not None)
 
 
 def _check_ts_reaction_coordinate_designated(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when the record identifies its reaction coordinate.
 
@@ -2987,7 +3022,7 @@ def _check_ts_reaction_coordinate_designated(
 
     Status-aware policy stays at the evaluator hard-fail layer.
     """
-    freq = _ts_representative_freq_result(ts_entry)
+    freq = _ts_representative_freq_result(ts_entry, context)
     if freq is None:
         return EvidenceOutcome.not_applicable
     if freq.n_imag is None:
@@ -3000,7 +3035,7 @@ def _check_ts_reaction_coordinate_designated(
 
 
 def _check_ts_no_frequency_result_lacks_an_imaginary_mode(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return warning when any attached frequency result records no imaginary mode at all.
 
@@ -3023,7 +3058,7 @@ def _check_ts_no_frequency_result_lacks_an_imaginary_mode(
 
 
 def _check_ts_no_frequency_result_has_undesignated_imaginary_modes(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return warning when any attached frequency result has several imaginary modes and no designated reaction coordinate.
 
@@ -3048,8 +3083,28 @@ def _check_ts_no_frequency_result_has_undesignated_imaginary_modes(
     return EvidenceOutcome.warning if undesignated else EvidenceOutcome.passed
 
 
+def _check_ts_declared_saddle_target_qualifies(
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
+) -> EvidenceOutcome:
+    """Return warning when a declared saddle target does not qualify, or a declared target is contested.
+
+    Reads only the scoped assessment the caller computed (``context.assessment``); it issues no query. It is
+    ``not_applicable`` unless the entry declares a target and the assessment ran, so an entry that declares nothing, a
+    list surface that does not assess, and a refusal over the selection bounds never warn: none of them is evidence
+    against anything. A warning means the declared target needs investigation, not that the transition state is
+    disproved; no warning certifies nothing. The answer is the structure assessment's, for the fixed question echoed in
+    ``trust.structure_assessment.task``: this runner restates it and adds no judgement of its own.
+    """
+    assessment = context.assessment
+    if assessment.status is not TransitionStateScopedAssessmentStatus.assessed:
+        return EvidenceOutcome.not_applicable
+    if assessment.outcome is not TransitionStateScopedAssessmentOutcome.qualified_evidence:
+        return EvidenceOutcome.warning
+    return EvidenceOutcome.warning if assessment.contested_target_count > 0 else EvidenceOutcome.passed
+
+
 def _check_ts_extra_imaginary_modes_not_flagged(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return warning when ADR 0012's structural flag was recorded.
 
@@ -3059,7 +3114,7 @@ def _check_ts_extra_imaginary_modes_not_flagged(
     from today's τ would let a parser improvement silently re-label
     historical records.
     """
-    freq = _ts_representative_freq_result(ts_entry)
+    freq = _ts_representative_freq_result(ts_entry, context)
     if freq is None or freq.imaginary_mode_structural_flag is None:
         return EvidenceOutcome.not_applicable
     if freq.imaginary_mode_structural_flag:
@@ -3068,17 +3123,17 @@ def _check_ts_extra_imaginary_modes_not_flagged(
 
 
 def _check_ts_imaginary_frequency_value_present(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Return passed when the representative freq result records ``imag_freq_cm1``."""
-    freq = _ts_representative_freq_result(ts_entry)
+    freq = _ts_representative_freq_result(ts_entry, context)
     if freq is None:
         return EvidenceOutcome.not_applicable
     return _bool_outcome(freq.imag_freq_cm1 is not None)
 
 
 def _check_ts_review_not_rejected_or_deprecated_if_applicable(
-    ts_entry: TransitionStateEntry,
+    ts_entry: TransitionStateEntry, context: TransitionStateTrustContext
 ) -> EvidenceOutcome:
     """Skip curator status checks until TS-entry-level review lookup is wired.
 
@@ -3105,9 +3160,17 @@ def _check_ts_review_not_rejected_or_deprecated_if_applicable(
 # ``no_frequency_result_has_undesignated_imaginary_modes`` warning. It supersedes v3;
 # machine reviews stamped v3 read as stale (``rubric_versions_mismatch``) and are
 # re-planned, never rewritten.
-COMPUTED_TRANSITION_STATE_V4: EvidenceRubric = EvidenceRubric(
+#
+# Version 5 (#723) brings the scoped structure assessment into the projection and supersedes v4;
+# machine reviews stamped v4 read as stale and are re-planned, never rewritten. Two things change what the
+# badge reports: the zero-weight ``declared_saddle_target_qualifies`` warning, and the representative frequency
+# result, which for an entry that declares a saddle target is the one the declaration pins (owner decision O2).
+# Label, completeness, score and ``is_certified`` never read the assessment: the assessment itself is the
+# ``trust.structure_assessment`` block, and only the pinned-result rule can move a completeness number, and only
+# for an entry that declares a target.
+COMPUTED_TRANSITION_STATE_V5: EvidenceRubric = EvidenceRubric(
     name="computed_transition_state",
-    version=4,
+    version=5,
     record_type="transition_state_entry",
     checks=(
         EvidenceCheckSpec(
@@ -3271,14 +3334,15 @@ COMPUTED_TRANSITION_STATE_V4: EvidenceRubric = EvidenceRubric(
         EvidenceCheckSpec(
             name="imaginary_frequency_count_recorded",
             kind=EvidenceCheckKind.optional,
-            explain="Representative freq result should record n_imag.",
+            explain="Representative freq result (the one a declared saddle target pins, else the newest attached) should record n_imag.",
             runner=_check_ts_imaginary_frequency_count_recorded,
         ),
         EvidenceCheckSpec(
             name="reaction_coordinate_designated_for_ts",
             kind=EvidenceCheckKind.required,
             explain=(
-                "Representative freq result must identify its reaction "
+                "Representative freq result (the one a declared saddle target pins, "
+                "else the newest attached) must identify its reaction "
                 "coordinate: one imaginary mode needs no designation, more "
                 "than one does (ADR 0012)."
             ),
@@ -3304,6 +3368,18 @@ COMPUTED_TRANSITION_STATE_V4: EvidenceRubric = EvidenceRubric(
             runner=_check_ts_no_frequency_result_has_undesignated_imaginary_modes,
         ),
         EvidenceCheckSpec(
+            name="declared_saddle_target_qualifies",
+            kind=EvidenceCheckKind.warning,
+            explain=(
+                "When the entry declares a saddle target: the structure assessment's first-order saddle question, asked "
+                "of the evidence alone, finds a declared target that qualifies and no contested target (advisory, zero "
+                "weight). A warning means the declared target needs investigation, not that the transition state is "
+                "disproved, and no warning certifies nothing. The scoped answer is `trust.structure_assessment`; it is "
+                "computed on a single transition-state entry read and not on lists."
+            ),
+            runner=_check_ts_declared_saddle_target_qualifies,
+        ),
+        EvidenceCheckSpec(
             name="extra_imaginary_modes_not_flagged",
             kind=EvidenceCheckKind.warning,
             explain=(
@@ -3315,7 +3391,7 @@ COMPUTED_TRANSITION_STATE_V4: EvidenceRubric = EvidenceRubric(
         EvidenceCheckSpec(
             name="imaginary_frequency_value_present",
             kind=EvidenceCheckKind.optional,
-            explain="Representative freq result should record the imaginary-mode value (cm-1).",
+            explain="Representative freq result (the one a declared saddle target pins, else the newest attached) should record the imaginary-mode value (cm-1).",
             runner=_check_ts_imaginary_frequency_value_present,
         ),
         EvidenceCheckSpec(
@@ -3364,7 +3440,7 @@ RUBRIC_REGISTRY: dict[str, EvidenceRubric] = {
     "kinetics": COMPUTED_KINETICS_V2,
     "statmech": COMPUTED_STATMECH_V2,
     "thermo": COMPUTED_THERMO_V2,
-    "transition_state_entry": COMPUTED_TRANSITION_STATE_V4,
+    "transition_state_entry": COMPUTED_TRANSITION_STATE_V5,
     "transport": COMPUTED_TRANSPORT_V2,
 }
 """Lookup of the latest active rubric per record-type discriminator.

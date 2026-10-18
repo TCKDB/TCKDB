@@ -117,6 +117,7 @@ from app.services.scientific_read.transition_states import (
     _build_entry_evidence_summary,
     build_transition_state_entry_trust_fragment,
 )
+from app.services.trust.ts_scoped import not_assessed_on_lists_context
 
 logger = logging.getLogger(__name__)
 
@@ -805,6 +806,10 @@ def _build_transition_states_section(
                     build_transition_state_entry_trust_fragment(
                         ts_entry,
                         review_status=badge.status,
+                        # The reaction document embeds every TS entry of a reaction entry: a list, so no
+                        # structure assessment (#723, O3). Its fragment equals the standalone detail fragment
+                        # except for ``structure_assessment``, which here says ``not_assessed_on_lists``.
+                        context=not_assessed_on_lists_context(),
                     )
                     if include_trust
                     else None
