@@ -4,10 +4,8 @@ The fix for that lives in :mod:`app.services.scientific_read.ref_guard`; this is
 ``/api/v1/scientific/*`` route against a database in which every review-gated type has a hidden instance linked from a
 visible parent (:mod:`_curated_sweep_world`), and looks for the hidden refs in the raw response bodies.
 
-This is **report mode** (the guard is wired in but enables no route family yet), so the test does not demand zero
-leaks. It demands that the leaks it finds are exactly the ones in ``curated_ref_sweep_baseline.json``: a new leak is a
-regression, and a baseline entry that no longer occurs must be deleted, so the file only ever shrinks. Each family PR
-enables its routes and removes its entries; the last PR deletes the file.
+The sweep is **enforce-only**: it demands zero hidden refs, zero hidden ids and zero substitutions on every route.
+There is no baseline and no report mode (both were deleted by guard PR-5, together with the rollout allowlist).
 
 Why the test cannot pass by looking at nothing (each guard is mutation-tested; see the PR body)
 -----------------------------------------------------------------------------------------------
@@ -20,30 +18,22 @@ Why the test cannot pass by looking at nothing (each guard is mutation-tested; s
 * curated must be a **withholding of** exploratory, which is what catches a hide that quietly substitutes a visible
   sibling (the #767 bug class);
 * a curated crawl that returned nothing would pass "no hidden ref anywhere", so every visible record must still show up.
-
-Regenerate the baseline (after a deliberate change) with ``CURATED_SWEEP_REGENERATE=1``.
 """
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
-
-import pytest
 
 from app.db.models.common import ReadProfile
 from app.services.scientific_read import ref_guard
 from app.services.scientific_read.profile import ResolvedReadProfile
 from tests.api.scientific._curated_sweep_analysis import (
-    REGENERATE,
     fmt,
     id_leaks,
     order_independent,
     parse_body,
-    read_baseline,
     ref_leaks,
     withholding_violations,
-    write_baseline,
 )
 from tests.api.scientific._curated_sweep_crawl import enumerate_routes, missing_providers
 from tests.api.scientific._curated_sweep_inputs import CRAWL_UNSUPPORTED
@@ -64,7 +54,7 @@ KNOWN_UNGUARDED: dict[tuple[str, str], str] = {}
 #: property. The property for these is hidden == absent: the curated selection over a world equals the exploratory
 #: selection over the same world with the hidden records never created, which
 #: ``tests/services/scientific_read/test_selection_hidden_equals_absent.py`` proves per engine. What stays checked here,
-#: for these routes too: no hidden ref anywhere (the ref ratchet), and the seam was crossed.
+#: for these routes too: no hidden ref anywhere, and the seam was crossed.
 SELECTION_DOCUMENT_ROUTES = frozenset(
     {
         ("POST", f"{BASE}/{root}/select{suffix}")
@@ -316,11 +306,11 @@ def _approved_floor_only():
     return ProfileRecommendation.approved_floor_only
 
 
-def test_curated_sweep_report_and_ratchet(client, db_session, login_as, monkeypatch):
-    """The sweep proper: positive control, coverage, leak ratchet, withholding-only, guard-reached.
+def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypatch):
+    """The sweep proper: positive control, coverage, no leak, withholding-only, guard-reached.
 
     Kills (see each block): an empty world or crawl, a skipped route, a substitution, a route that bypasses the guard,
-    a new leak, a fixed leak left in the baseline.
+    a leak, a substitution.
     """
     from app.api.config import settings
 
@@ -356,8 +346,6 @@ def test_curated_sweep_report_and_ratchet(client, db_session, login_as, monkeypa
     for (route, _label), r in {**exploratory, **exploratory_ids}.items():
         for key in ref_leaks(r.text, hidden, ""):
             sightings[key[0]].add(route[1])
-    if REGENERATE:
-        print("SIGHTINGS", json.dumps({k: sorted(v) for k, v in sorted(sightings.items())}, indent=1))
     if set(EXPECTED_EXPLORATORY_SIGHTINGS) != set(hidden):
         failures.append("the positive control must list every hidden record")
     for key, routes in EXPECTED_EXPLORATORY_SIGHTINGS.items():
@@ -380,7 +368,7 @@ def test_curated_sweep_report_and_ratchet(client, db_session, login_as, monkeypa
     for route, reason in KNOWN_UNGUARDED.items():
         assert reason, route
 
-    # -- 4. no hidden ref anywhere (ratchet) ---------------------------------------------------------------------
+    # -- 4. no hidden ref anywhere ---------------------------------------------------------------------
     ref_found: set[str] = set()
     for (route, label), r in curated.items():
         spec_request = _request_text(specs, route, label, world, ids=False)
@@ -395,7 +383,7 @@ def test_curated_sweep_report_and_ratchet(client, db_session, login_as, monkeypa
     substituted: set[str] = set()
     for (route, label), c in curated.items():
         if route in EXPECTED_CURATED_STATUS:
-            continue  # the curated answer is a different status by design; its leak is in the ref ratchet
+            continue  # the curated answer is a different status by design; its leak is in the ref check
         if route in SELECTION_DOCUMENT_ROUTES:
             continue  # see SELECTION_DOCUMENT_ROUTES: the substitution check for these is made at the engine
         e = exploratory[(route, label)]
@@ -413,23 +401,12 @@ def test_curated_sweep_report_and_ratchet(client, db_session, login_as, monkeypa
                 continue
             substituted.add(fmt(route, path))
 
-    found = {
-        "hidden_ref_leaks": sorted(ref_found),
-        "hidden_id_leaks": sorted(id_found),
-        "not_a_withholding": sorted(substituted),
-    }
-    if REGENERATE:
-        print("FAILURES-BEFORE-BASELINE", "\n".join(failures))
-        write_baseline(found)
-        pytest.skip("baseline regenerated")
-
-    baseline = read_baseline()
-    for section, now in found.items():
-        was = set(baseline.get(section, []))
-        for entry in sorted(set(now) - was):
-            failures.append(f"NEW {section}: {entry}")
-        for entry in sorted(was - set(now)):
-            failures.append(f"FIXED {section} (remove it from the baseline): {entry}")
+    for entry in sorted(ref_found):
+        failures.append(f"hidden ref leak: {entry}")
+    for entry in sorted(id_found):
+        failures.append(f"hidden id leak: {entry}")
+    for entry in sorted(substituted):
+        failures.append(f"not a withholding of exploratory: {entry}")
 
     assert not failures, "\n".join(failures)
 

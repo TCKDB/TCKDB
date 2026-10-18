@@ -3,27 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 from app.services.scientific_read import ref_guard
 from tests.api.scientific._curated_sweep_world import SweepWorld
-
-BASELINE_PATH = Path(__file__).with_name("curated_ref_sweep_baseline.json")
-#: ``CURATED_SWEEP_REGENERATE=1`` rewrites the baseline from what the sweep finds (a deliberate act, reviewed in the diff).
-REGENERATE = os.environ.get("CURATED_SWEEP_REGENERATE") == "1"
-
-
-def read_baseline() -> dict[str, list[str]]:
-    return json.loads(BASELINE_PATH.read_text()) if BASELINE_PATH.exists() else {}
-
-
-def write_baseline(sections: dict[str, list[str]]) -> None:
-    merged = {**read_baseline(), **sections}
-    BASELINE_PATH.write_text(json.dumps(merged, indent=1, sort_keys=True) + "\n")
 
 
 def fmt(route: tuple[str, str], text: str) -> str:

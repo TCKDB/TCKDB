@@ -3,7 +3,7 @@
 
 The families are the networks, network solves and fits, literature, analytics, levels of theory, frequency scale
 factors, energy-correction schemes and composite schemes. What this pins, beyond the all-routes sweep
-(``test_curated_ref_sweep.py``, whose baseline no longer lists any entry of these families):
+(``test_curated_ref_sweep.py``, which is enforce-only since PR-5 and covers every route):
 
 * **Leaks.** Every route of the families, crawled under ``curated`` with and without ``internal_ids`` and with every
   include token, names no hidden record by ref, integer id, URL or free text, and answers 200.
@@ -27,11 +27,11 @@ import pytest
 from app.db.models.common import ProfileRecommendation, ReadProfile, RecordReviewStatus
 from app.services.scientific_read import ref_guard
 from app.services.scientific_read.profile import ResolvedReadProfile
+from tests.api.scientific._curated_families import NETWORK_PROVENANCE_PREFIXES
 from tests.api.scientific._curated_sweep_analysis import (
     id_leaks,
     order_independent,
     parse_body,
-    read_baseline,
     ref_leaks,
     withholding_violations,
 )
@@ -50,7 +50,7 @@ def _is_selection_document(path: str) -> bool:
 
 
 def _in_family(path: str) -> bool:
-    return ref_guard.route_matches(path, ref_guard.NETWORK_PROVENANCE_PREFIXES) and not _is_selection_document(path)
+    return ref_guard.route_matches(path, NETWORK_PROVENANCE_PREFIXES) and not _is_selection_document(path)
 
 
 def _family(specs):
@@ -130,19 +130,6 @@ def test_network_and_provenance_routes_name_no_hidden_record_under_curated(clien
     for key in ("calc_h", "calc_h_lot", "calc_h_comp", "nsolve_h", "nkin_h", "nkin_h_plog", "tse_h", "sm_h", "net_h"):
         assert hidden[key] in exploratory_text, f"positive control: {key} never named under exploratory"
     assert not problems, "\n".join(problems)
-
-
-def test_the_baseline_keeps_no_entry_of_these_families():
-    """The ratchet only shrinks: PR-2c removed every entry of these families and none may come back.
-
-    Kills: re-adding a leak, hidden id or unplaceable of these prefixes to the baseline instead of fixing it.
-    """
-    baseline = read_baseline()
-    assert baseline, "baseline file is missing or empty"
-    for section, entries in baseline.items():
-        for entry in entries:
-            path = entry.split(" ", 2)[1]
-            assert not ref_guard.route_matches(path, ref_guard.NETWORK_PROVENANCE_PREFIXES), f"{section}: {entry}"
 
 
 def test_both_evaluate_routes_reach_the_boundary(client, db_session, login_as, monkeypatch):

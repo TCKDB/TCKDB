@@ -45,6 +45,22 @@ and are re-planned, none is rewritten.
 - Under `profile=curated` the assessment runs under that profile: a target resting on a hidden calculation is unresolved and warns.
 - The TS-entry page shows the assessment in plain words.
 
+## The curated ref guard covers every route; the per-surface hiding is retired (2026-10-18)
+
+**No wire change, apart from one statement fewer on the statmech reads that include `frequencies`.** Migration: none. New
+environment variable: none. `tckdb-schemas` and `tckdb-client` unchanged; OpenAPI golden unchanged.
+
+- The rollout allowlist (`_ENABLED_ROUTE_PREFIXES`) is deleted. The boundary hook applies to every scientific route that is not
+  in `EXEMPT_ROUTE_PREFIXES` (releases, `/meta` vocabulary, artifact download bytes), so a route added later is guarded from the
+  day it exists. The sweep is enforce-only: its baseline file, report mode and regenerate switch are gone.
+- Retired the hand-written hiding the guard now covers: the statmech source-calculation/frequency/torsion filters (#765), the
+  curvature-witness badge filter (#764; it also issued a review-badge statement under the exploratory profile), the statmech
+  conformer-context SQL filter, the thermo provenance hiding (#767; slots are still picked from every link first) and the
+  transition-state statmech summary hiding (#767; the batching stays). The count/flag floors (D5) and the selection
+  population withholding stay: they are not ref rules.
+- Tests of #764, #765 and #767 pass unmodified. Curated and exploratory responses of the sweep crawl are byte-identical to
+  the previous head.
+
 ## Curated exports no longer name hidden records (2026-10-18)
 
 **Narrowing under `profile=curated` only; the default (exploratory) output is byte-identical.** Migration: none. New environment variable:

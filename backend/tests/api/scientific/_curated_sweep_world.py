@@ -206,6 +206,9 @@ def build_sweep_world(session) -> SweepWorld:
     attach_statmech_source_calculation(session, statmech=sm_v, calculation=calc_h, role=StatmechCalculationRole.freq)
     attach_statmech_source_calculation(session, statmech=sm_v, calculation=calc_vsp, role=StatmechCalculationRole.sp)
     attach_statmech_source_calculation(session, statmech=sm_v2, calculation=calc_vf, role=StatmechCalculationRole.freq)
+    # sm_v also links the visible freq sibling, behind the thermo's own hidden freq link: a hide that filters the links before
+    # picking falls through to calc_vf (the #767 bug class); the guard must leave that slot empty instead.
+    attach_statmech_source_calculation(session, statmech=sm_v, calculation=calc_vf, role=StatmechCalculationRole.freq)
     attach_statmech_torsion(session, statmech=sm_v, source_scan_calculation=calc_h)
     vis["sm_v"], vis["sm_v2"] = sm_v, sm_v2
     hid["sm_h"] = sm_h

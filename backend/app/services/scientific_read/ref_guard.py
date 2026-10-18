@@ -45,12 +45,11 @@ and compared over those facts. Two kinds of nested ref are handled differently, 
   decided or hashed. ``n`` follows the sorted order of the real refs and one real ref has one token in a document, so
   every equality survives and a replay of the manifest runs over the tokens and reproduces it byte for byte.
 
-Rollout
--------
-:data:`_ENABLED_ROUTE_PREFIXES` lists the route families on which the hook withholds. PR-2a enables the
-species-side families (:data:`SPECIES_SIDE_PREFIXES`) and PR-2b the transition-state and reaction families
-(:data:`TS_REACTION_PREFIXES`); PR-2c the network, literature, analytics and provenance-vocabulary families
-(:data:`NETWORK_PROVENANCE_PREFIXES`). The selection documents and the exports follow.
+Scope
+-----
+The hook applies to every scientific route that is not listed in :data:`EXEMPT_ROUTE_PREFIXES`, each with its reason.
+There is no allowlist: a route added tomorrow is guarded from the day it exists. The selection documents and the exports
+reach the guard through their own seams (see above).
 """
 
 from __future__ import annotations
@@ -352,64 +351,6 @@ EXEMPT_ROUTE_PREFIXES: Mapping[str, str] = {
     "/api/v1/scientific/meta": "vocabulary (software, methods, families) carries no gated refs",
     "/api/v1/scientific/artifacts/{sha256}/download": "opaque bytes, not a JSON document",
 }
-
-#: Rollout allowlist: route-template prefixes on which the hook actually withholds. Empty in PR-1, so the
-#: hook is inert on the wire. Deleted once every family is enabled.
-_SCIENTIFIC_BASE = "/api/v1/scientific"
-
-#: PR-2a: the species-side route families. Matched on whole path segments, so ``/species`` does not cover
-#: ``/species-entries`` (which is listed on its own).
-SPECIES_SIDE_PREFIXES: frozenset[str] = frozenset(
-    f"{_SCIENTIFIC_BASE}/{segment}"
-    for segment in (
-        "statmech",
-        "thermo",
-        "species-entries",
-        "species",
-        "transport",
-        "conformer-groups",
-        "conformer-observations",
-        "conformers",
-        "calculations",
-        "species-calculations",
-        "artifacts",
-        "geometries",
-    )
-)
-
-#: PR-2b: the transition-state and reaction route families. ``/reaction-entries`` covers the ``/full`` read, the
-#: reaction entry's kinetics and (matched, though they never reach the hook) its selection documents; ``/kinetics`` is
-#: the kinetics search. Matched on whole path segments, so ``/reactions`` does not cover ``/reaction-entries``.
-TS_REACTION_PREFIXES: frozenset[str] = frozenset(
-    f"{_SCIENTIFIC_BASE}/{segment}"
-    for segment in (
-        "transition-states",
-        "transition-state-entries",
-        "reaction-entries",
-        "reactions",
-        "kinetics",
-    )
-)
-
-#: PR-2c: the network family (pressure-dependent networks, their solves and fits), literature, analytics and the
-#: provenance vocabulary reads (levels of theory, frequency scale factors, energy-correction and composite schemes).
-#: ``/network-solves`` is not a sub-path of ``/networks``, so each is listed.
-NETWORK_PROVENANCE_PREFIXES: frozenset[str] = frozenset(
-    f"{_SCIENTIFIC_BASE}/{segment}"
-    for segment in (
-        "networks",
-        "network-solves",
-        "network-kinetics",
-        "literature",
-        "analytics",
-        "level-of-theories",
-        "frequency-scale-factors",
-        "energy-correction-schemes",
-        "composite-schemes",
-    )
-)
-
-_ENABLED_ROUTE_PREFIXES: frozenset[str] = SPECIES_SIDE_PREFIXES | TS_REACTION_PREFIXES | NETWORK_PROVENANCE_PREFIXES
 
 
 class RefGuardUnplaceable(RuntimeError):
@@ -1342,8 +1283,7 @@ def withhold_for_current_request(payload: BaseModel) -> None:
     """The boundary hook: called by ``apply_internal_ids_visibility`` for every enveloped scientific response.
 
     Returns without a statement or a mutation when there is no context (outside a scientific request), no
-    review floor (exploratory: the default), a release-backed profile, an exempt route, or a route family
-    that is not enabled yet.
+    review floor (exploratory: the default), a release-backed profile, or an exempt route.
     """
     ctx = _CURRENT_CONTEXT.get()
     if ctx is None:
@@ -1353,8 +1293,6 @@ def withhold_for_current_request(payload: BaseModel) -> None:
     if not guard_active(profile):
         return
     if route_matches(ctx.route_path, EXEMPT_ROUTE_PREFIXES):
-        return
-    if not route_matches(ctx.route_path, _ENABLED_ROUTE_PREFIXES):
         return
     try:
         report = withhold_in_model(ctx.session, payload, profile=profile)
@@ -1377,11 +1315,8 @@ __all__ = [
     "EXEMPT_ROUTE_PREFIXES",
     "GATED_REF_RE",
     "GATED_TYPES",
-    "NETWORK_PROVENANCE_PREFIXES",
     "POINTER_FIELDS",
     "POINTER_MODELS",
-    "SPECIES_SIDE_PREFIXES",
-    "TS_REACTION_PREFIXES",
     "UNGATED_REVIEWABLE",
     "WITHHELD_TOKEN_PREFIX",
     "WITHHELD_TOKEN_RE",

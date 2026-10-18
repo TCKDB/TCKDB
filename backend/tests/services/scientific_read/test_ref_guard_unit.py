@@ -299,14 +299,9 @@ def test_routes_match_on_whole_path_segments():
     assert not ref_guard.route_matches("/api/v1/scientific/thermo", [])
 
 
-def test_the_hook_does_not_exempt_or_enable_by_a_shared_string_prefix(hook_env, monkeypatch):
-    """Kills: exemptions and the allowlist matching by plain prefix."""
+def test_the_hook_does_not_exempt_by_a_shared_string_prefix(hook_env):
+    """Kills: exemptions matching by plain prefix."""
     publish, calls = hook_env
-    monkeypatch.setattr(ref_guard, "_ENABLED_ROUTE_PREFIXES", frozenset({"/api/v1/scientific/statmech"}))
-    ctx = publish(CURATED, "/api/v1/scientific/statmechanics/x")
-    ref_guard.withhold_for_current_request(Envelope())
-    assert (ctx.applied, calls) == (0, [])  # not enabled: shares only a string prefix with an enabled family
-    monkeypatch.setattr(ref_guard, "_ENABLED_ROUTE_PREFIXES", frozenset({"/api/v1/scientific"}))
     ctx = publish(CURATED, "/api/v1/scientific/metadata/x")
     ref_guard.withhold_for_current_request(Envelope())
     assert ctx.applied == 1  # not exempt: shares only a string prefix with /meta
@@ -427,73 +422,27 @@ def test_the_hook_does_nothing_outside_a_scientific_request(hook_env):
     assert calls == []
 
 
-def test_the_hook_counts_that_it_was_reached_but_withholds_nothing_while_no_family_is_enabled(hook_env, monkeypatch):
-    """Kills: PR-1 changing the wire (enabling a family by default); a spy that cannot tell reached from applied."""
-    publish, calls = hook_env
-    monkeypatch.setattr(ref_guard, "_ENABLED_ROUTE_PREFIXES", frozenset())
-    ctx = publish(CURATED)
-    ref_guard.withhold_for_current_request(Envelope())
-    assert (ctx.reached, ctx.applied, calls) == (1, 0, [])
-
-
-def test_pr_2c_enables_exactly_the_species_side_ts_reaction_and_network_provenance_families():
-    """Kills: enabling an export or selection family early (their wire changes belong to PR-3/PR-4); dropping a family."""
+def test_the_hook_has_no_rollout_allowlist_and_the_exemptions_are_the_registry():
+    """Kills: bringing an allowlist back (a route outside it would be unguarded); an exemption without a reason; an
+    unreviewed new exemption (the registry is the one place that names them, each with its reason)."""
+    assert not hasattr(ref_guard, "_ENABLED_ROUTE_PREFIXES")
     base = "/api/v1/scientific/"
-    assert ref_guard._ENABLED_ROUTE_PREFIXES == (
-        ref_guard.SPECIES_SIDE_PREFIXES | ref_guard.TS_REACTION_PREFIXES | ref_guard.NETWORK_PROVENANCE_PREFIXES
+    assert dict.fromkeys(ref_guard.EXEMPT_ROUTE_PREFIXES) == dict.fromkeys(
+        {
+            f"{base}releases",
+            f"{base}meta",
+            f"{base}artifacts/{{sha256}}/download",
+        }
     )
-    assert {p.removeprefix(base) for p in ref_guard.SPECIES_SIDE_PREFIXES} == {
-        "statmech",
-        "thermo",
-        "species-entries",
-        "species",
-        "transport",
-        "conformer-groups",
-        "conformer-observations",
-        "conformers",
-        "calculations",
-        "species-calculations",
-        "artifacts",
-        "geometries",
-    }
-    assert {p.removeprefix(base) for p in ref_guard.TS_REACTION_PREFIXES} == {
-        "transition-states",
-        "transition-state-entries",
-        "reaction-entries",
-        "reactions",
-        "kinetics",
-    }
-    assert {p.removeprefix(base) for p in ref_guard.NETWORK_PROVENANCE_PREFIXES} == {
-        "networks",
-        "network-solves",
-        "network-kinetics",
-        "literature",
-        "analytics",
-        "level-of-theories",
-        "frequency-scale-factors",
-        "energy-correction-schemes",
-        "composite-schemes",
-    }
-    # Whole-segment matching: no later family rides in on a shared string prefix.
-    for route in (
-        "meta",
-        "releases",
-        "export",
-        "structure",
-    ):
-        assert not ref_guard.route_matches(f"{base}{route}/x", ref_guard._ENABLED_ROUTE_PREFIXES), route
-    assert ref_guard.route_matches(f"{base}species/search", ref_guard._ENABLED_ROUTE_PREFIXES)
-    assert ref_guard.route_matches(f"{base}species-entries/{{id}}/thermo", ref_guard._ENABLED_ROUTE_PREFIXES)
-    assert ref_guard.route_matches(f"{base}reaction-entries/{{id}}/full", ref_guard._ENABLED_ROUTE_PREFIXES)
-    assert ref_guard.route_matches(f"{base}kinetics/search", ref_guard._ENABLED_ROUTE_PREFIXES)
-    for route in ("networks/{ref}", "network-solves/search", "network-kinetics/{ref}/evaluate", "literature/{ref}/records"):
-        assert ref_guard.route_matches(f"{base}{route}", ref_guard._ENABLED_ROUTE_PREFIXES), route
+    assert all(reason.strip() for reason in ref_guard.EXEMPT_ROUTE_PREFIXES.values())
+    # Nothing that carries records is exempt.
+    for route in ("species/search", "thermo/search", "export/ndjson", "statmech/select", "structure/x"):
+        assert not ref_guard.route_matches(f"{base}{route}", ref_guard.EXEMPT_ROUTE_PREFIXES), route
 
 
-def test_the_hook_withholds_on_an_enabled_curated_route(hook_env, monkeypatch):
-    """Kills: a hook that never calls the guard once a family is enabled."""
+def test_the_hook_withholds_on_a_curated_route(hook_env):
+    """Kills: a hook that never calls the guard."""
     publish, calls = hook_env
-    monkeypatch.setattr(ref_guard, "_ENABLED_ROUTE_PREFIXES", frozenset({"/api/v1/scientific/statmech"}))
     ctx = publish(CURATED)
     payload = Envelope()
     ref_guard.withhold_for_current_request(payload)
@@ -513,18 +462,12 @@ def test_the_hook_withholds_on_an_enabled_curated_route(hook_env, monkeypatch):
         ),
         (CURATED, "/api/v1/scientific/releases/{release_handle}/selections"),
         (CURATED, "/api/v1/scientific/meta/software"),
-        (CURATED, "/api/v1/scientific/thermo/search"),
     ],
-    ids=["exploratory", "release-backed", "exempt-releases", "exempt-meta", "family-not-enabled"],
+    ids=["exploratory", "release-backed", "exempt-releases", "exempt-meta"],
 )
-def test_the_hook_stands_down(hook_env, monkeypatch, profile, route_path):
-    """Kills: running under exploratory; running on release-backed reads; ignoring an exemption; ignoring the allowlist."""
+def test_the_hook_stands_down(hook_env, profile, route_path):
+    """Kills: running under exploratory; running on release-backed reads; ignoring an exemption."""
     publish, calls = hook_env
-    monkeypatch.setattr(
-        ref_guard,
-        "_ENABLED_ROUTE_PREFIXES",
-        frozenset({"/api/v1/scientific"}) if "thermo" not in route_path else frozenset({"/api/v1/scientific/statmech"}),
-    )
     ctx = publish(profile, route_path)
     ref_guard.withhold_for_current_request(Envelope())
     assert (ctx.applied, calls) == (0, [])
@@ -533,7 +476,6 @@ def test_the_hook_stands_down(hook_env, monkeypatch, profile, route_path):
 def test_an_unplaceable_ref_in_the_hook_propagates(hook_env, monkeypatch):
     """Kills: swallowing RefGuardUnplaceable in the hook (it must fail the request, owner decision D4)."""
     publish, _ = hook_env
-    monkeypatch.setattr(ref_guard, "_ENABLED_ROUTE_PREFIXES", frozenset({"/api/v1/scientific"}))
 
     def boom(session, payload, *, profile, apply=True):
         raise ref_guard.RefGuardUnplaceable("M", "a.b", "calc")

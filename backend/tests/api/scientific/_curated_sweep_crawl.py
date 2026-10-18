@@ -104,7 +104,7 @@ def variants_for(spec: RouteSpec, world: SweepWorld, *, with_internal_ids: bool)
     providers = {**PATH_PARAM_PROVIDERS, **ROUTE_PATH_PARAM_PROVIDERS.get(spec.key, {})}
     value_lists = [[(p, v) for v in providers[p](world)] for p in spec.path_params]
     combos = list(itertools.product(*value_lists)) if value_lists else [()]
-    # Labels are stable across runs (provider positions, never ref text) so the ratchet baseline can name them.
+    # Labels are stable across runs (provider positions, never ref text) so a failure can name them.
     positions = list(itertools.product(*[range(len(vl)) for vl in value_lists])) if value_lists else [()]
     maker = ROUTE_INPUTS.get(spec.key)
     inputs = maker(world) if maker else [{}]
