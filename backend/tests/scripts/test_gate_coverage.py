@@ -801,6 +801,133 @@ def test_frontend_gate_runs_for_frontend_prs_and_main_pushes() -> None:
     assert "workflow_dispatch" in triggers
 
 
+IMAGE_TAGS_BLOCK_NEEDLES = (
+    "type=raw,value=latest,enable={{is_default_branch}}",
+    "type=sha,format=long",
+    "type=semver,pattern={{version}}",
+    "type=semver,pattern={{major}}.{{minor}}",
+)
+
+
+def _tag_lines(tags: str) -> list[str]:
+    return [
+        line.strip()
+        for line in tags.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+
+def _assert_native_multiarch_workflow(
+    workflow: dict, *, cache_prefix: str, context: str, dockerfile: str, smoke_name: str
+) -> tuple[dict, dict]:
+    """Pin the native per-platform build-then-merge image layout.
+
+    Each assertion exists because dropping the thing it checks leaves a green
+    workflow that publishes something wrong: no arm64 leg means an image the
+    Pi cannot pull, QEMU is the hang this layout removes, a missing timeout
+    is a 6-hour hang, and a missing tag or digest guard changes what gets
+    published.
+    """
+    jobs = workflow["jobs"]
+    assert set(jobs) == {"build", "merge"}
+    job = jobs["build"]
+    merge = jobs["merge"]
+    assert job.get("if") == "github.repository == 'TCKDB/TCKDB'"
+    assert merge.get("if") == "github.repository == 'TCKDB/TCKDB'"
+    assert merge.get("needs") == "build"
+
+    include = job["strategy"]["matrix"]["include"]
+    assert {entry["platform"] for entry in include} == {"linux/amd64", "linux/arm64"}
+    assert {entry["runner"] for entry in include} == {"ubuntu-latest", "ubuntu-24.04-arm"}
+    for entry in include:
+        assert entry["arch"] in entry["platform"]
+    for wf_job in (job, merge):
+        for step in wf_job.get("steps", []):
+            assert not str(step.get("uses", "")).startswith("docker/setup-qemu-action@")
+
+    assert "timeout-minutes" in job and "timeout-minutes" in merge
+    steps = job["steps"]
+    for wf_job in (job, merge):
+        for step in wf_job["steps"]:
+            if str(step.get("uses", "")).startswith("docker/build-push-action@"):
+                assert "timeout-minutes" in step, step.get("name")
+
+    names = [step.get("name") for step in steps]
+    smoke = names.index(smoke_name)
+    publish = names.index("Push by digest")
+    assert "timeout-minutes" in steps[smoke], "the smoke step must have its own timeout"
+    assert smoke < publish, "the image must be run before it is published"
+    login = [
+        i for i, step in enumerate(steps)
+        if str(step.get("uses", "")).startswith("docker/login-action@")
+    ]
+    assert login and login[0] < publish, "the build leg must log in before it pushes"
+
+    for step in steps[:publish]:
+        if str(step.get("uses", "")).startswith("docker/build-push-action@"):
+            assert step["with"]["platforms"] == "${{ matrix.platform }}"
+            assert f"scope={cache_prefix}-${{{{ matrix.arch }}}}" in step["with"]["cache-from"]
+
+    publish_step = steps[publish]
+    assert publish_step["with"]["context"] == context
+    assert publish_step["with"]["file"] == dockerfile
+    assert publish_step["with"]["platforms"] == "${{ matrix.platform }}"
+    assert "push-by-digest=true" in publish_step["with"]["outputs"]
+    assert f"scope={cache_prefix}-${{{{ matrix.arch }}}}" in publish_step["with"]["cache-from"]
+    assert f"scope={cache_prefix}-${{{{ matrix.arch }}}}" in publish_step["with"]["cache-to"]
+
+    # The full tags block, in both metadata steps, so labels and tags agree
+    # with what main published before the split.
+    build_meta = next(step for step in steps if step.get("id") == "meta")
+    merge_meta = next(step for step in merge["steps"] if step.get("id") == "meta")
+    merge_tags = _tag_lines(merge_meta["with"]["tags"])
+    assert merge_tags == list(IMAGE_TAGS_BLOCK_NEEDLES)
+    assert _tag_lines(build_meta["with"]["tags"]) == merge_tags
+
+    download = next(
+        step for step in merge["steps"]
+        if str(step.get("uses", "")).startswith("actions/download-artifact@")
+    )
+    assert download["with"]["merge-multiple"] is True
+
+    create = next(
+        step for step in merge["steps"] if "imagetools create" in str(step.get("run", ""))
+    )
+    assert '[ "$(ls | wc -l)" = "2" ]' in create["run"], "the 2-digest guard"
+    assert create["env"]["META_JSON"] == "${{ steps.meta.outputs.json }}"
+    assert '"$META_JSON"' in create["run"]
+
+    inspect = next(
+        step for step in merge["steps"] if "imagetools inspect" in str(step.get("run", ""))
+    )
+    assert "sha-${{ github.sha }}" in inspect["env"]["IMAGE_REF"]
+    for platform in ("linux/amd64", "linux/arm64"):
+        assert platform in inspect["run"], f"the inspect step must assert {platform}"
+    return job, merge
+
+
+def test_api_image_publish_workflow_is_native_per_platform() -> None:
+    """The API image must build each platform natively and merge by digest."""
+    workflow = _workflow(".github/workflows/build-api-image.yml")
+    triggers = _triggers(workflow)
+    push = triggers.get("push")
+    assert isinstance(push, dict)
+    assert push.get("branches") == ["main"]
+    assert push.get("tags") == ["v*"]
+    assert "workflow_dispatch" in triggers
+    job, _merge = _assert_native_multiarch_workflow(
+        workflow,
+        cache_prefix="api",
+        context=".",
+        dockerfile="backend/Dockerfile",
+        smoke_name="Smoke test — the image must import and serve",
+    )
+    names = [step.get("name") for step in job["steps"]]
+    assert any(str(n).startswith("Smoke test — imports on") for n in names), (
+        "every leg must run the native import check"
+    )
+
+
 def test_frontend_image_publish_workflow_cannot_silently_skip_shipping_changes() -> None:
     """The Pi image workflow must follow every shipping input and smoke first.
 
@@ -820,56 +947,17 @@ def test_frontend_image_publish_workflow_cannot_silently_skip_shipping_changes()
     }
     assert "workflow_dispatch" in triggers
 
-    jobs = workflow["jobs"]
-    assert set(jobs) == {"build", "merge"}
-    job = jobs["build"]
-    merge = jobs["merge"]
-    assert job.get("if") == "github.repository == 'TCKDB/TCKDB'"
-    assert merge.get("if") == "github.repository == 'TCKDB/TCKDB'"
-    assert merge.get("needs") == "build"
-
-    # Native per-platform builds: dropping the arm64 leg would publish an
-    # amd64-only image the Pi cannot pull, and QEMU is the 6-hour hang this
-    # layout exists to remove.
-    include = job["strategy"]["matrix"]["include"]
-    assert {entry["platform"] for entry in include} == {"linux/amd64", "linux/arm64"}
-    assert {entry["runner"] for entry in include} == {"ubuntu-latest", "ubuntu-24.04-arm"}
-    for entry in include:
-        assert entry["arch"] in entry["platform"]
-    for wf_job in (job, merge):
-        for step in wf_job.get("steps", []):
-            assert not str(step.get("uses", "")).startswith("docker/setup-qemu-action@")
-
-    # Every job and build step must carry a timeout (GitHub's default is 6h).
-    assert "timeout-minutes" in job and "timeout-minutes" in merge
-    steps = job.get("steps", [])
-    for step in steps:
-        if str(step.get("uses", "")).startswith("docker/build-push-action@"):
-            assert "timeout-minutes" in step, step.get("name")
-
-    names = [step.get("name") for step in steps]
-    smoke = names.index("Smoke test — SPA fallback and same-origin API proxy")
-    publish = names.index("Push by digest")
-    assert smoke < publish, "the image must serve its SPA and proxy before it is published"
-
-    # The smoke build is the only non-publishing build, and it is per-platform.
-    for step in steps[:publish]:
-        if not str(step.get("uses", "")).startswith("docker/build-push-action@"):
-            continue
-        assert step["with"]["platforms"] == "${{ matrix.platform }}"
-
-    publish_step = steps[publish]
-    assert publish_step["with"]["context"] == "frontend"
-    assert publish_step["with"]["file"] == "frontend/Dockerfile"
-    assert publish_step["with"]["platforms"] == "${{ matrix.platform }}"
-    assert "push-by-digest=true" in publish_step["with"]["outputs"]
-    assert "scope=frontend-${{ matrix.arch }}" in publish_step["with"]["cache-from"]
-
-    merge_run = "\n".join(str(step.get("run", "")) for step in merge["steps"])
-    assert "docker buildx imagetools create" in merge_run
-    merge_meta = next(step for step in merge["steps"] if step.get("id") == "meta")
-
-    assert "type=sha,format=long" in merge_meta["with"]["tags"]
+    job, merge = _assert_native_multiarch_workflow(
+        workflow,
+        cache_prefix="frontend",
+        context="frontend",
+        dockerfile="frontend/Dockerfile",
+        smoke_name="Smoke test — SPA fallback and same-origin API proxy",
+    )
+    steps = job["steps"]
+    smoke = [step.get("name") for step in steps].index(
+        "Smoke test — SPA fallback and same-origin API proxy"
+    )
     smoke_step = steps[smoke]
     command = smoke_step["run"]
     for expected in (

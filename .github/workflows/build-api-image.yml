@@ -66,11 +66,25 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # Labels only. Tags are computed once, in the merge job, because the
-      # per-platform images are pushed by digest and carry no tag.
+      # per-platform images are pushed by digest and carry no tag. The
+      # tags: block is repeated here only so the labels (notably
+      # org.opencontainers.image.version) match the merge job's.
       - id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            # Mutable pointer at the newest main build. Convenient for a
+            # scratch pull; never pin a deployment to it -- it moves.
+            type=raw,value=latest,enable={{is_default_branch}}
+            # Immutable, one per commit. This is what a deployment pins to and
+            # what makes "which code is running" answerable.
+            type=sha,format=long
+            # Immutable, human-meaningful, cut from a `v*` git tag. This is the
+            # one a paper cites, and the one stage 5's "Pi is reproducible from
+            # tagged release" means.
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
       # Build this leg's native arch and load it locally so it can be RUN
       # before anything is published. `docker build` succeeding only proves the
@@ -290,15 +304,27 @@ jobs:
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
+        env:
+          META_JSON: ${{ steps.meta.outputs.json }}
         run: |
           set -euo pipefail
           # Both platforms must be present: a merge of one is a silent
           # single-arch publish, which the Pi (arm64) could not pull.
           [ "$(ls | wc -l)" = "2" ] || { echo "::error::expected 2 digests, got: $(ls)"; exit 1; }
           docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$META_JSON") \
             $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
 
       - name: Inspect manifest list
+        env:
+          IMAGE_REF: ${{ env.REGISTRY_IMAGE }}:sha-${{ github.sha }}
         run: |
-          docker buildx imagetools inspect "${{ env.REGISTRY_IMAGE }}:sha-${{ github.sha }}"
+          set -euo pipefail
+          out="$(docker buildx imagetools inspect "$IMAGE_REF")"
+          echo "$out"
+          for platform in linux/amd64 linux/arm64; do
+            echo "$out" | grep -Eq "^ *Platform: +${platform}$" || {
+              echo "::error::manifest list is missing ${platform}"
+              exit 1
+            }
+          done

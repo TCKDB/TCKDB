@@ -49,6 +49,11 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
       - name: Build image for smoke testing
         timeout-minutes: 25
@@ -67,6 +72,9 @@ jobs:
         timeout-minutes: 10
         run: |
           set -euo pipefail
+          # The arm64 runner image may not ship jq/curl; install if missing.
+          command -v jq >/dev/null && command -v curl >/dev/null \
+            || { sudo apt-get update && sudo apt-get install -y jq curl; }
           docker network create --subnet 172.30.252.0/24 frontend-smoke-net
           docker run -d --name tckdb-api --network frontend-smoke-net \
             -v "$PWD/frontend/scripts/ops/smoke_api.py:/app/smoke_api.py:ro" \
@@ -176,13 +184,25 @@ jobs:
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
+        env:
+          META_JSON: ${{ steps.meta.outputs.json }}
         run: |
           set -euo pipefail
           [ "$(ls | wc -l)" = "2" ] || { echo "::error::expected 2 digests, got: $(ls)"; exit 1; }
           docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$META_JSON") \
             $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
 
       - name: Inspect manifest list
+        env:
+          IMAGE_REF: ${{ env.REGISTRY_IMAGE }}:sha-${{ github.sha }}
         run: |
-          docker buildx imagetools inspect "${{ env.REGISTRY_IMAGE }}:sha-${{ github.sha }}"
+          set -euo pipefail
+          out="$(docker buildx imagetools inspect "$IMAGE_REF")"
+          echo "$out"
+          for platform in linux/amd64 linux/arm64; do
+            echo "$out" | grep -Eq "^ *Platform: +${platform}$" || {
+              echo "::error::manifest list is missing ${platform}"
+              exit 1
+            }
+          done
