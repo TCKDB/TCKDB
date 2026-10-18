@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.154.0 - 2026-10-18
+
+Four typed methods for the relative conformer energy reads: `relative_conformer_energies`, `get_relative_conformer_energy_manifest`,
+`compare_relative_conformer_energies` and `get_relative_conformer_energy_comparison_manifest` (the four `.../conformers/relative-energies`
+routes, previously raw-only). The scientific choices are required keyword arguments with no default: the reference conformer,
+`energy_kind`, `certificate` and the level (exactly one of `level_of_theory_ref` and `composite_scheme_ref`, else `ValueError` before any
+request); the comparison also requires `candidate`, `reference` and `pairing`. Optional fields left unset are not sent. The manifest methods
+return the server's JSON unchanged, for replay. New types: `RelativeConformerEnergyResponse`, `RelativeConformerEnergyManifest`,
+`RelativeConformerEnergyCompareResponse`, `RelativeConformerEnergyCompareManifest`, `RelativeEnergyMember`, `RelativeEnergyComparePair`,
+`RelativeEnergyCompareClaims`, `RelativeEnergyPairing`. No new dependency.
+
 ## 0.153.0 - 2026-10-18
 
 `RejectionCode` gains `relative_conformer_energy_compare_identical_protocols` (`tckdb-schemas` 0.125.0): the code of the new server read

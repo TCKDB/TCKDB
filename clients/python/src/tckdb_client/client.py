@@ -101,6 +101,10 @@ from tckdb_client.scientific_types import (
     ThermoSearchResponse,
     ThermoSelectionRequest,
     StatmechSelectionResponse,
+    RelativeConformerEnergyCompareManifest,
+    RelativeConformerEnergyCompareResponse,
+    RelativeConformerEnergyManifest,
+    RelativeConformerEnergyResponse,
     StructureSelectionResponse,
     ThermoSelectionResponse,
     TransitionStateDetailResponse,
@@ -334,6 +338,63 @@ def _structure_selection_body(fields: Mapping[str, Any]) -> dict[str, Any]:
             value = list(value)
         body[key] = value
     return body
+
+
+_RELATIVE_ENERGY_OPTIONAL = (
+    "recipe", "member_refs", "coverage_requirement", "repeat_policy", "min_review_status", "permitted_quality",
+    "require_stable_reference", "temperature_k",
+)
+
+
+def _relative_energy_path(species_entry_ref: str, operation: str = "") -> str:
+    """Path of a relative conformer energy endpoint for a public species-entry ref (integer ids are refused)."""
+    if not isinstance(species_entry_ref, str) or not species_entry_ref.startswith("spe_"):
+        raise ValueError(
+            f"species_entry_ref must be a public species-entry ref starting with 'spe_'; got {species_entry_ref!r}."
+        )
+    return f"/scientific/species-entries/{quote(species_entry_ref, safe='')}/conformers/relative-energies{operation}"
+
+
+def _relative_energy_level(level_of_theory_ref: str | None, composite_scheme_ref: str | None) -> dict[str, str]:
+    """The one level of a request: exactly one of the two refs, checked before any request so no ambiguous body is sent."""
+    if (level_of_theory_ref is None) == (composite_scheme_ref is None):
+        raise ValueError("Name exactly one level: level_of_theory_ref or composite_scheme_ref (not both, not neither).")
+    if level_of_theory_ref is not None:
+        return {"level_of_theory_ref": level_of_theory_ref}
+    assert composite_scheme_ref is not None
+    return {"composite_scheme_ref": composite_scheme_ref}
+
+
+def _relative_energy_body(required: Mapping[str, Any], optional: Mapping[str, Any]) -> dict[str, Any]:
+    """The required choices as given, then whichever optional fields were supplied. The client invents no default."""
+    body: dict[str, Any] = dict(required)
+    for key, value in optional.items():
+        if value is None:
+            continue
+        if key in ("member_refs", "permitted_quality"):
+            value = list(value)
+        elif key == "recipe":
+            value = dict(value)
+        body[key] = value
+    return body
+
+
+def _relative_energy_level_object(level: Any, name: str) -> dict[str, str]:
+    """A protocol's ``level``: a mapping holding exactly one of the two refs (checked before any request)."""
+    if not isinstance(level, Mapping):
+        raise ValueError(f"{name}['level'] must be a mapping with exactly one of level_of_theory_ref and composite_scheme_ref; got {level!r}.")
+    unknown = sorted(set(level) - {"level_of_theory_ref", "composite_scheme_ref"})
+    if unknown:
+        raise ValueError(f"{name}['level'] has unknown field(s) {unknown!r}.")
+    return _relative_energy_level(level.get("level_of_theory_ref"), level.get("composite_scheme_ref"))
+
+
+def _relative_energy_protocol(protocol: Mapping[str, Any], name: str) -> dict[str, Any]:
+    if not isinstance(protocol, Mapping) or "level" not in protocol:
+        raise ValueError(f"{name} must be a mapping with a 'level' (and optionally a 'recipe'); got {protocol!r}.")
+    out = dict(protocol)
+    out["level"] = _relative_energy_level_object(protocol["level"], name)
+    return out
 
 
 _STATMECH_SELECTION_PATH = "/scientific/statmech/select"
@@ -2236,6 +2297,153 @@ class TCKDBClient:
         return self.request_json(
             "POST", path, json=_structure_selection_body(request), params={"profile": profile}, authenticated=False
         ).data
+
+    def relative_conformer_energies(
+        self,
+        species_entry_ref: str,
+        *,
+        reference_conformer_ref: str,
+        energy_kind: str,
+        certificate: str,
+        level_of_theory_ref: str | None = None,
+        composite_scheme_ref: str | None = None,
+        recipe: Mapping[str, Any] | None = None,
+        member_refs: Sequence[str] | None = None,
+        coverage_requirement: str | None = None,
+        repeat_policy: str | None = None,
+        min_review_status: str | None = None,
+        permitted_quality: Sequence[str] | None = None,
+        require_stable_reference: bool | None = None,
+        temperature_k: float | None = None,
+        profile: str | None = None,
+    ) -> RelativeConformerEnergyResponse:
+        """``POST /scientific/species-entries/{ref}/conformers/relative-energies``.
+
+        How much higher or lower in energy each conformer group of one species entry is than the conformer you
+        name, at one level. A read: nothing is stored. The reference conformer, ``energy_kind``, ``certificate`` and
+        the level are the scientific choices and have no default. Pass exactly one of ``level_of_theory_ref`` (a
+        ``lot_`` ref) and ``composite_scheme_ref`` (a ``csch_`` ref), or ``ValueError`` is raised before any request.
+        Optional fields left unset are not sent, so the server's own defaults apply. Report ``outcome`` and ``basis``
+        verbatim; members are ordered by ref and the order is not a ranking.
+        """
+        path = _relative_energy_path(species_entry_ref)
+        body = self._relative_energy_single_body(locals())
+        return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
+
+    def get_relative_conformer_energy_manifest(
+        self,
+        species_entry_ref: str,
+        *,
+        reference_conformer_ref: str,
+        energy_kind: str,
+        certificate: str,
+        level_of_theory_ref: str | None = None,
+        composite_scheme_ref: str | None = None,
+        recipe: Mapping[str, Any] | None = None,
+        member_refs: Sequence[str] | None = None,
+        coverage_requirement: str | None = None,
+        repeat_policy: str | None = None,
+        min_review_status: str | None = None,
+        permitted_quality: Sequence[str] | None = None,
+        require_stable_reference: bool | None = None,
+        temperature_k: float | None = None,
+        profile: str | None = None,
+    ) -> RelativeConformerEnergyManifest:
+        """``POST /scientific/species-entries/{ref}/conformers/relative-energies/manifest``.
+
+        The replayable manifest for the same request as :meth:`relative_conformer_energies`, returned exactly as the
+        server sent it (not normalised or reordered), so it can be stored and replayed. It is a new snapshot of the
+        current data, not a retrieval of an earlier answer.
+        """
+        path = _relative_energy_path(species_entry_ref, "/manifest")
+        body = self._relative_energy_single_body(locals())
+        return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
+
+    def compare_relative_conformer_energies(
+        self,
+        species_entry_ref: str,
+        *,
+        reference_conformer_ref: str,
+        energy_kind: str,
+        certificate: str,
+        candidate: Mapping[str, Any],
+        reference: Mapping[str, Any],
+        pairing: str,
+        member_refs: Sequence[str] | None = None,
+        coverage_requirement: str | None = None,
+        repeat_policy: str | None = None,
+        min_review_status: str | None = None,
+        permitted_quality: Sequence[str] | None = None,
+        require_stable_reference: bool | None = None,
+        temperature_k: float | None = None,
+        profile: str | None = None,
+    ) -> RelativeConformerEnergyCompareResponse:
+        """``POST /scientific/species-entries/{ref}/conformers/relative-energies/compare``.
+
+        A descriptive comparison of two stored protocols on one species entry, against one named reference
+        conformer. ``candidate`` and ``reference`` are protocols in the server's shape,
+        ``{"level": {"level_of_theory_ref": "lot_..."}}`` (or ``composite_scheme_ref``), optionally with a
+        ``"recipe"``. ``pairing`` (``same_geometry`` or ``same_basin``) is required. Deviations are candidate minus
+        reference. The result is descriptive only: it names no better protocol, and every deviation depends on the
+        reference conformer you named. Report ``outcome`` and ``claims["statement"]`` verbatim.
+        """
+        path = _relative_energy_path(species_entry_ref, "/compare")
+        body = self._relative_energy_compare_body(locals())
+        return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
+
+    def get_relative_conformer_energy_comparison_manifest(
+        self,
+        species_entry_ref: str,
+        *,
+        reference_conformer_ref: str,
+        energy_kind: str,
+        certificate: str,
+        candidate: Mapping[str, Any],
+        reference: Mapping[str, Any],
+        pairing: str,
+        member_refs: Sequence[str] | None = None,
+        coverage_requirement: str | None = None,
+        repeat_policy: str | None = None,
+        min_review_status: str | None = None,
+        permitted_quality: Sequence[str] | None = None,
+        require_stable_reference: bool | None = None,
+        temperature_k: float | None = None,
+        profile: str | None = None,
+    ) -> RelativeConformerEnergyCompareManifest:
+        """``POST /scientific/species-entries/{ref}/conformers/relative-energies/compare/manifest``.
+
+        The replayable manifest for the same request as :meth:`compare_relative_conformer_energies`, returned
+        exactly as the server sent it.
+        """
+        path = _relative_energy_path(species_entry_ref, "/compare/manifest")
+        body = self._relative_energy_compare_body(locals())
+        return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
+
+    @staticmethod
+    def _relative_energy_single_body(args: Mapping[str, Any]) -> dict[str, Any]:
+        return _relative_energy_body(
+            {
+                "reference_conformer_ref": args["reference_conformer_ref"],
+                "energy_kind": args["energy_kind"],
+                "level": _relative_energy_level(args["level_of_theory_ref"], args["composite_scheme_ref"]),
+                "certificate": args["certificate"],
+            },
+            {k: args[k] for k in _RELATIVE_ENERGY_OPTIONAL},
+        )
+
+    @staticmethod
+    def _relative_energy_compare_body(args: Mapping[str, Any]) -> dict[str, Any]:
+        return _relative_energy_body(
+            {
+                "reference_conformer_ref": args["reference_conformer_ref"],
+                "energy_kind": args["energy_kind"],
+                "certificate": args["certificate"],
+                "candidate": _relative_energy_protocol(args["candidate"], "candidate"),
+                "reference": _relative_energy_protocol(args["reference"], "reference"),
+                "pairing": args["pairing"],
+            },
+            {k: args[k] for k in _RELATIVE_ENERGY_OPTIONAL if k != "recipe"},
+        )
 
     def select_statmech_models(
         self, request: Mapping[str, Any], *, profile: str | None = None

@@ -21,6 +21,10 @@ on:
       # the one file guaranteed to move whenever the operation set does.
       - "backend/app/api/**"
       - "backend/tests/api/golden/openapi.json"
+      # clients/python/tests/test_relative_conformer_energy.py reads the closed
+      # comparison vocabularies out of this one file, so a change to them must
+      # run the client suite. The exact file, not a glob over services.
+      - "backend/app/services/relative_conformer_energy/compare.py"
   push:
     branches:
       - main
@@ -30,6 +34,7 @@ on:
       - "schemas/python/tckdb-schemas/**"
       - "backend/app/api/**"
       - "backend/tests/api/golden/openapi.json"
+      - "backend/app/services/relative_conformer_energy/compare.py"
   workflow_dispatch:
 
 permissions:

@@ -7,4 +7,9 @@ It never queries Postgres directly and never imports the backend.
 See ``docs/specs/mcp_readonly_integration.md`` for the full design.
 """
 
-__version__ = "0.2.0"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("tckdb-mcp")
+except PackageNotFoundError:
+    __version__ = "0.0.0+local"

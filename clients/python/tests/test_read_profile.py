@@ -105,6 +105,10 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "select_species_calculations": ("spe_1",),
     "get_species_calculation_selection_manifest": ("spe_1",),
     "select_conformer_basins": ("spe_1",),
+    "relative_conformer_energies": ("spe_1",),
+    "get_relative_conformer_energy_manifest": ("spe_1",),
+    "compare_relative_conformer_energies": ("spe_1",),
+    "get_relative_conformer_energy_comparison_manifest": ("spe_1",),
     "get_species_conformer_selection_manifest": ("spe_1",),
     "select_transition_state_evidence": ("tse_1",),
     "get_transition_state_evidence_selection_manifest": ("tse_1",),
@@ -122,6 +126,10 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
 #: ``evaluate_network_kinetics``'s optional scalar-or-list form) has no
 #: sensible default to fall back on.
 _REQUIRED_KEYWORD_ARGUMENTS: dict[str, dict] = {
+    "relative_conformer_energies": {"reference_conformer_ref": "cg_1", "energy_kind": "electronic_energy", "certificate": "local_minimum_any_surface", "level_of_theory_ref": "lot_1"},
+    "get_relative_conformer_energy_manifest": {"reference_conformer_ref": "cg_1", "energy_kind": "electronic_energy", "certificate": "local_minimum_any_surface", "level_of_theory_ref": "lot_1"},
+    "compare_relative_conformer_energies": {"reference_conformer_ref": "cg_1", "energy_kind": "electronic_energy", "certificate": "local_minimum_any_surface", "candidate": {"level": {"level_of_theory_ref": "lot_1"}}, "reference": {"level": {"level_of_theory_ref": "lot_2"}}, "pairing": "same_geometry"},
+    "get_relative_conformer_energy_comparison_manifest": {"reference_conformer_ref": "cg_1", "energy_kind": "electronic_energy", "certificate": "local_minimum_any_surface", "candidate": {"level": {"level_of_theory_ref": "lot_1"}}, "reference": {"level": {"level_of_theory_ref": "lot_2"}}, "pairing": "same_geometry"},
     "select_species_thermo": {"target": {"kind": "equilibrium_ensemble"}},
     "get_species_thermo_selection_manifest": {"target": {"kind": "equilibrium_ensemble"}},
     "select_reaction_kinetics": {"direction": "forward", "target": {"kind": "whole_reaction"}, "coefficient_basis": "elementary_coefficient", "temperature_min_k": 500.0, "temperature_max_k": 1500.0, "pressure": {"kind": "independent"}},
