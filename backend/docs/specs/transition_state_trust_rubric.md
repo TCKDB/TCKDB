@@ -1,5 +1,13 @@
 # Transition-State Trust Rubric — `computed_transition_state_v2`
 
+> **Version 4 (#729, 2026-10).** `computed_transition_state` is now version 4. It adds one zero-weight warning,
+> `no_frequency_result_has_undesignated_imaginary_modes`: it fires when any attached frequency result with a recorded count
+> reports two or more imaginary modes and does not designate the reaction coordinate (the same source set and the same null rule
+> as `no_frequency_result_lacks_an_imaginary_mode`; a null count is unknown). The required completeness check
+> `reaction_coordinate_designated_for_ts` is unchanged and still reads the representative result. A warning means that attached
+> result needs investigation, not that the transition state is disproved; its absence certifies nothing. It never moves the label,
+> the completeness counts or `is_certified`. Machine reviews stamped version 3 read as stale and are re-planned.
+
 > **Superseded in part by `computed_transition_state_v3` (2026-10).** An automated geometry-validation `fail` on a source
 > calculation is a warning, no longer the hard fail `geometry_validation_failed_for_source_calculation`, and the badge issues no
 > frequency verdict at all (the scoped judgement is the structure assessment's; the badge only warns, via

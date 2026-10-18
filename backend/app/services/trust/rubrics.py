@@ -3022,6 +3022,29 @@ def _check_ts_no_frequency_result_lacks_an_imaginary_mode(
     return EvidenceOutcome.warning if any(n == 0 for n in counts) else EvidenceOutcome.passed
 
 
+def _check_ts_no_frequency_result_has_undesignated_imaginary_modes(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return warning when any attached frequency result has several imaginary modes and no designated reaction coordinate.
+
+    Same source set and same null rule as ``no_frequency_result_lacks_an_imaginary_mode``: every source result with a
+    *recorded* count is read, a null count is unknown (it neither rescues nor condemns), and the representative result is
+    not privileged, so an older or newer non-representative result stays visible. A result with two or more recorded
+    imaginary modes and no ``reaction_coordinate_mode_index`` is a warning. ``passed`` means only that no recorded result
+    is in that state; it certifies nothing, and a warning means that attached result needs investigation, not that the
+    transition state is disproved. The required completeness check ``reaction_coordinate_designated_for_ts`` is unchanged.
+    """
+    recorded = [
+        (calc.freq_result.n_imag, calc.freq_result.reaction_coordinate_mode_index)
+        for calc in _ts_source_calculations(ts_entry)
+        if calc.freq_result is not None and calc.freq_result.n_imag is not None
+    ]
+    if not recorded:
+        return EvidenceOutcome.not_applicable
+    undesignated = any(n_imag >= 2 and mode_index is None for n_imag, mode_index in recorded if n_imag is not None)
+    return EvidenceOutcome.warning if undesignated else EvidenceOutcome.passed
+
+
 def _check_ts_extra_imaginary_modes_not_flagged(
     ts_entry: TransitionStateEntry,
 ) -> EvidenceOutcome:
@@ -3073,9 +3096,15 @@ def _check_ts_review_not_rejected_or_deprecated_if_applicable(
 # designation instead of recounting, and a new advisory check surfaces
 # the recorded structural flag. Bumping the version is deliberate — a
 # machine review performed under the counting rule is genuinely stale.
-COMPUTED_TRANSITION_STATE_V3: EvidenceRubric = EvidenceRubric(
+#
+# Version 3 (#722) added the zero-weight ``no_frequency_result_lacks_an_imaginary_mode``
+# warning and removed the frequency verdict. Version 4 (#729) adds the zero-weight
+# ``no_frequency_result_has_undesignated_imaginary_modes`` warning. It supersedes v3;
+# machine reviews stamped v3 read as stale (``rubric_versions_mismatch``) and are
+# re-planned, never rewritten.
+COMPUTED_TRANSITION_STATE_V4: EvidenceRubric = EvidenceRubric(
     name="computed_transition_state",
-    version=3,
+    version=4,
     record_type="transition_state_entry",
     checks=(
         EvidenceCheckSpec(
@@ -3262,6 +3291,16 @@ COMPUTED_TRANSITION_STATE_V3: EvidenceRubric = EvidenceRubric(
             runner=_check_ts_no_frequency_result_lacks_an_imaginary_mode,
         ),
         EvidenceCheckSpec(
+            name="no_frequency_result_has_undesignated_imaginary_modes",
+            kind=EvidenceCheckKind.warning,
+            explain=(
+                "No attached frequency result with a recorded count reports several imaginary modes without "
+                "designating which is the reaction coordinate (advisory; the badge does not certify the saddle). "
+                "A warning means that attached result needs investigation, not that the transition state is disproved."
+            ),
+            runner=_check_ts_no_frequency_result_has_undesignated_imaginary_modes,
+        ),
+        EvidenceCheckSpec(
             name="extra_imaginary_modes_not_flagged",
             kind=EvidenceCheckKind.warning,
             explain=(
@@ -3322,7 +3361,7 @@ RUBRIC_REGISTRY: dict[str, EvidenceRubric] = {
     "kinetics": COMPUTED_KINETICS_V2,
     "statmech": COMPUTED_STATMECH_V2,
     "thermo": COMPUTED_THERMO_V2,
-    "transition_state_entry": COMPUTED_TRANSITION_STATE_V3,
+    "transition_state_entry": COMPUTED_TRANSITION_STATE_V4,
     "transport": COMPUTED_TRANSPORT_V2,
 }
 """Lookup of the latest active rubric per record-type discriminator.

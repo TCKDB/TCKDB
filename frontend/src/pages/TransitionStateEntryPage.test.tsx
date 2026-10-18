@@ -368,6 +368,90 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.getByText(/24\/26/)).toBeVisible()
     })
 
+    function trustWith(checks: Record<string, string> | undefined) {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    trust: { trust_status: "partial", evidence: { passed_count: 10, possible_count: 20, ...(checks ? { checks } : {}) } },
+                }),
+            })
+        )))
+    }
+
+    it("trust warnings: each known warning renders its sentence, ending 'needs investigation'", async () => {
+        trustWith({
+            no_frequency_result_lacks_an_imaginary_mode: "warning",
+            no_frequency_result_has_undesignated_imaginary_modes: "warning",
+            extra_imaginary_modes_not_flagged: "warning",
+            geometry_validation_not_failed_for_source_calculations: "warning",
+            reaction_coordinate_designated_for_ts: "missing",
+        })
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        const list = screen.getByRole("list", { name: "Trust warnings" })
+        const items = within(list).getAllByRole("listitem").map((li) => li.textContent)
+        expect(items).toEqual([
+            "An attached frequency result reports no imaginary mode — needs investigation",
+            "An attached frequency result reports several imaginary modes and does not say which is the reaction coordinate — needs investigation",
+            "The frequency result carries the recorded structural flag for an extra imaginary mode — needs investigation",
+            "An automated geometry check raised a warning — needs investigation",
+        ])
+    })
+
+    it("trust warnings: an unknown warning key renders as its raw token rather than being dropped", async () => {
+        trustWith({ some_future_server_warning: "warning" })
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText("some_future_server_warning — needs investigation")).toBeVisible()
+    })
+
+    it("trust warnings: renders no list when nothing is a warning, or when the check map is not served", async () => {
+        trustWith({ transition_state_entry_present: "passed", imaginary_frequency_value_present: "not_applicable" })
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.queryByRole("list", { name: "Trust warnings" })).not.toBeInTheDocument()
+        cleanup()
+        trustWith(undefined)
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.queryByRole("list", { name: "Trust warnings" })).not.toBeInTheDocument()
+    })
+
+    it("trust warnings and the saddle statement never claim a disproof or a certificate", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    saddle_point: {
+                        n_imag: 0,
+                        imag_freq_cm1: null,
+                        reaction_coordinate_mode_index: null,
+                        imaginary_mode_structural_flag: null,
+                        calculation_ref: "calc_zero",
+                        level_of_theory: null,
+                    },
+                    trust: {
+                        trust_status: "partial",
+                        evidence: {
+                            passed_count: 10,
+                            possible_count: 20,
+                            checks: {
+                                no_frequency_result_lacks_an_imaginary_mode: "warning",
+                                no_frequency_result_has_undesignated_imaginary_modes: "warning",
+                            },
+                        },
+                    },
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText(/0 imaginary modes recorded at this level — needs investigation/)).toBeVisible()
+        const text = document.body.textContent ?? ""
+        for (const banned of ["not a saddle point", "validated", "certified", "disproved"]) {
+            expect(text.toLowerCase()).not.toContain(banned)
+        }
+    })
+
     it("evidence pills: positive-only phrasing, present kinds unmuted and absent kinds muted", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({ record: mockRecord() })

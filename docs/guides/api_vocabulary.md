@@ -62,9 +62,9 @@ Three things are deliberately absent:
 | --- | --- | --- |
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
-| Trust check names | 172 | `backend/app/services/trust/rubrics.py` |
+| Trust check names | 173 | `backend/app/services/trust/rubrics.py` |
 | Refusal codes a caller can receive | 317 | `backend/app/api/code_catalogue.py` |
-| **total** | **650** | |
+| **total** | **651** | |
 
 ## How a record is named
 
@@ -250,7 +250,7 @@ A check name is an assertion, so read it together with its value: `"irc_evidence
 
 `kind` decides what a failure costs: **required** — failing it stops the record reaching `well_supported`, however good the ratio is; **optional** — contributes to completeness; its absence blocks no badge; **warning** — informational; carries zero weight. `weight` is that check's share of the completeness ratio.
 
-Which rubric applies is decided by the kind of record, and for a statmech record by what owns it (`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): `computed_calculation` (v2), `computed_kinetics` (v2), `computed_statmech` (v2), `computed_thermo` (v2), `computed_transition_state` (v3), `computed_transport` (v2), `computed_ts_statmech` (v1).
+Which rubric applies is decided by the kind of record, and for a statmech record by what owns it (`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): `computed_calculation` (v2), `computed_kinetics` (v2), `computed_statmech` (v2), `computed_thermo` (v2), `computed_transition_state` (v4), `computed_transport` (v2), `computed_ts_statmech` (v1).
 
 | Check | Rubric | Kind | Weight | What it asks |
 | --- | --- | --- | --- | --- |
@@ -308,6 +308,7 @@ Which rubric applies is decided by the kind of record, and for a statmech record
 | `multiplicity_present` | `computed_transition_state` | required | 1 | transition_state_entry.multiplicity must be set. |
 | `multiplicity_valid` | `computed_transition_state` | required | 1 | transition_state_entry.multiplicity must be >= 1. |
 | `nasa_coefficients_present` | `computed_thermo` | optional | 1 | NASA thermo should include a complete coefficient block. |
+| `no_frequency_result_has_undesignated_imaginary_modes` | `computed_transition_state` | warning | 1 | No attached frequency result with a recorded count reports several imaginary modes without designating which is the reaction coordinate (advisory; the badge does not certify the saddle). A warning means that attached result needs investigation, not that the transition state is disproved. |
 | `no_frequency_result_lacks_an_imaginary_mode` | `computed_transition_state` | warning | 1 | No attached frequency result with a recorded count reports zero imaginary modes (advisory; the badge does not certify the saddle). |
 | `opt_source_present` | `computed_statmech` | optional | 1 | Computed statmech should link an optimization source calculation when available. |
 | `opt_source_present` | `computed_thermo` | optional | 1 | Computed thermo should link an optimization source calculation when available. |

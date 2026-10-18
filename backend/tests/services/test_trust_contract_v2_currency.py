@@ -72,10 +72,18 @@ def _classify(record_type, stored, active):
     )
 
 
+#: Families whose rubric has moved on since this change. ``_NOW`` stays as the history of what this change stored;
+#: the transition-state rubric went to version 4 (#729), pinned in ``test_ts_rubric_v4_currency.py``.
+_SUPERSEDED_SINCE = {"transition_state_entry"}
+
+
 def test_the_premise_six_families_changed_and_each_pair_differs():
     assert set(_PREVIOUS) == set(_NOW) and len(_NOW) == 6
     for record_type in _NOW:
-        assert active_rubric_versions_for_record_type(record_type) == _NOW[record_type]
+        if record_type in _SUPERSEDED_SINCE:
+            assert active_rubric_versions_for_record_type(record_type) != _NOW[record_type]
+        else:
+            assert active_rubric_versions_for_record_type(record_type) == _NOW[record_type]
         assert _PREVIOUS[record_type] != _NOW[record_type]
 
 

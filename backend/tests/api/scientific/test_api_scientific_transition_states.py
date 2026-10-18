@@ -1877,8 +1877,8 @@ def test_tse_detail_include_trust_returns_fragment(client, db_session):
     assert trust["is_certified"] is False
     evidence = trust["evidence"]
     assert evidence["record_type"] == "transition_state_entry"
-    assert evidence["rubric"] == "computed_transition_state_v3"
-    assert evidence["rubric_version"] == 3
+    assert evidence["rubric"] == "computed_transition_state_v4"
+    assert evidence["rubric_version"] == 4
     # Evidence object carries the deterministic check breakdown.
     for key in (
         "checks",
