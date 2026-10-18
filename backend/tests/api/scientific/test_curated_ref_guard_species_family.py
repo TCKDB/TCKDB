@@ -66,11 +66,20 @@ UNDER_REVIEW = RecordReviewStatus.under_review
 
 
 def _is_selection_document(path: str) -> bool:
-    """Hashed, replayable documents (``.../select``, ``.../relative-energies``, each with ``/manifest``).
+    """Hashed, replayable documents (`./select`, `./relative-energies`, `./relative-energies/compare`, each with `/manifest`).
 
     They never pass the boundary hook (they stamp the profile and return), carry population counts that follow the
     floor by design, and get their own seam in PR-3."""
-    return path.endswith(("/select", "/select/manifest", "/relative-energies", "/relative-energies/manifest"))
+    return path.endswith(
+        (
+            "/select",
+            "/select/manifest",
+            "/relative-energies",
+            "/relative-energies/manifest",
+            "/relative-energies/compare",
+            "/relative-energies/compare/manifest",
+        )
+    )
 
 
 def _in_species_side_family(path: str) -> bool:

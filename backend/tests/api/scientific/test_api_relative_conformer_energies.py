@@ -558,3 +558,46 @@ def test_compare_refuses_a_merged_level_against_the_level_it_was_merged_into(cli
     body_ = compare_body(world, ref, duplicate)
     response = client.post(compare_url(world.entry), json=body_)
     assert response.status_code == 422 and code(response) == "relative_conformer_energy_compare_identical_protocols"
+
+
+def test_compare_under_curated_names_no_hidden_record_and_the_guard_does_not_touch_its_text(client, db_session):
+    """The curated ref guard blanks free text that names a hidden ref. The comparison's own sentences, reasons and
+    codes must come through whole, and no hidden group, observation, determination or calculation may be named."""
+    from app.services.relative_conformer_energy import replay_comparison_matches
+    from app.services.relative_conformer_energy.compare import CLAIMS_STATEMENT, REFERENCE_CONFORMER_DEPENDENCE
+
+    world = make_world(db_session)
+    other = make_lot(db_session, method="b3lyp")
+    shown_calcs: set[str] = set()
+    groups = []
+    for at_world, at_other, approve in ((-76.400, -76.500, True), (-76.401, -76.503, True), (-76.398, -76.499, False)):
+        group, obs = conformer(world, at_world)
+        build_basin(world, energy=at_other, observation=obs, lot=other, target=StructureDeterminationTargetKind.conformer_basin)
+        if approve:  # approved only once both levels' evidence is attached: an accepted observation is immutable
+            shown_calcs |= {c.public_ref for c in world.calcs.values()}
+            for record_type, row in ((SubmissionRecordType.conformer_group, group), (SubmissionRecordType.conformer_observation, obs)):
+                set_review(db_session, record_type=record_type, record_id=row.id, status=RecordReviewStatus.approved)
+        groups.append((group, obs))
+    shown_a, shown_b, (hidden, hidden_obs) = groups[0][0], groups[1][0], groups[2]
+    world.settle()
+    hidden_calcs = {c.public_ref for c in world.calcs.values()} - shown_calcs
+    assert hidden_calcs
+    req = compare_body(world, shown_a, other, pairing="same_basin")
+    out = client.post(compare_url(world.entry), json=req, params={"profile": "curated"})
+    manifest = client.post(compare_url(world.entry, manifest=True), json=req, params={"profile": "curated"})
+    assert out.status_code == manifest.status_code == 200, out.text
+    doc = out.json()
+    assert doc["request"]["profile"] == "curated"
+    assert [p["conformer_ref"] for p in doc["pairs"]] == [shown_b.public_ref]
+    # Text the guard could blank is whole: the claims, the dependence sentence, the statements of both protocols.
+    assert doc["claims"]["statement"] == CLAIMS_STATEMENT and doc["claims"]["missing_evidence"] == [f"E{i}" for i in range(1, 8)]
+    assert doc["statistics"]["reference_conformer_dependence"] == REFERENCE_CONFORMER_DEPENDENCE
+    assert doc["statistics"]["n"] == 1 and doc["pairs"][0]["excluded_reason"] is None
+    assert doc["reference_conformer"]["problem"] is None
+    for text in (out.text, manifest.text):
+        assert hidden.public_ref not in text and hidden_obs.public_ref not in text
+        assert not any(r in text for r in hidden_calcs)
+    assert replay_comparison_matches(manifest.json())
+    exploratory = client.post(compare_url(world.entry), json=req).json()
+    assert {p["conformer_ref"] for p in exploratory["pairs"]} == {shown_b.public_ref, hidden.public_ref}
+    assert exploratory["claims"] == doc["claims"]
