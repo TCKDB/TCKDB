@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import not_found
 from app.chemistry.units import convert_energy_to_hartree
 from app.db.models.calculation import Calculation
+from app.db.models.common import SubmissionRecordType
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     AppliedEnergyCorrectionComponent,
@@ -48,7 +49,7 @@ from app.schemas.reads.scientific_energy_correction_scheme import (
     ScientificEnergyCorrectionSchemeDetailResponse,
     ScientificEnergyCorrectionSchemeRecord,
 )
-from app.services.scientific_read.common import validate_includes
+from app.services.scientific_read.common import review_floor_predicate, validate_includes, where_visible
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summary,
 )
@@ -233,14 +234,31 @@ def _count_component_params(session: Session, ecs_id: int) -> int:
     )
 
 
+def applied_target_visible():
+    """Condition on ``AppliedEnergyCorrection``: its target is not a transition-state entry the profile hides.
+
+    ``None`` under the default profile. A species or reaction entry is a scoping parent, never hidden; the application of
+    a scheme to a hidden transition-state entry is not part of what the curated profile shows (owner decision D5).
+    """
+    visible = review_floor_predicate(
+        AppliedEnergyCorrection.target_transition_state_entry_id, SubmissionRecordType.transition_state_entry
+    )
+    if visible is None:
+        return None
+    return AppliedEnergyCorrection.target_transition_state_entry_id.is_(None) | visible
+
+
 def _count_applied_usage(session: Session, ecs_id: int) -> int:
     from sqlalchemy import func
 
     return int(
         session.scalar(
-            select(func.count())
-            .select_from(AppliedEnergyCorrection)
-            .where(AppliedEnergyCorrection.scheme_id == ecs_id)
+            where_visible(
+                select(func.count())
+                .select_from(AppliedEnergyCorrection)
+                .where(AppliedEnergyCorrection.scheme_id == ecs_id),
+                applied_target_visible(),
+            )
         )
         or 0
     )
@@ -311,8 +329,7 @@ def _build_used_by(
     pointer comes from, so no extra query buys it. It is served as stored;
     the one derived field is the hartree projection, named for its unit.
     """
-    rows = session.execute(
-        select(
+    applied_stmt = select(
             AppliedEnergyCorrection.id,
             AppliedEnergyCorrection.target_species_entry_id,
             AppliedEnergyCorrection.target_reaction_entry_id,
@@ -323,15 +340,14 @@ def _build_used_by(
             AppliedEnergyCorrection.temperature_k,
             AppliedEnergyCorrection.note,
             Calculation.public_ref.label("source_calculation_ref"),
-        )
-        .select_from(AppliedEnergyCorrection)
-        .outerjoin(
+        ).select_from(AppliedEnergyCorrection).outerjoin(
             Calculation,
             Calculation.id == AppliedEnergyCorrection.source_calculation_id,
-        )
-        .where(AppliedEnergyCorrection.scheme_id == ecs_id)
-        .order_by(AppliedEnergyCorrection.id.asc())
-        .limit(_USAGE_LIMIT)
+        ).where(AppliedEnergyCorrection.scheme_id == ecs_id)
+    # An application to a hidden transition-state entry is not listed (floored before the limit, so a hidden row cannot
+    # displace a shown one); one whose source calculation is hidden is, and the guard withholds the source.
+    rows = session.execute(
+        where_visible(applied_stmt, applied_target_visible()).order_by(AppliedEnergyCorrection.id.asc()).limit(_USAGE_LIMIT)
     ).all()
     if not rows:
         return []

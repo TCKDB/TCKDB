@@ -28,16 +28,21 @@ PATH_PARAM_PROVIDERS: dict[str, Callable[[SweepWorld], list[str]]] = {
     ),
     "conformer_group_ref_or_id": lambda w: _refs(w, "cg_v"),
     "conformer_observation_ref_or_id": lambda w: _refs(w, "co_v", "co_v2"),
-    "energy_correction_scheme_ref_or_id": lambda w: [w.extra["ecs"].public_ref],
-    "frequency_scale_factor_ref_or_id": lambda w: [w.extra["fsf"].public_ref],
+    "composite_scheme_ref": lambda w: [w.extra["composite_scheme"].public_ref],
+    "energy_correction_scheme_ref_or_id": lambda w: [w.extra["ecs"].public_ref, w.extra["ecs_hidden_only"].public_ref],
+    "frequency_scale_factor_ref_or_id": lambda w: [
+        w.extra["fsf"].public_ref,
+        w.extra["fsf_hidden_only"].public_ref,
+        w.extra["fsf_limit"].public_ref,
+    ],
     "geometry_handle": lambda w: [
         w.extra["geometry_hidden_calc"].public_ref,
         w.extra["geometry_visible_calc"].public_ref,
         w.extra["geometry_hidden_ts_entry"].public_ref,
         w.extra["geometry_ambiguous_owners"].public_ref,
     ],
-    "level_of_theory_ref_or_id": lambda w: [w.extra["lot"].public_ref],
-    "literature_ref_or_id": lambda w: [w.extra["literature"].public_ref],
+    "level_of_theory_ref_or_id": lambda w: [w.extra["lot"].public_ref, w.extra["lot_hidden_only"].public_ref],
+    "literature_ref_or_id": lambda w: [w.extra["literature"].public_ref, w.extra["literature_hidden_only"].public_ref],
     "network_kinetics_ref_or_id": lambda w: _refs(w, "nkin_v", "nkin_v_under_hidden_net"),
     "network_ref": lambda w: _refs(w, "net_v"),
     "network_ref_or_id": lambda w: _refs(w, "net_v"),
@@ -115,8 +120,14 @@ _SEARCHES: dict[str, list[Callable[[SweepWorld], dict[str, Any]]]] = {
         lambda w: {"conformer_group_ref": w.visible["cg_v"].public_ref},
         lambda w: {"conformer_observation_ref": w.visible["co_v2"].public_ref},
     ],
-    "energy-correction-schemes": [lambda w: {"energy_correction_scheme_ref": w.extra["ecs"].public_ref}],
-    "frequency-scale-factors": [lambda w: {"frequency_scale_factor_ref": w.extra["fsf"].public_ref}],
+    "energy-correction-schemes": [
+        lambda w: {"energy_correction_scheme_ref": w.extra["ecs"].public_ref, "include": ["all"]},
+        lambda w: {"energy_correction_scheme_ref": w.extra["ecs_hidden_only"].public_ref, "include": ["all"]},
+    ],
+    "frequency-scale-factors": [
+        lambda w: {"frequency_scale_factor_ref": w.extra["fsf"].public_ref, "include": ["all"]},
+        lambda w: {"frequency_scale_factor_ref": w.extra["fsf_hidden_only"].public_ref, "include": ["all"]},
+    ],
     "kinetics": [
         lambda w: {"reaction_entry_ref": _rxe(w)},
         # PR-2b: every include token (``trust`` and ``assessments`` are not part of ``all``) and the superseded records.
@@ -127,10 +138,23 @@ _SEARCHES: dict[str, list[Callable[[SweepWorld], dict[str, Any]]]] = {
             "include_rejected": True,
         },
     ],
-    "level-of-theories": [lambda w: {"method": "wb97xd"}],
-    "network-kinetics": [lambda w: {"has_chebyshev": True}],
-    "network-solves": [lambda w: {"has_chebyshev": True}],
-    "networks": [lambda w: {"has_chebyshev": True}],
+    "level-of-theories": [
+        lambda w: {"method": "wb97xd", "include": ["all"]},
+        lambda w: {"method": "hiddenonly", "include": ["all"]},
+    ],
+    # PR-2c: the PLOG filters match only the hidden solve's fit; the Chebyshev ones match visible and hidden fits.
+    "network-kinetics": [
+        lambda w: {"has_chebyshev": True, "include": ["all"]},
+        lambda w: {"has_plog": True, "include": ["all"]},
+    ],
+    "network-solves": [
+        lambda w: {"has_chebyshev": True, "include": ["all"]},
+        lambda w: {"has_plog": True, "include": ["all"]},
+    ],
+    "networks": [
+        lambda w: {"has_chebyshev": True, "include": ["all"]},
+        lambda w: {"has_plog": True, "include": ["all"]},
+    ],
     "reactions": [
         lambda w: {"reaction_entry_ref": _rxe(w)},
         lambda w: {"reaction_entry_ref": _rxe(w), "include": ["all"]},
@@ -225,6 +249,10 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
     ),
     ("GET", f"{BASE}/transition-states/{{transition_state_ref_or_id}}"): _variants({}, {"include": _ALL_TS_TOKENS}),
     ("GET", f"{BASE}/transition-states/browse"): _variants({}, {"include": _ALL_TS_TOKENS}),
+    # PR-2c: ``points`` is not part of ``all`` on a fit's detail.
+    ("GET", f"{BASE}/network-kinetics/{{network_kinetics_ref_or_id}}"): _variants(
+        {}, {"include": ["all", "points"]}
+    ),
     ("GET", f"{BASE}/network-kinetics/{{network_kinetics_ref_or_id}}/evaluate"): lambda w: [
         {"query": {"temperature_k": 1000.0, "pressure_bar": 1.0}}
     ],
@@ -273,7 +301,6 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
 #: ``(method, route template)`` -> reason this route cannot be crawled yet. Must be empty once every family is
 #: enforced; each entry names the PR that closes it.
 CRAWL_UNSUPPORTED: dict[tuple[str, str], str] = {
-    ("GET", f"{BASE}/composite-schemes/{{composite_scheme_ref}}"): "needs a composite-scheme fixture (PR-2c)",
     ("POST", f"{BASE}/networks/{{network_ref}}/kinetics/select"): "needs a determination world (PR-3)",
     ("POST", f"{BASE}/networks/{{network_ref}}/kinetics/select/manifest"): "needs a determination world (PR-3)",
     ("POST", f"{BASE}/networks/{{network_ref}}/kinetics/export-selected"): "needs a verified manifest (PR-3)",

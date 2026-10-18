@@ -259,10 +259,15 @@ class ScientificNetworkKineticsRecord(BaseModel):
     - ``review`` — review history rows (only when the parent solve is
       reviewable; ``NetworkKinetics`` itself is not in
       ``SubmissionRecordType``).
+
+    ``network`` is the owner of the fit's solve. It is never ``null`` under the default (exploratory) profile.
+    Under ``profile=curated`` it is ``null`` when that network is below the review floor: the fit (reviewed
+    through its solve) stays visible, the network it belongs to is withheld, and nothing about the fit is hidden
+    on the network's account. The key is always present.
     """
 
     network_kinetics: NetworkKineticsCoreBlock
-    network: NetworkKineticsNetworkContext
+    network: NetworkKineticsNetworkContext | None
     network_solve: NetworkKineticsSolveContext
     network_channel: NetworkKineticsChannelContext
 

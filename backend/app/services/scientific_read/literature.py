@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import not_found
 from app.db.models.author import Author
 from app.db.models.calculation import Calculation
+from app.db.models.common import SubmissionRecordType
 from app.db.models.kinetics import Kinetics
 from app.db.models.literature import Literature
 from app.db.models.literature_author import LiteratureAuthor
@@ -41,7 +42,7 @@ from app.schemas.reads.scientific_literature import (
     ScientificLiteratureDetailResponse,
     ScientificLiteratureRecord,
 )
-from app.services.scientific_read.common import validate_includes
+from app.services.scientific_read.common import review_floor_predicate, validate_includes, where_visible
 from app.services.scientific_read.handles import resolve_literature_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
@@ -186,26 +187,30 @@ def _load_record_counts(
     """Count linked records of each direct-link type in a single pass.
 
     Each scalar count is a bounded ``COUNT(*)`` against the linked
-    table's ``literature_id`` column. No filtering by review status is
-    applied here — the counts represent the total inverse fan-out.
+    table's ``literature_id`` column. Under the default profile no filtering by
+    review status is applied — the counts represent the total inverse fan-out.
+    Under ``profile=curated`` each count is of the records the profile shows, the
+    same population ``/records`` lists (owner decision D5): a count that included
+    a hidden record would say it exists.
     """
-    def _count(model_cls) -> int:
+    def _count(model_cls, record_type: SubmissionRecordType) -> int:
         return (
             session.scalar(
-                select(func.count())
-                .select_from(model_cls)
-                .where(model_cls.literature_id == literature_id)
+                where_visible(
+                    select(func.count()).select_from(model_cls).where(model_cls.literature_id == literature_id),
+                    review_floor_predicate(model_cls.id, record_type),
+                )
             )
             or 0
         )
 
-    calcs = _count(Calculation)
-    thermo = _count(Thermo)
-    kinetics = _count(Kinetics)
-    statmech = _count(Statmech)
-    transport = _count(Transport)
-    networks = _count(Network)
-    nsolves = _count(NetworkSolve)
+    calcs = _count(Calculation, SubmissionRecordType.calculation)
+    thermo = _count(Thermo, SubmissionRecordType.thermo)
+    kinetics = _count(Kinetics, SubmissionRecordType.kinetics)
+    statmech = _count(Statmech, SubmissionRecordType.statmech)
+    transport = _count(Transport, SubmissionRecordType.transport)
+    networks = _count(Network, SubmissionRecordType.network)
+    nsolves = _count(NetworkSolve, SubmissionRecordType.network_solve)
 
     return LiteratureRecordCounts(
         calculations=calcs,

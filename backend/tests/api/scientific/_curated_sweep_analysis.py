@@ -68,12 +68,47 @@ POPULATION_KEYS = frozenset(
         "has_scf_stability",
         "entry_count",
         "by_status",
+        # PR-2c (D5): the network, level-of-theory, correction, literature and analytics counts and flags follow the
+        # floor. Each is pinned against what the list endpoints serve by test_curated_ref_guard_network_and_provenance_
+        # family.py, because this comparator cannot hold a count to "equal or null".
+        "solve_count",
+        "source_calculation_count",
+        "has_solves",
+        "has_source_calculations",
+        "has_chebyshev",
+        "has_plog",
+        "has_point_kinetics",
+        "solve_temperature_min_k",
+        "solve_temperature_max_k",
+        "solve_pressure_min_bar",
+        "solve_pressure_max_bar",
+        "calculation_usage_count",
+        "applied_usage_count",
+        "has_applied_usage",
+        "statmech_usage_count",
+        "has_statmech_usage",
+        "has_used_by",
+        "has_linked_records",
+        "has_statmech_provenance",
+        "has_transition_state_provenance",
+        "has_software",
+        "distinct_software_count",
+        "partial_sources",
+        "has_channel_barriers",
     }
 )
 
 #: Blocks that describe the read itself (when it was taken, which profile, the selection document's own disclosures and
 #: checksum) rather than the records. They differ between profiles by design.
-DESCRIBES_THE_READ_KEYS = frozenset({"watermark", "disclosures", "read_profile", "integrity", "population"})
+DESCRIBES_THE_READ_KEYS = frozenset(
+    {
+        "watermark",
+        "disclosures",
+        "read_profile",
+        "integrity",
+        "population",
+    }
+)
 #: Exact paths for the same reason where the key name is too common to ignore everywhere (``review`` is also a badge).
 DESCRIBES_THE_READ_PATHS = frozenset(
     {
@@ -84,6 +119,8 @@ DESCRIBES_THE_READ_PATHS = frozenset(
         "validation.imaginary_mode",
         # D5 (PR-2b): the kinetics evidence checklist counts the calculation types the profile shows.
         "evidence_completeness",
+        # D5 (PR-2c): a literature record's linked-record counts are of the records the profile shows.
+        "record_counts",
         # The trust fragment and the public assessment are verdicts over the evidence the profile shows.
         "trust",
         "assessments",

@@ -47,10 +47,12 @@ from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
     reject_client_sort,
+    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
@@ -287,8 +289,9 @@ def _apply_evidence_filters(stmt, request: NetworkSolveSearchRequest):
         )
         stmt = stmt.where(ex if request.has_energy_transfer else ~ex)
     if request.has_source_calculations is not None:
-        ex = exists().where(
-            NetworkSolveSourceCalculation.solve_id == NetworkSolve.id
+        ex = where_visible(
+            exists().where(NetworkSolveSourceCalculation.solve_id == NetworkSolve.id),
+            review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
         )
         stmt = stmt.where(ex if request.has_source_calculations else ~ex)
     if request.has_kinetics is not None:
@@ -335,6 +338,7 @@ def _apply_method_basis_software_filters(
         )
         .where(NetworkSolveSourceCalculation.solve_id == NetworkSolve.id)
     )
+    sub = where_visible(sub, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
     if method_or_basis:
         sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
         if request.method is not None:

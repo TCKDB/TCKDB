@@ -55,10 +55,12 @@ from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
     reject_client_sort,
+    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
@@ -370,6 +372,16 @@ def _apply_identity_filters(
     return stmt
 
 
+def _visible_solves(stmt):
+    """Restrict a query that ranges over ``NetworkSolve`` to the solves the read profile shows (owner decision D5).
+
+    Every evidence and envelope filter below asks about the network's solves and their fits. A filter that matched on a
+    hidden solve would be an existence oracle (``has_plog=true`` finding the one network whose only PLOG fit is hidden),
+    so each looks at the solves the profile shows.
+    """
+    return where_visible(stmt, review_floor_predicate(NetworkSolve.id, SubmissionRecordType.network_solve))
+
+
 def _apply_evidence_filters(stmt, request: NetworkSearchRequest | NetworkBrowseRequest):
     if request.has_species is not None:
         ex = exists().where(NetworkSpecies.network_id == Network.id)
@@ -384,17 +396,14 @@ def _apply_evidence_filters(stmt, request: NetworkSearchRequest | NetworkBrowseR
         ex = exists().where(NetworkChannel.network_id == Network.id)
         stmt = stmt.where(ex if request.has_channels else ~ex)
     if request.has_solves is not None:
-        ex = exists().where(NetworkSolve.network_id == Network.id)
+        ex = _visible_solves(exists().where(NetworkSolve.network_id == Network.id))
         stmt = stmt.where(ex if request.has_solves else ~ex)
     if request.has_kinetics is not None:
-        ex = (
+        ex = _visible_solves(
             select(NetworkKinetics.id)
-            .join(
-                NetworkSolve, NetworkSolve.id == NetworkKinetics.solve_id
-            )
+            .join(NetworkSolve, NetworkSolve.id == NetworkKinetics.solve_id)
             .where(NetworkSolve.network_id == Network.id)
-            .exists()
-        )
+        ).exists()
         stmt = stmt.where(ex if request.has_kinetics else ~ex)
     for want, model_kind in (
         (request.has_chebyshev, NetworkKineticsModelKind.chebyshev),
@@ -403,19 +412,16 @@ def _apply_evidence_filters(stmt, request: NetworkSearchRequest | NetworkBrowseR
     ):
         if want is None:
             continue
-        ex = (
+        ex = _visible_solves(
             select(NetworkKinetics.id)
-            .join(
-                NetworkSolve, NetworkSolve.id == NetworkKinetics.solve_id
-            )
+            .join(NetworkSolve, NetworkSolve.id == NetworkKinetics.solve_id)
             .where(
                 and_(
                     NetworkSolve.network_id == Network.id,
                     NetworkKinetics.model_kind == model_kind,
                 )
             )
-            .exists()
-        )
+        ).exists()
         stmt = stmt.where(ex if want else ~ex)
     return stmt
 
@@ -428,45 +434,53 @@ def _apply_envelope_filters(stmt, request: NetworkSearchRequest | NetworkBrowseR
     solves has `tmax_k >= X`; symmetrically for `temperature_max`.
     Same for pressure_min/pressure_max. This is the cheapest useful
     semantic and matches how kinetics search elsewhere handles
-    bounded ranges.
+    bounded ranges. Only the solves the read profile shows are asked.
     """
     if request.temperature_min is not None:
         stmt = stmt.where(
-            exists().where(
-                and_(
-                    NetworkSolve.network_id == Network.id,
-                    NetworkSolve.tmax_k.is_not(None),
-                    NetworkSolve.tmax_k >= request.temperature_min,
+            _visible_solves(
+                exists().where(
+                    and_(
+                        NetworkSolve.network_id == Network.id,
+                        NetworkSolve.tmax_k.is_not(None),
+                        NetworkSolve.tmax_k >= request.temperature_min,
+                    )
                 )
             )
         )
     if request.temperature_max is not None:
         stmt = stmt.where(
-            exists().where(
-                and_(
-                    NetworkSolve.network_id == Network.id,
-                    NetworkSolve.tmin_k.is_not(None),
-                    NetworkSolve.tmin_k <= request.temperature_max,
+            _visible_solves(
+                exists().where(
+                    and_(
+                        NetworkSolve.network_id == Network.id,
+                        NetworkSolve.tmin_k.is_not(None),
+                        NetworkSolve.tmin_k <= request.temperature_max,
+                    )
                 )
             )
         )
     if request.pressure_min is not None:
         stmt = stmt.where(
-            exists().where(
-                and_(
-                    NetworkSolve.network_id == Network.id,
-                    NetworkSolve.pmax_bar.is_not(None),
-                    NetworkSolve.pmax_bar >= request.pressure_min,
+            _visible_solves(
+                exists().where(
+                    and_(
+                        NetworkSolve.network_id == Network.id,
+                        NetworkSolve.pmax_bar.is_not(None),
+                        NetworkSolve.pmax_bar >= request.pressure_min,
+                    )
                 )
             )
         )
     if request.pressure_max is not None:
         stmt = stmt.where(
-            exists().where(
-                and_(
-                    NetworkSolve.network_id == Network.id,
-                    NetworkSolve.pmin_bar.is_not(None),
-                    NetworkSolve.pmin_bar <= request.pressure_max,
+            _visible_solves(
+                exists().where(
+                    and_(
+                        NetworkSolve.network_id == Network.id,
+                        NetworkSolve.pmin_bar.is_not(None),
+                        NetworkSolve.pmin_bar <= request.pressure_max,
+                    )
                 )
             )
         )
@@ -501,6 +515,8 @@ def _apply_method_basis_software_filters(
         )
         .where(NetworkSolve.network_id == Network.id)
     )
+    sub = _visible_solves(sub)
+    sub = where_visible(sub, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
     if method_or_basis:
         sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
         if request.method is not None:

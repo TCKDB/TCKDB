@@ -36,6 +36,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
+from app.db.models.common import SubmissionRecordType
 from app.db.models.energy_correction import EnergyCorrectionScheme, FrequencyScaleFactor
 from app.db.models.level_of_theory import LevelOfTheory
 from app.schemas.reads.scientific_common import ReviewStatusSummary
@@ -51,8 +52,10 @@ from app.schemas.reads.scientific_level_of_theory_search import (
 from app.services.scientific_read.common import (
     build_pagination,
     reject_client_sort,
+    review_floor_predicate,
     validate_includes,
     validate_pagination,
+    where_visible,
 )
 from app.services.scientific_read.composite_binding import composite_scheme_summaries
 from app.services.scientific_read.handles import (
@@ -194,8 +197,13 @@ def _run_lot_query(
         # A merged row's ref names the row it was merged into (#574).
         lot_id = canonical_level_of_theory_id(session, lot_id)
 
+    # Usage-derived eligibility rests on the calculations the profile shows: a level used only by hidden calculations
+    # is not listed (owner decision D5). It stays addressable by its own ref, which is a vocabulary row with no gate.
     stmt = select(LevelOfTheory.id).where(
-        exists().where(Calculation.lot_id == LevelOfTheory.id)
+        where_visible(
+            exists().where(Calculation.lot_id == LevelOfTheory.id),
+            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+        )
     )
     if lot_id is not None:
         stmt = stmt.where(LevelOfTheory.id == lot_id)

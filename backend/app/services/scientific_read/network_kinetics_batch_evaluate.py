@@ -39,12 +39,14 @@ from sqlalchemy.orm import Session
 from app.api.config import settings
 from app.api.error_contract import CodedValueError
 from app.api.errors import DataIntegrityError, not_found
+from app.db.models.common import SubmissionRecordType
 from app.db.models.network import Network
 from app.db.models.network_pdep import NetworkChannel, NetworkKinetics, NetworkSolve, NetworkState
 from app.schemas.reads.scientific_network_kinetics_batch_evaluate import (
     NetworkKineticsBatchEvaluateResponse,
     NetworkKineticsBatchFitEvaluation,
 )
+from app.services.scientific_read.common import review_floor_predicate, where_visible
 from app.services.scientific_read.handles import resolve_network_handle
 from app.services.scientific_read.network_kinetics import (
     EVALUATE_GRID_POINT_CAP,
@@ -181,8 +183,14 @@ def evaluate_network_kinetics_batch(
     if network is None:  # pragma: no cover — defended by resolver 404
         raise not_found("network", row_id=network_id, code="handle_not_found")
 
+    # A fit is reviewed through its solve, so the population is the fits of the solves the profile shows. Without this
+    # a hidden solve's fit would be evaluated through ``resolve_path_handle``, answer 404 naming the hidden fit, and be
+    # counted against the grid cap (an existence oracle). A population filter, never a pick.
     solve_ids = session.scalars(
-        select(NetworkSolve.id).where(NetworkSolve.network_id == network_id)
+        where_visible(
+            select(NetworkSolve.id).where(NetworkSolve.network_id == network_id),
+            review_floor_predicate(NetworkSolve.id, SubmissionRecordType.network_solve),
+        ).order_by(NetworkSolve.id.asc())
     ).all()
     if not solve_ids:
         return NetworkKineticsBatchEvaluateResponse(

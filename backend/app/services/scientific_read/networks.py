@@ -98,8 +98,10 @@ from app.schemas.reads.scientific_network import (
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    review_floor_predicate,
     review_summary,
     validate_includes,
+    where_visible,
 )
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
@@ -196,8 +198,12 @@ def build_network_record(
     channel_count = _count(
         session, NetworkChannel, NetworkChannel.network_id == n.id
     )
+    # Counts, the envelope and the kinetics flags rest on the solves the profile shows (owner decision D5).
     solve_rows = session.scalars(
-        select(NetworkSolve).where(NetworkSolve.network_id == n.id)
+        where_visible(
+            select(NetworkSolve).where(NetworkSolve.network_id == n.id),
+            review_floor_predicate(NetworkSolve.id, SubmissionRecordType.network_solve),
+        ).order_by(NetworkSolve.id.asc())
     ).all()
     solve_count = len(solve_rows)
     solve_ids = [s.id for s in solve_rows]
@@ -216,9 +222,14 @@ def build_network_record(
     source_calculation_count = (
         int(
             session.scalar(
-                select(func.count())
-                .select_from(NetworkSolveSourceCalculation)
-                .where(NetworkSolveSourceCalculation.solve_id.in_(solve_ids))
+                where_visible(
+                    select(func.count())
+                    .select_from(NetworkSolveSourceCalculation)
+                    .where(NetworkSolveSourceCalculation.solve_id.in_(solve_ids)),
+                    review_floor_predicate(
+                        NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation
+                    ),
+                )
             )
             or 0
         )
@@ -348,6 +359,14 @@ def _count(session: Session, model_cls, where) -> int:
         )
         or 0
     )
+
+
+def _visible_calculation_ids(session: Session, calculation_ids: set[int]) -> set[int]:
+    """The subset of ``calculation_ids`` the active read profile shows (all of them under the default profile)."""
+    visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
+    if visible is None or not calculation_ids:
+        return set(calculation_ids)
+    return set(session.scalars(where_visible(select(Calculation.id).where(Calculation.id.in_(calculation_ids)), visible)))
 
 
 def _exists_review_for(
@@ -636,9 +655,10 @@ def _build_channels(
     kinetics_by_channel = {
         cid: True
         for (cid,) in session.execute(
-            select(NetworkKinetics.channel_id)
-            .where(NetworkKinetics.channel_id.in_([r.id for r in rows]))
-            .distinct()
+            where_visible(
+                select(NetworkKinetics.channel_id).where(NetworkKinetics.channel_id.in_([r.id for r in rows])),
+                review_floor_predicate(NetworkKinetics.solve_id, SubmissionRecordType.network_solve),
+            ).distinct()
         ).all()
     }
     return [
@@ -711,12 +731,13 @@ def _build_solves(
     )
     src_counts = dict(
         session.execute(
-            select(
-                NetworkSolveSourceCalculation.solve_id,
-                func.count(),
-            )
-            .where(NetworkSolveSourceCalculation.solve_id.in_(solve_ids))
-            .group_by(NetworkSolveSourceCalculation.solve_id)
+            where_visible(
+                select(
+                    NetworkSolveSourceCalculation.solve_id,
+                    func.count(),
+                ).where(NetworkSolveSourceCalculation.solve_id.in_(solve_ids)),
+                review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
+            ).group_by(NetworkSolveSourceCalculation.solve_id)
         ).all()
     )
     out: list[NetworkSolveSummary] = []
@@ -1153,6 +1174,8 @@ def build_network_solve_record(
 ) -> ScientificNetworkSolveRecord:
     """Project one NetworkSolve row into the public scientific record shape."""
     parent = session.get(Network, s.network_id)
+    # Owner decision D1: the owner block is always built here; under ``profile=curated`` the ref guard blanks it when the
+    # network is hidden (``NetworkContextSummary`` is a registered pointer and the field is nullable).
     network_ctx = NetworkContextSummary(
         network_id=parent.id if parent is not None else None,
         network_ref=parent.public_ref if parent is not None else "",
@@ -1176,13 +1199,30 @@ def build_network_solve_record(
         NetworkSolveStateEnergy,
         NetworkSolveStateEnergy.solve_id == s.id,
     )
-    channel_barrier_count = _count(
-        session, NetworkSolveChannelBarrier, NetworkSolveChannelBarrier.solve_id == s.id
+    channel_barrier_count = int(
+        session.scalar(
+            where_visible(
+                select(func.count())
+                .select_from(NetworkSolveChannelBarrier)
+                .where(NetworkSolveChannelBarrier.solve_id == s.id),
+                review_floor_predicate(
+                    NetworkSolveChannelBarrier.transition_state_entry_id,
+                    SubmissionRecordType.transition_state_entry,
+                ),
+            )
+        )
+        or 0
     )
-    source_calculation_count = _count(
-        session,
-        NetworkSolveSourceCalculation,
-        NetworkSolveSourceCalculation.solve_id == s.id,
+    source_calculation_count = int(
+        session.scalar(
+            where_visible(
+                select(func.count())
+                .select_from(NetworkSolveSourceCalculation)
+                .where(NetworkSolveSourceCalculation.solve_id == s.id),
+                review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
+            )
+        )
+        or 0
     )
     kinetics_count = _count(
         session,
@@ -1360,7 +1400,10 @@ def _build_state_energies_for_solve(
         .join(NetworkState, NetworkState.id == NetworkSolveStateEnergy.state_id)
         .outerjoin(
             Calculation,
-            Calculation.id == NetworkSolveStateEnergy.source_calculation_id,
+            # Masked here, not left to the guard: the older single slot feeds the fallback source below and
+            # ``partial_sources``, and a guard that deleted that source afterwards would leave ``partial_sources: true``
+            # beside ``sources: []``, a shape the default profile cannot produce.
+            _visible_join(Calculation, NetworkSolveStateEnergy.source_calculation_id),
         )
         .where(NetworkSolveStateEnergy.solve_id == solve_id)
         .order_by(NetworkState.composition_hash.asc())
@@ -1393,15 +1436,21 @@ def _build_state_energies_for_solve(
             NetworkSolveStateEnergySource.species_entry_id,
             Calculation.public_ref,
             zpe_calculation.public_ref.label("zpe_public_ref"),
+            NetworkSolveStateEnergySource.zpe_calculation_id,
         )
-        .join(Calculation, Calculation.id == NetworkSolveStateEnergySource.calculation_id)
-        .outerjoin(zpe_calculation, zpe_calculation.id == NetworkSolveStateEnergySource.zpe_calculation_id)
+        .select_from(NetworkSolveStateEnergySource)
+        .join(Calculation, _visible_join(Calculation, NetworkSolveStateEnergySource.calculation_id))
+        .outerjoin(zpe_calculation, _visible_join(zpe_calculation, NetworkSolveStateEnergySource.zpe_calculation_id))
         .where(NetworkSolveStateEnergySource.solve_id == solve_id)
         .order_by(
             NetworkSolveStateEnergySource.state_id,
             NetworkSolveStateEnergySource.species_entry_id,
         )
     ).all():
+        if source.zpe_calculation_id is not None and source.zpe_public_ref is None:
+            # The zero-point calculation is hidden: the source is withheld whole (a source without its zero-point
+            # calculation would read as one that cited none).
+            continue
         listed_by_state.setdefault(source.state_id, []).append(
             (source.species_entry_id, source.public_ref, source.zpe_public_ref)
         )
@@ -1460,6 +1509,24 @@ def _build_state_energies_for_solve(
     return summaries
 
 
+def _visible_join(calculation, id_column):
+    """``calculation.id = id_column`` that holds only for a calculation the profile shows.
+
+    Used for the per-participant sources of a state energy, where the service (not only the guard) must drop a source
+    whose calculation is hidden: ``partial_sources`` is computed here from the sources that remain, and a guard that
+    deleted the element afterwards would leave it saying the sources are complete.
+    """
+    visible = review_floor_predicate(calculation.id, SubmissionRecordType.calculation)
+    return calculation.id == id_column if visible is None else and_(calculation.id == id_column, visible)
+
+
+def _barrier_entry_visible():
+    visible = review_floor_predicate(
+        NetworkSolveChannelBarrier.transition_state_entry_id, SubmissionRecordType.transition_state_entry
+    )
+    return True if visible is None else visible
+
+
 def _build_channel_barriers_for_solve(
     session: Session, solve_id: int
 ) -> list[NetworkSolveChannelBarrierSummary]:
@@ -1476,6 +1543,7 @@ def _build_channel_barriers_for_solve(
         .join(TransitionStateEntry, TransitionStateEntry.id == NetworkSolveChannelBarrier.transition_state_entry_id)
         .outerjoin(Calculation, Calculation.id == NetworkSolveChannelBarrier.source_calculation_id)
         .where(NetworkSolveChannelBarrier.solve_id == solve_id)
+        .where(_barrier_entry_visible())
         .order_by(NetworkChannel.channel_key, ReactionEntry.public_ref, TransitionStateEntry.public_ref)
     ).all()
     return [

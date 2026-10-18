@@ -446,8 +446,9 @@ class NetworkValidationEntryRead(BaseModel):
     """One cited piece of evidence as served: the stored entry, with a reference the caller may not see withheld.
 
     ``reference_solve_ref`` is served only when the solve it names is visible to the caller. A reference to a
-    solve the read profile hides is withheld (``null``) and ``reference_withheld`` is true; nothing says whether
-    that solve exists, so the entry cannot be used to learn it does.
+    solve the read profile hides is ``null``, like every ref to a hidden record, and nothing else changes:
+    ``reference_withheld`` is kept for wire compatibility and is always false on this surface (a reference to a
+    solve that cannot be seen is refused at upload, so a ``true`` could only mean a hidden solve exists).
     """
 
     kind: str
@@ -621,10 +622,19 @@ class ScientificNetworkSolveRecord(BaseModel):
     summaries, kinetics summaries (model_kind + shape metadata only —
     coefficient payloads are deferred to a future
     ``/scientific/network-kinetics/{ref}`` endpoint).
+
+    ``network`` is the owner of the solve. It is never ``null`` under the default (exploratory) profile. Under
+    ``profile=curated`` it is ``null`` when that network is below the review floor: the solve stays visible, the
+    network it solves is withheld, and nothing about the solve is hidden on the network's account. The key is
+    always present.
     """
 
     network_solve: NetworkSolveCoreBlock
-    network: NetworkContextSummary
+    #: The network this solve belongs to. Never ``null`` under the default (exploratory) profile. Under
+    #: ``profile=curated`` it is ``null`` when that network is below the review floor: the solve stays visible
+    #: and the network it solves is withheld; nothing about the solve is hidden on the network's account.
+    #: The key is always present.
+    network: NetworkContextSummary | None
     software_release: SoftwareReleaseSummary | None = None
     workflow_tool_release: WorkflowToolReleaseSummary | None = None
     literature: LiteratureSummary | None = None

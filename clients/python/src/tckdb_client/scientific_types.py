@@ -560,7 +560,9 @@ class NetworkSolveRecord(TypedDict, total=False):
     """One scientific network-solve record from search or detail reads."""
 
     network_solve: Required[JSONDict]
-    network: Required[JSONDict]
+    # ``None`` when the read used ``profile="curated"`` and the network this solve belongs to is not approved: the solve
+    # is shown, the network is not named (the key is always present).
+    network: Required[JSONDict | None]
     evidence_summary: Required[JSONDict]
     available_sections: Required[JSONDict]
     bath_gas: list[JSONDict] | None
@@ -575,7 +577,9 @@ class NetworkSolveRecord(TypedDict, total=False):
 
 class NetworkKineticsRecord(TypedDict, total=False):
     network_kinetics: Required[JSONDict]
-    network: Required[JSONDict]
+    # ``None`` when the read used ``profile="curated"`` and the network is not approved: the fit is shown (it is
+    # reviewed through its solve), the network is not named (the key is always present).
+    network: Required[JSONDict | None]
     network_solve: Required[JSONDict]
     network_channel: Required[JSONDict]
     evidence_summary: Required[JSONDict]

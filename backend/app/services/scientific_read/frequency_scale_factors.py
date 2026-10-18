@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import not_found
+from app.db.models.common import SubmissionRecordType
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     FrequencyScaleFactor,
@@ -42,8 +43,9 @@ from app.schemas.reads.scientific_frequency_scale_factor import (
     ScientificFrequencyScaleFactorDetailResponse,
     ScientificFrequencyScaleFactorRecord,
 )
-from app.services.scientific_read.common import validate_includes
+from app.services.scientific_read.common import review_floor_predicate, validate_includes, where_visible
 from app.services.scientific_read.composite_binding import composite_scheme_summary
+from app.services.scientific_read.energy_correction_schemes import applied_target_visible
 from app.services.scientific_read.handles import (
     resolve_frequency_scale_factor_handle,
 )
@@ -170,9 +172,10 @@ def build_frequency_scale_factor_record(
 def _count_statmech_usage(session: Session, fsf_id: int) -> int:
     return int(
         session.scalar(
-            select(func.count())
-            .select_from(Statmech)
-            .where(Statmech.frequency_scale_factor_id == fsf_id)
+            where_visible(
+                select(func.count()).select_from(Statmech).where(Statmech.frequency_scale_factor_id == fsf_id),
+                review_floor_predicate(Statmech.id, SubmissionRecordType.statmech),
+            )
         )
         or 0
     )
@@ -192,8 +195,10 @@ def _build_used_by(
     out: list[FrequencyScaleFactorUsageSummary] = []
 
     statmech_rows = session.execute(
-        select(Statmech.id, Statmech.public_ref)
-        .where(Statmech.frequency_scale_factor_id == fsf_id)
+        where_visible(
+            select(Statmech.id, Statmech.public_ref).where(Statmech.frequency_scale_factor_id == fsf_id),
+            review_floor_predicate(Statmech.id, SubmissionRecordType.statmech),
+        )
         .order_by(Statmech.id.asc())
         .limit(_USAGE_LIMIT)
     ).all()
@@ -210,13 +215,15 @@ def _build_used_by(
     remaining = _USAGE_LIMIT - len(out)
     if remaining > 0:
         applied_rows = session.execute(
-            select(
-                AppliedEnergyCorrection.id,
-                AppliedEnergyCorrection.target_species_entry_id,
-                AppliedEnergyCorrection.target_reaction_entry_id,
-                AppliedEnergyCorrection.target_transition_state_entry_id,
+            where_visible(
+                select(
+                    AppliedEnergyCorrection.id,
+                    AppliedEnergyCorrection.target_species_entry_id,
+                    AppliedEnergyCorrection.target_reaction_entry_id,
+                    AppliedEnergyCorrection.target_transition_state_entry_id,
+                ).where(AppliedEnergyCorrection.frequency_scale_factor_id == fsf_id),
+                applied_target_visible(),
             )
-            .where(AppliedEnergyCorrection.frequency_scale_factor_id == fsf_id)
             .order_by(AppliedEnergyCorrection.id.asc())
             .limit(remaining)
         ).all()
