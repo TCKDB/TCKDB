@@ -430,7 +430,7 @@ def test_solve_counts_flags_and_blocks_agree_with_what_is_served(client, db_sess
     assert any(b["source_calculation_ref"] == hidden_calc for b in exp["channel_barriers"])
     assert cur["channel_barriers"][0]["transition_state_entry_ref"] == world.visible["tse_v2"].public_ref
 
-    assert sum(len(e["sources"]) for e in exp["state_energies"]) == 8
+    assert sum(len(e["sources"]) for e in exp["state_energies"]) == 10
     assert sum(len(e["sources"]) for e in cur["state_energies"]) == 3
     single = [e for e in exp["state_energies"] if e["source_calculation_ref"] == hidden_calc]
     assert single, "the world builds no older single-slot state energy"
@@ -454,6 +454,108 @@ def test_solve_counts_flags_and_blocks_agree_with_what_is_served(client, db_sess
         cur_e = next(e for e in cur["state_energies"] if e["state_composition_hash"] == digest)
         assert len(exp_e["sources"]) == 2 and exp_e["partial_sources"] is False, tag
         assert len(cur_e["sources"]) == 1 and cur_e["partial_sources"] is True, tag
+
+    # The legacy single slot, hidden: G (two participants) and H (a slot owned by no participant). The default profile
+    # serves one source and ``partial_sources: true``; curated serves neither, and never ``partial_sources: true`` beside
+    # an empty ``sources`` (a shape the default profile cannot produce).
+    for tag in ("g-state", "h-state"):
+        digest = hashlib.sha256(tag.encode()).hexdigest()
+        exp_g = next(e for e in exp["state_energies"] if e["state_composition_hash"] == digest)
+        cur_g = next(e for e in cur["state_energies"] if e["state_composition_hash"] == digest)
+        assert len(exp_g["sources"]) == 1 and exp_g["partial_sources"] is True, tag
+        assert exp_g["source_calculation_ref"] is not None, tag
+        assert cur_g["sources"] == [] and cur_g["partial_sources"] is False, tag
+        assert cur_g["source_calculation_ref"] is None, tag
+    assert cur["state_energies"], "no state energy served: the invariant below is vacuous"
+    assert all(e["sources"] for e in cur["state_energies"] if e["partial_sources"])
+
+
+def test_a_channel_whose_only_microreaction_is_hidden_keeps_its_mechanism_and_serves_none(client, db_session, login_as):
+    """Owner decision D1 again: a visible record stays visible and its links to hidden records are dropped, even when
+    the result is a shape no upload produces. An ``elementary`` channel whose only microreaction cites a hidden
+    transition-state entry is served as ``mechanism: elementary, microreactions: []``; nothing else is invented
+    (no mechanism change, no placeholder path, no dropped channel).
+
+    Kills: dropping the channel; rewriting its mechanism; leaving the hidden path named.
+    """
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+    net = world.visible["net_v"].public_ref
+    key = "ch-only-hidden-entry"
+
+    def channel(profile):
+        record = _get(client, f"/networks/{net}", profile, include="channels").json()["record"]
+        return next(c for c in record["channels"] if c["channel_key"] == key)
+
+    exp, cur = channel("exploratory"), channel("curated")
+    assert exp["mechanism"] == "elementary" and [m["path_kind"] for m in exp["microreactions"]] == ["saddle_point"]
+    assert cur["mechanism"] == "elementary" and cur["microreactions"] == []
+    assert {k: v for k, v in cur.items() if k != "microreactions"} == {
+        k: v for k, v in exp.items() if k != "microreactions"
+    }
+
+
+def test_a_reference_to_a_hidden_solve_is_nulled_and_never_flagged(client, db_session, login_as):
+    """A validation entry that pins a hidden solve serves ``reference_solve_ref: null`` under curated like any ref to a
+    hidden record. ``reference_withheld`` stays false on every read: upload refuses a reference to a solve the depositor
+    cannot see, so the default profile never serves ``true`` and a curated ``true`` would be the one signal that a hidden
+    solve exists.
+
+    Kills: setting the flag when a reference is hidden; leaving the reference.
+    """
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+    solve = world.visible["nsolve_v"].public_ref
+    hidden = world.hidden["nsolve_h"].public_ref
+
+    def entries(profile):
+        return _get(client, f"/network-solves/{solve}", profile).json()["record"]["network_solve"]["validation"][
+            "entries"
+        ]
+
+    exp, cur = entries("exploratory"), entries("curated")
+    assert exp and cur
+    assert [e["reference_solve_ref"] for e in exp] == [hidden]
+    assert [e["reference_solve_ref"] for e in cur] == [None]
+    assert all(e["reference_withheld"] is False for e in [*exp, *cur])
+
+
+def test_the_analytics_watermark_does_not_encode_the_id_of_a_hidden_record(client, db_session, login_as):
+    """The watermark travels in ``next_cursor``, which any caller can decode. Under curated its ``max_id`` is the largest
+    id the profile shows, not the largest id in the table.
+
+    Kills: taking the maximum over the unfloored table (a hidden newest record shows up as a larger ``max_id``).
+    """
+    import base64
+    import json
+
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+
+    def decoded(profile):
+        body = _get(client, "/analytics/kinetics", profile, limit=1).json()
+        cursor = body["next_cursor"]
+        assert cursor, "the world has fewer than two kinetics rows: no cursor to decode"
+        payload = cursor.split(".")[0] if "." in cursor else cursor
+        raw = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
+        return json.loads(raw)
+
+    def find_max_id(node):
+        if isinstance(node, dict):
+            if "max_id" in node:
+                return node["max_id"]
+            for value in node.values():
+                found = find_max_id(value)
+                if found is not None:
+                    return found
+        return None
+
+    exp_max, cur_max = find_max_id(decoded("exploratory")), find_max_id(decoded("curated"))
+    visible_ids = [row.id for key, row in world.visible.items() if key.split("_", 1)[0] == "kin"]
+    hidden_ids = [row.id for key, row in world.hidden.items() if key.split("_", 1)[0] == "kin"]
+    assert max(hidden_ids) > max(visible_ids), "the world's newest kinetics is not hidden: the check is vacuous"
+    assert exp_max == max(hidden_ids)
+    assert cur_max == max(visible_ids)
 
 
 def test_fit_detail_counts_agree_with_its_source_calculations(client, db_session, login_as):
@@ -839,12 +941,14 @@ def test_analytics_provenance_flags_and_filters_agree(client, db_session, login_
         served = set(rows("curated", "thermo", "thermo_ref", has_statmech_provenance=str(value).lower()))
         assert served == {ref for ref, r in cur_t.items() if r["has_statmech_provenance"] is value}, value
 
-    statmech = rows("curated", "statmech", "statmech_ref")
-    on_hidden_entry = (
-        statmech[world.visible["sm_ts_v"].public_ref] if world.visible["sm_ts_v"].public_ref in statmech else None
-    )
-    assert on_hidden_entry is None or on_hidden_entry["transition_state_entry_ref"] != world.hidden["tse_h"].public_ref
-    assert all(r["transition_state_entry_ref"] != world.hidden["tse_h"].public_ref for r in statmech.values())
+    hidden_entry = world.hidden["tse_h"].public_ref
+    exp_s = rows("exploratory", "statmech", "statmech_ref")
+    cur_s = rows("curated", "statmech", "statmech_ref")
+    on_hidden = {ref for ref, r in exp_s.items() if r["transition_state_entry_ref"] == hidden_entry}
+    shown_on_hidden = on_hidden & set(cur_s)
+    assert shown_on_hidden, "the world has no shown statmech on the hidden entry: the check is vacuous"
+    assert all(cur_s[ref]["transition_state_entry_ref"] is None for ref in shown_on_hidden)
+    assert all(r["transition_state_entry_ref"] != hidden_entry for r in cur_s.values())
 
 
 # ---------------------------------------------------------------------------

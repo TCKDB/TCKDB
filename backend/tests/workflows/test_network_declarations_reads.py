@@ -193,7 +193,7 @@ def test_a_reference_to_a_hidden_solve_is_withheld_from_the_served_declaration(d
         finally:
             reset_current_read_profile(token)
         entry = served.validation.entries[0]
-        assert entry.reference_solve_ref is None and entry.reference_withheld is True
+        assert entry.reference_solve_ref is None and entry.reference_withheld is False
         assert cited.public_ref not in served.model_dump_json()  # nowhere in the served record
         assert served.validation.entries[1].reference_withheld is False  # an entry with no reference is untouched
     finally:

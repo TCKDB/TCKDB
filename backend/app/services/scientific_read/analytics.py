@@ -217,14 +217,18 @@ class _Page:
     watermark: WatermarkEcho
 
 
-def _take_watermark(session: Session, id_column: Any) -> Watermark:
+def _take_watermark(session: Session, id_column: Any, record_type: SubmissionRecordType) -> Watermark:
     """Establish the snapshot bound for a new traversal.
 
     Record ids are monotonic, so ``max(id)`` at this instant is a complete
     bound on insertions without needing a clock or a serializable snapshot.
     ``max(id)`` over a primary key is an index scan of one row.
+
+    Under ``profile=curated`` the maximum is over the records the profile shows (the same floor as the rows): the
+    watermark travels inside a cursor any caller can decode, and the id of a hidden newest record would otherwise
+    be readable from it.
     """
-    max_id = session.scalar(select(func.max(id_column)))
+    max_id = session.scalar(where_visible(select(func.max(id_column)), review_floor_predicate(id_column, record_type)))
     return Watermark(
         max_id=int(max_id) if max_id is not None else 0,
         taken_at=datetime.now(timezone.utc),
@@ -273,7 +277,7 @@ def _run_page(
         watermark = cursor.watermark
         mode = "cursor"
     else:
-        watermark = _take_watermark(session, id_column)
+        watermark = _take_watermark(session, id_column, record_type)
         mode = "offset"
 
     # The watermark applies to the count as well as to the page, so ``total``

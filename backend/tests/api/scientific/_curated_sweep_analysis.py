@@ -107,8 +107,6 @@ DESCRIBES_THE_READ_KEYS = frozenset(
         "read_profile",
         "integrity",
         "population",
-        # A validation entry's reference to a hidden solve is withheld and says so (the pre-existing per-surface rule).
-        "reference_withheld",
     }
 )
 #: Exact paths for the same reason where the key name is too common to ignore everywhere (``review`` is also a badge).

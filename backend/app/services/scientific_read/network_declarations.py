@@ -64,10 +64,12 @@ def _served_validation(
     for entry in validation.entries:
         body = entry.model_dump(mode="json")
         ref = body["reference_solve_ref"]
-        withheld = ref is not None and not solve_ref_is_visible(session, ref)
-        if withheld:
+        if ref is not None and not solve_ref_is_visible(session, ref):
+            # Nulled like any other ref to a hidden record (rule 2 / D1) and nothing more: upload refuses a reference to
+            # a solve its depositor cannot see, so ``reference_withheld`` is false on every default-profile read and a
+            # ``true`` here would be the one signal that a hidden solve exists.
             body["reference_solve_ref"] = None
-        entries.append(NetworkValidationEntryRead(**body, reference_withheld=withheld))
+        entries.append(NetworkValidationEntryRead(**body, reference_withheld=False))
     return NetworkValidationRead(version=validation.version, entries=entries)
 
 

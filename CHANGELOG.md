@@ -39,6 +39,13 @@ none. `tckdb-schemas` unchanged, `tckdb-client` 0.156.0.
   network search filters; a level of theory's usage, `used_by`, software breakdown and listing (a level used only by hidden calculations is
   not listed); a scheme's and a scale factor's `used_by` and usage counts; a literature record's linked-record counts; and the analytics
   provenance flags and filters.
+- **Exploratory is not byte-identical in one place:** a network's `solves` list now has a deterministic order (ascending row id); it
+  had none. No other list of this change gained an `ORDER BY` that alters exploratory output (the batch evaluate's solve query is
+  ordered too, but its fits were already served in row-id order).
+- **Shapes upload cannot produce (D1).** A visible record stays visible and its links to hidden records are dropped, even then: an
+  `elementary` channel whose only microreaction cites a hidden transition-state entry is served as `mechanism: "elementary",
+  microreactions: []`. A validation entry's reference to a hidden solve is `null`; `reference_withheld` stays `false` on every read
+  (it could only ever be `true` for a hidden solve). The analytics cursor's `watermark.max_id` is the largest id the profile shows.
 - `tckdb-client` 0.156.0: `NetworkSolveRecord.network` and `NetworkKineticsRecord.network` are `JSONDict | None`.
 
 ## Curated reads of the transition-state and reaction routes no longer name hidden records (2026-10-18)

@@ -1161,6 +1161,46 @@ def _extend_for_network_and_provenance_family(session, w: SweepWorld, *, lot, li
         )
     session.flush()
 
+    # The older single slot, hidden, in the two shapes where it feeds ``partial_sources``: G, a two-participant state
+    # whose only source it is; H, a one-participant state whose single slot is owned by no participant of the state.
+    calc_h_p2 = make_calculation(session, type=CalculationType.sp, species_entry_id=p2.id, lot_id=None)
+    hid["calc_h_p2"] = calc_h_p2
+    state_g = make_network_state(session, network=net_v, kind=NetworkStateKind.well, composition_hash=_hash("g-state"))
+    state_h = make_network_state(session, network=net_v, kind=NetworkStateKind.well, composition_hash=_hash("h-state"))
+    attach_network_state_participant(session, state=state_g, species_entry=sa)
+    attach_network_state_participant(session, state=state_g, species_entry=p2)
+    attach_network_state_participant(session, state=state_h, species_entry=sa)
+    for state, single in ((state_g, calc_h), (state_h, calc_h_p2)):
+        session.add(
+            NetworkSolveStateEnergy(
+                solve_id=nsolve_v.id,
+                state_id=state.id,
+                energy_kj_mol=-4.0,
+                energy_zero_convention=EnergyZeroConvention.lowest_state,
+                correction_convention=EnergyCorrectionConvention.electronic_plus_zpe,
+                source_calculation_id=single.id,
+            )
+        )
+    session.flush()
+
+    # An elementary channel whose ONLY microreaction cites the hidden entry: upload cannot produce a channel with a
+    # microreaction-less elementary mechanism, curated serves one (owner decision D1: the record stays, its link goes).
+    session.add(
+        NetworkChannelMicroReaction(
+            channel_id=make_network_channel(
+                session,
+                network=net_v,
+                source_state=state_c,
+                sink_state=state_d,
+                kind=NetworkChannelKind.isomerization,
+                channel_key="ch-only-hidden-entry",
+            ).id,
+            reaction_entry_id=rxe.id,
+            transition_state_entry_id=tse_h.id,
+        )
+    )
+    session.flush()
+
     # A validation entry pinning the hidden solve; hidden and visible source calculations of the visible solve.
     nsolve_v.validation_declaration = {
         "version": 1,
@@ -1415,4 +1455,6 @@ def _extend_for_network_and_provenance_family(session, w: SweepWorld, *, lot, li
         )
     )
     vis["kin_vt"] = kin_vt
+    # The newest kinetics record of the world is hidden: the analytics watermark must not reveal its id.
+    hid["kin_h_new"] = make_kinetics(session, reaction_entry=rxe, a=8.0e-12, ea_kj_mol=18.0)
     session.flush()

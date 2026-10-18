@@ -446,8 +446,9 @@ class NetworkValidationEntryRead(BaseModel):
     """One cited piece of evidence as served: the stored entry, with a reference the caller may not see withheld.
 
     ``reference_solve_ref`` is served only when the solve it names is visible to the caller. A reference to a
-    solve the read profile hides is withheld (``null``) and ``reference_withheld`` is true; nothing says whether
-    that solve exists, so the entry cannot be used to learn it does.
+    solve the read profile hides is ``null``, like every ref to a hidden record, and nothing else changes:
+    ``reference_withheld`` is kept for wire compatibility and is always false on this surface (a reference to a
+    solve that cannot be seen is refused at upload, so a ``true`` could only mean a hidden solve exists).
     """
 
     kind: str

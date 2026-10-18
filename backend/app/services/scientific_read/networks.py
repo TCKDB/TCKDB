@@ -1400,7 +1400,10 @@ def _build_state_energies_for_solve(
         .join(NetworkState, NetworkState.id == NetworkSolveStateEnergy.state_id)
         .outerjoin(
             Calculation,
-            Calculation.id == NetworkSolveStateEnergy.source_calculation_id,
+            # Masked here, not left to the guard: the older single slot feeds the fallback source below and
+            # ``partial_sources``, and a guard that deleted that source afterwards would leave ``partial_sources: true``
+            # beside ``sources: []``, a shape the default profile cannot produce.
+            _visible_join(Calculation, NetworkSolveStateEnergy.source_calculation_id),
         )
         .where(NetworkSolveStateEnergy.solve_id == solve_id)
         .order_by(NetworkState.composition_hash.asc())

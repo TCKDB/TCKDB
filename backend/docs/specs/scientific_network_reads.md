@@ -118,7 +118,15 @@ Defined in [scientific_network.py](../../app/schemas/reads/scientific_network.py
   truncation flag. `participant_count` and
   `composition.participant_count_total` describe the same full state.
 - **`NetworkChannelSummary`** — source/sink composition_hashes,
-  channel kind, `has_kinetics` boolean.
+  channel kind, `has_kinetics` boolean, `mechanism` and the supporting
+  microreactions.
+  *Curated profile:* the channel stays visible and each link to a record the
+  profile hides is dropped (owner decision D1: a visible record stays visible,
+  even when the result is a shape no upload produces). A microreaction whose
+  transition-state entry is hidden is not listed, so an `elementary` channel
+  whose only microreaction cites a hidden entry is served as
+  `mechanism: "elementary", microreactions: []`; `has_kinetics` counts only the
+  fits of solves the profile shows. Nothing is substituted or invented.
 - **`NetworkSolveSummary`** — `nsolve_…` ref + ME/grain/T/P metadata
   + bath-gas list (composite-PK rows are bounded) + counts for
   energy-transfer rows and source calculations + review badge.
