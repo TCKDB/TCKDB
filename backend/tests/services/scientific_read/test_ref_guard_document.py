@@ -367,3 +367,43 @@ def test_a_release_backed_profile_is_left_alone_by_every_entry_point(hidden):
 
     model = Model(ref=A)
     assert ref_guard.withhold_in_model(None, model, profile=RELEASE).sites == [] and model.ref == A
+
+
+# ---------------------------------------------------------------------------
+# Dict keys are read as values are
+# ---------------------------------------------------------------------------
+
+BODY = A.split("_", 1)[1]
+OBFUSCATED_KEYS = {
+    "newline": A + "\n",
+    "zero_width": "calc_\u200b" + BODY,
+    "soft_hyphen": "ca\u00adlc_" + BODY,
+    "percent_encoded": "calc%5F" + BODY,
+}
+
+
+@pytest.mark.parametrize("form", sorted(OBFUSCATED_KEYS))
+def test_null_mode_refuses_a_dict_key_that_names_a_hidden_ref_in_any_spelling(hidden, form):
+    """A key cannot be nulled or dropped, so a hidden ref in one, spelled any way a value could be, fails closed.
+
+    Kills: a key check that matches only an exact ref (the spelled key would pass through unchanged)."""
+    hidden({A})
+    with pytest.raises(ref_guard.RefGuardUnplaceable):
+        ref_guard.withhold_in_document(None, [{OBFUSCATED_KEYS[form]: 1}], profile=CURATED, mode="null")
+    visible = ref_guard.withhold_in_document(None, [{VISIBLE + "\n": 1}], profile=CURATED, mode="null")
+    assert visible.facts == [{VISIBLE + "\n": 1}]
+
+
+@pytest.mark.parametrize("form", sorted(OBFUSCATED_KEYS))
+def test_placeholder_mode_tokenises_a_key_that_is_a_hidden_ref_once_normalised(hidden, form):
+    hidden({A})
+    out, report = run({OBFUSCATED_KEYS[form]: "kept"})
+    assert out == {"withheld:1": "kept"} and report.tokens == {A: "withheld:1"}
+
+
+@pytest.mark.parametrize("key", [f"see {A}", f"x_{A}", "calc%5F" + BODY + "/ch"], ids=["prose", "prefixed", "composite"])
+def test_placeholder_mode_refuses_a_key_that_only_contains_a_hidden_ref(hidden, key):
+    """A key cannot be blanked (the entry would lose its name): it fails closed."""
+    hidden({A})
+    with pytest.raises(ref_guard.RefGuardUnplaceable):
+        run({key: 1})

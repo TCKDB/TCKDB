@@ -749,10 +749,11 @@ def _collect_sites(root: BaseModel | dict) -> list[tuple[tuple[_Frame, ...], str
     while stack:
         node, path = stack.pop()
         for key, value in _children(node, top=not path):
-            if isinstance(node, dict) and isinstance(key, str) and len(key) <= 40 and GATED_REF_RE.match(key):
-                # A ref used as a dict KEY cannot be blanked or deleted without renaming the entry. Recorded as a
-                # site so that, if it is hidden, the guard fails closed instead of letting it through.
-                sites.append(((*path, (node, _DictKey(key))), key))
+            if isinstance(node, dict) and isinstance(key, str):
+                # A ref used as a dict KEY cannot be blanked or deleted without renaming the entry. Recorded as a site so
+                # that, if it is hidden, the guard fails closed instead of letting it through. A key is read as a value
+                # is: a stray newline, invisible characters, percent-encoding and a ref inside longer text all count.
+                sites.extend(((*path, (node, _DictKey(key))), ref) for ref in _refs_named_by(key))
             if isinstance(value, str):
                 try:
                     refs = _refs_named_by(value, url_valued=_is_url_valued(key))
@@ -1206,8 +1207,8 @@ def _withhold_placeholders(session: Session, facts: Any, *, profile: ResolvedRea
         return value
 
     def collect_key(key: str) -> str:
-        if len(key) <= 40 and GATED_REF_RE.match(key):
-            seen[key] = None
+        for ref in _refs_named_by(key) if key else ():
+            seen[ref] = None
         return key
 
     _transform(facts, None, collect_string, collect_key)
@@ -1244,7 +1245,17 @@ def _withhold_placeholders(session: Session, facts: Any, *, profile: ResolvedRea
         return blanked(value, key)
 
     def replace_key(key: str) -> str:
-        return tokens.get(key, key)
+        named = _refs_named_by(key) if key else []
+        if not any(ref in tokens or ref == UNSETTLED_TEXT for ref in named):
+            return key
+        try:
+            normalised = _strip_invisible(_decode_stable(_strip_invisible(key))).strip()
+        except ValueError:
+            normalised = None
+        if normalised in tokens:
+            return tokens[normalised]  # exactly a hidden ref once normalised: renamed to its token
+        # A key that merely contains a hidden ref cannot be blanked (the entry would lose its name): fail closed.
+        raise RefGuardUnplaceable("document", "<dict key>", next(iter(ref for ref in named if ref in tokens), "?").split("_", 1)[0])
 
     report.facts = _transform(facts, None, replace_string, replace_key)
     return report
