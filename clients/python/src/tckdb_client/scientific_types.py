@@ -268,7 +268,10 @@ class KineticsDetailRecord(TypedDict, total=False):
     direction: str | None
     # What the depositor declared (attributed claims, not verified facts): the determination
     # this record is a representation of, what the coefficient is, and how the rate was
-    # produced. ``null`` means not stated, never "standalone" or "universally valid".
+    # produced. ``null`` means not stated, never "standalone" or "universally valid". Under ``profile="curated"``
+    # ``determination`` is also ``null`` when its target (a transition-state entry or a network channel) is not
+    # approved, ``tunneling_application`` is ``null`` when it cites an unapproved entry or calculation, and
+    # ``provenance["irc"]`` is ``null`` when its calculation is not approved.
     determination: JSONDict | None
     applicability: JSONDict | None
     protocol: JSONDict | None
@@ -797,7 +800,9 @@ class TransitionStateEntryRecord(TypedDict, total=False):
     """
 
     transition_state_entry: Required[JSONDict]
-    transition_state: Required[JSONDict]
+    # ``None`` when the read used ``profile="curated"`` and the owning transition state is not approved: the entry is
+    # shown, the transition state it belongs to is not named (the key is always present).
+    transition_state: Required[JSONDict | None]
     reaction: Required[JSONDict]
     evidence_summary: Required[JSONDict]
     validation: Required[JSONDict]

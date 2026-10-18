@@ -106,6 +106,8 @@ from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
     reject_client_sort,
+    review_floor_predicate,
+    review_hidden_under_profile,
     review_summary,
     slice_for_pagination,
     temperature_coverage,
@@ -113,6 +115,7 @@ from app.services.scientific_read.common import (
     validate_pagination,
     validate_temperature_range,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.composite_annotations import (
     legacy_composite_shape,
@@ -130,10 +133,10 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.supersession import fetch_supersession_notices
+from app.services.scientific_read.trust_floor import evaluate_shown_kinetics
 from app.services.trust import (
     TrustFragment,
     build_trust_fragment,
-    evaluate_loaded_kinetics,
 )
 
 logger = logging.getLogger(__name__)
@@ -410,13 +413,24 @@ def get_reaction_kinetics(
     sources_by_kinetics = _load_source_calculations(
         session, [k.id for k in kinetics_rows]
     )
+    # Owner decision D5: a source calculation the active profile hides contributes no level, software or filter match.
+    # The record's own LINK to it stays a fact of the record (the ref guard withholds the ref); what the calculation
+    # was run at is a fact about the hidden record. One lookup, and none without a floor.
+    _, hidden_source_calc_ids = review_hidden_under_profile(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids={sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs},
+    )
+
+    def shown(sources: list[KineticsSourceCalculation]) -> list[KineticsSourceCalculation]:
+        return [sc for sc in sources if sc.calculation_id not in hidden_source_calc_ids]
 
     # Apply level_of_theory_id filter (operates on the primary source calc).
     if effective_lot_id is not None:
         kinetics_rows = [
             k
             for k in kinetics_rows
-            if _primary_lot_id(sources_by_kinetics.get(k.id, []))
+            if _primary_lot_id(shown(sources_by_kinetics.get(k.id, [])))
             == effective_lot_id
         ]
     if not kinetics_rows:
@@ -438,7 +452,7 @@ def get_reaction_kinetics(
             k
             for k in kinetics_rows
             if _primary_software_name(
-                sources_by_kinetics.get(k.id, []),
+                shown(sources_by_kinetics.get(k.id, [])),
                 software_id_by_release,
                 session,
             )
@@ -566,6 +580,7 @@ def get_reaction_kinetics(
             sw_summaries=sw_summaries,
             wt_summaries=wt_summaries,
             network_kinetics_refs=network_kinetics_refs,
+            hidden_calc_ids=hidden_source_calc_ids,
         )
         for k in kinetics_rows
     }
@@ -590,6 +605,10 @@ def get_reaction_kinetics(
     missing_opt_meta_ids = set(opt_via_dependency.values()) - calc_meta.keys()
     if missing_opt_meta_ids:
         calc_meta.update(_calc_metadata(session, missing_opt_meta_ids))
+    _, hidden_opt_ids = review_hidden_under_profile(
+        session, record_type=SubmissionRecordType.calculation, record_ids=set(opt_via_dependency.values())
+    )
+    hidden_level_calc_ids = hidden_source_calc_ids | hidden_opt_ids
 
     # Pass 2: build per-record output.
     records: list[KineticsRecord] = []
@@ -629,6 +648,13 @@ def get_reaction_kinetics(
             ts_sp_calc_id=ts_sp_calc_id,
             calc_meta=calc_meta,
             composite_verifications=composite_verifications,
+        )
+        levels = _without_levels_from_hidden_calculations(
+            levels,
+            hidden=hidden_level_calc_ids,
+            opt_calc_id=levels_opt_calc_id,
+            freq_calc_id=ts_freq_calc_id,
+            sp_calc_id=ts_sp_calc_id,
         )
 
         evidence = _evidence_breakdown(
@@ -761,7 +787,7 @@ def build_kinetics_trust_fragment(
     review_status: RecordReviewStatus | None = None,
 ) -> TrustFragment:
     """Build the read-layer trust fragment for a kinetics record."""
-    evaluation = evaluate_loaded_kinetics(kinetics)
+    evaluation = evaluate_shown_kinetics(kinetics)
     return build_trust_fragment(evaluation, review_status=review_status)
 
 
@@ -888,6 +914,7 @@ def _build_provenance(
     sw_summaries: dict[int, SoftwareReleaseSummary],
     wt_summaries: dict[int, WorkflowToolReleaseSummary],
     network_kinetics_refs: dict[int, str],
+    hidden_calc_ids: set[int] | None = None,
 ) -> KineticsProvenance:
     """Assemble a KineticsProvenance — every key always present, ``None`` if absent."""
     by_role: dict[KineticsCalculationRole, list[KineticsSourceCalculation]] = (
@@ -927,6 +954,9 @@ def _build_provenance(
     transition_state_entry_id = _first_ts_entry_id(sources, calc_meta)
 
     primary_calc_id = _primary_calc_id(sources)
+    if primary_calc_id in (hidden_calc_ids or ()):
+        # What the hidden primary calculation ran at is a fact about that record; no other source is put in its place.
+        primary_calc_id = None
     primary_lot = (
         _lot_summary_for_calc(calc_meta.get(primary_calc_id))
         if primary_calc_id is not None
@@ -1307,8 +1337,13 @@ def _ts_calc_types_for_entries(
     if not ts_entry_ids:
         return {}
     rows = session.execute(
-        select(Calculation.transition_state_entry_id, Calculation.type)
-        .where(Calculation.transition_state_entry_id.in_(ts_entry_ids))
+        where_visible(
+            select(Calculation.transition_state_entry_id, Calculation.type).where(
+                Calculation.transition_state_entry_id.in_(ts_entry_ids)
+            ),
+            # D5: the evidence checklist counts the calculation types the profile shows.
+            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+        )
     ).all()
     grouped: dict[int, set[CalculationType]] = defaultdict(set)
     for ts_entry_id, calc_type in rows:
@@ -1924,6 +1959,56 @@ def _build_kinetics_levels(
             energy=energy_summary,
             energy_source=derived.energy_source,
         ),
+    )
+
+
+def _without_levels_from_hidden_calculations(
+    levels: ScientificLevelsSummary,
+    *,
+    hidden: set[int],
+    opt_calc_id: int | None,
+    freq_calc_id: int | None,
+    sp_calc_id: int | None,
+) -> ScientificLevelsSummary:
+    """Null the levels that come from a calculation the active profile hides (owner decision D5).
+
+    A level is a fact about the calculation that supplied it. When that calculation is below the floor the level is
+    withheld, not re-derived from what is left: the opt's level is never put in the place of a hidden single point's
+    (the substitution the guard exists to prevent). ``notation`` is computed from ``energy`` and ``geometry`` and goes
+    with them. With nothing hidden the summary is returned untouched.
+    """
+    if not hidden:
+        return levels
+    opt, freq, sp = (c is not None and c in hidden for c in (opt_calc_id, freq_calc_id, sp_calc_id))
+    update: dict[str, object] = {}
+    if (freq and levels.frequency_source == "freq") or (opt and levels.frequency_source == "opt"):
+        update.update(frequency=None, frequency_source=None)
+    if (opt and levels.geometry_source == "opt") or (sp and levels.geometry_source == "composite_recipe"):
+        update.update(geometry=None, geometry_source=None)
+    if (
+        (sp and levels.energy_source in ("sp", "composite"))
+        or (opt and levels.energy_source == "opt")
+    ):
+        update.update(energy=None, energy_source=None, composite_energy_verification=None)
+    if (sp and levels.frequency_source == "composite_recipe"):
+        update.update(frequency=None, frequency_source=None)
+    if not update:
+        return levels
+    masked = levels.model_copy(update=update)
+    # The annotation describes the levels it sits beside: recomputed from what is left, so it cannot still say that a
+    # hidden calculation sat at a named-method level.
+    return masked.model_copy(
+        update={
+            "legacy_composite_shape": legacy_composite_shape(
+                composite_role_on_non_composite=False,
+                geometry=masked.geometry,
+                geometry_source=masked.geometry_source,
+                frequency=masked.frequency,
+                frequency_source=masked.frequency_source,
+                energy=masked.energy,
+                energy_source=masked.energy_source,
+            )
+        }
     )
 
 

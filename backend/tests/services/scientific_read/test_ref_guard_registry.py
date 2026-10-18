@@ -111,7 +111,17 @@ def test_pointer_models_are_live_and_never_a_response_subject():
             if info is not None:
                 subjects |= set(_model_classes(info.annotation))
     assert subjects, "found no response envelopes: the scan itself is broken"
-    assert not subjects & ref_guard.POINTER_MODELS, sorted(m.__name__ for m in subjects & ref_guard.POINTER_MODELS)
+    # One model is both a subject and a nested block: a TS entry record is the subject of the entry detail, the browse
+    # and the search, and also an element of another record's ``entries``. The planner never deletes a subject
+    # position (``_is_subject``), so registering it only ever acts on the nested one; it is named here so a second
+    # model cannot join it unnoticed.
+    from app.schemas.reads.scientific_transition_state import ScientificTransitionStateEntryRecord
+
+    both = {ScientificTransitionStateEntryRecord}
+    assert both <= subjects & ref_guard.POINTER_MODELS, "the allowance names a model that is no longer both"
+    assert not (subjects & ref_guard.POINTER_MODELS) - both, sorted(
+        m.__name__ for m in (subjects & ref_guard.POINTER_MODELS) - both
+    )
 
 
 def _nested_models(model):
@@ -266,3 +276,20 @@ def test_the_hook_sees_the_route_s_own_session_and_route_template(client, db_ses
     assert session is not db_session
     assert route_path == "/api/v1/scientific/calculations/{calculation_ref_or_id}"
     assert ref_guard.current_ref_guard_context() is None  # reset when the request ended
+
+
+def test_every_pointer_field_names_a_real_nullable_untyped_field():
+    """A typo in ``POINTER_FIELDS`` would silently register nothing.
+
+    Kills: a misspelt field name; a registered field that is typed (it would have a pointer model instead) or cannot
+    be nulled.
+    """
+    from app.services.scientific_read.ref_guard import _field_traits
+
+    assert ref_guard.POINTER_FIELDS
+    for model, name in ref_guard.POINTER_FIELDS:
+        assert name in model.model_fields, f"{model.__name__}.{name} does not exist"
+        nullable, untyped = _field_traits(model, name)
+        assert nullable, f"{model.__name__}.{name} is not nullable"
+        info = model.model_fields[name]
+        assert "dict" in str(info.annotation).lower(), f"{model.__name__}.{name} is not an untyped dict block"

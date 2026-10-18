@@ -14,7 +14,9 @@ produced. It does nothing under the default (exploratory) profile.
 How a hidden ref is removed (:func:`withhold_in_model`)
 -------------------------------------------------------
 1. The nearest enclosing *pointer model* (:data:`POINTER_MODELS`) goes whole: a block whose subject is the
-   linked record, not the visible one. A list element is deleted; a nullable field is set to ``None``.
+   linked record, not the visible one. A list element (or a map entry) is deleted; a nullable field is set to
+   ``None``. An untyped field that is itself such a block is a *pointer field* (:data:`POINTER_FIELDS`) and goes
+   whole too.
 2. With no pointer on the way: an element of a ``list[str]`` is deleted (and the same index of an aligned
    ``*_ids`` sibling); a nullable field, or a value inside an untyped ``dict``/``Any`` subtree, becomes
    ``None`` (and a same-stem ``*_id`` sibling with it).
@@ -31,7 +33,8 @@ How a hidden ref is removed (:func:`withhold_in_model`)
 Rollout
 -------
 :data:`_ENABLED_ROUTE_PREFIXES` lists the route families on which the hook withholds. PR-2a enables the
-species-side families (:data:`SPECIES_SIDE_PREFIXES`); the TS/reaction and network families follow.
+species-side families (:data:`SPECIES_SIDE_PREFIXES`) and PR-2b the transition-state and reaction families
+(:data:`TS_REACTION_PREFIXES`); the network and remaining families follow.
 """
 
 from __future__ import annotations
@@ -52,6 +55,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, or_, select, union_all
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
+from tckdb_schemas.kinetics_declarations import StoredKineticsProtocolCalculationRef
 from tckdb_schemas.thermo_declarations import StoredThermoProtocolCalculationRef
 
 from app.db.models.common import ProfileRecommendation, RecordReviewStatus, SubmissionRecordType
@@ -65,7 +69,13 @@ from app.schemas.reads.scientific_calculation import (
     CalculationDependencySummary,
     TransitionStateEntryOwnerSummary,
 )
-from app.schemas.reads.scientific_common import CalculationEvidenceSummary, SupersessionNotice
+from app.schemas.reads.scientific_common import (
+    CalculationEvidenceSummary,
+    PathSearchSummary,
+    SCFStabilitySummary,
+    SupersessionNotice,
+    ValidationSummary,
+)
 from app.schemas.reads.scientific_conformer import (
     ConformerCalculationSummary,
     ConformerGeometryLink,
@@ -79,6 +89,24 @@ from app.schemas.reads.scientific_geometry import (
     GeometryProvenanceCalcLink,
     GeometryTransitionStateIdentity,
 )
+from app.schemas.reads.scientific_kinetics import (
+    KineticsDeterminationBlock,
+    KineticsInterpretationAssignmentBlock,
+    KineticsProvenance,
+    KineticsTunnelingApplicationBlock,
+)
+from app.schemas.reads.scientific_provenance import (
+    ReactionAtomMapBadge,
+    ReactionAtomMapDetail,
+    ReactionFullCalculationArtifacts,
+    ReactionFullCalculationEvidenceSummary,
+    ReactionFullIRCItem,
+    ReactionFullNetworkMembership,
+    ReactionFullPathSearchItem,
+    ReactionFullScanItem,
+    TransitionStateCalculationSlot,
+    TransitionStateDependency,
+)
 from app.schemas.reads.scientific_species_calculations import (
     CalculationProvenanceBlock,
     ConformerContextBlock,
@@ -91,8 +119,16 @@ from app.schemas.reads.scientific_statmech import (
     StatmechTransitionStateContext,
 )
 from app.schemas.reads.scientific_transition_state import (
+    ScientificTransitionStateEntryRecord,
+    TransitionStateCalculationSummary,
+    TransitionStateComparedEnergySummary,
+    TransitionStateCoreBlock,
+    TransitionStateEntryStatmech,
+    TransitionStateEntryValidationEvidence,
+    TransitionStateSaddlePointEvidence,
     TransitionStateStatmechSourceCalculation,
     TransitionStateStatmechSummary,
+    TransitionStateValidationEvidenceSummary,
 )
 from app.schemas.reads.scientific_transport import TransportSourceCalculationSummary
 from app.services.public_refs import PREFIXES
@@ -217,6 +253,46 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         # block blanked. Registering the block is what lets the guard blank it; widening the field alone is not
         # enough (design note, "Correction from the #770 review").
         ConformerGroupCoreBlock,
+        # PR-2b: the transition-state, reaction-entry (/full) and kinetics families.
+        #
+        # Owner decision D1: a visible TS entry whose transition state is hidden stays visible with the owner block
+        # blanked. Registering the block is what lets the guard blank it; widening the field alone is not enough.
+        TransitionStateCoreBlock,
+        TransitionStateCalculationSummary,
+        TransitionStateEntryStatmech,
+        TransitionStateEntryValidationEvidence,
+        # An entry record nested in another record's ``entries`` goes whole when the entry is hidden. The subject of a
+        # response (``record``, ``records[*]``) is never deleted as a pointer, so this is inert there.
+        ScientificTransitionStateEntryRecord,
+        TransitionStateSaddlePointEvidence,
+        TransitionStateValidationEvidenceSummary,
+        TransitionStateComparedEnergySummary,
+        ReactionFullCalculationEvidenceSummary,
+        ReactionFullIRCItem,
+        ReactionFullScanItem,
+        ReactionFullPathSearchItem,
+        ReactionFullCalculationArtifacts,
+        ReactionFullNetworkMembership,
+        ReactionAtomMapBadge,
+        ReactionAtomMapDetail,
+        TransitionStateCalculationSlot,
+        TransitionStateDependency,
+        KineticsDeterminationBlock,
+        KineticsInterpretationAssignmentBlock,
+        KineticsTunnelingApplicationBlock,
+        PathSearchSummary,
+        ValidationSummary,
+        SCFStabilitySummary,
+        StoredKineticsProtocolCalculationRef,
+    }
+)
+
+#: Untyped (``dict``) fields that are themselves a block about a linked record. A hidden ref anywhere inside one takes
+#: the whole field to ``None``: a skeleton left behind (``{"type": "irc", "calculation_ref": null}``) would still say
+#: that a hidden record exists. ``(model, field name)``; the field must be nullable.
+POINTER_FIELDS: frozenset[tuple[type[BaseModel], str]] = frozenset(
+    {
+        (KineticsProvenance, "irc"),
     }
 )
 
@@ -251,7 +327,21 @@ SPECIES_SIDE_PREFIXES: frozenset[str] = frozenset(
     )
 )
 
-_ENABLED_ROUTE_PREFIXES: frozenset[str] = SPECIES_SIDE_PREFIXES
+#: PR-2b: the transition-state and reaction route families. ``/reaction-entries`` covers the ``/full`` read, the
+#: reaction entry's kinetics and (matched, though they never reach the hook) its selection documents; ``/kinetics`` is
+#: the kinetics search. Matched on whole path segments, so ``/reactions`` does not cover ``/reaction-entries``.
+TS_REACTION_PREFIXES: frozenset[str] = frozenset(
+    f"{_SCIENTIFIC_BASE}/{segment}"
+    for segment in (
+        "transition-states",
+        "transition-state-entries",
+        "reaction-entries",
+        "reactions",
+        "kinetics",
+    )
+)
+
+_ENABLED_ROUTE_PREFIXES: frozenset[str] = SPECIES_SIDE_PREFIXES | TS_REACTION_PREFIXES
 
 
 class RefGuardUnplaceable(RuntimeError):
@@ -633,9 +723,19 @@ def _plan_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], Withh
     text = _path_text(path)
     n = len(path) - 1
 
-    # Rule 1: the nearest registered pointer on the way out.
-    for i in range(n - 1, -1, -1):
+    # Rule 1: the nearest registered pointer on the way out. A pointer FIELD (an untyped block) counts at the field.
+    for i in range(n, -1, -1):
         container, key = path[i]
+        if (
+            isinstance(container, BaseModel)
+            and isinstance(key, str)
+            and (type(container), key) in POINTER_FIELDS
+            and _field_traits(type(container), key)[0]
+        ):
+            site = WithheldSite(ref, text, "null_pointer", f"{type(container).__name__}.{key}")
+            return [_Action("null", container, key)], site
+        if i == n:
+            continue
         node = path[i + 1][0]
         if not isinstance(node, BaseModel) or type(node) not in POINTER_MODELS or _is_subject(path, i):
             continue
@@ -842,8 +942,10 @@ __all__ = [
     "EXEMPT_ROUTE_PREFIXES",
     "GATED_REF_RE",
     "GATED_TYPES",
+    "POINTER_FIELDS",
     "POINTER_MODELS",
     "SPECIES_SIDE_PREFIXES",
+    "TS_REACTION_PREFIXES",
     "UNGATED_REVIEWABLE",
     "GatedType",
     "RefGuardContext",

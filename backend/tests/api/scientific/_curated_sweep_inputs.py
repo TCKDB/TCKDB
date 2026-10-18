@@ -23,7 +23,9 @@ def _refs(world: SweepWorld, *keys: str) -> list[str]:
 
 
 PATH_PARAM_PROVIDERS: dict[str, Callable[[SweepWorld], list[str]]] = {
-    "calculation_ref_or_id": lambda w: _refs(w, "calc_vopt", "calc_vsp", "calc_ts_on_hidden_entry", "calc_ts_v", "calc_comp"),
+    "calculation_ref_or_id": lambda w: _refs(
+        w, "calc_vopt", "calc_vsp", "calc_ts_on_hidden_entry", "calc_ts_v", "calc_comp"
+    ),
     "conformer_group_ref_or_id": lambda w: _refs(w, "cg_v"),
     "conformer_observation_ref_or_id": lambda w: _refs(w, "co_v", "co_v2"),
     "energy_correction_scheme_ref_or_id": lambda w: [w.extra["ecs"].public_ref],
@@ -46,8 +48,8 @@ PATH_PARAM_PROVIDERS: dict[str, Callable[[SweepWorld], list[str]]] = {
     "species_entry_ref": lambda w: [w.extra["species_entry"].public_ref],
     "statmech_ref_or_id": lambda w: _refs(w, "sm_v", "sm_v2", "sm_ts_v"),
     "transition_state_entry_ref": lambda w: _refs(w, "tse_v", "tse_v2"),
-    "transition_state_entry_ref_or_id": lambda w: _refs(w, "tse_v", "tse_v2"),
-    "transition_state_ref_or_id": lambda w: _refs(w, "ts_v"),
+    "transition_state_entry_ref_or_id": lambda w: _refs(w, "tse_v", "tse_v2", "tse_vu", "tse_vw", "tse_vp"),
+    "transition_state_ref_or_id": lambda w: _refs(w, "ts_v", "ts_vu", "ts_vw", "ts_vp"),
     "transport_ref_or_id": lambda w: _refs(w, "trn_v"),
     "sha256": lambda w: [w.extra["artifact_sha_visible"]],
 }
@@ -59,10 +61,23 @@ ROUTE_PATH_PARAM_PROVIDERS: dict[tuple[str, str], dict[str, Callable[[SweepWorld
         "calculation_ref_or_id": lambda w: _refs(w, "calc_scan")
     },
     ("GET", f"{BASE}/calculations/{{calculation_ref_or_id}}/irc"): {
-        "calculation_ref_or_id": lambda w: _refs(w, "calc_irc")
+        "calculation_ref_or_id": lambda w: _refs(w, "calc_irc", "calc_irc_v")
     },
     ("GET", f"{BASE}/calculations/{{calculation_ref_or_id}}/path-search"): {
-        "calculation_ref_or_id": lambda w: _refs(w, "calc_ps")
+        "calculation_ref_or_id": lambda w: _refs(w, "calc_ps", "calc_ps_v")
+    },
+    # PR-2b: reaction entries whose scoping parents are unreviewed (never hidden, never 404), crawled beside the
+    # reviewed one on the two reads that list a reaction entry's participants and records.
+    **{
+        ("GET", f"{BASE}/reaction-entries/{{reaction_entry_id}}/{suffix}"): {
+            "reaction_entry_id": lambda w: [
+                w.extra["reaction_entry"].public_ref,
+                w.extra["reaction_entry_unreviewed"].public_ref,
+                w.extra["reaction_entry_hidden_participant"].public_ref,
+                w.extra["reaction_entry_all_hidden"].public_ref,
+            ]
+        }
+        for suffix in ("full", "kinetics")
     },
 }
 
@@ -102,12 +117,25 @@ _SEARCHES: dict[str, list[Callable[[SweepWorld], dict[str, Any]]]] = {
     ],
     "energy-correction-schemes": [lambda w: {"energy_correction_scheme_ref": w.extra["ecs"].public_ref}],
     "frequency-scale-factors": [lambda w: {"frequency_scale_factor_ref": w.extra["fsf"].public_ref}],
-    "kinetics": [lambda w: {"reaction_entry_ref": _rxe(w)}],
+    "kinetics": [
+        lambda w: {"reaction_entry_ref": _rxe(w)},
+        # PR-2b: every include token (``trust`` and ``assessments`` are not part of ``all``) and the superseded records.
+        lambda w: {
+            "reaction_entry_ref": _rxe(w),
+            "include": ["all", "trust", "assessments"],
+            "include_deprecated": True,
+            "include_rejected": True,
+        },
+    ],
     "level-of-theories": [lambda w: {"method": "wb97xd"}],
     "network-kinetics": [lambda w: {"has_chebyshev": True}],
     "network-solves": [lambda w: {"has_chebyshev": True}],
     "networks": [lambda w: {"has_chebyshev": True}],
-    "reactions": [lambda w: {"reaction_entry_ref": _rxe(w)}],
+    "reactions": [
+        lambda w: {"reaction_entry_ref": _rxe(w)},
+        lambda w: {"reaction_entry_ref": _rxe(w), "include": ["all"]},
+        lambda w: {"reaction_entry_ref": w.extra["reaction_entry_hidden_participant"].public_ref, "include": ["all"]},
+    ],
     "species-calculations": [lambda w: {"species_entry_ref": _sa(w)}],
     "species": [lambda w: {"species_entry_ref": _sa(w)}],
     "statmech": [
@@ -115,9 +143,20 @@ _SEARCHES: dict[str, list[Callable[[SweepWorld], dict[str, Any]]]] = {
         lambda w: {"transition_state_entry_ref": w.visible["tse_v2"].public_ref},
     ],
     "thermo": [lambda w: {"species_entry_ref": _sa(w)}],
-    "transition-states": [lambda w: {"has_calculations": True}],
+    "transition-states": [
+        lambda w: {"has_calculations": True},
+        # PR-2b: ``trust`` and ``entries`` are not part of ``all`` on the search surface.
+        lambda w: {"reaction_entry_ref": _rxe(w), "include": ["all", "trust", "entries"]},
+    ],
     "transport": [lambda w: {"has_lj_parameters": True}],
 }
+
+
+def _variants(*queries: dict[str, Any]):
+    return lambda w: [{"query": q} for q in queries]
+
+
+_ALL_TS_TOKENS = ["all", "entries", "validation_evidence", "statmech", "review"]
 
 _SELECT_STRUCTURE = _post(lambda w: {})
 _KINETICS_SELECT = _post(
@@ -171,6 +210,21 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
         )
         for m in ("GET", "POST")
     },
+    # PR-2b: the family's detail reads with every include token, the opt-in ones (``trust``, ``assessments``) included.
+    ("GET", f"{BASE}/reaction-entries/{{reaction_entry_id}}/full"): _variants(
+        {},
+        {"include": ["all", "trust"]},
+        {"include": ["all"], "include_review": "full", "include_deprecated": "true", "include_rejected": "true"},
+    ),
+    ("GET", f"{BASE}/reaction-entries/{{reaction_entry_id}}/kinetics"): _variants(
+        {},
+        {"include": ["all", "trust", "assessments", "interpretations"], "include_deprecated": "true"},
+    ),
+    ("GET", f"{BASE}/transition-state-entries/{{transition_state_entry_ref_or_id}}"): _variants(
+        {}, {"include": [*_ALL_TS_TOKENS, "trust"]}
+    ),
+    ("GET", f"{BASE}/transition-states/{{transition_state_ref_or_id}}"): _variants({}, {"include": _ALL_TS_TOKENS}),
+    ("GET", f"{BASE}/transition-states/browse"): _variants({}, {"include": _ALL_TS_TOKENS}),
     ("GET", f"{BASE}/network-kinetics/{{network_kinetics_ref_or_id}}/evaluate"): lambda w: [
         {"query": {"temperature_k": 1000.0, "pressure_bar": 1.0}}
     ],
@@ -192,7 +246,10 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
     ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/thermo/select"): _THERMO_SELECT,
     ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/thermo/select/manifest"): _THERMO_SELECT,
     **{
-        ("POST", f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies{suffix}"): _RELATIVE_ENERGIES
+        (
+            "POST",
+            f"{BASE}/species-entries/{{species_entry_ref}}/conformers/relative-energies{suffix}",
+        ): _RELATIVE_ENERGIES
         for suffix in ("", "/manifest")
     },
     **{

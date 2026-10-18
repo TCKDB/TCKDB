@@ -436,10 +436,10 @@ def test_the_hook_counts_that_it_was_reached_but_withholds_nothing_while_no_fami
     assert (ctx.reached, ctx.applied, calls) == (1, 0, [])
 
 
-def test_pr_2a_enables_exactly_the_species_side_families():
-    """Kills: enabling a TS/reaction/network family early (their wire changes belong to PR-2b/2c); dropping one."""
+def test_pr_2b_enables_exactly_the_species_side_and_ts_reaction_families():
+    """Kills: enabling a network or other family early (their wire changes belong to PR-2c); dropping a family."""
     base = "/api/v1/scientific/"
-    assert ref_guard._ENABLED_ROUTE_PREFIXES == ref_guard.SPECIES_SIDE_PREFIXES
+    assert ref_guard._ENABLED_ROUTE_PREFIXES == ref_guard.SPECIES_SIDE_PREFIXES | ref_guard.TS_REACTION_PREFIXES
     assert {p.removeprefix(base) for p in ref_guard.SPECIES_SIDE_PREFIXES} == {
         "statmech",
         "thermo",
@@ -454,13 +454,15 @@ def test_pr_2a_enables_exactly_the_species_side_families():
         "artifacts",
         "geometries",
     }
-    # Whole-segment matching: no later family rides in on a shared string prefix.
-    for route in (
+    assert {p.removeprefix(base) for p in ref_guard.TS_REACTION_PREFIXES} == {
         "transition-states",
         "transition-state-entries",
         "reaction-entries",
         "reactions",
         "kinetics",
+    }
+    # Whole-segment matching: no later family rides in on a shared string prefix.
+    for route in (
         "networks",
         "network-solves",
         "network-kinetics",
@@ -475,6 +477,8 @@ def test_pr_2a_enables_exactly_the_species_side_families():
         assert not ref_guard.route_matches(f"{base}{route}/x", ref_guard._ENABLED_ROUTE_PREFIXES), route
     assert ref_guard.route_matches(f"{base}species/search", ref_guard._ENABLED_ROUTE_PREFIXES)
     assert ref_guard.route_matches(f"{base}species-entries/{{id}}/thermo", ref_guard._ENABLED_ROUTE_PREFIXES)
+    assert ref_guard.route_matches(f"{base}reaction-entries/{{id}}/full", ref_guard._ENABLED_ROUTE_PREFIXES)
+    assert ref_guard.route_matches(f"{base}kinetics/search", ref_guard._ENABLED_ROUTE_PREFIXES)
 
 
 def test_the_hook_withholds_on_an_enabled_curated_route(hook_env, monkeypatch):
@@ -575,6 +579,32 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "SupersessionNotice",
         "TransitionStateEntryOwnerSummary",
         "TransportSourceCalculationSummary",
+        # PR-2b
+        "TransitionStateCoreBlock",
+        "TransitionStateCalculationSummary",
+        "TransitionStateEntryStatmech",
+        "TransitionStateEntryValidationEvidence",
+        "ScientificTransitionStateEntryRecord",
+        "TransitionStateSaddlePointEvidence",
+        "TransitionStateValidationEvidenceSummary",
+        "TransitionStateComparedEnergySummary",
+        "ReactionFullCalculationEvidenceSummary",
+        "ReactionFullIRCItem",
+        "ReactionFullScanItem",
+        "ReactionFullPathSearchItem",
+        "ReactionFullCalculationArtifacts",
+        "ReactionFullNetworkMembership",
+        "ReactionAtomMapBadge",
+        "ReactionAtomMapDetail",
+        "TransitionStateCalculationSlot",
+        "TransitionStateDependency",
+        "KineticsDeterminationBlock",
+        "KineticsInterpretationAssignmentBlock",
+        "KineticsTunnelingApplicationBlock",
+        "PathSearchSummary",
+        "ValidationSummary",
+        "SCFStabilitySummary",
+        "StoredKineticsProtocolCalculationRef",
     }
 
 

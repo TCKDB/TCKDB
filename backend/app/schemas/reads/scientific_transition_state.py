@@ -556,10 +556,18 @@ class ScientificTransitionStateEntryRecord(BaseModel):
     the parent TS, populated when ``include=entries`` is supplied), the
     TS-entry detail endpoint (always one record), and the search
     surface (records list).
+
+    ``transition_state`` is the entry's owner. It is always present under the
+    default (exploratory) profile. Under ``?profile=curated`` it is ``null``
+    when the owning transition state is below the review floor: the entry is
+    still a visible record, only its owner is withheld, and a hidden owner
+    never hides the entry (owner decision D1). A client must read ``null`` as
+    "an owner exists that this profile does not show", not as "the entry has no
+    owner".
     """
 
     transition_state_entry: TransitionStateEntryCoreBlock
-    transition_state: TransitionStateCoreBlock
+    transition_state: TransitionStateCoreBlock | None
     reaction: TransitionStateReactionContext
     evidence_summary: TransitionStateEntryEvidenceSummary
     validation: TransitionStateValidationDescriptor

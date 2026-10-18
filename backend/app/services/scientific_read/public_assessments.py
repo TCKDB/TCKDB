@@ -50,9 +50,9 @@ from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
 from app.services.scientific_read.statmech import STATMECH_TRUST_EAGER_LOADS
 from app.services.scientific_read.thermo import THERMO_TRUST_EAGER_LOADS
 from app.services.scientific_read.transport import TRANSPORT_TRUST_EAGER_LOADS
+from app.services.scientific_read.trust_floor import evaluate_shown_kinetics
 from app.services.trust import (
     build_trust_fragment,
-    evaluate_loaded_kinetics,
     evaluate_loaded_statmech,
     evaluate_loaded_thermo,
     evaluate_loaded_transport,
@@ -69,7 +69,7 @@ def attach_kinetics_assessments(session: Session, payload: Any) -> Any:
         record_type=SubmissionRecordType.kinetics,
         model=Kinetics,
         eager_loads=KINETICS_TRUST_EAGER_LOADS,
-        evaluator=evaluate_loaded_kinetics,
+        evaluator=evaluate_shown_kinetics,
     )
     return payload
 
@@ -146,7 +146,7 @@ def attach_kinetics_trust(
         records=records,
         model=Kinetics,
         eager_loads=KINETICS_TRUST_EAGER_LOADS,
-        evaluator=evaluate_loaded_kinetics,
+        evaluator=evaluate_shown_kinetics,
     )
 
 

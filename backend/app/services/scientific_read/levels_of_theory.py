@@ -62,10 +62,11 @@ from sqlalchemy import ColumnElement, select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
-from app.db.models.common import CalculationType
+from app.db.models.common import CalculationType, SubmissionRecordType
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.species import ConformerObservation
 from app.schemas.reads.scientific_common import LevelOfTheorySummary
+from app.services.scientific_read.common import review_floor_predicate, where_visible
 from app.services.scientific_read.composite_binding import composite_scheme_summaries
 
 #: Key order for the emitted map. The declaration order of
@@ -192,6 +193,9 @@ def _build(
         .where(owner_column.in_(ids))
         .distinct()
     )
+    # Owner decision D5: a calculation the active profile hides contributes neither its type nor its level. The keys of
+    # this map are calculation types, so a hidden IRC would otherwise print ``"irc": []`` beside ``has_irc: false``.
+    stmt = where_visible(stmt, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
 
     rows = session.execute(stmt).all()
     schemes = composite_scheme_summaries(session, [row.id for row in rows])

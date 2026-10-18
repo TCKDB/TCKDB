@@ -76,10 +76,12 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     molecular_formula_expr,
     reject_client_sort,
+    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.handles import (
     NO_MATCH,
@@ -1040,10 +1042,15 @@ def _apply_provenance_filters(stmt, request: SpeciesBrowseRequest):
     return apply_calculation_provenance_filter(
         stmt,
         request,
-        select(Calculation.id)
-        .select_from(Calculation)
-        .join(SpeciesEntry, SpeciesEntry.id == Calculation.species_entry_id)
-        .where(SpeciesEntry.species_id == Species.id),
+        # Only the calculations the profile shows can match (D5): a filter that matched a hidden calculation would
+        # return a species whose served flags say it has none.
+        where_visible(
+            select(Calculation.id)
+            .select_from(Calculation)
+            .join(SpeciesEntry, SpeciesEntry.id == Calculation.species_entry_id)
+            .where(SpeciesEntry.species_id == Species.id),
+            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+        ),
     )
 
 

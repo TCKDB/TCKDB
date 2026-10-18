@@ -457,6 +457,17 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
         expect(await screen.findByRole("img", { name: /Dependency graph for calc_opt1/ })).toBeInTheDocument()
     })
 
+    it("renders a transition state whose owner is withheld (profile=curated): no owner ref, the entry still there", async () => {
+        const full = mockFull() as { transition_states: Record<string, unknown>[] }
+        full.transition_states[0].transition_state_ref = null
+        handleFull(full)
+        page()
+        await screen.findByText("kin_test1")
+        expect(screen.queryByText("ts_test1")).not.toBeInTheDocument()
+        const strip = screen.getByTestId("ts-status-strip")
+        expect(strip.querySelector(".card--selected")?.textContent).toContain("Optimized")
+    })
+
     it("renders the guess/optimized/validated status strip with the served status selected", async () => {
         handleFull(mockFull())
         page()

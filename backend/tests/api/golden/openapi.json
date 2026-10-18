@@ -49180,7 +49180,7 @@
         "type": "object"
       },
       "ScientificTransitionStateEntryRecord": {
-        "description": "One TS entry projected as a scientific record.\n\nShared between the TS detail endpoint (one record per entry under\nthe parent TS, populated when ``include=entries`` is supplied), the\nTS-entry detail endpoint (always one record), and the search\nsurface (records list).",
+        "description": "One TS entry projected as a scientific record.\n\nShared between the TS detail endpoint (one record per entry under\nthe parent TS, populated when ``include=entries`` is supplied), the\nTS-entry detail endpoint (always one record), and the search\nsurface (records list).\n\n``transition_state`` is the entry's owner. It is always present under the\ndefault (exploratory) profile. Under ``?profile=curated`` it is ``null``\nwhen the owning transition state is below the review floor: the entry is\nstill a visible record, only its owner is withheld, and a hidden owner\nnever hides the entry (owner decision D1). A client must read ``null`` as\n\"an owner exists that this profile does not show\", not as \"the entry has no\nowner\".",
         "properties": {
           "available_sections": {
             "$ref": "#/components/schemas/AvailableTransitionStateSections"
@@ -49277,7 +49277,14 @@
             "x-tckdb-include-gated": "statmech"
           },
           "transition_state": {
-            "$ref": "#/components/schemas/TransitionStateCoreBlock"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransitionStateCoreBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "transition_state_entry": {
             "$ref": "#/components/schemas/TransitionStateEntryCoreBlock"
@@ -63712,7 +63719,7 @@
         "type": "object"
       },
       "TransitionStateInFull": {
-        "description": "Transition-state record embedded in /full.\n\nCarries the public refs that let a caller navigate to the new\nscientific TS read surface:\n\n- ``transition_state_ref`` → ``GET /scientific/transition-states/{ref}``\n- ``transition_state_entry_ref`` →\n  ``GET /scientific/transition-state-entries/{ref}``\n- ``calculations[*].calculation_ref`` →\n  ``GET /scientific/calculations/{ref}``\n\nInteger ``*_id`` siblings are Phase D policy-gated. ``status``\nand ``evidence_summary`` mirror the corresponding fields on\n:class:`ScientificTransitionStateEntryRecord` so the\nfull-response block lines up byte-for-byte with the per-entry\ndetail endpoint (same counts, same booleans, same status enum).\n\n``trust`` is populated only when the caller passes ``include=trust``\nto ``/reaction-entries/{id}/full``. It reuses :class:`TrustFragment`\nso a trust block embedded here is structurally identical to the one\nreturned by\n``GET /scientific/transition-state-entries/{ref}?include=trust``\n(rubric ``computed_transition_state_v2``).",
+        "description": "Transition-state record embedded in /full.\n\nCarries the public refs that let a caller navigate to the new\nscientific TS read surface:\n\n- ``transition_state_ref`` → ``GET /scientific/transition-states/{ref}``\n- ``transition_state_entry_ref`` →\n  ``GET /scientific/transition-state-entries/{ref}``\n- ``calculations[*].calculation_ref`` →\n  ``GET /scientific/calculations/{ref}``\n\n``transition_state_ref`` is ``null`` under ``?profile=curated`` when the owning transition state is below the review\nfloor: the entry stays in the response and only its owner ref (and id) is withheld (owner decision D1).\n\nInteger ``*_id`` siblings are Phase D policy-gated. ``status``\nand ``evidence_summary`` mirror the corresponding fields on\n:class:`ScientificTransitionStateEntryRecord` so the\nfull-response block lines up byte-for-byte with the per-entry\ndetail endpoint (same counts, same booleans, same status enum).\n\n``trust`` is populated only when the caller passes ``include=trust``\nto ``/reaction-entries/{id}/full``. It reuses :class:`TrustFragment`\nso a trust block embedded here is structurally identical to the one\nreturned by\n``GET /scientific/transition-state-entries/{ref}?include=trust``\n(rubric ``computed_transition_state_v2``).",
         "properties": {
           "calculations": {
             "additionalProperties": {
@@ -63766,8 +63773,15 @@
             "x-tckdb-policy-hidden": true
           },
           "transition_state_ref": {
-            "title": "Transition State Ref",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Ref"
           },
           "trust": {
             "anyOf": [

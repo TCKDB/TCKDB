@@ -101,6 +101,7 @@ from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
 )
 from app.services.scientific_read.conformers import build_group_record
+from app.services.scientific_read.handles import status_hidden_under_profile
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -1342,12 +1343,19 @@ def _build_review_records_section(
         if not ids:
             continue
         rows = session.scalars(
-            select(RecordReview).where(
+            select(RecordReview)
+            .where(
                 RecordReview.record_type == record_type,
                 RecordReview.record_id.in_(ids),
             )
+            # A stable order: the rows of one type came back in whatever order the plan produced.
+            .order_by(RecordReview.record_id.asc(), RecordReview.id.asc())
         ).all()
         for r in rows:
+            # The review row of a record the active profile hides (its own detail route answers 404) is not listed:
+            # its type, status and id would say that record exists. The reaction entry is a scoping parent, never gated.
+            if record_type is not SubmissionRecordType.reaction_entry and status_hidden_under_profile(r.status):
+                continue
             out.append(
                 ReviewRecordEntry(
                     record_type=record_type.value,

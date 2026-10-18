@@ -127,7 +127,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     const firstKinetics = kinetics[0]
     const refs: RefEntry[] = [
         { label: "Reaction identity", value: entry.reaction_ref, to: `/reactions/${entry.reaction_ref}` },
-        ...transitionStates.map((ts) => ({ label: "Transition state", value: ts.transition_state_ref })),
+        ...transitionStates.flatMap((ts) => (ts.transition_state_ref ? [{ label: "Transition state", value: ts.transition_state_ref }] : [])),
         ...(firstKinetics?.provenance.primary_level_of_theory?.level_of_theory_ref
             ? [{
                 label: "Level of theory",
