@@ -470,7 +470,8 @@ def test_the_hook_stands_down(hook_env, profile, route_path):
     publish, calls = hook_env
     ctx = publish(profile, route_path)
     ref_guard.withhold_for_current_request(Envelope())
-    assert (ctx.applied, calls) == (0, [])
+    # The hook was reached (so it is wired and counted) and stood down on its own.
+    assert (ctx.reached, ctx.applied, calls) == (1, 0, [])
 
 
 def test_an_unplaceable_ref_in_the_hook_propagates(hook_env, monkeypatch):

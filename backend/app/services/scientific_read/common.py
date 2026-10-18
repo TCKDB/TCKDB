@@ -626,26 +626,26 @@ def refs_for_ids(
     return {row.id: row.public_ref for row in rows}
 
 
-def review_hidden_under_profile(
+def ids_below_review_floor(
     session: Session,
     *,
     record_type: SubmissionRecordType,
     record_ids: Iterable[int],
-) -> tuple[dict[int, RecordReviewBadge], set[int]]:
-    """Review badges for ``record_ids`` and which of them the active read profile hides.
+) -> set[int]:
+    """Which of ``record_ids`` the active read profile's review floor hides (the detail route answers 404 for them).
 
-    Mirrors the floor the detail-by-ref gate applies (``handles.py``), so a read never names a
-    record that its own detail route answers 404 for. Without a review floor (exploratory, or
-    outside a scientific request) nothing is hidden and no query is made, so that output is
-    unchanged. Returns ``(badges, hidden_ids)``; ``badges`` is empty when no query was made.
+    Mirrors the floor the detail-by-ref gate applies (``handles.py``). For the count and flag floors (owner decision
+    D5), where a count must not include a record the profile hides. It is not a ref rule: refs are withheld at the
+    response boundary by ``ref_guard``. Without a review floor (exploratory, or outside a scientific request) nothing is
+    hidden and no query is made. Otherwise one statement.
     """
     ids = set(record_ids)
     if not ids or current_read_profile().review_floor is None:
-        return {}, set()
+        return set()
     from app.services.scientific_read.handles import status_hidden_under_profile
 
     badges = fetch_review_badges(session, record_type=record_type, record_ids=ids)
-    return badges, {rid for rid, b in badges.items() if status_hidden_under_profile(b.status)}
+    return {rid for rid, b in badges.items() if status_hidden_under_profile(b.status)}
 
 
 def review_floor_predicate(id_column: Any, record_type: SubmissionRecordType, *, profile: Any = None) -> Any:

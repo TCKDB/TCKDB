@@ -105,9 +105,9 @@ from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    ids_below_review_floor,
     reject_client_sort,
     review_floor_predicate,
-    review_hidden_under_profile,
     review_summary,
     slice_for_pagination,
     temperature_coverage,
@@ -416,7 +416,7 @@ def get_reaction_kinetics(
     # Owner decision D5: a source calculation the active profile hides contributes no level, software or filter match.
     # The record's own LINK to it stays a fact of the record (the ref guard withholds the ref); what the calculation
     # was run at is a fact about the hidden record. One lookup, and none without a floor.
-    _, hidden_source_calc_ids = review_hidden_under_profile(
+    hidden_source_calc_ids = ids_below_review_floor(
         session,
         record_type=SubmissionRecordType.calculation,
         record_ids={sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs},
@@ -605,7 +605,7 @@ def get_reaction_kinetics(
     missing_opt_meta_ids = set(opt_via_dependency.values()) - calc_meta.keys()
     if missing_opt_meta_ids:
         calc_meta.update(_calc_metadata(session, missing_opt_meta_ids))
-    _, hidden_opt_ids = review_hidden_under_profile(
+    hidden_opt_ids = ids_below_review_floor(
         session, record_type=SubmissionRecordType.calculation, record_ids=set(opt_via_dependency.values())
     )
     hidden_level_calc_ids = hidden_source_calc_ids | hidden_opt_ids

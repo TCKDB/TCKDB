@@ -94,8 +94,8 @@ from app.schemas.reads.scientific_transition_state import (
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    ids_below_review_floor,
     review_floor_predicate,
-    review_hidden_under_profile,
     review_summary,
     validate_includes,
     visible_statuses,
@@ -336,7 +336,7 @@ def get_transition_state(
     entry_ids = [e.id for e in entries]
     # Owner decision D5: counts and flags answer what the list would show. The lists keep every entry (the ref guard
     # removes the hidden ones from them); what is COUNTED follows the review floor.
-    _, hidden_entry_ids = review_hidden_under_profile(
+    hidden_entry_ids = ids_below_review_floor(
         session, record_type=SubmissionRecordType.transition_state_entry, record_ids=entry_ids
     )
     counted_entries = [e for e in entries if e.id not in hidden_entry_ids]

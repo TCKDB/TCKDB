@@ -6,6 +6,7 @@ See docs/specs/read_api_mvp.md §Endpoint 4.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 from pydantic import ValidationError
@@ -459,7 +460,7 @@ def get_species_thermo(
                 select(ConformerGroup.id, ConformerGroup.public_ref).where(
                     ConformerGroup.id.in_(target_group_ids)
                 )
-            ).all()
+            ).tuples().all()
         )
 
     records: list[ThermoRecord] = []
@@ -1251,7 +1252,7 @@ def _build_provenance(
     statmech_sources: list[StatmechSourceCalculation],
     thermo_software: SoftwareReleaseSummary | None,
     thermo_workflow_tool: WorkflowToolReleaseSummary | None,
-    conformer_links: dict[int, tuple[int | None, str | None, int | None, str | None]],
+    conformer_links: Mapping[int, tuple[int | None, str | None, int | None, str | None]],
 ) -> ThermoProvenance:
     """Build a ``ThermoProvenance`` block for one thermo record.
 
