@@ -716,6 +716,26 @@ a coded 422 (`structure_selection_population_too_large`, `..._evidence_too_large
 `..._manifest_too_large`). A deferred quantity (enthalpy, Gibbs energy, barrier, rate) is
 `structure_selection_unsupported`. See `docs/guides/selecting_structures.md`.
 
+### `tckdb_species_entry_relative_conformer_energies` and `tckdb_compare_relative_conformer_energies`
+
+Read-only. How much higher or lower in energy each conformer group of one species entry is than the conformer you name, and a
+descriptive comparison of two stored protocols on those relative energies. Nothing is stored.
+
+```
+species_entry_ref: "spe_..."
+reference_conformer_ref: "cg_..."   # required, no default
+energy_kind: "electronic_energy" | "zero_kelvin_energy"   # required, no default
+certificate: "local_minimum_any_surface" | "local_minimum_on_energy_surface"   # required, no default
+level_of_theory_ref ("lot_") XOR composite_scheme_ref ("csch_")   # relative energies: exactly one, required
+candidate, reference: {level: {level_of_theory_ref | composite_scheme_ref}, recipe?}   # comparison: required
+pairing: "same_geometry" | "same_basin"   # comparison: required, no default
+member_refs? ("cg_"), recipe?, coverage_requirement?, repeat_policy?, min_review_status?, permitted_quality?, require_stable_reference?, profile?
+```
+
+Output: the server response, unchanged. Quote `outcome`, `basis` and `claims.statement` verbatim. Members are ordered by conformer ref
+and the order is not a ranking. The comparison is descriptive only (it names no better protocol) and every deviation depends on the
+reference conformer you named. See `docs/guides/relative_conformer_energies.md`.
+
 ### `tckdb_select_statmech_models`
 
 Statmech selection: which supplied statistical-mechanics model of ONE species entry or transition state entry supports a

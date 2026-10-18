@@ -286,6 +286,22 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "get_species_conformer_selection_manifest", None, None, "tests/test_structure_selection.py",
     ),
     (
+        "POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies",
+        "relative_conformer_energies", None, None, "tests/test_relative_conformer_energy.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/manifest",
+        "get_relative_conformer_energy_manifest", None, None, "tests/test_relative_conformer_energy.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare",
+        "compare_relative_conformer_energies", None, None, "tests/test_relative_conformer_energy.py",
+    ),
+    (
+        "POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare/manifest",
+        "get_relative_conformer_energy_comparison_manifest", None, None, "tests/test_relative_conformer_energy.py",
+    ),
+    (
         "POST", "/api/v1/scientific/statmech/select",
         "select_statmech_models", None, None, "tests/test_statmech_selection.py",
     ),
@@ -856,16 +872,6 @@ _RAW_ONLY: tuple[tuple[str, str, str], ...] = tuple(
         "consumer scripts this client serves, which already reach the same "
         "records through search_transition_states(). Reachable via "
         "get_json().",
-    ),
-    *(
-        (
-            "POST",
-            f"/api/v1/scientific/species-entries/{{species_entry_ref}}/conformers/relative-energies{suffix}",
-            "Relative conformer energies against a named reference conformer. A typed method needs its request "
-            "and response types and the four required scientific choices as required keyword arguments, which "
-            "ships as its own client release; until then it is reached through post_json().",
-        )
-        for suffix in ("", "/manifest", "/compare", "/compare/manifest")
     ),
 )
 

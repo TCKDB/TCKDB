@@ -11,8 +11,8 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 123 |
-| raw_only | 111 |
+| typed | 127 |
+| raw_only | 107 |
 | not_applicable | 45 |
 | **total** | **279** |
 
@@ -110,6 +110,10 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/species-entries/{species_entry_id}/thermo` | yes | `get_species_thermo` | — | `examples/scientific_reads.py` | `tests/test_scientific.py` |
 | `POST /api/v1/scientific/species-entries/{species_entry_ref}/calculations/select` | yes | `select_species_calculations` | — | — | `tests/test_structure_selection.py` |
 | `POST /api/v1/scientific/species-entries/{species_entry_ref}/calculations/select/manifest` | yes | `get_species_calculation_selection_manifest` | — | — | `tests/test_structure_selection.py` |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies` | yes | `relative_conformer_energies` | — | — | `tests/test_relative_conformer_energy.py` |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare` | yes | `compare_relative_conformer_energies` | — | — | `tests/test_relative_conformer_energy.py` |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare/manifest` | yes | `get_relative_conformer_energy_comparison_manifest` | — | — | `tests/test_relative_conformer_energy.py` |
+| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/manifest` | yes | `get_relative_conformer_energy_manifest` | — | — | `tests/test_relative_conformer_energy.py` |
 | `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/select` | yes | `select_conformer_basins` | — | — | `tests/test_structure_selection.py` |
 | `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/select/manifest` | yes | `get_species_conformer_selection_manifest` | — | — | `tests/test_structure_selection.py` |
 | `POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select` | yes | `select_species_thermo` | — | — | `tests/test_thermo_selection.py` |
@@ -292,15 +296,6 @@ Deliberately reachable only through the generic request helpers. Each group stat
 | Operation | raw HTTP | typed client | iterator | example | contract test |
 |---|---|---|---|---|---|
 | `GET /api/v1/scientific/species-entries/{species_entry_id}/transport` | yes | — | — | — | — |
-
-> Relative conformer energies against a named reference conformer. A typed method needs its request and response types and the four required scientific choices as required keyword arguments, which ships as its own client release; until then it is reached through post_json().
-
-| Operation | raw HTTP | typed client | iterator | example | contract test |
-|---|---|---|---|---|---|
-| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies` | yes | — | — | — | — |
-| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare` | yes | — | — | — | — |
-| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare/manifest` | yes | — | — | — | — |
-| `POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/manifest` | yes | — | — | — | — |
 
 > Single-record read of a row already returned in full by search_statmech(statmech_ref=...). Reachable via get_json() when only the ref is known.
 

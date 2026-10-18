@@ -1909,6 +1909,168 @@ class StructureSelectionResponse(TypedDict):
 
 
 # ---------------------------------------------------------------------------
+# Relative conformer energies (one species entry, against a conformer the caller names)
+# ---------------------------------------------------------------------------
+
+RelativeEnergyOutcomeToken: TypeAlias = Literal[
+    "relative_energies",
+    "reference_only",
+    "reference_unavailable",
+    "multiple_recipes_at_level",
+    "incomplete_coverage",
+    "no_members",
+]
+"""The outcomes of a relative conformer energy read. Report ``outcome`` and ``basis`` verbatim."""
+
+RelativeEnergyComparisonOutcomeToken: TypeAlias = Literal["compared", "no_pairs", "incomplete_pairing"]
+
+RelativeEnergyPairing: TypeAlias = Literal["same_geometry", "same_basin"]
+"""``same_geometry``: both values evaluated at the same geometry. ``same_basin``: each protocol's own geometry of the basin."""
+
+
+class RelativeEnergyMember(TypedDict):
+    """One conformer group. There is no rank: members are ordered by ref and the order is not a ranking.
+
+    A member with no single value has ``status`` ``absent`` or ``unresolved``, a coded ``absent_reason`` and ``None``
+    values, never zero.
+    """
+
+    conformer_ref: str
+    status: str
+    relative_energy_kj_mol: float | None
+    relative_energy_hartree: float | None
+    value_hartree: float | None
+    value_uncertainty_hartree: float | None
+    representative: bool
+    determination_refs: list[str]
+    energy_calculation_refs: list[str]
+    evaluated_geometry_refs: list[str]
+    value_geometry_ref: str | None
+    certificate: JSONDict | None
+    alternates: list[JSONDict]
+    absent_reason: str | None
+    detail: list[str]
+
+
+class RelativeConformerEnergyResponse(TypedDict):
+    """Relative conformer energies against the named reference conformer: a read, nothing is stored.
+
+    Report ``outcome`` and ``basis`` verbatim. The relative energy is the member minus the reference, so a negative
+    value is below the reference. ``integrity`` carries the manifest checksum: a checksum, not a signature.
+    """
+
+    request: JSONDict
+    review: JSONDict
+    outcome: RelativeEnergyOutcomeToken
+    basis: str
+    energy_kind: str
+    temperature_k: float | None
+    units: JSONDict
+    level: JSONDict
+    reference: JSONDict
+    members: list[RelativeEnergyMember]
+    coverage: JSONDict
+    unresolved: list[JSONDict]
+    cohorts: list[JSONDict]
+    notes: list[str]
+    search_completeness: str
+    versions: JSONDict
+    snapshot_isolation: str
+    integrity: JSONDict
+
+
+class RelativeConformerEnergyManifest(TypedDict, total=False):
+    """The replayable manifest of the relative-energy ``/manifest`` download, exactly as the server sent it.
+
+    The server allows extra keys, so this lists the documented ones only. The client does not normalise, reorder or
+    drop any key: replay needs the manifest as served.
+    """
+
+    manifest_format: str
+    manifest_format_version: int
+    versions: JSONDict
+    request: JSONDict
+    structure_request: JSONDict
+    effective_review_statuses: list[str]
+    read_profile: JSONDict
+    snapshot_isolation: str
+    subject: JSONDict
+    population: JSONDict
+    calculations: list[JSONDict]
+    determinations: list[JSONDict]
+    assessments: list[JSONDict]
+    result: JSONDict
+    outcome: RelativeEnergyOutcomeToken
+    integrity: JSONDict
+
+
+class RelativeEnergyComparePair(TypedDict):
+    """One conformer's two values and their deviation. An unusable pair has ``excluded_reason`` and no deviation."""
+
+    conformer_ref: str
+    candidate_kj_mol: float | None
+    reference_kj_mol: float | None
+    deviation_kj_mol: float | None
+    excluded_reason: str | None
+    candidate_uncertainty_hartree: float | None
+    reference_uncertainty_hartree: float | None
+    candidate_geometry_ref: str | None
+    reference_geometry_ref: str | None
+
+
+class RelativeEnergyCompareClaims(TypedDict):
+    """What the comparison claims: description only. ``missing_evidence`` lists what a superiority claim would need."""
+
+    kind: str
+    superiority: str
+    ranking: str
+    missing_evidence: list[str]
+    statement: str
+
+
+class RelativeConformerEnergyCompareResponse(TypedDict):
+    """A descriptive comparison of two stored protocols against one named reference conformer.
+
+    Report ``outcome`` and ``claims["statement"]`` verbatim. The comparison is descriptive only: it names no better
+    protocol and ranks nothing, and every deviation depends on the named reference conformer
+    (``statistics["reference_conformer_dependence"]``). ``statistics`` is ``None`` for ``incomplete_pairing``.
+    """
+
+    request: JSONDict
+    review: JSONDict
+    outcome: RelativeEnergyComparisonOutcomeToken
+    pairing: RelativeEnergyPairing
+    coverage_requirement: str
+    units: JSONDict
+    statistics: JSONDict | None
+    reference_conformer: JSONDict
+    pairs: list[RelativeEnergyComparePair]
+    candidate: JSONDict
+    reference: JSONDict
+    claims: RelativeEnergyCompareClaims
+    comparison_version: str
+    notes: list[str]
+    versions: JSONDict
+    snapshot_isolation: str
+    integrity: JSONDict
+
+
+class RelativeConformerEnergyCompareManifest(TypedDict, total=False):
+    """The replayable manifest of the ``/compare/manifest`` download, exactly as the server sent it (extra keys allowed)."""
+
+    manifest_format: str
+    manifest_format_version: int
+    versions: JSONDict
+    request: JSONDict
+    read_profile: JSONDict
+    snapshot_isolation: str
+    runs: JSONDict
+    result: JSONDict
+    outcome: RelativeEnergyComparisonOutcomeToken
+    integrity: JSONDict
+
+
+# ---------------------------------------------------------------------------
 # Statmech selection (qualify supplied statistical models; prefer only where audited rules say so)
 # ---------------------------------------------------------------------------
 
