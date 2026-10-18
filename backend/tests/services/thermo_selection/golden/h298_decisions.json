@@ -8658,7 +8658,7 @@
      ],
      "selected_ref": "a"
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -9330,7 +9330,7 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
@@ -10024,7 +10024,7 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
@@ -10636,7 +10636,7 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -11177,7 +11177,7 @@
      ],
      "selected_ref": "g4"
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -11698,7 +11698,7 @@
      ],
      "selected_ref": "g4"
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -12078,7 +12078,7 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "no_applicable_candidate",
     "policy": {
      "name": "h298_method_preferred",
@@ -12407,7 +12407,7 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -12668,7 +12668,7 @@
      "rules": [],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -12991,7 +12991,7 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
@@ -13429,7 +13429,7 @@
      ],
      "selected_ref": "b"
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -13863,7 +13863,7 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
@@ -14208,7 +14208,7 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -14617,7 +14617,7 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -15002,7 +15002,7 @@
      "rules": [],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -15384,7 +15384,7 @@
      ],
      "selected_ref": "q"
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -15763,7 +15763,7 @@
      ],
      "selected_ref": "a"
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "sole_eligible_candidate",
     "policy": {
      "name": "h298_method_preferred",
@@ -16265,7 +16265,7 @@
      ],
      "selected_ref": "b"
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -16812,7 +16812,7 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -17123,7 +17123,7 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "manifest_format_version": 2,
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",

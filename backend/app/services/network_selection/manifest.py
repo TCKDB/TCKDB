@@ -64,7 +64,12 @@ from app.services.network_selection.models import (
 from app.services.network_selection.rules import NetworkRule, default_rules
 from app.services.scientific_read.profile import current_read_profile
 
-MANIFEST_FORMAT_VERSION = 2
+#: 3: a hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor (guard
+#: PR-3). The network's one such position, a validation entry's reference to a solve the reader cannot open, is
+#: evidence and reads as unavailable (``reference_solve_ref`` null, ``reference_withheld`` true), as on a reference to
+#: nothing; no token stands there today. A format-2 manifest, made before that, still replays.
+MANIFEST_FORMAT_VERSION = 3
+SUPPORTED_MANIFEST_FORMATS = frozenset({2, MANIFEST_FORMAT_VERSION})
 
 REPLAY_BOUNDARY = (
     "Replay reproduces the reasoning from the captured inputs. It does not authenticate their scientific truth and "
@@ -132,7 +137,7 @@ def build_manifest(result: NetworkAssessmentResult, decision: NetworkDecision) -
 
 
 def _check_versions(manifest: dict[str, Any]) -> None:
-    if manifest.get("manifest_format_version") != MANIFEST_FORMAT_VERSION:
+    if manifest.get("manifest_format_version") not in SUPPORTED_MANIFEST_FORMATS:
         raise ReplayError(f"unknown manifest format {manifest.get('manifest_format_version')!r}")
     policy = manifest["policy"]
     expected = {

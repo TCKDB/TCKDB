@@ -23,9 +23,10 @@ from app.db.models.common import RecordReviewStatus, ScientificOriginKind, Submi
 from app.db.models.thermo import Thermo
 from app.services.scientific_read.common import fetch_review_badges
 from app.services.scientific_read.thermo import THERMO_TRUST_EAGER_LOADS
+from app.services.selection_kernel.evidence_view import evidence_subject
 from app.services.structure_selection.source_findings import assess_source_findings, thermo_uses
 from app.services.thermo_selection.assessment import assess_candidate
-from app.services.thermo_selection.loader import load_subject, normalize_rows
+from app.services.thermo_selection.loader import load_subject, normalize_rows, unavailable_evidence
 from app.services.thermo_selection.models import (
     MAX_CANDIDATES,
     Applicability,
@@ -77,14 +78,15 @@ def h298_coverage_inventory(
         )
         badges = fetch_review_badges(session, record_type=SubmissionRecordType.thermo, record_ids=ids)
         statuses: dict[int, RecordReviewStatus] = {i: badges[i].status for i in ids}
-        normalized = normalize_rows(session, rows, statuses)
-        source_findings = assess_source_findings(session, {t.id: thermo_uses(t) for t in rows})
+        unavailable = unavailable_evidence(session, rows)
+        normalized = normalize_rows(session, rows, statuses, unavailable)
+        source_findings = assess_source_findings(session, {t.id: thermo_uses(t, unavailable) for t in rows})
         for thermo in rows:
             total += 1
             kind = thermo.thermodynamic_target_kind or ThermoTargetKind.equilibrium_ensemble
             group = thermo.target_conformer_group_id if kind is ThermoTargetKind.single_conformer else None
             request = H298Request(target_kind=kind, conformer_group_id=group, max_candidates=MAX_CANDIDATES)
-            evidence = evaluate_loaded_thermo(thermo) if thermo.scientific_origin is ScientificOriginKind.computed else None
+            evidence = evaluate_loaded_thermo(evidence_subject(thermo, unavailable)) if thermo.scientific_origin is ScientificOriginKind.computed else None
             assessment = assess_candidate(
                 thermo, request=request, evidence=evidence, source_findings=source_findings[thermo.id]
             )

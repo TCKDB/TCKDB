@@ -45,6 +45,7 @@ from app.services.kinetics_selection.models import (
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
 from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
+from app.services.scientific_read.ref_guard import unavailable_refs
 
 CODE_POPULATION_TOO_LARGE = "kinetics_selection_population_too_large"
 #: The exclusion listing is bounded: under a strict floor nearly every row of a large population can be excluded,
@@ -86,6 +87,8 @@ class LoadedPopulation:
     subject: KineticsSubject
     rows: list[Kinetics]
     candidates: dict[int, NormalizedKinetics] = field(default_factory=dict)
+    #: Calculation and network-solve refs the profile hides (or that name no row): evidence that reads as unavailable.
+    unavailable: frozenset[str] = frozenset()
 
     @property
     def candidates_by_ref(self) -> dict[str, NormalizedKinetics]:
@@ -161,8 +164,13 @@ def load_population(session: Session, scan: PopulationScan) -> LoadedPopulation:
             select(Kinetics).where(Kinetics.id.in_(scan.population_ids)).options(*_LOAD_OPTIONS).order_by(Kinetics.id)
         ).all()
     )
+    unavailable = unavailable_evidence(session, rows)
     return LoadedPopulation(
-        entry=entry, subject=subject, rows=rows, candidates=normalize_rows(session, entry, rows, scan.review_status)
+        entry=entry,
+        subject=subject,
+        rows=rows,
+        candidates=normalize_rows(session, entry, rows, scan.review_status, unavailable),
+        unavailable=unavailable,
     )
 
 
@@ -317,11 +325,42 @@ def _network_context(session: Session, ids: set[int]) -> dict[int, tuple[str, st
     return {i: (f"{net}/{key}", solve) for i, net, key, solve in rows}
 
 
+def unavailable_evidence(session: Session, rows: list[Kinetics]) -> frozenset[str]:
+    """The calculations and network solves these records cite that the reader cannot open: hidden, or naming no row.
+
+    Hidden == unknown: such evidence is treated exactly like a reference to nothing, so a hidden supporting calculation
+    (a source link, a protocol citation) or a hidden network solve does not count under ``curated``. Empty, with no
+    statement, without a review floor: an exploratory selection is unchanged.
+    """
+    refs: set[str] = set()
+    for k in rows:
+        refs.update(link.calculation.public_ref for link in k.source_calculations if link.calculation is not None)
+        for support in (k.protocol_declaration or {}).get("supporting_calculations") or ():
+            if isinstance(support, dict) and support.get("calculation_ref"):
+                refs.add(support["calculation_ref"])
+    network = _network_context(session, {k.network_kinetics_id for k in rows if k.network_kinetics_id})
+    refs.update(solve for _, solve in network.values() if solve)
+    return frozenset(unavailable_refs(session, refs))
+
+
+def _without_unavailable(protocol: dict | None, unavailable: frozenset[str]) -> dict | None:
+    """The protocol without the supporting calculations the reader cannot open."""
+    if not unavailable or not protocol or not protocol.get("supporting_calculations"):
+        return protocol
+    return {
+        **protocol,
+        "supporting_calculations": [
+            s for s in protocol["supporting_calculations"] if s.get("calculation_ref") not in unavailable
+        ],
+    }
+
+
 def normalize_rows(
     session: Session,
     entry: ReactionEntry,
     rows: list[Kinetics],
     review_status: dict[int, RecordReviewStatus],
+    unavailable: frozenset[str] = frozenset(),
 ) -> dict[int, NormalizedKinetics]:
     """Normalise loaded rows (children eager-loaded) into assessor inputs; ``id_rank`` follows the given order.
 
@@ -351,7 +390,9 @@ def normalize_rows(
     product_stoichiometries = stoichiometries(ReactionRole.product)
     protocols: dict[str, dict | None] = {}
     for k in rows:
-        protocols[k.public_ref] = _declaration(StoredKineticsProtocolDeclaration, k.protocol_declaration)[1]
+        protocols[k.public_ref] = _without_unavailable(
+            _declaration(StoredKineticsProtocolDeclaration, k.protocol_declaration)[1], unavailable
+        )
     declared_levels = _declared_levels(session, protocols)
     record_levels = _record_declared_levels(session, rows)
     candidates: dict[int, NormalizedKinetics] = {}
@@ -365,12 +406,15 @@ def normalize_rows(
                 "basis": link.calculation.lot.basis if link.calculation.lot is not None else None,
             }
             for link in sorted(k.source_calculations, key=lambda x: (x.role.value, x.calculation.public_ref))
-            if link.role in _ENERGY_ROLES and link.calculation is not None
+            if link.role in _ENERGY_ROLES
+            and link.calculation is not None
+            and link.calculation.public_ref not in unavailable
         ]
         applicability_state, applicability = _declaration(
             StoredKineticsApplicabilityDeclaration, k.applicability_declaration
         )
         protocol_state, protocol = _declaration(StoredKineticsProtocolDeclaration, k.protocol_declaration)
+        protocol = _without_unavailable(protocol, unavailable)
         chebyshev = None
         if k.chebyshev is not None:
             c = k.chebyshev
@@ -380,6 +424,9 @@ def normalize_rows(
                 "has_coefficients": bool(c.coefficients),
             }
         net_ref, solve_ref = network.get(k.network_kinetics_id, (None, None)) if k.network_kinetics_id else (None, None)
+        if solve_ref in unavailable:
+            # A fit is gated through its solve: with the solve unavailable the record's link to the fit reads as absent.
+            net_ref, solve_ref = None, None
         candidates[k.id] = NormalizedKinetics(
             kinetics_ref=k.public_ref,
             review_status=review_status[k.id],

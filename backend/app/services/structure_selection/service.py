@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.db.models.calculation import Calculation
 from app.db.models.structure_determination import StructureDetermination
 from app.services.read_snapshot import begin_read_snapshot
+from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.selection_kernel import Applicability
 from app.services.structure_selection.assessment import assess_unit
 from app.services.structure_selection.loader import (
@@ -65,6 +66,12 @@ def assess_entry_structures(
     scan = scan_population(session, entry_id=entry_id, request=request)
     excluded = _excluded_refs(session, scan)
     loaded = load_population(session, scan, request)
+    # The loader to engine seam (guard PR-3): a hidden ref in the captured facts (an observation's conformer group, a
+    # dependency or witness calculation outside the population, a validation row's calculation) becomes a placeholder
+    # token BEFORE any unit is assessed, decided, hashed or written to the manifest.
+    loaded.subject, loaded.calculations, loaded.determinations = withhold_selection_facts(
+        session, (loaded.subject, loaded.calculations, loaded.determinations)
+    )
 
     calculations_by_ref = loaded.calculations_by_ref
     units = (

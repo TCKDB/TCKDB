@@ -21,6 +21,7 @@ from app.db.models.common import RecordReviewStatus
 from app.db.models.statmech import Statmech
 from app.db.models.statmech_declaration import StatmechModelDeclaration
 from app.services.read_snapshot import begin_read_snapshot
+from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.statmech_selection.assessment import (
     QualificationSummary,
     StatmechAssessment,
@@ -104,6 +105,12 @@ def qualify_target(
         calculations: tuple[NormalizedCalculation, ...] = ()
     else:
         loaded = load_population(session, scan, request)
+        # The loader to engine seam (guard PR-3): a hidden ref in the captured facts (a declared or anchoring conformer
+        # group, a supersession notice, a calculation's own conformer group) becomes a placeholder token BEFORE any
+        # candidate is assessed, decided or written to the manifest.
+        loaded.subject, loaded.candidates, loaded.calculations = withhold_selection_facts(
+            session, (loaded.subject, loaded.candidates, loaded.calculations)
+        )
         subject = loaded.subject
         candidates = tuple(loaded.candidates[i] for i in sorted(loaded.candidates))
         calculations = tuple(loaded.calculations[i] for i in sorted(loaded.calculations))

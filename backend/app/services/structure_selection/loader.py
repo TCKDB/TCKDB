@@ -884,8 +884,8 @@ def _load_determinations(
                 )
             )
         )
-        # The calculation an evidence row reconstructs is named only when the profile shows it; a hidden one reads
-        # exactly like an absent one, so a hidden IRC calculation neither appears nor certifies connectivity.
+        # The calculation an evidence row reconstructs is named only when the profile shows it; a row resting on a hidden one
+        # reads exactly like an absent row (hidden == unknown), so a hidden IRC neither appears nor certifies connectivity.
         evidence_calc_ids = {ev.reconstruction_calculation_id for ev in evidence if ev.reconstruction_calculation_id is not None}
         outside = evidence_calc_ids - calc_ref.keys()
         outside_badges = fetch_review_badges(session, record_type=SubmissionRecordType.calculation, record_ids=outside)
@@ -913,6 +913,9 @@ def _load_determinations(
             else {}
         )
         for ev in evidence:
+            reconstructed = ev.reconstruction_calculation_id
+            if reconstructed is not None and reconstructed not in calc_ref and reconstructed not in outside_refs:
+                continue  # hidden == absent: evidence resting on a calculation the reader cannot open is no evidence row
             evidence_rows[scan.entry_id].append(
                 {
                     "kind": ev.kind,

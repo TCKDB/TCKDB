@@ -30,6 +30,21 @@ How a hidden ref is removed (:func:`withhold_in_model`)
    a ref in the wrong place (most likely a pointer the registry missed), so it raises :class:`RefGuardUnplaceable`
    and the registry gets fixed (D4).
 
+Selection documents
+-------------------
+A selection engine is a pure function of the facts its loader captured, and the manifest it writes is hashed, replayed
+and compared over those facts. Two kinds of nested ref are handled differently, per position:
+
+* **Evidence** (a supporting or protocol calculation, an energy source, a network solve, a validation reference, an
+  anchoring group): a record the reader cannot open reads as **unavailable**, exactly like a reference to nothing
+  (hidden == unknown). The loader leaves it out (:func:`unavailable_refs`), nothing stands in its place, and counts follow;
+  the curated decision may differ from the exploratory one, which is intended. The proof is hidden == absent.
+* **Identity** (a determination's target, a candidate's own target group, a supersession pointer): the engine needs the
+  ref to compare or partition. Every such hidden ref in the captured facts becomes a placeholder token (``withheld:<n>``,
+  :data:`WITHHELD_TOKEN_RE`, :func:`withhold_in_document` with ``mode="placeholder"``) *before* anything is assessed,
+  decided or hashed. ``n`` follows the sorted order of the real refs and one real ref has one token in a document, so
+  every equality survives and a replay of the manifest runs over the tokens and reproduces it byte for byte.
+
 Rollout
 -------
 :data:`_ENABLED_ROUTE_PREFIXES` lists the route families on which the hook withholds. PR-2a enables the
@@ -41,6 +56,8 @@ species-side families (:data:`SPECIES_SIDE_PREFIXES`) and PR-2b the transition-s
 from __future__ import annotations
 
 import copy
+import dataclasses
+import enum
 import functools
 import logging
 import re
@@ -423,6 +440,9 @@ class RefGuardContext:
     #: Times the hook actually withheld (families enabled, curated, not exempt).
     applied: int = 0
     reports: list[WithholdReport] = field(default_factory=list)
+    #: Selection documents that passed the loader to engine seam (:func:`withhold_selection_facts`), and what it did.
+    documents: int = 0
+    document_reports: list[WithholdReport] = field(default_factory=list)
 
 
 _CURRENT_CONTEXT: ContextVar[RefGuardContext | None] = ContextVar("tckdb_ref_guard_context", default=None)
@@ -541,7 +561,7 @@ class WithheldSite:
 @dataclass
 class WithholdReport:
     #: Document mode only: the withheld copy of the facts passed in (the input is never modified).
-    facts: list[dict] | None = None
+    facts: Any = None
     #: Document mode only: ``hidden ref -> token`` for the modes that replace a ref by a stand-in. Always empty in
     #: ``"null"`` mode (guard PR-3 fills it in ``"placeholder"`` mode).
     tokens: dict[str, str] = field(default_factory=dict)
@@ -953,7 +973,7 @@ def withhold_in_model(
     :class:`RefGuardUnplaceable` for a hidden ref that has nowhere safe to go, in either mode.
     """
     report = WithholdReport()
-    if profile.review_floor is None:
+    if not guard_active(profile):
         return report
     if not apply:
         # A dry run works on a copy, so what it reports (collapses included) is exactly what an applied run would do.
@@ -1011,7 +1031,7 @@ def _plan_document_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Actio
 
 def withhold_in_document(
     session: Session,
-    facts: list[dict],
+    facts: Any,
     *,
     profile: ResolvedReadProfile,
     mode: Literal["null", "placeholder"],
@@ -1031,7 +1051,17 @@ def withhold_in_document(
 
     - ``"null"`` (exports): a ref that is a *value* becomes ``None``; a ref that is a string *element of a list* is
       dropped from the list.
-    - ``"placeholder"`` (selection documents, PR-3): not implemented here; raises ``NotImplementedError``.
+    - ``"placeholder"`` (selection documents, PR-3): ``facts`` is whatever plain data a loader captured (frozen
+      dataclasses, tuples, dicts, lists, strings, nested), not only dicts, and is never mutated: the withheld copy shares
+      every subtree that held no hidden ref and is the very object passed in when nothing is hidden. A ref that is a whole
+      string value, or a dict key, becomes its token ``withheld:<n>``; ``n`` follows the **sorted order of the real refs**,
+      and one real ref has one token in a document. A composite ``<ref>/<channel key>`` in a field of
+      :data:`COMPOSITE_REF_FIELDS`, and only there, with a key that matches the strict channel-key grammar and names no
+      gated ref, has its ref replaced and its key kept. Any other string that names a hidden ref is blanked whole, to
+      ``""`` and never ``None``: the one exception to the "``None`` when nullable" rule, because a selection engine reads
+      the PRESENCE of such text (a torsion's ``invalidated_reason`` is tested with ``is not None``), and the
+      invalidation is the visible record's own claim about itself. The walker builds new immutable structures rather
+      than planning in-place actions, so it does not use the typed planner below.
 
     Rules every mode shares, so PR-3 inherits them:
 
@@ -1050,17 +1080,13 @@ def withhold_in_document(
     if mode not in ("null", "placeholder"):
         raise ValueError(f"mode must be 'null' or 'placeholder', not {mode!r}")
     if mode == "placeholder":
-        raise NotImplementedError(
-            "withhold_in_document(mode='placeholder') belongs to curated-guard PR-3 (selection documents); "
-            "this PR implements mode='null' for the export streams"
-        )
-    report = WithholdReport()
-    withheld = copy.deepcopy(facts)
-    report.facts = withheld
+        return _withhold_placeholders(session, facts, profile=profile)
+    report = WithholdReport(facts=facts)
     if not guard_active(profile):
         return report
+    # Read the documents first: nothing is copied unless something is withheld, and then ``report.facts`` is a copy.
     sites: list[tuple[tuple[_Frame, ...], str]] = []
-    for document in withheld:
+    for document in facts:
         sites.extend(_collect_sites(document))
     report.refs_seen = len(sites)
     if not sites:
@@ -1069,6 +1095,11 @@ def withhold_in_document(
     report.hidden |= {ref for _, ref in sites if ref == UNSETTLED_TEXT}
     if not report.hidden:
         return report
+    withheld = copy.deepcopy(facts)
+    report.facts = withheld
+    sites = []
+    for document in withheld:
+        sites.extend(_collect_sites(document))
     planned: dict[tuple[int, Any, str], _Action] = {}
     for path, ref in sites:
         if ref not in report.hidden:
@@ -1081,6 +1112,176 @@ def withhold_in_document(
             planned.setdefault((id(action.container), action.key, action.kind), action)
     _apply(list(planned.values()))
     return report
+
+
+#: What a hidden gated ref becomes inside a selection document. Not a ref: no route resolves it, no prefix matches it.
+WITHHELD_TOKEN_PREFIX = "withheld:"
+WITHHELD_TOKEN_RE = re.compile(r"^withheld:[1-9][0-9]*\Z")
+
+#: Fields of a selection fact whose value is ``<gated ref>/<channel key>``, compared for equality with the parts the engine
+#: holds elsewhere. Only these are ever rewritten (ref to token); a composite-looking value in any other field is prose.
+COMPOSITE_REF_FIELDS: frozenset[str] = frozenset({"network_channel_ref"})
+#: ``<gated ref>/<key>``, the key a channel key as the schema writes them (``assoc``, ``elim_alt``, ``ch-1.2``): letters,
+#: digits, ``.``, ``_`` and ``-``, starting with a letter or digit, no percent sign, no slash, no invisible character.
+_COMPOSITE_REF = re.compile("^((?:" + _GATED_PREFIX_ALT + r")_[a-z0-9]{26})(/[A-Za-z0-9][A-Za-z0-9._\-]*)\Z")
+
+
+def is_withheld_token(value: object) -> bool:
+    """Whether ``value`` is exactly one placeholder token."""
+    return isinstance(value, str) and WITHHELD_TOKEN_RE.match(value) is not None
+
+
+def _document_string_refs(value: str, key: Any) -> list[str]:
+    """Every gated ref a string value of a captured fact names (whole, composite or in free text)."""
+    if not value:
+        return []
+    return _refs_named_by(value, url_valued=_is_url_valued(key))
+
+
+def _rebuild(node: Any, changes: dict[Any, Any]) -> Any:
+    """``node`` with ``changes`` ({field name: new child}) applied, as a shallow copy; the original is never mutated."""
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        clone = copy.copy(node)
+        for name, value in changes.items():
+            object.__setattr__(clone, name, value)
+        return clone
+    if isinstance(node, BaseModel):
+        return node.model_copy(update=changes)
+    raise TypeError(f"cannot rebuild {type(node).__name__}")  # pragma: no cover
+
+
+def _transform(node: Any, key: Any, on_string, on_key) -> Any:
+    """Walk plain captured facts, passing every string through ``on_string(value, key)`` and every dict key through
+    ``on_key``, and return the result. A subtree that did not change is returned as the same object. Enums (including
+    ``str`` enums), numbers, datetimes and anything that is not plain data pass through untouched."""
+    if node is None or isinstance(node, (enum.Enum, bool, int, float, bytes)):
+        return node
+    if isinstance(node, str):
+        return on_string(node, key)
+    if isinstance(node, dict):
+        items = [(on_key(k) if isinstance(k, str) else k, _transform(v, k, on_string, on_key)) for k, v in node.items()]
+        unchanged = all(nk == k and nv is v for (nk, nv), (k, v) in zip(items, node.items(), strict=True))
+        return node if unchanged else dict(items)
+    if isinstance(node, (list, tuple, set, frozenset)):
+        children = list(node)
+        new = [_transform(c, key, on_string, on_key) for c in children]
+        if all(a is b for a, b in zip(children, new, strict=True)):
+            return node
+        if isinstance(node, list):
+            return new
+        return type(node)(new) if isinstance(node, (set, frozenset)) else tuple(new)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changes = {}
+        for f in dataclasses.fields(node):
+            value = getattr(node, f.name)
+            replaced = _transform(value, f.name, on_string, on_key)
+            if replaced is not value:
+                changes[f.name] = replaced
+        return _rebuild(node, changes) if changes else node
+    if isinstance(node, BaseModel):
+        changes = {}
+        for name in type(node).model_fields:
+            value = getattr(node, name)
+            replaced = _transform(value, name, on_string, on_key)
+            if replaced is not value:
+                changes[name] = replaced
+        return _rebuild(node, changes) if changes else node
+    return node
+
+
+def _withhold_placeholders(session: Session, facts: Any, *, profile: ResolvedReadProfile) -> WithholdReport:
+    """``mode="placeholder"`` of :func:`withhold_in_document`: hidden refs become ``withheld:<n>`` in a withheld copy."""
+    report = WithholdReport(facts=facts)
+    if not guard_active(profile):
+        return report
+    seen: dict[str, None] = {}
+
+    def collect_string(value: str, key: Any) -> str:
+        try:
+            for ref in _document_string_refs(value, key):
+                seen[ref] = None
+        except ValueError as exc:
+            # A URL-valued field the guard cannot read is refused, never kept (owner decision D4).
+            raise RefGuardUnplaceable("document", str(key), "?") from exc
+        return value
+
+    def collect_key(key: str) -> str:
+        if len(key) <= 40 and GATED_REF_RE.match(key):
+            seen[key] = None
+        return key
+
+    _transform(facts, None, collect_string, collect_key)
+    report.refs_seen = len(seen)
+    if not seen:
+        return report
+    hidden = hidden_refs(session, set(seen), profile=profile, unknown_is_hidden=True)
+    if not hidden:
+        return report
+    report.hidden = set(hidden)
+    tokens = {ref: f"{WITHHELD_TOKEN_PREFIX}{n}" for n, ref in enumerate(sorted(hidden), start=1)}
+    report.tokens = tokens
+
+    def blanked(value: str, key: Any) -> str:
+        report.blanked.append(WithheldSite(value, str(key), "blank_free_text"))
+        return ""
+
+    def replace_string(value: str, key: Any) -> str:
+        named = _document_string_refs(value, key)
+        if UNSETTLED_TEXT in named:
+            return blanked(value, key)  # text whose encoding never settles is blanked, never kept
+        if not any(ref in tokens for ref in named):
+            return value
+        if value.strip() in tokens:
+            return tokens[value.strip()]
+        composite = _COMPOSITE_REF.match(value) if isinstance(key, str) and key in COMPOSITE_REF_FIELDS else None
+        if composite is not None and composite.group(1) in tokens and not _free_text_refs(composite.group(2)):
+            # ``<ref>/<channel key>`` in a registered field and exactly that: the key names no gated ref (hidden or not,
+            # under the same boundary matcher as everywhere), so the ref becomes its token and the key stays.
+            return tokens[composite.group(1)] + composite.group(2)
+        # Any other string that names a hidden ref (prose, a depositor URL) is blanked whole, to ``""`` and never ``None``:
+        # an engine may read the PRESENCE of the text, and replacing the ref inside it would have to find it through
+        # percent-encoding and invisible characters again (a miss leaves the ref in place).
+        return blanked(value, key)
+
+    def replace_key(key: str) -> str:
+        return tokens.get(key, key)
+
+    report.facts = _transform(facts, None, replace_string, replace_key)
+    return report
+
+
+def unavailable_refs(session: Session, refs: Collection[str]) -> set[str]:
+    """Refs a selection treats as unavailable under the profile in force: hidden, or naming no row.
+
+    Hidden == unknown: evidence that points at a record the reader cannot open reads exactly like evidence that points at
+    nothing. Empty (and no statement) without a review floor, so an exploratory selection is unchanged; a release-backed
+    profile is left alone as everywhere in the guard. ``session`` is the selection's own snapshot session.
+    """
+    profile = current_read_profile()
+    if not guard_active(profile) or not refs:
+        return set()
+    return hidden_refs(session, refs, profile=profile, unknown_is_hidden=True)
+
+
+def withhold_selection_facts(session: Session, facts: Any) -> Any:
+    """The seam every selection engine calls once, between its loader and its assessment.
+
+    Reads the profile in force; with no review floor (exploratory, the default) or a release-backed profile it returns
+    ``facts`` untouched and runs no statement. ``session`` must be the selection's own snapshot session, so visibility
+    comes from the same state as the population. Returns the facts with hidden refs tokenised; the report is recorded on
+    the request's guard context when there is one (the sweep's spy counts the call as reaching the boundary).
+    """
+    ctx = _CURRENT_CONTEXT.get()
+    if ctx is not None:
+        ctx.documents += 1
+    profile = current_read_profile()
+    if not guard_active(profile):
+        return facts
+    report = withhold_in_document(session, facts, profile=profile, mode="placeholder")
+    if ctx is not None:
+        ctx.document_reports.append(report)
+    return report.facts
+
 
 
 def refuse_hidden_refs_in_text(session: Session, texts: Mapping[str, str], *, profile: ResolvedReadProfile) -> None:
@@ -1157,6 +1358,7 @@ def withhold_for_current_request(payload: BaseModel) -> None:
 
 __all__ = [
     "ALIGNED_ID_LISTS",
+    "COMPOSITE_REF_FIELDS",
     "EXEMPT_ROUTE_PREFIXES",
     "GATED_REF_RE",
     "GATED_TYPES",
@@ -1166,6 +1368,8 @@ __all__ = [
     "SPECIES_SIDE_PREFIXES",
     "TS_REACTION_PREFIXES",
     "UNGATED_REVIEWABLE",
+    "WITHHELD_TOKEN_PREFIX",
+    "WITHHELD_TOKEN_RE",
     "GatedType",
     "RefGuardContext",
     "RefGuardUnplaceable",
@@ -1174,11 +1378,14 @@ __all__ = [
     "current_ref_guard_context",
     "guard_active",
     "hidden_refs",
+    "is_withheld_token",
     "refuse_hidden_refs_in_text",
     "reset_ref_guard_context",
     "route_matches",
     "set_ref_guard_context",
+    "unavailable_refs",
     "withhold_for_current_request",
     "withhold_in_document",
     "withhold_in_model",
+    "withhold_selection_facts",
 ]

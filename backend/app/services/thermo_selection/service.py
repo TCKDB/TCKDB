@@ -22,6 +22,8 @@ from app.db.models.species import ConformerGroup
 from app.db.models.thermo import Thermo
 from app.services.calculation_ownership import assert_owned_by
 from app.services.read_snapshot import begin_read_snapshot
+from app.services.scientific_read.ref_guard import withhold_selection_facts
+from app.services.selection_kernel.evidence_view import evidence_subject
 from app.services.structure_selection.source_findings import assess_source_findings, thermo_uses
 from app.services.thermo_declaration_resolution import W_THERMO_TARGET_GROUP_OWNER_MISMATCH
 from app.services.thermo_selection.assessment import assess_candidate
@@ -119,11 +121,14 @@ def select_h298(
         )
 
     loaded = load_population(session, scan)
+    # The loader to engine seam (guard PR-3): a hidden ref in the captured facts becomes a placeholder token BEFORE the
+    # candidates are assessed, ordered, decided or written to the manifest. The engine is pure over these facts.
+    loaded.subject, loaded.candidates = withhold_selection_facts(session, (loaded.subject, loaded.candidates))
     assessments: list[CandidateAssessment] = []
     rows = []
-    source_findings = assess_source_findings(session, {t.id: thermo_uses(t) for t in loaded.rows})
+    source_findings = assess_source_findings(session, {t.id: thermo_uses(t, loaded.unavailable) for t in loaded.rows})
     for thermo in loaded.rows:
-        evidence = evaluate_loaded_thermo(thermo) if thermo.scientific_origin is ScientificOriginKind.computed else None
+        evidence = evaluate_loaded_thermo(evidence_subject(thermo, loaded.unavailable)) if thermo.scientific_origin is ScientificOriginKind.computed else None
         assessment = assess_candidate(
             thermo, request=request, evidence=evidence, source_findings=source_findings[thermo.id]
         )

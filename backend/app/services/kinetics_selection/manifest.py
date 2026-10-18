@@ -40,7 +40,10 @@ from app.services.selection_kernel.assessment_semantics import (
 )
 from app.services.trust.rubrics import COMPUTED_KINETICS_V2
 
-MANIFEST_FORMAT_VERSION = 1
+#: 2: a hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor (guard
+#: PR-3). A format-1 manifest, made before that, still replays: replay only compares the refs it is given with each other.
+MANIFEST_FORMAT_VERSION = 2
+SUPPORTED_MANIFEST_FORMATS = frozenset({1, MANIFEST_FORMAT_VERSION})
 
 
 class ReplayError(ValueError):
@@ -121,7 +124,7 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] |
         manifest, is not what the running registry carries; or if the manifest contradicts itself (a record's
         recorded eligibility, or the determinations it says the eligible records form).
     """
-    if manifest.get("manifest_format_version") != MANIFEST_FORMAT_VERSION:
+    if manifest.get("manifest_format_version") not in SUPPORTED_MANIFEST_FORMATS:
         raise ReplayError(f"unknown manifest format {manifest.get('manifest_format_version')!r}")
     if manifest["policy"] != {"name": POLICY_NAME, "version": POLICY_VERSION}:
         raise ReplayError(

@@ -300,7 +300,7 @@ def test_assessment_semantics_are_never_substituted_with_the_current_ones():
     refused("unsupported_assessment_semantics", reproduce_statmech_ordering, retamper(manifest, lambda b: b["assessment_semantics"].update(version="0")))
     refused("unsupported_assessment_semantics", reproduce_statmech_ordering, retamper(manifest, lambda b: b.pop("assessment_semantics")))
     refused("unsupported_assessment_semantics", reproduce_statmech_ordering, retamper(manifest, lambda b: b.update(assessment_semantics="x")))
-    refused("unsupported_manifest_format", reproduce_statmech_ordering, retamper(manifest, lambda b: b.update(manifest_format_version=2)))
+    refused("unsupported_manifest_format", reproduce_statmech_ordering, retamper(manifest, lambda b: b.update(manifest_format_version=99)))
 
 
 @pytest.mark.parametrize("name", ["assessment", "normalizer", "finding_semantics"])

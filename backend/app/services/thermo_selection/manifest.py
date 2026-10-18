@@ -37,6 +37,7 @@ from app.services.thermo_selection.models import (
     QUANTITY,
     REFERENCE_TEMPERATURE_K,
     SUPPORTED_ASSESSMENT_SEMANTICS,
+    SUPPORTED_MANIFEST_FORMATS,
     CandidateAssessment,
     Decision,
     H298Request,
@@ -114,7 +115,7 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule]
     :raises ReplayError: if the manifest's format, policy version or a rule version is not carried by
         the running registry.
     """
-    if manifest.get("manifest_format_version") != MANIFEST_FORMAT_VERSION:
+    if manifest.get("manifest_format_version") not in SUPPORTED_MANIFEST_FORMATS:
         raise ReplayError(f"unknown manifest format {manifest.get('manifest_format_version')!r}")
     if manifest["policy"] != {"name": POLICY_NAME, "version": POLICY_VERSION}:
         raise ReplayError(f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} v{POLICY_VERSION}")

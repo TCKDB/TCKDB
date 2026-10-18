@@ -501,7 +501,7 @@ def _assert_integers_are_pinned(doc, *, is_manifest, curated):
     if is_manifest:
         population = doc["population"]
         pinned.update({
-            "manifest_format_version": lambda v: v == [1],
+            "manifest_format_version": lambda v: v == [2],
             "candidates[].id_rank": lambda v: sorted(v) == list(range(1, len(candidates) + 1)),
             "population.visible_candidates": lambda v: v == [len(candidates)],
             "population.assessed": lambda v: v == [len(candidates)],
