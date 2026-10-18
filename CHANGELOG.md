@@ -22,6 +22,26 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curated exports no longer name hidden records (2026-10-18)
+
+**Narrowing under `profile=curated` only; the default (exploratory) output is byte-identical.** Migration: none. New environment variable:
+none. `tckdb-schemas` and `tckdb-client` unchanged.
+
+- The four export streams (`/export/ndjson`, `/export/ml/species.ndjson`, `/export/ml/reactions.ndjson`,
+  `/export/chemkin`) bypassed the response boundary and could name records whose own route answers 404. They now reach the
+  ref guard through a document seam: record dicts are buffered 200 at a time and withheld in untyped mode (one visibility
+  statement per batch). A withheld ref is `null` in an export, a hidden ref in a list of strings is dropped, free text that
+  names one is blanked. Exports have no placeholders.
+- Where a hidden record supplied a *value* it is left out before anything is derived: a hidden calculation or statmech record
+  is no longer a linearity witness (NDJSON `is_linear*`, CHEMKIN transport comments), a hidden calculation's energy,
+  frequencies, Hessian, geometry and conformer links are not in the ML species records, and a hidden calculation or
+  transition-state entry no longer sets or names the ML reaction barrier. A visible transition-state entry of a hidden
+  transition state keeps its entry and has a `null` owner. Gap and skip counts follow the floor.
+- The profile is captured before a generator is returned and passed down explicitly (the ML streams used to read it on first
+  iteration, and the thermo/transport/kinetics selection read the context variable). The sweep's `KNOWN_UNGUARDED` and
+  baseline entries for the four exports are gone.
+- Release artifacts and `/releases/*` are untouched (they carry their own digest; the export streams carry none).
+
 ## Curated reads of the network, literature, analytics and provenance routes no longer name hidden records (2026-10-18)
 
 **Narrowing under `profile=curated` only; the default (exploratory) output is unchanged.** Migration: none. New environment variable:

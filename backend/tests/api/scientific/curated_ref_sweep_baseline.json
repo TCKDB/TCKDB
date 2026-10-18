@@ -1,9 +1,6 @@
 {
  "hidden_id_leaks": [],
  "hidden_ref_leaks": [
-  "GET /api/v1/scientific/export/ml/reactions.ndjson :: ts_hw @ line[*].transition_state.transition_state_ref",
-  "GET /api/v1/scientific/export/ml/reactions.ndjson :: tse_hw @ line[*].transition_state.transition_state_entry_ref",
-  "GET /api/v1/scientific/export/ml/species.ndjson :: cg_h @ line[*].conformer_group_refs[*]",
   "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select :: calc_h @ candidates[*].protocol.supporting_calculations[*].calculation_ref",
   "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest :: calc_h @ candidates[*].protocol.supporting_calculations[*].calculation_ref",
   "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest :: calc_h_tssp @ candidates[*].energy_levels[*].calculation_ref",

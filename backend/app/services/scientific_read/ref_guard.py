@@ -682,7 +682,7 @@ def _refs_named_by(value: str, *, url_valued: bool = False) -> list[str]:
     return found
 
 
-def _collect_sites(root: BaseModel) -> list[tuple[tuple[_Frame, ...], str]]:
+def _collect_sites(root: BaseModel | dict) -> list[tuple[tuple[_Frame, ...], str]]:
     sites: list[tuple[tuple[_Frame, ...], str]] = []
     stack: list[tuple[Any, tuple[_Frame, ...]]] = [(root, ())]
     while stack:
@@ -939,6 +939,96 @@ def withhold_in_model(
 
 
 # ---------------------------------------------------------------------------
+# Untyped documents (the export streams)
+# ---------------------------------------------------------------------------
+
+
+def _plan_document_site(path: tuple[_Frame, ...], ref: str) -> tuple[list[_Action], WithheldSite]:
+    """Untyped mode: a plain dict/list has no pointer registry and no field traits, so only two removals exist.
+
+    * a hidden ref that is a VALUE becomes ``None`` (free text that names one is blanked whole, to ``None``);
+    * a hidden ref that is a string ELEMENT of a list is dropped from the list.
+
+    A hidden ref used as a dict KEY has nowhere to go and fails closed (:class:`RefGuardUnplaceable`).
+    """
+    text = _path_text(path)
+    holder, key = path[-1]
+    if isinstance(key, _DictKey):
+        raise RefGuardUnplaceable(type(holder).__name__, f"{text}<dict key>", ref.split("_", 1)[0])
+    if isinstance(ref, _FreeRef):
+        if isinstance(holder, dict):
+            return [_Action("null", holder, key)], WithheldSite(ref, text, "blank_free_text")
+        if isinstance(holder, list):
+            return [_Action("delete", holder, key)], WithheldSite(ref, text, "blank_free_text")
+        raise RefGuardUnplaceable(type(holder).__name__, text, ref.split("_", 1)[0])
+    if isinstance(holder, dict):
+        return [_Action("null", holder, key)], WithheldSite(ref, text, "null_untyped")
+    if isinstance(holder, list):
+        return [_Action("delete", holder, key)], WithheldSite(ref, text, "delete_list_element")
+    raise RefGuardUnplaceable(type(holder).__name__, text, ref.split("_", 1)[0])
+
+
+def withhold_in_document(
+    session: Session,
+    documents: list[dict],
+    *,
+    profile: ResolvedReadProfile,
+) -> WithholdReport:
+    """Remove every ref the profile hides from a batch of plain dicts, in place (untyped mode).
+
+    For documents that are not response models: the export streams' records. ``profile`` is passed in, never read
+    from the request context, because a stream outlives the request. ``session`` is the one that read the rows, so
+    visibility is judged from the same snapshot. One visibility statement per call, however many documents.
+
+    Under the exploratory profile (no floor) and a release-backed profile this does nothing and issues no statement.
+    """
+    report = WithholdReport()
+    if profile.review_floor is None or profile.recommendation is ProfileRecommendation.tckdb_curated_release:
+        return report
+    sites: list[tuple[tuple[_Frame, ...], str]] = []
+    for document in documents:
+        sites.extend(_collect_sites(document))
+    report.refs_seen = len(sites)
+    if not sites:
+        return report
+    report.hidden = hidden_refs(session, {ref for _, ref in sites}, profile=profile)
+    report.hidden |= {ref for _, ref in sites if ref == UNSETTLED_TEXT}
+    if not report.hidden:
+        return report
+    planned: dict[tuple[int, Any, str], _Action] = {}
+    for path, ref in sites:
+        if ref not in report.hidden:
+            continue
+        actions, site = _plan_document_site(path, ref)
+        report.sites.append(site)
+        for action in actions:
+            planned.setdefault((id(action.container), action.key, action.kind), action)
+    _apply(list(planned.values()))
+    return report
+
+
+def refuse_hidden_refs_in_text(session: Session, texts: Mapping[str, str], *, profile: ResolvedReadProfile) -> None:
+    """Fail closed when generated text (the CHEMKIN files) names a hidden ref.
+
+    Text has no structure to withhold from, so a hidden ref in it is a bug in whatever produced it (a source that
+    should have been filtered), and the export is refused rather than emitted. ``texts`` maps a file name to its text.
+    """
+    if profile.review_floor is None or profile.recommendation is ProfileRecommendation.tckdb_curated_release:
+        return
+    found: dict[str, str] = {}
+    for name, text in texts.items():
+        for ref in _refs_in_text(text) if _REF_ANYWHERE.search(text) or "%" in text else []:
+            found.setdefault(ref, name)
+    if not found:
+        return
+    hidden = hidden_refs(session, set(found), profile=profile)
+    if hidden:
+        ref = sorted(hidden)[0]
+        logger.error("ref_guard_unplaceable_text file=%s prefix=%s", found[ref], ref.split("_", 1)[0])
+        raise RefGuardUnplaceable("text", found[ref], ref.split("_", 1)[0])
+
+
+# ---------------------------------------------------------------------------
 # Boundary hook
 # ---------------------------------------------------------------------------
 
@@ -1001,9 +1091,11 @@ __all__ = [
     "WithholdReport",
     "current_ref_guard_context",
     "hidden_refs",
+    "refuse_hidden_refs_in_text",
     "reset_ref_guard_context",
     "route_matches",
     "set_ref_guard_context",
     "withhold_for_current_request",
+    "withhold_in_document",
     "withhold_in_model",
 ]

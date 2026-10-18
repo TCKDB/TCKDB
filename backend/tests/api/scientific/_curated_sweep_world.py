@@ -474,6 +474,9 @@ def build_sweep_world(session) -> SweepWorld:
     # ---- PR-2c: the network, literature, level-of-theory, correction and analytics families -------------------------
     _extend_for_network_and_provenance_family(session, w, lot=lot, lit=lit, sa=sa, rxe=rxe)
 
+    # ---- PR-4: the export streams ---------------------------------------------------------------------------------------
+    _extend_for_export_family(session, w, lot=lot, rxe=rxe, r1=r1, r2=r2, tse_v2=tse_v2)
+
     # ---- review states: hidden ones first (under_review for some), approvals last ---------------------------------
     under_review_keys = {"cg_h", "ts_h", "sm_h", "net_h", "kin_h", "tse_h"}
     kind_to_type = {
@@ -996,6 +999,120 @@ def _extend_for_ts_and_reaction_family(
     attach_dependency(session, parent=calc_h_psp, child=calc_vp_opt, role=CalculationDependencyRole.optimized_from)
     vis["ts_vp"], vis["tse_vp"], vis["calc_vp_opt"] = ts_vp, tse_vp, calc_vp_opt
     hid["calc_h_psp"] = calc_h_psp
+
+
+_LINEAR_XYZ = "3\n\nO 0.0 0.0 -1.16\nC 0.0 0.0 0.0\nO 0.0 0.0 1.16\n"
+_BENT_XYZ = "3\n\nO 0.0 0.0 0.0\nH 0.76 0.59 0.0\nH -0.76 0.59 0.0\n"
+
+
+def _extend_for_export_family(session, w: SweepWorld, *, lot, rxe, r1, r2, tse_v2) -> None:
+    """A hidden record in every position the four export streams can name one (PR-4).
+
+    Before this the exports met the hidden records of the older families only, and the one hidden transition state
+    they named came from a reaction whose every record was hidden. Now:
+
+    * ``sx``: a hidden calculation that is the only linearity witness of a visible transport (its input geometry is
+      collinear), that carries an energy, a frequency block and a Hessian beside a visible calculation of the same
+      species, and a hidden single point at the same geometry;
+    * ``sy``: a visible transport whose only witnesses are two statmech records that disagree about linearity, one of
+      them hidden (a *conflict* that names the hidden one);
+    * ``sz``: a visible statmech whose only link to the transport is a hidden calculation;
+    * ``sg``: a species whose only thermo record is hidden (an export reports a gap exactly as for a species with none);
+    * the reaction entry ``rxe``: a hidden single point on a visible transition-state entry that is the lowest TS
+      energy (it would set the barrier), with reactant energies at the same level of theory; and a reaction whose
+      selected transition-state entry is visible but whose transition state is hidden.
+    """
+    from tests.services.scientific_read._factories import (
+        attach_hessian,
+        attach_input_geometry,
+        attach_sp_result,
+    )
+
+    hid, vis, ext = w.hidden, w.visible, w.extra
+
+    def entry(tag):
+        return make_species_entry(session, make_species(session, inchi_key=next_inchi_key(tag)))
+
+    def geometry(xyz, symbols, coords):
+        g = make_geometry(session, xyz_text=xyz)
+        attach_geometry_atoms(session, geometry=g, symbols=symbols, coords=coords)
+        return g
+
+    # -- sx --------------------------------------------------------------------------------------------------------------
+    sx = entry("SWX")
+    g_lin = geometry(_LINEAR_XYZ, ["O", "C", "O"], [[0, 0, -1.16], [0, 0, 0], [0, 0, 1.16]])
+    g_bent = geometry(_BENT_XYZ, ["O", "H", "H"], [[0, 0, 0], [0.76, 0.59, 0], [-0.76, 0.59, 0]])
+    calc_h_xlin = make_calculation(session, type=CalculationType.freq, species_entry_id=sx.id, lot_id=lot.id)
+    attach_input_geometry(session, calculation=calc_h_xlin, geometry=g_lin)
+    attach_freq_result(session, calculation=calc_h_xlin, frequencies_cm1=[600.0, 600.0, 1300.0, 2400.0], zpe_hartree=0.01)
+    attach_hessian(session, calculation=calc_h_xlin, geometry=g_lin, natoms=3)
+    calc_h_xsp = make_calculation(session, type=CalculationType.sp, species_entry_id=sx.id, lot_id=lot.id)
+    attach_input_geometry(session, calculation=calc_h_xsp, geometry=g_lin)
+    attach_sp_result(session, calculation=calc_h_xsp, electronic_energy_hartree=-188.5)
+    calc_xv = make_calculation(session, type=CalculationType.sp, species_entry_id=sx.id, lot_id=lot.id)
+    attach_input_geometry(session, calculation=calc_xv, geometry=g_bent)
+    attach_sp_result(session, calculation=calc_xv, electronic_energy_hartree=-76.4)
+    trx_v = make_transport(session, species_entry=sx)
+    attach_transport_source_calculation(session, transport=trx_v, calculation=calc_h_xlin)
+    hid["calc_h_xlin"], hid["calc_h_xsp"] = calc_h_xlin, calc_h_xsp
+    vis["calc_xv"], vis["trn_xv"] = calc_xv, trx_v
+
+    # -- sy: two statmech records that disagree, one hidden ----------------------------------------------------------------
+    sy = entry("SWY")
+    calc_yv = make_calculation(session, type=CalculationType.freq, species_entry_id=sy.id, lot_id=lot.id)
+    try_v = make_transport(session, species_entry=sy)
+    attach_transport_source_calculation(session, transport=try_v, calculation=calc_yv)
+    sm_h_y = make_statmech(session, species_entry=sy, is_linear=True)
+    sm_v_y = make_statmech(session, species_entry=sy, is_linear=False)
+    for sm in (sm_h_y, sm_v_y):
+        attach_statmech_source_calculation(session, statmech=sm, calculation=calc_yv, role=StatmechCalculationRole.freq)
+    vis["calc_yv"], vis["trn_yv"], vis["sm_v_y"] = calc_yv, try_v, sm_v_y
+    hid["sm_h_y"] = sm_h_y
+
+    # -- sz: a visible statmech reachable only through a hidden calculation ---------------------------------------------------
+    sz = entry("SWZ")
+    calc_h_zh = make_calculation(session, type=CalculationType.freq, species_entry_id=sz.id, lot_id=lot.id)
+    trz_v = make_transport(session, species_entry=sz)
+    attach_transport_source_calculation(session, transport=trz_v, calculation=calc_h_zh)
+    sm_v_z = make_statmech(session, species_entry=sz, is_linear=True)
+    attach_statmech_source_calculation(session, statmech=sm_v_z, calculation=calc_h_zh, role=StatmechCalculationRole.freq)
+    vis["trn_zv"], vis["sm_v_z"] = trz_v, sm_v_z
+    hid["calc_h_zh"] = calc_h_zh
+
+    # -- sg: a species whose only thermo is hidden (the export gap count must follow the floor) ---------------------------
+    sg = entry("SWG")
+    thm_h_g = make_thermo_scalar(session, species_entry=sg, h298_kj_mol=-11.0)
+    hid["thm_h_g"] = thm_h_g
+    ext["species_entry_hidden_thermo_only"] = sg
+    ext["scoping_approved_extra"].append((R.species_entry, sg))
+
+    # -- ML reactions: TS energy and barrier ----------------------------------------------------------------------------------
+    for reactant, energy in ((r1, -50.0), (r2, -40.0)):
+        calc_r = make_calculation(session, type=CalculationType.sp, species_entry_id=reactant.id, lot_id=lot.id)
+        attach_sp_result(session, calculation=calc_r, electronic_energy_hartree=energy)
+        vis[f"calc_r{reactant.id}"] = calc_r
+    calc_ts_vsp = make_calculation(session, type=CalculationType.sp, transition_state_entry_id=tse_v2.id, lot_id=lot.id)
+    attach_sp_result(session, calculation=calc_ts_vsp, electronic_energy_hartree=-89.0)
+    calc_h_xts = make_calculation(session, type=CalculationType.sp, transition_state_entry_id=tse_v2.id, lot_id=lot.id)
+    attach_sp_result(session, calculation=calc_h_xts, electronic_energy_hartree=-91.0)
+    vis["calc_ts_vsp"] = calc_ts_vsp
+    hid["calc_h_xts"] = calc_h_xts
+
+    # -- ML reactions: a visible transition-state entry whose transition state is hidden -------------------------------------
+    dr, dp = entry("SWD1"), entry("SWD2")
+    reaction_d = make_chem_reaction(session, reactants=[dr.species], products=[dp.species], reversible=False)
+    rxe_d = make_reaction_entry(session, reaction=reaction_d, reactant_entries=[dr], product_entries=[dp])
+    ts_h_x = make_transition_state(session, reaction_entry=rxe_d, label="hidden-owner-of-visible-entry")
+    tse_xd = make_transition_state_entry(session, transition_state=ts_h_x)
+    hid["ts_h_x"] = ts_h_x
+    vis["tse_xd"] = tse_xd
+    ext["reaction_entry_hidden_ts_owner"] = rxe_d
+    ext["species_entry_export"] = sx
+    ext["species_entry_conflict"], ext["species_entry_hidden_link"] = sy, sz
+    ext["scoping_approved_extra"].extend(
+        [(R.species_entry, sx), (R.species_entry, sy), (R.species_entry, sz), (R.reaction_entry, rxe_d)]
+    )
+    session.flush()
 
 
 def _extend_for_network_and_provenance_family(session, w: SweepWorld, *, lot, lit, sa, rxe) -> None:

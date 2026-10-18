@@ -226,6 +226,21 @@ _RELATIVE_ENERGIES_COMPARE = _post(
 
 #: ``(method, route template)`` -> list of input variants, each ``{"query": {...}, "json": {...}}`` (GET uses the
 #: query, POST the JSON). A route absent from this map is crawled once with no extra input (empty JSON for POSTs).
+def _export_species_refs(w: SweepWorld) -> list[str]:
+    """The species entries the exports are seeded with beside ``all``: the ones holding hidden thermo, statmech,
+    transport witnesses, calculations and conformers (none of them is a participant of a reaction)."""
+    return [
+        w.extra[key].public_ref
+        for key in (
+            "species_entry",
+            "species_entry_export",
+            "species_entry_conflict",
+            "species_entry_hidden_link",
+            "species_entry_hidden_thermo_only",
+        )
+    ]
+
+
 ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]] = {
     **{(m, f"{BASE}/{name}/search"): _search(*makers) for name, makers in _SEARCHES.items() for m in ("GET", "POST")},
     **{
@@ -259,15 +274,29 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
     ("POST", f"{BASE}/networks/{{network_ref_or_id}}/kinetics/evaluate"): _post(
         lambda w: {"temperature_k": [1000.0], "pressure_bar": [1.0]}
     ),
-    ("GET", f"{BASE}/export/ndjson"): lambda w: [{"query": {"all": True, "min_review_status": "not_reviewed"}}],
+    ("GET", f"{BASE}/export/ndjson"): lambda w: [
+        {"query": {"all": True, "species_ref": _export_species_refs(w), "min_review_status": "not_reviewed"}},
+        # Every candidate, not the first: the hidden thermo and kinetics records are candidates too.
+        {
+            "query": {
+                "all": True,
+                "species_ref": _export_species_refs(w),
+                "min_review_status": "not_reviewed",
+                "collapse": "all",
+            }
+        },
+    ],
     ("GET", f"{BASE}/export/ml/species.ndjson"): lambda w: [
-        {"query": {"all": True, "min_review_status": "not_reviewed"}}
+        {"query": {"all": True, "min_review_status": "not_reviewed", "include_hessian": True}}
     ],
     ("GET", f"{BASE}/export/ml/reactions.ndjson"): lambda w: [
         {"query": {"all": True, "min_review_status": "not_reviewed"}}
     ],
     ("POST", f"{BASE}/export/chemkin"): _post(
-        lambda w: {"seed": {"all_reactions": True}, "min_review_status": "not_reviewed"}
+        lambda w: {
+            "seed": {"all_reactions": True, "species_refs": _export_species_refs(w)},
+            "min_review_status": "not_reviewed",
+        }
     ),
     ("POST", f"{BASE}/reaction-entries/{{reaction_entry_ref}}/kinetics/select"): _KINETICS_SELECT,
     ("POST", f"{BASE}/reaction-entries/{{reaction_entry_ref}}/kinetics/select/manifest"): _KINETICS_SELECT,

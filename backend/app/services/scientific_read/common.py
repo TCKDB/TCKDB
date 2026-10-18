@@ -648,19 +648,22 @@ def review_hidden_under_profile(
     return badges, {rid for rid, b in badges.items() if status_hidden_under_profile(b.status)}
 
 
-def review_floor_predicate(id_column: Any, record_type: SubmissionRecordType) -> Any:
+def review_floor_predicate(id_column: Any, record_type: SubmissionRecordType, *, profile: Any = None) -> Any:
     """A SQL condition true for the rows of ``record_type`` the active profile's review floor leaves visible.
 
     ``id_column`` is the column holding the record id (``Calculation.id``, or a foreign key such as
     ``Evidence.reconstruction_calculation_id``). Returns ``None`` when there is no floor (the default profile) or the
     floor hides nothing, so a caller adds no condition and its statement is unchanged.
 
+    ``profile`` defaults to the request's. A streaming caller, which outlives the request context, passes the profile it
+    captured while the request was alive.
+
     Owner decision D5: a count or flag that would say a hidden record exists ("this entry has an IRC", "3 calculations")
     answers what the list endpoint would show. A missing review row reads as ``not_reviewed``, as everywhere else.
     """
     from app.services.scientific_read.handles import status_hidden_under_profile
 
-    profile = current_read_profile()
+    profile = profile if profile is not None else current_read_profile()
     if profile.review_floor is None:
         return None
     hidden = [s for s in RecordReviewStatus if status_hidden_under_profile(s, profile=profile)]

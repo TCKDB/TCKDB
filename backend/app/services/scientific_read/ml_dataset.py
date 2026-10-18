@@ -103,8 +103,11 @@ from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
 from app.services.scientific_read import export as export_core
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    review_floor_predicate,
     visible_statuses,
+    where_visible,
 )
+from app.services.scientific_read.export_withhold import WithheldBatcher
 from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.scientific_read.profile import (
     ResolvedReadProfile,
@@ -574,6 +577,7 @@ def _species_thermo_block(
     species_entry_id: int,
     *,
     min_review_status: RecordReviewStatus | None,
+    profile: ResolvedReadProfile,
 ) -> dict | None:
     """Species-scoped thermo summary, selected with the read-time trust policy.
 
@@ -590,6 +594,7 @@ def _species_thermo_block(
         min_review_status=min_review_status,
         collapse=CollapseMode.first,
         selection_policy=SelectionPolicy.default,
+        profile=profile,
     )
     if not chosen:
         return None
@@ -649,6 +654,7 @@ def _build_species_records(
     lot_id_filter: int | None,
     lot_cache: dict[int, dict | None],
     geom_cache: dict[int, _GeometryPayload],
+    profile: ResolvedReadProfile,
 ) -> list[MLSpeciesRecord]:
     """Build the per-geometry ML records for one species entry."""
     entry = session.get(SpeciesEntry, species_entry_id)
@@ -659,10 +665,13 @@ def _build_species_records(
         return []
     review_status = _species_entry_review(session, species_entry_id)
 
+    # A calculation the profile hides is not part of this species' world: its energies, frequencies, Hessian,
+    # geometry and conformer links are left out, not blanked (hidden equals unknown).
     calcs = session.scalars(
-        select(Calculation)
-        .where(Calculation.species_entry_id == species_entry_id)
-        .order_by(Calculation.id)
+        where_visible(
+            select(Calculation).where(Calculation.species_entry_id == species_entry_id),
+            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile),
+        ).order_by(Calculation.id)
     ).all()
     if not calcs:
         return []
@@ -679,7 +688,7 @@ def _build_species_records(
         by_geometry.setdefault(gid, []).append(calc)
 
     thermo_block = _species_thermo_block(
-        session, species_entry_id, min_review_status=filters.min_review_status
+        session, species_entry_id, min_review_status=filters.min_review_status, profile=profile
     )
 
     records: list[MLSpeciesRecord] = []
@@ -784,6 +793,9 @@ def iter_ml_species_ndjson(
     streaming response has started.
     """
     filters = filters or MLFilters()
+    # Captured here, eagerly: the body of the generator below runs when the response is iterated, which can be after
+    # the request context (and the profile in it) is gone.
+    profile = current_read_profile()
     species_entry_ids = _resolve_species_entry_ids(
         session,
         species_refs=species_refs,
@@ -804,6 +816,7 @@ def iter_ml_species_ndjson(
         filters=filters,
         lot_id_filter=lot_id_filter,
         visible=visible,
+        profile=profile,
     )
 
 
@@ -814,11 +827,13 @@ def _stream_species(
     filters: MLFilters,
     lot_id_filter: int | None,
     visible: set[RecordReviewStatus],
+    profile: ResolvedReadProfile,
 ) -> Iterator[str]:
     generated_at = datetime.now(timezone.utc)
-    # Captured before the first yield: a streaming generator can outlive
-    # the request-scoped context the profile lives in.
-    resolved_profile = current_read_profile()
+    # ``profile`` was captured before the generator was returned: a streaming generator can outlive the
+    # request-scoped context the profile lives in, so the context variable is never read in here.
+    resolved_profile = profile
+    batcher = WithheldBatcher(session, profile)
     yield _dumps(
         {
             "record_type": "manifest",
@@ -849,10 +864,13 @@ def _stream_species(
             lot_id_filter=lot_id_filter,
             lot_cache=lot_cache,
             geom_cache=geom_cache,
+            profile=profile,
         )
         for record in records:
             n_species += 1
-            yield _dumps(record.to_ndjson()) + "\n"
+            yield from batcher.add(record.to_ndjson())
+
+    yield from batcher.flush()
 
     yield _dumps(
         {
@@ -962,7 +980,7 @@ def _species_entry_smiles(session: Session, species_entry_id: int) -> str | None
 
 
 def _species_entry_energy_at_lot(
-    session: Session, species_entry_id: int, lot_id: int
+    session: Session, species_entry_id: int, lot_id: int, profile: ResolvedReadProfile
 ) -> float | None:
     """Lowest electronic energy for a species entry at a specific LOT.
 
@@ -970,27 +988,34 @@ def _species_entry_energy_at_lot(
     energies. Used to assemble a same-LOT reactant energy sum for the
     electronic barrier.
     """
+    shown = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile)
     values: list[float] = []
     sp_rows = session.execute(
-        select(CalculationSPResult.electronic_energy_hartree)
-        .join(Calculation, Calculation.id == CalculationSPResult.calculation_id)
-        .where(
-            Calculation.species_entry_id == species_entry_id,
-            Calculation.lot_id == lot_id,
-            CalculationSPResult.electronic_energy_hartree.is_not(None),
+        where_visible(
+            select(CalculationSPResult.electronic_energy_hartree)
+            .join(Calculation, Calculation.id == CalculationSPResult.calculation_id)
+            .where(
+                Calculation.species_entry_id == species_entry_id,
+                Calculation.lot_id == lot_id,
+                CalculationSPResult.electronic_energy_hartree.is_not(None),
+            ),
+            shown,
         )
     ).all()
     values.extend(r[0] for r in sp_rows)
     if not values:
         opt_rows = session.execute(
-            select(CalculationOptResult.final_energy_hartree)
-            .join(
-                Calculation, Calculation.id == CalculationOptResult.calculation_id
-            )
-            .where(
-                Calculation.species_entry_id == species_entry_id,
-                Calculation.lot_id == lot_id,
-                CalculationOptResult.final_energy_hartree.is_not(None),
+            where_visible(
+                select(CalculationOptResult.final_energy_hartree)
+                .join(
+                    Calculation, Calculation.id == CalculationOptResult.calculation_id
+                )
+                .where(
+                    Calculation.species_entry_id == species_entry_id,
+                    Calculation.lot_id == lot_id,
+                    CalculationOptResult.final_energy_hartree.is_not(None),
+                ),
+                shown,
             )
         ).all()
         values.extend(r[0] for r in opt_rows)
@@ -998,7 +1023,7 @@ def _species_entry_energy_at_lot(
 
 
 def _ts_energy_candidates(
-    session: Session, ts_entry_id: int
+    session: Session, ts_entry_id: int, profile: ResolvedReadProfile
 ) -> list[tuple[float, int | None, Calculation]]:
     """Best TS electronic energy per LOT, ordered by energy ascending.
 
@@ -1008,20 +1033,28 @@ def _ts_energy_candidates(
     value wins. Callers walk this list to find a LOT with complete reactant
     coverage for the electronic barrier.
     """
+    # Hidden calculations are not candidates: their energies would otherwise set the barrier.
+    shown = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile)
     sp_rows = session.execute(
-        select(CalculationSPResult.electronic_energy_hartree, Calculation)
-        .join(Calculation, Calculation.id == CalculationSPResult.calculation_id)
-        .where(
-            Calculation.transition_state_entry_id == ts_entry_id,
-            CalculationSPResult.electronic_energy_hartree.is_not(None),
+        where_visible(
+            select(CalculationSPResult.electronic_energy_hartree, Calculation)
+            .join(Calculation, Calculation.id == CalculationSPResult.calculation_id)
+            .where(
+                Calculation.transition_state_entry_id == ts_entry_id,
+                CalculationSPResult.electronic_energy_hartree.is_not(None),
+            ),
+            shown,
         )
     ).all()
     opt_rows = session.execute(
-        select(CalculationOptResult.final_energy_hartree, Calculation)
-        .join(Calculation, Calculation.id == CalculationOptResult.calculation_id)
-        .where(
-            Calculation.transition_state_entry_id == ts_entry_id,
-            CalculationOptResult.final_energy_hartree.is_not(None),
+        where_visible(
+            select(CalculationOptResult.final_energy_hartree, Calculation)
+            .join(Calculation, Calculation.id == CalculationOptResult.calculation_id)
+            .where(
+                Calculation.transition_state_entry_id == ts_entry_id,
+                CalculationOptResult.final_energy_hartree.is_not(None),
+            ),
+            shown,
         )
     ).all()
 
@@ -1045,17 +1078,24 @@ def _ts_energy_candidates(
 
 
 def _select_ts_entry(
-    session: Session, reaction_entry_id: int
+    session: Session, reaction_entry_id: int, profile: ResolvedReadProfile
 ) -> TransitionStateEntry | None:
-    """Pick a representative TS entry for a reaction entry (lowest id, stable)."""
+    """Pick a representative TS entry for a reaction entry (lowest id, stable).
+
+    Among the entries the profile shows: a hidden entry is not in the population, so it is neither picked nor named.
+    """
     return session.scalars(
-        select(TransitionStateEntry)
-        .join(
-            TransitionState,
-            TransitionState.id == TransitionStateEntry.transition_state_id,
-        )
-        .where(TransitionState.reaction_entry_id == reaction_entry_id)
-        .order_by(TransitionStateEntry.id)
+        where_visible(
+            select(TransitionStateEntry)
+            .join(
+                TransitionState,
+                TransitionState.id == TransitionStateEntry.transition_state_id,
+            )
+            .where(TransitionState.reaction_entry_id == reaction_entry_id),
+            review_floor_predicate(
+                TransitionStateEntry.id, SubmissionRecordType.transition_state_entry, profile=profile
+            ),
+        ).order_by(TransitionStateEntry.id)
     ).first()
 
 
@@ -1064,6 +1104,7 @@ def _kinetics_blocks(
     reaction_entry_id: int,
     *,
     min_review_status: RecordReviewStatus | None,
+    profile: ResolvedReadProfile,
 ) -> list[dict]:
     """Selected Arrhenius kinetics for a reaction entry (read-time trust policy)."""
     from app.db.models.kinetics import Kinetics
@@ -1077,6 +1118,7 @@ def _kinetics_blocks(
         min_review_status=min_review_status,
         collapse=CollapseMode.all,
         selection_policy=SelectionPolicy.default,
+        profile=profile,
     )
     out: list[dict] = []
     for kid in chosen:
@@ -1110,6 +1152,7 @@ def _ts_and_barrier(
     reactant_ids: list[int],
     lot_cache: dict[int, dict | None],
     geom_cache: dict[int, _GeometryPayload],
+    profile: ResolvedReadProfile,
 ) -> tuple[dict | None, dict | None]:
     """Build the TS geometry+energy block and the electronic forward barrier.
 
@@ -1122,11 +1165,11 @@ def _ts_and_barrier(
     block falls back to the overall lowest-energy candidate and the barrier
     is ``null``.
     """
-    ts_entry = _select_ts_entry(session, reaction_entry_id)
+    ts_entry = _select_ts_entry(session, reaction_entry_id, profile)
     if ts_entry is None:
         return None, None
 
-    candidates = _ts_energy_candidates(session, ts_entry.id)
+    candidates = _ts_energy_candidates(session, ts_entry.id, profile)
 
     chosen: tuple[float, int | None, Calculation] | None = None
     reactant_energies: list[float] | None = None
@@ -1135,7 +1178,7 @@ def _ts_and_barrier(
             if cand_lot_id is None:
                 continue
             energies = [
-                _species_entry_energy_at_lot(session, se_id, cand_lot_id)
+                _species_entry_energy_at_lot(session, se_id, cand_lot_id, profile)
                 for se_id in reactant_ids
             ]
             if all(e is not None for e in energies):
@@ -1219,6 +1262,7 @@ def _delta_h298(
     reactant_ids: list[int],
     product_ids: list[int],
     min_review_status: RecordReviewStatus | None,
+    profile: ResolvedReadProfile,
 ) -> tuple[float | None, str | None]:
     """ΣH298(products) − ΣH298(reactants) from selected thermo (RDB7 ``dh``).
 
@@ -1251,7 +1295,7 @@ def _delta_h298(
         blocks: list[dict] = []
         for se_id in ids:
             block = _species_thermo_block(
-                session, se_id, min_review_status=min_review_status
+                session, se_id, min_review_status=min_review_status, profile=profile
             )
             if block is None or block.get("h298_kj_mol") is None:
                 return None
@@ -1286,6 +1330,7 @@ def _build_reaction_record(
     filters: MLFilters,
     lot_cache: dict[int, dict | None],
     geom_cache: dict[int, _GeometryPayload],
+    profile: ResolvedReadProfile,
 ) -> tuple[MLReactionRecord | None, str | None]:
     """Build one reaction record.
 
@@ -1345,7 +1390,7 @@ def _build_reaction_record(
             product_smiles.append(smiles)
 
     kinetics = _kinetics_blocks(
-        session, reaction_entry_id, min_review_status=filters.min_review_status
+        session, reaction_entry_id, min_review_status=filters.min_review_status, profile=profile
     )
 
     ts_block, barrier = _ts_and_barrier(
@@ -1354,12 +1399,14 @@ def _build_reaction_record(
         reactant_ids=reactant_ids,
         lot_cache=lot_cache,
         geom_cache=geom_cache,
+        profile=profile,
     )
     delta_h, delta_h_decline_reason = _delta_h298(
         session,
         reactant_ids=reactant_ids,
         product_ids=product_ids,
         min_review_status=filters.min_review_status,
+        profile=profile,
     )
 
     record = MLReactionRecord(
@@ -1397,6 +1444,8 @@ def iter_ml_reactions_ndjson(
     :class:`ValueError` (422) before streaming starts.
     """
     filters = filters or MLFilters()
+    # Captured here, eagerly (see iter_ml_species_ndjson).
+    profile = current_read_profile()
     seed = export_core.SeedSelection(
         reaction_refs=list(reaction_refs) if reaction_refs else None,
         reaction_family=reaction_family,
@@ -1420,6 +1469,7 @@ def iter_ml_reactions_ndjson(
         reaction_entry_ids=reaction_entry_ids,
         filters=filters,
         visible=visible,
+        profile=profile,
     )
 
 
@@ -1429,11 +1479,12 @@ def _stream_reactions(
     reaction_entry_ids: list[int],
     filters: MLFilters,
     visible: set[RecordReviewStatus],
+    profile: ResolvedReadProfile,
 ) -> Iterator[str]:
     generated_at = datetime.now(timezone.utc)
-    # Captured before the first yield: a streaming generator can outlive
-    # the request-scoped context the profile lives in.
-    resolved_profile = current_read_profile()
+    # ``profile`` was captured before the generator was returned (see _stream_species).
+    resolved_profile = profile
+    batcher = WithheldBatcher(session, profile)
     yield _dumps(
         {
             "record_type": "manifest",
@@ -1465,6 +1516,7 @@ def _stream_reactions(
             filters=filters,
             lot_cache=lot_cache,
             geom_cache=geom_cache,
+            profile=profile,
         )
         if delta_h_decline_reason == DELTA_H298_UNRECORDED_REFERENCE:
             n_delta_h298_unrecorded_reference += 1
@@ -1472,8 +1524,9 @@ def _stream_reactions(
             n_delta_h298_mixed_reference += 1
         if record is not None:
             n_reactions += 1
-            yield _dumps(record.to_ndjson()) + "\n"
+            yield from batcher.add(record.to_ndjson())
 
+    yield from batcher.flush()
     yield _dumps(
         {
             "record_type": "export_summary",

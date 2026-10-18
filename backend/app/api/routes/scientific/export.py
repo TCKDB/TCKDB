@@ -37,6 +37,7 @@ from app.api.deps import get_db, require_curator_or_admin
 from app.db.models.app_user import AppUser
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
+from app.services.scientific_read import ref_guard
 from app.services.scientific_read.chemkin_serialize import (
     ChemkinOptions,
     serialize_chemkin,
@@ -164,6 +165,17 @@ def export_chemkin(
     # ``record_set.manifest()`` already carries the resolved read-profile echo,
     # so the zipped manifest.json states its contract exactly like every other
     # TCKDB manifest and response.
+
+    # Curated guard (PR-4). The sources are filtered where the record set is
+    # built (a hidden record is never a linearity witness); these two calls are
+    # the net under that. The manifest goes through the document withhold, and
+    # the generated text is refused outright if it names a hidden record, since
+    # text has nothing to blank. ``record_set.read_profile`` was captured at
+    # build time. Both do nothing under the exploratory profile.
+    profile = record_set.read_profile
+    if profile is not None:
+        ref_guard.withhold_in_document(session, [manifest], profile=profile)
+        ref_guard.refuse_hidden_refs_in_text(session, result.files, profile=profile)
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
