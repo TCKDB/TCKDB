@@ -487,6 +487,22 @@ environment variable: none. `tckdb-client` 0.141.0 (three new rejection codes), 
   member, source calculation and geometry) are database facts. Archive and release carry the new tables.
 - `tckdb-schemas` 0.113.0, `tckdb-client` 0.140.0 (new rejection codes).
 
+## Transition-state badge: undesignated imaginary modes warning (rubric version 4) (2026-10-19)
+
+Closes #729. Migration: none. New environment variable: none. API shape: unchanged (a new key in the existing
+`trust.evidence.checks` map).
+
+- **New warning `no_frequency_result_has_undesignated_imaginary_modes`.** Zero weight, built like
+  `no_frequency_result_lacks_an_imaginary_mode`. It fires when any attached frequency result with a recorded count reports two or
+  more imaginary modes and does not designate the reaction coordinate; a null count is unknown and neither rescues nor condemns. A
+  warning means that attached result needs investigation, not that the transition state is disproved; it never changes the label,
+  the completeness counts or `is_certified`. The required check `reaction_coordinate_designated_for_ts` is unchanged.
+- **`computed_transition_state` is version 4.** Reviewer-family machine reviews stamped version 3 read as stale
+  (`rubric_versions_mismatch`) and are re-planned; no stored review is rewritten.
+- **Transition-state page.** Warnings are now listed in words under the Trust fact, each ending "needs investigation"; an
+  unrecognised warning key shows as its raw token. The line "not a saddle point at this level" for a recorded zero-mode result is
+  now "recorded at this level — needs investigation": a recorded count is evidence to investigate, never a disproof.
+
 ## Trust-contract correction, inspection-filter correction and the structure coverage inventory (2026-10-06)
 
 **Chunk 6 of 6 of calculation, conformer and transition-state energy selection: legacy corrections.** This changes live answers

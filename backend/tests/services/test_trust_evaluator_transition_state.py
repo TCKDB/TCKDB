@@ -54,8 +54,9 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.services.trust import (
-    COMPUTED_TRANSITION_STATE_V3,
+    COMPUTED_TRANSITION_STATE_V4,
     EvidenceBadge,
+    EvidenceCheckKind,
     EvidenceOutcome,
     HardFailReason,
     evaluate_computed_transition_state_entry,
@@ -551,7 +552,7 @@ def test_none_input_hard_fails():
     assert result.label is EvidenceBadge.hard_failed
     assert result.hard_fail_reason is HardFailReason.transition_state_entry_missing
     assert result.rubric == "computed_transition_state"
-    assert result.rubric_version == 3
+    assert result.rubric_version == 4
     assert result.record_type == "transition_state_entry"
     assert result.record_id is None
 
@@ -691,6 +692,8 @@ def test_undesignated_extra_modes_are_a_missing_designation_not_a_hard_fail(db_s
     assert result.label is not EvidenceBadge.hard_failed and result.hard_fail_reason is None
     assert result.checks["reaction_coordinate_designated_for_ts"] is EvidenceOutcome.missing
     assert "no_frequency_result_lacks_an_imaginary_mode" not in result.checks  # a warning check is recorded only when it fires
+    # v4 (#729): the same fact is also visible as an advisory warning (completeness is still the required check above).
+    assert result.checks[UNDESIGNATED] is EvidenceOutcome.warning
 
 
 @pytest.mark.parametrize(
@@ -1069,7 +1072,7 @@ def test_session_wrapper_returns_hard_fail_for_missing_id(db_session: Session):
 
 def test_rubric_metadata_pinned():
     """Pin the public contract of the rubric metadata."""
-    assert COMPUTED_TRANSITION_STATE_V3.name == "computed_transition_state"
+    assert COMPUTED_TRANSITION_STATE_V4.name == "computed_transition_state"
     # Bumped by ADR 0012: the required imaginary-mode check changed from
     # counting to citing the recorded designation, and a new advisory
     # check surfaces the structural flag. A machine review performed
@@ -1078,9 +1081,14 @@ def test_rubric_metadata_pinned():
     # automated geometry-validation fail is advisory (a warning), not a hard
     # fail, and the frequency contradiction is judged over every source
     # frequency result, not the one the rubric calls representative.
-    assert COMPUTED_TRANSITION_STATE_V3.version == 3
-    assert COMPUTED_TRANSITION_STATE_V3.record_type == "transition_state_entry"
-    assert len(COMPUTED_TRANSITION_STATE_V3.checks) == 30
+    assert COMPUTED_TRANSITION_STATE_V4.version == 4
+    assert COMPUTED_TRANSITION_STATE_V4.record_type == "transition_state_entry"
+    assert len(COMPUTED_TRANSITION_STATE_V4.checks) == 31
+    # v4 (#729): the undesignated-modes warning sits right after the zero-mode warning and carries no weight.
+    names = [c.name for c in COMPUTED_TRANSITION_STATE_V4.checks]
+    i = names.index("no_frequency_result_lacks_an_imaginary_mode")
+    assert names[i + 1] == "no_frequency_result_has_undesignated_imaginary_modes"
+    assert COMPUTED_TRANSITION_STATE_V4.checks[i + 1].kind is EvidenceCheckKind.warning
 
 
 def test_calculation_dependencies_check_passes_when_freq_linked(db_session: Session):
@@ -1128,6 +1136,105 @@ def test_only_null_counts_say_nothing(db_session: Session):
     db_session.refresh(ts_entry)
     result = evaluate_loaded_transition_state_entry(ts_entry)
     assert result.checks["no_frequency_result_lacks_an_imaginary_mode"] is EvidenceOutcome.not_applicable
+
+
+UNDESIGNATED = "no_frequency_result_has_undesignated_imaginary_modes"
+
+
+def _evaluate_with_freqs(db_session: Session, freqs: list[dict]):
+    ts_entry = _make_ts_entry(db_session, status=TransitionStateEntryStatus.validated)
+    opt = _attach_ts_opt_calc(db_session, ts_entry)
+    for kwargs in freqs:
+        _attach_ts_freq_calc(db_session, ts_entry, opt, **kwargs)
+    db_session.refresh(ts_entry)
+    return evaluate_loaded_transition_state_entry(ts_entry)
+
+
+def test_an_older_undesignated_result_warns_even_when_a_newer_one_is_clean(db_session: Session):
+    """Kills: the runner reads only the representative (latest) result. The newer 1-mode result is representative."""
+    result = _evaluate_with_freqs(
+        db_session,
+        [{"n_imag": 3, "imag_freq_cm1": -100.0}, {"n_imag": 1, "imag_freq_cm1": -550.0}],
+    )
+    assert result.checks["reaction_coordinate_designated_for_ts"] is EvidenceOutcome.passed  # representative is clean
+    assert result.checks[UNDESIGNATED] is EvidenceOutcome.warning
+    assert result.hard_fail_reason is None
+
+
+def test_a_newer_undesignated_result_warns_too(db_session: Session):
+    result = _evaluate_with_freqs(
+        db_session,
+        [{"n_imag": 1, "imag_freq_cm1": -550.0}, {"n_imag": 2, "imag_freq_cm1": -100.0}],
+    )
+    assert result.checks[UNDESIGNATED] is EvidenceOutcome.warning
+
+
+def test_several_imaginary_modes_with_none_designated_warns(db_session: Session):
+    result = _evaluate_with_freqs(db_session, [{"n_imag": 4, "imag_freq_cm1": -100.0}])
+    assert result.checks[UNDESIGNATED] is EvidenceOutcome.warning
+
+
+def test_several_imaginary_modes_with_one_designated_does_not_warn(db_session: Session):
+    """Kills: firing on ``n_imag > 1`` regardless of the designation."""
+    result = _evaluate_with_freqs(
+        db_session, [{"n_imag": 3, "imag_freq_cm1": -100.0, "reaction_coordinate_mode_index": 1}]
+    )
+    assert UNDESIGNATED not in result.checks  # a warning check is recorded only when it fires
+    assert result.checks["reaction_coordinate_designated_for_ts"] is EvidenceOutcome.passed
+
+
+def test_one_imaginary_mode_without_a_designation_does_not_warn(db_session: Session):
+    """Kills: the ``>= 2`` threshold drifting to ``>= 1``."""
+    result = _evaluate_with_freqs(db_session, [{"n_imag": 1, "imag_freq_cm1": -550.0}])
+    assert UNDESIGNATED not in result.checks
+
+
+def test_zero_imaginary_modes_raise_only_the_existing_warning(db_session: Session):
+    result = _evaluate_with_freqs(db_session, [{"n_imag": 0, "imag_freq_cm1": None}])
+    assert result.checks["no_frequency_result_lacks_an_imaginary_mode"] is EvidenceOutcome.warning
+    assert UNDESIGNATED not in result.checks
+
+
+def test_only_null_counts_make_the_undesignated_warning_not_applicable_and_null_plus_one_is_absent(
+    db_session: Session,
+):
+    """Kills: a null count treated as 'several'. A null count is unknown: it neither rescues nor condemns."""
+    only_null = _evaluate_with_freqs(db_session, [{"n_imag": None, "imag_freq_cm1": None}])
+    assert only_null.checks[UNDESIGNATED] is EvidenceOutcome.not_applicable
+    null_and_one = _evaluate_with_freqs(
+        db_session,
+        [{"n_imag": None, "imag_freq_cm1": None}, {"n_imag": 1, "imag_freq_cm1": -550.0}],
+    )
+    assert UNDESIGNATED not in null_and_one.checks
+
+
+def test_no_frequency_result_at_all_is_not_applicable(db_session: Session):
+    result = _evaluate_with_freqs(db_session, [])
+    assert result.checks[UNDESIGNATED] is EvidenceOutcome.not_applicable
+
+
+def test_the_undesignated_warning_has_zero_weight_and_never_moves_the_label(db_session: Session):
+    """Kills: the spec kind changed to optional/required, or a nonzero weight.
+
+    Twin entries: the older result is undesignated (3 modes) in one and designated in the other; the newer, clean,
+    representative result is identical, so every required/optional check reads the same. Only the warning differs.
+    """
+    warned = _evaluate_with_freqs(
+        db_session,
+        [{"n_imag": 3, "imag_freq_cm1": -100.0}, {"n_imag": 1, "imag_freq_cm1": -550.0}],
+    )
+    clean = _evaluate_with_freqs(
+        db_session,
+        [
+            {"n_imag": 3, "imag_freq_cm1": -100.0, "reaction_coordinate_mode_index": 1},
+            {"n_imag": 1, "imag_freq_cm1": -550.0},
+        ],
+    )
+    assert warned.checks[UNDESIGNATED] is EvidenceOutcome.warning
+    assert UNDESIGNATED not in clean.checks
+    for field in ("label", "evidence_completeness", "passed_count", "possible_count", "is_certified"):
+        assert getattr(warned, field) == getattr(clean, field), field
+    assert warned.is_certified is False
 
 
 def test_the_badge_never_hard_fails_on_a_frequency_result_of_any_shape(db_session: Session):

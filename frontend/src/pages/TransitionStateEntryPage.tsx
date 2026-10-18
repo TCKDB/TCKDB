@@ -348,6 +348,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                 </div>
                             )}
                         </dl>
+                        {trust && <TrustWarnings checks={trust.evidence.checks} />}
                         <RefsDisclosure refs={refs} />
                     </header>
                 )}
@@ -662,7 +663,7 @@ function SaddlePointStatement({ saddlePoint, evidence }: {
     if (saddlePoint.n_imag == null) {
         verdict = "Imaginary-mode count not recorded"
     } else if (saddlePoint.n_imag === 0) {
-        verdict = "0 imaginary modes — not a saddle point at this level"
+        verdict = "0 imaginary modes recorded at this level — needs investigation"
     } else if (saddlePoint.n_imag === 1) {
         verdict = <>1 imaginary mode{freqText ? ` · ${freqText}` : ""}</>
     } else if (saddlePoint.reaction_coordinate_mode_index == null) {
@@ -681,6 +682,34 @@ function SaddlePointStatement({ saddlePoint, evidence }: {
             <strong>{verdict}</strong> · {lotText} · <Link to={`/calculations/${saddlePoint.calculation_ref}`}>{saddlePoint.calculation_ref}</Link>
             {saddlePoint.imaginary_mode_structural_flag ? " · flagged as a higher-order saddle point" : ""}
         </p>
+    )
+}
+
+// One plain sentence per warning-kind trust check. A warning means an attached
+// result (or recorded fact) needs investigation: never that the transition state is
+// disproved, and the absence of a warning certifies nothing. A warning-kind check
+// appears in the served map only when it fires, so a key whose value is "warning" is
+// listed; a key this page has not been taught renders as its raw token, so a new
+// server-side warning is never silently dropped.
+const TRUST_WARNING_SENTENCES: Record<string, string> = {
+    no_frequency_result_lacks_an_imaginary_mode: "An attached frequency result reports no imaginary mode",
+    no_frequency_result_has_undesignated_imaginary_modes:
+        "An attached frequency result reports several imaginary modes and does not say which is the reaction coordinate",
+    extra_imaginary_modes_not_flagged: "The frequency result carries the recorded structural flag for an extra imaginary mode",
+    geometry_validation_not_failed_for_source_calculations: "An automated geometry check raised a warning",
+}
+
+function TrustWarnings({ checks }: { checks: Record<string, string> | undefined }) {
+    const warnings = Object.entries(checks ?? {}).filter(([, outcome]) => outcome === "warning").map(([name]) => name)
+    if (warnings.length === 0) return null
+    return (
+        <ul className="tse-trust-warnings" aria-label="Trust warnings">
+            {warnings.map((name) => (
+                <li key={name}>
+                    {TRUST_WARNING_SENTENCES[name] ?? name} — needs investigation
+                </li>
+            ))}
+        </ul>
     )
 }
 

@@ -65,7 +65,7 @@ from app.services.trust.rubrics import (
     COMPUTED_KINETICS_V2,
     COMPUTED_STATMECH_V2,
     COMPUTED_THERMO_V2,
-    COMPUTED_TRANSITION_STATE_V3,
+    COMPUTED_TRANSITION_STATE_V4,
     COMPUTED_TRANSPORT_V2,
     COMPUTED_TS_STATMECH_V1,
     _ts_source_calculations,
@@ -1048,7 +1048,7 @@ def evaluate_loaded_transition_state_entry(
     ``child_dependencies`` (both directions), and the linked calcs along
     each dependency edge.
     """
-    rubric = COMPUTED_TRANSITION_STATE_V3
+    rubric = COMPUTED_TRANSITION_STATE_V4
     if transition_state_entry is None:
         return _empty_evaluation_for_missing_transition_state_entry(None, rubric)
 
@@ -1419,6 +1419,6 @@ def evaluate_computed_transition_state_entry(
     ts_entry = session.scalars(statement).one_or_none()
     if ts_entry is None:
         return _empty_evaluation_for_missing_transition_state_entry(
-            transition_state_entry_id, COMPUTED_TRANSITION_STATE_V3
+            transition_state_entry_id, COMPUTED_TRANSITION_STATE_V4
         )
     return evaluate_loaded_transition_state_entry(ts_entry)

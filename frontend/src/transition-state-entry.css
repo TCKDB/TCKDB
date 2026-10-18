@@ -55,6 +55,16 @@
 
 .tse-saddle-point strong { color: var(--ink); }
 
+/* Trust warnings: zero-weight advisories, listed in words under the Trust fact. Plain list, the same measure and
+   register as the saddle-point box; no alarm colour, since a warning means "needs investigation", not "disproved". */
+.tse-trust-warnings {
+    max-width: var(--measure-note);
+    margin: var(--s-3) 0 0;
+    padding-left: var(--s-5);
+    color: var(--ink-2);
+    font: var(--type-body-font);
+}
+
 /* Evidence-present pills, positive-only phrasing ("opt", not "opt yes") --
    matches `TransitionStateBrowseRow`'s own evidence line, reusing the
    global `.value-pill`/`.value-pill--muted` pair rather than inventing a

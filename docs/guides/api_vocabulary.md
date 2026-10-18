@@ -62,9 +62,9 @@ Three things are deliberately absent:
 | --- | --- | --- |
 | Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
-| Trust check names | 172 | `backend/app/services/trust/rubrics.py` |
+| Trust check names | 173 | `backend/app/services/trust/rubrics.py` |
 | Refusal codes a caller can receive | 317 | `backend/app/api/code_catalogue.py` |
-| **total** | **650** | |
+| **total** | **651** | |
 
 ## How a record is named
 
@@ -250,7 +250,7 @@ A check name is an assertion, so read it together with its value: `"irc_evidence
 
 `kind` decides what a failure costs: **required** — failing it stops the record reaching `well_supported`, however good the ratio is; **optional** — contributes to completeness; its absence blocks no badge; **warning** — informational; carries zero weight. `weight` is that check's share of the completeness ratio.
 
-Which rubric applies is decided by the kind of record, and for a statmech record by what owns it (`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): `computed_calculation` (v2), `computed_kinetics` (v2), `computed_statmech` (v2), `computed_thermo` (v2), `computed_transition_state` (v3), `computed_transport` (v2), `computed_ts_statmech` (v1).
+Which rubric applies is decided by the kind of record, and for a statmech record by what owns it (`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): `computed_calculation` (v2), `computed_kinetics` (v2), `computed_statmech` (v2), `computed_thermo` (v2), `computed_transition_state` (v4), `computed_transport` (v2), `computed_ts_statmech` (v1).
 
 | Check | Rubric | Kind | Weight | What it asks |
 | --- | --- | --- | --- | --- |
@@ -271,7 +271,7 @@ Which rubric applies is decided by the kind of record, and for a statmech record
 | `epsilon_present` | `computed_transport` | optional | 1 | Lennard-Jones transport should include epsilon/k. |
 | `external_symmetry_present` | `computed_statmech` | optional | 1 | External symmetry number should be recorded. |
 | `external_symmetry_present` | `computed_ts_statmech` | optional | 1 | External symmetry number should be recorded. |
-| `extra_imaginary_modes_not_flagged` | `computed_transition_state` | warning | 1 | Recorded ADR 0012 structural flag: an extra imaginary mode at or above the protocol's tau (advisory). |
+| `extra_imaginary_modes_not_flagged` | `computed_transition_state` | warning | 0 | Recorded ADR 0012 structural flag: an extra imaginary mode at or above the protocol's tau (advisory). |
 | `freq_source_present` | `computed_statmech` | optional | 1 | Computed statmech should link a frequency source calculation when available. |
 | `freq_source_present` | `computed_thermo` | optional | 1 | Computed thermo should link a frequency source calculation when available. |
 | `freq_source_present` | `computed_ts_statmech` | optional | 1 | Computed statmech should link a frequency source calculation when available. |
@@ -280,13 +280,13 @@ Which rubric applies is decided by the kind of record, and for a statmech record
 | `frequency_scale_factor_present_if_applicable` | `computed_ts_statmech` | optional | 1 | Frequency-derived statmech should record a frequency scale factor. |
 | `frequency_source_present` | `computed_kinetics` | optional | 1 | Frequency source calculations should be linked when available. |
 | `full_transport_source_present` | `computed_transport` | optional | 1 | Computed transport should link a full-transport source calculation when available. |
-| `geometry_validation_not_failed_for_source_calculations` | `computed_kinetics` | warning | 1 | Source calculation geometry validation is warning (advisory). |
-| `geometry_validation_not_failed_for_source_calculations` | `computed_statmech` | warning | 1 | Source calculation geometry validation is warning (advisory). |
-| `geometry_validation_not_failed_for_source_calculations` | `computed_thermo` | warning | 1 | Source calculation geometry validation is warning (advisory). |
-| `geometry_validation_not_failed_for_source_calculations` | `computed_transition_state` | warning | 1 | Source calculation geometry validation is warning (advisory). |
-| `geometry_validation_not_failed_for_source_calculations` | `computed_transport` | warning | 1 | Source calculation geometry validation is warning (advisory). |
-| `geometry_validation_not_failed_for_source_calculations` | `computed_ts_statmech` | warning | 1 | Source calculation geometry validation is warning (advisory). |
-| `geometry_validation_passed_or_warning` | `computed_calculation` | warning | 1 | Geometry validation status is warning (advisory). |
+| `geometry_validation_not_failed_for_source_calculations` | `computed_kinetics` | warning | 0 | Source calculation geometry validation is warning (advisory). |
+| `geometry_validation_not_failed_for_source_calculations` | `computed_statmech` | warning | 0 | Source calculation geometry validation is warning (advisory). |
+| `geometry_validation_not_failed_for_source_calculations` | `computed_thermo` | warning | 0 | Source calculation geometry validation is warning (advisory). |
+| `geometry_validation_not_failed_for_source_calculations` | `computed_transition_state` | warning | 0 | Source calculation geometry validation is warning (advisory). |
+| `geometry_validation_not_failed_for_source_calculations` | `computed_transport` | warning | 0 | Source calculation geometry validation is warning (advisory). |
+| `geometry_validation_not_failed_for_source_calculations` | `computed_ts_statmech` | warning | 0 | Source calculation geometry validation is warning (advisory). |
+| `geometry_validation_passed_or_warning` | `computed_calculation` | warning | 0 | Geometry validation status is warning (advisory). |
 | `geometry_validation_present` | `computed_calculation` | optional | 1 | Opt calculations should carry geometry-validation evidence. |
 | `geometry_validation_present_for_source_calculations` | `computed_kinetics` | optional | 1 | Strong source calculations should carry geometry-validation evidence. |
 | `geometry_validation_present_for_source_calculations` | `computed_statmech` | optional | 1 | Strong source calculations should carry geometry-validation evidence. |
@@ -308,7 +308,8 @@ Which rubric applies is decided by the kind of record, and for a statmech record
 | `multiplicity_present` | `computed_transition_state` | required | 1 | transition_state_entry.multiplicity must be set. |
 | `multiplicity_valid` | `computed_transition_state` | required | 1 | transition_state_entry.multiplicity must be >= 1. |
 | `nasa_coefficients_present` | `computed_thermo` | optional | 1 | NASA thermo should include a complete coefficient block. |
-| `no_frequency_result_lacks_an_imaginary_mode` | `computed_transition_state` | warning | 1 | No attached frequency result with a recorded count reports zero imaginary modes (advisory; the badge does not certify the saddle). |
+| `no_frequency_result_has_undesignated_imaginary_modes` | `computed_transition_state` | warning | 0 | No attached frequency result with a recorded count reports several imaginary modes without designating which is the reaction coordinate (advisory; the badge does not certify the saddle). A warning means that attached result needs investigation, not that the transition state is disproved. |
+| `no_frequency_result_lacks_an_imaginary_mode` | `computed_transition_state` | warning | 0 | No attached frequency result with a recorded count reports zero imaginary modes (advisory; the badge does not certify the saddle). |
 | `opt_source_present` | `computed_statmech` | optional | 1 | Computed statmech should link an optimization source calculation when available. |
 | `opt_source_present` | `computed_thermo` | optional | 1 | Computed thermo should link an optimization source calculation when available. |
 | `opt_source_present` | `computed_ts_statmech` | optional | 1 | Computed statmech should link an optimization source calculation when available. |

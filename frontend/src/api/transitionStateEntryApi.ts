@@ -146,15 +146,22 @@ const saddlePointSchema = z.object({
     level_of_theory: levelOfTheorySchema.nullable().optional(),
 }).passthrough()
 
-// Trust fragment (`TrustFragment`) -- only the two facts this page
-// surfaces (`trust_status`, `evidence.passed_count`/`possible_count`) are
-// pulled out; the rest (per-check map, llm_precheck, ...) is left to
-// `.passthrough()` since nothing here renders it.
+// Trust fragment (`TrustFragment`) -- the facts this page surfaces
+// (`trust_status`, `evidence.passed_count`/`possible_count`, and the per-check
+// outcome map, from which the warnings are listed) are pulled out; the rest
+// (llm_precheck, ...) is left to `.passthrough()` since nothing here renders it.
+// `checks` is typed as the map it is: check name -> outcome. A warning-kind check
+// appears in it only when it fires; the map is optional so a deployment that does
+// not serve it still renders.
+// Outcome values are read as plain strings (the page only tests `=== "warning"`), so a future outcome token
+// never turns the whole page into a "malformed data" error.
+
 const trustSchema = z.object({
     trust_status: z.string(),
     evidence: z.object({
         passed_count: z.number(),
         possible_count: z.number(),
+        checks: z.record(z.string(), z.string()).optional(),
     }).passthrough(),
 }).passthrough()
 

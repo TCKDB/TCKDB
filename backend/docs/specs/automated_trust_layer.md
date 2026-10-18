@@ -48,6 +48,13 @@ an honest judgement?
   adjudications. Reason mapping for the retired hard fails: zero modes becomes the warning above plus `curvature_contradicts_claim`;
   undesignated extra modes becomes the missing designation check plus `reaction_coordinate_not_established`.
   The trust projection of a TS entry does not yet consume that assessment; it is a disclosed limitation, not a claim.
+- **Undesignated imaginary modes (rubric version 4, #729).** A second zero-weight warning,
+  `no_frequency_result_has_undesignated_imaginary_modes`, fires when any attached frequency result with a recorded count reports
+  two or more imaginary modes and does not designate the reaction coordinate. It reads the same source set as the zero-mode warning
+  and applies the same rule to a null count (unknown: it neither rescues nor condemns), so an older or newer non-representative
+  result stays visible even when the representative result is clean. It means that attached result needs investigation, not that the
+  transition state is disproved, and it certifies nothing. `reaction_coordinate_designated_for_ts` is unchanged. The transition
+  state page lists every warning in words, each ending "needs investigation".
 - **A confirmed finding is applied where it is consumed.** The badge stays narrow (rejected quality, artifact custody). H298 and
   kinetics selection read live, supported `StructureEvidenceFinding` rows for the record's own source calculations in the roles it
   uses them for (`structure_selection.source_findings`): calculation-scope findings, geometry-scope findings on the geometry the role
@@ -57,7 +64,7 @@ an honest judgement?
   an unreadable kind or version is disclosed, not promoted to a failure. A heuristic geometry `fail` is not read here at all.
 
 **Versioning.** `computed_calculation`, `computed_kinetics`, `computed_thermo`, `computed_statmech` and `computed_transport`
-are now version 2 and `computed_transition_state` is version 3. The reviewer-family machine-review recipe stamps the rubric
+are now version 2 and `computed_transition_state` is version 3 (version 4 from #729; see above). The reviewer-family machine-review recipe stamps the rubric
 version, so a review made under the previous version compares **stale** and a re-review is planned. `rubric_versions_mismatch` is
 always among the reasons; on real data `context_hash_mismatch` usually accompanies it, because the machine-review context carries the
 check sets and the hard-fail reason, which these changes alter even for clean records;
