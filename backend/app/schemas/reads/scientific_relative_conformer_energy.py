@@ -511,6 +511,18 @@ class RelativeConformerEnergyCompareResponse(BaseModel):
     integrity: RelativeEnergyIntegrity
 
 
+class RelativeEnergyCompareManifestRequest(ProfiledRequestEcho):
+    """The comparison manifest's normalised request (``shared``, ``candidate``, ``reference``, ``pairing``), all kept.
+
+    As for the relative-energy manifest (:class:`RelativeEnergyManifestRequest`): the manifest is served as a download
+    and replayed offline, so the profile it was made under is the manifest's own ``read_profile`` block; the profile echo
+    fields here keep the published shape uniform with every other scientific envelope and are not part of the digested
+    content.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+
 class RelativeConformerEnergyCompareManifest(BaseModel):
     """The replayable manifest of the ``/compare/manifest`` download.
 
@@ -524,7 +536,7 @@ class RelativeConformerEnergyCompareManifest(BaseModel):
     manifest_format: str
     manifest_format_version: int
     versions: dict[str, Any]
-    request: dict[str, Any]
+    request: RelativeEnergyCompareManifestRequest
     read_profile: dict[str, Any]
     snapshot_isolation: str
     runs: dict[str, Any]

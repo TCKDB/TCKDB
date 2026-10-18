@@ -700,3 +700,22 @@ def test_a_comparison_manifest_embedding_older_version_runs_is_refused_not_crash
     with pytest.raises(ReplayError) as raised:  # not a KeyError from the pairing
         replay_comparison(_resealed(old))
     assert raised.value.code == "inconsistent_manifest"
+
+
+def test_an_answer_that_lists_no_member_at_all_has_no_reference_conformer_value_and_no_pair():
+    # The engine's own no_members outcome: the entry has no visible group, so even the named reference is not listed.
+    empty = side(ANCHOR, {})
+    empty["members"] = []
+    empty["outcome"] = "no_members"
+    for pairing in (Pairing.same_basin, Pairing.same_geometry):
+        out = run(empty, copy.deepcopy(empty), pairing=pairing)
+        anchor = out["reference_conformer"]
+        assert anchor["problem"] == "reference_conformer_value_missing"
+        assert (anchor["candidate_value_present"], anchor["reference_value_present"]) == (False, False)
+        assert (anchor["candidate_geometry_ref"], anchor["reference_geometry_ref"]) == (None, None)
+        assert out["pairs"] == [] and out["outcome"] == "no_pairs" and out["statistics"]["n"] == 0
+    assert run(empty, copy.deepcopy(empty), coverage=ALL)["outcome"] == "incomplete_pairing"
+    # One side lists the member and the other does not: the absent side has no value and no geometry, never a crash.
+    one_sided = {p["conformer_ref"]: p for p in run(side(ANCHOR, {"cg_b": (3.0, G)}), empty)["pairs"]}
+    assert one_sided["cg_b"]["excluded_reason"] == "reference_protocol_value_missing"
+    assert one_sided["cg_b"]["reference_geometry_ref"] is None

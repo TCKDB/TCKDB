@@ -175,6 +175,14 @@ def _has_value(member: dict[str, Any] | None) -> bool:
     return member is not None and member["value_hartree"] is not None
 
 
+def _geometry_of(member: dict[str, Any] | None) -> str | None:
+    """The one geometry a member's value came from; ``None`` for no member, no value, or a value tied to none."""
+    if member is None or member["value_hartree"] is None:
+        return None
+    geometry: str | None = member["value_geometry_ref"]
+    return geometry
+
+
 def _reference_conformer(
     candidate: dict[str, Any], reference: dict[str, Any], anchor: str, pairing: Pairing
 ) -> dict[str, Any]:
@@ -184,8 +192,7 @@ def _reference_conformer(
     on a side, or (for ``same_geometry``) evaluated at a different geometry on the two sides, makes every pair unusable.
     """
     c, r = _member_map(candidate).get(anchor), _member_map(reference).get(anchor)
-    c_geo = c["value_geometry_ref"] if _has_value(c) else None
-    r_geo = r["value_geometry_ref"] if _has_value(r) else None
+    c_geo, r_geo = _geometry_of(c), _geometry_of(r)
     problem: str | None = None
     if not (_has_value(c) and _has_value(r)):
         problem = REFERENCE_CONFORMER_VALUE_MISSING
@@ -209,8 +216,7 @@ def _pair(
 ) -> dict[str, Any]:
     """One member's pair. The geometry is the one each value came from, never a sibling record's."""
     c_has, r_has = _has_value(c), _has_value(r)
-    c_geo = c["value_geometry_ref"] if c_has else None
-    r_geo = r["value_geometry_ref"] if r_has else None
+    c_geo, r_geo = _geometry_of(c), _geometry_of(r)
     reason: str | None = None
     if not c_has and not r_has:
         reason = NEITHER_PROTOCOL_HAS_VALUE

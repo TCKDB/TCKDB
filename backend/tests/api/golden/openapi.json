@@ -41443,9 +41443,7 @@
             "type": "object"
           },
           "request": {
-            "additionalProperties": true,
-            "title": "Request",
-            "type": "object"
+            "$ref": "#/components/schemas/RelativeEnergyCompareManifestRequest"
           },
           "result": {
             "additionalProperties": true,
@@ -42122,6 +42120,33 @@
           "statement"
         ],
         "title": "RelativeEnergyCompareClaims",
+        "type": "object"
+      },
+      "RelativeEnergyCompareManifestRequest": {
+        "additionalProperties": true,
+        "description": "The comparison manifest's normalised request (``shared``, ``candidate``, ``reference``, ``pairing``), all kept.\n\nAs for the relative-energy manifest (:class:`RelativeEnergyManifestRequest`): the manifest is served as a download\nand replayed offline, so the profile it was made under is the manifest's own ``read_profile`` block; the profile echo\nfields here keep the published shape uniform with every other scientific envelope and are not part of the digested\ncontent.",
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          }
+        },
+        "title": "RelativeEnergyCompareManifestRequest",
         "type": "object"
       },
       "RelativeEnergyComparePair": {
