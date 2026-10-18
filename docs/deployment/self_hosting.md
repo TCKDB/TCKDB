@@ -254,7 +254,8 @@ Three tags are published, and which you use matters:
 Before publishing, CI runs the image: it must import (rdkit, tckdb_schemas,
 the app factory), migrate a fresh RDKit-cartridge database to head, serve
 `/api/v1/health`, and report `status: ok` with its inline worker thread alive.
-An arm64 import check runs under emulation as well, because arm64 is the
+Each architecture is built and checked natively (amd64 and arm64 runners, no
+emulation), and the arm64 leg runs the import check, because arm64 is the
 deployment target and a dependency with no arm64 build would otherwise only
 fail on the Pi. That is the **build half**. The **deploy half** is deliberately
 left to the operator, because it involves a choice and a migration step:
