@@ -1,6 +1,8 @@
 {
  "hidden_id_leaks": [
   "GET /api/v1/scientific/analytics/statmech :: id:tse_h @ records[*].transition_state_entry_id",
+  "GET /api/v1/scientific/energy-correction-schemes/search :: id:tse_h @ records[*].used_by[*].record_id",
+  "GET /api/v1/scientific/energy-correction-schemes/{energy_correction_scheme_ref_or_id} :: id:tse_h @ record.used_by[*].record_id",
   "GET /api/v1/scientific/level-of-theories/browse :: id:calc_h @ records[*].used_by[*].calculation_id",
   "GET /api/v1/scientific/level-of-theories/browse :: id:calc_h_ts @ records[*].used_by[*].calculation_id",
   "GET /api/v1/scientific/level-of-theories/browse :: id:calc_hgeo @ records[*].used_by[*].calculation_id",

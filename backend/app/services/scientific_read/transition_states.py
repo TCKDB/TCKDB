@@ -111,10 +111,10 @@ from app.services.scientific_read.species_calculations_search import (
     _build_energy_block,
     _load_sp_lot_pairs,
 )
+from app.services.scientific_read.trust_floor import evaluate_shown_transition_state_entry
 from app.services.trust import (
     TrustFragment,
     build_trust_fragment,
-    evaluate_loaded_transition_state_entry,
 )
 
 # ---------------------------------------------------------------------------
@@ -825,7 +825,7 @@ def build_transition_state_entry_trust_fragment(
     advisory here — the fragment always carries the evaluator's
     ``record_id`` and the boundary removes it when policy disallows it.
     """
-    evaluation = evaluate_loaded_transition_state_entry(transition_state_entry)
+    evaluation = evaluate_shown_transition_state_entry(transition_state_entry)
     return build_trust_fragment(evaluation, review_status=review_status)
 
 

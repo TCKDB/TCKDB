@@ -469,7 +469,7 @@ def build_sweep_world(session) -> SweepWorld:
     )
 
     # ---- review states: hidden ones first (under_review for some), approvals last ---------------------------------
-    under_review_keys = {"cg_h", "ts_h", "sm_h", "net_h", "kin_h"}
+    under_review_keys = {"cg_h", "ts_h", "sm_h", "net_h", "kin_h", "tse_h"}
     kind_to_type = {
         "calc": R.calculation,
         "sm": R.statmech,
@@ -943,6 +943,7 @@ def _extend_for_ts_and_reaction_family(
     calc_h_w2 = make_calculation(session, type=CalculationType.opt, transition_state_entry_id=tse_vw.id, lot_id=None)
     _add_irc(session, calc_h_w1, geom_ts)
     attach_geometry_validation(session, calculation=calc_h_w2)
+    attach_scf_stability(session, calculation=calc_h_w2)
     attach_output_geometry(session, calculation=calc_h_w2, geometry=make_geometry(session))
     session.add(
         TransitionStateValidationEvidence(
@@ -970,6 +971,8 @@ def _extend_for_ts_and_reaction_family(
     )
     _add_path_search(session, calc_h_psw, geom_ts)
     kin_hw = make_kinetics(session, reaction_entry=rxe_w, a=7.0e-12)
+    # The only atom map of this reaction entry belongs to the hidden entry: ``has_atom_map`` must follow the floor.
+    _atom_map(session, reaction_entry=rxe_w, tse=tse_hw, participant=rxe_w.structure_participants[0])
     hid["ts_hw"], hid["tse_hw"], hid["calc_h_psw"], hid["kin_hw"] = ts_hw, tse_hw, calc_h_psw, kin_hw
     ext["reaction_entry_all_hidden"] = rxe_w
     ext["scoping_approved_extra"].append((R.reaction_entry, rxe_w))

@@ -76,10 +76,12 @@ from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
     reject_client_sort,
+    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.handles import (
     resolve_filter_ref,
@@ -519,9 +521,16 @@ def _apply_scalar_filters(
 def _apply_evidence_filters(
     stmt, request: TransitionStatesSearchRequest | TransitionStatesBrowseRequest
 ):
+    # Owner decision D5: a filter on evidence agrees with the flag the record serves, so it looks at the calculations
+    # the profile shows. Otherwise ``has_irc=true`` would return an entry that serves ``has_irc: false``, which says a
+    # hidden calculation exists. ``None`` (no floor) leaves every statement as it was.
+    calc_visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
     if request.has_calculations is not None:
-        ex = exists().where(
-            Calculation.transition_state_entry_id == TransitionStateEntry.id
+        ex = where_visible(
+            exists().where(
+                Calculation.transition_state_entry_id == TransitionStateEntry.id
+            ),
+            calc_visible,
         )
         stmt = stmt.where(ex if request.has_calculations else ~ex)
 
@@ -535,33 +544,42 @@ def _apply_evidence_filters(
     for want, calc_type in type_filters:
         if want is None:
             continue
-        ex = exists().where(
-            and_(
-                Calculation.transition_state_entry_id
-                == TransitionStateEntry.id,
-                Calculation.type == calc_type,
-            )
+        ex = where_visible(
+            exists().where(
+                and_(
+                    Calculation.transition_state_entry_id
+                    == TransitionStateEntry.id,
+                    Calculation.type == calc_type,
+                )
+            ),
+            calc_visible,
         )
         stmt = stmt.where(ex if want else ~ex)
 
     if request.has_geometry_validation is not None:
-        ex = exists().where(
-            and_(
-                CalculationGeometryValidation.calculation_id
-                == Calculation.id,
-                Calculation.transition_state_entry_id
-                == TransitionStateEntry.id,
-            )
+        ex = where_visible(
+            exists().where(
+                and_(
+                    CalculationGeometryValidation.calculation_id
+                    == Calculation.id,
+                    Calculation.transition_state_entry_id
+                    == TransitionStateEntry.id,
+                )
+            ),
+            calc_visible,
         )
         stmt = stmt.where(ex if request.has_geometry_validation else ~ex)
 
     if request.has_scf_stability is not None:
-        ex = exists().where(
-            and_(
-                CalculationSCFStability.calculation_id == Calculation.id,
-                Calculation.transition_state_entry_id
-                == TransitionStateEntry.id,
-            )
+        ex = where_visible(
+            exists().where(
+                and_(
+                    CalculationSCFStability.calculation_id == Calculation.id,
+                    Calculation.transition_state_entry_id
+                    == TransitionStateEntry.id,
+                )
+            ),
+            calc_visible,
         )
         stmt = stmt.where(ex if request.has_scf_stability else ~ex)
 
@@ -584,8 +602,12 @@ def _apply_method_basis_software_filters(
     return apply_calculation_provenance_filter(
         stmt,
         request,
-        select(Calculation.id).where(
-            Calculation.transition_state_entry_id == TransitionStateEntry.id
+        # Only the calculations the profile shows can match the method/basis/software filter (D5).
+        where_visible(
+            select(Calculation.id).where(
+                Calculation.transition_state_entry_id == TransitionStateEntry.id
+            ),
+            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
         ),
     )
 

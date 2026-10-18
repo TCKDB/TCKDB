@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import pytest
 
+from app.db.models.common import CalculationType, RecordReviewStatus
+from app.db.models.common import SubmissionRecordType as R
 from app.services.scientific_read import ref_guard
 from tests.api.scientific._curated_sweep_analysis import (
     id_leaks,
@@ -30,7 +32,17 @@ from tests.api.scientific._curated_sweep_analysis import (
 from tests.api.scientific._curated_sweep_crawl import enumerate_routes, variants_for
 from tests.api.scientific._curated_sweep_run import install_spy, run_pass
 from tests.api.scientific._curated_sweep_world import build_sweep_world
+from tests.services.scientific_read._factories import (
+    make_calculation,
+    make_lot,
+    make_species,
+    make_species_entry,
+    make_transition_state_entry,
+    next_inchi_key,
+    set_review,
+)
 
+APPROVED = RecordReviewStatus.approved
 BASE = "/api/v1/scientific"
 
 
@@ -219,6 +231,8 @@ def _shapes(world):
     kinetics_all = (f"/reaction-entries/{rxe}/kinetics", {"include": ["all", "assessments", "interpretations"]})
     entry_all = (f"/transition-state-entries/{tse2}", {"include": ["all", "entries"]})
     concept_all = (f"/transition-states/{ts}", {"include": ["all", "entries"]})
+    from tckdb_schemas.kinetics_declarations import StoredKineticsProtocolCalculationRef
+
     from app.schemas.reads import scientific_common as common
     from app.schemas.reads import scientific_kinetics as kin
     from app.schemas.reads import scientific_provenance as prov
@@ -250,6 +264,7 @@ def _shapes(world):
         (common.ValidationSummary, kinetics_all),
         (common.SCFStabilitySummary, kinetics_all),
         (common.SupersessionNotice, kinetics_all),
+        (StoredKineticsProtocolCalculationRef, kinetics_all),
     ]
 
 
@@ -471,3 +486,269 @@ def test_unreviewed_scoping_parents_are_not_hidden(client, db_session, login_as)
     unreviewed_rxe = world.extra["reaction_entry_unreviewed"].public_ref
     records = _get(client, f"/reaction-entries/{unreviewed_rxe}/kinetics", "curated").json()["records"]
     assert [r["kinetics_ref"] for r in records] == [world.visible["kin_vu"].public_ref]
+
+
+# ---------------------------------------------------------------------------
+# Review rows, levels of theory and search filters are not existence oracles
+# ---------------------------------------------------------------------------
+
+
+def test_the_review_rows_of_a_full_read_do_not_list_hidden_records(client, db_session, login_as, monkeypatch):
+    """``include_review=full`` lists the review rows of the records under a reaction entry. Under curated a record
+    below the floor has no row there (its type, status and, with internal ids, its primary key would say it exists),
+    and the rows come back in one deterministic order.
+
+    Kills: listing the rows of hidden kinetics or transition-state entries; an unordered query.
+    """
+    from app.api.config import settings
+
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+    route = f"/reaction-entries/{world.extra['reaction_entry'].public_ref}/full"
+    params = {"include_review": "full", "include": ["internal_ids"]}
+    monkeypatch.setattr(settings, "allow_public_internal_ids", True)
+
+    exploratory = _get(client, route, "exploratory", **params).json()["review_records"]
+    hidden_ids = {
+        ("kinetics", world.hidden["kin_h"].id),
+        ("transition_state_entry", world.hidden["tse_h"].id),
+    }
+    assert hidden_ids <= {(r["record_type"], r["record_id"]) for r in exploratory}, "the world lists no hidden row"
+
+    curated = _get(client, route, "curated", **params).json()["review_records"]
+    assert curated, "the curated read lists no review row at all: the check is vacuous"
+    assert not hidden_ids & {(r["record_type"], r["record_id"]) for r in curated}
+    assert {r["status"] for r in curated} <= {"approved"}
+    again = _get(client, route, "curated", **params).json()["review_records"]
+    assert again == curated
+    keys = [(r["record_type"], r["record_id"]) for r in curated]
+    assert keys == sorted(
+        keys, key=lambda k: (["reaction_entry", "kinetics", "transition_state_entry"].index(k[0]), k[1])
+    )
+
+
+def test_levels_of_theory_name_only_the_calculation_types_the_profile_shows(client, db_session, login_as):
+    """The keys of a ``levels_of_theory`` map are calculation types, so a hidden IRC would print ``"irc": []`` beside
+    ``has_irc: false``. Entry, concept and kinetics levels come only from calculations the profile shows.
+
+    Kills: building the map from hidden calculations; leaving kinetics ``levels.frequency`` to a hidden freq.
+    """
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+    entry = world.visible["tse_vw"].public_ref
+    exp = _get(client, f"/transition-state-entries/{entry}", "exploratory").json()["record"]
+    assert set(exp["evidence_summary"]["levels_of_theory"]) == {"opt", "irc"}
+    cur = _get(client, f"/transition-state-entries/{entry}", "curated").json()["record"]
+    assert cur["evidence_summary"]["levels_of_theory"] == {}
+
+    ts = world.visible["ts_vw"].public_ref
+    assert _get(client, f"/transition-states/{ts}", "exploratory").json()["record"]["evidence_summary"][
+        "levels_of_theory"
+    ]
+    assert (
+        _get(client, f"/transition-states/{ts}", "curated").json()["record"]["evidence_summary"]["levels_of_theory"]
+        == {}
+    )
+
+    kinetics = f"/reaction-entries/{world.extra['reaction_entry'].public_ref}/kinetics"
+    ref = world.visible["kin_v"].public_ref
+    exp_k = next(r for r in _get(client, kinetics, "exploratory").json()["records"] if r["kinetics_ref"] == ref)
+    cur_k = next(r for r in _get(client, kinetics, "curated").json()["records"] if r["kinetics_ref"] == ref)
+    assert exp_k["levels"]["frequency"] is not None and exp_k["levels"]["frequency_source"] == "freq"
+    assert cur_k["levels"]["frequency"] is None and cur_k["levels"]["frequency_source"] is None
+    # The checklist counts the calculation types the profile shows: ``kin_vn`` cites nothing and reaches a freq only
+    # through the (hidden) calculations of the reaction's entries.
+    ref = world.visible["kin_vn"].public_ref
+    exp_n = next(r for r in _get(client, kinetics, "exploratory").json()["records"] if r["kinetics_ref"] == ref)
+    cur_n = next(r for r in _get(client, kinetics, "curated").json()["records"] if r["kinetics_ref"] == ref)
+    assert exp_n["evidence_completeness"]["checklist"]["has_ts_freq_evidence"] is True
+    assert cur_n["evidence_completeness"]["checklist"]["has_ts_freq_evidence"] is False
+
+
+def _extra_hidden_calculation_world(db_session, world):
+    """A level of theory used ONLY by hidden calculations: one on a visible TS entry, one on a visible species entry."""
+    lot = make_lot(db_session, method="zzhidden", basis="zzbasis")
+    entry = make_transition_state_entry(db_session, transition_state=world.visible["ts_v"], multiplicity=8)
+    set_review(db_session, record_type=R.transition_state_entry, record_id=entry.id, status=APPROVED)
+    make_calculation(db_session, type=CalculationType.freq, transition_state_entry_id=entry.id, lot_id=lot.id)
+    species_entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("SWF")))
+    set_review(db_session, record_type=R.species_entry, record_id=species_entry.id, status=APPROVED)
+    make_calculation(db_session, type=CalculationType.freq, species_entry_id=species_entry.id, lot_id=lot.id)
+    db_session.flush()
+    return entry, species_entry
+
+
+def test_search_filters_agree_with_the_flags_the_records_serve(client, db_session, login_as):
+    """Under curated a filter on evidence looks at the calculations the profile shows, so ``has_irc=true`` never
+    returns a record that serves ``has_irc: false``; the method/basis filter cannot find a level used only by hidden
+    calculations, on the transition-state routes or on the species browse.
+
+    Kills: leaving any one filter on the unfloored calculation set.
+    """
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+    tse_x, species_entry = _extra_hidden_calculation_world(db_session, world)
+    only_hidden = world.visible["tse_vw"].public_ref
+
+    flags = {
+        "has_calculations": lambda r: r["available_sections"]["has_calculations"],
+        "has_opt": lambda r: r["evidence_summary"]["has_opt"],
+        "has_freq": lambda r: r["evidence_summary"]["has_freq"],
+        "has_sp": lambda r: r["evidence_summary"]["has_sp"],
+        "has_irc": lambda r: r["evidence_summary"]["has_irc"],
+        "has_path_search": lambda r: r["evidence_summary"]["has_path_search"],
+        "has_geometry_validation": lambda r: r["evidence_summary"]["has_geometry_validation"],
+        "has_scf_stability": lambda r: r["evidence_summary"]["has_scf_stability"],
+    }
+    for route in ("/transition-states/browse", "/transition-states/search"):
+        extra = {"reaction_entry_ref": world.extra["reaction_entry"].public_ref} if route.endswith("search") else {}
+        for name, served in flags.items():
+            for want in (True, False):
+                rows = _get(client, route, "curated", **{name: str(want).lower()}, limit=100, **extra)
+                assert rows.status_code == 200, (route, name, rows.text)
+                for record in rows.json()["records"]:
+                    assert served(record) is want, f"{route} {name}={want} returned a record serving {not want}"
+        # The entry whose every calculation is hidden answers the "absent" side of each filter, and only that side.
+        for name in ("has_irc", "has_opt", "has_calculations", "has_geometry_validation", "has_scf_stability"):
+            for want in (True, False):
+                refs = {
+                    r["transition_state_entry"]["transition_state_entry_ref"]
+                    for r in _get(client, route, "curated", **{name: str(want).lower()}, limit=100, **extra).json()[
+                        "records"
+                    ]
+                }
+                assert (only_hidden in refs) is (not want), (route, name, want)
+
+        found = _get(client, route, "exploratory", method="zzhidden", limit=100, **extra).json()["records"]
+        assert [r["transition_state_entry"]["transition_state_entry_ref"] for r in found] == [tse_x.public_ref]
+        assert _get(client, route, "curated", method="zzhidden", limit=100, **extra).json()["records"] == []
+        assert _get(client, route, "curated", basis="zzbasis", limit=100, **extra).json()["records"] == []
+
+    exploratory = _get(client, "/species/browse", "exploratory", method="zzhidden", limit=100).json()["records"]
+    assert exploratory, "the species browse finds nothing under exploratory: the check is vacuous"
+    assert _get(client, "/species/browse", "curated", method="zzhidden", limit=100).json()["records"] == []
+    assert _get(client, "/species/browse", "curated", basis="zzbasis", limit=100).json()["records"] == []
+
+
+def test_coverage_and_atom_map_counts_follow_the_floor(client, db_session, login_as):
+    """The concept's geometry-validation and SCF-stability coverage, and a reaction's ``has_atom_map``, count only what
+    the profile shows. The sweep comparator ignores these keys, so they are asserted here.
+
+    Kills: removing the floor from the coverage join; removing it from ``has_atom_map``.
+    """
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+    ts = world.visible["ts_vw"].public_ref
+    exp = _get(client, f"/transition-states/{ts}", "exploratory").json()["record"]["evidence_summary"][
+        "evidence_coverage"
+    ]
+    cur = _get(client, f"/transition-states/{ts}", "curated").json()["record"]["evidence_summary"]["evidence_coverage"]
+    assert (exp["geometry_validation"], exp["scf_stability"]) == (1, 1)
+    assert (cur["geometry_validation"], cur["scf_stability"]) == (0, 0)
+
+    ref = world.extra["reaction_entry_all_hidden"].public_ref
+
+    def has_atom_map(profile):
+        rows = _get(client, "/reactions/browse", profile, limit=100).json()["records"]
+        return next(r for r in rows if r["reaction_entry_ref"] == ref)["availability"]["has_atom_map"]
+
+    assert has_atom_map("exploratory") is True and has_atom_map("curated") is False
+
+
+# ---------------------------------------------------------------------------
+# The registries and the subject rule
+# ---------------------------------------------------------------------------
+
+
+def test_the_subject_of_every_enabled_route_sits_at_record_or_records():
+    """``_is_subject`` keys off the names ``record`` and ``records``: only a value at one of those keys is protected from
+    being deleted as a pointer. An enabled route whose envelope has neither key must not hold a pointer model as a
+    single block at its top level (the guard would null it); lists of pointer elements, which the guard may thin, are
+    fine, and so is a route named below with the reason it has no subject block.
+
+    Kills: a new enabled route whose subject sits under another key and is itself a pointer model.
+    """
+    from typing import get_args
+
+    from pydantic import BaseModel
+
+    from app.api.app import create_app
+
+    def classes(annotation):
+        yield annotation
+        for arg in get_args(annotation):
+            yield from classes(arg)
+
+    app = create_app()
+    checked = 0
+    offenders = []
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        model = getattr(route, "response_model", None)
+        if not (
+            path.startswith(BASE)
+            and ref_guard.route_matches(path, ref_guard._ENABLED_ROUTE_PREFIXES)
+            and not ref_guard.route_matches(path, ref_guard.EXEMPT_ROUTE_PREFIXES)
+            and isinstance(model, type)
+            and issubclass(model, BaseModel)
+        ):
+            continue
+        checked += 1
+        if {"record", "records"} & set(model.model_fields):
+            continue
+        for name, info in model.model_fields.items():
+            annotation = info.annotation
+            is_list = getattr(annotation, "__origin__", None) in (list, dict) or any(
+                getattr(a, "__origin__", None) in (list, dict) for a in classes(annotation)
+            )
+            if not is_list and any(c in ref_guard.POINTER_MODELS for c in classes(annotation)):
+                offenders.append(f"{path}:{name}")
+    assert checked > 40, "the scan found almost no enabled route: it is broken"
+    assert not offenders, offenders
+
+
+def test_trust_verdicts_rest_only_on_the_evidence_the_profile_shows(client, db_session, login_as):
+    """A trust fragment is a checklist over the evidence graph. Under curated a hidden optimisation, IRC or geometry
+    validation counts for nothing: ``tse_vw`` has only hidden calculations, and ``kin_v`` cites only hidden ones. The
+    collections swapped for the evaluation are put back, so a read after a curated one is unchanged.
+
+    Kills: evaluating over the whole graph (a verdict that says a hidden record exists); leaving the graph swapped.
+    """
+    world = build_sweep_world(db_session)
+    login_as(world.extra["curator"].id)
+    entry = f"/transition-state-entries/{world.visible['tse_vw'].public_ref}"
+    exp = _get(client, entry, "exploratory", include="trust").json()["record"]["trust"]["evidence"]["checks"]
+    cur = _get(client, entry, "curated", include="trust").json()["record"]["trust"]["evidence"]["checks"]
+    shown = ("supporting_calculations_present", "ts_optimization_present", "irc_evidence_present")
+    assert all(exp[name] == "passed" for name in shown), exp
+    assert not any(cur[name] == "passed" for name in shown), cur
+    assert _get(client, entry, "exploratory", include="trust").json()["record"]["trust"]["evidence"]["checks"] == exp
+
+    kinetics = f"/reaction-entries/{world.extra['reaction_entry'].public_ref}/kinetics"
+    ref = world.visible["kin_v"].public_ref
+
+    def checks(profile):
+        records = _get(client, kinetics, profile, include="trust").json()["records"]
+        return next(r for r in records if r["kinetics_ref"] == ref)["trust"]["evidence"]["checks"]
+
+    assert checks("exploratory")["source_calculations_present"] == "passed"
+    assert checks("curated")["source_calculations_present"] == "missing"
+    assert checks("exploratory")["source_calculations_present"] == "passed"
+
+
+def test_an_id_whose_type_sits_in_a_sibling_key_is_seen_by_the_leak_check(db_session):
+    """``{"record_type": "kinetics", "record_id": 7}`` names its type in a sibling key; the sweep's id check reads it.
+
+    Kills: dropping the sibling-key rule from ``id_leaks`` (the review-rows leak went unseen for a PR because the stem
+    of ``record_id`` names no type).
+    """
+    import json
+
+    world = build_sweep_world(db_session)
+    hidden = world.hidden["kin_h"]
+    body = json.dumps(
+        {"review_records": [{"record_type": "kinetics", "record_id": hidden.id, "status": "under_review"}]}
+    )
+    assert id_leaks(body, world) == {("id:kin_h", "review_records[*].record_id")}
+    visible = json.dumps({"review_records": [{"record_type": "kinetics", "record_id": world.visible["kin_v"].id}]})
+    assert id_leaks(visible, world) == set()

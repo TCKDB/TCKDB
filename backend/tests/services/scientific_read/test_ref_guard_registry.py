@@ -276,3 +276,20 @@ def test_the_hook_sees_the_route_s_own_session_and_route_template(client, db_ses
     assert session is not db_session
     assert route_path == "/api/v1/scientific/calculations/{calculation_ref_or_id}"
     assert ref_guard.current_ref_guard_context() is None  # reset when the request ended
+
+
+def test_every_pointer_field_names_a_real_nullable_untyped_field():
+    """A typo in ``POINTER_FIELDS`` would silently register nothing.
+
+    Kills: a misspelt field name; a registered field that is typed (it would have a pointer model instead) or cannot
+    be nulled.
+    """
+    from app.services.scientific_read.ref_guard import _field_traits
+
+    assert ref_guard.POINTER_FIELDS
+    for model, name in ref_guard.POINTER_FIELDS:
+        assert name in model.model_fields, f"{model.__name__}.{name} does not exist"
+        nullable, untyped = _field_traits(model, name)
+        assert nullable, f"{model.__name__}.{name} is not nullable"
+        info = model.model_fields[name]
+        assert "dict" in str(info.annotation).lower(), f"{model.__name__}.{name} is not an untyped dict block"

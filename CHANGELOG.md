@@ -40,6 +40,10 @@ none. `tckdb-schemas` unchanged, `tckdb-client` 0.155.0.
   `available_sections` and `validation` tokens, and a reaction's `availability` (kinetics count, transition state, path search, atom map)
   count only what the profile shows. `/reactions` default order sorts on those flags, so a curated page can order the same records
   differently.
+- The same floor now reaches what used to be existence oracles: the `levels_of_theory` maps and kinetics `levels` (a level that comes only
+  from a hidden calculation is not shown), the evidence checklist, `trust` fragments and public assessments (evaluated over the
+  calculations the profile shows), the transition-state search filters (`has_*`, `method`, `basis`, `software`) and the species browse
+  method/basis filter, and `include_review=full` on `/full` (no review row of a hidden record, in a stable order).
 - `tckdb-client` 0.155.0: `TransitionStateEntryRecord.transition_state` is `JSONDict | None`. The transition-state entry page tolerates a
   null owner.
 

@@ -56,6 +56,7 @@ POPULATION_KEYS = frozenset(
         "kinetics_count",
         "has_transition_state",
         "has_path_search",
+        "has_atom_map",
         "has_entries",
         "has_geometries",
         "has_validation_evidence",
@@ -81,6 +82,11 @@ DESCRIBES_THE_READ_PATHS = frozenset(
         "validation.irc",
         "validation.energy_ordering",
         "validation.imaginary_mode",
+        # D5 (PR-2b): the kinetics evidence checklist counts the calculation types the profile shows.
+        "evidence_completeness",
+        # The trust fragment and the public assessment are verdicts over the evidence the profile shows.
+        "trust",
+        "assessments",
         *(
             f"evidence_coverage.{name}"
             for name in ("opt", "freq", "sp", "irc", "path_search", "geometry_validation", "scf_stability")
@@ -90,7 +96,7 @@ DESCRIBES_THE_READ_PATHS = frozenset(
 
 #: Fields whose value is a MAP of slots keyed by role (``/full``'s ``transition_states[*].calculations``), not a model
 #: with fixed keys. A slot whose calculation is hidden is removed from the map; the key of a model is never removed.
-REMOVABLE_MAP_FIELDS = frozenset({"calculations"})
+REMOVABLE_MAP_FIELDS = frozenset({"calculations", "levels_of_theory"})
 
 #: Key stem -> world kind, for the integer-id check.
 ID_STEM_TO_KIND = {
@@ -194,7 +200,28 @@ def id_leaks(text: str, world: SweepWorld) -> set[tuple[str, str]]:
             if kind_name and value in hidden_ids.get(kind_name, {}):
                 out.add((f"id:{hidden_ids[kind_name][value]}", path))
                 break
+    # An id whose type sits in a SIBLING key (``{"record_type": "kinetics", "record_id": 7}``): the stem of ``record_id``
+    # names no type, so the stem check above cannot see it.
+    for path, node in _dicts(_root(kind, obj)):
+        record_id, record_type = node.get("record_id"), node.get("record_type")
+        if isinstance(record_id, int) and not isinstance(record_id, bool) and isinstance(record_type, str):
+            kind_name = ID_STEM_TO_KIND.get(record_type)
+            if kind_name and record_id in hidden_ids.get(kind_name, {}):
+                out.add((f"id:{hidden_ids[kind_name][record_id]}", f"{path}.record_id" if path else "record_id"))
     return out
+
+
+def _dicts(obj: Any, path: str = "", *, top: bool = True) -> Iterator[tuple[str, dict]]:
+    """Every dict in a document with its path (list indices collapsed to ``[*]``); the echoed ``request`` is skipped."""
+    if isinstance(obj, dict):
+        yield path, obj
+        for key, value in obj.items():
+            if top and key == "request":
+                continue
+            yield from _dicts(value, f"{path}.{key}" if path else key, top=False)
+    elif isinstance(obj, list):
+        for item in obj:
+            yield from _dicts(item, f"{path}[*]", top=False)
 
 
 def _is_withholding(cur: Any, exp: Any) -> bool:
@@ -223,7 +250,7 @@ def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
             ):
                 continue
             if key not in cur:
-                if path.rsplit(".", 1)[-1] in REMOVABLE_MAP_FIELDS and isinstance(exp[key], dict):
+                if path.rsplit(".", 1)[-1] in REMOVABLE_MAP_FIELDS:
                     continue  # a slot of a map, withheld whole
                 out.append(f"{sub}<key removed>")
             elif key not in exp:

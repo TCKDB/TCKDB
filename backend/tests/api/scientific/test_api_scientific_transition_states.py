@@ -2113,8 +2113,10 @@ def test_tse_detail_trust_path_uses_loaded_evaluator(
     """The read path must call the loaded evaluator, not the session/id
     wrapper (which would issue its own query / hard-fail on missing rows).
     """
+    # The read path reaches the loaded evaluator through ``trust_floor`` (which runs it over the evidence the active
+    # profile shows), so that is where the call is counted.
     from app.services.scientific_read import (
-        transition_states as ts_service,
+        trust_floor as ts_service,
     )
     from app.services.trust import evaluate_loaded_transition_state_entry
 
