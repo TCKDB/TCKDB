@@ -81,7 +81,7 @@ def _signed() -> dict:
 def test_the_shipped_manifest_is_exactly_the_pinned_bytes_and_loads():
     assert hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest() == STRUCTURE_RULE_MANIFEST_SHA256
     manifest = shipped()
-    assert manifest.sha256 == STRUCTURE_RULE_MANIFEST_SHA256 and manifest.version == "0.1.0"
+    assert manifest.sha256 == STRUCTURE_RULE_MANIFEST_SHA256 and manifest.version == "0.2.0"
     assert {c.rule_id for c in manifest.candidates} == RULE_IDS
     # No shipped entry is approved, and none is activatable: that is the owner's signed act, never ours.
     assert [c.activatable for c in manifest.candidates] == [False] * len(manifest.candidates)
@@ -155,7 +155,7 @@ def test_the_audit_findings_are_recorded_as_specific_blockers():
         "reference_is_silver_and_partly_circular",
         "no_numeric_reference_uncertainty",
         "mad_is_not_a_per_conformer_error",
-        "relative_energy_is_not_a_supported_quantity",
+        "no_preference_stage_consumes_relative_conformer_energy",
         "core_correlation_and_corrections_not_stated",
         "geometry_level_not_stated",
         "localized_orbital_settings_need_vocabulary",
@@ -167,7 +167,7 @@ def test_the_audit_findings_are_recorded_as_specific_blockers():
         "reference_is_silver_and_not_canonical_beyond_dodecane",
         "no_numeric_reference_uncertainty",
         "program_specific_thresholds",
-        "relative_energy_is_not_a_supported_quantity",
+        "no_preference_stage_consumes_relative_conformer_energy",
     } <= dlpno
     assert {"no_source", "no_pinned_reference_in_the_store", "setting_names_do_not_imply_accuracy"} <= by_id[
         "S-FIXED-MODEL-CONVERGENCE"
@@ -199,7 +199,9 @@ def test_the_sources_are_pinned_by_sha256_with_what_each_was_used_for_and_the_ve
     assert "NOT opened" in sources["SANTRA_MARTIN_2022_SI_DATA"]["used_for"]
     assert "NOT extracted" in sources["SANTRA_MARTIN_2022_SI_PDF"]["used_for"]
     header = MANIFEST_PATH.read_text().split("manifest_version")[0]
-    assert "published PDF could not be downloaded" in header
+    # 0.2.0 corrects the 0.1.0 statement rather than repeating it as fact: the header names it as the old claim.
+    assert "Manifest 0.1.0 said the published PDF could not be downloaded" in header
+    assert "Table 4 of the article itself" in header
 
 
 def test_every_quoted_number_is_anchored_to_a_page_table_or_figure():

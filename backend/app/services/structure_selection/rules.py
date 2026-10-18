@@ -30,6 +30,7 @@ from typing import Any
 
 from app.chemistry.manifest_attestation import is_attested
 from app.chemistry.structure_rules.manifest import (
+    MANIFEST_0_1_0_PATH,
     RuleCandidate,
     StructureRuleManifest,
     load_structure_rule_manifest,
@@ -158,17 +159,19 @@ class StructureRule(ABC):
 
 
 def validate_rules(rules: Sequence[StructureRule]) -> None:
-    """Refuse a registry that could make an unsupported edge: duplicate ids, or an active rule that is not pinned.
+    """Refuse a registry that could make an unsupported edge: a repeated (rule id, version), or an active rule not pinned.
 
-    :raises ValueError: duplicate ``(rule_id)``; an active rule with no objective, no pinned manifest digest or
+    One rule id may appear at two versions (the replay registry holds the current rule and its earlier, replay-only one).
+
+    :raises ValueError: duplicate ``(rule_id, version)``; an active rule with no objective, no pinned manifest digest or
         with inactive reasons still listed; a model-fidelity rule with no reference model.
     """
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     for rule in rules:
         name = rule.rule_id  # a registry name, not a database row id
-        if name in seen:
-            raise ValueError(f"rule names must be distinct: {name}")
-        seen.add(name)
+        if (name, rule.version) in seen:
+            raise ValueError(f"rule names must be distinct: {name} {rule.version}")
+        seen.add((name, rule.version))
         if rule.status != RULE_ACTIVE:
             continue
         problems = []
@@ -184,10 +187,20 @@ def validate_rules(rules: Sequence[StructureRule]) -> None:
             raise ValueError(f"rule {name} cannot be active: {', '.join(problems)}")
 
 
-#: SHA-256 of ``structure_rule_candidates.yaml`` as shipped (manifest 0.1.0). The registry refuses to load over any
+#: SHA-256 of ``structure_rule_candidates.yaml`` as shipped (manifest 0.2.0). The registry refuses to load over any
 #: other bytes; a change to an entry, a blocker or a source list is a new manifest version, a new pin and a new rule
 #: version. A manifest handed to a rule must be the one this pins.
-STRUCTURE_RULE_MANIFEST_SHA256 = "cff519d81754e1cb42ac52d86d6a9988b7702455cc96d699f3d7c3413e535048"
+STRUCTURE_RULE_MANIFEST_SHA256 = "e8c25422f4192b2ba505321959b6be6afe943516bcbb224c2445cdc6b6c054f4"
+
+#: The pin of manifest 0.1.0, which rule version 0.1.0 rested on. Rule 0.1.0 is kept loadable for replay only, so a
+#: decision recorded before manifest 0.2.0 still replays; it is never in ``default_rules`` and never takes part in a
+#: live selection.
+STRUCTURE_RULE_MANIFEST_SHA256_0_1_0 = "cff519d81754e1cb42ac52d86d6a9988b7702455cc96d699f3d7c3413e535048"
+
+#: Rule version -> the SHA-256 of the manifest bytes it rests on (every rule of this registry moved together). Moving a
+#: pin without a new version is the error this ledger exists to catch: a recorded decision names (rule, version,
+#: manifest digest) and replay holds all three.
+STRUCTURE_RULE_VERSION_PINS = {"0.1.0": STRUCTURE_RULE_MANIFEST_SHA256_0_1_0, "0.2.0": STRUCTURE_RULE_MANIFEST_SHA256}
 
 #: Ids of audited rules whose predicates have been written and reviewed. None yet: approval in the manifest alone
 #: applies nothing, and approving one rule never enables another.
@@ -208,12 +221,16 @@ class AuditedStructureRule(StructureRule):
         """Per rule: only a rule id listed in :data:`RULES_WITH_IMPLEMENTED_PREDICATES` has its predicates written."""
         return self.rule_id in RULES_WITH_IMPLEMENTED_PREDICATES
 
+    #: The digest an earlier, replay-only version rests on; ``None`` is the current manifest, whose pin is read from the
+    #: module at construction.
+    _pin: str | None = None
+
     def __init__(self, candidate: RuleCandidate, manifest: StructureRuleManifest) -> None:
         name = candidate.rule_id  # a rule's name, not a database key
-        if manifest.sha256 != STRUCTURE_RULE_MANIFEST_SHA256:
+        pin = self._pin or STRUCTURE_RULE_MANIFEST_SHA256
+        if manifest.sha256 != pin:
             raise ValueError(
-                f"the manifest handed to rule {name} is not the pinned one "
-                f"(expected {STRUCTURE_RULE_MANIFEST_SHA256}, got {manifest.sha256})"
+                f"the manifest handed to rule {name} is not the pinned one (expected {pin}, got {manifest.sha256})"
             )
         if not is_attested(manifest):
             # The digest field survives dataclasses.replace, so it proves nothing about the content in hand.
@@ -264,6 +281,27 @@ class AuditedStructureRule(StructureRule):
         entry["manifest_version"] = self._manifest.version
         entry["manifest_sha256"] = self._manifest.sha256
         return entry
+
+
+class AuditedStructureRuleV0_1_0(AuditedStructureRule):
+    """The rules of manifest 0.1.0, kept so a decision recorded before manifest 0.2.0 still replays.
+
+    The logic is the same (an audited, inactive candidate that makes no edge); only the audited manifest differs. Replay
+    only: :func:`default_rules` does not carry it, so no live selection uses it. A rule built over the preserved 0.1.0
+    bytes is inactive by its own entry (``activation_approved: false``), whatever ``RULES_WITH_IMPLEMENTED_PREDICATES`` says.
+
+    It subclasses the live rule, so it inherits that rule's logic. If a future version gives a rule real logic, 0.1.0
+    replay would silently inherit it; freeze the old logic before doing that.
+    """
+
+    _pin = STRUCTURE_RULE_MANIFEST_SHA256_0_1_0
+
+
+@lru_cache(maxsize=1)
+def replay_rules() -> tuple[StructureRule, ...]:
+    """The rules a recorded decision may name: this release's, plus earlier versions kept loadable for replay only."""
+    old = load_structure_rule_manifest(expected_sha256=STRUCTURE_RULE_MANIFEST_SHA256_0_1_0, path=MANIFEST_0_1_0_PATH)
+    return (*default_rules(), *(AuditedStructureRuleV0_1_0(candidate, old) for candidate in old.candidates))
 
 
 @lru_cache(maxsize=1)

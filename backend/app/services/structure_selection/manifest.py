@@ -55,7 +55,13 @@ from app.services.structure_selection.models import (
     StructureRequest,
     StructureSubject,
 )
-from app.services.structure_selection.rules import RULES_VERSION, StructureRule, default_rules, validate_rules
+from app.services.structure_selection.rules import (
+    RULES_VERSION,
+    StructureRule,
+    default_rules,
+    replay_rules,
+    validate_rules,
+)
 
 MANIFEST_FORMAT_VERSION = 1
 
@@ -298,7 +304,9 @@ def replay_structure_assessment(manifest: dict[str, Any]) -> list[StructureAsses
 
 
 def _rules_for(manifest: dict[str, Any], rules: Sequence[StructureRule] | None) -> tuple[StructureRule, ...]:
-    registry = tuple(default_rules() if rules is None else rules)
+    # A replay may name a rule version this release no longer applies live (kept loadable for replay only); a version
+    # in neither list is refused below.
+    registry = tuple(replay_rules() if rules is None else rules)
     validate_rules(registry)
     available = {(r.rule_id, r.version): r for r in registry}
     protocol = manifest["decision"].get("protocol") or {}
@@ -347,3 +355,34 @@ def replay_matches(manifest: dict[str, Any], *, rules: Sequence[StructureRule] |
     """
     replayed = replay_structure_decision(manifest, rules=rules)
     return _canon(replayed) == _canon(manifest["decision"]) and replayed["outcome"] == manifest["outcome"]
+
+
+def replay_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Label a replay as historical or current: the rule versions the manifest was made under versus today's registry.
+
+    A manifest that names a rule version kept for replay only (one ``default_rules`` no longer carries) is historical:
+    replay reproduces what that decision recorded, and a fresh selection uses the current versions. Pure; it does not
+    replay or reassess anything.
+    """
+    live = {(r.rule_id, r.version) for r in default_rules()}
+    protocol = manifest["decision"].get("protocol") or {}
+    superseded = [
+        f"{e['rule_id']} {e['version']}" for e in protocol.get("rules", []) if (e["rule_id"], e["version"]) not in live
+    ]
+    statement = (
+        "Replay reproduces the decision from the inputs recorded in the manifest. It does not reassess any candidate "
+        "and is not an endorsement under today's rules"
+    )
+    if superseded:
+        statement += (
+            f". It names rule version(s) kept for replay only ({', '.join(superseded)}); "
+            "a fresh selection uses the current versions."
+        )
+    else:
+        statement += "."
+    return {
+        "kind": "historical" if superseded else "current",
+        "reassessed": False,
+        "superseded_rule_versions": superseded,
+        "statement": statement,
+    }
