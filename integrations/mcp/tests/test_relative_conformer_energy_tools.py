@@ -27,7 +27,7 @@ SINGLE_ARGS: dict[str, Any] = {
     "reference_conformer_ref": "cg_ref01",
     "energy_kind": "electronic_energy",
     "certificate": "local_minimum_any_surface",
-    "level_of_theory_ref": "lot_abc01",
+    "level": {"level_of_theory_ref": "lot_abc01"},
 }
 COMPARE_ARGS: dict[str, Any] = {
     "species_entry_ref": SPECIES,
@@ -91,7 +91,7 @@ def test_required_fields_are_required_and_nothing_is_defaulted():
     listed = _listed()
     single = listed[SINGLE]["inputSchema"]
     assert {"species_entry_ref", "reference_conformer_ref", "energy_kind", "certificate"} <= set(single["required"])
-    assert single["oneOf"] == [{"required": ["level_of_theory_ref"]}, {"required": ["composite_scheme_ref"]}]
+    assert "level" in single["required"]
     compare = listed[COMPARE]["inputSchema"]
     assert {
         "species_entry_ref", "reference_conformer_ref", "energy_kind", "certificate", "candidate", "reference", "pairing"
@@ -101,6 +101,14 @@ def test_required_fields_are_required_and_nothing_is_defaulted():
         for field in schema["required"]:
             assert "default" not in schema["properties"][field], field
         assert _no_default(schema)  # no optional field carries a tool-side default either
+
+
+def test_no_tool_schema_has_a_top_level_combinator():
+    # Kills: a top-level oneOf/anyOf/allOf, which the Claude API rejects in a tool input_schema.
+    for tool in list_tools_payload():
+        assert not {"oneOf", "anyOf", "allOf"} & set(tool["inputSchema"]), tool["name"]
+    for name in (SINGLE, COMPARE):
+        assert "oneOf" not in json.dumps(_listed()[name]["inputSchema"])
 
 
 def test_descriptions_tell_the_model_what_to_quote_and_what_not_to_claim():
@@ -143,10 +151,10 @@ def test_compare_posts_to_the_compare_route_with_both_protocols():
 @pytest.mark.parametrize(
     ("name", "args", "field", "bad"),
     [
-        (SINGLE, SINGLE_ARGS, "level_of_theory_ref", "cg_ref01"),
+        (SINGLE, SINGLE_ARGS, "level", {"level_of_theory_ref": "cg_ref01"}),
         (SINGLE, SINGLE_ARGS, "reference_conformer_ref", "lot_abc01"),
         (SINGLE, SINGLE_ARGS, "species_entry_ref", "tse_01HZ5K9X2A"),
-        (SINGLE, {**_without(SINGLE_ARGS, "level_of_theory_ref"), "composite_scheme_ref": "lot_abc01"}, "composite_scheme_ref", "lot_abc01"),
+        (SINGLE, SINGLE_ARGS, "level", {"composite_scheme_ref": "lot_abc01"}),
         (COMPARE, COMPARE_ARGS, "reference_conformer_ref", "spe_01HZ5K9X2A"),
     ],
 )
@@ -183,13 +191,17 @@ def test_compare_requires_both_protocols_and_the_pairing(missing):
     assert seen == []
 
 
-def test_the_level_is_exactly_one_of_a_lot_and_a_csch():
+@pytest.mark.parametrize(
+    "level",
+    [{"level_of_theory_ref": "lot_x", "composite_scheme_ref": "csch_x"}, {}, "lot_x", {"bogus": "lot_x"}],
+)
+def test_the_level_is_exactly_one_of_a_lot_and_a_csch(level):
     seen, handler = _recording()
     with _client(handler) as client:
         with pytest.raises(MCPToolError):
-            _call(client, SINGLE, {**SINGLE_ARGS, "composite_scheme_ref": "csch_x"})
+            _call(client, SINGLE, {**SINGLE_ARGS, "level": level})
         with pytest.raises(MCPToolError):
-            _call(client, SINGLE, _without(SINGLE_ARGS, "level_of_theory_ref"))
+            _call(client, SINGLE, _without(SINGLE_ARGS, "level"))
     assert seen == []
 
 
@@ -210,3 +222,16 @@ def test_optional_fields_are_forwarded_when_given_and_absent_otherwise():
     assert body["member_refs"] == ["cg_a", "cg_b"]
     assert "repeat_policy" not in body and "coverage_requirement" not in body
     assert request.url.params["profile"] == "curated"
+
+
+def test_package_version_matches_installed_metadata():
+    from importlib.metadata import PackageNotFoundError, version
+
+    import tckdb_mcp
+
+    try:
+        expected = version("tckdb-mcp")
+    except PackageNotFoundError:
+        expected = "0.0.0+local"
+    assert tckdb_mcp.__version__ == expected
+    assert tckdb_mcp.__version__ != "0.2.0"

@@ -726,7 +726,7 @@ species_entry_ref: "spe_..."
 reference_conformer_ref: "cg_..."   # required, no default
 energy_kind: "electronic_energy" | "zero_kelvin_energy"   # required, no default
 certificate: "local_minimum_any_surface" | "local_minimum_on_energy_surface"   # required, no default
-level_of_theory_ref ("lot_") XOR composite_scheme_ref ("csch_")   # relative energies: exactly one, required
+level: {level_of_theory_ref ("lot_") | composite_scheme_ref ("csch_")}   # relative energies: required, exactly one ref
 candidate, reference: {level: {level_of_theory_ref | composite_scheme_ref}, recipe?}   # comparison: required
 pairing: "same_geometry" | "same_basin"   # comparison: required, no default
 member_refs? ("cg_"), recipe?, coverage_requirement?, repeat_policy?, min_review_status?, permitted_quality?, require_stable_reference?, profile?

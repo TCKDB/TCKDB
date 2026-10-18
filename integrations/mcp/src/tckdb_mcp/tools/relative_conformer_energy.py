@@ -109,6 +109,16 @@ _LEVEL_PROPERTIES: dict[str, Any] = {
     "composite_scheme_ref": _ref_property("csch_", "The composite scheme compared (use this, not lot_, for a level bound to one)."),
 }
 
+_LEVEL_PROPERTY: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "The one level compared: an object with exactly one of level_of_theory_ref ('lot_...') and "
+        "composite_scheme_ref ('csch_...'); not both, not neither."
+    ),
+    "properties": _LEVEL_PROPERTIES,
+    "additionalProperties": False,
+}
+
 _PROTOCOL_PROPERTY: dict[str, Any] = {
     "type": "object",
     "description": (
@@ -116,11 +126,7 @@ _PROTOCOL_PROPERTY: dict[str, Any] = {
         "'recipe': optional}. The level names exactly one of the two refs."
     ),
     "properties": {
-        "level": {
-            "type": "object",
-            "properties": _LEVEL_PROPERTIES,
-            "additionalProperties": False,
-        },
+        "level": _LEVEL_PROPERTY,
         "recipe": {"type": "object", "description": "A requested actual recipe in the declaration's shape (version 1)."},
     },
     "required": ["level"],
@@ -159,13 +165,10 @@ def _input_schema(tool: RelativeEnergyTool) -> dict[str, Any]:
         }
         required += ["candidate", "reference", "pairing"]
     else:
-        properties.update(_LEVEL_PROPERTIES)
+        properties["level"] = _LEVEL_PROPERTY
+        required.append("level")
         properties["recipe"] = {"type": "object", "description": "A requested actual recipe in the declaration's shape (version 1)."}
-        # The level is "exactly one of lot_ / csch_": expressed as oneOf so a host can show it; the tool re-checks.
-    schema: dict[str, Any] = {"type": "object", "required": required, "properties": properties, "additionalProperties": False}
-    if not tool.compare:
-        schema["oneOf"] = [{"required": ["level_of_theory_ref"]}, {"required": ["composite_scheme_ref"]}]
-    return schema
+    return {"type": "object", "required": required, "properties": properties, "additionalProperties": False}
 
 
 INPUT_SCHEMAS: dict[str, dict[str, Any]] = {name: _input_schema(tool) for name, tool in TOOLS.items()}
@@ -200,7 +203,7 @@ def _level(value: Any, *, field_name: str) -> dict[str, str]:
         raise invalid_input(f"{field_name} must name exactly one of level_of_theory_ref and composite_scheme_ref")
     key, ref = next(iter(given.items()))
     prefix = "lot_" if key == "level_of_theory_ref" else "csch_"
-    return {key: validate_path_handle(ref, field_name=f"{field_name}.{key}" if field_name != "level" else key, expected_prefix=prefix)}
+    return {key: validate_path_handle(ref, field_name=f"{field_name}.{key}", expected_prefix=prefix)}
 
 
 def _protocol(value: Any, *, field_name: str) -> dict[str, Any]:
@@ -252,9 +255,7 @@ def run(name: str, client: TCKDBHttpClient, config: Config, arguments: dict[str,
         body["reference"] = _protocol(args.get("reference"), field_name="reference")
         body["pairing"] = _enum(args, "pairing", PAIRINGS)
     else:
-        body["level"] = _level(
-            {k: args[k] for k in ("level_of_theory_ref", "composite_scheme_ref") if k in args}, field_name="level"
-        )
+        body["level"] = _level(args.get("level"), field_name="level")
         if "recipe" in args:
             if not isinstance(args["recipe"], dict):
                 raise invalid_input(f"recipe must be an object; got {type(args['recipe']).__name__}")

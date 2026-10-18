@@ -379,10 +379,22 @@ def _relative_energy_body(required: Mapping[str, Any], optional: Mapping[str, An
     return body
 
 
+def _relative_energy_level_object(level: Any, name: str) -> dict[str, str]:
+    """A protocol's ``level``: a mapping holding exactly one of the two refs (checked before any request)."""
+    if not isinstance(level, Mapping):
+        raise ValueError(f"{name}['level'] must be a mapping with exactly one of level_of_theory_ref and composite_scheme_ref; got {level!r}.")
+    unknown = sorted(set(level) - {"level_of_theory_ref", "composite_scheme_ref"})
+    if unknown:
+        raise ValueError(f"{name}['level'] has unknown field(s) {unknown!r}.")
+    return _relative_energy_level(level.get("level_of_theory_ref"), level.get("composite_scheme_ref"))
+
+
 def _relative_energy_protocol(protocol: Mapping[str, Any], name: str) -> dict[str, Any]:
     if not isinstance(protocol, Mapping) or "level" not in protocol:
         raise ValueError(f"{name} must be a mapping with a 'level' (and optionally a 'recipe'); got {protocol!r}.")
-    return dict(protocol)
+    out = dict(protocol)
+    out["level"] = _relative_energy_level_object(protocol["level"], name)
+    return out
 
 
 _STATMECH_SELECTION_PATH = "/scientific/statmech/select"

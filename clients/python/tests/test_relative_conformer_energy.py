@@ -187,3 +187,39 @@ def test_manifests_come_back_exactly_as_served():
         assert list(got) == list(expected)
         assert list(got["a"]) == ["y", "x"]
         assert json.dumps(got) == json.dumps(expected)
+
+
+@pytest.mark.parametrize(
+    "bad_level",
+    [{}, {"level_of_theory_ref": "lot_x", "composite_scheme_ref": "csch_x"}, "lot_x", {"bogus": "lot_x"}],
+)
+@pytest.mark.parametrize("method", ["compare_relative_conformer_energies", "get_relative_conformer_energy_comparison_manifest"])
+@pytest.mark.parametrize("which", ["candidate", "reference"])
+def test_compare_protocol_level_must_name_exactly_one_ref(method, which, bad_level):
+    # Kills: skipping the level check on a compare protocol.
+    seen, handler = _recorder()
+    with pytest.raises(ValueError):
+        getattr(_client(handler), method)(SPECIES, **dict(COMPARE, **{which: {"level": bad_level}}))
+    assert seen == []
+
+
+def test_client_documents_the_backend_vocabularies_it_lists():
+    # The client cannot import the backend, so read the backend source when the checkout has it (skipped otherwise).
+    import re
+    from pathlib import Path
+
+    import tckdb_client.scientific_types as types
+
+    source = Path(__file__).resolve().parents[3] / "backend/app/services/relative_conformer_energy/compare.py"
+    if not source.exists():
+        pytest.skip("backend source is not beside the client package")
+    codes = dict(re.findall(r'^([A-Z_]+) = "([a-z_]+)"', source.read_text(), re.M))
+    reasons = {v for k, v in codes.items() if k not in {"COMPARISON_VERSION", "CODE_IDENTICAL_PROTOCOLS", "SIGN_CONVENTION"}}
+    problems = {v for k, v in codes.items() if k.startswith("REFERENCE_CONFORMER_")}
+    assert len(reasons) == 8 and len(problems) == 3
+
+    def words(cls) -> set[str]:
+        return set(re.findall(r"``([a-z_]+)``", cls.__doc__ or ""))
+
+    assert reasons <= words(types.RelativeEnergyComparePair)
+    assert problems <= words(types.RelativeEnergyCompareReferenceConformer)

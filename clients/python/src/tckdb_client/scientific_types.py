@@ -2005,7 +2005,13 @@ class RelativeConformerEnergyManifest(TypedDict, total=False):
 
 
 class RelativeEnergyComparePair(TypedDict):
-    """One conformer's two values and their deviation. An unusable pair has ``excluded_reason`` and no deviation."""
+    """One conformer's two values and their deviation. An unusable pair has ``excluded_reason`` and no deviation.
+
+    ``excluded_reason`` is a code from a closed vocabulary (typed ``str`` because the server's type is ``str``):
+    ``neither_protocol_has_value``, ``candidate_value_missing``, ``reference_protocol_value_missing``,
+    ``geometry_not_recorded``, ``geometry_differs``, ``reference_conformer_value_missing``,
+    ``reference_conformer_geometry_not_recorded`` and ``reference_conformer_geometry_differs``. Never a zero deviation.
+    """
 
     conformer_ref: str
     candidate_kj_mol: float | None
@@ -2028,6 +2034,22 @@ class RelativeEnergyCompareClaims(TypedDict):
     statement: str
 
 
+class RelativeEnergyCompareReferenceConformer(TypedDict):
+    """What the named reference conformer allows; every relative energy is taken from it.
+
+    ``problem`` is ``None`` or one of ``reference_conformer_value_missing``, ``reference_conformer_geometry_not_recorded``
+    and ``reference_conformer_geometry_differs`` (the last two under ``same_geometry`` only). With a problem no pair is
+    usable.
+    """
+
+    conformer_ref: str
+    problem: str | None
+    candidate_value_present: bool
+    reference_value_present: bool
+    candidate_geometry_ref: str | None
+    reference_geometry_ref: str | None
+
+
 class RelativeConformerEnergyCompareResponse(TypedDict):
     """A descriptive comparison of two stored protocols against one named reference conformer.
 
@@ -2043,7 +2065,7 @@ class RelativeConformerEnergyCompareResponse(TypedDict):
     coverage_requirement: str
     units: JSONDict
     statistics: JSONDict | None
-    reference_conformer: JSONDict
+    reference_conformer: RelativeEnergyCompareReferenceConformer
     pairs: list[RelativeEnergyComparePair]
     candidate: JSONDict
     reference: JSONDict
