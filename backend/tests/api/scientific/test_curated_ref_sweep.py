@@ -151,6 +151,9 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     "calc_h_tsopt": {_TSE, _TS, _TSBROWSE, _FULL, _KIN, _KSEARCH},
     "calc_h_scan": {_TSE, _TS, _TSBROWSE, _FULL},
     "cg_h_rxn": {_FULL},
+    # A hidden freq calculation that is the most recent freq of a visible TS entry, beside a visible freq of the same
+    # entry: the reaction whose single-slot picks a fall-through would move to the sibling.
+    "calc_h_tsfq": {_FULL, _KIN},
     # D5 world: children of a visible entry and a reaction entry with only hidden records.
     "tse_hw2": {_TS, _TSBROWSE},
     "calc_h_w1": {_TSE, _TS, _TSBROWSE},

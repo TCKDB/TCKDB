@@ -81,6 +81,7 @@ ROUTE_PATH_PARAM_PROVIDERS: dict[tuple[str, str], dict[str, Callable[[SweepWorld
                 w.extra["reaction_entry_unreviewed"].public_ref,
                 w.extra["reaction_entry_hidden_participant"].public_ref,
                 w.extra["reaction_entry_all_hidden"].public_ref,
+                w.extra["reaction_entry_siblings"].public_ref,
             ]
         }
         for suffix in ("full", "kinetics")

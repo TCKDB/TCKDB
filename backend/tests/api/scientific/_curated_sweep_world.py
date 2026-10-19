@@ -1052,6 +1052,33 @@ def _extend_for_ts_and_reaction_family(
     ext["reaction_entry_all_hidden"] = rxe_w
     ext["scoping_approved_extra"].append((R.reaction_entry, rxe_w))
 
+    # -- a reaction with a visible same-role sibling for every single-slot pick of its TS entry -----------------------------
+    # Its own reaction, so the D5 tests that rest on ``rxe`` having ONLY hidden freq calculations keep their premise. The
+    # visible freq calculation is created first and the hidden one second, so the hidden one is the entry's most recent
+    # freq (what the ``/full`` ``ts_freq`` slot picks, and what kinetics provenance's first freq resolves to): a hide that
+    # falls through to the sibling names ``calc_s_vf`` where exploratory names ``calc_h_tsfq``.
+    sr1, sp1 = (
+        make_species_entry(session, make_species(session, inchi_key=next_inchi_key(tag))) for tag in ("SWS1", "SWS2")
+    )
+    reaction_s = make_chem_reaction(session, reactants=[sr1.species], products=[sp1.species], reversible=False)
+    rxe_s = make_reaction_entry(session, reaction=reaction_s, reactant_entries=[sr1], product_entries=[sp1])
+    ts_s = make_transition_state(session, reaction_entry=rxe_s, label="visible-sibling-ts")
+    tse_s = make_transition_state_entry(session, transition_state=ts_s)
+    calc_s_vf = make_calculation(
+        session, type=CalculationType.freq, transition_state_entry_id=tse_s.id, lot_id=lot.id
+    )
+    calc_h_tsfq = make_calculation(
+        session, type=CalculationType.freq, transition_state_entry_id=tse_s.id, lot_id=None
+    )
+    kin_sib = make_kinetics(session, reaction_entry=rxe_s, a=6.0e-12, ea_kj_mol=14.0)
+    session.flush()
+    source(kin_sib, calc_h_tsfq, KineticsCalculationRole.freq)
+    source(kin_sib, calc_s_vf, KineticsCalculationRole.fit_source)
+    vis["ts_vsb"], vis["tse_vsb"], vis["calc_s_vf"], vis["kin_vsb"] = ts_s, tse_s, calc_s_vf, kin_sib
+    hid["calc_h_tsfq"] = calc_h_tsfq
+    ext["reaction_entry_siblings"] = rxe_s
+    ext["scoping_approved_extra"].append((R.reaction_entry, rxe_s))
+
     # -- a hidden PARENT of a visible TS optimisation (``optimized_from``): the only path search of its entry ---------------
     ts_vp = make_transition_state(session, reaction_entry=rxe, label="visible-ts-hidden-parent")
     tse_vp = make_transition_state_entry(session, transition_state=ts_vp)

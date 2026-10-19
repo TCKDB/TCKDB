@@ -294,7 +294,10 @@ def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
             while i < len(exp) and not _is_withholding(c, exp[i]):
                 i += 1
             if i == len(exp):
-                return [f"{path}[*]<element not in exploratory list>"]
+                # Name the field that differs, not just the element: the closest exploratory element (fewest
+                # violations) is the one this curated element was taken from, so its violations are the substitution.
+                closest = min((withholding_violations(e, c, f"{path}[*]") for e in exp), key=len, default=[])
+                return closest or [f"{path}[*]<element not in exploratory list>"]
             i += 1
         return []
     return [] if _same_modulo_placeholders(exp, cur) else [f"{path}<value changed>"]
