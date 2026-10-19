@@ -1,7 +1,7 @@
 """PR-2a: the species-side route families withhold hidden refs under ``?profile=curated`` (and only there).
 
-What this pins, beyond the all-routes sweep (``test_curated_ref_sweep.py``, whose baseline no longer lists any
-species-side entry):
+What this pins, beyond the all-routes sweep (``test_curated_ref_sweep.py``, which is enforce-only since PR-5 and covers
+every route):
 
 * **Leaks.** Every species-side route, crawled under ``curated`` with and without ``internal_ids``, names no hidden
   record by ref or by integer id, and answers 200. On ``main`` before PR-2a this fails: the same crawl finds 29 refs
@@ -37,10 +37,10 @@ from app.services.scientific_read.profile import (
     set_current_read_profile,
 )
 from app.services.scientific_read.species import _compute_availability, _compute_section_ids
+from tests.api.scientific._curated_families import SPECIES_SIDE_PREFIXES
 from tests.api.scientific._curated_sweep_analysis import (
     id_leaks,
     parse_body,
-    read_baseline,
     ref_leaks,
     withholding_violations,
 )
@@ -83,7 +83,7 @@ def _is_selection_document(path: str) -> bool:
 
 
 def _in_species_side_family(path: str) -> bool:
-    return ref_guard.route_matches(path, ref_guard.SPECIES_SIDE_PREFIXES) and not _is_selection_document(path)
+    return ref_guard.route_matches(path, SPECIES_SIDE_PREFIXES) and not _is_selection_document(path)
 
 
 def _species_side(specs):
@@ -147,19 +147,6 @@ def test_species_side_routes_name_no_hidden_record_under_curated(client, db_sess
     for key in ("calc_h", "cg_h", "co_h", "tse_h", "thm_h"):
         assert hidden[key] in exploratory_text, f"positive control: {key} never named under exploratory"
     assert not problems, "\n".join(problems)
-
-
-def test_the_baseline_keeps_no_species_side_entry():
-    """The ratchet only shrinks: PR-2a removed every species-side entry and none may come back.
-
-    Kills: re-adding a species-side leak, hidden id or unplaceable to the baseline instead of fixing it.
-    """
-    baseline = read_baseline()
-    assert baseline, "baseline file is missing or empty"
-    for section, entries in baseline.items():
-        for entry in entries:
-            path = entry.split(" ", 2)[1]
-            assert not _in_species_side_family(path), f"{section}: {entry}"
 
 
 # ---------------------------------------------------------------------------

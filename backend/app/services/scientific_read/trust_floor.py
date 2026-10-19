@@ -23,7 +23,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from app.db.models.common import SubmissionRecordType
 from app.db.models.kinetics import Kinetics
 from app.db.models.transition_state import TransitionStateEntry
-from app.services.scientific_read.common import review_hidden_under_profile
+from app.services.scientific_read.common import ids_below_review_floor
 from app.services.scientific_read.profile import current_read_profile
 from app.services.trust import (
     EvidenceEvaluation,
@@ -37,7 +37,7 @@ def _hidden_calculation_ids(session: Session | None, calculations: Iterator[Any]
     if session is None:
         return set()
     ids = {c.id for c in calculations if c is not None}
-    return review_hidden_under_profile(session, record_type=SubmissionRecordType.calculation, record_ids=ids)[1]
+    return ids_below_review_floor(session, record_type=SubmissionRecordType.calculation, record_ids=ids)
 
 
 @contextmanager

@@ -94,8 +94,8 @@ from app.schemas.reads.scientific_transition_state import (
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    ids_below_review_floor,
     review_floor_predicate,
-    review_hidden_under_profile,
     review_summary,
     validate_includes,
     visible_statuses,
@@ -336,7 +336,7 @@ def get_transition_state(
     entry_ids = [e.id for e in entries]
     # Owner decision D5: counts and flags answer what the list would show. The lists keep every entry (the ref guard
     # removes the hidden ones from them); what is COUNTED follows the review floor.
-    _, hidden_entry_ids = review_hidden_under_profile(
+    hidden_entry_ids = ids_below_review_floor(
         session, record_type=SubmissionRecordType.transition_state_entry, record_ids=entry_ids
     )
     counted_entries = [e for e in entries if e.id not in hidden_entry_ids]
@@ -1462,13 +1462,9 @@ def _build_statmech_summaries_by_entry(
     """Project the statmech records the given transition-state entries own, in one pass.
 
     Three statements for the whole set, whatever it holds: the records, their source
-    calculations, and their torsion counts (plus, under a curated review floor, one review
-    lookup for the records and one for the calculations). The full record, with its torsions,
-    electronic levels and scale factor, is the statmech detail read.
-
-    Under a review floor, a statmech record below it (404 on its own detail route) is not listed,
-    and neither is a source calculation below it. With no floor nothing is hidden and no review
-    lookup is made, so the exploratory output is unchanged.
+    calculations, and their torsion counts. The full record, with its torsions, electronic
+    levels and scale factor, is the statmech detail read. A record or a source calculation the
+    review floor hides is withheld afterwards, at the response boundary (``ref_guard``).
     """
     if not entry_ids:
         return {}
@@ -1479,10 +1475,6 @@ def _build_statmech_summaries_by_entry(
             .order_by(Statmech.id.asc())
         ).all()
     )
-    _, hidden_records = review_hidden_under_profile(
-        session, record_type=SubmissionRecordType.statmech, record_ids=[r.id for r in records]
-    )
-    records = [r for r in records if r.id not in hidden_records]
     if not records:
         return {}
     record_ids = [record.id for record in records]
@@ -1499,15 +1491,7 @@ def _build_statmech_summaries_by_entry(
         .where(StatmechSourceCalculation.statmech_id.in_(record_ids))
         .order_by(Calculation.id.asc(), StatmechSourceCalculation.role.asc())
     ).all()
-    # A calculation the active profile hides (404 on its own detail route) is not named.
-    _, hidden = review_hidden_under_profile(
-        session,
-        record_type=SubmissionRecordType.calculation,
-        record_ids=[row[2] for row in link_rows],
-    )
-    for statmech_id, role, calculation_id, calculation_ref in link_rows:
-        if calculation_id in hidden:
-            continue
+    for statmech_id, role, _calculation_id, calculation_ref in link_rows:
         sources.setdefault(statmech_id, []).append(
             TransitionStateStatmechSourceCalculation(
                 role=role.value, calculation_ref=calculation_ref

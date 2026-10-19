@@ -1,7 +1,7 @@
 """PR-2b: the transition-state and reaction route families withhold hidden refs under ``?profile=curated``.
 
-What this pins, beyond the all-routes sweep (``test_curated_ref_sweep.py``, whose baseline no longer lists any
-transition-state, reaction-entry, reaction or kinetics entry):
+What this pins, beyond the all-routes sweep (``test_curated_ref_sweep.py``, which is enforce-only since PR-5 and covers
+every route):
 
 * **Leaks.** Every route of the family, crawled under ``curated`` with and without ``internal_ids`` and with every
   include token (``trust`` and ``assessments`` are not part of ``all``), names no hidden record by ref, by integer id,
@@ -21,11 +21,11 @@ import pytest
 from app.db.models.common import CalculationType, RecordReviewStatus
 from app.db.models.common import SubmissionRecordType as R
 from app.services.scientific_read import ref_guard
+from tests.api.scientific._curated_families import TS_REACTION_PREFIXES
 from tests.api.scientific._curated_sweep_analysis import (
     id_leaks,
     order_independent,
     parse_body,
-    read_baseline,
     ref_leaks,
     withholding_violations,
 )
@@ -53,7 +53,7 @@ def _is_selection_document(path: str) -> bool:
 
 
 def _in_family(path: str) -> bool:
-    return ref_guard.route_matches(path, ref_guard.TS_REACTION_PREFIXES) and not _is_selection_document(path)
+    return ref_guard.route_matches(path, TS_REACTION_PREFIXES) and not _is_selection_document(path)
 
 
 def _family(specs):
@@ -117,19 +117,6 @@ def test_ts_and_reaction_routes_name_no_hidden_record_under_curated(client, db_s
         if key in hidden:
             assert hidden[key] in exploratory_text, f"positive control: {key} never named under exploratory"
     assert not problems, "\n".join(problems)
-
-
-def test_the_baseline_keeps_no_ts_or_reaction_entry():
-    """The ratchet only shrinks: PR-2b removed every entry of the family and none may come back.
-
-    Kills: re-adding a leak, hidden id or unplaceable of this family to the baseline instead of fixing it.
-    """
-    baseline = read_baseline()
-    assert baseline, "baseline file is missing or empty"
-    for section, entries in baseline.items():
-        for entry in entries:
-            path = entry.split(" ", 2)[1]
-            assert not _in_family(path), f"{section}: {entry}"
 
 
 # ---------------------------------------------------------------------------
@@ -695,7 +682,6 @@ def test_the_subject_of_every_enabled_route_sits_at_record_or_records():
         model = getattr(route, "response_model", None)
         if not (
             path.startswith(BASE)
-            and ref_guard.route_matches(path, ref_guard._ENABLED_ROUTE_PREFIXES)
             and not ref_guard.route_matches(path, ref_guard.EXEMPT_ROUTE_PREFIXES)
             and isinstance(model, type)
             and issubclass(model, BaseModel)
