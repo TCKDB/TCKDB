@@ -50,9 +50,9 @@ dataset must never require a code release.
   structure determination named by public ref. `GET` on the same path lists a subject's findings and whether each is still in force.
 - Append-only: a correction is a later adjudication naming the earlier ruling on the same subject and stating the replacement verdict
   (`does_not_invalidate`, `unresolved` or `invalidates`). Corrections can themselves be corrected; nothing is edited or deleted.
-- **Selection behaviour changes for corrected findings only.** Selections read the newest ruling in force of each chain, with the kind and role
-  of the finding it started from. A finding no correction names reads exactly as before. A correction ruling `invalidates` or `unresolved`
-  used to settle the earlier finding and then be ignored; it now carries its verdict.
+- **Selection behaviour changes only for a corrected role invalidation or contradictory characterization.** Selections already read the newest ruling in
+  force of each chain, and a finding no correction names reads exactly as before. What changes: a correction that continues a `role_invalidation` or a
+  `contradictory_characterization` now keeps that claim's role and scope instead of reading as a whole-subject failure that bars every role.
 - An in-force `invalidates` finding excludes the evidence from H298, kinetics and structure selection through the route, and a correction
   restores or reopens it. Before this, only tests that inserted rows directly could do either.
 - Twelve new coded refusals, all prefixed `structure_finding_`; see the generated error-code docs.

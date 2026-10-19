@@ -198,6 +198,10 @@ def _evaluated_geometry(c: NormalizedCalculation) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+#: The kinds whose claim is narrower than the whole subject: a ruling that continues one keeps its scope.
+_SCOPED_KINDS = frozenset({"role_invalidation", "contradictory_characterization"})
+
+
 def live_findings(findings: tuple[FindingFacts, ...]) -> list[FindingFacts]:
     """The rulings in force: findings no correction has replaced, each read with the meaning it currently carries.
 
@@ -208,12 +212,13 @@ def live_findings(findings: tuple[FindingFacts, ...]) -> list[FindingFacts]:
     set (so its subject cannot be checked), corrects nothing: the earlier ruling stands until a readable, authorized,
     same-subject adjudication says otherwise.
 
-    A correction carries a replacement verdict, and corrections can themselves be corrected, so each chain of
-    corrections is read at its head, the newest ruling in force. A head that rules ``does_not_invalidate`` is returned
-    as it is (it has no effect). A head that rules ``invalidates`` or ``unresolved`` is returned with the kind and role
-    of the finding the chain started from, because an adjudication has no kind or role of its own: the ruling applies
-    to the same claim, with the verdict it now carries. A chain with no correction is returned untouched, exactly as
-    before corrections could carry a verdict.
+    A correction carries a replacement verdict, and corrections can themselves be corrected, so each chain is read at its
+    head, the newest ruling in force: a head that rules ``invalidates`` blocks and one that rules ``unresolved`` leaves the
+    product unresolved, each as an ordinary finding does, and one that rules ``does_not_invalidate`` has no effect. An
+    adjudication has no kind or role of its own, so a head that continues a ``role_invalidation`` or a
+    ``contradictory_characterization`` is returned with that kind and role: those two claims are narrower than the whole
+    subject, and a head without them would read as an identity failure and bar every role. A head that continues any other
+    kind is returned as it is, as it always was.
     """
     by_ref = {f.finding_ref: f for f in findings}
     corrects: dict[str, str] = {}  # correcting finding -> the finding it corrects, for the valid corrections only
@@ -237,7 +242,8 @@ def live_findings(findings: tuple[FindingFacts, ...]) -> list[FindingFacts]:
             while root.finding_ref in corrects and root.finding_ref not in seen:
                 seen.add(root.finding_ref)
                 root = by_ref[corrects[root.finding_ref]]
-            f = replace(f, kind=root.kind, role=root.role)
+            if root.kind in _SCOPED_KINDS:
+                f = replace(f, kind=root.kind, role=root.role)
         out.append(f)
     return out
 

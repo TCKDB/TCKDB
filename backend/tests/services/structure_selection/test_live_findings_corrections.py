@@ -38,7 +38,7 @@ def _worlds_without_a_verdict_carrying_correction() -> list[tuple[FindingFacts, 
     """Every finding-set shape that has no correction ruling ``invalidates`` or ``unresolved``, including withdrawals."""
     worlds: list[tuple[FindingFacts, ...]] = [()]
     for kind, verdict, authority, version in itertools.product(
-        KINDS + ("role_invalidation", "a_kind_this_release_cannot_read"),
+        (*KINDS, "role_invalidation", "a_kind_this_release_cannot_read"),
         ("invalidates", "does_not_invalidate", "unresolved"),
         ("authorized_adjudication", "producer_assertion"),
         (1, 2),
@@ -48,7 +48,7 @@ def _worlds_without_a_verdict_carrying_correction() -> list[tuple[FindingFacts, 
         worlds.append((base,))
         # Withdrawn by a same-subject authorized adjudication, by one about another subject, by an unreadable one, by a
         # producer's, and by one naming a finding that is not loaded.
-        for label, change in (
+        for _label, change in (
             ("same", {}),
             ("other_subject", {"subject_ref": "calc_other"}),
             ("unreadable", {"version": 2}),
@@ -77,8 +77,8 @@ def test_every_world_without_a_verdict_carrying_correction_reads_exactly_as_on_m
 
 def test_the_differential_can_fail():
     """A reference that disagreed with the function would be seen: the corrected shapes differ from main."""
-    a = finding_facts("sfnd_a")
-    c = finding_facts("sfnd_c", kind="adjudication", verdict="unresolved", supersedes="sfnd_a")
+    a = finding_facts("sfnd_a", kind="role_invalidation", role="energy")
+    c = finding_facts("sfnd_c", kind="adjudication", verdict="invalidates", supersedes="sfnd_a")
     assert live_findings((a, c)) != _main_live_findings((a, c))
 
 
@@ -95,14 +95,15 @@ def test_the_head_of_a_chain_is_the_only_ruling_in_force():
     assert [f.finding_ref for f in live] == ["sfnd_3"]
 
 
-def test_a_head_that_invalidates_or_is_unresolved_reads_as_the_claim_the_chain_started_from():
+def test_a_head_continuing_a_narrow_claim_keeps_its_kind_and_role_and_any_other_head_is_unchanged():
+    for kind, role in (("role_invalidation", "curvature"), ("contradictory_characterization", None)):
+        for verdict in ("invalidates", "unresolved"):
+            (head,) = live_findings(_chain("does_not_invalidate", verdict, kind=kind, role=role))
+            assert (head.kind, head.verdict, head.role, head.authority) == (kind, verdict, role, "authorized_adjudication")
     for verdict in ("invalidates", "unresolved"):
-        (head,) = live_findings(_chain("does_not_invalidate", verdict))
-        assert (head.kind, head.verdict, head.role, head.authority) == (
-            "identity_incompatibility", verdict, None, "authorized_adjudication"
-        )
-    (role_head,) = live_findings(_chain("invalidates", kind="role_invalidation", role="curvature"))
-    assert (role_head.kind, role_head.role) == ("role_invalidation", "curvature")
+        chain = _chain("does_not_invalidate", verdict)
+        (head,) = live_findings(chain)
+        assert head == chain[-1] and head.kind == "adjudication"  # as it always was
 
 
 def test_a_head_that_withdraws_is_returned_as_it_is_and_has_no_effect():

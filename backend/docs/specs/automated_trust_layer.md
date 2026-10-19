@@ -110,13 +110,12 @@ force. Corrections can themselves be corrected. A ruling is replaced once: the r
 curators correcting the same ruling cannot both succeed. An ordinary finding that rules `does_not_invalidate` and names nothing is
 refused (`structure_finding_dismissal_needs_target`): it would change nothing, and withdrawing a ruling is an adjudication.
 
-**Effect.** Each chain of corrections is read at its head, the newest ruling in force, with the kind and role of the finding the
-chain started from (an adjudication has none of its own). An `invalidates` head excludes the evidence from H298, kinetics and structure
+**Effect.** Each chain of corrections is read at its head, the newest ruling in force, and a head that continues a `role_invalidation` or a
+`contradictory_characterization` keeps that claim's role and scope (an adjudication has none of its own). An `invalidates` head excludes the evidence from H298, kinetics and structure
 selection, scoped by role, exactly as described above. A `does_not_invalidate` head has no effect. An `unresolved` head leaves the
 product unresolved, not excluded, as an ordinary `unresolved` finding does. Replacing one role's ruling leaves the other roles' rulings
 standing, and a single append changes the effect, so there is no moment in which a record is wrongly selectable. History stays: a
-replaced ruling reads `in_force: false` and names the adjudication that replaced it. For a finding that no correction names, the reading
-is unchanged.
+replaced ruling reads `in_force: false` and names the adjudication that replaced it. A finding that no correction names reads as it always did.
 
 **Reads.** `GET /api/v1/curation/structure-evidence-findings?subject_ref=...` (curator or admin) lists the findings about one subject with
 whether each is still in force and what settled it. It is a curator surface: curators adjudicate records the curated profile hides, so it is

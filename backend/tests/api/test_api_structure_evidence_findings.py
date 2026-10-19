@@ -17,11 +17,11 @@ from sqlalchemy.exc import DBAPIError
 
 from app.db.models.common import (
     CalculationType,
-    RecordReviewStatus,
-    SubmissionRecordType,
     KineticsCalculationRole,
     LiteratureKind,
+    RecordReviewStatus,
     StructureFindingAuthority,
+    SubmissionRecordType,
     ThermoCalculationRole,
     ThermoTargetKind,
 )
@@ -454,7 +454,7 @@ def test_structure_selection_reads_unresolved_in_one_append_with_no_selectable_g
     unit = by_ref(run_structure(db_session, world, structure_request()))[c.public_ref]
     assert unit.blocking == () and not unit.physically_eligible
     assert unit.applicability is A.unresolved
-    assert any("finding_unresolved:identity_incompatibility" in r.code for r in unit.reasons)
+    assert any("finding_unresolved:adjudication" in r.code for r in unit.reasons)
 
 
 def test_h298_selection_reads_unresolved_in_one_append_with_no_selectable_gap(client, db_session, curator):
@@ -496,7 +496,7 @@ def test_a_ruling_withdrawn_and_then_reinstated_blocks_again_and_the_middle_ruli
     db_session.expire_all()
     unit = by_ref(run_structure(db_session, world, structure_request()))[c.public_ref]
     assert not unit.physically_eligible
-    assert unit.blocking == ("finding_invalidates:identity_incompatibility:authorized_adjudication",)
+    assert unit.blocking == ("finding_invalidates:adjudication:authorized_adjudication",)
     assert in_force(client, c) == {first: False, withdrawn: False, reinstated: True}
 
 

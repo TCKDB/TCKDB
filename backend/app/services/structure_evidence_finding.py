@@ -20,8 +20,8 @@ What this module enforces, beyond the table's own checks
 * a cited paper carries a DOI or an ISBN (the literature policy: a title alone does not identify a source);
 * a correction is an adjudication. It names an earlier finding about the *same subject* that is still in force (any
   ruling in force, including an earlier correction) and states the replacement verdict: ``does_not_invalidate``,
-  ``unresolved`` or ``invalidates``. Selections read the newest ruling in force of each chain, with the kind and role of
-  the finding the chain started from, so one append changes the effect with no window in between;
+  ``unresolved`` or ``invalidates``. Selections read the newest ruling in force of each chain (a continued role invalidation or contradictory
+  characterization keeps its role and scope), so one append changes the effect with no window in between;
 * an ordinary finding that rules ``does_not_invalidate`` and names nothing is refused: it would change nothing, and a
   curator who wants to withdraw a ruling does so with an adjudication naming it.
 
