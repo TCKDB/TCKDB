@@ -109,7 +109,12 @@ def parse_allowed(source: str) -> dict[tuple[str, str, str], str]:
 
 def parse_new_allowances(source: str) -> set[tuple[str, str, str]]:
     """``NEW_ALLOWANCES``: the allowances this change says it adds."""
-    return {tuple(row) for row in literal_binding(source, "NEW_ALLOWANCES")}  # type: ignore[misc]
+    result: set[tuple[str, str, str]] = set()
+    for row in literal_binding(source, "NEW_ALLOWANCES"):
+        if not (isinstance(row, tuple) and len(row) == 3):
+            raise DebtFileError(f"a NEW_ALLOWANCES row is not (path, kind, token): {row!r}")
+        result.add((row[0], row[1], row[2]))
+    return result
 
 
 def new_allowances(

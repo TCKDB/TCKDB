@@ -10,6 +10,8 @@ contains a version is refused.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import pytest
 from pydantic import ValidationError
 from tckdb_schemas.fragments.version import VersionRef
@@ -241,7 +243,7 @@ def test_create_app_fails_when_a_startup_registry_is_malformed() -> None:
 # -- every registry in app is seen by the startup check ------------------------
 
 
-def _unchecked_registries(modules: dict[str, object]) -> list[str]:
+def _unchecked_registries(modules: Mapping[str, object]) -> list[str]:
     """``module.attr`` of each module-level ``VersionRegistry`` not built with ``startup_checked=True``.
 
     Looks at module attributes and one level of dict/list/tuple values, which is where a registry
