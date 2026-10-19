@@ -24,6 +24,7 @@ nothing.
 
 from __future__ import annotations
 
+import contextlib
 from collections import Counter
 from typing import Any, cast
 
@@ -57,8 +58,18 @@ class _ReportCustody:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._session, name)
+    # Explicit delegation, no ``__getattr__``: the recorder uses exactly these four, all SQLAlchemy Session API.
+    def add(self, instance: Any) -> None:
+        self._session.add(instance)
+
+    def flush(self) -> None:
+        self._session.flush()
+
+    def begin(self) -> Any:
+        return contextlib.nullcontext()
+
+    def scalars(self, *args: Any, **kwargs: Any) -> Any:
+        return self._session.scalars(*args, **kwargs)
 
     def __call__(self) -> Session:
         return cast(Session, self)
