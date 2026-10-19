@@ -446,7 +446,8 @@ _REPRODUCIBILITY = Vocabulary(
         "sources behind it. An assembled composite energy, which ran no program "
         "of its own, is graded on its inputs instead: it reaches a level only "
         "when every calculation it cites does, and only while its stated total "
-        "still follows from them."
+        "still follows from them. A statmech record is graded on the same checks "
+        "whether a species entry or a transition-state entry owns it."
     ),
     terms=(
         Term(

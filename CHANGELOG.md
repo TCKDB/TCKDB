@@ -1134,6 +1134,19 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### Owner-scoped reproducibility rubric for transition-state statmech (#760)
+
+- A transition-state-owned statmech was graded `insufficient` whatever its evidence, because the
+  `scientific_context` check asked every statmech for a species entry. It is now graded under
+  `tckdb_reproducibility_ts_statmech` v1: the shared rubric with that one question asking for a
+  transition-state entry. It reaches at most `described`; no transition-state-specific check is added.
+  Species-owned statmech keeps `tckdb_reproducibility` v1 byte for byte, and its stored assessments stay `current`.
+- The read-time current/stale comparison now uses the rubric the fresh evaluation used. No migration, no
+  schema or OpenAPI change. Stored transition-state-owned assessments read `stale` until a curator re-assesses;
+  nothing is re-assessed automatically.
+- New read-only operator report `backend/scripts/ops/reproducibility_ts_statmech_report.py` (`--list-stale` lists
+  the stale records); runbook in `backend/docs/specs/reproducibility_assessments.md`.
+
 ### Observation reads, a deposit-time rights gate, and curator identity attach (Phase C-E5)
 
 - New `GET /api/v1/scientific/species-entries/{id}/observations`

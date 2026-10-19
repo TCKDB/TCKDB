@@ -585,7 +585,8 @@ existing `HardFailReason`); external symmetry, torsion dimension and required-ro
 - *Task assessment does not inherit the badge's required-role checks.* `app.services.statmech_selection` never imports
   `app.services.trust` (pinned by a test).
 - *The reproducibility rubric* has the same species-only assumption (`scientific_context`); it is a separate tier with a
-  separate decision (issue #760) and is not touched here.
+  separate decision (issue #760), now made: a transition-state-owned statmech is graded under
+  `tckdb_reproducibility_ts_statmech` v1. See `reproducibility_assessments.md`.
 
 **Machine-review recipe.** A reviewer-family review is stamped with the rubric that actually evaluated the record
 (`active_rubric_versions_for_fragment`), not with the record type's default: `{"computed_ts_statmech_v1": "1"}` for a

@@ -47,6 +47,11 @@ TCKDB is pre-release, so there is deliberately one rubric implementation rather
 than a chain of versioned ones. ``RUBRIC_VERSION`` labels stored rows; genuine
 staleness is detected by comparing an assessment's snapshotted
 ``context_json`` against a fresh evaluation, not by the label alone.
+
+One owner kind carries its own label (#760): a transition-state-owned statmech is graded by ``TS_STATMECH``
+(``tckdb_reproducibility_ts_statmech``), the shared rubric with one question changed. Every other record,
+species-owned statmech included, keeps ``SHARED`` byte for byte. The read-time currency check compares an
+assessment with the rubric the fresh evaluation used, not with a module constant.
 """
 
 from __future__ import annotations
@@ -106,8 +111,43 @@ from app.services.reproducibility_assessment import (
 )
 from app.services.snapshot_defaults import is_unchanged_default
 
-RUBRIC_NAME = "tckdb_reproducibility"
-RUBRIC_VERSION = "v1"
+
+@dataclass(frozen=True)
+class ReproducibilityRubric:
+    """The identity a stored assessment is attributed to: which rule graded it."""
+
+    name: str
+    version: str
+
+
+#: The rubric for every record, and for species-owned statmech byte for byte as before #760.
+SHARED = ReproducibilityRubric("tckdb_reproducibility", "v1")
+#: The same rubric with one question changed for a transition-state-owned statmech: "is it attached to a
+#: transition-state entry?" in place of "is it attached to a species entry?". Nothing else differs.
+TS_STATMECH = ReproducibilityRubric("tckdb_reproducibility_ts_statmech", "v1")
+#: Aliases of the shared identity, kept for importers.
+RUBRIC_NAME = SHARED.name
+RUBRIC_VERSION = SHARED.version
+
+
+def reproducibility_rubric_for(target: Any) -> ReproducibilityRubric:
+    """Return the rubric that grades ``target``, by who owns it.
+
+    A statmech with a transition-state owner and no species owner is graded by ``TS_STATMECH``. Everything else,
+    species-owned statmech, every other record type, and the rows the ``statmech_exactly_one_subject`` CHECK makes
+    impossible (neither owner or both), keeps ``SHARED``. This is the same owner test as the trust tier's
+    ``statmech_rubric_for``; the two are separate implementations (the tiers do not import each other) and a test
+    pins their agreement.
+    """
+    if (
+        isinstance(target, Statmech)
+        and target.species_entry_id is None
+        and target.transition_state_entry_id is not None
+    ):
+        return TS_STATMECH
+    return SHARED
+
+
 #: Maximum output bytes fetched during one verification (50 MiB, matching the
 #: repository's per-artifact upload ceiling).
 MAX_ARTIFACT_VERIFICATION_BYTES = 50 * 1024 * 1024
@@ -293,6 +333,9 @@ class ReproducibilityEvaluation:
     passed: tuple[dict[str, Any], ...]
     missing: tuple[dict[str, Any], ...]
     warnings: tuple[dict[str, Any], ...]
+    #: The rubric that graded this evaluation. Not part of ``context_json`` beyond ``context_json["rubric"]``.
+    rubric_name: str = SHARED.name
+    rubric_version: str = SHARED.version
 
 
 def _json_value(value: Any) -> Any:
@@ -833,7 +876,9 @@ def _calculation_snapshot(
     )
 
 
-def _scientific_context(target: Any, snapshot: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+def _scientific_context(
+    target: Any, snapshot: dict[str, Any], rubric: ReproducibilityRubric = SHARED
+) -> tuple[bool, dict[str, Any]]:
     columns = snapshot["columns"]
     relationships = snapshot["relationships"]
     if isinstance(target, Species):
@@ -867,9 +912,8 @@ def _scientific_context(target: Any, snapshot: dict[str, Any]) -> tuple[bool, di
         )
         passed = bool(target.reaction_entry_id and target.scientific_origin and target.model_kind and representation)
     elif isinstance(target, Statmech):
-        passed = bool(
-            target.species_entry_id and target.scientific_origin and (target.external_symmetry or target.point_group)
-        )
+        owner_id = target.transition_state_entry_id if rubric == TS_STATMECH else target.species_entry_id
+        passed = bool(owner_id and target.scientific_origin and (target.external_symmetry or target.point_group))
     elif isinstance(target, Transport):
         passed = bool(
             target.species_entry_id
@@ -1049,8 +1093,13 @@ def evaluate_reproducibility(
     artifact_loader: ArtifactLoader = load_artifact_bytes,
     integrity_session_factory: Callable[[], Session] | None = None,
     integrity_storage_client: Any = None,
+    rubric: ReproducibilityRubric | None = None,
 ) -> ReproducibilityEvaluation:
     """Evaluate one record and snapshot every datum the rubric consumed.
+
+    ``rubric`` is a keyword-only override; None (production) routes by owner through
+    :func:`reproducibility_rubric_for`. Tests and the operator report pass one to reconstruct how a record
+    read under another rubric.
 
     ``integrity_session_factory`` and ``integrity_storage_client`` are
     the seam for where a detected custody break gets recorded and where
@@ -1066,6 +1115,7 @@ def evaluate_reproducibility(
     if target is None:
         raise ValueError(f"the requested {resolved_type.value} record does not exist")
 
+    rubric = rubric if rubric is not None else reproducibility_rubric_for(target)
     target_evidence = _target_snapshot(target, resolved_type)
     source_refs = _source_refs(target)
     roots = sorted({calculation.id: calculation for calculation, _ in source_refs}.values(), key=lambda row: row.id)
@@ -1094,7 +1144,7 @@ def evaluate_reproducibility(
         calculations[str(calculation.id)] = snapshot
         warnings.extend(calculation_warnings)
 
-    context_present, context_detail = _scientific_context(target, target_evidence)
+    context_present, context_detail = _scientific_context(target, target_evidence, rubric)
     attribution_outcome, attribution_detail = _source_attribution(target, source_refs)
     assembled = _is_assembled_composite(target)
     assembled_inputs: list[dict[str, Any]] = []
@@ -1309,7 +1359,7 @@ def evaluate_reproducibility(
     check_snapshots = tuple(check.snapshot() for check in checks)
     warning_snapshots = tuple(warning.snapshot() for warning in warnings)
     context = {
-        "rubric": {"name": RUBRIC_NAME, "version": RUBRIC_VERSION},
+        "rubric": {"name": rubric.name, "version": rubric.version},
         "target": target_evidence,
         "source_roles": [{"calculation_id": calculation.id, "role": role} for calculation, role in source_refs],
         "calculation_evidence": calculations,
@@ -1326,6 +1376,8 @@ def evaluate_reproducibility(
         passed=tuple(check for check in check_snapshots if check["outcome"] in {"passed", "not_applicable"}),
         missing=tuple(check for check in check_snapshots if check["outcome"] == "missing"),
         warnings=warning_snapshots,
+        rubric_name=rubric.name,
+        rubric_version=rubric.version,
     )
 
 
@@ -1352,8 +1404,8 @@ def evaluate_and_append_reproducibility(
         record_type=evaluation.record_type,
         record_id=evaluation.record_id,
         grade=evaluation.grade,
-        rubric_name=RUBRIC_NAME,
-        rubric_version=RUBRIC_VERSION,
+        rubric_name=evaluation.rubric_name,
+        rubric_version=evaluation.rubric_version,
         context_json=evaluation.context_json,
         passed=evaluation.passed,
         missing=evaluation.missing,

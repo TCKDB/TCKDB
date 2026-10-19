@@ -42,8 +42,6 @@ from app.services.reproducibility_assessment import (
     is_reproducibility_assessment_context_current,
 )
 from app.services.reproducibility_rubric import (
-    RUBRIC_NAME,
-    RUBRIC_VERSION,
     evaluate_reproducibility,
 )
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
@@ -330,8 +328,7 @@ def _reproducibility_summary(
 
     current = evaluate_reproducibility(session, record_type=record_type, record_id=record_id)
     is_current = (
-        assessment.rubric_name == RUBRIC_NAME
-        and assessment.rubric_version == RUBRIC_VERSION
+        (assessment.rubric_name, assessment.rubric_version) == (current.rubric_name, current.rubric_version)
         and is_reproducibility_assessment_context_current(assessment, current_context_json=current.context_json)
     )
     return ReproducibilityAssessmentSummary(
