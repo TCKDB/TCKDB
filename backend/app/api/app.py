@@ -25,6 +25,7 @@ from app.api.startup_checks import (
     validate_network_selection_rules,
     validate_structure_selection_rules,
     validate_thermo_selection_rules,
+    validate_version_registries,
 )
 from app.services.trust.ts_scoped import validate_ts_scoped_structure_versions
 
@@ -129,6 +130,8 @@ def create_app() -> FastAPI:
     validate_kinetics_selection_rules()
     validate_network_selection_rules()
     validate_structure_selection_rules()
+    # Every registry of versioned things must give each name a current version.
+    validate_version_registries()
     # The transition-state badge's structure assessment is pinned to the structure-selection versions it was written for.
     validate_ts_scoped_structure_versions()
     docs_kwargs = _docs_kwargs(settings)

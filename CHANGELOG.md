@@ -35,6 +35,10 @@ dataset must never require a code release.
 - `backend/tests/test_no_versioned_names.py` fails on any new identifier, string constant, f-string or file name that embeds a version
   (`parse_machine_review_v2_payload`, `ContributionBundleV0`, `...RuleV0_2_0`, `tckdb.archive.v1`, `rules_0_1_0.yaml`). Everything that
   already violates the rule is listed, with the PR that removes it, in `backend/tests/versioned_names_debt.py`; that list can only shrink.
+  The guard also scans f-string, `.format`, `%` and `+` builds, lowercase `foov2`, the YAML rule manifests, `integrations/mcp/src` and
+  non-test `frontend/src`; chemistry (`cc-pV5Z`, `VV10`) is pinned as clean, and rule ids such as `K-XYG3-B3LYP-BARRIER` are valid names.
+  `repo-gate.yml` runs `backend/scripts/check_versioned_debt_not_grown.py`, which compares the debt list with the merge base's copy so a
+  count-for-count swap is refused. A startup check (`validate_version_registries`) fails the boot for a registry name with no current version.
 
 ## Transition-state trust carries the scoped structure assessment (2026-10-19, #723)
 

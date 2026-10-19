@@ -27,7 +27,7 @@ def test_the_version_is_a_strict_integer_of_at_least_one(version: object) -> Non
         VersionRef(name="thing", version=version)  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize("name", ["", "x", "Thing", "1thing", "thing_", "has space", "a" * 129])
+@pytest.mark.parametrize("name", ["", "x", "1thing", "-thing", "thing_", "has space", "a" * 129])
 def test_a_malformed_name_is_refused(name: str) -> None:
     with pytest.raises(ValidationError):
         VersionRef(name=name, version=1)
@@ -44,7 +44,7 @@ def test_a_name_with_a_version_in_it_is_refused(name: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "name", ["computed_thermo", "tckdb.dataset_release", "statmech-selection", "gaussian_parameters", "psi4"]
+    "name", ["computed_thermo", "tckdb.dataset_release", "statmech-selection", "gaussian_parameters", "psi4", "E1", "K-XYG3-B3LYP-BARRIER", "N-JM-CH4-RATE", "S-ACONFL-DLPNO-F12-VERYTIGHT"]
 )
 def test_an_ordinary_name_is_accepted(name: str) -> None:
     assert not embeds_version(name)
@@ -64,6 +64,6 @@ def test_the_patterns_see_the_forms_a_trailing_word_boundary_misses(text: str) -
     assert any(pattern.search(text) for pattern in VERSIONED_NAME_PATTERNS)
 
 
-@pytest.mark.parametrize("text", ["v1", "v2_", "HFV2", "vault_2", "a_v2x", "/api/v1/species", "utf_8"])
+@pytest.mark.parametrize("text", ["v1", "v2_", "HFV2", "vault_2", "a_v2x", "/api/v1/species", "utf_8", "cc-pV5Z", "aug-cc-pV6Z", "VV10", "rVV10", "B3LYP-D3", "rev2"])
 def test_the_patterns_leave_alone_what_is_not_a_version(text: str) -> None:
     assert not embeds_version(text)

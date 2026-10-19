@@ -4,7 +4,8 @@
 
 One new model, `tckdb_schemas.fragments.version.VersionRef`: a stable `name` and a separate integer `version` (at least 1, a real
 integer, never text). A name that already contains a version (`computed_thermo_v2`, `tckdb.archive.v1`, `manifest_0_3_0`) is refused,
-because the version belongs in its own field. `embeds_version` and the shared patterns it uses are exported so the repository's guard
+because the version belongs in its own field. A name may use upper case and hyphens (a scientific rule id such as
+`K-XYG3-B3LYP-BARRIER` is a name), and chemistry spellings such as `cc-pV5Z` or `VV10` are not read as versions. `embeds_version` and the shared patterns it uses are exported so the repository's guard
 test and the model cannot disagree about what counts. No producer route and no upload payload changes; nothing in the existing
 wire contract refers to the model yet.
 

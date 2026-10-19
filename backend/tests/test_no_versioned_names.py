@@ -39,7 +39,7 @@ from pathlib import Path
 import pytest
 from tckdb_schemas.fragments.version import VersionRef
 
-from tests.versioned_names_debt import ALLOWED, DEBT
+from tests.versioned_names_debt import ALLOWED, COMPLETED_PRS, DEBT
 from tests.versioned_names_scan import (
     REPO_ROOT,
     SCAN_ROOTS,
@@ -55,8 +55,8 @@ from tests.versioned_names_scan import (
 )
 
 #: Upper bounds on the debt list. Lower them (never raise them) as entries go.
-DEBT_ENTRY_CEILING = 197
-DEBT_OCCURRENCE_CEILING = 336
+DEBT_ENTRY_CEILING = 199
+DEBT_OCCURRENCE_CEILING = 338
 
 REMOVING_PRS = frozenset({"PR-2", "PR-3", "PR-4"})
 
@@ -118,6 +118,9 @@ def test_the_debt_list_cannot_grow() -> None:
     assert all(row[3] >= 1 for row in DEBT), "DEBT holds an entry with no occurrences"
     assert {row[4] for row in DEBT} <= REMOVING_PRS, "every DEBT entry names the PR that removes it"
     assert DEBT, "DEBT is empty: delete it and the tests above that read it (PR-4)"
+    assert COMPLETED_PRS <= REMOVING_PRS, "COMPLETED_PRS names a PR the programme does not have"
+    done = sorted(row[:3] for row in DEBT if row[4] in COMPLETED_PRS)
+    assert not done, f"these rows name a PR already listed in COMPLETED_PRS, which said it was done: {done}"
 
 
 def test_every_allowance_has_a_reason_and_matches_something() -> None:
@@ -149,6 +152,11 @@ def test_the_scan_reaches_the_code_it_claims_to() -> None:
     assert [row for row in DEBT if row[1] == "openapi"], "the OpenAPI golden was not reached"
     assert scan_openapi(), "the OpenAPI scan found nothing in a golden that has versioned names"
     assert scan_names(), "the file-name scan found nothing under the roots"
+    mcp = REPO_ROOT / "integrations/mcp/src"
+    assert mcp in SCAN_ROOTS and any(mcp in file.parents for file in files), "the MCP package was not reached"
+    assert len(list((REPO_ROOT / "backend/app/chemistry").rglob("*.yaml"))) >= 6, "rule manifests not reached"
+    frontend = [f for f in (REPO_ROOT / "frontend/src").rglob("*.ts*") if ".test." not in f.name]
+    assert len(frontend) > 100, "frontend sources not reached"
 
 
 def test_an_empty_root_finds_nothing_which_is_why_the_reach_test_exists(tmp_path: Path) -> None:

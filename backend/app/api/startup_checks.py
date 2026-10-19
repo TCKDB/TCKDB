@@ -140,6 +140,17 @@ def validate_thermo_selection_rules() -> None:
         ) from exc
 
 
+def validate_version_registries() -> None:
+    """Stop the boot if a versioned-thing registry holds a name with no current version.
+
+    The registries (``app/versioning.py``) are filled at import, so a malformed one is a
+    code defect that should fail the deploy, not the first request that reaches it.
+    """
+    from app.versioning import validate_startup_registries
+
+    validate_startup_registries()
+
+
 class KineticsSelectionRulesError(RuntimeError):
     """Raised when the shipped kinetics-selection rule registry cannot be built.
 

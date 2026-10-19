@@ -134,6 +134,22 @@ jobs:
           --head-ref "${{ github.event.pull_request.head.sha || github.sha }}"
           --main-ref "origin/${{ github.base_ref || github.event.repository.default_branch }}"
 
+      # THE VERSIONED-NAMES DEBT LIST MAY ONLY SHRINK, AND ONLY THE BASE BRANCH CAN SAY SO.
+      #   backend/tests/test_no_versioned_names.py judges the debt list against
+      #   numbers in the same pull request, so a change that fixes one violation,
+      #   plants another and swaps the debt row keeps every total equal. This step
+      #   compares against the merge base's copy of the list, read through git.
+      #   It is here because this job has the full history (the backend gates use a
+      #   depth-1 checkout with no merge base) and needs only the standard library.
+      - name: The versioned-names debt list has not grown
+        run: >-
+          python backend/scripts/check_versioned_debt_not_grown.py
+          --base-ref "${{ github.event.pull_request.base.sha || github.sha }}"
+          --head-ref "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: The debt-growth check works
+        run: python -m pytest --noconftest -q backend/tests/scripts/test_check_versioned_debt_not_grown.py
+
       # Runs here too, and not only in the backend complement gate, because
       # this file is the mechanism by which the *other* workflows become
       # requireable. A defect in it is a defect in the gate that reports

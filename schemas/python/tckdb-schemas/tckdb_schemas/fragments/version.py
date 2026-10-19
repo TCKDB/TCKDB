@@ -49,7 +49,19 @@ VERSION_SEGMENT = re.compile(r"(?<=[A-Za-z0-9])[_.@-][vV]\d+(?![A-Za-z0-9])")
 #: ``MachineReviewProviderResultV2``. Requires a lowercase letter or digit
 #: before the ``V`` so an acronym like ``HFV2`` is not read as camel case by
 #: accident of capitals alone being adjacent.
-CAMEL_VERSION = re.compile(r"(?<=[a-z0-9])V\d+(?![a-z0-9])")
+#:
+#: ``V<digits>Z`` is excluded: that is the Dunning basis-set family at
+#: zeta 5 and above (``cc-pV5Z``, ``aug-cc-pV6Z``, ``jun-cc-pV5Z``), a
+#: chemistry name and not a version. Everything else of the shape
+#: ``[a-z]V<digits>`` in the method, basis and dispersion vocabularies is
+#: pinned clean by ``backend/tests/test_no_versioned_names.py``.
+CAMEL_VERSION = re.compile(r"(?<=[a-z0-9])V\d+(?![a-z0-9Z])")
+
+#: A lowercase ``vN`` glued straight onto a word: ``foov2``, ``thingv10``.
+#: At least three letters precede the ``v`` and the letter just before it is
+#: not itself ``v``, which keeps ``VV10`` / ``rVV10`` (the nonlocal
+#: correlation functional) and short tokens like ``rev2`` out.
+LOWER_GLUED_VERSION = re.compile(r"(?<![A-Za-z0-9])[a-z]{2,}[a-uw-z]v\d+(?![A-Za-z0-9])")
 
 #: Three numeric segments in a row, the shape of a semantic version spelled
 #: into a name: ``manifest_0_3_0``, ``rule-0.1.0``.
@@ -62,6 +74,7 @@ AT_VERSION = re.compile(r"(?<=[A-Za-z0-9])@\d+(?![0-9])")
 VERSIONED_NAME_PATTERNS: tuple[re.Pattern[str], ...] = (
     VERSION_SEGMENT,
     CAMEL_VERSION,
+    LOWER_GLUED_VERSION,
     SEMVER_SEGMENTS,
     AT_VERSION,
 )
@@ -84,9 +97,12 @@ class VersionRef(SchemaBase):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     name: str = Field(
-        pattern=r"^[a-z][a-z0-9_.-]*[a-z0-9]$",
+        pattern=r"^[A-Za-z][A-Za-z0-9_.-]*[A-Za-z0-9]$",
         max_length=128,
-        description="Stable name of the thing. Never contains a version.",
+        description=(
+            "Stable name of the thing. Never contains a version. Upper case and hyphens are allowed: "
+            "a scientific rule id such as K-XYG3-B3LYP-BARRIER is a name."
+        ),
     )
     version: StrictInt = Field(
         ge=1,

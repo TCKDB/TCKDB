@@ -14,6 +14,7 @@ shrink:
 * an entry the scan no longer finds fails the guard (delete the entry);
 * an entry whose count differs from the scan fails the guard (fix the count --
   a lower count after a partial clean-up is the only change that is allowed);
+* a row naming a PR in ``COMPLETED_PRS`` fails the guard (that PR said it was done);
 * the ceilings in ``tests/test_no_versioned_names.py`` fail any growth in
   entries or occurrences, so a new violation cannot be hidden by adding a row.
 
@@ -22,6 +23,10 @@ Regenerate the rows with ``python -m tests.versioned_names_scan`` and keep the
 """
 
 from __future__ import annotations
+
+#: PRs of the versioning programme that have landed. No debt row may name one;
+#: each later PR adds itself here in the same change that empties its rows.
+COMPLETED_PRS: frozenset[str] = frozenset()
 
 #: (path glob, kind, token glob, reason). ``path`` is repo-relative.
 ALLOWED: tuple[tuple[str, str, str, str], ...] = (
@@ -60,6 +65,18 @@ ALLOWED: tuple[tuple[str, str, str, str], ...] = (
         'string',
         'PD94bWwg*',
         "A base64 payload (an XML example document); the 'V1' is an accident of the encoding, not a name.",
+    ),
+    (
+        'backend/app/chemistry/structure_rules/*.yaml',
+        'yaml',
+        'SANTRA_MARTIN_2022_ARXIV_V2',
+        "An id for the arXiv v2 copy of a cited paper (Santra and Martin 2022); a citation of someone else's revision, not a TCKDB version.",
+    ),
+    (
+        'schemas/python/tckdb-schemas/tckdb_schemas/fragments/execution_environment.py',
+        'fstring',
+        "f'{module.name}/{module.version}'",
+        "Formats an HPC module as name/version (gaussian/16); the module and its version are the site's, recorded as given.",
     ),
 )
 
@@ -262,4 +279,6 @@ DEBT: tuple[tuple[str, str, str, int, str], ...] = (
     ('backend/app/services/upload_reconciliation.py', 'string', 'upload_payload_v1', 1, 'PR-2'),
     ('clients/python/src/tckdb_client/scientific_types.py', 'string', 'statmech-selection-v1', 1, 'PR-4'),
     ('schemas/python/tckdb-schemas/tckdb_schemas/fragments/execution_environment.py', 'string', 'tckdb.execution-environment.v1', 1, 'PR-4'),
+    ('backend/app/chemistry/network_rules/network_rule_candidates.yaml', 'yaml', 'proposed evidence rule (the Network-v1 council record, section 3, "alternate fits of one solve").', 1, 'PR-4'),
+    ('backend/app/chemistry/structure_rules/structure_rule_candidates.yaml', 'yaml', 'Records owner decision D (O5, 2026-10-13): relative conformer energies are a named-reference oper...', 1, 'PR-4'),
 )

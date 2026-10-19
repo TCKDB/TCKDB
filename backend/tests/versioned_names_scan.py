@@ -8,11 +8,23 @@ finds, and ``python -m tests.versioned_names_scan`` prints the current findings
 in the form ``tests/versioned_names_debt.py`` holds them.
 
 What is scanned (see ``SCAN_ROOTS``): ``backend/app``, the ``tckdb_schemas``
-wire package and the ``tckdb_client`` package, plus the OpenAPI golden. The
-QCSchema and Chemkin adapters are deliberately not roots: their ``v1``/``v2``
-names are MolSSI's and Cantera's, not TCKDB's.
+wire package, the ``tckdb_client`` and ``tckdb_mcp`` packages, the YAML rule
+manifests under ``backend/app/chemistry``, non-test ``frontend/src``, and the
+OpenAPI golden. Deliberately not scanned, with the reason:
 
-Five kinds of finding, by what carries the version:
+* The QCSchema and Chemkin adapters: their ``v1``/``v2`` names are MolSSI's and
+  Cantera's, not TCKDB's.
+* ``backend/alembic``: a migration is history. A deployed revision must not be
+  edited (the migration rules), and the revisions that created or relabelled a
+  versioned value have to name it. The names they act on are the ones listed
+  here, so they disappear from the scan when the code stops using them.
+* Test code: a test names the legacy thing it pins.
+
+Chemistry is the main false-positive risk: Dunning ``cc-pV5Z``, ``VV10``,
+``wB97X-V`` and the like are method and basis names. The patterns exclude them
+and ``tests/test_no_versioned_names.py`` pins a corpus of them as clean.
+
+Eight kinds of finding, by what carries the version:
 
 ``identifier``
     A name in code: variable, attribute, function, class, argument, keyword,
@@ -30,6 +42,15 @@ Five kinds of finding, by what carries the version:
 ``fstring``
     An f-string that builds a versioned name: constant text ending ``_v``,
     ``.v``, ``@v`` or ``@`` directly before a formatted value.
+``build``
+    A string assembled at run time into a versioned name without an f-string:
+    ``"{}_v{}".format(n, v)``, ``"%s_v%d" % (n, v)``, ``n + "_v" + str(v)``.
+``yaml``
+    A scalar value in a YAML file under ``backend/app/chemistry`` (rule
+    manifests): ``rule_id: thing_v2``, ``manifest: foo/0.1.0``.
+``frontend``
+    A string literal or identifier in non-test ``frontend/src`` TypeScript,
+    found by a tokenising regex (comments skipped), not a parser.
 ``filename``
     A file or directory name under a root: ``rules_0_1_0.yaml``,
     ``ContributionBundleV0.schema.json``.
@@ -48,9 +69,11 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml  # type: ignore[import-untyped]
 from tckdb_schemas.fragments.version import (
     AT_VERSION,
     CAMEL_VERSION,
+    LOWER_GLUED_VERSION,
     VERSION_SEGMENT,
     embeds_version,
 )
@@ -61,7 +84,11 @@ SCAN_ROOTS: tuple[Path, ...] = (
     REPO_ROOT / "backend" / "app",
     REPO_ROOT / "schemas" / "python" / "tckdb-schemas" / "tckdb_schemas",
     REPO_ROOT / "clients" / "python" / "src" / "tckdb_client",
+    REPO_ROOT / "integrations" / "mcp" / "src",
 )
+
+YAML_ROOTS: tuple[Path, ...] = (REPO_ROOT / "backend" / "app" / "chemistry",)
+FRONTEND_ROOT = REPO_ROOT / "frontend" / "src"
 
 OPENAPI_GOLDEN = REPO_ROOT / "backend" / "tests" / "api" / "golden" / "openapi.json"
 
@@ -72,7 +99,16 @@ _SEGMENT_V = re.compile(r"^[vV]\d+$")
 _STRING_NAME_SEMVER = re.compile(r"(?<=[A-Za-z0-9])[-/@]\d+\.\d+\.\d+(?![0-9])")
 #: ``name_0_3_0`` in a string.
 _STRING_SEMVER_SEGMENTS = re.compile(r"(?<=[A-Za-z])_\d+_\d+_\d+(?![0-9])")
-_FSTRING_TAIL = re.compile(r"(?:[_.@]v|@)$")
+#: Constant text that ends where a version number is about to be interpolated:
+#: ``..._v``, ``....v``, ``...@v``, ``.../v``, ``...-v``, a bare ``V``/``v`` right
+#: after a name character, or an ``@``.
+_FSTRING_TAIL = re.compile(r"(?:[_.@/-][vV]|@|(?<![A-Za-z0-9 ])[vV]|[a-z0-9]V)$")
+#: An interpolated expression that is plainly a version: ``v``, ``version``,
+#: ``x.version``, ``rubric_version``.
+_VERSION_EXPR = re.compile(r"^(?:[\w.]*\.)?(?:v|ver|version|\w+_version)$")
+#: ``"{}_v{}"``, ``"%s_v%d"``, ``"{name}.v{version}"``: a format template that
+#: puts a placeholder after a ``v``.
+_FORMAT_TEMPLATE = re.compile(r"(?:[_.@/-][vV]|(?<=[a-z0-9}])V)(?:\{[^{}]*\}|%[sdiu]|%\([A-Za-z_]+\)[sdiu])")
 
 _MAX_TOKEN = 100
 
@@ -96,6 +132,8 @@ def is_versioned_identifier(name: str) -> bool:
     segments = [part for part in name.split("_") if part]
     if len(segments) > 1 and any(_SEGMENT_V.match(part) for part in segments):
         return True
+    if any(LOWER_GLUED_VERSION.search(part) for part in segments):
+        return True
     return bool(CAMEL_VERSION.search(name) or _IDENT_SEMVER.search(name))
 
 
@@ -107,6 +145,7 @@ def is_versioned_string(value: str) -> bool:
         or AT_VERSION.search(value)
         or _STRING_NAME_SEMVER.search(value)
         or _STRING_SEMVER_SEGMENTS.search(value)
+        or LOWER_GLUED_VERSION.search(value)
     )
 
 
@@ -139,6 +178,33 @@ def _identifier_names(node: ast.AST) -> list[str]:
     return []
 
 
+def _builds_versioned_name(node: ast.JoinedStr) -> bool:
+    """An f-string that fuses a name and a version.
+
+    Two shapes: constant text ending ``_v``/``.v``/``-v``/``/v``/``@v``/``@``
+    directly before a formatted value, and a name-then-separator-then-version
+    sequence such as ``f"{n}/{v}"`` or ``f"{n}-{version}"`` (the interpolated
+    expression itself is named ``v`` or ``version``).
+    """
+    values = node.values
+    for index, part in enumerate(values):
+        if not (isinstance(part, ast.Constant) and isinstance(part.value, str)):
+            continue
+        following = values[index + 1] if index + 1 < len(values) else None
+        if not isinstance(following, ast.FormattedValue):
+            continue
+        if _FSTRING_TAIL.search(part.value):
+            return True
+        text = part.value
+        if text and text[-1] in "-/_." and _VERSION_EXPR.match(ast.unparse(following.value)):
+            after_name = (len(text) > 1 and text[-2].isalnum() and text[-1] != "/") or (
+                index > 0 and isinstance(values[index - 1], ast.FormattedValue)
+            )
+            if after_name:
+                return True
+    return False
+
+
 def scan_source(source: str, path: str) -> list[Finding]:
     """Identifier, string and f-string findings in one module's source."""
     tree = ast.parse(source)
@@ -162,17 +228,21 @@ def scan_source(source: str, path: str) -> list[Finding]:
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             if id(node) not in documentation and is_versioned_string(node.value):
                 findings.append(Finding(path, "string", _clip(node.value), node.lineno))
-        if isinstance(node, ast.JoinedStr):
-            values = node.values
-            for index, part in enumerate(values[:-1]):
-                if (
-                    isinstance(part, ast.Constant)
-                    and isinstance(part.value, str)
-                    and isinstance(values[index + 1], ast.FormattedValue)
-                    and _FSTRING_TAIL.search(part.value)
-                ):
-                    findings.append(Finding(path, "fstring", _clip(ast.unparse(node)), node.lineno))
-                    break
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if id(node) not in documentation and _FORMAT_TEMPLATE.search(node.value):
+                findings.append(Finding(path, "build", _clip(node.value), node.lineno))
+        if isinstance(node, ast.JoinedStr) and _builds_versioned_name(node):
+            findings.append(Finding(path, "fstring", _clip(ast.unparse(node)), node.lineno))
+        if (
+            isinstance(node, ast.BinOp)
+            and isinstance(node.op, ast.Add)
+            and isinstance(node.right, ast.Constant)
+            and isinstance(node.right.value, str)
+            and not isinstance(node.left, ast.Constant)
+            and _FSTRING_TAIL.search(node.right.value)
+        ):
+            # ``name + "_v" + str(version)``: the inner Add ends in the constant.
+            findings.append(Finding(path, "build", _clip(ast.unparse(node)), node.lineno))
     return findings
 
 
@@ -231,8 +301,57 @@ def scan_openapi(golden: Path = OPENAPI_GOLDEN, repo_root: Path = REPO_ROOT) -> 
     return findings
 
 
+def scan_yaml(roots: tuple[Path, ...] = YAML_ROOTS, repo_root: Path = REPO_ROOT) -> list[Finding]:
+    """Scalar string values in the YAML files under *roots*."""
+    findings: list[Finding] = []
+
+    def walk(node: object, rel: str) -> None:
+        if isinstance(node, dict):
+            for value in node.values():
+                walk(value, rel)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item, rel)
+        elif isinstance(node, str) and is_versioned_string(node):
+            findings.append(Finding(rel, "yaml", _clip(node)))
+
+    for root in roots:
+        for file in sorted([*root.rglob("*.yaml"), *root.rglob("*.yml")]):
+            rel = file.relative_to(repo_root).as_posix()
+            for document in yaml.safe_load_all(file.read_text(encoding="utf-8")):
+                walk(document, rel)
+    return findings
+
+
+#: Comments are skipped; strings and identifiers are checked.
+_TS_TOKEN = re.compile(
+    r"//[^\n]*|/\*.*?\*/|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`|[A-Za-z_$][\w$]*",
+    re.DOTALL,
+)
+_TS_TEST = re.compile(r"(?:\.test\.|\.spec\.)|(?:^|/)(?:__tests__|__mocks__|test|tests)/")
+
+
+def scan_frontend(root: Path = FRONTEND_ROOT, repo_root: Path = REPO_ROOT) -> list[Finding]:
+    """String literals and identifiers in non-test ``.ts``/``.tsx`` under *root*."""
+    findings: list[Finding] = []
+    for file in sorted([*root.rglob("*.ts"), *root.rglob("*.tsx")]):
+        rel = file.relative_to(repo_root).as_posix()
+        if _TS_TEST.search(rel):
+            continue
+        for match in _TS_TOKEN.finditer(file.read_text(encoding="utf-8")):
+            text = match.group(0)
+            if text.startswith(("//", "/*")):
+                continue
+            if text[0] in "\"'`":
+                if is_versioned_string(text[1:-1]) or _FORMAT_TEMPLATE.search(text[1:-1]):
+                    findings.append(Finding(rel, "frontend", _clip(text[1:-1])))
+            elif is_versioned_identifier(text):
+                findings.append(Finding(rel, "frontend", text))
+    return findings
+
+
 def scan_all() -> list[Finding]:
-    return scan_code() + scan_names() + scan_openapi()
+    return scan_code() + scan_names() + scan_openapi() + scan_yaml() + scan_frontend()
 
 
 def counts(findings: list[Finding]) -> Counter[tuple[str, str, str]]:

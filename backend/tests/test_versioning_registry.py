@@ -95,7 +95,7 @@ def test_a_name_without_a_current_version_fails_validation() -> None:
     assert registry.get("thing", 1) == "a"
 
 
-@pytest.mark.parametrize("name", ["foo_v2", "foo.v1", "tckdb.archive.v1", "rules_0_1_0", "a_v2_b", "Foo", "x"])
+@pytest.mark.parametrize("name", ["foo_v2", "foo.v1", "tckdb.archive.v1", "rules_0_1_0", "a_v2_b", "1abc", "x"])
 def test_a_name_that_embeds_a_version_or_is_malformed_is_refused(name: str) -> None:
     registry: VersionRegistry[str] = VersionRegistry("f")
     with pytest.raises(ValueError):
@@ -176,3 +176,63 @@ def test_an_evidence_rubric_exposes_its_ref() -> None:
     rubric = EvidenceRubric(name="computed_thermo", version=3, record_type="thermo", checks=())
     assert rubric.ref == VersionRef(name="computed_thermo", version=3)
     assert not hasattr(rubric, "qualified_name")
+
+
+# -- strict versions and the startup check -------------------------------------
+
+
+@pytest.mark.parametrize("version", [True, False, 2.0, 1.0, "2", 2 + 0j])
+def test_get_refuses_a_version_that_is_not_exactly_an_int(version: object) -> None:
+    registry = _registry()
+    with pytest.raises(TypeError, match="must be an int"):
+        registry.get("thing", version)  # type: ignore[arg-type]
+
+
+def test_get_still_accepts_none_and_a_real_int() -> None:
+    registry = _registry()
+    assert registry.get("thing", None) == "thing-two"
+    assert registry.get("thing", 1) == "thing-one"
+
+
+def test_a_startup_checked_registry_with_a_currentless_name_fails_the_sweep() -> None:
+    from app.versioning import validate_startup_registries
+
+    broken: VersionRegistry[str] = VersionRegistry("broken_family", startup_checked=True)
+    broken.register("thing", 1, "a", current=False)
+    with pytest.raises(ValueError, match="no current version for thing"):
+        validate_startup_registries()
+
+
+def test_a_registry_that_did_not_opt_in_is_not_swept_up() -> None:
+    from app.versioning import validate_startup_registries
+
+    loose: VersionRegistry[str] = VersionRegistry("loose_family")
+    loose.register("thing", 1, "a", current=False)
+    validate_startup_registries()  # does not raise: it is not startup-checked
+
+
+def test_a_well_formed_startup_checked_registry_passes() -> None:
+    from app.versioning import validate_startup_registries
+
+    fine: VersionRegistry[str] = VersionRegistry("fine_family", startup_checked=True)
+    fine.register("thing", 1, "a", current=True)
+    validate_startup_registries()
+    assert fine.get("thing") == "a"
+
+
+def test_create_app_runs_the_registry_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.api.app as app_module
+
+    calls: list[str] = []
+    monkeypatch.setattr(app_module, "validate_version_registries", lambda: calls.append("ran"))
+    app_module.create_app()
+    assert calls == ["ran"]
+
+
+def test_create_app_fails_when_a_startup_registry_is_malformed() -> None:
+    import app.api.app as app_module
+
+    broken: VersionRegistry[str] = VersionRegistry("broken_at_boot", startup_checked=True)
+    broken.register("thing", 1, "a", current=False)
+    with pytest.raises(ValueError, match="no current version for thing"):
+        app_module.create_app()

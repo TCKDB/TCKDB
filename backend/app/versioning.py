@@ -36,12 +36,17 @@ layer can use it without creating an import cycle.
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Iterable
 from typing import Generic, TypeVar
 
 from tckdb_schemas.fragments.version import VersionRef
 
 T = TypeVar("T")
+
+#: Registries that opted in to the startup check, held weakly so a registry a
+#: test builds and drops never lingers into the next ``create_app()``.
+_STARTUP_REGISTRIES: weakref.WeakSet[VersionRegistry] = weakref.WeakSet()
 
 
 class UnknownVersion(LookupError):
@@ -80,10 +85,18 @@ class UnknownVersion(LookupError):
 class VersionRegistry(Generic[T]):
     """``(name, version) -> implementation``, one current version per name."""
 
-    def __init__(self, family: str) -> None:
+    def __init__(self, family: str, *, startup_checked: bool = False) -> None:
+        """*startup_checked*: include this registry in :func:`validate_startup_registries`.
+
+        Every registry that production code reads sets it, so a name registered
+        without a current version stops the boot (``app/api/startup_checks.py``)
+        instead of failing on the first request that asks for that name.
+        """
         self.family = family
         self._impls: dict[str, dict[int, T]] = {}
         self._current: dict[str, int] = {}
+        if startup_checked:
+            _STARTUP_REGISTRIES.add(self)
 
     def register(self, name: str, version: int, impl: T, *, current: bool) -> T:
         """Add *impl* under ``(name, version)`` and return it.
@@ -121,8 +134,12 @@ class VersionRegistry(Generic[T]):
     def get(self, name: str, version: int | None = None) -> T:
         """The implementation for ``(name, version)``; ``None`` means current.
 
-        Raises :class:`UnknownVersion` for an unregistered name or version.
+        Raises :class:`UnknownVersion` for an unregistered name or version, and
+        ``TypeError`` for a *version* that is not exactly an ``int`` (``True``
+        and ``1.0`` would otherwise find version 1 through dict equality).
         """
+        if version is not None and (type(version) is not int):
+            raise TypeError(f"{self.family}: version must be an int or None, not {type(version).__name__}")
         versions = self._impls.get(name)
         if versions is None:
             raise UnknownVersion(self.family, name, version)
@@ -160,3 +177,13 @@ class VersionRegistry(Generic[T]):
             for name in sorted(self._impls)
             for version in sorted(self._impls[name])
         )
+
+
+def validate_startup_registries() -> None:
+    """Run :meth:`VersionRegistry.validate` on every startup-checked registry.
+
+    Called from ``create_app()``. Raises ``ValueError`` naming the first
+    registry that holds a name with no current version.
+    """
+    for registry in sorted(_STARTUP_REGISTRIES, key=lambda r: r.family):
+        registry.validate()
