@@ -10,11 +10,16 @@
 > frequency-presence checks (`imaginary_frequency_count_recorded`, `reaction_coordinate_designated_for_ts`,
 > `extra_imaginary_modes_not_flagged`, `imaginary_frequency_value_present`) read the frequency result a declared target pins in
 > role `curvature`; an entry that declares nothing, or none of whose pins is a visible frequency result, keeps reading the newest
-> attached result. The unscoped warnings still read every attached result. **Where it runs:** on a single transition-state-entry
-> detail read only. Lists (search, the sibling entries of a detail read, the `/reaction-entries/{id}/full` document) carry
-> `structure_assessment.status = "not_assessed_on_lists"`, issue no statement for it, and read the newest attached result, so the
-> same entry renders the same on every list; its completeness can therefore differ between a list and its own page when it
-> declares a target. Under `profile=curated` the assessment runs under that profile: a target resting on a hidden calculation is
+> attached result. The unscoped warnings still read every attached result. **Where it runs:** the assessment runs on a single transition-state-entry detail read only. Lists (search, the sibling
+> `entries` of a detail read, the `/reaction-entries/{id}/full` document) carry `structure_assessment.status =
+> "not_assessed_on_lists"` and issue no statement for the assessment. They do read which frequency result each declaration
+> pins, in ONE grouped statement per page or response however many entries it holds, so the frequency-presence checks, and
+> with them the label and the passed/possible counts, are the same on every surface. The saddle-point block
+> (`saddle_point`, the "N imaginary modes" statement) follows the same pin: when a declaration pins a frequency result it
+> describes that result and carries `basis = "declared_curvature_witness"`; with no declaration it describes the newest
+> attached result (`latest_direct_frequency`), as before. **Cost:** an entry that declares nothing costs one statement on its
+> own page; one declared target costs 46 more statements than an identical undeclared graph (measured; pinned at 70 or fewer).
+> Under `profile=curated` the assessment runs under that profile: a target resting on a hidden calculation is
 > unresolved and warns, and nothing is cached across profiles. Label, completeness, score and `is_certified` never read the
 > assessment. Machine reviews stamped version 4 (or 3) read as stale and are re-planned, never rewritten.
 

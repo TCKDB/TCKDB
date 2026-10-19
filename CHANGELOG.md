@@ -38,8 +38,10 @@ and are re-planned, none is rewritten.
   means the declared target needs investigation, not that the transition state is disproved. Label, completeness, score and
   `is_certified` never read the assessment.
 - The frequency-presence checks read the frequency result a declared target pins in role `curvature` (an entry that declares nothing
-  keeps reading the newest attached result). A list does not look at declarations, so a declared entry's completeness can differ
-  between a list and its own page.
+  keeps reading the newest attached result). Lists read the pins too, in one grouped statement per page or response, so the label and
+  the passed/possible counts agree on the entry page, browse, search, the sibling `entries` and `/full`.
+- `saddle_point` (the "N imaginary modes" block) follows the pin: it describes the pinned result and carries the new `basis` value
+  `declared_curvature_witness`; with no declaration it is unchanged (`latest_direct_frequency`).
 - Under `profile=curated` the assessment runs under that profile: a target resting on a hidden calculation is unresolved and warns.
 - The TS-entry page shows the assessment in plain words.
 
