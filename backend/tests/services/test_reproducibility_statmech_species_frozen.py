@@ -122,6 +122,9 @@ _KIND_ALIAS = {
     "parent_calculation": "calculation",
     "child_calculation": "calculation",
     "created_by": "user",
+    "source_scan_calculation": "calculation",
+    # Artifact rows are list items under ``artifacts``; warnings cite an artifact by ``artifact_id``.
+    "artifacts": "artifact",
 }
 
 
@@ -647,7 +650,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "00bce39a870f3cf7b3c5e4828d12ce98d50c88b601e2d6938a363222031d1f8f",
+        "digest": "2045367116ee2f2bedfa30cc16199461735b436a4345fe0260d47ac57c085025",
     },
     "computed_no_sources": {
         "grade": "insufficient",
@@ -685,7 +688,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "5eb7e7413ce14480bb6bc9474946f189214f8739d24b9421a055237fc094b487",
+        "digest": "24ad7e726217040f8e0de5a6e5bc264a2a9f8dba6ea02c2ecbb753b5dc748d91",
     },
     "custody_break_on_source_artifact": {
         "grade": "described",
@@ -704,7 +707,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'missing'],
         ],
-        "digest": "a4aef64a765bd9b134d045312ab2914b9d3bcb7c54c426dcee27d3d0bf48d3b6",
+        "digest": "b5bc532b11ea259d98655712a94b012678a9845fc3a6562a99f193ce01346eb9",
     },
     "declaration_with_members_and_sources": {
         "grade": "described",
@@ -723,7 +726,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "2910ac8b8e293709b0dac8d3947a0967c65338adac41c16d307a2bdcae8cb0cb",
+        "digest": "9be7f8a56d311d26db0b2f66088784908dc0c555d24aa35b07db26f360d3c5bb",
     },
     "dependency_cycle": {
         "grade": "described",
@@ -742,7 +745,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "7be4e3e5653de0fc147db99e84819b7628c72b01a8098212eeb231df55decf6c",
+        "digest": "9532908bbc8343a3796dd6aeb08cff09a3bd98e6dabcc20756fbcb87bd59ce82",
     },
     "dependency_edges": {
         "grade": "described",
@@ -761,7 +764,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "e2b0dccd8ca9616e88cd5b3387f167b2b232fd4f525c7a860a197f288cd78097",
+        "digest": "15976d0184f9cd90f3d2e96a1016a0870fcce9542a4016d4a9f691fc1ef126a2",
     },
     "estimated_with_literature": {
         "grade": "described",
@@ -856,7 +859,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "25df6173c7041a475c064fe29ea42f0eb207d158a70a82c8c3560c457455c9f7",
+        "digest": "997b6a54a7a42e9d10e790c5ca6dbe7e7cb0f5a42a5de4710a0d0595ac48eee6",
     },
     "object_missing_break_on_source_artifact": {
         "grade": "described",
@@ -875,7 +878,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'missing'],
         ],
-        "digest": "e0664d3eacd2ed4f18ce63f12118975cd68d1b9e28ede43cd034960a5224e3a2",
+        "digest": "5abb93d72894c14500a3b0bf8e04f1f32825773a154fd387c2fedb8643213f59",
     },
     "point_group_only": {
         "grade": "described",
@@ -894,7 +897,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "d3b93c771bda3af0b682861168989ea81cfef4977b6ee757f13c9404c301e300",
+        "digest": "5e889008db93916b31d2a4a9edf46f3ff360be43d4544dfa768d08ade19c7b0a",
     },
     "scan_source_with_result": {
         "grade": "described",
@@ -913,7 +916,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "33531e65d9c669562af8c2ac40008bab7961dd9b08a89e86002f123707ffc4d8",
+        "digest": "b88fdcf0f22dc4e6991193d6006684b4ab4c343ff1763445fde2ff87b7605a7f",
     },
     "source_geometries_and_parameters": {
         "grade": "described",
@@ -932,7 +935,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "662035b591e5320f63d14f1b01f1fab851830f3391c19c5da15d08cedd0de0a2",
+        "digest": "0ea10c27771f09a8e34b7de4ddcd2c1bd981ee7943ac9f13837044e31f8e934b",
     },
     "sparse": {
         "grade": "insufficient",
@@ -970,7 +973,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "a0b517570b27f17747adc0147aa1220995f5805b2b38d5b5c0432926962431bd",
+        "digest": "5fe17e6068784934ecfee4357315726dfe803bead4357639b5afc02375d01bb9",
     },
     "with_model_declaration": {
         "grade": "described",
@@ -989,7 +992,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "092b3bcc413c22d47952986bbad8b3559649340b268c134ce5d6a45876135324",
+        "digest": "3dc9dbf8958d9968e9328056f0629e4ec7cf9dbe3058b76b8d2499130fee47e2",
     },
 }
 
@@ -1125,6 +1128,47 @@ def test_probe_pointing_a_foreign_key_at_another_row_moves_the_digest():
     minimal["calculation_evidence"]["12"]["columns"]["lot_id"] = 22
     assert normalised_digest(minimal) != baseline
 
+
+
+def test_probe_repointing_a_torsions_scan_link_moves_the_digest(db_session, _api_test_user):
+    """``source_scan_calculation_id`` must meet the calculation numbering, so naming another calculation shows."""
+    context = _context(db_session, "torsion_with_scan", _api_test_user)
+    context = json.loads(json.dumps(context, default=str))
+    baseline = normalised_digest(context)
+    opt_id = next(
+        int(key) for key, entry in context["calculation_evidence"].items() if entry["columns"]["type"] == "opt"
+    )
+
+    def repoint(node) -> int:
+        """Point every mention of the link at the opt calculation; return how many were changed."""
+        if isinstance(node, list):
+            return sum(repoint(item) for item in node)
+        if not isinstance(node, dict):
+            return 0
+        changed = sum(repoint(value) for value in node.values())
+        if node.get("source_scan_calculation_id") not in (None, opt_id):
+            node["source_scan_calculation_id"] = opt_id
+            changed += 1
+        return changed
+
+    assert repoint(context) >= 1
+    assert normalised_digest(context) != baseline
+
+
+def test_probe_repointing_a_warnings_artifact_moves_the_digest(db_session, _api_test_user):
+    """A warning's ``artifact_id`` must meet the ``id`` of the artifact row it cites."""
+    context = _context(db_session, "custody_break_on_source_artifact", _api_test_user)
+    context = json.loads(json.dumps(context, default=str))
+    baseline = normalised_digest(context)
+    warning = next(w for w in context["warnings"] if "artifact_id" in w["evidence"])
+    other = next(
+        artifact["id"]
+        for entry in context["calculation_evidence"].values()
+        for artifact in entry["artifacts"]
+        if artifact["id"] != warning["evidence"]["artifact_id"]
+    )
+    warning["evidence"]["artifact_id"] = other
+    assert normalised_digest(context) != baseline
 
 
 def test_every_scenario_is_frozen():
