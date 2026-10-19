@@ -26,7 +26,12 @@ import pytest
 from sqlalchemy import event
 
 from app.api.error_contract import CodedValueError
-from app.db.models.common import StructureDeterminationTargetKind, StructureFindingKind, StructureSourceRole
+from app.db.models.common import (
+    RecordReviewStatus,
+    StructureDeterminationTargetKind,
+    StructureFindingKind,
+    StructureSourceRole,
+)
 from app.services.structure_selection import DECISION_VERSION
 from app.services.structure_selection.models import (
     ASSESSMENT_VERSION,
@@ -66,7 +71,8 @@ def detail(client, entry, *, profile: str | None = None) -> dict:
     return response.json()["record"]["trust"]
 
 
-def search(client, **params) -> dict:
+def search(client, profile: str | None = None, **params) -> dict:
+    params = {**params, **({"profile": profile} if profile else {})}
     qs = "&".join(f"{k}={v}" for k, v in {"include": "trust", "charge": 0, **params}.items())
     response = client.get(f"{API}/transition-states/search?{qs}")
     assert response.status_code == 200, response.text
@@ -680,6 +686,70 @@ def test_the_hidden_pin_falls_back_to_the_newest_attached_visible_result_under_c
     # (exploratory: the pin is visible and chosen.)
     assert detail(client, world.entry, profile="curated")["evidence"]["checks"]["reaction_coordinate_designated_for_ts"] == "missing"
     assert detail(client, world.entry)["evidence"]["checks"]["reaction_coordinate_designated_for_ts"] == "passed"
+
+
+def _box(client, entry, *, profile=None):
+    qs = "include=trust" + (f"&profile={profile}" if profile else "")
+    return client.get(f"{API}/transition-state-entries/{entry.public_ref}?{qs}").json()["record"]["saddle_point"]
+
+
+def test_under_curated_a_hidden_pinned_result_is_absent_for_the_box_and_the_check_alike(client, db_session):
+    """Hidden == absent (D6): the box and the trust check both read the newest visible result, and say nothing of the hidden one.
+
+    The expected answer is what exploratory gives on a world where the hidden calculation does not exist.
+    Kills: the box going blank, or still describing/naming the hidden pinned result.
+    """
+    hidden_world = make_ts_world(db_session)
+    d, opt, sp, f = saddle(hidden_world, statuses={"freq": None})  # the pinned witness is below the curated floor
+    visible = hidden_world.freq("visible", frequencies=THREE)
+    hidden_world.settle()
+
+    absent_world = make_ts_world(db_session)  # the same declaration, with no hidden calculation in existence
+    geometry = make_geometry(db_session)
+    opt_b = absent_world.opt("o", -40.2, geometry=geometry)
+    sp_b = absent_world.sp("s", -40.3, geometry=geometry)
+    absent_world.determination([("geometry_optimization", opt_b), ("energy", sp_b)], evaluated=geometry, target=SADDLE)
+    visible_b = absent_world.freq("visible", frequencies=THREE, geometry=geometry)
+    absent_world.settle()
+
+    curated = _box(client, hidden_world.entry, profile="curated")
+    assert curated is not None  # not blank
+    assert (curated["basis"], curated["n_imag"], curated["calculation_ref"]) == ("latest_direct_frequency", 3, visible.public_ref)
+    expected = _box(client, absent_world.entry)
+    assert (curated["basis"], curated["n_imag"], curated["reaction_coordinate_mode_index"]) == (
+        expected["basis"], expected["n_imag"], expected["reaction_coordinate_mode_index"]
+    )
+    assert expected["calculation_ref"] == visible_b.public_ref
+
+    frequency_checks = (
+        "imaginary_frequency_count_recorded",
+        "reaction_coordinate_designated_for_ts",
+        "imaginary_frequency_value_present",
+        UNDESIGNATED,
+    )
+    trust_curated = detail(client, hidden_world.entry, profile="curated")["evidence"]["checks"]
+    trust_expected = detail(client, absent_world.entry)["evidence"]["checks"]
+    assert {k: trust_curated.get(k) for k in frequency_checks} == {k: trust_expected.get(k) for k in frequency_checks}
+    assert trust_curated["reaction_coordinate_designated_for_ts"] == "missing"  # the visible three-mode result
+    body = client.get(f"{API}/transition-state-entries/{hidden_world.entry.public_ref}?include=trust&profile=curated").text
+    assert f.public_ref not in body  # nothing names the hidden calculation
+    # and a list agrees with the entry's own page
+    listed = _record_in(search(client, profile="curated"), hidden_world.entry.public_ref)["saddle_point"]
+    assert listed == curated
+
+
+def test_a_deprecated_declared_entry_has_the_same_counts_on_its_page_and_on_a_list(client, db_session):
+    """The detail read treats a deprecated entry's declarations as excluded; so must the list pin read.
+
+    Kills: the list pin read without the owner-status exclusion.
+    """
+    world = make_ts_world(db_session, entry_status=RecordReviewStatus.deprecated)
+    saddle(world)
+    _with_unrelated_rerun(world, THREE)
+    on_detail = _badge(detail(client, world.entry))
+    assert on_detail[4]["reaction_coordinate_designated_for_ts"] == "missing"  # no pin: the newest attached result
+    on_list = _badge(_record_in(search(client, include_deprecated="true"), world.entry.public_ref)["trust"])
+    assert on_list == on_detail
 
 
 # ---------------------------------------------------------------------------

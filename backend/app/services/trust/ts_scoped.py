@@ -31,7 +31,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
-from app.db.models.common import StructureDeterminationTargetKind, StructureSourceRole
+from app.db.models.common import (
+    RecordReviewStatus,
+    StructureDeterminationTargetKind,
+    StructureSourceRole,
+    SubmissionRecordType,
+)
+from app.db.models.record_review import RecordReview
 from app.db.models.structure_determination import StructureDetermination, StructureDeterminationSource
 from app.db.models.transition_state import TransitionStateEntry
 from app.services.trust.models import (
@@ -88,6 +94,12 @@ def declared_curvature_pins(session: Session, entry_ids: list[int]) -> ListScope
     The list surfaces' counterpart of what the detail read learns from the assessment. It is not the assessment: it
     reads which result a declaration points at, never whether the target qualifies.
     """
+    from app.services.scientific_read.common import visible_statuses
+
+    # The detail read's exclusion rule, in the same statement: a determination whose owning entry is rejected, deprecated
+    # or below the profile floor is not part of that entry's world, so it pins nothing. An entry with no review row is
+    # ``not_reviewed``.
+    allowed = visible_statuses(min_review_status=None, include_rejected=False, include_deprecated=False)
     pins: dict[int, set[str]] = {}
     if entry_ids:
         rows = session.execute(
@@ -95,7 +107,13 @@ def declared_curvature_pins(session: Session, entry_ids: list[int]) -> ListScope
             .select_from(StructureDeterminationSource)
             .join(StructureDetermination, StructureDeterminationSource.determination_id == StructureDetermination.id)
             .join(Calculation, StructureDeterminationSource.calculation_id == Calculation.id)
+            .outerjoin(
+                RecordReview,
+                (RecordReview.record_type == SubmissionRecordType.transition_state_entry)
+                & (RecordReview.record_id == StructureDetermination.transition_state_entry_id),
+            )
             .where(
+                func.coalesce(RecordReview.status, RecordReviewStatus.not_reviewed).in_(allowed),
                 StructureDetermination.transition_state_entry_id.in_(entry_ids),
                 StructureDetermination.target_kind.in_(_DECLARED_KINDS),
                 StructureDeterminationSource.role == StructureSourceRole.curvature,

@@ -98,6 +98,7 @@ from app.services.scientific_read.common import (
     review_hidden_under_profile,
     review_summary,
     validate_includes,
+    visible_statuses,
     where_visible,
 )
 from app.services.scientific_read.composite_binding import (
@@ -1629,13 +1630,21 @@ def _build_saddle_point_index(
         )
         .exists()
     )
+    # Hidden == absent (D6): a frequency calculation the read profile hides is not a candidate, so it is neither
+    # described nor counted as a pin; the block then describes the newest visible result, with no trace of the hidden one.
+    shown = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
     rows = session.execute(
         select(Calculation, CalculationFreqResult, pinned_by_declaration)
         .join(
             CalculationFreqResult,
             CalculationFreqResult.calculation_id == Calculation.id,
         )
+        .outerjoin(
+            RecordReview,
+            (RecordReview.record_type == SubmissionRecordType.calculation) & (RecordReview.record_id == Calculation.id),
+        )
         .where(
+            func.coalesce(RecordReview.status, RecordReviewStatus.not_reviewed).in_(shown),
             Calculation.transition_state_entry_id.in_(entry_ids),
             Calculation.type == CalculationType.freq,
         )
