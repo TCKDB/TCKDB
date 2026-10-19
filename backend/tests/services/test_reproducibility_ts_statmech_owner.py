@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import func, select, text
 
+from app.db.models.calculation import ArtifactIntegrityEvent
 from app.db.models.common import (
     CalculationType,
     ReproducibilityAssessorKind,
@@ -286,6 +287,7 @@ def test_t8_the_report_names_currency_transitions_and_species_stability(db_sessi
     assert report["by_owner"] == {"species_entry": {"n": 1}, "transition_state_entry": {"n": 1}}
     assert report["unowned_statmech"] == 0
     assert report["species_entry_unchanged"] is True
+    assert report["species_currency_changed"] == 0
     assert report["species_entry_records_compared"] == 1
     assert report["statmech_with_assessment"] == {"species_entry": 1, "transition_state_entry": 1, "unowned": 0}
     assert report["assessment_currency"] == [
@@ -325,9 +327,58 @@ def test_t8_the_report_writes_nothing(db_session, _api_test_user):
     _seed(db_session, _api_test_user)
     db_session.flush()
     rows = db_session.scalar(select(func.count()).select_from(RecordReproducibilityAssessment))
+    events = db_session.scalar(select(func.count()).select_from(ArtifactIntegrityEvent))
     reproducibility_owner_report(db_session, include_stale_list=True)
     assert not db_session.new and not db_session.dirty and not db_session.deleted
     assert db_session.scalar(select(func.count()).select_from(RecordReproducibilityAssessment)) == rows == 2
+    assert db_session.scalar(select(func.count()).select_from(ArtifactIntegrityEvent)) == events
+
+
+def test_the_report_hands_the_rubric_a_custody_recorder_bound_to_its_own_session(
+    db_session, _api_test_user, monkeypatch
+):
+    """Left to default the recorder opens the app's configured database, not the one the operator named.
+
+    A statmech evaluation reads no output bytes, so no custody write is reachable from a test; what can be pinned is
+    that every evaluation the report makes is given the report's own session as the recorder's factory.
+    """
+    import app.services.reproducibility_owner_report as report_module
+
+    _seed(db_session, _api_test_user)
+    seen = []
+    real = report_module.evaluate_reproducibility
+
+    def spy(session, **kwargs):
+        seen.append(kwargs.get("integrity_session_factory"))
+        return real(session, **kwargs)
+
+    monkeypatch.setattr(report_module, "evaluate_reproducibility", spy)
+    reproducibility_owner_report(db_session)
+    assert len(seen) == 4  # live + shared reading, for two records
+    assert all(factory is not None and factory() is factory for factory in seen)
+    assert all(factory._session is db_session for factory in seen)
+
+
+def test_a_species_row_already_stale_stays_stale_and_changes_no_currency(db_session, _api_test_user):
+    """A species row whose evidence changed after it was assessed reads stale under old and new code alike."""
+    from app.services.reproducibility_rubric import SHARED as _SHARED  # noqa: F401
+
+    already_stale = _species_statmech(db_session, _api_test_user)
+    _append(db_session, _evaluate(db_session, already_stale, rubric=SHARED))
+    already_stale.point_group = "D2h"  # evidence changed after the assessment
+    db_session.flush()
+    db_session.refresh(already_stale)
+    current = _species_statmech(db_session, _api_test_user)
+    _append(db_session, _evaluate(db_session, current, rubric=SHARED))
+
+    report = reproducibility_owner_report(db_session)
+    species = {
+        (r["state"], tuple(r["stale_reasons"])): r["count"]
+        for r in report["assessment_currency"]
+        if r["owner"] == "species_entry"
+    }
+    assert species == {("current", ()): 1, ("stale", ("context_hash_mismatch",)): 1}
+    assert report["species_currency_changed"] == 0
 
 
 def test_an_empty_database_reports_zero_everywhere(db_session):

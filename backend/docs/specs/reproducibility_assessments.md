@@ -102,8 +102,11 @@ keep reading `current`.
    It reports statmech by owner, assessed and unassessed counts by owner,
    currency by owner with reasons (`rubric_identity_mismatch`,
    `context_hash_mismatch`), the grade transitions (the shared rubric's reading
-   against the live one), and `species_entry_unchanged` (a routing check only;
-   every `species_entry` row of `assessment_currency` must read `current`).
+   against the live one), and `species_entry_unchanged` (a routing check only) and
+   `species_currency_changed`, which must be 0: no species row changes currency
+   between the shared rubric and the live one. A species row already stale
+   because its evidence changed after it was assessed reads stale under both
+   and is not counted.
 3. `--list-stale` adds the record id and assessment ref of each stale
    transition-state-owned record: operator-only output, because it carries
    identifiers. Whatever a deployment holds is what the report shows; the

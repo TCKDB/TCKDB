@@ -15,7 +15,8 @@ Reading it:
 
 * ``species_entry_unchanged`` checks ROUTING only. ``false`` is a defect in the change; ``true`` does not show the
   shared checks are untouched.
-* Every ``species_entry`` row of ``assessment_currency`` must read ``current``.
+* ``species_currency_changed`` must be 0: no species row changes currency. A species row already stale because its
+  evidence changed after it was assessed reads stale under both the old and the new code and is not counted.
 * Stored transition-state-owned assessments read ``stale`` with ``rubric_identity_mismatch`` until re-assessed.
 """
 
