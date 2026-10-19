@@ -3,27 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 from app.services.scientific_read import ref_guard
 from tests.api.scientific._curated_sweep_world import SweepWorld
-
-BASELINE_PATH = Path(__file__).with_name("curated_ref_sweep_baseline.json")
-#: ``CURATED_SWEEP_REGENERATE=1`` rewrites the baseline from what the sweep finds (a deliberate act, reviewed in the diff).
-REGENERATE = os.environ.get("CURATED_SWEEP_REGENERATE") == "1"
-
-
-def read_baseline() -> dict[str, list[str]]:
-    return json.loads(BASELINE_PATH.read_text()) if BASELINE_PATH.exists() else {}
-
-
-def write_baseline(sections: dict[str, list[str]]) -> None:
-    merged = {**read_baseline(), **sections}
-    BASELINE_PATH.write_text(json.dumps(merged, indent=1, sort_keys=True) + "\n")
 
 
 def fmt(route: tuple[str, str], text: str) -> str:
@@ -309,7 +294,10 @@ def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
             while i < len(exp) and not _is_withholding(c, exp[i]):
                 i += 1
             if i == len(exp):
-                return [f"{path}[*]<element not in exploratory list>"]
+                # Name the field that differs, not just the element: the closest exploratory element (fewest
+                # violations) is the one this curated element was taken from, so its violations are the substitution.
+                closest = min((withholding_violations(e, c, f"{path}[*]") for e in exp), key=len, default=[])
+                return closest or [f"{path}[*]<element not in exploratory list>"]
             i += 1
         return []
     return [] if _same_modulo_placeholders(exp, cur) else [f"{path}<value changed>"]

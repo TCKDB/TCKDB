@@ -183,7 +183,10 @@ def build_sweep_world(session) -> SweepWorld:
         session, type=CalculationType.sp, species_entry_id=sa.id, lot_id=lot.id, conformer_observation_id=co_h.id
     )  # visible calc whose observation is hidden
     calc_h = make_calculation(session, type=CalculationType.freq, species_entry_id=sa.id, lot_id=lot.id)
-    calc_vf = make_calculation(session, type=CalculationType.freq, species_entry_id=sa.id, lot_id=lot.id)
+    # calc_vf is run at its own level of theory, so a level derived from a substituted sibling differs from the true one.
+    lot_vf = make_lot(session, method="sweepfreq", basis="def2svp")
+    ext["lot_vf"] = lot_vf
+    calc_vf = make_calculation(session, type=CalculationType.freq, species_entry_id=sa.id, lot_id=lot_vf.id)
     vis["calc_vopt"], vis["calc_vsp"], vis["calc_vf"] = calc_vopt, calc_vsp, calc_vf
     hid["calc_h"] = calc_h
     geom_h = make_geometry(session)
@@ -206,6 +209,9 @@ def build_sweep_world(session) -> SweepWorld:
     attach_statmech_source_calculation(session, statmech=sm_v, calculation=calc_h, role=StatmechCalculationRole.freq)
     attach_statmech_source_calculation(session, statmech=sm_v, calculation=calc_vsp, role=StatmechCalculationRole.sp)
     attach_statmech_source_calculation(session, statmech=sm_v2, calculation=calc_vf, role=StatmechCalculationRole.freq)
+    # sm_v also links the visible freq sibling, behind the thermo's own hidden freq link: a hide that filters the links before
+    # picking falls through to calc_vf (the #767 bug class); the guard must leave that slot empty instead.
+    attach_statmech_source_calculation(session, statmech=sm_v, calculation=calc_vf, role=StatmechCalculationRole.freq)
     attach_statmech_torsion(session, statmech=sm_v, source_scan_calculation=calc_h)
     vis["sm_v"], vis["sm_v2"] = sm_v, sm_v2
     hid["sm_h"] = sm_h
@@ -255,6 +261,12 @@ def build_sweep_world(session) -> SweepWorld:
     hid["ts_h"], hid["tse_h"] = ts_h, tse_h
 
     calc_ts_v = make_calculation(session, type=CalculationType.opt, transition_state_entry_id=tse_v2.id, lot_id=lot.id)
+    # A visible freq calculation at its own level of theory, for the visible same-role sibling shapes (a second TS statmech,
+    # a second kinetics record). It is owned by the species entry, not by a TS entry of the reaction: a visible freq on the
+    # reaction's entries would make the kinetics checklist (``has_ts_freq_evidence``) true under curated and defeat the D5
+    # tests that rest on the reaction having only hidden freq calculations.
+    lot_tsvf = make_lot(session, method="sweeptsfreq", basis="def2svp")
+    calc_ts_vf = make_calculation(session, type=CalculationType.freq, species_entry_id=sa.id, lot_id=lot_tsvf.id)
     calc_ts_h = make_calculation(session, type=CalculationType.freq, transition_state_entry_id=tse_v2.id, lot_id=lot.id)
     calc_ts_v_on_h = make_calculation(
         session, type=CalculationType.opt, transition_state_entry_id=tse_h.id, lot_id=lot.id
@@ -271,6 +283,13 @@ def build_sweep_world(session) -> SweepWorld:
     )
     vis["sm_ts_v"] = sm_ts_v
     hid["sm_ts_h"] = sm_ts_h
+    # A visible same-role sibling on the same entry: a second visible TS statmech that links a visible freq calculation
+    # (at its own level of theory), so a hide that falls through to a sibling of the same role is visible as a change.
+    sm_ts_v2 = make_statmech_for_ts(session, tse_v2)
+    attach_statmech_source_calculation(
+        session, statmech=sm_ts_v2, calculation=calc_ts_vf, role=StatmechCalculationRole.freq
+    )
+    vis["calc_ts_vf"], vis["sm_ts_v2"] = calc_ts_vf, sm_ts_v2
 
     # Kinetics: a visible and a hidden record on the reaction entry.
     kin_v = make_kinetics(session, reaction_entry=rxe)
@@ -734,11 +753,13 @@ def _extend_for_ts_and_reaction_family(
             session, type=type_, transition_state_entry_id=tse_v2.id, lot_id=None if hidden else lot.id
         )
 
-    calc_h_tssp, calc_ts_sp_v = calc_on_tse_v2(CalculationType.sp, hidden=True), calc_on_tse_v2(CalculationType.sp)
-    calc_h_irc, calc_irc_v = calc_on_tse_v2(CalculationType.irc, hidden=True), calc_on_tse_v2(CalculationType.irc)
-    calc_h_ps, calc_ps_v = (
-        calc_on_tse_v2(CalculationType.path_search, hidden=True),
+    # The visible sibling is created first, so the hidden calculation is the most recent of its type on the entry (what a
+    # "most recent wins" slot picks) and a hide that falls through to a sibling lands on the visible one.
+    calc_ts_sp_v, calc_h_tssp = calc_on_tse_v2(CalculationType.sp), calc_on_tse_v2(CalculationType.sp, hidden=True)
+    calc_irc_v, calc_h_irc = calc_on_tse_v2(CalculationType.irc), calc_on_tse_v2(CalculationType.irc, hidden=True)
+    calc_ps_v, calc_h_ps = (
         calc_on_tse_v2(CalculationType.path_search),
+        calc_on_tse_v2(CalculationType.path_search, hidden=True),
     )
     for calc in (calc_h_irc, calc_irc_v):
         _add_irc(session, calc, geom_ts)
@@ -867,6 +888,25 @@ def _extend_for_ts_and_reaction_family(
     source(kin_v, calc_h_irc, KineticsCalculationRole.irc)
     source(kin_v, calc_h_ps, KineticsCalculationRole.fit_source)
     source(kin_v, calc_h_tsopt, KineticsCalculationRole.fit_source)  # the optimisation the geometry validation hangs on
+    # A second visible record whose single-slot picks (first freq / ts-energy / irc / path search / opt by role order)
+    # resolve to HIDDEN calculations while a visible calculation of the same type is linked after them: a hide that
+    # filters the links before picking would resolve to the visible one, which the withholding-only check catches.
+    kin_vsl = make_kinetics(session, reaction_entry=rxe, a=4.0e-12, ea_kj_mol=25.0)
+    session.flush()
+    for calc, role in (
+        (calc_ts_h, KineticsCalculationRole.freq),
+        (calc_h_tssp, KineticsCalculationRole.ts_energy),
+        (calc_h_irc, KineticsCalculationRole.irc),
+        (calc_h_ps, KineticsCalculationRole.fit_source),
+        (calc_h_tsopt, KineticsCalculationRole.fit_source),
+        (vis["calc_ts_vf"], KineticsCalculationRole.fit_source),
+        (calc_ts_sp_v, KineticsCalculationRole.ts_energy),
+        (calc_irc_v, KineticsCalculationRole.fit_source),
+        (calc_ps_v, KineticsCalculationRole.fit_source),
+        (vis["calc_ts_v"], KineticsCalculationRole.fit_source),
+    ):
+        source(kin_vsl, calc, role)
+    vis["kin_vsl"] = kin_vsl
     session.flush()
     kin_v.network_kinetics_id = nkin_h.id  # the bridge to a hidden network kinetics
     kin_v.note = f"fit to {calc_h_tssp.public_ref}"
@@ -1011,6 +1051,33 @@ def _extend_for_ts_and_reaction_family(
     hid["ts_hw"], hid["tse_hw"], hid["calc_h_psw"], hid["kin_hw"] = ts_hw, tse_hw, calc_h_psw, kin_hw
     ext["reaction_entry_all_hidden"] = rxe_w
     ext["scoping_approved_extra"].append((R.reaction_entry, rxe_w))
+
+    # -- a reaction with a visible same-role sibling for every single-slot pick of its TS entry -----------------------------
+    # Its own reaction, so the D5 tests that rest on ``rxe`` having ONLY hidden freq calculations keep their premise. The
+    # visible freq calculation is created first and the hidden one second, so the hidden one is the entry's most recent
+    # freq (what the ``/full`` ``ts_freq`` slot picks, and what kinetics provenance's first freq resolves to): a hide that
+    # falls through to the sibling names ``calc_s_vf`` where exploratory names ``calc_h_tsfq``.
+    sr1, sp1 = (
+        make_species_entry(session, make_species(session, inchi_key=next_inchi_key(tag))) for tag in ("SWS1", "SWS2")
+    )
+    reaction_s = make_chem_reaction(session, reactants=[sr1.species], products=[sp1.species], reversible=False)
+    rxe_s = make_reaction_entry(session, reaction=reaction_s, reactant_entries=[sr1], product_entries=[sp1])
+    ts_s = make_transition_state(session, reaction_entry=rxe_s, label="visible-sibling-ts")
+    tse_s = make_transition_state_entry(session, transition_state=ts_s)
+    calc_s_vf = make_calculation(
+        session, type=CalculationType.freq, transition_state_entry_id=tse_s.id, lot_id=lot.id
+    )
+    calc_h_tsfq = make_calculation(
+        session, type=CalculationType.freq, transition_state_entry_id=tse_s.id, lot_id=None
+    )
+    kin_sib = make_kinetics(session, reaction_entry=rxe_s, a=6.0e-12, ea_kj_mol=14.0)
+    session.flush()
+    source(kin_sib, calc_h_tsfq, KineticsCalculationRole.freq)
+    source(kin_sib, calc_s_vf, KineticsCalculationRole.fit_source)
+    vis["ts_vsb"], vis["tse_vsb"], vis["calc_s_vf"], vis["kin_vsb"] = ts_s, tse_s, calc_s_vf, kin_sib
+    hid["calc_h_tsfq"] = calc_h_tsfq
+    ext["reaction_entry_siblings"] = rxe_s
+    ext["scoping_approved_extra"].append((R.reaction_entry, rxe_s))
 
     # -- a hidden PARENT of a visible TS optimisation (``optimized_from``): the only path search of its entry ---------------
     ts_vp = make_transition_state(session, reaction_entry=rxe, label="visible-ts-hidden-parent")

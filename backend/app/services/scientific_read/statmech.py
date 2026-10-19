@@ -16,7 +16,7 @@ See ``backend/docs/specs/scientific_statmech_reads.md``.
 
 from __future__ import annotations
 
-from sqlalchemy import and_, exists, func, select
+from sqlalchemy import and_, exists, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import not_found
@@ -81,10 +81,8 @@ from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     fetch_review_badges,
-    review_hidden_under_profile,
     review_summary,
     validate_includes,
-    visible_statuses,
 )
 from app.services.scientific_read.composite_annotations import (
     legacy_composite_shape,
@@ -101,11 +99,10 @@ from app.services.scientific_read.composite_recipe import (
 from app.services.scientific_read.declared_levels import (
     load_declared_energy_summaries,
 )
-from app.services.scientific_read.handles import resolve_statmech_handle, status_hidden_under_profile
+from app.services.scientific_read.handles import resolve_statmech_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
@@ -399,30 +396,15 @@ def build_statmech_record(
         review=badge,
     )
 
-    # The two blocks that *name* a linked calculation (the source-calculations list and the
-    # frequency pointer) only name calculations the active profile lets the caller address.
-    # Record-level facts above (levels, evidence counts, availability flags, trust) describe the
-    # statmech's own provenance and deliberately do not vary by profile.
-    # Only computed when a block that names a calculation was asked for, and only under a floor.
-    names_calculations = bool(includes & {"source_calculations", "frequencies", "torsions"})
-    prefetched_badges: dict[int, RecordReviewBadge] = {}
-    hidden_calc_ids: set[int] = set()
-    if names_calculations:
-        prefetched_badges, hidden_calc_ids = review_hidden_under_profile(
-            session,
-            record_type=SubmissionRecordType.calculation,
-            record_ids={r.calculation_id for r in source_rows}
-            | {t.source_scan_calculation_id for t in torsion_rows if t.source_scan_calculation_id is not None},
-        )
-    profile_visible_rows = [r for r in source_rows if r.calculation_id not in hidden_calc_ids]
-
+    # Blocks that name a linked calculation carry the calculation's own ref; under a review floor the boundary
+    # guard (``ref_guard``) withholds a ref the profile hides, by its pointer rules. Nothing here consults the profile.
     source_block: list[StatmechSourceCalculationSummary] | None = None
     if "source_calculations" in includes:
-        source_block = _build_source_calculations(session, profile_visible_rows, badges=prefetched_badges)
+        source_block = _build_source_calculations(session, source_rows)
 
     torsions_block: list[StatmechTorsionSummary] | None = None
     if "torsions" in includes:
-        torsions_block = _build_torsions(session, torsion_rows, hidden_calc_ids=hidden_calc_ids)
+        torsions_block = _build_torsions(session, torsion_rows)
 
     electronic_levels_block: list[StatmechElectronicLevelSummary] | None = None
     if "electronic_levels" in includes:
@@ -430,9 +412,7 @@ def build_statmech_record(
 
     frequencies_block: StatmechFrequenciesSummary | None = None
     if "frequencies" in includes:
-        frequencies_block = _build_frequencies_summary(
-            session, profile_visible_rows, fsf_value=fsf_value
-        )
+        frequencies_block = _build_frequencies_summary(session, source_rows, fsf_value=fsf_value)
 
     conformers_block: list[StatmechConformerContextItem] | None = None
     if "conformers" in includes:
@@ -879,8 +859,6 @@ def _build_literature_summary(
 def _build_source_calculations(
     session: Session,
     source_rows: list[StatmechSourceCalculation],
-    *,
-    badges: dict[int, RecordReviewBadge] | None = None,
 ) -> list[StatmechSourceCalculationSummary]:
     if not source_rows:
         return []
@@ -889,13 +867,11 @@ def _build_source_calculations(
         select(Calculation).where(Calculation.id.in_(calc_ids))
     ).all()
     calc_by_id = {c.id: c for c in calcs}
-    # Badges prefetched for the profile filter cover these ids; otherwise fetch them.
-    if not badges:
-        badges = fetch_review_badges(
-            session,
-            record_type=SubmissionRecordType.calculation,
-            record_ids=calc_ids,
-        )
+    badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids=calc_ids,
+    )
     lot_ids = {c.lot_id for c in calcs if c.lot_id is not None}
     sw_ids = {
         c.software_release_id
@@ -1033,8 +1009,6 @@ def _bulk_workflow_summaries(
 def _build_torsions(
     session: Session,
     torsion_rows: list[StatmechTorsion],
-    *,
-    hidden_calc_ids: set[int] | frozenset[int] = frozenset(),
 ) -> list[StatmechTorsionSummary]:
     if not torsion_rows:
         return []
@@ -1078,15 +1052,12 @@ def _build_torsions(
                 top_description=t.top_description,
                 invalidated_reason=t.invalidated_reason,
                 note=t.note,
-                # A scan calculation the profile hides is not named (ref or id).
                 source_scan_calculation_ref=(
                     scan_refs_by_id.get(t.source_scan_calculation_id)
-                    if t.source_scan_calculation_id is not None and t.source_scan_calculation_id not in hidden_calc_ids
+                    if t.source_scan_calculation_id is not None
                     else None
                 ),
-                source_scan_calculation_id=(
-                    None if t.source_scan_calculation_id in hidden_calc_ids else t.source_scan_calculation_id
-                ),
+                source_scan_calculation_id=t.source_scan_calculation_id,
                 coordinates=[
                     StatmechTorsionCoordinateSummary(
                         coordinate_index=c.coordinate_index,
@@ -1189,21 +1160,10 @@ def _curvature_witnesses(
             .where(Calculation.id.in_(calc_ids))
         ).all()
     }
-    # A calculation the active profile hides from ``GET /calculations/{ref}`` must not be
-    # confirmed here either (existence, review state, or having a Hessian). The same floor
-    # detail-by-ref gate applies: no extra restriction when exploratory, approval when curated.
-    badges = fetch_review_badges(
-        session,
-        record_type=SubmissionRecordType.calculation,
-        record_ids=[i for i, r in rows.items() if r.freq_id is not None or r.hessian_id is not None],
-    )
     witnesses: list[StatmechCurvatureWitness] = []
     for link in sorted(source_rows, key=lambda r: (role_order[r.role], r.calculation_id)):
         row = rows.get(link.calculation_id)
         if row is None or (row.freq_id is None and row.hessian_id is None):
-            continue
-        badge = badges.get(link.calculation_id)
-        if badge is None or status_hidden_under_profile(badge.status):
             continue
         witnesses.append(
             StatmechCurvatureWitness(
@@ -1230,20 +1190,6 @@ def _build_conformer_context(
         .where(ConformerGroup.species_entry_id == species_entry_id)
         .order_by(ConformerGroup.id.asc())
     )
-    # A conformer group the active profile hides (404 on its own detail route) is not named. The
-    # filter is part of this one query (an outer join to the review row), so a curated read costs the
-    # same number of statements as an exploratory one. With no floor the statement is unchanged.
-    # Whether the species entry has conformer context at all (``has_conformers``) is a record-level
-    # fact and is not affected.
-    if current_read_profile().review_floor is not None:
-        visible = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
-        stmt = stmt.outerjoin(
-            RecordReview,
-            and_(
-                RecordReview.record_type == SubmissionRecordType.conformer_group,
-                RecordReview.record_id == ConformerGroup.id,
-            ),
-        ).where(func.coalesce(RecordReview.status, RecordReviewStatus.not_reviewed).in_(visible))
     rows = session.scalars(stmt).all()
     return [
         StatmechConformerContextItem(
