@@ -319,6 +319,19 @@ class RejectionCode(str, Enum):
     STRUCTURE_DECLARATION_VERSION_UNSUPPORTED = "structure_declaration_version_unsupported"
     STRUCTURE_DETERMINATION_INVALID = "structure_determination_invalid"
     STRUCTURE_DETERMINATION_MISMATCH = "structure_determination_mismatch"
+    STRUCTURE_FINDING_ADJUDICATION_NEEDS_TARGET = "structure_finding_adjudication_needs_target"
+    STRUCTURE_FINDING_ADJUDICATION_VERDICT_UNSUPPORTED = "structure_finding_adjudication_verdict_unsupported"
+    STRUCTURE_FINDING_ALREADY_SETTLED = "structure_finding_already_settled"
+    STRUCTURE_FINDING_CORRECTION_NEEDS_ADJUDICATION = "structure_finding_correction_needs_adjudication"
+    STRUCTURE_FINDING_CORRECTION_SUBJECT_MISMATCH = "structure_finding_correction_subject_mismatch"
+    STRUCTURE_FINDING_LITERATURE_UNIDENTIFIED = "structure_finding_literature_unidentified"
+    STRUCTURE_FINDING_RATIONALE_REQUIRED = "structure_finding_rationale_required"
+    STRUCTURE_FINDING_REFERENCE_INVALID = "structure_finding_reference_invalid"
+    STRUCTURE_FINDING_REFERENCE_NOT_FOUND = "structure_finding_reference_not_found"
+    STRUCTURE_FINDING_ROLE_MISMATCH = "structure_finding_role_mismatch"
+    STRUCTURE_FINDING_SCOPE_SUBJECT_MISMATCH = "structure_finding_scope_subject_mismatch"
+    STRUCTURE_FINDING_SUBJECT_NOT_FOUND = "structure_finding_subject_not_found"
+    STRUCTURE_FINDING_TARGET_IS_ADJUDICATION = "structure_finding_target_is_adjudication"
     STRUCTURE_SELECTION_EVIDENCE_TOO_LARGE = "structure_selection_evidence_too_large"
     STRUCTURE_SELECTION_MANIFEST_TOO_LARGE = "structure_selection_manifest_too_large"
     STRUCTURE_SELECTION_POPULATION_TOO_LARGE = "structure_selection_population_too_large"
@@ -607,6 +620,17 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STRUCTURE_DECLARATION_VERSION_UNSUPPORTED,
         RejectionCode.STRUCTURE_DETERMINATION_INVALID,
         RejectionCode.STRUCTURE_DETERMINATION_MISMATCH,
+        RejectionCode.STRUCTURE_FINDING_ADJUDICATION_NEEDS_TARGET,
+        RejectionCode.STRUCTURE_FINDING_ADJUDICATION_VERDICT_UNSUPPORTED,
+        RejectionCode.STRUCTURE_FINDING_ALREADY_SETTLED,
+        RejectionCode.STRUCTURE_FINDING_CORRECTION_NEEDS_ADJUDICATION,
+        RejectionCode.STRUCTURE_FINDING_CORRECTION_SUBJECT_MISMATCH,
+        RejectionCode.STRUCTURE_FINDING_LITERATURE_UNIDENTIFIED,
+        RejectionCode.STRUCTURE_FINDING_RATIONALE_REQUIRED,
+        RejectionCode.STRUCTURE_FINDING_REFERENCE_INVALID,
+        RejectionCode.STRUCTURE_FINDING_ROLE_MISMATCH,
+        RejectionCode.STRUCTURE_FINDING_SCOPE_SUBJECT_MISMATCH,
+        RejectionCode.STRUCTURE_FINDING_TARGET_IS_ADJUDICATION,
         RejectionCode.STRUCTURE_SELECTION_EVIDENCE_TOO_LARGE,
         RejectionCode.STRUCTURE_SELECTION_MANIFEST_TOO_LARGE,
         RejectionCode.STRUCTURE_SELECTION_POPULATION_TOO_LARGE,
@@ -949,6 +973,19 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STRUCTURE_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.STRUCTURE_DETERMINATION_INVALID: frozenset({422}),
     RejectionCode.STRUCTURE_DETERMINATION_MISMATCH: frozenset({422}),
+    RejectionCode.STRUCTURE_FINDING_ADJUDICATION_NEEDS_TARGET: frozenset({422}),
+    RejectionCode.STRUCTURE_FINDING_ADJUDICATION_VERDICT_UNSUPPORTED: frozenset({422}),
+    RejectionCode.STRUCTURE_FINDING_ALREADY_SETTLED: frozenset({422}),
+    RejectionCode.STRUCTURE_FINDING_CORRECTION_NEEDS_ADJUDICATION: frozenset({422}),
+    RejectionCode.STRUCTURE_FINDING_CORRECTION_SUBJECT_MISMATCH: frozenset({422}),
+    RejectionCode.STRUCTURE_FINDING_LITERATURE_UNIDENTIFIED: frozenset({422}),
+    RejectionCode.STRUCTURE_FINDING_RATIONALE_REQUIRED: frozenset({422}),
+    RejectionCode.STRUCTURE_FINDING_REFERENCE_INVALID: frozenset({422}),
+    RejectionCode.STRUCTURE_FINDING_REFERENCE_NOT_FOUND: frozenset({404}),
+    RejectionCode.STRUCTURE_FINDING_ROLE_MISMATCH: frozenset({422}),
+    RejectionCode.STRUCTURE_FINDING_SCOPE_SUBJECT_MISMATCH: frozenset({422}),
+    RejectionCode.STRUCTURE_FINDING_SUBJECT_NOT_FOUND: frozenset({404}),
+    RejectionCode.STRUCTURE_FINDING_TARGET_IS_ADJUDICATION: frozenset({422}),
     RejectionCode.STRUCTURE_SELECTION_EVIDENCE_TOO_LARGE: frozenset({422}),
     RejectionCode.STRUCTURE_SELECTION_MANIFEST_TOO_LARGE: frozenset({422}),
     RejectionCode.STRUCTURE_SELECTION_POPULATION_TOO_LARGE: frozenset({422}),

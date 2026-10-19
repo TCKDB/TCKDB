@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.157.0 - 2026-10-19
+
+The two curator routes for structure-evidence findings (`POST` and `GET /api/v1/curation/structure-evidence-findings`) are registered in
+the parity matrix as curation workflow, like the other curator routes: no typed method, reachable through the raw request helpers.
+`tckdb-schemas` is unchanged.
+
 ## 0.156.0 - 2026-10-18
 
 `NetworkSolveRecord.network` and `NetworkKineticsRecord.network` are `JSONDict | None`: under `profile="curated"` a visible

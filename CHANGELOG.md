@@ -40,6 +40,19 @@ dataset must never require a code release.
   `repo-gate.yml` runs `backend/scripts/check_versioned_debt_not_grown.py`, which compares the debt list with the merge base's copy so a
   count-for-count swap is refused. A startup check (`validate_version_registries`) fails the boot for a registry name with no current version.
 
+## Curators can record structure-evidence findings (2026-10-19, #750)
+
+**Additive route.** Migration: none (the table, its append-only trigger and its constraints already exist). New environment variable: none.
+`tckdb-schemas`, `tckdb-client` and `tckdb-mcp` unchanged (no existing curator route has a client method or MCP tool).
+
+- `POST /api/v1/curation/structure-evidence-findings` (curator or admin) appends an authorized adjudication about a geometry, calculation or
+  structure determination named by public ref. `GET` on the same path lists a subject's findings and whether each is still in force.
+- Append-only: a correction is a later adjudication naming the earlier finding on the same subject; nothing is edited or deleted.
+- An in-force `invalidates` finding now excludes the evidence from H298, kinetics and structure selection through the route, and a later
+  `does_not_invalidate` adjudication restores it. Before this, only tests that inserted rows directly could do either.
+- Thirteen new coded refusals, all prefixed `structure_finding_`; see the generated error-code docs.
+- Spec: "Recording a structure-evidence finding" in `backend/docs/specs/automated_trust_layer.md`.
+
 ## Transition-state trust carries the scoped structure assessment (2026-10-19, #723)
 
 **Additive field and a rubric bump.** Migration: none. New environment variable: none. `tckdb-schemas` and `tckdb-client` unchanged

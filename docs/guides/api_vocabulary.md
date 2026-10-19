@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 125 | 29 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 317 | `backend/app/api/code_catalogue.py` |
-| **total** | **659** | |
+| Refusal codes a caller can receive | 330 | `backend/app/api/code_catalogue.py` |
+| **total** | **672** | |
 
 ## How a record is named
 
@@ -746,7 +746,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `rights_attestation_requires_curator` | a thing |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (26 codes)
+### HTTP 404 (28 codes)
 
 | Code | Names |
 | --- | --- |
@@ -758,6 +758,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `owner_missing` | a thing |
 | `path_search_result_not_found` | a thing |
 | `scan_result_not_found` | a thing |
+| `structure_finding_reference_not_found` | a thing |
+| `structure_finding_subject_not_found` | a thing |
 | `unknown_calculation_artifact_ref` | a thing |
 | `unknown_calculation_ref` | a thing |
 | `unknown_conformer_group_ref` | a thing |
@@ -814,7 +816,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (256 codes)
+### HTTP 422 (267 codes)
 
 | Code | Names |
 | --- | --- |
@@ -1020,6 +1022,17 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `structure_declaration_version_unsupported` | a thing |
 | `structure_determination_invalid` | a relationship — read `context` |
 | `structure_determination_mismatch` | a relationship — read `context` |
+| `structure_finding_adjudication_needs_target` | a thing |
+| `structure_finding_adjudication_verdict_unsupported` | a thing |
+| `structure_finding_already_settled` | a relationship — read `context` |
+| `structure_finding_correction_needs_adjudication` | a thing |
+| `structure_finding_correction_subject_mismatch` | a relationship — read `context` |
+| `structure_finding_literature_unidentified` | a thing |
+| `structure_finding_rationale_required` | a thing |
+| `structure_finding_reference_invalid` | a thing |
+| `structure_finding_role_mismatch` | a relationship — read `context` |
+| `structure_finding_scope_subject_mismatch` | a relationship — read `context` |
+| `structure_finding_target_is_adjudication` | a thing |
 | `structure_selection_evidence_too_large` | a relationship — read `context` |
 | `structure_selection_manifest_too_large` | a relationship — read `context` |
 | `structure_selection_population_too_large` | a relationship — read `context` |
