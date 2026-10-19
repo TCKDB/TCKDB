@@ -117,6 +117,12 @@ def parse_new_allowances(source: str) -> set[tuple[str, str, str]]:
     return result
 
 
+def _annotation(message: str) -> str:
+    """A GitHub ``warning`` annotation, so a declared allowance shows on the PR's checks summary."""
+    escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    return f"::warning title=New versioned-name allowance::{escaped}"
+
+
 def new_allowances(
     base: dict[tuple[str, str, str], str],
     head: dict[tuple[str, str, str], str],
@@ -131,7 +137,7 @@ def new_allowances(
     problems, notices = [], []
     for key in sorted(set(head) - set(base)):
         if key in declared:
-            notices.append(f"NEW ALLOWANCE for the reviewer: {key!r}: {head[key]}")
+            notices.append(_annotation(f"{key!r} \u2014 {head[key]}"))
         else:
             problems.append(f"new allowance {key!r} is not declared in NEW_ALLOWANCES")
     for key in sorted(declared - set(head)):

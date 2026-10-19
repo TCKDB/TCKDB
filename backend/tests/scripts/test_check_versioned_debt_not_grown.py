@@ -217,7 +217,8 @@ def test_a_declared_new_allowance_passes_and_is_printed_for_the_reviewer(
     base, head = _branch(repo, BASE_ROWS, source=source, base_source=_debt_source(BASE_ROWS))
     assert _run(repo, base, head) == 0
     out = capsys.readouterr().out
-    assert "NEW ALLOWANCE for the reviewer" in out and ALLOW[3] in out
+    lines = [line for line in out.splitlines() if line.startswith("::warning")]
+    assert lines == [f"::warning title=New versioned-name allowance::{ALLOW[:3]!r} \u2014 {ALLOW[3]}"]
 
 
 def test_a_widened_glob_counts_as_a_new_allowance(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
