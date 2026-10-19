@@ -29,7 +29,7 @@ convention, never add a zero-point energy, and never read a unit's neighbour.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from tckdb_schemas.enums import ImaginaryModeDisposition, StationaryPointKind
 from tckdb_schemas.stationary_point import (
@@ -199,17 +199,24 @@ def _evaluated_geometry(c: NormalizedCalculation) -> str | None:
 
 
 def live_findings(findings: tuple[FindingFacts, ...]) -> list[FindingFacts]:
-    """Findings not settled by a later one. A settled finding is history, not evidence.
+    """The rulings in force: findings no correction has replaced, each read with the meaning it currently carries.
 
-    Only an **authorized adjudication about the same subject** settles a finding. Naming an earlier finding is not
+    Only an **authorized adjudication about the same subject** corrects a finding. Naming an earlier finding is not
     enough: a producer's own assertion of "does not invalidate" does not erase an authorized disproof, and an
     adjudication about a different calculation, geometry or determination says nothing about this one. A
     superseding finding this release cannot read (a newer semantic version), or whose target is not in the loaded
-    set (so its subject cannot be checked), settles nothing: the disproof stands until a readable, authorized,
+    set (so its subject cannot be checked), corrects nothing: the earlier ruling stands until a readable, authorized,
     same-subject adjudication says otherwise.
+
+    A correction carries a replacement verdict, and corrections can themselves be corrected, so each chain of
+    corrections is read at its head, the newest ruling in force. A head that rules ``does_not_invalidate`` is returned
+    as it is (it has no effect). A head that rules ``invalidates`` or ``unresolved`` is returned with the kind and role
+    of the finding the chain started from, because an adjudication has no kind or role of its own: the ruling applies
+    to the same claim, with the verdict it now carries. A chain with no correction is returned untouched, exactly as
+    before corrections could carry a verdict.
     """
     by_ref = {f.finding_ref: f for f in findings}
-    settled: set[str] = set()
+    corrects: dict[str, str] = {}  # correcting finding -> the finding it corrects, for the valid corrections only
     for f in findings:
         if f.supersedes_ref is None or f.kind != "adjudication" or f.authority != "authorized_adjudication":
             continue
@@ -218,8 +225,21 @@ def live_findings(findings: tuple[FindingFacts, ...]) -> list[FindingFacts]:
         target = by_ref.get(f.supersedes_ref)
         if target is None or (target.scope, target.subject_ref) != (f.scope, f.subject_ref):
             continue
-        settled.add(target.finding_ref)
-    return [f for f in findings if f.finding_ref not in settled]
+        corrects[f.finding_ref] = target.finding_ref
+    replaced = set(corrects.values())
+    out: list[FindingFacts] = []
+    for f in findings:
+        if f.finding_ref in replaced:
+            continue
+        if f.finding_ref in corrects and f.verdict != "does_not_invalidate":
+            root = by_ref[corrects[f.finding_ref]]
+            seen = {f.finding_ref}
+            while root.finding_ref in corrects and root.finding_ref not in seen:
+                seen.add(root.finding_ref)
+                root = by_ref[corrects[root.finding_ref]]
+            f = replace(f, kind=root.kind, role=root.role)
+        out.append(f)
+    return out
 
 
 def _apply_finding(f: _Findings, finding: FindingFacts, *, blocks: bool, role_needed: bool) -> None:

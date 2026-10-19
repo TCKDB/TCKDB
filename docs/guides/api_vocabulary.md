@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 125 | 29 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 330 | `backend/app/api/code_catalogue.py` |
-| **total** | **672** | |
+| Refusal codes a caller can receive | 329 | `backend/app/api/code_catalogue.py` |
+| **total** | **671** | |
 
 ## How a record is named
 
@@ -816,7 +816,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (267 codes)
+### HTTP 422 (266 codes)
 
 | Code | Names |
 | --- | --- |
@@ -1023,16 +1023,15 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `structure_determination_invalid` | a relationship — read `context` |
 | `structure_determination_mismatch` | a relationship — read `context` |
 | `structure_finding_adjudication_needs_target` | a thing |
-| `structure_finding_adjudication_verdict_unsupported` | a thing |
 | `structure_finding_already_settled` | a relationship — read `context` |
 | `structure_finding_correction_needs_adjudication` | a thing |
 | `structure_finding_correction_subject_mismatch` | a relationship — read `context` |
+| `structure_finding_dismissal_needs_target` | a thing |
 | `structure_finding_literature_unidentified` | a thing |
 | `structure_finding_rationale_required` | a thing |
 | `structure_finding_reference_invalid` | a thing |
 | `structure_finding_role_mismatch` | a relationship — read `context` |
 | `structure_finding_scope_subject_mismatch` | a relationship — read `context` |
-| `structure_finding_target_is_adjudication` | a thing |
 | `structure_selection_evidence_too_large` | a relationship — read `context` |
 | `structure_selection_manifest_too_large` | a relationship — read `context` |
 | `structure_selection_population_too_large` | a relationship — read `context` |

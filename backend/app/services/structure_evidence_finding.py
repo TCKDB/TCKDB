@@ -10,8 +10,7 @@ party, are different questions with their own policy; neither is representable h
 
 A finding is an event, not a state. Rows are never edited or deleted (the database refuses both). A mistaken or
 withdrawn finding is corrected by a later *adjudication* that names it: the adjudication settles the earlier finding,
-which then stops having any effect on a selection but stays on record. To rule against a record again after that, append
-a fresh finding.
+which then stops being in force but stays on record.
 
 What this module enforces, beyond the table's own checks
 --------------------------------------------------------
@@ -19,10 +18,12 @@ What this module enforces, beyond the table's own checks
 * a role is given exactly for a ``role_invalidation``;
 * the rationale is not blank;
 * a cited paper carries a DOI or an ISBN (the literature policy: a title alone does not identify a source);
-* a correction is an adjudication, names an earlier finding about the *same subject* that is still in force and is not
-  itself an adjudication, and rules ``does_not_invalidate``. An adjudication that said ``invalidates`` would settle the
-  earlier finding while blocking nothing itself (an adjudication is not a kind the selections read as a block), which
-  would silently restore a record the curator meant to condemn; to condemn, append a fresh finding.
+* a correction is an adjudication. It names an earlier finding about the *same subject* that is still in force (any
+  ruling in force, including an earlier correction) and states the replacement verdict: ``does_not_invalidate``,
+  ``unresolved`` or ``invalidates``. Selections read the newest ruling in force of each chain, with the kind and role of
+  the finding the chain started from, so one append changes the effect with no window in between;
+* an ordinary finding that rules ``does_not_invalidate`` and names nothing is refused: it would change nothing, and a
+  curator who wants to withdraw a ruling does so with an adjudication naming it.
 
 Row ids never reach a refusal: every message and context names public refs; ids are logged.
 """
@@ -162,6 +163,18 @@ def append_structure_evidence_finding(
             message_prefix=False,
         )
 
+    if (
+        supersedes_finding_ref is None
+        and kind is not StructureFindingKind.adjudication
+        and verdict is StructureFindingVerdict.does_not_invalidate
+    ):
+        raise CodedValueError(
+            "structure_finding_dismissal_needs_target",
+            "a does_not_invalidate ruling withdraws an earlier finding: record it as an adjudication naming that finding",
+            context={"kind": kind.value},
+            message_prefix=False,
+        )
+
     source_calculation_id = (
         _resolve_reference(session, Calculation, source_calculation_ref, field="source_calculation_ref")
         if source_calculation_ref is not None
@@ -181,14 +194,6 @@ def append_structure_evidence_finding(
 
     supersedes_id = None
     if supersedes_finding_ref is not None:
-        if verdict is not StructureFindingVerdict.does_not_invalidate:
-            raise CodedValueError(
-                "structure_finding_adjudication_verdict_unsupported",
-                "an adjudication settles the finding it names, so it rules does_not_invalidate; to rule against the "
-                "record again, append a fresh finding",
-                context={"verdict": verdict.value},
-                message_prefix=False,
-            )
         supersedes_id = _resolve_reference(
             session, StructureEvidenceFinding, supersedes_finding_ref, field="supersedes_finding_ref"
         )
@@ -202,13 +207,6 @@ def append_structure_evidence_finding(
                 "structure_finding_correction_subject_mismatch",
                 "a correction names an earlier finding about the same subject",
                 context={"supersedes_finding_ref": supersedes_finding_ref, "subject_ref": subject_ref},
-                message_prefix=False,
-            )
-        if target.kind is StructureFindingKind.adjudication:
-            raise CodedValueError(
-                "structure_finding_target_is_adjudication",
-                "an adjudication cannot be corrected; to rule against the record again, append a fresh finding",
-                context={"supersedes_finding_ref": supersedes_finding_ref},
                 message_prefix=False,
             )
         settled = session.scalar(

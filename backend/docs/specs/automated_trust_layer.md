@@ -103,15 +103,20 @@ optionally a supporting calculation and a paper by public ref. A cited paper mus
 has to be identifiable. No request carries a row id and no refusal does either; ids are logged server-side.
 
 **Append-only.** A finding is never edited or deleted: the API has no method for it and the database refuses both
-(`trg_structure_evidence_finding_append_only`). A correction is an *adjudication* naming the earlier finding. The route requires the
-named finding to exist, to be about the same subject, to be itself an ordinary finding (an adjudication cannot be corrected) and to be
-still in force (not already corrected). An adjudication rules `does_not_invalidate`: it settles what it names, and an adjudication is not
-a kind the selections read as a block, so one that ruled `invalidates` would silently restore the record it meant to condemn. To rule
-against a record again after a correction, append a fresh finding.
+(`trg_structure_evidence_finding_append_only`). A correction is an *adjudication* naming the earlier ruling and stating the
+replacement verdict: `does_not_invalidate` (withdraw it), `unresolved` (reopen it) or `invalidates` (reinstate it, which is how an
+earlier withdrawal is overturned). The route requires the named ruling to exist, to be about the same subject and to be still in
+force. Corrections can themselves be corrected. A ruling is replaced once: the row is locked before the in-force check, so two
+curators correcting the same ruling cannot both succeed. An ordinary finding that rules `does_not_invalidate` and names nothing is
+refused (`structure_finding_dismissal_needs_target`): it would change nothing, and withdrawing a ruling is an adjudication.
 
-**Effect.** An in-force `invalidates` finding excludes the evidence from H298, kinetics and structure selection, scoped by role, exactly as
-described above; a later `does_not_invalidate` adjudication restores it for fresh decisions and the history stays. An `unresolved` finding
-leaves the product unresolved, not excluded.
+**Effect.** Each chain of corrections is read at its head, the newest ruling in force, with the kind and role of the finding the
+chain started from (an adjudication has none of its own). An `invalidates` head excludes the evidence from H298, kinetics and structure
+selection, scoped by role, exactly as described above. A `does_not_invalidate` head has no effect. An `unresolved` head leaves the
+product unresolved, not excluded, as an ordinary `unresolved` finding does. Replacing one role's ruling leaves the other roles' rulings
+standing, and a single append changes the effect, so there is no moment in which a record is wrongly selectable. History stays: a
+replaced ruling reads `in_force: false` and names the adjudication that replaced it. For a finding that no correction names, the reading
+is unchanged.
 
 **Reads.** `GET /api/v1/curation/structure-evidence-findings?subject_ref=...` (curator or admin) lists the findings about one subject with
 whether each is still in force and what settled it. It is a curator surface: curators adjudicate records the curated profile hides, so it is

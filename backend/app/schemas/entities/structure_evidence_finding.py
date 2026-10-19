@@ -48,8 +48,8 @@ class StructureEvidenceFindingCreate(SchemaBase):
     supersedes_finding_ref: str | None = Field(
         default=None,
         max_length=64,
-        description="Public ref of the earlier finding this one corrects. Only an adjudication names one, and it must be "
-        "an earlier finding about the same subject that is still in force.",
+        description="Public ref of the earlier ruling this one corrects. Only an adjudication names one, and it states the "
+        "replacement verdict. The ruling must be about the same subject and still in force (it may itself be a correction).",
     )
 
 

@@ -43,14 +43,19 @@ dataset must never require a code release.
 ## Curators can record structure-evidence findings (2026-10-19, #750)
 
 **Additive route.** Migration: none (the table, its append-only trigger and its constraints already exist). New environment variable: none.
-`tckdb-schemas`, `tckdb-client` and `tckdb-mcp` unchanged (no existing curator route has a client method or MCP tool).
+`tckdb-schemas` and `tckdb-mcp` unchanged. `tckdb-client` is 0.157.0: the two routes are registered in the parity ledger as curation workflow
+(no typed method, as for the other curator routes) and `RejectionCode` gains twelve `structure_finding_*` members.
 
 - `POST /api/v1/curation/structure-evidence-findings` (curator or admin) appends an authorized adjudication about a geometry, calculation or
   structure determination named by public ref. `GET` on the same path lists a subject's findings and whether each is still in force.
-- Append-only: a correction is a later adjudication naming the earlier finding on the same subject; nothing is edited or deleted.
-- An in-force `invalidates` finding now excludes the evidence from H298, kinetics and structure selection through the route, and a later
-  `does_not_invalidate` adjudication restores it. Before this, only tests that inserted rows directly could do either.
-- Thirteen new coded refusals, all prefixed `structure_finding_`; see the generated error-code docs.
+- Append-only: a correction is a later adjudication naming the earlier ruling on the same subject and stating the replacement verdict
+  (`does_not_invalidate`, `unresolved` or `invalidates`). Corrections can themselves be corrected; nothing is edited or deleted.
+- **Selection behaviour changes for corrected findings only.** Selections read the newest ruling in force of each chain, with the kind and role
+  of the finding it started from. A finding no correction names reads exactly as before. A correction ruling `invalidates` or `unresolved`
+  used to settle the earlier finding and then be ignored; it now carries its verdict.
+- An in-force `invalidates` finding excludes the evidence from H298, kinetics and structure selection through the route, and a correction
+  restores or reopens it. Before this, only tests that inserted rows directly could do either.
+- Twelve new coded refusals, all prefixed `structure_finding_`; see the generated error-code docs.
 - Spec: "Recording a structure-evidence finding" in `backend/docs/specs/automated_trust_layer.md`.
 
 ## Transition-state trust carries the scoped structure assessment (2026-10-19, #723)

@@ -17,6 +17,8 @@ from sqlalchemy.exc import DBAPIError
 
 from app.db.models.common import (
     CalculationType,
+    RecordReviewStatus,
+    SubmissionRecordType,
     KineticsCalculationRole,
     LiteratureKind,
     StructureFindingAuthority,
@@ -26,6 +28,7 @@ from app.db.models.common import (
 from app.db.models.literature import Literature
 from app.db.models.structure_determination import StructureEvidenceFinding
 from app.services.scientific_read.profile import reset_current_read_profile
+from app.services.selection_kernel import Applicability as A
 from app.services.thermo_selection import H298Request, Outcome, select_h298
 from tests.id_leak import id_in_text
 from tests.services.kinetics_selection.test_service import run as run_kinetics
@@ -42,6 +45,7 @@ from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
     next_inchi_key,
+    set_review,
 )
 from tests.services.structure_selection._support import curated, declaration, make_world
 from tests.services.structure_selection._support import request as structure_request
@@ -62,16 +66,31 @@ def calc_finding(client, calc, **fields):
     return post(client, scope="calculation", subject_ref=calc.public_ref, kind="identity_incompatibility", **fields)
 
 
-def overturn(client, calc, finding_ref):
+def correct(client, calc, finding_ref, verdict):
+    """A correction: an adjudication naming an earlier ruling and stating the replacement verdict."""
     return post(
         client,
         scope="calculation",
         subject_ref=calc.public_ref,
         kind="adjudication",
-        verdict="does_not_invalidate",
+        verdict=verdict,
         rationale=LATER,
         supersedes_finding_ref=finding_ref,
     )
+
+
+def overturn(client, calc, finding_ref):
+    return correct(client, calc, finding_ref, "does_not_invalidate")
+
+
+def ref_of(response) -> str:
+    assert response.status_code == 201, response.text
+    return response.json()["finding_ref"]
+
+
+def in_force(client, calc) -> dict[str, bool]:
+    rows = client.get(URL, params={"subject_ref": calc.public_ref}).json()["findings"]
+    return {r["finding_ref"]: r["in_force"] for r in rows}
 
 
 @pytest.fixture
@@ -215,20 +234,51 @@ def test_a_correction_must_name_a_finding_about_the_same_subject(client, db_sess
     assert geometry.status_code == 422 and geometry.json()["code"] == "structure_finding_correction_subject_mismatch"
 
 
-def test_an_adjudication_rules_does_not_invalidate_and_cannot_be_corrected_or_repeated(client, curator, calc):
-    first = calc_finding(client, calc).json()["finding_ref"]
-    affirming = post(
-        client, scope="calculation", subject_ref=calc.public_ref, kind="adjudication", verdict="invalidates",
-        rationale=LATER, supersedes_finding_ref=first,
-    )
-    assert affirming.status_code == 422 and affirming.json()["code"] == "structure_finding_adjudication_verdict_unsupported"
-    done = overturn(client, calc, first)
-    assert done.status_code == 201
-    again = overturn(client, calc, first)
+def test_a_correction_states_its_own_verdict_and_a_correction_can_itself_be_corrected(client, curator, calc):
+    first = ref_of(calc_finding(client, calc))
+    withdrawn = ref_of(correct(client, calc, first, "does_not_invalidate"))
+    again = correct(client, calc, first, "unresolved")
     assert again.status_code == 422 and again.json()["code"] == "structure_finding_already_settled"
-    assert again.json()["context"]["settled_by_finding_ref"] == done.json()["finding_ref"]
-    of_adjudication = overturn(client, calc, done.json()["finding_ref"])
-    assert of_adjudication.status_code == 422 and of_adjudication.json()["code"] == "structure_finding_target_is_adjudication"
+    assert again.json()["context"]["settled_by_finding_ref"] == withdrawn
+    reinstated = ref_of(correct(client, calc, withdrawn, "invalidates"))
+    reopened = ref_of(correct(client, calc, reinstated, "unresolved"))
+    assert in_force(client, calc) == {first: False, withdrawn: False, reinstated: False, reopened: True}
+
+
+def test_a_ruling_that_withdraws_nothing_is_refused(client, curator, calc):
+    """An ordinary does_not_invalidate with no target changes no selection, so it is refused rather than accepted as a no-op."""
+    response = calc_finding(client, calc, verdict="does_not_invalidate")
+    assert response.status_code == 422 and response.json()["code"] == "structure_finding_dismissal_needs_target"
+    assert client.get(URL, params={"subject_ref": calc.public_ref}).json()["findings"] == []
+
+
+def test_two_corrections_of_one_ruling_cannot_both_be_recorded(client, db_session, curator, calc):
+    """The target row is locked (FOR UPDATE) before the in-force check, so a second curator waits and then sees it settled.
+
+    A true two-connection race cannot be staged inside one rolled-back test transaction, and a unique index on the superseded
+    column would contradict the selection suites, which store several superseders of one finding on purpose. So this pins both
+    halves of the guard: the lock is taken, and a second correction is refused once the first exists.
+    """
+    from sqlalchemy import event
+
+    first = ref_of(calc_finding(client, calc))
+    statements: list[str] = []
+    bind = db_session.get_bind()
+
+    def capture(_conn, _cursor, statement, *_rest):
+        statements.append(statement)
+
+    event.listen(bind, "before_cursor_execute", capture)
+    try:
+        winner = correct(client, calc, first, "does_not_invalidate")
+    finally:
+        event.remove(bind, "before_cursor_execute", capture)
+    assert winner.status_code == 201
+    assert any("FROM structure_evidence_finding" in st and "FOR UPDATE" in st for st in statements)
+    loser = correct(client, calc, first, "unresolved")
+    assert loser.status_code == 422 and loser.json()["code"] == "structure_finding_already_settled"
+    rows = client.get(URL, params={"subject_ref": calc.public_ref}).json()["findings"]
+    assert sum(1 for r in rows if r["supersedes_finding_ref"] == first) == 1
 
 
 def test_the_read_says_what_is_in_force_and_what_settled_the_rest(client, curator, calc):
@@ -274,7 +324,7 @@ def test_no_refusal_carries_a_row_id(client, db_session, curator, calc):
         calc_finding_for(client, "calc_" + "a" * 26),
         post(client, scope="geometry", subject_ref=calc.public_ref, kind="identity_incompatibility"),
         overturn(client, calc, "sfnd_" + "c" * 26),
-        post(client, scope="calculation", subject_ref=calc.public_ref, kind="adjudication", verdict="invalidates", rationale=LATER, supersedes_finding_ref=first),
+        calc_finding(client, calc, verdict="does_not_invalidate"),
     ]
     overturn(client, calc, first)
     refusals.append(overturn(client, calc, first))
@@ -371,31 +421,171 @@ def test_kinetics_selection_excludes_on_an_adjudicated_invalidation_and_a_later_
 # --------------------------------------------------------------------------------------------------------------------
 
 
-def test_under_curated_a_finding_on_a_hidden_subject_is_not_read_and_names_nothing(client, db_session, curator):
-    world = make_world(db_session)
-    visible = world.sp("a", -76.4, declared=declaration())
-    hidden = world.sp("h", -76.9, status=None)
-    world.settle()
-    ref = calc_finding(client, hidden).json()["finding_ref"]
-    db_session.expire_all()
+# --------------------------------------------------------------------------------------------------------------------
+# A correction carries a replacement verdict; selections read the newest ruling in force
+# --------------------------------------------------------------------------------------------------------------------
 
-    exploratory = run_structure(db_session, world, structure_request())
-    assert not by_ref(exploratory)[hidden.public_ref].physically_eligible  # the positive control: the finding bites when seen
+
+def _opt_source(session, entry, thermo):
+    calc = make_calculation(session, type=CalculationType.opt, species_entry_id=entry.id)
+    attach_opt_result(session, calculation=calc, final_energy_hartree=-76.4, converged=True)
+    attach_output_geometry(session, calculation=calc, geometry=make_geometry(session))
+    attach_thermo_source_calculation(session, thermo=thermo, calculation=calc, role=ThermoCalculationRole.opt)
+    session.flush()
+    return calc
+
+
+def _h298(session, entry):
+    session.expire_all()
+    return select_h298(session, species_entry_id=entry.id, request=EQUILIBRIUM, require_snapshot=False)
+
+
+def test_structure_selection_reads_unresolved_in_one_append_with_no_selectable_gap(client, db_session, curator):
+    world = make_world(db_session)
+    c = world.sp("c", -76.4, declared=declaration())
+    world.settle()
+    first = ref_of(calc_finding(client, c))
+    db_session.expire_all()
+    assert by_ref(run_structure(db_session, world, structure_request()))[c.public_ref].blocking
+    before = db_session.scalar(select(func.count()).select_from(StructureEvidenceFinding))
+    assert correct(client, c, first, "unresolved").status_code == 201
+    assert db_session.scalar(select(func.count()).select_from(StructureEvidenceFinding)) == before + 1  # one append, nothing else
+    db_session.expire_all()
+    unit = by_ref(run_structure(db_session, world, structure_request()))[c.public_ref]
+    assert unit.blocking == () and not unit.physically_eligible
+    assert unit.applicability is A.unresolved
+    assert any("finding_unresolved:identity_incompatibility" in r.code for r in unit.reasons)
+
+
+def test_h298_selection_reads_unresolved_in_one_append_with_no_selectable_gap(client, db_session, curator):
+    entry = species_entry_for(db_session, "Methane")
+    thermo = make_thermo(db_session, entry, proto=protocol("g4"))
+    calc = _opt_source(db_session, entry, thermo)
+    first = ref_of(calc_finding(client, calc))
+    assert _h298(db_session, entry).outcome is Outcome.no_applicable_candidate
+    assert correct(client, calc, first, "unresolved").status_code == 201
+    result = _h298(db_session, entry)
+    (assessment,) = result.assessments
+    assert assessment.blocking == () and assessment.applicability.value == "unresolved"
+    assert result.outcome is Outcome.no_applicable_candidate and result.unresolved_refs == (thermo.public_ref,)
+
+
+def test_kinetics_selection_reads_unresolved_in_one_append_with_no_selectable_gap(client, db_session, curator, kinetics_world):
+    sources = Sources(db_session, kinetics_world)
+    c, _, role = sources.energy(KineticsCalculationRole.ts_energy)
+    record(db_session, kinetics_world, "d", sources, links=[(c, role)])
+    first = ref_of(calc_finding(client, c))
+    db_session.expire_all()
+    assert only(run_kinetics(db_session, kinetics_world.entry)).blocking
+    assert correct(client, c, first, "unresolved").status_code == 201
+    db_session.expire_all()
+    assessment = only(run_kinetics(db_session, kinetics_world.entry))
+    assert assessment.blocking == () and assessment.applicability is A.unresolved
+    assert not assessment.physically_eligible
+
+
+def test_a_ruling_withdrawn_and_then_reinstated_blocks_again_and_the_middle_ruling_is_not_in_force(client, db_session, curator):
+    world = make_world(db_session)
+    c = world.sp("c", -76.4, declared=declaration())
+    world.settle()
+    first = ref_of(calc_finding(client, c))
+    withdrawn = ref_of(overturn(client, c, first))
+    db_session.expire_all()
+    assert by_ref(run_structure(db_session, world, structure_request()))[c.public_ref].physically_eligible
+    reinstated = ref_of(correct(client, c, withdrawn, "invalidates"))
+    db_session.expire_all()
+    unit = by_ref(run_structure(db_session, world, structure_request()))[c.public_ref]
+    assert not unit.physically_eligible
+    assert unit.blocking == ("finding_invalidates:identity_incompatibility:authorized_adjudication",)
+    assert in_force(client, c) == {first: False, withdrawn: False, reinstated: True}
+
+
+def test_h298_ruling_withdrawn_and_reinstated_blocks_again(client, db_session, curator):
+    entry = species_entry_for(db_session, "Methane")
+    thermo = make_thermo(db_session, entry, proto=protocol("g4"))
+    calc = _opt_source(db_session, entry, thermo)
+    first = ref_of(calc_finding(client, calc))
+    withdrawn = ref_of(overturn(client, calc, first))
+    assert _h298(db_session, entry).selected_ref == thermo.public_ref
+    ref_of(correct(client, calc, withdrawn, "invalidates"))
+    assert _h298(db_session, entry).outcome is Outcome.no_applicable_candidate
+
+
+def test_replacing_one_roles_ruling_leaves_the_other_roles_ruling_standing(client, db_session, curator):
+    entry = species_entry_for(db_session, "Methane")
+    energy_user = make_thermo(db_session, entry, proto=protocol("g4"))
+    curvature_user = make_thermo(db_session, entry, proto=protocol("g3"))
+    shared = make_calculation(db_session, type=CalculationType.opt, species_entry_id=entry.id)
+    attach_opt_result(db_session, calculation=shared, final_energy_hartree=-76.4, converged=True)
+    attach_output_geometry(db_session, calculation=shared, geometry=make_geometry(db_session))
+    attach_thermo_source_calculation(db_session, thermo=energy_user, calculation=shared, role=ThermoCalculationRole.sp)
+    attach_thermo_source_calculation(db_session, thermo=curvature_user, calculation=shared, role=ThermoCalculationRole.freq)
+    db_session.flush()
+    energy = ref_of(post(client, scope="calculation", subject_ref=shared.public_ref, kind="role_invalidation", role="energy"))
+    ref_of(post(client, scope="calculation", subject_ref=shared.public_ref, kind="role_invalidation", role="curvature"))
+
+    def blocked():
+        result = _h298(db_session, entry)
+        return {a.thermo_ref: bool(a.blocking) for a in result.assessments}
+
+    assert blocked() == {energy_user.public_ref: True, curvature_user.public_ref: True}
+    withdrawn = ref_of(correct(client, shared, energy, "does_not_invalidate"))
+    assert blocked() == {energy_user.public_ref: False, curvature_user.public_ref: True}  # only the energy ruling was replaced
+    ref_of(correct(client, shared, withdrawn, "invalidates"))
+    result = _h298(db_session, entry)
+    labels = {a.thermo_ref: a.blocking for a in result.assessments}
+    assert labels[energy_user.public_ref] == ("source_finding:sp:role_invalidated:energy:authorized_adjudication",)  # role kept
+    assert labels[curvature_user.public_ref]
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# Visibility
+# --------------------------------------------------------------------------------------------------------------------
+
+
+def test_under_curated_a_finding_on_a_hidden_source_is_not_applied_and_its_refs_are_not_named(client, db_session, curator):
+    """A visible H298 record cites a hidden calculation as a source. The finding the curator recorded about that calculation
+    would block the record if it were read; under curated the calculation is unknown, so it must neither block nor be named.
+    The exploratory run in the same test is the positive control: there the same finding blocks and the manifest records its
+    effect. The manifest names the effect, not the refs, so the effect is what must be absent under curated."""
+    world = make_world(db_session)
+    visible_calc = world.sp("v", -76.4, declared=declaration())
+    hidden_calc = world.sp("h", -76.9, status=None)  # no review: hidden under curated
+    thermo = make_thermo(db_session, world.entry, proto=protocol("g4"))
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=visible_calc, role=ThermoCalculationRole.sp)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=hidden_calc, role=ThermoCalculationRole.freq)
+    world.settle()
+    set_review(db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id, status=RecordReviewStatus.approved)
+    finding = ref_of(post(client, scope="calculation", subject_ref=hidden_calc.public_ref, kind="identity_incompatibility"))
+
+    def run():
+        db_session.expire_all()
+        selection = select_h298(db_session, species_entry_id=world.entry.id, request=EQUILIBRIUM, require_snapshot=False)
+        return selection, json.dumps(selection.manifest, default=str)
+
+    exploratory, exploratory_text = run()
+    (open_assessment,) = exploratory.assessments
+    assert open_assessment.blocking, "positive control: the finding blocks the record when its subject is visible"
+    assert "source_finding:freq:finding_invalidates" in exploratory_text  # the manifest records the finding's effect
 
     token = curated()
     try:
-        result = run_structure(db_session, world, structure_request())
+        hidden_view, hidden_text = run()
     finally:
         reset_current_read_profile(token)
-    document = json.dumps([a.to_dict() for a in result.assessments]) + json.dumps(result.excluded_by_review)
-    assert hidden.public_ref not in document and ref not in document and visible.public_ref in document
-    assert by_ref(result)[visible.public_ref].physically_eligible
+    (closed_assessment,) = hidden_view.assessments
+    assert closed_assessment.blocking == () and hidden_view.selected_ref == thermo.public_ref
+    assert "source_finding:" not in hidden_text, "the hidden subject's finding left a trace in the curated document"
+    assert hidden_calc.public_ref not in hidden_text and finding not in hidden_text
 
 
-def test_the_curator_read_lists_a_subject_the_public_profile_hides(client, db_session, curator):
+def test_the_curator_read_is_not_filtered_by_a_read_profile(client, db_session, curator):
+    """Curators adjudicate records the curated profile hides, so this curator surface ignores ``profile``: the finding
+    about a never-reviewed calculation is listed with or without ``profile=curated``."""
     world = make_world(db_session)
     hidden = world.sp("h", -76.9, status=None)
     world.settle()
-    ref = calc_finding(client, hidden).json()["finding_ref"]
-    rows = client.get(URL, params={"subject_ref": hidden.public_ref}).json()["findings"]
-    assert [r["finding_ref"] for r in rows] == [ref]
+    ref = ref_of(calc_finding(client, hidden))
+    for params in ({}, {"profile": "curated"}):
+        rows = client.get(URL, params={"subject_ref": hidden.public_ref, **params}).json()["findings"]
+        assert [r["finding_ref"] for r in rows] == [ref], params
