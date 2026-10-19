@@ -32,6 +32,7 @@ from enum import Enum
 from typing import Callable, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+from tckdb_schemas.fragments.version import VersionRef
 
 
 class EvidenceBadge(str, Enum):
@@ -280,9 +281,9 @@ class EvidenceRubric(BaseModel):
     )
 
     @property
-    def qualified_name(self) -> str:
-        """Return ``<name>@v<version>`` for telemetry and logs."""
-        return f"{self.name}@v{self.version}"
+    def ref(self) -> VersionRef:
+        """The rubric's identity as a ``VersionRef``: its name and its version, apart."""
+        return VersionRef(name=self.name, version=self.version)
 
 
 class EvidenceEvaluation(BaseModel):
