@@ -34,24 +34,44 @@ import pytest
 
 from app.db.models.calculation import (
     CalculationArtifact,
+    CalculationCompositeResult,
+    CalculationCompositeTerm,
+    CalculationDependency,
     CalculationFreqMode,
     CalculationFreqResult,
+    CalculationInputGeometry,
     CalculationOptResult,
+    CalculationOutputGeometry,
+    CalculationParameter,
+    CalculationScanCoordinate,
+    CalculationScanPoint,
+    CalculationScanResult,
     CalculationSPResult,
 )
 from app.db.models.common import (
     ArtifactIntegrityDetectionContext,
     ArtifactIntegrityFinding,
     ArtifactKind,
+    CalculationDependencyRole,
     CalculationType,
+    CompositeAssembly,
+    CoordinateUnit,
+    ParameterSource,
     ReproducibilityGrade,
+    ScanCoordinateKind,
     ScientificOriginKind,
     StatmechCalculationRole,
     StatmechModelScopeKind,
+    StatmechModelSourceRole,
     SubmissionRecordType,
 )
+from app.db.models.geometry import GeometryAtom
 from app.db.models.statmech import Statmech
-from app.db.models.statmech_declaration import StatmechModelDeclaration
+from app.db.models.statmech_declaration import (
+    StatmechModelDeclaration,
+    StatmechModelMember,
+    StatmechModelSource,
+)
 from app.services.artifact_integrity import record_integrity_observation
 from app.services.reproducibility_rubric import evaluate_and_append_reproducibility, evaluate_reproducibility
 from tests.services.scientific_read._factories import (
@@ -60,6 +80,7 @@ from tests.services.scientific_read._factories import (
     attach_statmech_torsion,
     make_calculation,
     make_chem_reaction,
+    make_geometry,
     make_literature,
     make_lot,
     make_reaction_entry,
@@ -80,17 +101,39 @@ from tests.services.test_reproducibility_rubric import _integrity_seam, _MuteSto
 
 _ID_KEY = re.compile(r"(^id$|_id$|^created_by$)")
 _ID_LIST_KEY = re.compile(r"_ids$")
-_VALUE_KEYS = {"public_ref", "reference", "sha256", "inchi_key", "doi", "uri", "lot_hash", "content_hash", "integrity_event_ref"}
+_VALUE_KEYS = {
+    "public_ref",
+    "reference",
+    "sha256",
+    "inchi_key",
+    "doi",
+    "uri",
+    "lot_hash",
+    "geom_hash",
+    "content_hash",
+    "integrity_event_ref",
+}
 _AT_KEY = re.compile(r"_at$")
+#: Foreign-key names that point at a table under a different name from the one the snapshot nests it under.
+_KIND_ALIAS = {
+    "lot": "level_of_theory",
+    "record": "statmech",
+    "member_statmech": "statmech",
+    "parent_calculation": "calculation",
+    "child_calculation": "calculation",
+    "created_by": "user",
+}
 
 
 class _Ordinals:
-    """First-appearance ordinals, kept per kind of id.
+    """First-appearance ordinals, numbered separately for each table an id points at.
 
-    Two different tables hand out the same integer in the same transaction (a statmech and its species entry are
-    both row 1 in an empty database and rows 40 and 7 in a busy one). One shared namespace would make the digest
-    depend on that coincidence, so each kind of id is numbered on its own. Ids that name the same table share a
-    kind: ``calculation_id``, the keys of ``calculation_evidence`` and the ``id`` inside each of its entries.
+    Two tables hand out the same integer in one transaction (a statmech and its species entry are both row 1 in an
+    empty database and rows 40 and 7 in a busy one), so one shared numbering would make the digest depend on that
+    coincidence. Instead the *table* is the kind, and every way the snapshot names a row of that table shares it:
+    a foreign key ``calculation_id``, the key of its ``calculation_evidence`` entry, and the ``id`` inside that
+    entry's ``columns``. A snapshot in which two rows have swapped places, or in which a foreign key points at a
+    different row, therefore numbers differently and digests differently.
     """
 
     def __init__(self) -> None:
@@ -104,24 +147,26 @@ class _Ordinals:
 
 
 def _id_kind(key: str, path: tuple[str, ...]) -> str:
-    if key.endswith("_ids"):
-        return key[:-1]
-    if key != "id":
-        return key
-    if path and path[-1].startswith("<calculation_id#"):
-        return "calculation_id"
-    if path[:2] == ("target", "columns"):
-        return "record_id"
-    owner = [part for part in path if part != "columns"]
-    return f"id@{owner[-1] if owner else ''}"
+    """The table an id-valued field points at."""
+    if key == "id":
+        # The primary key of whatever the enclosing object is.
+        owner = [part for part in path if part != "columns"]
+        if path[:2] == ("target", "columns"):
+            return "statmech"
+        name = owner[-1] if owner else ""
+        return "calculation" if name.startswith("<calculation#") else _KIND_ALIAS.get(name, name)
+    stem = key[:-3] if key.endswith("_id") else key[:-4] if key.endswith("_ids") else key
+    return _KIND_ALIAS.get(stem, stem)
 
 
 def _normalise(node, ordinals: _Ordinals, key: str | None = None, path: tuple[str, ...] = ()):
     if isinstance(node, dict):
         out = {}
         for k, v in node.items():
-            # ``calculation_evidence`` is a map keyed by calculation id.
-            nk = ordinals.of("calculation_id", k) if key == "calculation_evidence" and str(k).isdigit() else k
+            # ``calculation_evidence`` is a map keyed by calculation id. The key is text (``"5"``) while every
+            # other mention of that calculation is the integer 5, so convert before numbering or the two never
+            # meet.
+            nk = ordinals.of("calculation", int(k)) if key == "calculation_evidence" else k
             out[nk] = _normalise(v, ordinals, nk, path + ((key,) if key else ()))
         return out
     if isinstance(node, list):
@@ -324,6 +369,225 @@ def _custody_break_on_source(db_session, user):
     return statmech
 
 
+def _estimated(db_session, user, *, literature: bool):
+    return make_statmech(
+        db_session,
+        species_entry=_entry(db_session),
+        scientific_origin=ScientificOriginKind.estimated,
+        literature_id=make_literature(db_session).id if literature else None,
+    )
+
+
+def _estimated_with_literature(db_session, user):
+    return _estimated(db_session, user, literature=True)
+
+
+def _estimated_without_literature(db_session, user):
+    return _estimated(db_session, user, literature=False)
+
+
+def _geometry(db_session, shift: float):
+    geometry = make_geometry(db_session, natoms=2, xyz_text=f"2\n\nH 0 0 0\nH 0 0 {0.74 + shift}\n")
+    db_session.add_all(
+        GeometryAtom(geometry_id=geometry.id, atom_index=i, element="H", x=0.0, y=0.0, z=z)
+        for i, z in ((1, 0.0), (2, 0.74 + shift))
+    )
+    db_session.flush()
+    return geometry
+
+
+def _edge(parent, child, role):
+    return CalculationDependency(
+        parent_calculation_id=parent.id, child_calculation_id=child.id, dependency_role=role
+    )
+
+
+def _dependency_edges(db_session, user):
+    entry = _entry(db_session)
+    statmech = make_statmech(db_session, species_entry=entry)
+    calcs = _opt_freq_sp(db_session, entry, statmech, user=user)
+    opt, freq, sp = (calcs[CalculationType.opt], calcs[CalculationType.freq], calcs[CalculationType.sp])
+    db_session.add_all(
+        [
+            _edge(opt, freq, CalculationDependencyRole.freq_on),
+            _edge(opt, sp, CalculationDependencyRole.single_point_on),
+        ]
+    )
+    db_session.flush()
+    for calculation in calcs.values():
+        db_session.refresh(calculation)
+    return statmech
+
+
+def _dependency_cycle(db_session, user):
+    """Two source calculations that are each other's parent.
+
+    Nothing in the schema forbids the pair (the primary key is the ordered pair, and self-edges are the only edge
+    refused), so the closure walk's cycle branch is reachable from stored data.
+    """
+    entry = _entry(db_session)
+    statmech = make_statmech(db_session, species_entry=entry)
+    calcs = _opt_freq_sp(db_session, entry, statmech, user=user)
+    opt, freq = calcs[CalculationType.opt], calcs[CalculationType.freq]
+    db_session.add_all(
+        [
+            _edge(opt, freq, CalculationDependencyRole.freq_on),
+            _edge(freq, opt, CalculationDependencyRole.optimized_from),
+        ]
+    )
+    db_session.flush()
+    for calculation in calcs.values():
+        db_session.refresh(calculation)
+    return statmech
+
+
+def _scan_with_result(db_session, user):
+    entry = _entry(db_session)
+    statmech = make_statmech(db_session, species_entry=entry)
+    scan = _calc(db_session, entry, CalculationType.scan, user=user)
+    attach_statmech_source_calculation(
+        db_session, statmech=statmech, calculation=scan, role=StatmechCalculationRole.scan
+    )
+    db_session.add_all(
+        [
+            CalculationScanResult(
+                calculation_id=scan.id, dimension=1, is_relaxed=True, zero_energy_reference_hartree=-40.7
+            ),
+            CalculationScanCoordinate(
+                calculation_id=scan.id,
+                coordinate_index=1,
+                coordinate_kind=ScanCoordinateKind.dihedral,
+                atom1_index=1,
+                atom2_index=2,
+                atom3_index=3,
+                atom4_index=4,
+                step_count=3,
+                step_size=10.0,
+                start_value=0.0,
+                end_value=20.0,
+                value_unit=CoordinateUnit.degree,
+            ),
+        ]
+    )
+    db_session.flush()
+    for index in (1, 2):
+        db_session.add(
+            CalculationScanPoint(
+                calculation_id=scan.id,
+                point_index=index,
+                electronic_energy_hartree=-40.7 + 0.001 * index,
+                relative_energy_kj_mol=2.6 * index,
+                geometry_id=_geometry(db_session, 0.01 * index).id,
+            )
+        )
+    db_session.flush()
+    db_session.refresh(scan)
+    return statmech
+
+
+def _composite_source(db_session, user):
+    entry = _entry(db_session)
+    statmech = make_statmech(db_session, species_entry=entry)
+    composite = _calc(db_session, entry, CalculationType.composite, user=user)
+    attach_statmech_source_calculation(
+        db_session, statmech=statmech, calculation=composite, role=StatmechCalculationRole.composite
+    )
+    db_session.add(
+        CalculationCompositeResult(
+            calculation_id=composite.id,
+            assembly=CompositeAssembly.program_run,
+            electronic_energy_hartree=-40.9,
+            e0_hartree=-40.85,
+            recipe_zpe_hartree=0.05,
+        )
+    )
+    db_session.add_all(
+        CalculationCompositeTerm(calculation_id=composite.id, term_position=i, value_hartree=v)
+        for i, v in enumerate((-40.8, -0.1))
+    )
+    db_session.flush()
+    db_session.refresh(composite)
+    return statmech
+
+
+def _object_missing_break(db_session, user):
+    entry = _entry(db_session)
+    statmech = make_statmech(db_session, species_entry=entry)
+    calcs = _opt_freq_sp(db_session, entry, statmech, user=user)
+    artifact = calcs[CalculationType.sp].artifacts[0]
+    record_integrity_observation(
+        sha256=artifact.sha256,
+        finding=ArtifactIntegrityFinding.object_missing,
+        detected_during=ArtifactIntegrityDetectionContext.download,
+        expected_bytes=artifact.bytes,
+        artifact_id=artifact.id,
+        artifact_recorded_at=artifact.created_at,
+        session_factory=_SessionProxy(db_session),
+        storage_client=_MuteStoreProbe(),
+    )
+    return statmech
+
+
+def _declaration_with_members_and_sources(db_session, user):
+    entry = _entry(db_session)
+    statmech = make_statmech(db_session, species_entry=entry)
+    member = make_statmech(db_session, species_entry=entry)
+    source = _calc(db_session, entry, CalculationType.freq, user=user)
+    attach_statmech_source_calculation(db_session, statmech=statmech, calculation=source)
+    declaration = StatmechModelDeclaration(
+        statmech_id=statmech.id,
+        schema_version=1,
+        scope_kind=StatmechModelScopeKind.explicit_equilibrium_ensemble,
+        literature_id=make_literature(db_session).id,
+        recipe={},
+        content_hash=hashlib.sha256(b"frozen-declaration-with-members").hexdigest(),
+    )
+    db_session.add(declaration)
+    db_session.flush()
+    db_session.add_all(
+        [
+            StatmechModelMember(
+                declaration_id=declaration.id,
+                member_key="m1",
+                member_statmech_id=member.id,
+                counting_multiplicity=1,
+                relative_energy_kj_mol=0.0,
+            ),
+            StatmechModelSource(
+                declaration_id=declaration.id,
+                source_key="s1",
+                role=StatmechModelSourceRole.geometry,
+                calculation_id=source.id,
+            ),
+        ]
+    )
+    db_session.flush()
+    db_session.refresh(statmech)
+    return statmech
+
+
+def _source_geometries_and_parameters(db_session, user):
+    entry = _entry(db_session)
+    statmech = make_statmech(db_session, species_entry=entry)
+    calcs = _opt_freq_sp(db_session, entry, statmech, user=user)
+    opt = calcs[CalculationType.opt]
+    opt.parameters_json = {"route": "opt=tight", "nproc": 4}
+    db_session.add_all(
+        [
+            CalculationInputGeometry(calculation_id=opt.id, geometry_id=_geometry(db_session, 0.0).id, input_order=1),
+            CalculationOutputGeometry(
+                calculation_id=opt.id, geometry_id=_geometry(db_session, 0.02).id, output_order=1
+            ),
+            CalculationParameter(
+                calculation_id=opt.id, raw_key="scf_convergence", raw_value="tight", source=ParameterSource.upload
+            ),
+        ]
+    )
+    db_session.flush()
+    db_session.refresh(opt)
+    return statmech
+
+
 SCENARIOS = {
     "sparse": _sparse,
     "point_group_only": _point_group_only,
@@ -335,6 +599,15 @@ SCENARIOS = {
     "computed_no_sources": _computed_no_sources,
     "with_model_declaration": _with_model_declaration,
     "custody_break_on_source_artifact": _custody_break_on_source,
+    "estimated_with_literature": _estimated_with_literature,
+    "estimated_without_literature": _estimated_without_literature,
+    "dependency_edges": _dependency_edges,
+    "dependency_cycle": _dependency_cycle,
+    "scan_source_with_result": _scan_with_result,
+    "composite_source": _composite_source,
+    "object_missing_break_on_source_artifact": _object_missing_break,
+    "declaration_with_members_and_sources": _declaration_with_members_and_sources,
+    "source_geometries_and_parameters": _source_geometries_and_parameters,
 }
 
 
@@ -357,6 +630,25 @@ def _observe(db_session, name: str, user: int) -> dict:
 # ---------------------------------------------------------------------------
 
 FROZEN: dict[str, dict] = {
+    "composite_source": {
+        "grade": "described",
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "checks": [
+            ['target_identity', 'described', 'passed'],
+            ['scientific_context', 'described', 'passed'],
+            ['source_attribution', 'described', 'passed'],
+            ['record_type_audit_policy', 'auditable', 'missing'],
+            ['calculation_metadata', 'auditable', 'missing'],
+            ['typed_output_evidence', 'auditable', 'missing'],
+            ['verified_output_artifact_bytes', 'auditable', 'missing'],
+            ['source_role_preservation', 'auditable', 'missing'],
+            ['preserved_input_artifacts', 'rerunnable', 'missing'],
+            ['execution_parameter_snapshot', 'rerunnable', 'missing'],
+            ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
+            ['evidence_warnings_clear', 'rerunnable', 'passed'],
+        ],
+        "digest": "00bce39a870f3cf7b3c5e4828d12ce98d50c88b601e2d6938a363222031d1f8f",
+    },
     "computed_no_sources": {
         "grade": "insufficient",
         "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
@@ -374,7 +666,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "7fa7693195f420d66fb9ea431308ab542c3ff6217c2a67a6be7909ff1a2c450d",
+        "digest": "5765646980c71112fd73c3d574bddd138ec7ce94549e06a4b63cdcb1e819d762",
     },
     "computed_opt_freq_sp": {
         "grade": "described",
@@ -393,7 +685,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "26c42bf824c88a2cf23d3a032219d20b5a34f803cefbee2257ee048902f819f0",
+        "digest": "5eb7e7413ce14480bb6bc9474946f189214f8739d24b9421a055237fc094b487",
     },
     "custody_break_on_source_artifact": {
         "grade": "described",
@@ -412,7 +704,102 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'missing'],
         ],
-        "digest": "dd7b4d8095ed2e95fe32a9e3ba5a53ace902f4d6242cdc5ecf396a9a08e29e73",
+        "digest": "a4aef64a765bd9b134d045312ab2914b9d3bcb7c54c426dcee27d3d0bf48d3b6",
+    },
+    "declaration_with_members_and_sources": {
+        "grade": "described",
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "checks": [
+            ['target_identity', 'described', 'passed'],
+            ['scientific_context', 'described', 'passed'],
+            ['source_attribution', 'described', 'passed'],
+            ['record_type_audit_policy', 'auditable', 'missing'],
+            ['calculation_metadata', 'auditable', 'missing'],
+            ['typed_output_evidence', 'auditable', 'missing'],
+            ['verified_output_artifact_bytes', 'auditable', 'missing'],
+            ['source_role_preservation', 'auditable', 'missing'],
+            ['preserved_input_artifacts', 'rerunnable', 'missing'],
+            ['execution_parameter_snapshot', 'rerunnable', 'missing'],
+            ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
+            ['evidence_warnings_clear', 'rerunnable', 'passed'],
+        ],
+        "digest": "2910ac8b8e293709b0dac8d3947a0967c65338adac41c16d307a2bdcae8cb0cb",
+    },
+    "dependency_cycle": {
+        "grade": "described",
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "checks": [
+            ['target_identity', 'described', 'passed'],
+            ['scientific_context', 'described', 'passed'],
+            ['source_attribution', 'described', 'passed'],
+            ['record_type_audit_policy', 'auditable', 'missing'],
+            ['calculation_metadata', 'auditable', 'missing'],
+            ['typed_output_evidence', 'auditable', 'missing'],
+            ['verified_output_artifact_bytes', 'auditable', 'missing'],
+            ['source_role_preservation', 'auditable', 'missing'],
+            ['preserved_input_artifacts', 'rerunnable', 'missing'],
+            ['execution_parameter_snapshot', 'rerunnable', 'missing'],
+            ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
+            ['evidence_warnings_clear', 'rerunnable', 'passed'],
+        ],
+        "digest": "7be4e3e5653de0fc147db99e84819b7628c72b01a8098212eeb231df55decf6c",
+    },
+    "dependency_edges": {
+        "grade": "described",
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "checks": [
+            ['target_identity', 'described', 'passed'],
+            ['scientific_context', 'described', 'passed'],
+            ['source_attribution', 'described', 'passed'],
+            ['record_type_audit_policy', 'auditable', 'missing'],
+            ['calculation_metadata', 'auditable', 'missing'],
+            ['typed_output_evidence', 'auditable', 'missing'],
+            ['verified_output_artifact_bytes', 'auditable', 'missing'],
+            ['source_role_preservation', 'auditable', 'missing'],
+            ['preserved_input_artifacts', 'rerunnable', 'missing'],
+            ['execution_parameter_snapshot', 'rerunnable', 'missing'],
+            ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
+            ['evidence_warnings_clear', 'rerunnable', 'passed'],
+        ],
+        "digest": "e2b0dccd8ca9616e88cd5b3387f167b2b232fd4f525c7a860a197f288cd78097",
+    },
+    "estimated_with_literature": {
+        "grade": "described",
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "checks": [
+            ['target_identity', 'described', 'passed'],
+            ['scientific_context', 'described', 'passed'],
+            ['source_attribution', 'described', 'passed'],
+            ['record_type_audit_policy', 'auditable', 'missing'],
+            ['calculation_metadata', 'auditable', 'missing'],
+            ['typed_output_evidence', 'auditable', 'missing'],
+            ['verified_output_artifact_bytes', 'auditable', 'missing'],
+            ['source_role_preservation', 'auditable', 'missing'],
+            ['preserved_input_artifacts', 'rerunnable', 'missing'],
+            ['execution_parameter_snapshot', 'rerunnable', 'missing'],
+            ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
+            ['evidence_warnings_clear', 'rerunnable', 'passed'],
+        ],
+        "digest": "0e52333acfc6753332a64f108a5285d1935ccd528e4e95321bae29aca83cb9e4",
+    },
+    "estimated_without_literature": {
+        "grade": "insufficient",
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "checks": [
+            ['target_identity', 'described', 'passed'],
+            ['scientific_context', 'described', 'passed'],
+            ['source_attribution', 'described', 'missing'],
+            ['record_type_audit_policy', 'auditable', 'missing'],
+            ['calculation_metadata', 'auditable', 'missing'],
+            ['typed_output_evidence', 'auditable', 'missing'],
+            ['verified_output_artifact_bytes', 'auditable', 'missing'],
+            ['source_role_preservation', 'auditable', 'missing'],
+            ['preserved_input_artifacts', 'rerunnable', 'missing'],
+            ['execution_parameter_snapshot', 'rerunnable', 'missing'],
+            ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
+            ['evidence_warnings_clear', 'rerunnable', 'passed'],
+        ],
+        "digest": "e24adae0602dd6023d0470d881bc2b4ef28a963bf4ccc2fe0155aded400b12fa",
     },
     "experimental_with_literature": {
         "grade": "described",
@@ -431,7 +818,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "0b117736de65c4f6c8bf31f7619d794cb2c32e3a3bb5fd0b4b9dcc97e412f224",
+        "digest": "a3954a6ee43099bf42f82f70841519536af4dbc6d0bd72d8e350f29d354667ed",
     },
     "experimental_without_literature": {
         "grade": "insufficient",
@@ -450,7 +837,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "7ecf57a6157b6bb3fcd24b5220ba2756ea145b8e8638c050beae73c1129bbb18",
+        "digest": "9355fe4a776f8c5f642ca325c5c84a52189c8e750787eef8af17b83472115e3d",
     },
     "external_symmetry_only": {
         "grade": "described",
@@ -469,7 +856,26 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "f50e4aa2e7dfc3c55bda0102cc414970d34fa4ef10578674d8569c32f16f5058",
+        "digest": "25df6173c7041a475c064fe29ea42f0eb207d158a70a82c8c3560c457455c9f7",
+    },
+    "object_missing_break_on_source_artifact": {
+        "grade": "described",
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "checks": [
+            ['target_identity', 'described', 'passed'],
+            ['scientific_context', 'described', 'passed'],
+            ['source_attribution', 'described', 'passed'],
+            ['record_type_audit_policy', 'auditable', 'missing'],
+            ['calculation_metadata', 'auditable', 'missing'],
+            ['typed_output_evidence', 'auditable', 'missing'],
+            ['verified_output_artifact_bytes', 'auditable', 'missing'],
+            ['source_role_preservation', 'auditable', 'missing'],
+            ['preserved_input_artifacts', 'rerunnable', 'missing'],
+            ['execution_parameter_snapshot', 'rerunnable', 'missing'],
+            ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
+            ['evidence_warnings_clear', 'rerunnable', 'missing'],
+        ],
+        "digest": "e0664d3eacd2ed4f18ce63f12118975cd68d1b9e28ede43cd034960a5224e3a2",
     },
     "point_group_only": {
         "grade": "described",
@@ -488,7 +894,45 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "4635e153a0fa66b209e05cb278f7ce4ad219d358a52e097c9904c22fa72bb964",
+        "digest": "d3b93c771bda3af0b682861168989ea81cfef4977b6ee757f13c9404c301e300",
+    },
+    "scan_source_with_result": {
+        "grade": "described",
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "checks": [
+            ['target_identity', 'described', 'passed'],
+            ['scientific_context', 'described', 'passed'],
+            ['source_attribution', 'described', 'passed'],
+            ['record_type_audit_policy', 'auditable', 'missing'],
+            ['calculation_metadata', 'auditable', 'missing'],
+            ['typed_output_evidence', 'auditable', 'missing'],
+            ['verified_output_artifact_bytes', 'auditable', 'missing'],
+            ['source_role_preservation', 'auditable', 'missing'],
+            ['preserved_input_artifacts', 'rerunnable', 'missing'],
+            ['execution_parameter_snapshot', 'rerunnable', 'missing'],
+            ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
+            ['evidence_warnings_clear', 'rerunnable', 'passed'],
+        ],
+        "digest": "33531e65d9c669562af8c2ac40008bab7961dd9b08a89e86002f123707ffc4d8",
+    },
+    "source_geometries_and_parameters": {
+        "grade": "described",
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "checks": [
+            ['target_identity', 'described', 'passed'],
+            ['scientific_context', 'described', 'passed'],
+            ['source_attribution', 'described', 'passed'],
+            ['record_type_audit_policy', 'auditable', 'missing'],
+            ['calculation_metadata', 'auditable', 'missing'],
+            ['typed_output_evidence', 'auditable', 'missing'],
+            ['verified_output_artifact_bytes', 'auditable', 'missing'],
+            ['source_role_preservation', 'auditable', 'missing'],
+            ['preserved_input_artifacts', 'rerunnable', 'missing'],
+            ['execution_parameter_snapshot', 'rerunnable', 'missing'],
+            ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
+            ['evidence_warnings_clear', 'rerunnable', 'passed'],
+        ],
+        "digest": "662035b591e5320f63d14f1b01f1fab851830f3391c19c5da15d08cedd0de0a2",
     },
     "sparse": {
         "grade": "insufficient",
@@ -507,7 +951,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "9452291a91ec3793e2be351229e88e3f8ccee5b81626fb06fe75e4517e3510b1",
+        "digest": "89d3de9083ff07acd381357de99a0c04d8ff2df100ae2a48567976d738d5e456",
     },
     "torsion_with_scan": {
         "grade": "described",
@@ -526,7 +970,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "c3ab62268c95ac817e8d749b363b760a76a2478e4f7f81d77748a483339eda80",
+        "digest": "a0b517570b27f17747adc0147aa1220995f5805b2b38d5b5c0432926962431bd",
     },
     "with_model_declaration": {
         "grade": "described",
@@ -545,7 +989,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "8b401d7c87397d515ca1cbf7e98ed3d6efcb7ff9131e7fcd0bc2683f44d93874",
+        "digest": "092b3bcc413c22d47952986bbad8b3559649340b268c134ce5d6a45876135324",
     },
 }
 
@@ -562,6 +1006,127 @@ def test_the_digest_does_not_depend_on_row_ids(db_session, _api_test_user, name)
     assert first == second
 
 
+def _context(db_session, name: str, user: int) -> dict:
+    statmech = SCENARIOS[name](db_session, user)
+    return evaluate_reproducibility(
+        db_session, record_type=SubmissionRecordType.statmech, record_id=statmech.id, **_integrity_seam(db_session)
+    ).context_json
+
+
+def test_the_new_shapes_reach_the_branches_they_exist_for(db_session, _api_test_user):
+    """A shape that quietly stops exercising its branch would freeze nothing. Say what each one reaches."""
+    user = _api_test_user
+
+    def evidence(name):
+        context = _context(db_session, name, user)
+        return context, list(context["calculation_evidence"].values())
+
+    context, _ = evidence("dependency_cycle")
+    check = next(c for c in context["checks"] if c["name"] == "upstream_dependency_snapshot")
+    assert check["evidence"]["cycle_detected"] is True
+
+    _, calcs = evidence("dependency_edges")
+    assert sum(len(c["upstream_dependencies"]) for c in calcs) == 2
+
+    _, calcs = evidence("scan_source_with_result")
+    scan = next(c for c in calcs if c["typed_output"]["calculation_type"] == "scan")
+    assert scan["typed_output_present"] is True
+    assert len(scan["typed_output"]["points"]) == 2 and scan["typed_output"]["coordinates"]
+
+    _, calcs = evidence("composite_source")
+    composite = next(c for c in calcs if c["typed_output"]["calculation_type"] == "composite")
+    assert composite["typed_output_present"] is True and len(composite["typed_output"]["terms"]) == 2
+
+    _, calcs = evidence("object_missing_break_on_source_artifact")
+    assert {a["verification"] for c in calcs for a in c["artifacts"]} >= {"evidence_missing"}
+
+    context, _ = evidence("declaration_with_members_and_sources")
+    declaration = context["target"]["relationships"]["model_declaration"]
+    assert len(declaration["members"]) == 1 and len(declaration["sources"]) == 1
+
+    _, calcs = evidence("source_geometries_and_parameters")
+    opt = next(c for c in calcs if c["typed_output"]["calculation_type"] == "opt")
+    assert opt["input_geometries"] and opt["output_geometries"] and opt["parameters"] and opt["parameters_json"]
+
+    for name in ("estimated_with_literature", "estimated_without_literature"):
+        context, _ = evidence(name)
+        assert context["target"]["columns"]["scientific_origin"] == "estimated"
+
+
+# ---------------------------------------------------------------------------
+# The digest must notice a row being swapped for another row
+# ---------------------------------------------------------------------------
+
+
+def _two_calculation_context(db_session, user) -> dict:
+    context = _context(db_session, "computed_opt_freq_sp", user)
+    assert len(context["calculation_evidence"]) == 3
+    return json.loads(json.dumps(context, default=str))
+
+
+def _minimal_context() -> dict:
+    """Two calculations that differ in nothing but their ids, so no other field can give a swap away."""
+    return {
+        "source_roles": [{"calculation_id": 11, "role": "opt"}, {"calculation_id": 12, "role": "opt"}],
+        "calculation_evidence": {
+            "11": {"columns": {"id": 11, "type": "opt", "lot_id": 21}, "level_of_theory": {"id": 21}},
+            "12": {"columns": {"id": 12, "type": "opt", "lot_id": 21}, "level_of_theory": {"id": 21}},
+        },
+    }
+
+
+def test_probe_exchanging_the_keys_of_two_calculations_evidence_entries_moves_the_digest(db_session, _api_test_user):
+    """Entry 11 filed under 12 and entry 12 under 11: each entry's own ``id`` now disagrees with its key."""
+    minimal = _minimal_context()
+    baseline = normalised_digest(minimal)
+    evidence = minimal["calculation_evidence"]
+    minimal["calculation_evidence"] = {"12": evidence["11"], "11": evidence["12"]}
+    assert normalised_digest(minimal) != baseline
+
+    context = _two_calculation_context(db_session, _api_test_user)
+    baseline = normalised_digest(context)
+    assert normalised_digest(json.loads(json.dumps(context))) == baseline
+    evidence = context["calculation_evidence"]
+    first, second = list(evidence)[:2]
+    context["calculation_evidence"] = {second: evidence[first], first: evidence[second], **{
+        k: v for k, v in evidence.items() if k not in (first, second)
+    }}
+    assert normalised_digest(context) != baseline
+
+
+def test_probe_exchanging_the_ids_inside_two_entries_moves_the_digest(db_session, _api_test_user):
+    """Each entry stays under its key but now carries the other's ``id``."""
+    minimal = _minimal_context()
+    baseline = normalised_digest(minimal)
+    columns = [entry["columns"] for entry in minimal["calculation_evidence"].values()]
+    columns[0]["id"], columns[1]["id"] = columns[1]["id"], columns[0]["id"]
+    assert normalised_digest(minimal) != baseline
+
+    context = _two_calculation_context(db_session, _api_test_user)
+    baseline = normalised_digest(context)
+    evidence = context["calculation_evidence"]
+    first, second = list(evidence)[:2]
+    evidence[first]["columns"]["id"], evidence[second]["columns"]["id"] = int(second), int(first)
+    assert normalised_digest(context) != baseline
+
+
+def test_probe_a_key_that_names_no_listed_calculation_moves_the_digest():
+    minimal = _minimal_context()
+    baseline = normalised_digest(minimal)
+    evidence = minimal["calculation_evidence"]
+    minimal["calculation_evidence"] = {"11": evidence["11"], "13": evidence["12"]}
+    assert normalised_digest(minimal) != baseline
+
+
+def test_probe_pointing_a_foreign_key_at_another_row_moves_the_digest():
+    """The same hole one table over: ``lot_id`` must meet the ``id`` of the level of theory it names."""
+    minimal = _minimal_context()
+    baseline = normalised_digest(minimal)
+    minimal["calculation_evidence"]["12"]["columns"]["lot_id"] = 22
+    assert normalised_digest(minimal) != baseline
+
+
+
 def test_every_scenario_is_frozen():
     """No scenario escapes the freeze, and no literal outlives its scenario."""
     assert SCENARIOS
@@ -574,11 +1139,13 @@ def test_species_owned_statmech_reproducibility_is_frozen(db_session, _api_test_
     assert observed == FROZEN[name]
 
 
-def test_a_stored_species_assessment_reads_current_under_its_original_rubric_identity(client, db_session):
-    """Append, then read over the API: the row says what graded it, and it is ``current``.
+def test_smoke_a_species_row_appended_now_is_current_and_carries_the_original_rubric_name(client, db_session):
+    """Smoke test, and only that: it pins the rubric name and version written on a freshly appended row.
 
-    This is the observable half of "species rows are untouched": a row appended by this code reads ``current``
-    through ``include=assessments``, and carries the rubric identity species records have always carried.
+    A row appended by this code reads ``current`` through ``include=assessments`` and says it was graded by
+    ``tckdb_reproducibility`` ``v1``. It is not evidence about rows stored earlier: whether those still read
+    ``current`` after the owner-scoped rubric lands is PR-2's to prove (its currency tests append under the old
+    identity and read back).
     """
     statmech = _computed_no_sources(db_session, None)
     row = evaluate_and_append_reproducibility(
@@ -622,7 +1189,8 @@ def _ts_entry(db_session):
 
 @pytest.mark.xfail(
     strict=True,
-    # Only an assertion about the grade may excuse this test. A setup error must fail it, not hide behind xfail.
+    # Only a failed assertion about the outcome may excuse this test. Everything else, including a broken
+    # precondition (which raises RuntimeError below), is reported as a failure, never as the expected xfail.
     raises=AssertionError,
     reason="#760: scientific_context asks every statmech record for species_entry_id, so a TS-owned record is "
     "graded insufficient. PR-2 grades it on its own evidence and flips this to a pass.",
@@ -648,7 +1216,8 @@ def test_a_ts_owned_statmech_is_graded_on_its_evidence(db_session, _api_test_use
     attach_statmech_source_calculation(
         db_session, statmech=statmech, calculation=calculation, role=StatmechCalculationRole.freq
     )
-    assert statmech.species_entry_id is None and statmech.transition_state_entry_id is not None
+    if statmech.species_entry_id is not None or statmech.transition_state_entry_id is None:
+        raise RuntimeError("precondition broken: the record under test is not TS-owned")
 
     result = evaluate_reproducibility(
         db_session, record_type=SubmissionRecordType.statmech, record_id=statmech.id, **_integrity_seam(db_session)
