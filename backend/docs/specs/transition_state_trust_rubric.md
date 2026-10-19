@@ -17,7 +17,7 @@
 > with them the label and the passed/possible counts, are the same on every surface. The saddle-point block
 > (`saddle_point`, the "N imaginary modes" statement) follows the same pin: when a declaration pins a frequency result it
 > describes that result and carries `basis = "declared_curvature_witness"`; with no declaration it describes the newest
-> attached result (`latest_direct_frequency`), as before. **Cost:** an entry that declares nothing costs one statement on its
+> attached result (`latest_direct_frequency`), as before. A declaration of a rejected or deprecated entry pins nothing (the same exclusion the detail read applies), and under `profile=curated` a frequency result the profile hides is absent for the box and the check alike: both read the newest visible result. **Cost:** an entry that declares nothing costs one statement on its
 > own page; one declared target costs 46 more statements than an identical undeclared graph (measured; pinned at 70 or fewer).
 > Under `profile=curated` the assessment runs under that profile: a target resting on a hidden calculation is
 > unresolved and warns, and nothing is cached across profiles. Label, completeness, score and `is_certified` never read the
