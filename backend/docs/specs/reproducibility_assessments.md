@@ -68,6 +68,53 @@ hash against a fresh evaluation, so an evidence change is detected whether or
 not the label moved. Introduce a second version only when a released consumer
 depends on the old grades.
 
+**One owner kind carries its own label (#760).** A statmech record belongs to a
+species entry or to a transition-state entry, never both. The
+`scientific_context` check asks whether the record is attached to its owner. A
+species-owned statmech keeps `tckdb_reproducibility` `v1` byte for byte. A
+transition-state-owned statmech is graded by `tckdb_reproducibility_ts_statmech`
+`v1`: the same code and the same checks, with that one question asking for a
+transition-state entry instead of a species entry. It reaches at most
+`described`, like every product, and no transition-state-specific check is
+added: the saddle evidence is graded on the transition-state entry by the trust
+tier. The router uses the same owner test as the trust tier's
+`statmech_rubric_for` (a test pins their agreement; the tiers do not import each
+other). "Changed in place" still holds for the shared code; the separate name
+exists so a stored claim made under the old species-only rule cannot be confused
+with one made under the owner-scoped rule.
+
+**Currency compares against the rubric the fresh evaluation used**, not against
+a module constant: a stored row reads `current` only if its `(rubric_name,
+rubric_version)` equals the fresh evaluation's and the hash matches.
+
+**Rollout runbook.** No migration, no environment variable, and nothing is
+re-assessed automatically; assessments are append-only and are written only by a
+curator's explicit `POST /api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/evaluate`.
+After deploy, the latest stored assessment of every transition-state-owned
+statmech reads `stale` (its stored rubric name and hash predate the rule); its
+stored grade is still shown, labelled stale. Species-owned and all other records
+keep reading `current`.
+
+1. Restore a backup into a **scratch** database (not the live one).
+2. Run the read-only report with the PR's code:
+   `PYTHONPATH=. python scripts/ops/reproducibility_ts_statmech_report.py --database-url <scratch>`.
+   It runs in a `REPEATABLE READ` / `READ ONLY` transaction and has no apply mode.
+   It reports statmech by owner, assessed and unassessed counts by owner,
+   currency by owner with reasons (`rubric_identity_mismatch`,
+   `context_hash_mismatch`), the grade transitions (the shared rubric's reading
+   against the live one), and `species_entry_unchanged` (a routing check only) and
+   `species_currency_changed`, which must be 0: no species row changes currency
+   between the shared rubric and the live one. A species row already stale
+   because its evidence changed after it was assessed reads stale under both
+   and is not counted.
+3. `--list-stale` adds the record id and assessment ref of each stale
+   transition-state-owned record: operator-only output, because it carries
+   identifiers. Whatever a deployment holds is what the report shows; the
+   population is whatever curators asked to have assessed.
+4. Re-assessment is optional and per record, by a curator or operator.
+5. The reproducibility summary is profile-blind (as for every record type) and
+   no selection reads the grade.
+
 The rubric caps every non-calculation record at `described`; product derivation
 and source-role policies remain explicit missing checks until their complete
 recipes are modeled. A calculation reaches `auditable` only when it has an

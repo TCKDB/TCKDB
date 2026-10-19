@@ -244,7 +244,7 @@ What the structure assessment found for the declared saddle targets, for the que
 
 *On the wire:* `assessments.reproducibility.grade`.
 
-How far somebody else could get with what was deposited. An evidence ladder, independent of both the review status and the trust badge, and a statement about *completeness of the deposit* rather than a promise of bitwise-identical output. Only a calculation can be graded above `described`: a thermo or kinetics record keeps the limits of the sources behind it. An assembled composite energy, which ran no program of its own, is graded on its inputs instead: it reaches a level only when every calculation it cites does, and only while its stated total still follows from them.
+How far somebody else could get with what was deposited. An evidence ladder, independent of both the review status and the trust badge, and a statement about *completeness of the deposit* rather than a promise of bitwise-identical output. Only a calculation can be graded above `described`: a thermo or kinetics record keeps the limits of the sources behind it. An assembled composite energy, which ran no program of its own, is graded on its inputs instead: it reaches a level only when every calculation it cites does, and only while its stated total still follows from them. A statmech record is graded on the same checks whether a species entry or a transition-state entry owns it.
 
 | Token | What it means |
 | --- | --- |

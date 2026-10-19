@@ -1231,14 +1231,6 @@ def _ts_entry(db_session):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    # Only a failed assertion about the outcome may excuse this test. Everything else, including a broken
-    # precondition (which raises RuntimeError below), is reported as a failure, never as the expected xfail.
-    raises=AssertionError,
-    reason="#760: scientific_context asks every statmech record for species_entry_id, so a TS-owned record is "
-    "graded insufficient. PR-2 grades it on its own evidence and flips this to a pass.",
-)
 def test_a_ts_owned_statmech_is_graded_on_its_evidence(db_session, _api_test_user):
     """Intended behaviour: complete described-level evidence, graded ``described`` (the ceiling for a product)."""
     ts_entry = _ts_entry(db_session)

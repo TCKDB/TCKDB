@@ -193,7 +193,11 @@ species-entry subresource. It is internal-tokenized everywhere, so
 `include=all` never returns it. The compact block has the shared
 deterministic-trust and reproducibility freshness semantics documented in
 `public_assessment_summaries.md`; a missing immutable assessment is always
-reported as `unassessed`, never as approval.
+reported as `unassessed`, never as approval. A transition-state-owned
+statmech's reproducibility block names the rubric
+`tckdb_reproducibility_ts_statmech`; a species-owned one names
+`tckdb_reproducibility`. A row stored under the old rule reads `stale` until a
+curator re-assesses it.
 
 ## 5. Search filters
 

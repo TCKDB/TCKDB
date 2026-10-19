@@ -28,6 +28,7 @@ SCRIPTS = {
     "structure": (BACKEND / "scripts/ops/structure_selection_coverage_inventory.py", "calculations"),
     "statmech": (BACKEND / "scripts/ops/statmech_selection_coverage_inventory.py", "by_profile"),
     "statmech_trust_owner": (BACKEND / "scripts/ops/statmech_trust_owner_report.py", "by_owner"),
+    "reproducibility_ts_statmech": (BACKEND / "scripts/ops/reproducibility_ts_statmech_report.py", "by_owner"),
 }
 #: Nothing listens here, so a script that tried to connect would fail with a connection error, not a usage error.
 UNREACHABLE = {"DB_HOST": "127.0.0.1", "DB_PORT": "1", "DB_USER": "nobody", "DB_PASSWORD": "x", "DB_NAME": "none"}
@@ -139,6 +140,7 @@ INVENTORY_FUNCTIONS = {
     "network": "network_coverage_inventory",
     "statmech": "statmech_coverage_inventory",
     "statmech_trust_owner": "statmech_trust_owner_report",
+    "reproducibility_ts_statmech": "reproducibility_owner_report",
 }
 
 
