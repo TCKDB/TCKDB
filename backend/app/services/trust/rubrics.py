@@ -2682,7 +2682,10 @@ def _ts_representative_freq_result(ts_entry: TransitionStateEntry, context: Tran
         passing = [
             c
             for c in pinned
-            if frequency_result_designates_its_reaction_coordinate(c.freq_result.n_imag, c.freq_result.reaction_coordinate_mode_index)
+            if c.freq_result is not None
+            and frequency_result_designates_its_reaction_coordinate(
+                c.freq_result.n_imag, c.freq_result.reaction_coordinate_mode_index
+            )
         ]
         pool = passing or pinned
     chosen = max(pool, key=lambda c: (c.created_at, c.id))
