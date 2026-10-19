@@ -1,5 +1,28 @@
 # Transition-State Trust Rubric — `computed_transition_state_v2`
 
+> **Version 5 (#723, 2026-10).** `computed_transition_state` is now version 5. It brings the scoped structure assessment into the
+> TS trust projection without moving the badge. (1) The block `trust.structure_assessment` carries the assessment's own answer to
+> one fixed, evidence-only question, echoed as `task` (`qualify_evidence`, `first_order_saddle`, `known_values`, no connectivity
+> requirement); sending `task` to `POST /scientific/transition-state-entries/{ref}/evidence/select` returns the same answer.
+> (2) A zero-weight warning, `declared_saddle_target_qualifies`, fires when the entry declares a saddle target and the assessment
+> finds none that qualifies, or finds a contested target; it is `not_applicable` when nothing is declared, on lists, and over the
+> selection bounds. It means the declared target needs investigation, not that the transition state is disproved. (3) The
+> frequency-presence checks (`imaginary_frequency_count_recorded`, `reaction_coordinate_designated_for_ts`,
+> `extra_imaginary_modes_not_flagged`, `imaginary_frequency_value_present`) read the frequency result a declared target pins in
+> role `curvature`; an entry that declares nothing, or none of whose pins is a visible frequency result, keeps reading the newest
+> attached result. The unscoped warnings still read every attached result. **Where it runs:** the assessment runs on a single transition-state-entry detail read only. Lists (search, the sibling
+> `entries` of a detail read, the `/reaction-entries/{id}/full` document) carry `structure_assessment.status =
+> "not_assessed_on_lists"` and issue no statement for the assessment. They do read which frequency result each declaration
+> pins, in ONE grouped statement per page or response however many entries it holds, so the frequency-presence checks, and
+> with them the label and the passed/possible counts, are the same on every surface. The saddle-point block
+> (`saddle_point`, the "N imaginary modes" statement) follows the same pin: when a declaration pins a frequency result it
+> describes that result and carries `basis = "declared_curvature_witness"`; with no declaration it describes the newest
+> attached result (`latest_direct_frequency`), as before. When several declared targets each pin a frequency result, the frequency-presence checks pass if ANY pinned result passes the designation rule (one imaginary mode, or several with a designated reaction coordinate), and that result is the representative and the one the box shows; when none passes, both use the newest pin. Lists apply the same rule from the same one-statement pin read. A bound refusal of the assessment does not hide the pins: the refused entry still reads them. The structure versions the badge was written for are pinned (`TS_SCOPED_STRUCTURE_VERSIONS`, beside rubric version 5) and checked when the application boots, so a drift fails the deploy and CI instead of a request. A declaration of a rejected or deprecated entry pins nothing (the same exclusion the detail read applies), and under `profile=curated` a frequency result the profile hides is absent for the box and the check alike: both read the newest visible result. **Cost:** an entry that declares nothing costs one statement on its
+> own page; one declared target costs 46 more statements than an identical undeclared graph (measured; pinned at 70 or fewer).
+> Under `profile=curated` the assessment runs under that profile: a target resting on a hidden calculation is
+> unresolved and warns, and nothing is cached across profiles. Label, completeness, score and `is_certified` never read the
+> assessment. Machine reviews stamped version 4 (or 3) read as stale and are re-planned, never rewritten.
+
 > **Version 4 (#729, 2026-10).** `computed_transition_state` is now version 4. It adds one zero-weight warning,
 > `no_frequency_result_has_undesignated_imaginary_modes`: it fires when any attached frequency result with a recorded count
 > reports two or more imaginary modes and does not designate the reaction coordinate (the same source set and the same null rule

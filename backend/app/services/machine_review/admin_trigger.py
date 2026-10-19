@@ -84,7 +84,7 @@ from app.services.trust.rubrics import (
     COMPUTED_KINETICS_V2,
     COMPUTED_STATMECH_V2,
     COMPUTED_THERMO_V2,
-    COMPUTED_TRANSITION_STATE_V4,
+    COMPUTED_TRANSITION_STATE_V5,
     COMPUTED_TRANSPORT_V2,
 )
 
@@ -143,7 +143,7 @@ _RESOLVERS: dict[str, _RecordTypeResolver] = {
         TransitionStateEntry,
         evaluate_computed_transition_state_entry,
         SubmissionRecordType.transition_state_entry,
-        COMPUTED_TRANSITION_STATE_V4,
+        COMPUTED_TRANSITION_STATE_V5,
     ),
 }
 

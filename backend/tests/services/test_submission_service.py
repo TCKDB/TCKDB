@@ -38,6 +38,7 @@ from app.services.submission import (
     reject_submission,
     supersede_submission,
 )
+from tests.id_leak import id_in_text
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -495,7 +496,7 @@ class TestSupersede:
             )
         message = str(refused.value)
         assert message.startswith("submission_supersede_not_owner: ")
-        assert str(old.id) not in message and str(new.id) not in message
+        assert not id_in_text(old.id, message) and not id_in_text(new.id, message)
         self._assert_untouched(db_session, old, new)
 
     @pytest.mark.parametrize(

@@ -25,6 +25,7 @@ from app.db.models.common import (
 from app.db.models.kinetics import Kinetics, KineticsDetermination
 from app.db.models.network_pdep import NetworkChannelMicroReaction
 from app.services.species_resolution import resolve_species
+from tests.id_leak import id_in_text
 from tests.services.scientific_read._factories import (
     attach_network_state_participant,
     make_calculation,
@@ -1161,7 +1162,7 @@ def test_an_export_reports_what_a_portable_bundle_cannot_carry(client, db_sessio
     (omission,) = omissions
     assert omission.action == "declaration_pruned" and omission.ref == row.public_ref
     assert "resolved channel" in omission.detail and "supporting calculations" in omission.detail
-    assert str(row.id) not in omission.detail
+    assert not id_in_text(row.id, omission.detail)
 
 
 def test_the_record_type_of_a_determination_is_not_a_reviewable_record():

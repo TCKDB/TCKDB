@@ -81,6 +81,7 @@ from app.db.models.common import (
 )
 from app.db.models.statmech import Statmech
 from app.services.record_review import set_record_review_status
+from tests.id_leak import id_in_text
 from tests.services.release._attest import deposit_and_attest
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
@@ -441,7 +442,7 @@ def test_species_id_and_species_ref_that_disagree_are_refused(
         json={"species_id": species.id, "species_ref": "spc_nosuchspecies"},
     )
     body = _assert_refusal(refused, status=422, code="species_handle_conflict")
-    assert str(species.id) not in str(body.get("detail")), body
+    assert not id_in_text(species.id, str(body.get("detail"))), body
 
     accepted = client.post(
         _SPECIES_CALC_SEARCH,
@@ -474,7 +475,7 @@ def test_species_entry_id_and_ref_that_disagree_are_refused(
     body = _assert_refusal(
         refused, status=422, code="species_entry_handle_conflict"
     )
-    assert str(species_entry.id) not in str(body.get("detail")), body
+    assert not id_in_text(species_entry.id, str(body.get("detail"))), body
 
     accepted = client.post(
         _SPECIES_CALC_SEARCH,

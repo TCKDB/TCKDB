@@ -47,7 +47,10 @@ an honest judgement?
   `curvature_contradicts_claim`, reports an undesignated extra mode as `reaction_coordinate_not_established`, and applies authorized
   adjudications. Reason mapping for the retired hard fails: zero modes becomes the warning above plus `curvature_contradicts_claim`;
   undesignated extra modes becomes the missing designation check plus `reaction_coordinate_not_established`.
-  The trust projection of a TS entry does not yet consume that assessment; it is a disclosed limitation, not a claim.
+  From rubric version 5 (#723) the trust projection of a TS entry carries that assessment: `trust.structure_assessment` holds its
+  answer to one fixed evidence-only question (echoed as `task`), the zero-weight warning `declared_saddle_target_qualifies` restates
+  it, and the frequency-presence checks read the result a declared target pins. The assessment runs on a single-entry detail read only; lists
+  carry the status `not_assessed_on_lists` but read the declared pins in one statement per page, so the counts agree everywhere. It never moves the label, the completeness counts or `is_certified`.
 - **Undesignated imaginary modes (rubric version 4, #729).** A second zero-weight warning,
   `no_frequency_result_has_undesignated_imaginary_modes`, fires when any attached frequency result with a recorded count reports
   two or more imaginary modes and does not designate the reaction coordinate. It reads the same source set as the zero-mode warning

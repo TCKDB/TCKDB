@@ -28,7 +28,7 @@ from app.services.trust.rubrics import (
     COMPUTED_KINETICS_V2,
     COMPUTED_STATMECH_V2,
     COMPUTED_THERMO_V2,
-    COMPUTED_TRANSITION_STATE_V4,
+    COMPUTED_TRANSITION_STATE_V5,
     COMPUTED_TRANSPORT_V2,
     COMPUTED_TS_STATMECH_V1,
     EXTERNAL_CP_COMPARISON_V2,
@@ -46,7 +46,7 @@ _ACTIVE_RUBRICS = (
     COMPUTED_THERMO_V2,
     COMPUTED_STATMECH_V2,
     COMPUTED_TRANSPORT_V2,
-    COMPUTED_TRANSITION_STATE_V4,
+    COMPUTED_TRANSITION_STATE_V5,
     # The owner-scoped rubric for transition-state-owned statmech.
     COMPUTED_TS_STATMECH_V1,
     # Phase C-E4: not a computed-trust rubric (checks=()), but it is part of

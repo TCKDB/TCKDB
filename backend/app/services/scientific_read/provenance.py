@@ -117,6 +117,7 @@ from app.services.scientific_read.transition_states import (
     _build_entry_evidence_summary,
     build_transition_state_entry_trust_fragment,
 )
+from app.services.trust.ts_scoped import ListScope, context_for, declared_curvature_pins
 
 logger = logging.getLogger(__name__)
 
@@ -770,6 +771,9 @@ def _build_transition_states_section(
         record_ids=all_ts_calc_ids,
     )
 
+    # Declared curvature pins for every TS entry of the document in ONE statement (no assessment: this is a list).
+    trust_scope = declared_curvature_pins(session, ts_entry_ids) if include_trust else ListScope()
+
     out: list[TransitionStateInFull] = []
     for ts_entry in ts_entry_rows:
         badge = badge_by_entry[ts_entry.id]
@@ -805,6 +809,10 @@ def _build_transition_states_section(
                     build_transition_state_entry_trust_fragment(
                         ts_entry,
                         review_status=badge.status,
+                        # The reaction document embeds every TS entry of a reaction entry: a list, so no
+                        # structure assessment (#723, O3). Its fragment equals the standalone detail fragment
+                        # except for ``structure_assessment``, which here says ``not_assessed_on_lists``.
+                        context=context_for(session, ts_entry, trust_scope),
                     )
                     if include_trust
                     else None

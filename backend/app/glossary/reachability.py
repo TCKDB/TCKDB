@@ -95,11 +95,17 @@ def read_schema_enums() -> frozenset[type[enum.Enum]]:
 
 
 def trust_fragment_enums() -> frozenset[type[enum.Enum]]:
-    """Enums a serialised ``trust`` fragment can contain."""
-    from app.services.trust.models import EvidenceEvaluation
+    """Enums a serialised ``trust`` fragment can contain.
+
+    The evaluation, and, on a transition-state entry, the ``structure_assessment`` block that
+    :class:`~app.services.trust.models.TransitionStateTrustFragment` carries beside it. That block lives in the trust
+    package rather than under ``app/schemas/reads``, so the read-schema walk does not find it.
+    """
+    from app.services.trust.models import EvidenceEvaluation, TransitionStateScopedAssessment
 
     return frozenset(
         _model_enums(EvidenceEvaluation, exclude=_EVALUATION_EXCLUDED_FIELDS)
+        | _model_enums(TransitionStateScopedAssessment)
     )
 
 

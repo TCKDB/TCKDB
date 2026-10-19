@@ -27,6 +27,7 @@ from app.db.models.network_pdep import (
     NetworkSolve,
     NetworkSolveEnergyTransfer,
 )
+from tests.id_leak import id_in_text
 
 # ---------------------------------------------------------------------------
 # Payload helpers
@@ -760,7 +761,7 @@ class TestMalformedKinetics:
         assert resp.status_code == 500
         detail = resp.json()["detail"]
         # Row id must NOT leak into the user-facing payload.
-        assert str(kin.id) not in detail
+        assert not id_in_text(kin.id, detail)
         assert "Invalid network_kinetics row" in detail
         assert "model_kind='plog'" in detail
         assert "no matching subtype payload was found" in detail
@@ -793,7 +794,7 @@ class TestMalformedKinetics:
         )
         assert resp.status_code == 500
         detail = resp.json()["detail"]
-        assert str(kin.id) not in detail
+        assert not id_in_text(kin.id, detail)
         assert "Invalid network_kinetics row" in detail
         assert "model_kind='plog'" in detail
         # Mismatch summary shows every family's populated flag.
@@ -823,7 +824,7 @@ class TestMalformedKinetics:
         )
         assert resp.status_code == 500
         detail = resp.json()["detail"]
-        assert str(kin.id) not in detail
+        assert not id_in_text(kin.id, detail)
         assert "Invalid network_kinetics row" in detail
         assert "model_kind='chebyshev'" in detail
         assert "chebyshev=False" in detail

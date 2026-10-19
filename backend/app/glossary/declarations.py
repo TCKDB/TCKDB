@@ -56,7 +56,13 @@ from app.schemas.reads.scientific_structure_search import (
     StructureQueryKind,
     StructureSearchMode,
 )
-from app.services.trust.models import EvidenceBadge, EvidenceOutcome, HardFailReason
+from app.services.trust.models import (
+    EvidenceBadge,
+    EvidenceOutcome,
+    HardFailReason,
+    TransitionStateScopedAssessmentOutcome,
+    TransitionStateScopedAssessmentStatus,
+)
 
 __all__ = ["VOCABULARIES", "vocabularies"]
 
@@ -1186,12 +1192,99 @@ _ARTIFACT_INTEGRITY = Vocabulary(
 )
 
 
+_TS_SCOPED_STATUS = Vocabulary(
+    group=Group.trust,
+    title="Transition-state structure assessment status",
+    enum=TransitionStateScopedAssessmentStatus,
+    carried_by="`trust.structure_assessment.status` on a transition-state entry's trust block",
+    summary=(
+        "Whether TCKDB asked its structure assessment about the saddle this entry declares, and what came back. The "
+        "assessment answers one fixed question, echoed in `trust.structure_assessment.task`: does a declared target "
+        "have the evidence for a first-order saddle. It is advisory. It never changes the trust badge, the "
+        "completeness numbers or `is_certified`."
+    ),
+    terms=(
+        Term(
+            token="assessed",
+            means=(
+                "The entry declares at least one saddle target and the assessment ran under the read profile of this "
+                "request. Read `outcome` and `units`. The same answer comes from sending `task` to the entry's "
+                "evidence-selection endpoint."
+            ),
+        ),
+        Term(
+            token="no_declared_target",
+            means=(
+                "The entry declares no saddle target that this request may see, so there is nothing to assess. This "
+                "is not a missing check: the badge never required a declaration."
+            ),
+        ),
+        Term(
+            token="not_assessed_on_lists",
+            means=(
+                "This response lists several entries (a search, the sibling entries of a detail read, a reaction "
+                "document), and the assessment runs on a single-entry detail read only. So the same entry shows the "
+                "same status on every list. Read the entry's own page for the assessment."
+            ),
+        ),
+        Term(
+            token="not_assessed_over_bound",
+            means=(
+                "The assessment refused because the entry's evidence is over the server's fixed size limits, and "
+                "nothing is inferred from part of it. `refusal_code` names the limit; the evidence-selection endpoint "
+                "answers the same refusal."
+            ),
+        ),
+    ),
+)
+
+
+_TS_SCOPED_OUTCOME = Vocabulary(
+    group=Group.trust,
+    title="Transition-state structure assessment outcome",
+    enum=TransitionStateScopedAssessmentOutcome,
+    carried_by="`trust.structure_assessment.outcome` on a transition-state entry's trust block",
+    summary=(
+        "What the structure assessment found for the declared saddle targets, for the question in "
+        "`trust.structure_assessment.task`. Only an evidence question is asked, so these are the only three outcomes. "
+        "Anything but `qualified_evidence` means the declared target needs investigation; none of them says the "
+        "transition state is disproved."
+    ),
+    terms=(
+        Term(
+            token="qualified_evidence",
+            means=(
+                "At least one declared target has the evidence for the question asked, and `qualifying_refs` names "
+                "it. This is scoped to that question and is not a certificate. A contested target beside it still "
+                "raises the `declared_saddle_target_qualifies` warning."
+            ),
+        ),
+        Term(
+            token="no_applicable_candidate",
+            means=(
+                "No declared target qualifies: each is either contradicted by its own evidence or lacks a fact the "
+                "question needs. `units` says which, per target, as codes."
+            ),
+        ),
+        Term(
+            token="evidence_conflict",
+            means=(
+                "The declared evidence disagrees with itself: a target with both a supporting and a contradicting "
+                "determination, or a target whose only failure is a recorded finding against its evidence."
+            ),
+        ),
+    ),
+)
+
+
 #: Every declared vocabulary, in reading order within each group.
 VOCABULARIES: tuple[Vocabulary, ...] = (
     _REVIEW,
     _TRUST_BADGE,
     _TRUST_OUTCOME,
     _HARD_FAIL,
+    _TS_SCOPED_STATUS,
+    _TS_SCOPED_OUTCOME,
     _REPRODUCIBILITY,
     _READ_PROFILE,
     _PROFILE_RECOMMENDATION,

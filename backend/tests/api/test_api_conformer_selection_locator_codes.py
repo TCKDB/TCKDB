@@ -45,6 +45,7 @@ from tests.api.test_api_statmech_citation_ownership import (
     _rate,
     _seed_participants,
 )
+from tests.id_leak import id_in_text
 from tests.services.scientific_read._factories import (
     attach_conformer_selection,
     make_conformer_group,
@@ -405,7 +406,7 @@ def test_a_group_ref_naming_a_group_of_another_species_entry_is_refused(
     # DR-0028 Requirement 2: the entry that does own it is not disclosed.
     rendered = str(body)
     for row_id in (entries["oh"].id, foreign.id):
-        assert str(row_id) not in rendered, (row_id, rendered)
+        assert not id_in_text(row_id, rendered), (row_id, rendered)
 
 
 def test_a_group_ref_naming_nothing_is_a_404_that_echoes_it(

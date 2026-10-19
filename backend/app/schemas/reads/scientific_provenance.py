@@ -41,7 +41,7 @@ from app.schemas.reads.scientific_kinetics import KineticsRecord
 from app.schemas.reads.scientific_transition_state import (
     TransitionStateEntryEvidenceSummary,
 )
-from app.services.trust.models import TrustFragment
+from app.services.trust.models import TransitionStateTrustFragment, TrustFragment
 
 
 class ReactionFullCalculationEvidenceSummary(CalculationEvidenceSummary):
@@ -306,11 +306,14 @@ class TransitionStateInFull(BaseModel):
     detail endpoint (same counts, same booleans, same status enum).
 
     ``trust`` is populated only when the caller passes ``include=trust``
-    to ``/reaction-entries/{id}/full``. It reuses :class:`TrustFragment`
-    so a trust block embedded here is structurally identical to the one
-    returned by
+    to ``/reaction-entries/{id}/full``. It reuses
+    :class:`TransitionStateTrustFragment` so a trust block embedded here is
+    structurally identical to the one returned by
     ``GET /scientific/transition-state-entries/{ref}?include=trust``
-    (rubric ``computed_transition_state_v2``).
+    (rubric ``computed_transition_state_v5``), with one difference by design:
+    this document lists the reaction's entries, so its
+    ``structure_assessment.status`` is ``not_assessed_on_lists`` where the
+    single-entry detail read runs the assessment.
     """
 
     transition_state_id: int | None = None
@@ -324,7 +327,7 @@ class TransitionStateInFull(BaseModel):
     evidence_summary: TransitionStateEntryEvidenceSummary
     calculations: dict[str, TransitionStateCalculationSlot] = Field(default_factory=dict)
     dependencies: list[TransitionStateDependency] = Field(default_factory=list)
-    trust: TrustFragment | None = None
+    trust: TransitionStateTrustFragment | None = None
 
 
 # ---------------------------------------------------------------------------

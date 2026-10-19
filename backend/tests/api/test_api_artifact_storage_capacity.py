@@ -79,6 +79,7 @@ from app.services import artifact_storage
 from app.services import artifact_storage_capacity as capacity
 from app.services import artifact_storage_seaweedfs as seaweedfs
 from tests.api.artifact_urls import artifacts_url
+from tests.id_leak import id_in_text
 
 CONFORMER_PAYLOAD: dict = {
     "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
@@ -780,7 +781,7 @@ def test_the_operator_view_exposes_no_row_ids(
         "refused_bytes",
     }
     # Neither the row id nor the store's prose (which carries a digest).
-    assert str(event.id) not in str(body.get("s3_code"))
+    assert not id_in_text(event.id, str(body.get("s3_code")))
     assert "deadbeef" not in str(body)
 
 

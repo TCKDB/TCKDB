@@ -44,6 +44,7 @@ from app.services.statmech_resolution import (
     evaluate_frequency_scale_factor_software,
 )
 from app.workflows.statmech import persist_statmech_upload
+from tests.id_leak import id_in_text
 
 _LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
 _FSF_LOT = {"method": "wB97X-D", "basis": "def2-TZVP"}
@@ -139,7 +140,7 @@ def test_mismatch_warns(db_conn) -> None:
         assert "Gaussian" in warnings[0].message
         assert "ORCA" in warnings[0].message
         # No-ID-leak rule: the message names software, never a row id.
-        assert str(statmech.id) not in warnings[0].message
+        assert not id_in_text(statmech.id, warnings[0].message)
 
 
 # ---------------------------------------------------------------------------
