@@ -236,3 +236,64 @@ def test_create_app_fails_when_a_startup_registry_is_malformed() -> None:
     broken.register("thing", 1, "a", current=False)
     with pytest.raises(ValueError, match="no current version for thing"):
         app_module.create_app()
+
+
+# -- every registry in app is seen by the startup check ------------------------
+
+
+def _unchecked_registries(modules: dict[str, object]) -> list[str]:
+    """``module.attr`` of each module-level ``VersionRegistry`` not built with ``startup_checked=True``.
+
+    Looks at module attributes and one level of dict/list/tuple values, which is where a registry
+    kept in a table of families would sit.
+    """
+    found = []
+    for module_name, module in sorted(modules.items()):
+        for attr, value in vars(module).items():
+            candidates = [value]
+            if isinstance(value, dict):
+                candidates = list(value.values())
+            elif isinstance(value, (list, tuple)):
+                candidates = list(value)
+            for candidate in candidates:
+                if isinstance(candidate, VersionRegistry) and not candidate.startup_checked:
+                    found.append(f"{module_name}.{attr} ({candidate.family})")
+    return found
+
+
+def test_every_registry_in_app_is_startup_checked() -> None:
+    """Import all of ``app`` and require every module-level registry to opt in to the startup check.
+
+    TODAY THIS HOLDS BECAUSE THERE ARE NO REGISTRIES IN ``app`` YET: ``app/versioning.py`` is the only
+    thing this change adds, and the families that will use it arrive in later PRs. The assertion that
+    the sweep reached the code is on the module count, and the planted-registry test below proves the
+    detector bites; neither needs a registry invented here. When a later PR adds one with
+    ``startup_checked=False`` (the default), this fails and says which.
+    """
+    import importlib
+    import pkgutil
+    import sys
+
+    import app
+
+    for info in pkgutil.walk_packages(app.__path__, "app."):
+        importlib.import_module(info.name)
+    modules = {name: mod for name, mod in sys.modules.items() if name.startswith("app.") and mod is not None}
+    assert len(modules) > 300, f"only {len(modules)} app modules were imported"
+    assert "app.versioning" in modules
+    assert _unchecked_registries(modules) == []
+
+
+def test_the_sweep_finds_a_planted_unchecked_registry_and_ignores_checked_ones() -> None:
+    import types
+
+    planted = types.ModuleType("app.planted")
+    planted.LOOSE = VersionRegistry("loose")  # type: ignore[attr-defined]
+    planted.CHECKED = VersionRegistry("checked", startup_checked=True)  # type: ignore[attr-defined]
+    planted.TABLE = {"a": VersionRegistry("in_a_table")}  # type: ignore[attr-defined]
+    planted.NOT_A_REGISTRY = {"a": 1}  # type: ignore[attr-defined]
+    found = _unchecked_registries({"app.planted": planted})
+    assert sorted(found) == ["app.planted.LOOSE (loose)", "app.planted.TABLE (in_a_table)"]
+    clean = types.ModuleType("app.clean")
+    clean.OK = VersionRegistry("ok", startup_checked=True)  # type: ignore[attr-defined]
+    assert _unchecked_registries({"app.clean": clean}) == []

@@ -133,6 +133,52 @@ def test_every_allowance_has_a_reason_and_matches_something() -> None:
         ), f"allowance ({path}, {kind}, {token}) matches nothing; delete it"
 
 
+def _debt_checker():  # type: ignore[no-untyped-def]
+    import importlib.util
+
+    script = REPO_ROOT / "backend" / "scripts" / "check_versioned_debt_not_grown.py"
+    spec = importlib.util.spec_from_file_location("check_versioned_debt_not_grown", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_debt_module_is_in_the_plain_shape_the_growth_check_reads() -> None:
+    """DEBT, ALLOWED and NEW_ALLOWANCES are each bound once, as literal tuples, in the module this file imports.
+
+    ``scripts/check_versioned_debt_not_grown.py`` reads the file as text and refuses any other shape,
+    so a second ``DEBT = DEBT + (...)``, a ``DEBT`` imported from elsewhere, or a computed tuple fails
+    here as well as in the repo gate. The parsed values must equal what this module imported, which
+    is what proves the text the script reads and the object the tests use are the same thing.
+    """
+    from tests import versioned_names_debt
+
+    checker = _debt_checker()
+    source = Path(versioned_names_debt.__file__).read_text(encoding="utf-8")
+    assert checker.parse_debt(source) == {(p, k, t): n for p, k, t, n, _pr in DEBT}
+    assert checker.parse_allowed(source) == {(p, k, t): reason for p, k, t, reason in ALLOWED}
+    assert checker.parse_new_allowances(source) == set(versioned_names_debt.NEW_ALLOWANCES)
+    assert DEBT is versioned_names_debt.DEBT
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        "DEBT = DEBT + (('a.py', 'identifier', 'X_V1', 1, 'PR-3'),)\n",
+        "DEBT += (('a.py', 'identifier', 'X_V1', 1, 'PR-3'),)\n",
+        "from elsewhere import DEBT\n",
+    ],
+)
+def test_the_shape_check_refuses_a_second_binding(extra: str) -> None:
+    from tests import versioned_names_debt
+
+    checker = _debt_checker()
+    source = Path(versioned_names_debt.__file__).read_text(encoding="utf-8") + extra
+    with pytest.raises(checker.DebtFileError, match="exactly once"):
+        checker.parse_debt(source)
+
+
 def test_the_debt_and_the_allowances_do_not_overlap() -> None:
     assert not [row for row in DEBT if _allowance(row[:3])]
 

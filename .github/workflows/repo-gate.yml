@@ -141,10 +141,19 @@ jobs:
       #   compares against the merge base's copy of the list, read through git.
       #   It is here because this job has the full history (the backend gates use a
       #   depth-1 checkout with no merge base) and needs only the standard library.
+      #
+      #   BASE BY EVENT. A pull request compares with its base sha. A push to main
+      #   compares with ``github.event.before`` (the tip it replaced), so the push is a
+      #   real check and not a comparison of a commit with itself. ``workflow_dispatch``
+      #   has no ``before`` and falls back to the default branch's remote tip. The
+      #   all-zero ``before`` of a push that created a branch is passed through and the
+      #   script FAILS CLOSED on it (exit 2): skipping would report success having
+      #   compared nothing, and the pull request that carried the change was checked
+      #   against its real base anyway.
       - name: The versioned-names debt list has not grown
         run: >-
           python backend/scripts/check_versioned_debt_not_grown.py
-          --base-ref "${{ github.event.pull_request.base.sha || github.sha }}"
+          --base-ref "${{ github.event.pull_request.base.sha || github.event.before || format('origin/{0}', github.event.repository.default_branch) }}"
           --head-ref "${{ github.event.pull_request.head.sha || github.sha }}"
 
       - name: The debt-growth check works

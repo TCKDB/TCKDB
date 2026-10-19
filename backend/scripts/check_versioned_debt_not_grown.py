@@ -41,23 +41,97 @@ DEBT_PATH = "backend/tests/versioned_names_debt.py"
 Row = tuple[str, str, str, int, str]
 
 
+class DebtFileError(ValueError):
+    """The debt module is not in the plain shape this check can read safely."""
+
+
+def literal_binding(source: str, name: str) -> tuple[object, ...]:
+    """The value of the one top-level ``name = <literal tuple>`` in *source*, strictly.
+
+    Refused (``DebtFileError``): no binding, more than one binding of the name
+    anywhere in the module (a second ``DEBT = DEBT + (...)``, an augmented
+    assignment, a loop target, an import or a def of the same name all count),
+    and a value that is not a plain literal tuple. Reading the first assignment
+    and ignoring the rest is how a later ``DEBT = DEBT + ((new row),)`` would
+    slip a row past a check that only parsed the first.
+    """
+    tree = ast.parse(source)
+    bindings = 0
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == name and isinstance(node.ctx, (ast.Store, ast.Del)):
+            bindings += 1
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == name:
+            bindings += 1
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            bindings += sum(1 for alias in node.names if (alias.asname or alias.name.split(".")[0]) == name)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)) and name in node.names:
+            bindings += 1
+    if bindings != 1:
+        raise DebtFileError(f"{name} must be bound exactly once in the debt module; found {bindings} bindings")
+    value: ast.expr | None = None
+    for node in tree.body:
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == name:
+            value = node.value
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            if node.targets[0].id == name:
+                value = node.value
+    if value is None:
+        raise DebtFileError(f"{name} must be a top-level assignment of a literal tuple")
+    if not isinstance(value, ast.Tuple):
+        raise DebtFileError(f"{name} must be a plain literal tuple, not {type(value).__name__}")
+    parsed = ast.literal_eval(value)
+    if not isinstance(parsed, tuple):
+        raise DebtFileError(f"{name} must be a plain literal tuple")
+    return parsed
+
+
 def parse_debt(source: str) -> dict[tuple[str, str, str], int]:
     """``DEBT`` from the source of the debt module, without importing it."""
-    for node in ast.parse(source).body:
-        value: ast.expr | None = None
-        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "DEBT":
-            value = node.value
-        elif (
-            isinstance(node, ast.Assign)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-            and node.targets[0].id == "DEBT"
-        ):
-            value = node.value
-        if value is not None:
-            rows = ast.literal_eval(value)
-            return {(path, kind, token): count for path, kind, token, count, _pr in rows}
-    raise ValueError("no DEBT assignment found")
+    rows = literal_binding(source, "DEBT")
+    result: dict[tuple[str, str, str], int] = {}
+    for row in rows:
+        if not (isinstance(row, tuple) and len(row) == 5 and isinstance(row[3], int)):
+            raise DebtFileError(f"a DEBT row is not (path, kind, token, count, pr): {row!r}")
+        path, kind, token, count, _pr = row
+        result[(path, kind, token)] = count
+    return result
+
+
+def parse_allowed(source: str) -> dict[tuple[str, str, str], str]:
+    """``ALLOWED`` as {(path glob, kind, token glob): reason}."""
+    result: dict[tuple[str, str, str], str] = {}
+    for row in literal_binding(source, "ALLOWED"):
+        if not (isinstance(row, tuple) and len(row) == 4):
+            raise DebtFileError(f"an ALLOWED row is not (path, kind, token, reason): {row!r}")
+        result[(row[0], row[1], row[2])] = row[3]
+    return result
+
+
+def parse_new_allowances(source: str) -> set[tuple[str, str, str]]:
+    """``NEW_ALLOWANCES``: the allowances this change says it adds."""
+    return {tuple(row) for row in literal_binding(source, "NEW_ALLOWANCES")}  # type: ignore[misc]
+
+
+def new_allowances(
+    base: dict[tuple[str, str, str], str],
+    head: dict[tuple[str, str, str], str],
+    declared: set[tuple[str, str, str]],
+) -> tuple[list[str], list[str]]:
+    """(problems, notices): an ALLOWED entry the base lacks must be declared in NEW_ALLOWANCES.
+
+    A widened glob is a different key, so it counts as new. The declaration is
+    a marker, not a permission: the script prints every new entry with its
+    reason so the reviewer sees it, and an undeclared one fails.
+    """
+    problems, notices = [], []
+    for key in sorted(set(head) - set(base)):
+        if key in declared:
+            notices.append(f"NEW ALLOWANCE for the reviewer: {key!r}: {head[key]}")
+        else:
+            problems.append(f"new allowance {key!r} is not declared in NEW_ALLOWANCES")
+    for key in sorted(declared - set(head)):
+        problems.append(f"NEW_ALLOWANCES names {key!r}, which is not in ALLOWED")
+    return problems, notices
 
 
 def grown(base: dict[tuple[str, str, str], int], head: dict[tuple[str, str, str], int]) -> list[str]:
@@ -86,6 +160,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if not args.base_ref.strip("0") or not args.base_ref.strip():
+        print(
+            "the base ref is empty or all zeros (a push that created a branch has no 'before'). "
+            "Failing closed: a check with nothing to compare against must not report success.",
+            file=sys.stderr,
+        )
+        return 2
+
     merge_base = _git(args.repo, "merge-base", args.base_ref, args.head_ref or "HEAD")
     if merge_base.returncode != 0:
         print(
@@ -101,20 +183,44 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{DEBT_PATH} does not exist at the merge base ({base_sha[:9]}): the guard is being introduced.")
         return 0
 
+    try:
+        base_debt = parse_debt(base_file.stdout)
+    except DebtFileError as exc:
+        print(f"the merge base's debt file is unreadable ({exc}); fix main first", file=sys.stderr)
+        return 2
+
     if args.head_ref:
         head_file = _git(args.repo, "show", f"{args.head_ref}:{DEBT_PATH}")
-        if head_file.returncode != 0:
-            print(f"{DEBT_PATH} is missing at {args.head_ref}: deleted (the programme is finished).")
-            return 0
-        head_source = head_file.stdout
+        head_source = head_file.stdout if head_file.returncode == 0 else None
     else:
         path = Path(args.repo) / DEBT_PATH
-        if not path.exists():
-            print(f"{DEBT_PATH} is missing in the working tree.")
-            return 0
-        head_source = path.read_text(encoding="utf-8")
+        head_source = path.read_text(encoding="utf-8") if path.exists() else None
 
-    problems = grown(parse_debt(base_file.stdout), parse_debt(head_source))
+    if head_source is None:
+        if not base_debt:
+            print(f"{DEBT_PATH} is gone and the merge base's DEBT was already empty: the programme is finished.")
+            return 0
+        print(
+            f"{DEBT_PATH} is missing at the head but the merge base still lists {len(base_debt)} debt rows. "
+            "Deleting the file is not a way to clear them; fix the violations.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        head_debt = parse_debt(head_source)
+        problems = grown(base_debt, head_debt)
+        allow_problems, notices = new_allowances(
+            parse_allowed(base_file.stdout),
+            parse_allowed(head_source),
+            parse_new_allowances(head_source),
+        )
+    except DebtFileError as exc:
+        print(f"{DEBT_PATH} at the head is not in the shape this check reads: {exc}", file=sys.stderr)
+        return 1
+    problems += allow_problems
+    for notice in notices:
+        print(notice)
     if problems:
         print(f"The versioned-names debt grew relative to the merge base {base_sha[:9]}:", file=sys.stderr)
         for problem in problems:

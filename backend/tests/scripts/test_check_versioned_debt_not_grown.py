@@ -28,9 +28,19 @@ _spec.loader.exec_module(checker)
 DEBT_REL = checker.DEBT_PATH
 
 
-def _debt_source(rows: list[tuple[str, str, str, int, str]]) -> str:
+def _debt_source(
+    rows: list[tuple[str, str, str, int, str]],
+    allowed: tuple[tuple[str, str, str, str], ...] = (),
+    new: tuple[tuple[str, str, str], ...] = (),
+    extra: str = "",
+) -> str:
     body = "".join(f"    {row!r},\n" for row in rows)
-    return f"COMPLETED_PRS = frozenset()\nDEBT: tuple[tuple[str, str, str, int, str], ...] = (\n{body})\n"
+    return (
+        "COMPLETED_PRS = frozenset()\n"
+        f"NEW_ALLOWANCES = {new!r}\n"
+        f"ALLOWED = {allowed!r}\n"
+        f"DEBT: tuple[tuple[str, str, str, int, str], ...] = (\n{body})\n{extra}"
+    )
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -43,13 +53,18 @@ def _git(repo: Path, *args: str) -> str:
     return done.stdout.strip()
 
 
-def _commit(repo: Path, rows: list[tuple[str, str, str, int, str]] | None, message: str) -> str:
+def _commit(
+    repo: Path,
+    rows: list[tuple[str, str, str, int, str]] | None,
+    message: str,
+    source: str | None = None,
+) -> str:
     path = repo / DEBT_REL
     path.parent.mkdir(parents=True, exist_ok=True)
     if rows is None:
         path.unlink(missing_ok=True)
     else:
-        path.write_text(_debt_source(rows))
+        path.write_text(source if source is not None else _debt_source(rows))
     (repo / "marker.txt").write_text(message)
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", message)
@@ -75,10 +90,12 @@ def _run(repo: Path, base: str, head: str | None = None) -> int:
     return int(checker.main(argv))
 
 
-def _branch(repo: Path, rows: list[tuple[str, str, str, int, str]]) -> tuple[str, str]:
-    base = _commit(repo, BASE_ROWS, "base")
+def _branch(
+    repo: Path, rows: list[tuple[str, str, str, int, str]], source: str | None = None, base_source: str | None = None
+) -> tuple[str, str]:
+    base = _commit(repo, BASE_ROWS, "base", base_source)
     _git(repo, "checkout", "-q", "-b", "feature")
-    head = _commit(repo, rows, "feature")
+    head = _commit(repo, rows, "feature", source)
     return base, head
 
 
@@ -127,14 +144,100 @@ def test_a_branch_behind_main_is_measured_against_its_merge_base(repo: Path) -> 
     assert base != tip
 
 
-def test_a_deleted_debt_file_at_head_passes(repo: Path) -> None:
-    base, head = _branch(repo, [])
-    path = repo / DEBT_REL
-    path.unlink()
+def test_deleting_the_debt_file_while_the_base_still_lists_rows_is_refused(repo: Path) -> None:
+    base, _ = _branch(repo, BASE_ROWS)
+    (repo / DEBT_REL).unlink()
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "delete the debt file")
+    assert _run(repo, base, _git(repo, "rev-parse", "HEAD")) == 1
+
+
+def test_deleting_the_debt_file_when_the_base_debt_is_already_empty_passes(repo: Path) -> None:
+    base, _ = _branch(repo, [], base_source=_debt_source([]))
+    (repo / DEBT_REL).unlink()
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "programme finished")
     assert _run(repo, base, _git(repo, "rev-parse", "HEAD")) == 0
-    assert head != base
+
+
+def test_moving_debt_out_of_the_module_is_refused(repo: Path) -> None:
+    moved = "from elsewhere import DEBT\nALLOWED = ()\nNEW_ALLOWANCES = ()\n"
+    base, head = _branch(repo, [], source=moved)
+    assert _run(repo, base, head) == 1
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        "DEBT = DEBT + (('backend/app/new.py', 'identifier', 'NEW_V1', 1, 'PR-3'),)\n",
+        "DEBT += (('backend/app/new.py', 'identifier', 'NEW_V1', 1, 'PR-3'),)\n",
+        "DEBT: tuple = ()\n",
+        "for DEBT in ((),):\n    pass\n",
+        "def DEBT():\n    return ()\n",
+        "from x import DEBT\n",
+    ],
+)
+def test_a_second_binding_of_debt_is_refused(repo: Path, extra: str, capsys: pytest.CaptureFixture[str]) -> None:
+    base, head = _branch(repo, BASE_ROWS, source=_debt_source(BASE_ROWS, extra=extra))
+    assert _run(repo, base, head) == 1
+    assert "exactly once" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "assignment",
+    ["DEBT = tuple(ROWS)", "DEBT = [('a', 'b', 'c', 1, 'PR-3')]", "DEBT = BASE + OTHER", "DEBT = ()  if True else ()"],
+)
+def test_debt_must_be_a_plain_literal_tuple(repo: Path, assignment: str, capsys: pytest.CaptureFixture[str]) -> None:
+    source = f"ROWS = ()\nBASE = ()\nOTHER = ()\nALLOWED = ()\nNEW_ALLOWANCES = ()\n{assignment}\n"
+    base, head = _branch(repo, [], source=source)
+    assert _run(repo, base, head) == 1
+    assert "literal tuple" in capsys.readouterr().err
+
+
+def test_a_zero_or_empty_base_fails_closed(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _commit(repo, BASE_ROWS, "base")
+    assert _run(repo, "0" * 40) == 2
+    assert "Failing closed" in capsys.readouterr().err
+    assert _run(repo, "") == 2
+
+
+ALLOW = ("backend/app/x/*.py", "string", "tool/*", "A third party's own name, recorded as given by the tool.")
+
+
+def test_a_new_allowance_must_be_declared(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    base, head = _branch(repo, BASE_ROWS, source=_debt_source(BASE_ROWS, allowed=(ALLOW,)), base_source=_debt_source(BASE_ROWS))
+    assert _run(repo, base, head) == 1
+    assert "not declared in NEW_ALLOWANCES" in capsys.readouterr().err
+
+
+def test_a_declared_new_allowance_passes_and_is_printed_for_the_reviewer(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = _debt_source(BASE_ROWS, allowed=(ALLOW,), new=(ALLOW[:3],))
+    base, head = _branch(repo, BASE_ROWS, source=source, base_source=_debt_source(BASE_ROWS))
+    assert _run(repo, base, head) == 0
+    out = capsys.readouterr().out
+    assert "NEW ALLOWANCE for the reviewer" in out and ALLOW[3] in out
+
+
+def test_a_widened_glob_counts_as_a_new_allowance(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    widened = (ALLOW[0], ALLOW[1], "*", ALLOW[3])
+    base, head = _branch(
+        repo, BASE_ROWS, source=_debt_source(BASE_ROWS, allowed=(widened,)), base_source=_debt_source(BASE_ROWS, allowed=(ALLOW,))
+    )
+    assert _run(repo, base, head) == 1
+    assert "not declared" in capsys.readouterr().err
+
+
+def test_an_unchanged_allowance_list_passes(repo: Path) -> None:
+    source = _debt_source(BASE_ROWS, allowed=(ALLOW,))
+    base, head = _branch(repo, BASE_ROWS, source=source, base_source=source)
+    assert _run(repo, base, head) == 0
+
+
+def test_declaring_an_allowance_that_is_not_in_allowed_is_refused(repo: Path) -> None:
+    base, head = _branch(repo, BASE_ROWS, source=_debt_source(BASE_ROWS, new=(ALLOW[:3],)))
+    assert _run(repo, base, head) == 1
 
 
 def test_a_base_without_the_debt_file_means_the_guard_is_being_introduced(repo: Path) -> None:
@@ -172,3 +275,12 @@ def test_the_repo_gate_runs_the_check_with_the_base_and_head_shas() -> None:
     workflow = (Path(__file__).resolve().parents[3] / ".github" / "workflows" / "repo-gate.yml").read_text()
     assert "backend/scripts/check_versioned_debt_not_grown.py" in workflow
     assert "fetch-depth: 0" in workflow
+
+
+def test_a_push_is_compared_with_the_commit_it_replaced() -> None:
+    """On a push ``github.sha`` is the head, so using it as the base compares a commit with itself."""
+    workflow = (Path(__file__).resolve().parents[3] / ".github" / "workflows" / "repo-gate.yml").read_text()
+    step = workflow[workflow.index("check_versioned_debt_not_grown.py\n") :]
+    step = step[: step.index("--head-ref")]
+    assert "github.event.pull_request.base.sha || github.event.before" in step
+    assert "github.sha" not in step

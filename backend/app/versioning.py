@@ -93,6 +93,7 @@ class VersionRegistry(Generic[T]):
         instead of failing on the first request that asks for that name.
         """
         self.family = family
+        self.startup_checked = startup_checked
         self._impls: dict[str, dict[int, T]] = {}
         self._current: dict[str, int] = {}
         if startup_checked:

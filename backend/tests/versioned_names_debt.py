@@ -28,6 +28,13 @@ from __future__ import annotations
 #: each later PR adds itself here in the same change that empties its rows.
 COMPLETED_PRS: frozenset[str] = frozenset()
 
+#: Allowances this change adds, as (path glob, kind, token glob). A new ``ALLOWED`` entry, or a
+#: widened glob (a different key), that the merge base does not have fails
+#: ``scripts/check_versioned_debt_not_grown.py`` unless it is named here; naming it makes the
+#: script print the entry and its reason for the reviewer. Empty when nothing is being added.
+#: Bound exactly once, as a literal tuple: the script refuses anything else.
+NEW_ALLOWANCES: tuple[tuple[str, str, str], ...] = ()
+
 #: (path glob, kind, token glob, reason). ``path`` is repo-relative.
 ALLOWED: tuple[tuple[str, str, str, str], ...] = (
     (
