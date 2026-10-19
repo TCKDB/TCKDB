@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import pytest
 
+from tests.id_leak import id_in_text
+
 
 @pytest.fixture
 def seeded_geometry(db_session):
@@ -54,7 +56,7 @@ def test_unknown_integer_handle_returns_sanitized_404(client, label, path):
     body = r.json()
     assert body.get("code") == "handle_not_found"
     # The integer probe value must not appear in the public body.
-    assert str(_UNKNOWN_INT) not in repr(body)
+    assert not id_in_text(_UNKNOWN_INT, repr(body))
 
 
 def test_unknown_ref_handle_uses_same_code_as_unknown_int(client):

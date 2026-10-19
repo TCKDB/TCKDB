@@ -62,6 +62,7 @@ from app.services.upload_reference import (
     W_UNKNOWN_CALCULATION_REF,
     unknown_reference,
 )
+from tests.id_leak import id_in_text
 from tests.services.scientific_read._factories import (
     make_calculation,
     make_species,
@@ -142,7 +143,7 @@ def _missing(response, *, code: str, field: str, kind: str) -> dict:
     # No row id, under any key: not the one the caller sent, not any other.
     leaked = [key for key in context if key == "id" or key.endswith("_id")]
     assert not leaked, f"{code} leaked database ids into context: {leaked}"
-    assert str(_ABSENT) not in str(body), body
+    assert not id_in_text(_ABSENT, str(body)), body
     return body
 
 
@@ -316,7 +317,7 @@ def test_no_refusal_here_echoes_the_row_id(client, methyl):
     ]
     for response in bodies:
         assert response.status_code == 404, response.text[:400]
-        assert str(_ABSENT) not in response.text, response.text[:400]
+        assert not id_in_text(_ABSENT, response.text), response.text[:400]
 
 
 # ---------------------------------------------------------------------------

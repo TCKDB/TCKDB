@@ -38,6 +38,7 @@ from app.services.artifact_storage import (
     ArtifactStorageUnavailable,
 )
 from app.services.deposit_ownership import user_owns_calculation_deposit
+from tests.id_leak import id_in_text
 from tests.services.test_artifact_integrity import _SessionProxy
 
 #: Where the explanatory log line for a download 502/503 is now emitted.
@@ -610,7 +611,7 @@ def test_store_reporting_no_such_key_is_recorded_as_a_missing_object(
     )
     # No database primary key in a user-facing body (DR-0028 Req 2).
     assert body["context"] == {}, body
-    assert str(artifact.id) not in body["detail"], body
+    assert not id_in_text(artifact.id, body["detail"]), body
 
     (event,) = _events_for(db_session, artifact.sha256)
     assert event.finding is ArtifactIntegrityFinding.object_missing

@@ -614,6 +614,8 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "ValidationSummary",
         "SCFStabilitySummary",
         "StoredKineticsProtocolCalculationRef",
+        # #723
+        "TransitionStateScopedAssessmentUnit",
         # PR-2c
         "NetworkContextSummary",
         "NetworkKineticsNetworkContext",

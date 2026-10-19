@@ -244,7 +244,9 @@ def _shapes(world):
         (tsr.TransitionStateEntryStatmech, concept_all),
         (tsr.TransitionStateEntryValidationEvidence, concept_all),
         (tsr.ScientificTransitionStateEntryRecord, entry_all),
-        (tsr.TransitionStateSaddlePointEvidence, entry_all),
+        # TransitionStateSaddlePointEvidence is deliberately not here (#723): the block is now built from the calculations
+        # the profile shows (hidden == absent at the source), so unregistering it changes no answer. It stays registered as
+        # the second line of defence; ``test_the_saddle_point_block_stays_registered_behind_the_source_filter`` pins that.
         (tsr.TransitionStateValidationEvidenceSummary, entry_all),
         (tsr.TransitionStateComparedEnergySummary, entry_all),
         (prov.ReactionFullCalculationEvidenceSummary, full_all),
@@ -296,6 +298,12 @@ def test_every_block_the_family_registers_is_reached_and_matters(client, db_sess
         assert answer is None or json.loads(answer) != json.loads(registered.text), (
             f"unregistering {model.__name__} changed nothing on {route}: the world does not reach it"
         )
+
+
+def test_the_saddle_point_block_stays_registered_behind_the_source_filter():
+    from app.schemas.reads import scientific_transition_state as tsr
+
+    assert tsr.TransitionStateSaddlePointEvidence in ref_guard.POINTER_MODELS
 
 
 def test_the_untyped_irc_block_of_a_kinetics_provenance_goes_whole(client, db_session, login_as, monkeypatch):

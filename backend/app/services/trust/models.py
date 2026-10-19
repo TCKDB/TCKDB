@@ -27,6 +27,7 @@ always emitted as ``False`` by the evaluator.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Optional
 
@@ -410,6 +411,127 @@ class TrustFragment(BaseModel):
     evidence: dict
     llm_precheck: TrustLLMPrecheck = Field(default_factory=TrustLLMPrecheck)
     is_certified: bool = False
+
+
+class TransitionStateScopedAssessmentStatus(str, Enum):
+    """Whether, and how, the structure assessment was run for the transition-state badge (#723).
+
+    * ``assessed`` -- the entry declares at least one saddle or geometry target and the assessment ran.
+    * ``no_declared_target`` -- the entry declares none, so there is nothing to assess. Not a missing check.
+    * ``not_assessed_on_lists`` -- this surface lists several entries (browse, search, a reaction document, the
+      sibling entries of a detail read). The assessment runs on a single-entry detail read only, so the same entry
+      renders the same on every list page.
+    * ``not_assessed_over_bound`` -- the assessment refused on the server's fixed bounds; nothing is inferred from a
+      subset. ``refusal_code`` names the bound.
+    """
+
+    assessed = "assessed"
+    no_declared_target = "no_declared_target"
+    not_assessed_on_lists = "not_assessed_on_lists"
+    not_assessed_over_bound = "not_assessed_over_bound"
+
+
+class TransitionStateScopedAssessmentOutcome(str, Enum):
+    """The decision's outcome for the badge's evidence-only question: the three the question can return.
+
+    The structure-selection outcome vocabulary, narrowed to what ``qualify_evidence`` over known values can produce
+    (the other outcomes need an energy, an ordering or a complete-profile claim, none of which the badge asks). Mirrored
+    here because this module must not import the structure-selection package (a cycle through the read schemas); a
+    test pins every member to a ``StructureOutcome`` of the same value.
+    """
+
+    qualified_evidence = "qualified_evidence"
+    no_applicable_candidate = "no_applicable_candidate"
+    evidence_conflict = "evidence_conflict"
+
+
+class TransitionStateScopedAssessmentTask(BaseModel):
+    """The one fixed question the badge asks, as the request body ``POST .../evidence/select`` takes.
+
+    Evidence only (owner decision O1): which declared saddle targets are supported by the evidence for a conventional
+    first-order saddle, with no energy asked and no reactive-connectivity requirement. Send these fields to the
+    evidence-selection endpoint of the same entry and the answer is the one in ``outcome`` and ``units``.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    intent: str = "qualify_evidence"
+    quantity: Optional[str] = None
+    validation_claim: str = "first_order_saddle"
+    require_connectivity: bool = False
+    coverage_requirement: str = "known_values"
+
+
+class TransitionStateScopedAssessmentUnit(BaseModel):
+    """One assessed declared target: its public ref and the codes the assessment gave it. Codes only."""
+
+    model_config = ConfigDict(frozen=True)
+
+    unit_ref: str
+    applicability: str
+    blocking: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+
+
+class TransitionStateScopedAssessment(BaseModel):
+    """The structure assessment's answer for the badge's fixed question, as part of the transition-state trust fragment.
+
+    Read-only and advisory. It never moves the badge, the completeness numbers or ``is_certified``; the only thing it
+    changes in the checks is the zero-weight warning ``declared_saddle_target_qualifies``. ``outcome`` is the
+    assessment's own outcome: ``qualified_evidence`` says a declared target is supported for the question asked,
+    nothing more, and any other outcome says the declared target needs investigation, not that the transition state is
+    disproved.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    status: TransitionStateScopedAssessmentStatus
+    task: TransitionStateScopedAssessmentTask = Field(default_factory=TransitionStateScopedAssessmentTask)
+    declared_targets: Optional[int] = None
+    outcome: Optional[TransitionStateScopedAssessmentOutcome] = None
+    qualifying_refs: list[str] = Field(default_factory=list)
+    contested_target_count: int = 0
+    units: list[TransitionStateScopedAssessmentUnit] = Field(default_factory=list)
+    refusal_code: Optional[str] = None
+    versions: Optional[dict[str, str]] = None
+
+
+class TransitionStateTrustFragment(TrustFragment):
+    """:class:`TrustFragment` for a transition-state entry: the badge plus the scoped structure assessment (#723).
+
+    A subclass, not a field on :class:`TrustFragment`, so every other record type's fragment is unchanged.
+    """
+
+    structure_assessment: TransitionStateScopedAssessment
+
+
+def frequency_result_designates_its_reaction_coordinate(n_imag: Optional[int], mode_index: Optional[int]) -> bool:
+    """Whether a frequency result passes the required ``reaction_coordinate_designated_for_ts`` check.
+
+    One imaginary mode needs no designation, more than one needs a designated mode, none or an unrecorded count fails
+    (ADR 0012). It is the single rule the trust rubric and the saddle-point block share when several declared targets
+    each pin a frequency result (owner decision, 2026-10-19): the result that passes is the one both describe.
+    """
+    if n_imag is None or n_imag == 0:
+        return False
+    if n_imag == 1:
+        return True
+    return mode_index is not None
+
+
+@dataclass(frozen=True)
+class TransitionStateTrustContext:
+    """What the transition-state rubric reads beyond the loaded graph, computed by the caller before evaluation.
+
+    Check runners are pure and issue no queries, so the scoped assessment (which does) is run first and handed in.
+    ``declared_curvature_refs`` are the public refs of the calculations the entry's declared targets pin in role
+    ``curvature``; the frequency-presence checks use them to choose the representative result (owner decision O2).
+    The evaluator takes this as a required keyword argument with no default: a caller that forgets it fails loudly
+    instead of silently falling back to the unscoped answer.
+    """
+
+    assessment: TransitionStateScopedAssessment
+    declared_curvature_refs: frozenset[str] = frozenset()
 
 
 COMPLETENESS_THRESHOLDS: tuple[tuple[float, EvidenceBadge], ...] = (

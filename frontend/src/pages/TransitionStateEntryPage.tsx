@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../transition-state-entry.css"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
-import type { TransitionStateEntryRecord, TransitionStateSiblingRecord } from "../api/transitionStateEntryApi"
+import type { StructureAssessment, TransitionStateEntryRecord, TransitionStateSiblingRecord } from "../api/transitionStateEntryApi"
 import { loadTransitionStateEntry, loadTransitionStateSiblings } from "../api/transitionStateEntryApi"
 import { Disclosure } from "../components/Disclosure"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
@@ -347,6 +347,12 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                     <dd>{statusLabel(trust.trust_status)} · {trust.evidence.passed_count}/{trust.evidence.possible_count}</dd>
                                 </div>
                             )}
+                            {trust?.structure_assessment && (
+                                <div>
+                                    <dt>Structure assessment</dt>
+                                    <dd>{structureAssessmentSentence(trust.structure_assessment)}</dd>
+                                </div>
+                            )}
                         </dl>
                         {trust && <TrustWarnings checks={trust.evidence.checks} />}
                         <RefsDisclosure refs={refs} />
@@ -681,6 +687,7 @@ function SaddlePointStatement({ saddlePoint, evidence }: {
         <p className="tse-saddle-point">
             <strong>{verdict}</strong> · {lotText} · <Link to={`/calculations/${saddlePoint.calculation_ref}`}>{saddlePoint.calculation_ref}</Link>
             {saddlePoint.imaginary_mode_structural_flag ? " · flagged as a higher-order saddle point" : ""}
+            {saddlePoint.basis === "declared_curvature_witness" ? " · the frequency result the declared saddle target pins" : ""}
         </p>
     )
 }
@@ -697,6 +704,38 @@ const TRUST_WARNING_SENTENCES: Record<string, string> = {
         "An attached frequency result reports several imaginary modes and does not say which is the reaction coordinate",
     extra_imaginary_modes_not_flagged: "The frequency result carries the recorded structural flag for an extra imaginary mode",
     geometry_validation_not_failed_for_source_calculations: "An automated geometry check raised a warning",
+    declared_saddle_target_qualifies: "The structure assessment finds no declared saddle target that qualifies, or a declared target is contested",
+}
+
+// The structure assessment (`trust.structure_assessment`) in plain words. It is the assessment's own answer to one fixed
+// question -- does a declared target have the evidence for a first-order saddle -- and nothing more: a declared target that
+// qualifies is scoped to that question, and anything else is "needs investigation", never a disproof. A status or outcome
+// token this page has not been taught renders as itself, so a new server-side token is never silently dropped.
+const STRUCTURE_ASSESSMENT_OUTCOME_SENTENCES: Record<string, string> = {
+    qualified_evidence: "a declared target has the evidence for a first-order saddle. Scoped to this question.",
+    no_applicable_candidate: "no declared target qualifies for a first-order saddle — needs investigation",
+    evidence_conflict: "the declared evidence conflicts — needs investigation",
+}
+
+function structureAssessmentSentence(assessment: StructureAssessment): string {
+    switch (assessment.status) {
+        case "assessed": {
+            const outcome = assessment.outcome ?? null
+            const sentence = outcome === null
+                ? "assessed"
+                : (STRUCTURE_ASSESSMENT_OUTCOME_SENTENCES[outcome] ?? outcome)
+            const contested = (assessment.contested_target_count ?? 0) > 0 && outcome === "qualified_evidence"
+            return `Declared targets, first-order saddle question: ${sentence}${contested ? " A declared target is contested — needs investigation." : ""}`
+        }
+        case "no_declared_target":
+            return "No saddle target is declared, so the structure assessment has nothing to assess."
+        case "not_assessed_on_lists":
+            return "Not assessed on lists."
+        case "not_assessed_over_bound":
+            return "Not run: the evidence is over the server's size limits. Use the evidence-selection endpoint."
+        default:
+            return assessment.status
+    }
 }
 
 function TrustWarnings({ checks }: { checks: Record<string, string> | undefined }) {

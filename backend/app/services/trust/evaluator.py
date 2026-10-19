@@ -58,6 +58,7 @@ from app.services.trust.models import (
     EvidenceOutcome,
     EvidenceRubric,
     HardFailReason,
+    TransitionStateTrustContext,
     label_from_completeness,
 )
 from app.services.trust.rubrics import (
@@ -65,13 +66,14 @@ from app.services.trust.rubrics import (
     COMPUTED_KINETICS_V2,
     COMPUTED_STATMECH_V2,
     COMPUTED_THERMO_V2,
-    COMPUTED_TRANSITION_STATE_V4,
+    COMPUTED_TRANSITION_STATE_V5,
     COMPUTED_TRANSPORT_V2,
     COMPUTED_TS_STATMECH_V1,
     _ts_source_calculations,
     get_rubric_for_record_type,
     statmech_rubric_for,
 )
+from app.services.trust.ts_scoped import scoped_ts_context
 
 
 def select_rubric(record_type: str) -> Optional[EvidenceRubric]:
@@ -1034,6 +1036,8 @@ def evaluate_loaded_transport(
 
 def evaluate_loaded_transition_state_entry(
     transition_state_entry: TransitionStateEntry | None,
+    *,
+    context: TransitionStateTrustContext,
 ) -> EvidenceEvaluation:
     """Evaluate deterministic evidence completeness for a loaded TS entry.
 
@@ -1047,8 +1051,13 @@ def evaluate_loaded_transition_state_entry(
     ``geometry_validation``, ``artifacts``, ``parent_dependencies`` /
     ``child_dependencies`` (both directions), and the linked calcs along
     each dependency edge.
+
+    ``context`` is required and has no default (#723): it carries the scoped structure assessment and the declared
+    curvature pins the rubric reads, computed by the caller because runners never query. A caller that has no
+    assessment to offer passes :func:`app.services.trust.ts_scoped.not_assessed_on_lists_context`, which says so out
+    loud; it cannot fall back to the unscoped answer by omission.
     """
-    rubric = COMPUTED_TRANSITION_STATE_V4
+    rubric = COMPUTED_TRANSITION_STATE_V5
     if transition_state_entry is None:
         return _empty_evaluation_for_missing_transition_state_entry(None, rubric)
 
@@ -1056,7 +1065,7 @@ def evaluate_loaded_transition_state_entry(
 
     check_results: list[EvidenceCheckResult] = []
     for spec in rubric.checks:
-        outcome = spec.runner(transition_state_entry)
+        outcome = spec.runner(transition_state_entry, context)
         check_results.append(
             EvidenceCheckResult(
                 name=spec.name,
@@ -1419,6 +1428,6 @@ def evaluate_computed_transition_state_entry(
     ts_entry = session.scalars(statement).one_or_none()
     if ts_entry is None:
         return _empty_evaluation_for_missing_transition_state_entry(
-            transition_state_entry_id, COMPUTED_TRANSITION_STATE_V4
+            transition_state_entry_id, COMPUTED_TRANSITION_STATE_V5
         )
-    return evaluate_loaded_transition_state_entry(ts_entry)
+    return evaluate_loaded_transition_state_entry(ts_entry, context=scoped_ts_context(session, ts_entry))

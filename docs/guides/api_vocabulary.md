@@ -60,11 +60,11 @@ Three things are deliberately absent:
 
 | Kind of token | Count | Read from |
 | --- | --- | --- |
-| Status, badge and query words | 118 | 27 enums, declared in `backend/app/glossary/declarations.py` |
+| Status, badge and query words | 125 | 29 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
-| Trust check names | 173 | `backend/app/services/trust/rubrics.py` |
+| Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
 | Refusal codes a caller can receive | 317 | `backend/app/api/code_catalogue.py` |
-| **total** | **651** | |
+| **total** | **659** | |
 
 ## How a record is named
 
@@ -215,6 +215,31 @@ Why a record was hard-failed. Each names one discrete, evidenced structural fail
 | `frequency_source_has_zero_imaginary_modes_for_validated_ts` | Historic: stored version 2 transition-state trust results carried this when the latest frequency result reported no imaginary mode. Version 3 issues no frequency verdict; the same fact is the warning `no_frequency_result_lacks_an_imaginary_mode`, and the scoped judgement (does a usable result on the evaluated geometry contradict the saddle claim) is the structure assessment's. |
 | `frequency_source_reaction_coordinate_not_designated_for_validated_ts` | Historic: stored version 2 transition-state trust results carried this when the latest frequency result reported several imaginary modes without a designated reaction coordinate. Version 3 issues no frequency verdict; the missing designation is the missing check `reaction_coordinate_designated_for_ts`, and the structure assessment reports it as the unresolved `reaction_coordinate_not_established`. |
 
+### Transition-state structure assessment status
+
+*On the wire:* `trust.structure_assessment.status` on a transition-state entry's trust block.
+
+Whether TCKDB asked its structure assessment about the saddle this entry declares, and what came back. The assessment answers one fixed question, echoed in `trust.structure_assessment.task`: does a declared target have the evidence for a first-order saddle. It is advisory. It never changes the trust badge, the completeness numbers or `is_certified`.
+
+| Token | What it means |
+| --- | --- |
+| `assessed` | The entry declares at least one saddle target and the assessment ran under the read profile of this request. Read `outcome` and `units`. The same answer comes from sending `task` to the entry's evidence-selection endpoint. |
+| `no_declared_target` | The entry declares no saddle target that this request may see, so there is nothing to assess. This is not a missing check: the badge never required a declaration. |
+| `not_assessed_on_lists` | This response lists several entries (a search, the sibling entries of a detail read, a reaction document), and the assessment runs on a single-entry detail read only. So the same entry shows the same status on every list. Read the entry's own page for the assessment. |
+| `not_assessed_over_bound` | The assessment refused because the entry's evidence is over the server's fixed size limits, and nothing is inferred from part of it. `refusal_code` names the limit; the evidence-selection endpoint answers the same refusal. |
+
+### Transition-state structure assessment outcome
+
+*On the wire:* `trust.structure_assessment.outcome` on a transition-state entry's trust block.
+
+What the structure assessment found for the declared saddle targets, for the question in `trust.structure_assessment.task`. Only an evidence question is asked, so these are the only three outcomes. Anything but `qualified_evidence` means the declared target needs investigation; none of them says the transition state is disproved.
+
+| Token | What it means |
+| --- | --- |
+| `qualified_evidence` | At least one declared target has the evidence for the question asked, and `qualifying_refs` names it. This is scoped to that question and is not a certificate. A contested target beside it still raises the `declared_saddle_target_qualifies` warning. |
+| `no_applicable_candidate` | No declared target qualifies: each is either contradicted by its own evidence or lacks a fact the question needs. `units` says which, per target, as codes. |
+| `evidence_conflict` | The declared evidence disagrees with itself: a target with both a supporting and a contradicting determination, or a target whose only failure is a recorded finding against its evidence. |
+
 ### Reproducibility grade
 
 *On the wire:* `assessments.reproducibility.grade`.
@@ -250,7 +275,7 @@ A check name is an assertion, so read it together with its value: `"irc_evidence
 
 `kind` decides what a failure costs: **required** — failing it stops the record reaching `well_supported`, however good the ratio is; **optional** — contributes to completeness; its absence blocks no badge; **warning** — informational; carries zero weight. `weight` is that check's share of the completeness ratio.
 
-Which rubric applies is decided by the kind of record, and for a statmech record by what owns it (`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): `computed_calculation` (v2), `computed_kinetics` (v2), `computed_statmech` (v2), `computed_thermo` (v2), `computed_transition_state` (v4), `computed_transport` (v2), `computed_ts_statmech` (v1).
+Which rubric applies is decided by the kind of record, and for a statmech record by what owns it (`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): `computed_calculation` (v2), `computed_kinetics` (v2), `computed_statmech` (v2), `computed_thermo` (v2), `computed_transition_state` (v5), `computed_transport` (v2), `computed_ts_statmech` (v1).
 
 | Check | Rubric | Kind | Weight | What it asks |
 | --- | --- | --- | --- | --- |
@@ -266,6 +291,7 @@ Which rubric applies is decided by the kind of record, and for a statmech record
 | `chem_reaction_present` | `computed_transition_state` | optional | 1 | Parent reaction_entry should resolve to a chem_reaction. |
 | `correction_scheme_literature_present` | `computed_thermo` | optional | 1 | A cited software-scoped correction scheme should cite the literature its parameters come from. |
 | `correction_scheme_software_release_present` | `computed_thermo` | optional | 1 | A cited software-scoped correction scheme (atom_energy, bac_petersson, bac_melius) should declare which software release computed its parameters. |
+| `declared_saddle_target_qualifies` | `computed_transition_state` | warning | 0 | When the entry declares a saddle target: the structure assessment's first-order saddle question, asked of the evidence alone, finds a declared target that qualifies and no contested target (advisory, zero weight). A warning means the declared target needs investigation, not that the transition state is disproved, and no warning certifies nothing. The scoped answer is `trust.structure_assessment`; it is computed on a single transition-state entry read and not on lists. |
 | `dipole_present` | `computed_transport` | optional | 1 | Dipole evidence should be populated when this representation is present. |
 | `dipole_source_present_if_dipole_present` | `computed_transport` | optional | 1 | Computed dipole transport evidence should link a dipole source calculation. |
 | `epsilon_present` | `computed_transport` | optional | 1 | Lennard-Jones transport should include epsilon/k. |
@@ -294,8 +320,8 @@ Which rubric applies is decided by the kind of record, and for a statmech record
 | `geometry_validation_present_for_source_calculations` | `computed_transition_state` | optional | 1 | At least one opt/irc/path_search source calc should carry geometry validation. |
 | `geometry_validation_present_for_source_calculations` | `computed_transport` | optional | 1 | Strong source calculations should carry geometry-validation evidence. |
 | `geometry_validation_present_for_source_calculations` | `computed_ts_statmech` | optional | 1 | Strong source calculations should carry geometry-validation evidence. |
-| `imaginary_frequency_count_recorded` | `computed_transition_state` | optional | 1 | Representative freq result should record n_imag. |
-| `imaginary_frequency_value_present` | `computed_transition_state` | optional | 1 | Representative freq result should record the imaginary-mode value (cm-1). |
+| `imaginary_frequency_count_recorded` | `computed_transition_state` | optional | 1 | Representative freq result (the one a declared saddle target pins, else the newest attached) should record n_imag. |
+| `imaginary_frequency_value_present` | `computed_transition_state` | optional | 1 | Representative freq result (the one a declared saddle target pins, else the newest attached) should record the imaginary-mode value (cm-1). |
 | `input_geometry_present` | `computed_calculation` | required | 1 | At least one input geometry must be linked. |
 | `irc_evidence_present` | `computed_kinetics` | optional | 1 | IRC evidence should be linked when available. |
 | `irc_evidence_present` | `computed_transition_state` | optional | 1 | IRC calculation present (additive only) -- this checks that an IRC calculation exists in the source set, not that structured pass/fail validation evidence was deposited. |
@@ -324,7 +350,7 @@ Which rubric applies is decided by the kind of record, and for a statmech record
 | `product_energy_sources_present` | `computed_kinetics` | optional | 1 | Product energy source calculations should cover all loaded products. |
 | `quality_recorded` | `computed_calculation` | optional | 1 | An independent reviewer should have approved this calculation via record_review; self-declared CalculationQuality is not sufficient (decoupled from trust, see _check_quality_recorded). |
 | `reactant_energy_sources_present` | `computed_kinetics` | optional | 1 | Reactant energy source calculations should cover all loaded reactants. |
-| `reaction_coordinate_designated_for_ts` | `computed_transition_state` | required | 1 | Representative freq result must identify its reaction coordinate: one imaginary mode needs no designation, more than one does (ADR 0012). |
+| `reaction_coordinate_designated_for_ts` | `computed_transition_state` | required | 1 | Representative freq result (the one a declared saddle target pins, else the newest attached) must identify its reaction coordinate: one imaginary mode needs no designation, more than one does (ADR 0012). |
 | `reaction_entry_present` | `computed_kinetics` | required | 1 | Kinetics must be attached to a reaction_entry. |
 | `reaction_entry_present` | `computed_transition_state` | required | 1 | Parent transition_state must resolve to a reaction_entry. |
 | `result_block_present` | `computed_calculation` | required | 1 | Calculation must have the result block matching its type (sp/opt/freq/irc/scan/path_search). |

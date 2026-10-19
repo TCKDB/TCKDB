@@ -40,7 +40,7 @@ from app.schemas.reads.scientific_common import (
 from app.schemas.reads.scientific_species_calculations import (
     CalculationEnergyBlock,
 )
-from app.services.trust.models import TrustFragment
+from app.services.trust.models import TransitionStateTrustFragment
 
 # ---------------------------------------------------------------------------
 # Request
@@ -425,6 +425,12 @@ class TransitionStateSaddlePointEvidence(BaseModel):
     ``app.services.scientific_read.transition_states._build_saddle_point_index``
     for the exact scope this block uses.
 
+    ``basis`` says which result this is. ``latest_direct_frequency`` is the newest attached one. When one of the
+    entry's own declarations pins a frequency result in role ``curvature``, the block describes that result instead and
+    ``basis`` is ``declared_curvature_witness`` (the newest such result when several are pinned): the entry's declared
+    saddle is then the subject, and a newer unrelated rerun does not replace it. The trust projection reads the same
+    result, so the two agree.
+
     ``None`` on the parent record exactly when the entry carries no freq
     calculation with a result row — a real absence, not a zeroed-out
     struct. When present, every field below still reports its own
@@ -434,7 +440,7 @@ class TransitionStateSaddlePointEvidence(BaseModel):
     nor the structural flag at all.
     """
 
-    basis: Literal["latest_direct_frequency"] = "latest_direct_frequency"
+    basis: Literal["latest_direct_frequency", "declared_curvature_witness"] = "latest_direct_frequency"
     n_imag: int | None = None
     imag_freq_cm1: float | None = None
     reaction_coordinate_mode_index: int | None = None
@@ -603,7 +609,7 @@ class ScientificTransitionStateEntryRecord(BaseModel):
     # "there is no verdict". A record nested inside another record's
     # ``entries`` block carries it on the same terms as its parent: the
     # token governs the whole response, not one depth of it.
-    trust: TrustFragment | None = None
+    trust: TransitionStateTrustFragment | None = None
 
 
 # ---------------------------------------------------------------------------

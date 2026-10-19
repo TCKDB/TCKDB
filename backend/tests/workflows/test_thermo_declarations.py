@@ -33,6 +33,7 @@ from app.services.thermo_declaration_resolution import (
 )
 from app.services.thermo_resolution import persist_thermo
 from app.workflows.thermo import persist_thermo_upload
+from tests.id_leak import id_in_text
 from tests.services.scientific_read._factories import make_conformer_group
 
 SOFTWARE = {"name": "Gaussian", "version": "16"}
@@ -168,7 +169,7 @@ def test_a_supporting_calculation_by_key_is_stored_as_its_public_ref(db_session)
     }
     # Never a key and never an id.
     assert "opt0" not in str(thermo.protocol_declaration)
-    assert str(calc.id) not in str(thermo.protocol_declaration["supporting_calculations"])
+    assert not id_in_text(calc.id, str(thermo.protocol_declaration["supporting_calculations"]))
 
 
 def test_a_supporting_calculation_by_public_ref_resolves_and_deduplicates(db_session):

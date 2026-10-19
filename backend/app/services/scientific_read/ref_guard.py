@@ -165,6 +165,7 @@ from app.services.public_refs import PREFIXES
 from app.services.scientific_read import handles
 from app.services.scientific_read.handles import status_hidden_under_profile
 from app.services.scientific_read.profile import ResolvedReadProfile, current_read_profile
+from app.services.trust.models import TransitionStateScopedAssessmentUnit
 
 logger = logging.getLogger(__name__)
 
@@ -314,6 +315,9 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         ValidationSummary,
         SCFStabilitySummary,
         StoredKineticsProtocolCalculationRef,
+        # #723: one assessed declared target in the transition-state trust fragment. A unit's subject is the
+        # declaration, so a hidden ref drops the whole unit instead of raising on a read.
+        TransitionStateScopedAssessmentUnit,
         # PR-2c: the network, provenance (level of theory, corrections, literature) and analytics families.
         #
         # Owner decision D1: a visible solve (or fit) whose network is hidden stays visible with the network block

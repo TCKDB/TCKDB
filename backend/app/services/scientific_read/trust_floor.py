@@ -25,7 +25,12 @@ from app.db.models.kinetics import Kinetics
 from app.db.models.transition_state import TransitionStateEntry
 from app.services.scientific_read.common import review_hidden_under_profile
 from app.services.scientific_read.profile import current_read_profile
-from app.services.trust import EvidenceEvaluation, evaluate_loaded_kinetics, evaluate_loaded_transition_state_entry
+from app.services.trust import (
+    EvidenceEvaluation,
+    TransitionStateTrustContext,
+    evaluate_loaded_kinetics,
+    evaluate_loaded_transition_state_entry,
+)
 
 
 def _hidden_calculation_ids(session: Session | None, calculations: Iterator[Any] | list[Any]) -> set[int]:
@@ -91,12 +96,18 @@ def kinetics_without_hidden_calculations(kinetics: Kinetics) -> Iterator[None]:
         yield
 
 
-def evaluate_shown_transition_state_entry(entry: TransitionStateEntry | None) -> EvidenceEvaluation:
-    """:func:`evaluate_loaded_transition_state_entry` over the calculations the active profile shows."""
+def evaluate_shown_transition_state_entry(
+    entry: TransitionStateEntry | None, *, context: TransitionStateTrustContext
+) -> EvidenceEvaluation:
+    """:func:`evaluate_loaded_transition_state_entry` over the calculations the active profile shows.
+
+    ``context`` is required, with no default: it is the scoped assessment the caller ran (or declined to run) under
+    the same profile, and a pinned calculation the profile hides is simply not in the shown graph.
+    """
     if entry is None:
-        return evaluate_loaded_transition_state_entry(entry)
+        return evaluate_loaded_transition_state_entry(entry, context=context)
     with transition_state_entry_without_hidden_calculations(entry):
-        return evaluate_loaded_transition_state_entry(entry)
+        return evaluate_loaded_transition_state_entry(entry, context=context)
 
 
 def evaluate_shown_kinetics(kinetics: Kinetics | None) -> EvidenceEvaluation:

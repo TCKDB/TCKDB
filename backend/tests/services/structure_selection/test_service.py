@@ -37,6 +37,7 @@ from app.services.structure_selection import (
     ValidationClaim,
     assess_entry_structures,
 )
+from tests.id_leak import id_in_text
 from tests.services.scientific_read._factories import (
     attach_dependency,
     make_conformer_group,
@@ -186,7 +187,7 @@ def test_a_hidden_entry_behaves_exactly_like_a_missing_one(db_session):
     assert exc_hidden.value.code == exc_missing.value.code == "handle_not_found"
     assert str(exc_hidden.value) == f"species_entry not found (species_entry_ref={hidden.entry.public_ref!r})"
     assert str(exc_missing.value) == "species_entry not found"
-    assert str(hidden.entry.id) not in str(exc_hidden.value)
+    assert not id_in_text(hidden.entry.id, str(exc_hidden.value))
 
 
 def test_explicit_members_restrict_the_population_and_an_unauthorized_ref_is_not_told_apart_from_a_missing_one(db_session):

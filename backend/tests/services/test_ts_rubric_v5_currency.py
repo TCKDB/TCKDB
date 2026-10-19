@@ -1,9 +1,10 @@
-"""The transition-state rubric bump to version 4 (#729) restales the transition-state reviewer family only.
+"""The transition-state rubric bump to version 5 (#723) restales the transition-state reviewer family only.
 
-``computed_transition_state`` gained the zero-weight ``no_frequency_result_has_undesignated_imaginary_modes`` warning, so
-a machine review stamped version 3 was made under a check set the record is no longer read by. This pins:
+``computed_transition_state`` gained the zero-weight ``declared_saddle_target_qualifies`` warning and reads the
+frequency result a declared saddle target pins, so a machine review stamped version 4 (or 3) was made under a check set
+the record is no longer read by. This pins:
 
-* a review stored under ``computed_transition_state_v3`` compares stale, with ``rubric_versions_mismatch``;
+* a review stored under ``computed_transition_state_v4`` compares stale, with ``rubric_versions_mismatch`` (so does v3);
 * every other reviewer family keeps its key, so a review stored under it still compares current;
 * re-planning a transition-state review leaves the stored row, its recipe and its verdict exactly as they were.
 """
@@ -42,6 +43,7 @@ _DIGEST = MachineReviewContextDigest(context_hash="c" * 64, context_schema_versi
 _PROMPT = "machine_review_v1"
 _V3 = {"computed_transition_state_v3": "3"}
 _V4 = {"computed_transition_state_v4": "4"}
+_V5 = {"computed_transition_state_v5": "5"}
 _OTHER_FAMILIES = {
     "calculation": {"computed_calculation_v2": "2"},
     "kinetics": {"computed_kinetics_v2": "2"},
@@ -62,19 +64,20 @@ def _classify(record_type, stored, active):
     )
 
 
-def test_the_active_transition_state_recipe_is_version_4():
-    assert active_rubric_versions_for_record_type("transition_state_entry") == _V4
+def test_the_active_transition_state_recipe_is_version_5():
+    assert active_rubric_versions_for_record_type("transition_state_entry") == _V5
 
 
-def test_a_v3_review_is_stale_for_the_rubric_version_alone():
-    result = _classify("transition_state_entry", _V3, active_rubric_versions_for_record_type("transition_state_entry"))
+@pytest.mark.parametrize("stored", [_V4, _V3], ids=["v4", "v3"])
+def test_an_older_review_is_stale_for_the_rubric_version_alone(stored):
+    result = _classify("transition_state_entry", stored, active_rubric_versions_for_record_type("transition_state_entry"))
     assert (result.state, result.stale_reasons) == (
         MachineReviewCurrencyState.stale, (MachineReviewStaleReason.rubric_versions_mismatch,)
     )
 
 
-def test_a_v4_review_is_current():
-    result = _classify("transition_state_entry", _V4, active_rubric_versions_for_record_type("transition_state_entry"))
+def test_a_v5_review_is_current():
+    result = _classify("transition_state_entry", _V5, active_rubric_versions_for_record_type("transition_state_entry"))
     assert (result.state, result.stale_reasons) == (MachineReviewCurrencyState.current, ())
 
 
@@ -89,7 +92,7 @@ def test_re_planning_a_stale_ts_review_rewrites_no_stored_row(db_session):
     def _entry(tag):
         return make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key(tag)))
 
-    r1, p = _entry("TSV4R"), _entry("TSV4P")
+    r1, p = _entry("TSV5R"), _entry("TSV5P")
     reaction = make_chem_reaction(db_session, reactants=[r1.species], products=[p.species], reversible=False)
     rxn_entry = make_reaction_entry(db_session, reaction=reaction, reactant_entries=[r1], product_entries=[p])
     ts_entry = make_transition_state_entry(
@@ -105,7 +108,7 @@ def test_re_planning_a_stale_ts_review_rewrites_no_stored_row(db_session):
         ),
         context_digest=_DIGEST,
         prompt_version=_PROMPT,
-        rubric_versions=_V3,
+        rubric_versions=_V4,
     )
     db_session.flush()
 
@@ -123,4 +126,4 @@ def test_re_planning_a_stale_ts_review_rewrites_no_stored_row(db_session):
     )
     assert plan.decision is MachineReviewReReviewDecision.run_stale
     assert snapshot() == before
-    assert before and before[0][1] == _V3
+    assert before and before[0][1] == _V4
