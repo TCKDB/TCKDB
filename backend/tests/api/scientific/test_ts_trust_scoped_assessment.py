@@ -130,7 +130,7 @@ def test_a_detail_read_runs_the_assessment_and_a_qualifying_target_adds_no_warni
 
 
 def test_no_declaration_is_not_a_missing_check_and_costs_exactly_one_statement(client, db_session, monkeypatch):
-    from app.services.scientific_read import transition_states as service
+    from app.services.trust import ts_scoped as service
     from app.services.trust.models import TransitionStateScopedAssessment, TransitionStateTrustContext
     from app.services.trust.ts_scoped import BADGE_TASK
 
@@ -154,7 +154,7 @@ def test_no_declaration_is_not_a_missing_check_and_costs_exactly_one_statement(c
 
 
 def test_a_list_never_runs_the_assessment_and_says_so_in_a_coded_status(client, db_session, monkeypatch):
-    from app.services.scientific_read import transition_states as service
+    from app.services.trust import ts_scoped as service
 
     world, d, f = declared_world(db_session)
 
@@ -519,14 +519,132 @@ def test_an_entry_with_no_declaration_still_reads_the_newest_attached_result(cli
     assert checks["reaction_coordinate_designated_for_ts"] == "missing"
 
 
-def test_a_list_reads_the_newest_attached_result_because_it_does_not_look_at_declarations(client, db_session):
+def _record_in(body, ref):
+    [record] = [r for r in body["records"] if r["transition_state_entry"]["transition_state_entry_ref"] == ref]
+    return record
+
+
+def _badge(trust):
+    """What a reader sees of the badge, without the assessment-only warning (which a list never computes)."""
+    evidence = trust["evidence"]
+    checks = {k: v for k, v in evidence["checks"].items() if k != WARNING}
+    return trust["trust_status"], evidence["passed_count"], evidence["possible_count"], evidence["evidence_completeness"], checks
+
+
+def test_the_badge_counts_agree_on_the_entry_page_browse_search_full_and_siblings(client, db_session):
+    """A declared entry with a newer unrelated rerun: the same label and passed/possible on every surface.
+
+    Kills: lists ignoring the declared pins (the label then differs from the entry's own page).
+    """
     world, d, f = declared_world(db_session)
     _with_unrelated_rerun(world, THREE)
-    [record] = [
-        r for r in search(client)["records"]
-        if r["transition_state_entry"]["transition_state_entry_ref"] == world.entry.public_ref
-    ]
-    assert record["trust"]["evidence"]["checks"]["reaction_coordinate_designated_for_ts"] == "missing"
+    ref = world.entry.public_ref
+    rxe = world.entry.transition_state.reaction_entry
+
+    on_detail = _badge(detail(client, world.entry))
+    assert on_detail[4]["reaction_coordinate_designated_for_ts"] == "passed"  # the pin, not the newer rerun
+    on_search = _badge(_record_in(search(client), ref)["trust"])
+    on_other_search = _badge(_record_in(search(client, reaction_entry_ref=rxe.public_ref), ref)["trust"])
+    full = client.get(f"{API}/reaction-entries/{rxe.public_ref}/full?include=trust").json()
+    [in_full] = [t for t in full["transition_states"] if t["transition_state_entry_ref"] == ref]
+    on_full = _badge(in_full["trust"])
+    siblings = client.get(f"{API}/transition-state-entries/{ref}?include=trust,entries").json()["record"]["entries"]
+    on_sibling = _badge(_record_in({"records": siblings}, ref)["trust"])
+    assert on_search == on_other_search == on_full == on_sibling == on_detail
+
+
+def test_an_entry_with_no_declaration_is_unchanged_on_every_surface(client, db_session):
+    world = make_ts_world(db_session)
+    world.freq("old", frequencies=GOOD)
+    world.freq("new", frequencies=THREE)
+    world.settle()
+    ref = world.entry.public_ref
+    rxe = world.entry.transition_state.reaction_entry
+    on_detail = _badge(detail(client, world.entry))
+    assert on_detail[4]["reaction_coordinate_designated_for_ts"] == "missing"  # the newest attached result
+    assert _badge(_record_in(search(client), ref)["trust"]) == on_detail
+    full = client.get(f"{API}/reaction-entries/{rxe.public_ref}/full?include=trust").json()
+    [in_full] = [t for t in full["transition_states"] if t["transition_state_entry_ref"] == ref]
+    assert _badge(in_full["trust"]) == on_detail
+
+
+def _many_entries(db_session, n):
+    worlds = []
+    for i in range(n):
+        world = make_ts_world(db_session)
+        if i % 2 == 0:
+            saddle(world)
+        else:
+            world.freq("f", frequencies=GOOD)
+        world.settle()
+        worlds.append(world)
+    return worlds
+
+
+@pytest.mark.parametrize("n", [1, 5])
+def test_a_list_page_reads_the_pins_in_exactly_one_extra_statement_however_many_entries(client, db_session, monkeypatch, n):
+    """Kills: the pin read happening per entry."""
+    from app.services.scientific_read import transition_states_search as service
+    from app.services.trust.ts_scoped import ListScope
+
+    _many_entries(db_session, n)
+    real = service.declared_curvature_pins
+    url = f"{API}/transition-states/search?include=trust&charge=0&limit=50"
+    client.get(url)  # warm per-process caches
+    monkeypatch.setattr(service, "declared_curvature_pins", lambda session, ids: ListScope())
+    _, without = count_statements(db_session, lambda: client.get(url))
+    monkeypatch.setattr(service, "declared_curvature_pins", real)
+    response, with_pins = count_statements(db_session, lambda: client.get(url))
+    assert len(response.json()["records"]) == n
+    assert with_pins - without == 1, (with_pins, without)
+
+
+def test_the_reaction_document_and_the_sibling_list_also_read_the_pins_in_one_statement(client, db_session, monkeypatch):
+    from app.services.scientific_read import provenance, transition_states
+    from app.services.trust.ts_scoped import ListScope
+
+    world, d, f = declared_world(db_session)
+    rxe = world.entry.transition_state.reaction_entry
+    full_url = f"{API}/reaction-entries/{rxe.public_ref}/full?include=trust"
+    sibling_url = f"{API}/transition-state-entries/{world.entry.public_ref}?include=trust,entries"
+    for module, url in ((provenance, full_url), (transition_states, sibling_url)):
+        client.get(url)
+        real = module.declared_curvature_pins
+        monkeypatch.setattr(module, "declared_curvature_pins", lambda session, ids: ListScope())
+        _, without = count_statements(db_session, lambda url=url: client.get(url))
+        monkeypatch.setattr(module, "declared_curvature_pins", real)
+        _, with_pins = count_statements(db_session, lambda url=url: client.get(url))
+        assert with_pins - without == 1, (module.__name__, with_pins, without)
+
+
+# ---------------------------------------------------------------------------
+# The saddle-point verdict box follows the pin
+# ---------------------------------------------------------------------------
+
+
+def test_the_saddle_point_block_describes_the_pinned_result_and_says_so(client, db_session):
+    """A declaration pins the older one-mode result; a newer unrelated three-mode rerun is attached.
+
+    Kills: the block ignoring the pin (it would describe the rerun), or not saying which basis it used.
+    """
+    world, d, f = declared_world(db_session)
+    _with_unrelated_rerun(world, THREE)
+    ref = world.entry.public_ref
+    detail_block = client.get(f"{API}/transition-state-entries/{ref}?include=trust").json()["record"]["saddle_point"]
+    assert detail_block["basis"] == "declared_curvature_witness"
+    assert detail_block["calculation_ref"] == f.public_ref and detail_block["n_imag"] == 1
+    on_search = _record_in(search(client), ref)["saddle_point"]
+    assert on_search == detail_block  # every client agrees
+
+
+def test_without_a_declaration_the_saddle_point_block_describes_the_newest_attached_result(client, db_session):
+    world = make_ts_world(db_session)
+    world.freq("old", frequencies=GOOD)
+    newest = world.freq("new", frequencies=THREE)
+    world.settle()
+    block = client.get(f"{API}/transition-state-entries/{world.entry.public_ref}").json()["record"]["saddle_point"]
+    assert block["basis"] == "latest_direct_frequency"
+    assert block["calculation_ref"] == newest.public_ref and block["n_imag"] == 3
 
 
 # ---------------------------------------------------------------------------
@@ -571,7 +689,7 @@ def test_the_hidden_pin_falls_back_to_the_newest_attached_visible_result_under_c
 _APP = pathlib.Path(__file__).resolve().parents[3] / "app"
 
 
-def test_context_and_assess_structures_are_required_keyword_only_arguments():
+def test_context_and_trust_scope_are_required_keyword_only_arguments():
     """Kills: a default ``None`` reintroduced, which would let a caller silently fall back to the unscoped answer."""
     from app.services.scientific_read import transition_states, trust_floor
     from app.services.trust import evaluate_loaded_transition_state_entry
@@ -580,8 +698,8 @@ def test_context_and_assess_structures_are_required_keyword_only_arguments():
         (evaluate_loaded_transition_state_entry, "context"),
         (trust_floor.evaluate_shown_transition_state_entry, "context"),
         (transition_states.build_transition_state_entry_trust_fragment, "context"),
-        (transition_states.build_entry_record, "assess_structures"),
-        (transition_states._build_entry_record, "assess_structures"),
+        (transition_states.build_entry_record, "trust_scope"),
+        (transition_states._build_entry_record, "trust_scope"),
     ):
         parameter = inspect.signature(func).parameters[name]
         assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, (func.__name__, name)
@@ -593,8 +711,8 @@ def test_every_production_call_site_passes_the_context():
         "evaluate_loaded_transition_state_entry": "context",
         "evaluate_shown_transition_state_entry": "context",
         "build_transition_state_entry_trust_fragment": "context",
-        "build_entry_record": "assess_structures",
-        "_build_entry_record": "assess_structures",
+        "build_entry_record": "trust_scope",
+        "_build_entry_record": "trust_scope",
     }
     calls = 0
     for path in _APP.rglob("*.py"):

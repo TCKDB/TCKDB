@@ -249,6 +249,42 @@ describe("TransitionStateEntryPage", () => {
         expect(identityHeader.nextElementSibling).toBe(statement)
     })
 
+    function saddleWith(basis: string | undefined) {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    saddle_point: {
+                        ...(basis ? { basis } : {}),
+                        n_imag: 1,
+                        imag_freq_cm1: -1500,
+                        reaction_coordinate_mode_index: null,
+                        imaginary_mode_structural_flag: null,
+                        calculation_ref: "calc_pinned",
+                        level_of_theory: null,
+                    },
+                }),
+            })
+        )))
+    }
+
+    it("saddle-point: says the result is the declared one when the server reports the declared witness", async () => {
+        saddleWith("declared_curvature_witness")
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText(/the frequency result the declared saddle target pins/)).toBeVisible()
+    })
+
+    it.each([["latest_direct_frequency"], [undefined], ["some_future_basis"]])(
+        "saddle-point: basis %s describes the result without the declared wording and the page still loads",
+        async (basis) => {
+            saddleWith(basis)
+            page()
+            await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+            expect(screen.getByText(/1 imaginary mode/)).toBeVisible()
+            expect(screen.queryByText(/declared saddle target pins/)).not.toBeInTheDocument()
+        },
+    )
+
     it("saddle-point: flags a structural (higher-order) saddle without citing an internal ADR number in user-facing text", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({

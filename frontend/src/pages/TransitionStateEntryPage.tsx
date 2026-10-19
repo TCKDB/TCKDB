@@ -687,6 +687,7 @@ function SaddlePointStatement({ saddlePoint, evidence }: {
         <p className="tse-saddle-point">
             <strong>{verdict}</strong> · {lotText} · <Link to={`/calculations/${saddlePoint.calculation_ref}`}>{saddlePoint.calculation_ref}</Link>
             {saddlePoint.imaginary_mode_structural_flag ? " · flagged as a higher-order saddle point" : ""}
+            {saddlePoint.basis === "declared_curvature_witness" ? " · the frequency result the declared saddle target pins" : ""}
         </p>
     )
 }

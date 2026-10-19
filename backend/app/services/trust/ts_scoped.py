@@ -24,11 +24,15 @@ Imports of the structure-selection package are lazy: that package imports the re
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models.common import StructureDeterminationTargetKind
-from app.db.models.structure_determination import StructureDetermination
+from app.db.models.calculation import Calculation
+from app.db.models.common import StructureDeterminationTargetKind, StructureSourceRole
+from app.db.models.structure_determination import StructureDetermination, StructureDeterminationSource
 from app.db.models.transition_state import TransitionStateEntry
 from app.services.trust.models import (
     TransitionStateScopedAssessment,
@@ -48,14 +52,65 @@ BADGE_TASK = TransitionStateScopedAssessmentTask()
 _CURVATURE_ROLE = "curvature"
 
 
-def not_assessed_on_lists_context() -> TransitionStateTrustContext:
-    """The context for a surface that lists entries: no assessment, no pinned frequency result. Issues no statement."""
+def not_assessed_on_lists_context(declared_curvature_refs: frozenset[str] = frozenset()) -> TransitionStateTrustContext:
+    """The context for a surface that lists entries: no assessment, issues no statement.
+
+    ``declared_curvature_refs`` are the calculations the entry's declarations pin in role ``curvature``, read for the
+    whole page in one statement by :func:`declared_curvature_pins`, so the frequency-presence checks (and so the badge
+    counts) agree with the entry's own page. The default, no pins, is the unscoped answer and is for tests of the rubric.
+    """
     return TransitionStateTrustContext(
         assessment=TransitionStateScopedAssessment(
             status=TransitionStateScopedAssessmentStatus.not_assessed_on_lists, task=BADGE_TASK
         ),
-        declared_curvature_refs=frozenset(),
+        declared_curvature_refs=declared_curvature_refs,
     )
+
+
+@dataclass(frozen=True)
+class DetailScope:
+    """The read is one transition-state entry's own page: the structure assessment runs."""
+
+
+@dataclass(frozen=True)
+class ListScope:
+    """The read lists entries: no assessment, but the page's declared curvature pins (one grouped statement)."""
+
+    pins: Mapping[int, frozenset[str]] = field(default_factory=dict)
+
+
+TrustScope = DetailScope | ListScope
+
+
+def declared_curvature_pins(session: Session, entry_ids: list[int]) -> ListScope:
+    """The calculations each entry's declared targets pin in role ``curvature``, for every entry in ONE statement.
+
+    The list surfaces' counterpart of what the detail read learns from the assessment. It is not the assessment: it
+    reads which result a declaration points at, never whether the target qualifies.
+    """
+    pins: dict[int, set[str]] = {}
+    if entry_ids:
+        rows = session.execute(
+            select(StructureDetermination.transition_state_entry_id, Calculation.public_ref)
+            .select_from(StructureDeterminationSource)
+            .join(StructureDetermination, StructureDeterminationSource.determination_id == StructureDetermination.id)
+            .join(Calculation, StructureDeterminationSource.calculation_id == Calculation.id)
+            .where(
+                StructureDetermination.transition_state_entry_id.in_(entry_ids),
+                StructureDetermination.target_kind.in_(_DECLARED_KINDS),
+                StructureDeterminationSource.role == StructureSourceRole.curvature,
+            )
+        ).all()
+        for entry_id, ref in rows:
+            pins.setdefault(entry_id, set()).add(ref)
+    return ListScope({k: frozenset(v) for k, v in pins.items()})
+
+
+def context_for(session: Session, entry: TransitionStateEntry, scope: TrustScope) -> TransitionStateTrustContext:
+    """The rubric's context under *scope*: the assessment on a detail read, the page's pins on a list."""
+    if isinstance(scope, DetailScope):
+        return scoped_ts_context(session, entry)
+    return not_assessed_on_lists_context(scope.pins.get(entry.id, frozenset()))
 
 
 def _no_declared_target(versions: dict[str, str]) -> TransitionStateTrustContext:
@@ -161,4 +216,13 @@ def scoped_ts_context(session: Session, entry: TransitionStateEntry) -> Transiti
     )
 
 
-__all__ = ["BADGE_TASK", "not_assessed_on_lists_context", "scoped_ts_context"]
+__all__ = [
+    "BADGE_TASK",
+    "DetailScope",
+    "ListScope",
+    "TrustScope",
+    "context_for",
+    "declared_curvature_pins",
+    "not_assessed_on_lists_context",
+    "scoped_ts_context",
+]

@@ -106,6 +106,7 @@ from app.services.scientific_read.transition_states import (
     build_entry_record,
     build_sibling_entry_records,
 )
+from app.services.trust.ts_scoped import ListScope, declared_curvature_pins
 
 # ``trust`` is legal on this surface, and it was not always. The search
 # response has always carried ``records[*].trust`` — at the record root
@@ -738,6 +739,10 @@ def _materialize_records(
     # 169 → 189 at ``limit=20``).
     saddle_point_index = _build_saddle_point_index(session, page_ids)
 
+    # The page's declared curvature pins: ONE grouped statement for every entry on the page, so the badge counts agree
+    # with each entry's own page. Only when the page asked for trust.
+    trust_scope = declared_curvature_pins(session, page_ids) if "trust" in includes else ListScope()
+
     # Software attributed to the whole page's calculations, one grouped
     # statement, same cost discipline as ``levels_index`` above. Deliberately
     # NOT threaded into ``build_entry_record`` (that shared builder is also
@@ -788,8 +793,8 @@ def _materialize_records(
             reaction=reaction,
             entry_badge=badges[cid],
             includes=includes,
-            # A list never runs the structure assessment (#723, O3): the same entry renders the same on every page.
-            assess_structures=False,
+            # A list never runs the structure assessment (#723, O3); it reads the page's declared pins instead.
+            trust_scope=trust_scope,
             entries_block=entries_block,
             levels_index=levels_index,
             saddle_point_index=saddle_point_index,

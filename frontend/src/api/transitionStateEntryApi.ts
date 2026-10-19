@@ -137,7 +137,10 @@ const reviewHistoryEntrySchema = z.object({
 // so far -- see the PR body); a client hitting an older backend gets
 // `undefined` here, which this schema's `.nullable().optional()` and the
 // page's own `?? null` treat identically to a served `null`.
+// `basis` (read as a plain string, so a future token never breaks the page) says which frequency result this is:
+// `latest_direct_frequency` (the newest attached) or `declared_curvature_witness` (the one a declared saddle target pins).
 const saddlePointSchema = z.object({
+    basis: z.string().optional(),
     n_imag: z.number().nullable().optional(),
     imag_freq_cm1: z.number().nullable().optional(),
     reaction_coordinate_mode_index: z.number().nullable().optional(),

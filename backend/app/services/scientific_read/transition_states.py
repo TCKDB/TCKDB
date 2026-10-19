@@ -37,6 +37,8 @@ from app.db.models.common import (
     CalculationRecordKind,
     CalculationType,
     RecordReviewStatus,
+    StructureDeterminationTargetKind,
+    StructureSourceRole,
     SubmissionRecordType,
 )
 from app.db.models.geometry import Geometry
@@ -45,6 +47,7 @@ from app.db.models.reaction import ChemReaction, ReactionEntry, ReactionFamily
 from app.db.models.record_review import RecordReview
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.statmech import Statmech, StatmechSourceCalculation, StatmechTorsion
+from app.db.models.structure_determination import StructureDetermination, StructureDeterminationSource
 from app.db.models.transition_state import (
     TransitionState,
     TransitionStateEntry,
@@ -117,7 +120,13 @@ from app.services.trust import (
     TransitionStateTrustFragment,
     build_transition_state_trust_fragment,
 )
-from app.services.trust.ts_scoped import not_assessed_on_lists_context, scoped_ts_context
+from app.services.trust.ts_scoped import (
+    DetailScope,
+    ListScope,
+    TrustScope,
+    context_for,
+    declared_curvature_pins,
+)
 
 # ---------------------------------------------------------------------------
 # Include policy
@@ -387,7 +396,7 @@ def get_transition_state(
                     RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
                 ),
                 includes=nested_includes,
-                assess_structures=False,
+                trust_scope=ListScope(),
                 levels_index=levels_index,
                 saddle_point_index=saddle_point_index,
             )
@@ -528,7 +537,7 @@ def get_transition_state_entry(
         reaction=reaction,
         entry_badge=tse_badge,
         includes=includes,
-        assess_structures=True,
+        trust_scope=DetailScope(),
     )
 
     return ScientificTransitionStateEntryDetailResponse(
@@ -551,7 +560,7 @@ def build_entry_record(
     reaction: TransitionStateReactionContext,
     entry_badge: RecordReviewBadge,
     includes: set[str],
-    assess_structures: bool,
+    trust_scope: TrustScope,
     entries_block: list[ScientificTransitionStateEntryRecord] | None = None,
     levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
     saddle_point_index: (
@@ -570,7 +579,7 @@ def build_entry_record(
         reaction=reaction,
         entry_badge=entry_badge,
         includes=includes,
-        assess_structures=assess_structures,
+        trust_scope=trust_scope,
         entries_block=entries_block,
         levels_index=levels_index,
         saddle_point_index=saddle_point_index,
@@ -585,7 +594,7 @@ def _build_entry_record(
     reaction: TransitionStateReactionContext,
     entry_badge: RecordReviewBadge,
     includes: set[str],
-    assess_structures: bool,
+    trust_scope: TrustScope,
     entries_block: list[ScientificTransitionStateEntryRecord] | None = None,
     levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
     saddle_point_index: (
@@ -612,10 +621,11 @@ def _build_entry_record(
     means "resolve it for this entry alone" (the single-entry detail path);
     every loop over more than one entry in this module hands one in.
 
-    ``assess_structures`` is required, with no default (#723): ``True`` only for a single transition-state-entry
-    detail read, where ``include=trust`` also runs the scoped structure assessment for this one entry; ``False`` on
-    every surface that lists entries, which then carries the coded status ``not_assessed_on_lists`` and issues no
-    statement for it, so the same entry renders the same on every list page.
+    ``trust_scope`` is required, with no default (#723): :class:`DetailScope` only for a single transition-state-entry
+    detail read, where ``include=trust`` also runs the scoped structure assessment for this one entry; a
+    :class:`ListScope` on every surface that lists entries, which carries the coded status ``not_assessed_on_lists`` and
+    issues no statement for it. The list scope carries the page's declared curvature pins (read once for the whole page),
+    so the badge counts agree on every page.
     """
     evidence = _build_entry_evidence_summary(
         session, entry.id, levels_index=levels_index
@@ -699,11 +709,7 @@ def _build_entry_record(
             entry,
             review_status=entry_badge.status,
             include_internal_ids="internal_ids" in includes,
-            context=(
-                scoped_ts_context(session, entry)
-                if assess_structures
-                else not_assessed_on_lists_context()
-            ),
+            context=context_for(session, entry, trust_scope),
         )
 
     return ScientificTransitionStateEntryRecord(
@@ -794,6 +800,8 @@ def _build_sibling_entry_records(
         else {}
     )
     nested_includes = includes - {"entries"}
+    # The siblings are a list: no assessment, but their declared curvature pins in one grouped statement.
+    sibling_scope = declared_curvature_pins(session, sibling_ids) if "trust" in includes else ListScope()
     # Grouped over the sibling set, never per sibling — same reason as the
     # trust eager loads above.
     levels_index = levels_of_theory.for_transition_state_entries(
@@ -811,7 +819,7 @@ def _build_sibling_entry_records(
                 RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
             ),
             includes=nested_includes,
-            assess_structures=False,
+            trust_scope=sibling_scope,
             levels_index=levels_index,
             saddle_point_index=saddle_point_index,
         )
@@ -837,7 +845,7 @@ def build_transition_state_entry_trust_fragment(
     (all supplied by :func:`build_trust_fragment`).
 
     ``context`` is required (#723): the scoped assessment the caller ran, or
-    :func:`~app.services.trust.ts_scoped.not_assessed_on_lists_context` on a surface that lists entries.
+    :func:`~app.services.trust.ts_scoped.context_for` under a list scope on a surface that lists entries.
     The fragment carries it as ``structure_assessment``; it never changes the badge.
 
     ``include_internal_ids`` mirrors the resolved include set so callers
@@ -1606,8 +1614,23 @@ def _build_saddle_point_index(
     if not entry_ids:
         return index
 
+    # ``pinned``: the calculation is pinned in role ``curvature`` by one of this entry's declared targets. Part of the
+    # same statement, so the block still costs a page one statement.
+    pinned_by_declaration = (
+        select(StructureDeterminationSource.id)
+        .join(StructureDetermination, StructureDeterminationSource.determination_id == StructureDetermination.id)
+        .where(
+            StructureDeterminationSource.calculation_id == Calculation.id,
+            StructureDeterminationSource.role == StructureSourceRole.curvature,
+            StructureDetermination.transition_state_entry_id == Calculation.transition_state_entry_id,
+            StructureDetermination.target_kind.in_(
+                (StructureDeterminationTargetKind.saddle_point, StructureDeterminationTargetKind.geometry)
+            ),
+        )
+        .exists()
+    )
     rows = session.execute(
-        select(Calculation, CalculationFreqResult)
+        select(Calculation, CalculationFreqResult, pinned_by_declaration)
         .join(
             CalculationFreqResult,
             CalculationFreqResult.calculation_id == Calculation.id,
@@ -1619,6 +1642,35 @@ def _build_saddle_point_index(
     ).all()
     if not rows:
         return index
+
+    by_entry: dict[int, list[tuple[Calculation, CalculationFreqResult, bool]]] = {}
+    for calc, freq, pinned in rows:
+        by_entry.setdefault(calc.transition_state_entry_id, []).append((calc, freq, bool(pinned)))
+
+    lot_ids = {
+        calc.lot_id
+        for pairs in by_entry.values()
+        for calc, _, _ in pairs
+        if calc.lot_id is not None
+    }
+    lot_summaries = _bulk_lot_summaries(session, lot_ids)
+
+    for entry_id, triples in by_entry.items():
+        # A declaration that pins a frequency result names the one the entry's own claim rests on: describe that one.
+        # Otherwise the newest attached, as before. The same choice the trust rubric makes (rubric v5).
+        pinned_triples = [t for t in triples if t[2]]
+        pool = pinned_triples or triples
+        calc, freq, declared = max(pool, key=lambda t: (t[0].created_at, t[0].id))
+        index[entry_id] = TransitionStateSaddlePointEvidence(
+            basis="declared_curvature_witness" if declared else "latest_direct_frequency",
+            n_imag=freq.n_imag,
+            imag_freq_cm1=freq.imag_freq_cm1,
+            reaction_coordinate_mode_index=freq.reaction_coordinate_mode_index,
+            imaginary_mode_structural_flag=freq.imaginary_mode_structural_flag,
+            calculation_ref=calc.public_ref,
+            level_of_theory=lot_summaries.get(calc.lot_id),
+        )
+    return index
 
     by_entry: dict[int, list[tuple[Calculation, CalculationFreqResult]]] = {}
     for calc, freq in rows:
