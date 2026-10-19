@@ -22,6 +22,20 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## One way to version things: `VersionRef`, `VersionRegistry`, and a guard (2026-10-19)
+
+**New types and a guard test; no behaviour change.** Migration: none. New environment variable: none. OpenAPI snapshot: unchanged.
+`tckdb-schemas` 0.126.0 (one new model); `tckdb-client` unchanged.
+
+- A versioned thing TCKDB owns is a stable `name` plus a separate integer `version`, never a name with the version glued on.
+  `VersionRef(name, version)` (tckdb-schemas) carries the pair and refuses a name that embeds a version. `VersionRegistry`
+  (`app/versioning.py`) maps `(name, version)` to the implementation, with exactly one current version per name; a version-dependent
+  function takes `version: int | None = None` and dispatches through it, and `UnknownVersion` is raised for a version that is not
+  registered instead of falling back to the current one. `EvidenceRubric` gains `ref`; its unused `qualified_name` is removed.
+- `backend/tests/test_no_versioned_names.py` fails on any new identifier, string constant, f-string or file name that embeds a version
+  (`parse_machine_review_v2_payload`, `ContributionBundleV0`, `...RuleV0_2_0`, `tckdb.archive.v1`, `rules_0_1_0.yaml`). Everything that
+  already violates the rule is listed, with the PR that removes it, in `backend/tests/versioned_names_debt.py`; that list can only shrink.
+
 ## Transition-state trust carries the scoped structure assessment (2026-10-19, #723)
 
 **Additive field and a rubric bump.** Migration: none. New environment variable: none. `tckdb-schemas` and `tckdb-client` unchanged
