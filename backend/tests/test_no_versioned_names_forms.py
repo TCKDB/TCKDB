@@ -142,6 +142,24 @@ def test_the_dunning_exclusion_is_what_keeps_pv5z_clean() -> None:
     assert CAMEL_VERSION.search("RuleV5") is not None
 
 
+def test_the_lowercase_glued_pattern_is_not_greedy_about_vv10() -> None:
+    from tckdb_schemas.fragments.version import LOWER_GLUED_VERSION
+
+    assert LOWER_GLUED_VERSION.search("thingv10") is not None
+    assert LOWER_GLUED_VERSION.search("scanrvv10") is None  # the nonlocal-correlation VV10 is not a version
+    assert LOWER_GLUED_VERSION.search("rev2") is None
+
+
+@pytest.mark.parametrize("scanner", ["scan_code", "scan_names", "scan_openapi", "scan_yaml", "scan_frontend"])
+def test_scan_all_includes_every_scanner(scanner: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A scanner with no findings today must still be wired in: it is the one that catches tomorrow's."""
+    from tests import versioned_names_scan as module
+
+    sentinel = module.Finding("sentinel", "test", scanner)
+    monkeypatch.setattr(module, scanner, lambda: [sentinel])
+    assert sentinel in module.scan_all()
+
+
 def _kinds(source: str) -> list[tuple[str, str]]:
     return [(f.kind, f.token) for f in scan_source(source, "planted.py")]
 

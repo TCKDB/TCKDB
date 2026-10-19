@@ -100,9 +100,11 @@ _STRING_NAME_SEMVER = re.compile(r"(?<=[A-Za-z0-9])[-/@]\d+\.\d+\.\d+(?![0-9])")
 #: ``name_0_3_0`` in a string.
 _STRING_SEMVER_SEGMENTS = re.compile(r"(?<=[A-Za-z])_\d+_\d+_\d+(?![0-9])")
 #: Constant text that ends where a version number is about to be interpolated:
-#: ``..._v``, ``....v``, ``...@v``, ``.../v``, ``...-v``, a bare ``V``/``v`` right
-#: after a name character, or an ``@``.
-_FSTRING_TAIL = re.compile(r"(?:[_.@/-][vV]|@|(?<![A-Za-z0-9 ])[vV]|[a-z0-9]V)$")
+#: an ``@``, a ``v``/``V`` that does not end a word or follow a space (so
+#: ``_v``, ``.v``, ``-v``, ``/v``, ``@v`` and a lone ``v`` all count, and
+#: ``"Gaussian v{ver}"`` does not), or a camel ``...V`` after a lowercase
+#: letter or digit.
+_FSTRING_TAIL = re.compile(r"(?:@|(?<![A-Za-z0-9 ])[vV]|[a-z0-9]V)$")
 #: An interpolated expression that is plainly a version: ``v``, ``version``,
 #: ``x.version``, ``rubric_version``.
 _VERSION_EXPR = re.compile(r"^(?:[\w.]*\.)?(?:v|ver|version|\w+_version)$")
