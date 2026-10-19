@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Literal
 
 from sqlalchemy import and_, exists, func, or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.api.errors import not_found
 from app.db.models.calculation import (
@@ -121,6 +121,7 @@ from app.services.trust import (
     TransitionStateTrustFragment,
     build_transition_state_trust_fragment,
 )
+from app.services.trust.models import frequency_result_designates_its_reaction_coordinate
 from app.services.trust.ts_scoped import (
     DetailScope,
     ListScope,
@@ -1617,10 +1618,20 @@ def _build_saddle_point_index(
 
     # ``pinned``: the calculation is pinned in role ``curvature`` by one of this entry's declared targets. Part of the
     # same statement, so the block still costs a page one statement.
+    # A declaration of an owning entry that is rejected, deprecated or below the profile floor pins nothing: the same
+    # exclusion the detail read applies, so the block and the trust projection describe the same result.
+    owner_review = aliased(RecordReview)
+    owner_allowed = visible_statuses(min_review_status=None, include_rejected=False, include_deprecated=False)
     pinned_by_declaration = (
         select(StructureDeterminationSource.id)
         .join(StructureDetermination, StructureDeterminationSource.determination_id == StructureDetermination.id)
+        .outerjoin(
+            owner_review,
+            (owner_review.record_type == SubmissionRecordType.transition_state_entry)
+            & (owner_review.record_id == StructureDetermination.transition_state_entry_id),
+        )
         .where(
+            func.coalesce(owner_review.status, RecordReviewStatus.not_reviewed).in_(owner_allowed),
             StructureDeterminationSource.calculation_id == Calculation.id,
             StructureDeterminationSource.role == StructureSourceRole.curvature,
             StructureDetermination.transition_state_entry_id == Calculation.transition_state_entry_id,
@@ -1669,35 +1680,18 @@ def _build_saddle_point_index(
         # Otherwise the newest attached, as before. The same choice the trust rubric makes (rubric v5).
         pinned_triples = [t for t in triples if t[2]]
         pool = pinned_triples or triples
+        if pinned_triples:
+            # Several declared targets can each pin a result: the one that passes the designation rule is described
+            # (the same rule, and so the same result, as the trust projection); when none passes, the newest pin.
+            passing = [
+                t
+                for t in pinned_triples
+                if frequency_result_designates_its_reaction_coordinate(t[1].n_imag, t[1].reaction_coordinate_mode_index)
+            ]
+            pool = passing or pinned_triples
         calc, freq, declared = max(pool, key=lambda t: (t[0].created_at, t[0].id))
         index[entry_id] = TransitionStateSaddlePointEvidence(
             basis="declared_curvature_witness" if declared else "latest_direct_frequency",
-            n_imag=freq.n_imag,
-            imag_freq_cm1=freq.imag_freq_cm1,
-            reaction_coordinate_mode_index=freq.reaction_coordinate_mode_index,
-            imaginary_mode_structural_flag=freq.imaginary_mode_structural_flag,
-            calculation_ref=calc.public_ref,
-            level_of_theory=lot_summaries.get(calc.lot_id),
-        )
-    return index
-
-    by_entry: dict[int, list[tuple[Calculation, CalculationFreqResult]]] = {}
-    for calc, freq in rows:
-        by_entry.setdefault(calc.transition_state_entry_id, []).append(
-            (calc, freq)
-        )
-
-    lot_ids = {
-        calc.lot_id
-        for pairs in by_entry.values()
-        for calc, _ in pairs
-        if calc.lot_id is not None
-    }
-    lot_summaries = _bulk_lot_summaries(session, lot_ids)
-
-    for entry_id, pairs in by_entry.items():
-        calc, freq = max(pairs, key=lambda pair: (pair[0].created_at, pair[0].id))
-        index[entry_id] = TransitionStateSaddlePointEvidence(
             n_imag=freq.n_imag,
             imag_freq_cm1=freq.imag_freq_cm1,
             reaction_coordinate_mode_index=freq.reaction_coordinate_mode_index,

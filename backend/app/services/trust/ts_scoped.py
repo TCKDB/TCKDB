@@ -149,9 +149,14 @@ def _live_versions() -> dict[str, str]:
     return {"assessment": ASSESSMENT_VERSION, "normalizer": NORMALIZER_VERSION, "decision": DECISION_VERSION}
 
 
-def _assert_pinned_versions(live: dict[str, str]) -> None:
+def validate_ts_scoped_structure_versions() -> None:
+    """Refuse to boot when the structure-selection semantics moved without a deliberate TS rubric bump.
+
+    Called by ``create_app`` (so it fails the deploy and CI, not a request later), like the selection-rule manifests.
+    """
     from app.services.trust.rubrics import TS_SCOPED_STRUCTURE_VERSIONS
 
+    live = _live_versions()
     if live != TS_SCOPED_STRUCTURE_VERSIONS:
         raise RuntimeError(
             f"structure-selection versions {live} differ from the {TS_SCOPED_STRUCTURE_VERSIONS} the transition-state "
@@ -172,7 +177,6 @@ def scoped_ts_context(session: Session, entry: TransitionStateEntry) -> Transiti
     from app.services.structure_selection.selection import select_entry_structures
 
     live = _live_versions()
-    _assert_pinned_versions(live)
 
     declared = session.scalar(
         select(func.count())
@@ -198,7 +202,9 @@ def scoped_ts_context(session: Session, entry: TransitionStateEntry) -> Transiti
                 refusal_code=refusal.code,
                 versions=live,
             ),
-            declared_curvature_refs=frozenset(),
+            # The assessment refused, but which result a declaration pins is still known, in one statement: the counts
+            # then agree with the lists, which read the pins the same way.
+            declared_curvature_refs=declared_curvature_pins(session, [entry.id]).pins.get(entry.id, frozenset()),
         )
     response = build_response(selection, entry_ref=entry.public_ref)
     if not response.units:
@@ -243,4 +249,5 @@ __all__ = [
     "declared_curvature_pins",
     "not_assessed_on_lists_context",
     "scoped_ts_context",
+    "validate_ts_scoped_structure_versions",
 ]

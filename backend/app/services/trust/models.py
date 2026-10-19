@@ -505,6 +505,20 @@ class TransitionStateTrustFragment(TrustFragment):
     structure_assessment: TransitionStateScopedAssessment
 
 
+def frequency_result_designates_its_reaction_coordinate(n_imag: Optional[int], mode_index: Optional[int]) -> bool:
+    """Whether a frequency result passes the required ``reaction_coordinate_designated_for_ts`` check.
+
+    One imaginary mode needs no designation, more than one needs a designated mode, none or an unrecorded count fails
+    (ADR 0012). It is the single rule the trust rubric and the saddle-point block share when several declared targets
+    each pin a frequency result (owner decision, 2026-10-19): the result that passes is the one both describe.
+    """
+    if n_imag is None or n_imag == 0:
+        return False
+    if n_imag == 1:
+        return True
+    return mode_index is not None
+
+
 @dataclass(frozen=True)
 class TransitionStateTrustContext:
     """What the transition-state rubric reads beyond the loaded graph, computed by the caller before evaluation.

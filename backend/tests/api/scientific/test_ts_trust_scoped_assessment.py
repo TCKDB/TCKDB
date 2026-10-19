@@ -752,6 +752,94 @@ def test_a_deprecated_declared_entry_has_the_same_counts_on_its_page_and_on_a_li
     assert on_list == on_detail
 
 
+def _surfaces(client, world):
+    """The badge as every surface renders it: entry page, search GET and POST, the reaction document, the siblings."""
+    ref = world.entry.public_ref
+    rxe = world.entry.transition_state.reaction_entry
+    post_response = client.post(f"{API}/transition-states/search", json={"charge": 0, "limit": 50, "include": ["trust"]})
+    assert post_response.status_code == 200, post_response.text
+    post = post_response.json()
+    full = client.get(f"{API}/reaction-entries/{rxe.public_ref}/full?include=trust").json()
+    [in_full] = [t for t in full["transition_states"] if t["transition_state_entry_ref"] == ref]
+    siblings = client.get(f"{API}/transition-state-entries/{ref}?include=trust,entries").json()["record"]["entries"]
+    return {
+        "detail": _badge(detail(client, world.entry)),
+        "search_get": _badge(_record_in(search(client), ref)["trust"]),
+        "search_post": _badge(_record_in(post, ref)["trust"]),
+        "full": _badge(in_full["trust"]),
+        "siblings": _badge(_record_in({"records": siblings}, ref)["trust"]),
+    }
+
+
+def test_a_bound_refusal_leaves_the_counts_equal_on_every_surface(client, db_session, monkeypatch):
+    """Forced inside the real loader. The refusal does not hide which result a declaration pins.
+
+    Kills: the refusal branch going back to an empty pin set (detail would read the newest rerun, the lists the pin).
+    """
+    from app.services.structure_selection import loader
+
+    def refuse(bounds, visible):
+        raise CodedValueError("structure_selection_population_too_large", "over the bound", context={})
+
+    world, d, f = declared_world(db_session)
+    _with_unrelated_rerun(world, THREE)
+    monkeypatch.setattr(loader, "check_candidates", refuse)
+    trust = detail(client, world.entry)
+    assert trust["structure_assessment"]["status"] == "not_assessed_over_bound"
+    surfaces = _surfaces(client, world)
+    assert surfaces["detail"][4]["reaction_coordinate_designated_for_ts"] == "passed"  # the pin, not the newer rerun
+    assert len(set(map(repr, surfaces.values()))) == 1, surfaces
+    assert _box(client, world.entry)["calculation_ref"] == f.public_ref
+
+
+def test_the_box_applies_the_owner_status_exclusion_like_the_trust_projection(client, db_session):
+    """A deprecated declared entry: no declared target on its page, so the box describes the newest attached result.
+
+    Kills: the box's pin subquery without the owner-status exclusion.
+    """
+    world = make_ts_world(db_session, entry_status=RecordReviewStatus.deprecated)
+    saddle(world)
+    newest = world.freq("rerun", frequencies=THREE)
+    world.settle()
+    assert detail(client, world.entry)["structure_assessment"]["status"] == "no_declared_target"
+    box = _box(client, world.entry)
+    assert box["basis"] == "latest_direct_frequency" and box["calculation_ref"] == newest.public_ref
+
+
+def _two_declared_targets(db_session, *, older, newer):
+    """Two declared saddle targets on different geometries; each pins its own frequency result, the newer one last."""
+    world = make_ts_world(db_session)
+    _, _, _, first = saddle(world, n_freq=older)
+    _, _, _, second = saddle(world, n_freq=newer)
+    world.settle()
+    return world, first, second
+
+
+def test_when_several_declared_targets_pin_results_any_that_passes_is_the_representative(client, db_session):
+    """The newer pin has no imaginary mode; the older pin is a one-mode witness. The older one is what every surface reads.
+
+    Kills: the newest-pin-only rule.
+    """
+    world, older_pin, newer_pin = _two_declared_targets(db_session, older=GOOD, newer=FLAT)
+    surfaces = _surfaces(client, world)
+    assert surfaces["detail"][4]["reaction_coordinate_designated_for_ts"] == "passed"
+    assert len(set(map(repr, surfaces.values()))) == 1, surfaces
+    trust = detail(client, world.entry)
+    assert trust["structure_assessment"]["outcome"] == "qualified_evidence"
+    box = _box(client, world.entry)
+    assert (box["basis"], box["calculation_ref"], box["n_imag"]) == ("declared_curvature_witness", older_pin.public_ref, 1)
+    assert _record_in(search(client), world.entry.public_ref)["saddle_point"] == box
+
+
+def test_when_no_pinned_result_passes_the_newest_pin_is_the_representative(client, db_session):
+    world, older_pin, newer_pin = _two_declared_targets(db_session, older=THREE, newer=FLAT)
+    surfaces = _surfaces(client, world)
+    assert surfaces["detail"][4]["reaction_coordinate_designated_for_ts"] == "missing"
+    assert len(set(map(repr, surfaces.values()))) == 1, surfaces
+    box = _box(client, world.entry)
+    assert (box["basis"], box["calculation_ref"], box["n_imag"]) == ("declared_curvature_witness", newer_pin.public_ref, 0)
+
+
 # ---------------------------------------------------------------------------
 # Contracts: no default, version pin, machine review, fragment shape
 # ---------------------------------------------------------------------------
@@ -785,6 +873,7 @@ def test_every_production_call_site_passes_the_context():
         "_build_entry_record": "trust_scope",
     }
     calls = 0
+    exempted = 0
     for path in _APP.rglob("*.py"):
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
@@ -793,26 +882,41 @@ def test_every_production_call_site_passes_the_context():
             name = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", None)
             if name not in guarded:
                 continue
-            if path.name == "species.py":  # its own, unrelated ``_build_entry_record``
+            if path.name == "species.py" and name == "_build_entry_record":  # species.py's own, unrelated builder
+                exempted += 1
                 continue
             calls += 1
             assert guarded[name] in {k.arg for k in node.keywords}, f"{path.name}:{node.lineno} {name}"
     assert calls >= 8  # the scan found the call sites: a rename cannot make this vacuous
+    assert exempted == 1  # the exemption covers exactly the one call that justifies it
 
 
-def test_the_pinned_structure_versions_equal_the_live_ones_and_drift_refuses(db_session, monkeypatch):
-    """Kills: silent structure-semantics drift under the badge."""
+def test_the_pin_is_a_literal_tied_to_rubric_version_5():
+    """Editing the pin dict without a rubric bump fails here: the pair is written out, not derived.
+
+    Kills: changing the structure versions (or the dict) while the TS rubric stays at version 5.
+    """
+    assert (COMPUTED_TRANSITION_STATE_V5.version, TS_SCOPED_STRUCTURE_VERSIONS) == (
+        5,
+        {"assessment": "1", "normalizer": "1", "decision": "1"},
+    )
     assert TS_SCOPED_STRUCTURE_VERSIONS == {
         "assessment": ASSESSMENT_VERSION,
         "normalizer": NORMALIZER_VERSION,
         "decision": DECISION_VERSION,
     }
-    world = make_ts_world(db_session)
+
+
+def test_drift_fails_the_boot_not_a_request(monkeypatch):
+    """Kills: the drift check living in the request path (a 500 on every TS detail with include=trust)."""
+    from app.api.app import create_app
     from app.services.trust import rubrics, ts_scoped
 
     monkeypatch.setitem(rubrics.TS_SCOPED_STRUCTURE_VERSIONS, "decision", "999")
     with pytest.raises(RuntimeError, match="deliberate rubric bump"):
-        ts_scoped.scoped_ts_context(db_session, world.entry)
+        ts_scoped.validate_ts_scoped_structure_versions()
+    with pytest.raises(RuntimeError, match="deliberate rubric bump"):
+        create_app()
 
 
 def test_the_outcome_vocabulary_is_the_structure_selection_vocabulary_narrowed_to_the_evidence_question():

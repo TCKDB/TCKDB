@@ -54,6 +54,7 @@ from app.services.trust.models import (
     TransitionStateScopedAssessmentOutcome,
     TransitionStateScopedAssessmentStatus,
     TransitionStateTrustContext,
+    frequency_result_designates_its_reaction_coordinate,
 )
 
 _TYPES_WITH_OUTPUT_GEOMETRY: frozenset[CalculationType] = frozenset(
@@ -2675,6 +2676,15 @@ def _ts_representative_freq_result(ts_entry: TransitionStateEntry, context: Tran
         return None
     pinned = [calc for calc in freq_calcs if calc.public_ref in context.declared_curvature_refs]
     pool = pinned or freq_calcs
+    if pinned:
+        # Several declared targets can each pin a result: the frequency-presence checks pass if ANY pinned result passes
+        # the designation rule, and then that result is the representative; when none does, the newest pin is.
+        passing = [
+            c
+            for c in pinned
+            if frequency_result_designates_its_reaction_coordinate(c.freq_result.n_imag, c.freq_result.reaction_coordinate_mode_index)
+        ]
+        pool = passing or pinned
     chosen = max(pool, key=lambda c: (c.created_at, c.id))
     return chosen.freq_result
 
