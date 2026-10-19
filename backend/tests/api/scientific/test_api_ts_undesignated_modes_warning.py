@@ -8,6 +8,7 @@ reaction coordinate. Each test names the mutation it kills.
 from __future__ import annotations
 
 from app.db.models.common import CalculationType, RecordReviewStatus, SubmissionRecordType
+from app.services.trust import COMPUTED_TRANSITION_STATE_V5
 from tests.services.scientific_read._factories import (
     attach_freq_result,
     make_calculation,
@@ -62,11 +63,11 @@ def _trust(client, tse, **params):
 
 
 def test_detail_carries_the_warning_for_an_undesignated_multi_mode_result(client, db_session):
-    """Kills: the new check missing from the served rubric (a stale v3 check set)."""
+    """Kills: the new check missing from the served rubric (a stale check set), or a rubric version that is not the active one."""
     _, _, tse, _ = _ts_with_freqs(db_session, "UDW1", [[-300.0, -200.0, -100.0, 500.0]])
     trust = _trust(client, tse)
     assert trust["evidence"]["checks"][WARNING] == "warning"
-    assert trust["evidence"]["rubric_version"] == 4
+    assert trust["evidence"]["rubric_version"] == COMPUTED_TRANSITION_STATE_V5.version
     assert trust["is_certified"] is False
     assert trust["trust_status"] != "hard_failed"
 
