@@ -31,6 +31,7 @@ against a live database rather than mocking the lookups.
 from __future__ import annotations
 
 from app.db.models.statmech import Statmech
+from tests.id_leak import id_in_text
 from tests.services.scientific_read._factories import (
     attach_conformer_selection,
     make_chem_reaction,
@@ -179,7 +180,7 @@ def test_a_thermo_citing_another_species_statmech_is_coded(client, db_session) -
     assert body["context"]["owner_kind"] == "species_entry", body
     # The id the depositor supplied is theirs; the id of the entry that
     # owns it is not (DR-0028 Requirement 2).
-    assert str(other.id) not in str(body.get("detail", "")), body
+    assert not id_in_text(other.id, str(body.get("detail", ""))), body
 
 
 def test_a_thermo_citing_its_own_statmech_is_accepted(client, db_session) -> None:

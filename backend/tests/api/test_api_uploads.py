@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.id_leak import id_in_text
+
 
 def _hydrogen_conformer_payload(label: str = "conf-a") -> dict:
     return {
@@ -601,7 +603,7 @@ class TestThermoUpload:
         # The field the depositor wrote is still named, in context.
         assert body["context"]["field"].endswith("existing_calculation_id")
         # No internal id values leaked.
-        assert str(calc_id) not in detail
+        assert not id_in_text(calc_id, detail)
         assert "species_entry_id=" not in detail
 
     def test_existing_calc_role_type_mismatch_returns_422(self, client):

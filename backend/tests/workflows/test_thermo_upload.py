@@ -63,6 +63,7 @@ from app.services.calculation_ownership import (
 from app.services.species_resolution import resolve_species_entry
 from app.services.thermo_resolution import persist_thermo
 from app.workflows.thermo import persist_thermo_upload
+from tests.id_leak import id_in_text
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -1740,7 +1741,7 @@ def test_thermo_upload_statmech_wrong_species_entry_raises_422(db_conn) -> None:
     detail = str(exc_info.value)
     assert "species_entry_id=" not in detail
     assert "id=" not in detail
-    assert str(statmech_a.id) not in detail
+    assert not id_in_text(statmech_a.id, detail)
 
 
 def test_schema_rejects_negative_enthalpy_formation_0k_uncertainty() -> None:

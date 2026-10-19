@@ -46,6 +46,7 @@ from app.db.models.idempotency import IdempotencyRecord
 from app.db.models.record_review import RecordReview, RecordReviewEvent
 from app.db.models.submission import Submission, SubmissionRecordLink
 from tests.api.artifact_urls import artifacts_url
+from tests.id_leak import id_in_text
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 GAUSSIAN_OPT_LOG = FIXTURES / "gaussian" / "opt_g09.log"
@@ -569,7 +570,7 @@ class TestAuthorization:
         body = resp.json()
         assert "not authorized" in body["detail"].lower()
         # 403 detail must not leak internal IDs.
-        assert str(calc_id) not in body["detail"]
+        assert not id_in_text(calc_id, body["detail"])
 
     def test_curator_override(
         self, client, db_session, stub_store_artifact, make_user_client

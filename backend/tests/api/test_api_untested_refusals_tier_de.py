@@ -80,6 +80,7 @@ from tests.api.test_api_scientific_rejection_codes import (
     _bundle_species,
     _map,
 )
+from tests.id_leak import id_in_text
 from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
@@ -944,7 +945,7 @@ def test_the_download_route_publishes_the_same_code_for_the_same_break(
     # DR-0028 Req. 2 — a subsystem is named and nothing else. No digest,
     # no artifact id, nothing a caller could use to probe stored content.
     assert body["context"] == {}, body
-    assert str(artifact.id) not in str(body.get("detail")), body
+    assert not id_in_text(artifact.id, str(body.get("detail"))), body
 
     # ADR 0014: the break outlives the request that discovered it. This is
     # the half that must survive the code change.
@@ -1018,7 +1019,7 @@ def test_a_missing_object_names_the_storage_subsystem_too(
         status=502,
     )
     assert body["context"] == {}, body
-    assert str(artifact.id) not in str(body.get("detail")), body
+    assert not id_in_text(artifact.id, str(body.get("detail"))), body
 
     events = db_session.scalars(
         select(ArtifactIntegrityEvent).where(
