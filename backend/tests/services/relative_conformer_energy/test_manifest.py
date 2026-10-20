@@ -99,3 +99,17 @@ def test_a_current_version_manifest_missing_the_field_is_refused(manifest):
     with pytest.raises(ReplayError) as raised:
         replay_relative_energies(reseal(forged))
     assert raised.value.code == "result_mismatch"
+
+
+def test_the_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_bool_or_missing_one(manifest):
+    from app.services.relative_conformer_energy.manifest import MANIFEST_FORMAT, MANIFEST_FORMATS
+    from tests.services._format_cases import bad_format_versions
+
+    current = MANIFEST_FORMATS.current(MANIFEST_FORMAT).version
+    assert manifest["manifest_format_version"] == current and type(current) is int
+    for bad in [*bad_format_versions(current), "absent"]:
+        tampered = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
+        if bad != "absent":
+            tampered["manifest_format_version"] = bad
+        with pytest.raises(ReplayError, match="unknown manifest format"):
+            replay_relative_energies(tampered)

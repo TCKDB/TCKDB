@@ -418,3 +418,22 @@ def test_replay_refuses_a_rule_that_is_gone_changed_or_repinned(protocol_selecti
     # A replay under a rule that says the opposite does not reproduce the decision.
     flipped = Pref("R1", prefer="unrestricted", yield_="restricted")
     assert replay_matches(result.manifest, rules=[flipped]) is False
+
+
+def test_the_writer_stamps_the_registered_format_and_every_reader_refuses_a_float_bool_or_missing_one(
+    db_session, calc_selection
+):
+    from app.services.structure_selection.manifest import MANIFEST_FORMAT_NAME, MANIFEST_FORMATS
+    from tests.services._format_cases import bad_format_versions
+
+    _, result = calc_selection
+    manifest = result.manifest
+    current = MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version
+    assert manifest["manifest_format_version"] == current and type(current) is int
+    for bad in [*bad_format_versions(current), "absent"]:
+        tampered = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
+        if bad != "absent":
+            tampered["manifest_format_version"] = bad
+        for read in (replay_structure_assessment, replay_structure_decision, replay_matches):
+            with pytest.raises(ReplayError, match="unknown manifest format"):
+                read(tampered)

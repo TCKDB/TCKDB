@@ -100,3 +100,19 @@ def test_a_rule_version_this_release_does_not_carry_is_refused():
     _e1(manifest)["version"] = "0.9.0"
     with pytest.raises(ReplayError, match="0.9.0"):
         replay_decision(manifest, rules=RULES["e1_g4_over_g3"])
+
+
+def test_the_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_bool_or_missing_one():
+    from app.services.thermo_selection.models import MANIFEST_FORMAT_NAME
+    from tests.services._format_cases import bad_format_versions
+
+    manifest = _manifest("single")
+    current = MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version
+    assert manifest["manifest_format_version"] == current and type(current) is int
+    for bad in bad_format_versions(current):
+        tampered = {**manifest, "manifest_format_version": bad}
+        with pytest.raises(ReplayError, match="unknown manifest format"):
+            replay_decision(tampered, rules=RULES["single"])
+    missing = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
+    with pytest.raises(ReplayError, match="unknown manifest format"):
+        replay_decision(missing, rules=RULES["single"])

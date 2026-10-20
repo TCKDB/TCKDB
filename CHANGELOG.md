@@ -48,12 +48,17 @@ behaviour by version now asks a registry instead of a hand-written dictionary or
   conformer energy manifests register their format in a `startup_checked` `MANIFEST_FORMATS` registry. The writer stamps the registry's
   current version; the reader looks up the version the manifest recorded. A missing, non-integer or unregistered version is refused with the same
   message as before (a manifest that records no version is never read as the current one). `SUPPORTED_MANIFEST_FORMATS` is gone.
+  **Deliberately stricter:** the readers now match the recorded version as an exact integer, so a float (`2.0`) or a bool (`True`) is
+  refused, where the old frozenset/`!=` readers accepted them because `2.0 == 2` and `True == 1`. Text, `null` and a missing key were
+  already refused. No manifest this release writes is affected (they record a plain integer); only a hand-edited or foreign manifest.
 - **Not converted, and why:** rule versions, policy versions and assessment-semantics versions are still text (`"1.0.0"`, `"2"`), and a
   registry version is an integer from 1, so they move to registries with the reset in PR-4. The dataset-release renderer and the
   machine-review audit adapter dispatch on a fused wire tag (`tckdb.dataset_release.v2`, `machine_review_v2`), which is also PR-4.
 - Debt list: every PR-3 row is removed (111 rows); 57 rows remain, all PR-4. Two PR-4 rows whose f-string text named a renamed
   constant are declared in the new `MOVED_DEBT` tuple, which `check_versioned_debt_not_grown.py` accepts only for a row whose old text
-  existed at the merge base, is gone from the head and has no higher count; each move is printed for the reviewer.
+  existed at the merge base, is gone from the head, has no higher count, and whose new text is the old text with only the whole-word
+  identifiers of the declared `RENAMES` map replaced (each new name in that map must itself pass the version patterns, read from the merge
+  base). An old row can be claimed by one move only. A move is printed once, while the base still has the old row; once it has landed it is inert.
 
 ## Legacy and replay-only versions deleted (versioning PR-2, 2026-10-20)
 

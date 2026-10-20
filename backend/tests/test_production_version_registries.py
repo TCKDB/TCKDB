@@ -153,8 +153,9 @@ def test_the_current_manifest_format_is_read_back_as_registered() -> None:
     assert got == ManifestFormat(MANIFEST_FORMAT_NAME, current.version)
 
 
-def test_the_writers_stamp_the_registered_current_format() -> None:
-    """The writer reads the version from the registry; the exported constant is only the registration argument."""
+def test_the_exported_format_constants_are_what_each_registry_holds_as_current() -> None:
+    """The constants are only the registration argument. That each *writer* stamps the registry's version, and
+    each reader refuses a float, bool, text or missing one, is tested per engine beside its manifest tests."""
     from app.services.kinetics_selection.manifest import MANIFEST_FORMAT_NAME as k_name
     from app.services.kinetics_selection.manifest import MANIFEST_FORMAT_VERSION as k_ver
     from app.services.network_selection.manifest import MANIFEST_FORMAT_NAME as n_name

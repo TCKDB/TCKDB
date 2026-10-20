@@ -35,6 +35,35 @@ COMPLETED_PRS: frozenset[str] = frozenset({"PR-2", "PR-3"})
 #: Bound exactly once, as a literal tuple: the script refuses anything else.
 NEW_ALLOWANCES: tuple[tuple[str, str, str], ...] = ()
 
+#: The identifier renames PR-3 made. A ``MOVED_DEBT`` row is valid only if its new text is its old text with
+#: these whole-word identifiers replaced and nothing else, and every new name here must itself pass the guard
+#: (``scripts/check_versioned_debt_not_grown.py`` checks both against the merge base's patterns). Bound exactly
+#: once, as a literal tuple. PR-4 deletes it with ``MOVED_DEBT``.
+RENAMES: tuple[tuple[str, str], ...] = (
+    ('COMPUTED_CALCULATION_V2', 'COMPUTED_CALCULATION'),
+    ('COMPUTED_KINETICS_V2', 'COMPUTED_KINETICS'),
+    ('COMPUTED_STATMECH_V2', 'COMPUTED_STATMECH'),
+    ('COMPUTED_THERMO_V2', 'COMPUTED_THERMO'),
+    ('COMPUTED_TRANSPORT_V2', 'COMPUTED_TRANSPORT'),
+    ('COMPUTED_TRANSITION_STATE_V5', 'COMPUTED_TRANSITION_STATE'),
+    ('COMPUTED_TS_STATMECH_V1', 'COMPUTED_TS_STATMECH'),
+    ('EXTERNAL_CP_COMPARISON_V2', 'EXTERNAL_CP_COMPARISON'),
+    ('THERMO_CONSISTENCY_V1', 'THERMO_CONSISTENCY'),
+    ('THERMO_KINETICS_CONSISTENCY_V1', 'THERMO_KINETICS_CONSISTENCY'),
+    ('GIBBS_SELF_CONSISTENCY_V1', 'GIBBS_SELF_CONSISTENCY'),
+    ('HESS_CONSISTENCY_V1', 'HESS_CONSISTENCY'),
+    ('KIRCHHOFF_CONSISTENCY_V1', 'KIRCHHOFF_CONSISTENCY'),
+    ('ISOTOPE_IDENTITY_CONSISTENCY_V1', 'ISOTOPE_IDENTITY_CONSISTENCY'),
+    ('BOUNDS_V1', 'DEFAULT_BOUNDS'),
+    ('ContributionBundleV0', 'ContributionBundle'),
+    ('MachineReviewProviderFindingV2', 'MachineReviewProviderFinding'),
+    ('MachineReviewProviderResultV2', 'MachineReviewProviderResult'),
+    ('MACHINE_REVIEW_V2_SCHEMA_VERSION', 'MACHINE_REVIEW_SCHEMA_VERSION'),
+    ('parse_machine_review_v2_payload', 'parse_machine_review_payload'),
+    ('machine_review_v2_result_to_details_json', 'machine_review_result_to_details_json'),
+    ('record_machine_review_v2_audit_event', 'record_machine_review_audit_event'),
+)
+
 #: Debt rows whose token text changed only because a rename (a PR-3 rename of an identifier the text mentions)
 #: rewrote it: ``(path, kind, old token, new token)``. The violation, its file, its kind and its count are the
 #: same as at the merge base; ``scripts/check_versioned_debt_not_grown.py`` accepts the new text instead of

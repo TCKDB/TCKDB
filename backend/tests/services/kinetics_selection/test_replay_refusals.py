@@ -93,3 +93,17 @@ def test_the_pinned_digest_is_the_shipped_bytes():
     for rule in default_rules():
         if rule.rule_id == "K-XYG3-B3LYP-BARRIER":
             assert rule.describe()["manifest_sha256"] == XYG3_MANIFEST_SHA256
+
+
+def test_the_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_bool_or_missing_one(db_session, world):
+    from app.services.kinetics_selection.manifest import MANIFEST_FORMAT_NAME
+    from tests.services._format_cases import bad_format_versions
+
+    manifest = _fresh(db_session, world)
+    current = MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version
+    assert manifest["manifest_format_version"] == current and type(current) is int
+    for bad in bad_format_versions(current):
+        with pytest.raises(ReplayError, match="unknown manifest format"):
+            replay_decision({**manifest, "manifest_format_version": bad})
+    with pytest.raises(ReplayError, match="unknown manifest format"):
+        replay_decision({k: v for k, v in manifest.items() if k != "manifest_format_version"})

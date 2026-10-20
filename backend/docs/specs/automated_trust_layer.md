@@ -605,9 +605,9 @@ was internally consistent and validly owned, so the badge was a defect.
 *same spec object*, so the two cannot drift. It adds no transition-state-specific check: no imaginary-mode count, no
 reaction-coordinate designation, no IRC requirement.
 
-**Selection.** `statmech_rubric_for(statmech)` returns the TS rubric iff `species_entry_id is None and transition_state_entry_id is
+**Selection.** `statmech_rubric_for(statmech)` returns the *name* of the TS rubric (`computed_ts_statmech`; resolve it with `RUBRICS.get(name)`) iff `species_entry_id is None and transition_state_entry_id is
 not None`, else `computed_statmech` v2 (a row with neither or both owners, impossible under the CHECK, keeps v2).
-`RUBRIC_REGISTRY["statmech"]` stays v2: it is the record-type default. The TS rubric lives in `OWNER_SCOPED_RUBRICS`, which the
+`RUBRIC_NAME_FOR_RECORD_TYPE["statmech"]` stays `computed_statmech` (v2): it is the record-type default. The TS rubric is listed in `OWNER_SCOPED_RUBRIC_NAMES`, which the
 API vocabulary also reads. The structural hard-fail check differs only in its first line (`transition_state_entry_missing`, an
 existing `HardFailReason`); external symmetry, torsion dimension and required-role source calculations are shared code.
 
