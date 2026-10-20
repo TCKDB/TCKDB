@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel, Field
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import (
     DatasetReleaseStatus,
@@ -74,8 +75,8 @@ class ReleaseVersionBinding(BaseModel):
     alembic_revision: str
     backend_version: str
     schemas_package_version: str
-    review_policy_version: str
-    recovery_archive_schema: str
+    review_policy: VersionRef
+    recovery_archive: VersionRef
 
 
 class DatasetReleaseSummary(BaseModel):
@@ -103,7 +104,7 @@ class ReleaseManifestSummary(BaseModel):
     """The frozen manifest: the document a citation resolves to."""
 
     manifest_ref: str
-    manifest_schema: str
+    manifest_format: VersionRef
     profile: ReadProfile
     content_sha256: str
     generated_at: str | None = None

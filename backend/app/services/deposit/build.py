@@ -1,10 +1,10 @@
-"""Build and verify a ``tckdb.deposit.v1`` publication deposit.
+"""Build and verify a ``tckdb.deposit`` publication deposit.
 
 What a deposit is
 -----------------
 A published dataset release freezes four NDJSON files and a manifest, but by
 its own contract omits the evidence: raw artifact bytes, geometries and
-calculation payloads. That evidence lives in a ``tckdb.archive.v1`` archive.
+calculation payloads. That evidence lives in a ``tckdb.archive`` archive.
 Neither says which git commit produced it, and nothing binds the two to the
 scripts that turn the database into the numbers a manuscript quotes.
 
@@ -67,6 +67,7 @@ from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.base import Base
 from app.db.models.app_user import AppUser
@@ -77,13 +78,14 @@ from app.db.models.molecular_property_observation import (
 )
 from app.services.archive import verify_archive, write_archive
 from app.services.deposit.expected_outputs import Generator, write_expected_outputs
+from app.services.document_formats import DEPOSIT, FORMATS, header_of, reads_as
 from app.services.release import versions
 from app.services.release.artifacts import canonical_json, release_record_universe
 from app.services.release.manifest import load_manifest, verify_release
 from app.services.release.record_rights import linked_rights
 from app.services.rights import licenses_match
 
-DEPOSIT_SCHEMA = "tckdb.deposit.v1"
+DEPOSIT_FORMAT: VersionRef = FORMATS.current(DEPOSIT)
 MANIFEST_NAME = "MANIFEST.json"
 REPRODUCE_TEMPLATE = Path(__file__).with_name("REPRODUCE.md.template")
 
@@ -624,7 +626,7 @@ def _assert_observations_have_rights_basis(
     explicitly avoids elsewhere.
 
     The place an observation *does* travel out under a release's name is
-    here: ``write_deposit`` bundles the full ``tckdb.archive.v1`` evidence
+    here: ``write_deposit`` bundles the full ``tckdb.archive`` evidence
     archive -- every table, unconditionally -- into one release's deposit
     (see the module docstring), and nothing before this checked that the
     observations inside it are licensed compatibly with ``release.
@@ -809,7 +811,7 @@ def write_deposit(
 
         members.sort(key=lambda member: member.path)
         document = {
-            "schema": DEPOSIT_SCHEMA,
+            "format": header_of(DEPOSIT_FORMAT),
             "release": {
                 "tag": release.tag,
                 "ref": release.public_ref,
@@ -875,8 +877,10 @@ def verify_deposit(path: Path, session: Session | None = None) -> DepositVerific
         document = json.loads(manifest_path.read_bytes())
     except json.JSONDecodeError as exc:
         return DepositVerificationReport(root, None, 0, [f"{MANIFEST_NAME} is not valid JSON: {exc}"], session is not None)
-    if not isinstance(document, dict) or document.get("schema") != DEPOSIT_SCHEMA:
-        problems.append(f"schema is {document.get('schema') if isinstance(document, dict) else None!r}, expected {DEPOSIT_SCHEMA!r}")
+    if not isinstance(document, dict) or reads_as(document.get("format"), DEPOSIT) != DEPOSIT_FORMAT:
+        problems.append(
+            f"format is {document.get('format') if isinstance(document, dict) else None!r}, expected {header_of(DEPOSIT_FORMAT)!r}"
+        )
         return DepositVerificationReport(root, None, 0, problems, session is not None)
 
     release_block = document.get("release") if isinstance(document.get("release"), dict) else {}
@@ -1031,7 +1035,7 @@ def _verify_against_database(
 
 
 __all__ = [
-    "DEPOSIT_SCHEMA",
+    "DEPOSIT_FORMAT",
     "MANIFEST_NAME",
     "REQUIRED_ROLE_COUNTS",
     "RESIDUAL_RISK_PARAGRAPH",

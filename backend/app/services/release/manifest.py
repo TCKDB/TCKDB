@@ -46,14 +46,14 @@ This is deliberately not the other two things TCKDB can emit:
 ===================================  ==============================  =========
 Format                               Contract                        Lossless?
 ===================================  ==============================  =========
-``tckdb.dataset_release.v2`` (here)  citable, immutable, curated;     no — it
+``tckdb.dataset_release`` (here)     citable, immutable, curated;     no — it
                                      ships selections *and* the       is a
                                      candidates and review history    scientific
                                      they were chosen from            release,
                                                                       not a DB
-``tckdb.archive.v1``                 operator disaster recovery;      yes
+``tckdb.archive``                    operator disaster recovery;      yes
                                      restores a database
-``tckdb.export.v0``                  convenience projection           no, and
+``tckdb.export``                     convenience projection           no, and
                                      (NDJSON/CHEMKIN/ML)              says so
 ===================================  ==============================  =========
 
@@ -66,11 +66,13 @@ distinction is stated in naming, in this table, in every manifest's
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import (
     DatasetReleaseStatus,
@@ -82,6 +84,7 @@ from app.db.models.dataset_release import (
     ReleaseArtifact,
     ReleaseManifest,
 )
+from app.services.document_formats import EXPORT, current_header, header_of
 from app.services.release import versions
 from app.services.release.artifacts import (
     RenderedArtifact,
@@ -91,6 +94,7 @@ from app.services.release.artifacts import (
 )
 from app.services.release.record_rights import linked_rights, rights_summary
 from app.services.release.records import encode_scalar
+from app.versioning import UnknownVersion, VersionRegistry
 
 
 class ReleaseStateError(RuntimeError):
@@ -146,10 +150,10 @@ class DivergenceReport:
     )
 
 
-def _contract_block(*, ships: list[str], recovery_archive_schema: str) -> dict[str, Any]:
+def _contract_block(*, ships: list[str], recovery_archive_format: VersionRef) -> dict[str, Any]:
     """State plainly what this format is, and what it is not.
 
-    ``ships`` and ``recovery_archive_schema`` are passed in rather than read
+    ``ships`` and ``recovery_archive_format`` are passed in rather than read
     from live module constants so that bumping a contract tag or adding an
     artifact kind cannot retroactively change a published document's digest.
     """
@@ -162,8 +166,8 @@ def _contract_block(*, ships: list[str], recovery_archive_schema: str) -> dict[s
         "lossless_database_backup": False,
         "reingestible": False,
         "distinct_from": {
-            "recovery_archive": recovery_archive_schema,
-            "convenience_projection": "tckdb.export.v0",
+            "recovery_archive": header_of(recovery_archive_format),
+            "convenience_projection": current_header(EXPORT),
         },
         "ships": sorted(ships),
         "omits": [
@@ -207,10 +211,10 @@ class ManifestSnapshot:
     policy_version: str
     policy_description: str
     policy_criteria: dict[str, Any]
-    manifest_schema: str
-    recovery_archive_schema: str
+    manifest_format: VersionRef
+    recovery_archive_format: VersionRef
     contract: dict[str, Any]
-    versions: dict[str, str]
+    versions: dict[str, Any]
     selected_record_count: int
     candidate_record_count: int
     artifacts: list[dict[str, Any]]
@@ -222,27 +226,28 @@ class ManifestSnapshot:
 def render_manifest_document(snapshot: ManifestSnapshot) -> dict[str, Any]:
     """Build the canonical manifest document from a snapshot (no digest).
 
-    Dispatches on the snapshot's own ``manifest_schema`` -- the tag stored on
-    the manifest row -- and never on the live :data:`versions.MANIFEST_SCHEMA`
-    constant, so the renderer a row was frozen under is the renderer that
-    re-renders it. A tag no renderer is registered for is refused: nothing
-    guesses a shape for a document it does not know.
+    Dispatches on the snapshot's own ``manifest_format`` -- the name and
+    version stored on the manifest row -- and never on the live
+    :data:`versions.MANIFEST_FORMAT` constant, so the renderer a row was frozen
+    under is the renderer that re-renders it. A format no renderer is registered
+    for is refused: nothing guesses a shape for a document it does not know.
 
-    :raises ReleaseManifestStateConflict: the stored tag has no renderer.
+    :raises ReleaseManifestStateConflict: the stored format has no renderer.
     """
-    render = _RENDERERS.get(snapshot.manifest_schema)
-    if render is None:
+    try:
+        render = RENDERERS.get(snapshot.manifest_format.name, snapshot.manifest_format.version)
+    except UnknownVersion:
         raise ReleaseManifestStateConflict(
             "unknown_manifest_schema: this build has no renderer for the "
             "manifest format the row was frozen under."
-        )
+        ) from None
     return render(snapshot)
 
 
 def _render(snapshot: ManifestSnapshot) -> dict[str, Any]:
     """The current dataset-release document shape."""
     return {
-        "schema": snapshot.manifest_schema,
+        "format": header_of(snapshot.manifest_format),
         # A release is by construction the curated contract. Recorded rather
         # than assumed so the document is self-describing outside this codebase.
         "profile": ReadProfile.curated.value,
@@ -287,10 +292,14 @@ def _render(snapshot: ManifestSnapshot) -> dict[str, Any]:
     }
 
 
-#: Renderer per manifest tag, bound once at import. Keyed on the tag a row
-#: stores, not read from ``versions`` at call time, so a moved constant never
-#: changes how an already-frozen row renders.
-_RENDERERS = {versions.MANIFEST_SCHEMA: _render}
+#: Renderer per manifest format, bound once at import. Keyed on the (name, version) a row stores, not read from
+#: ``versions`` at call time, so a moved constant never changes how an already-frozen row renders. A future format
+#: version is registered beside this one (``current=False`` once superseded) for as long as a published release cites it.
+RENDERERS: VersionRegistry[Callable[[ManifestSnapshot], dict[str, Any]]] = VersionRegistry(
+    "release_manifest_renderers", startup_checked=True
+)
+RENDERERS.register(versions.MANIFEST_FORMAT.name, versions.MANIFEST_FORMAT.version, _render, current=True)
+RENDERERS.validate()
 
 
 def manifest_digest(document: dict[str, Any]) -> str:
@@ -358,14 +367,14 @@ def freeze_manifest(
         "alembic_revision": versions.alembic_revision(session),
         "backend_version": versions.backend_version(),
         "schemas_package_version": versions.schemas_package_version(),
-        "review_policy_version": versions.REVIEW_POLICY_VERSION,
-        "recovery_archive_schema": versions.RECOVERY_ARCHIVE_SCHEMA,
+        "review_policy": header_of(versions.REVIEW_POLICY),
+        "recovery_archive": header_of(versions.RECOVERY_ARCHIVE_FORMAT),
     }
     policy = release.curation_policy
     artifact_entries = _artifact_entries(rendered)
     contract = _contract_block(
         ships=[entry["path"] for entry in artifact_entries],
-        recovery_archive_schema=binding["recovery_archive_schema"],
+        recovery_archive_format=versions.RECOVERY_ARCHIVE_FORMAT,
     )
     # The rights block spans everything the release ships -- the same set the
     # publish gate checked and the renderer wrote -- and is snapshotted onto
@@ -394,8 +403,8 @@ def freeze_manifest(
         policy_version=policy.version,
         policy_description=policy.description,
         policy_criteria=encode_scalar(dict(policy.criteria_json or {})),
-        manifest_schema=versions.MANIFEST_SCHEMA,
-        recovery_archive_schema=binding["recovery_archive_schema"],
+        manifest_format=versions.MANIFEST_FORMAT,
+        recovery_archive_format=versions.RECOVERY_ARCHIVE_FORMAT,
         contract=contract,
         versions=binding,
         selected_record_count=selected_count,
@@ -407,14 +416,17 @@ def freeze_manifest(
 
     manifest = ReleaseManifest(
         dataset_release_id=release.id,
-        manifest_schema=snapshot.manifest_schema,
+        manifest_format_name=snapshot.manifest_format.name,
+        manifest_format_version=snapshot.manifest_format.version,
         profile=ReadProfile.curated,
         alembic_revision=binding["alembic_revision"],
         backend_version=binding["backend_version"],
         schemas_package_version=binding["schemas_package_version"],
-        review_policy_version=binding["review_policy_version"],
+        review_policy_name=versions.REVIEW_POLICY.name,
+        review_policy_version=versions.REVIEW_POLICY.version,
         curation_policy_id=release.curation_policy_id,
-        recovery_archive_schema=binding["recovery_archive_schema"],
+        recovery_archive_format_name=versions.RECOVERY_ARCHIVE_FORMAT.name,
+        recovery_archive_format_version=versions.RECOVERY_ARCHIVE_FORMAT.version,
         release_public_ref=snapshot.release_ref,
         release_published_at=release.published_at,
         release_tag=snapshot.tag,
@@ -501,15 +513,20 @@ def snapshot_from_manifest(manifest: ReleaseManifest) -> ManifestSnapshot:
         policy_version=manifest.curation_policy_version,
         policy_description=manifest.curation_policy_description,
         policy_criteria=dict(manifest.curation_policy_criteria_json or {}),
-        manifest_schema=manifest.manifest_schema,
-        recovery_archive_schema=manifest.recovery_archive_schema,
+        manifest_format=VersionRef(name=manifest.manifest_format_name, version=manifest.manifest_format_version),
+        recovery_archive_format=VersionRef(
+            name=manifest.recovery_archive_format_name, version=manifest.recovery_archive_format_version
+        ),
         contract=dict(manifest.contract_json),
         versions={
             "alembic_revision": manifest.alembic_revision,
             "backend_version": manifest.backend_version,
             "schemas_package_version": manifest.schemas_package_version,
-            "review_policy_version": manifest.review_policy_version,
-            "recovery_archive_schema": manifest.recovery_archive_schema,
+            "review_policy": {"name": manifest.review_policy_name, "version": manifest.review_policy_version},
+            "recovery_archive": {
+                "name": manifest.recovery_archive_format_name,
+                "version": manifest.recovery_archive_format_version,
+            },
         },
         selected_record_count=manifest.selected_record_count,
         candidate_record_count=manifest.candidate_record_count,

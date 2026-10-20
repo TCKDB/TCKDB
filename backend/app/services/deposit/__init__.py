@@ -1,7 +1,7 @@
-"""Digest-bound publication deposit (``tckdb.deposit.v1``).
+"""Digest-bound publication deposit (``tckdb.deposit``).
 
 A *release* is the citable, frozen scientific product (four NDJSON files and
-a manifest). An *archive* is the lossless ``tckdb.archive.v1`` database
+a manifest). An *archive* is the lossless ``tckdb.archive`` database
 snapshot that carries the evidence behind it. A *deposit* is the directory
 that binds one release, its archive, the exact source commit, the scripts
 that generate every manuscript number and those scripts' expected outputs
@@ -11,7 +11,7 @@ byte. See :mod:`app.services.deposit.build`.
 """
 
 from app.services.deposit.build import (
-    DEPOSIT_SCHEMA,
+    DEPOSIT_FORMAT,
     AccountNotAllowlistedError,
     ActorOutsideAllowlistError,
     DepositError,
@@ -39,7 +39,7 @@ from app.services.deposit.expected_outputs import (
 )
 
 __all__ = [
-    "DEPOSIT_SCHEMA",
+    "DEPOSIT_FORMAT",
     "AccountNotAllowlistedError",
     "ActorOutsideAllowlistError",
     "DepositError",

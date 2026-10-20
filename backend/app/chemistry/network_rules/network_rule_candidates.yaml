@@ -388,7 +388,7 @@ rules:
   open_access: null
   activation_approved: false
   owner_acceptance: null
-  citation: proposed evidence rule (the Network-v1 council record, section 3, "alternate fits of one solve").
+  citation: proposed evidence rule (the first network-selection council record, section 3, "alternate fits of one solve").
   council_observation: >-
     Demonstrated independent representation fidelity can select a better fit for a declared domain metric while
     retaining common-source dependence. Fit quality does not rank different physical solves.

@@ -192,7 +192,7 @@ def validate_rules(rules: Sequence[StructureRule]) -> None:
 #: SHA-256 of ``structure_rule_candidates.yaml`` as shipped (manifest 0.2.0). The registry refuses to load over any
 #: other bytes; a change to an entry, a blocker or a source list is a new manifest version, a new pin and a new rule
 #: version. A manifest handed to a rule must be the one this pins.
-STRUCTURE_RULE_MANIFEST_SHA256 = "812301928688c9a921b70c8b1195881489b40078564483145a8dcb7d67b84621"
+STRUCTURE_RULE_MANIFEST_SHA256 = "0dc5ff853cec30767a2e38fbabb07f3966efca34d8af7d43624a3246a6639c27"
 
 #: Ids of audited rules whose predicates have been written and reviewed. None yet: approval in the manifest alone
 #: applies nothing, and approving one rule never enables another.

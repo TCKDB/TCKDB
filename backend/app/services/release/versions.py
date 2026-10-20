@@ -16,29 +16,29 @@ from importlib import metadata
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
-#: Wire tag of the dataset-release manifest contract. Bumped only when the
-#: rendered manifest document changes shape, since ``content_sha256`` values
-#: recorded under an older tag would no longer reproduce. The renderer
-#: branches on the tag *stored on the manifest row*, never on this constant,
-#: so a row frozen under an older tag keeps reproducing its digest.
+from app.services.document_formats import ARCHIVE, DATASET_RELEASE, FORMATS
+from app.services.document_formats import REVIEW_POLICY as REVIEW_POLICY_NAME
+
+#: The dataset-release manifest format, recorded on the manifest row as a name beside an integer version. Bumped
+#: only when the rendered manifest document changes shape, since ``content_sha256`` values recorded under an older
+#: version would no longer reproduce. The renderer dispatches on the format *stored on the manifest row*
+#: (:data:`~app.services.document_formats.FORMATS`), never on this constant, so a row frozen under an older version
+#: keeps reproducing its digest.
 #:
-#: The document carries a ``rights`` block: the data license, the number of
-#: rights attestations standing behind the shipped records, and a count per
-#: basis kind.
-MANIFEST_SCHEMA = "tckdb.dataset_release.v2"
+#: The document carries a ``rights`` block: the data license, the number of rights attestations standing behind the
+#: shipped records, and a count per basis kind.
+MANIFEST_FORMAT: VersionRef = FORMATS.current(DATASET_RELEASE)
 
-#: The *recovery* archive contract, recorded in the manifest purely so a
-#: reader can see that it is a different thing (see
-#: ``backend/docs/specs/dataset_release_and_profiles.md``). Kept in step with
-#: ``app.services.archive.core.ARCHIVE_SCHEMA`` by a drift-guard test.
-RECOVERY_ARCHIVE_SCHEMA = "tckdb.archive.v1"
+#: The *recovery* archive contract, recorded in the manifest purely so a reader can see that it is a different thing
+#: (see ``backend/docs/specs/dataset_release_and_profiles.md``). The same ref as the archive writer's.
+RECOVERY_ARCHIVE_FORMAT: VersionRef = FORMATS.current(ARCHIVE)
 
-#: Version of the review/trust policy the corpus was curated under: the
-#: ``RecordReviewStatus`` vocabulary plus the guarded transition machine in
-#: ``app/services/record_review.py``. Bumped when either changes meaning, so a
+#: The review/trust policy the corpus was curated under: the ``RecordReviewStatus`` vocabulary plus the guarded
+#: transition machine in ``app/services/record_review.py``. Its version is raised when either changes meaning, so a
 #: release states what "approved" meant when it was cut.
-REVIEW_POLICY_VERSION = "record_review.v1"
+REVIEW_POLICY: VersionRef = FORMATS.current(REVIEW_POLICY_NAME)
 
 UNKNOWN = "unknown"
 
@@ -73,9 +73,9 @@ def schemas_package_version() -> str:
 
 
 __all__ = [
-    "MANIFEST_SCHEMA",
-    "RECOVERY_ARCHIVE_SCHEMA",
-    "REVIEW_POLICY_VERSION",
+    "MANIFEST_FORMAT",
+    "RECOVERY_ARCHIVE_FORMAT",
+    "REVIEW_POLICY",
     "UNKNOWN",
     "alembic_revision",
     "backend_version",

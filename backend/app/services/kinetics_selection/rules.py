@@ -46,7 +46,7 @@ EDGE_LABEL = "expected-performance inference"
 #: SHA-256 of ``xyg3_b3lyp_barrier_manifest.yaml`` as shipped. The rule refuses to load over any
 #: other bytes; a change to a member, a barrier height or a blocker is a new manifest version, a new pin and a new
 #: rule version.
-XYG3_MANIFEST_SHA256 = "e7f37fa3b726f632c3a264d8a62e216945eff5c8036fcf6afef7dfcafd976989"
+XYG3_MANIFEST_SHA256 = "0b3b743d1e9a262797cb4a36fe69c339a5dfefbda0c1949d51ec452fe29e4293"
 
 #: The protocol components, other than the one a rule compares, that must be stated and equal on both sides for the
 #: rule's evidence to speak about the whole rate.

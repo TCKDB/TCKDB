@@ -42,7 +42,7 @@ E1_RULE_VERSION = 1
 #: SHA-256 of ``e1_g4_over_g3_manifest.yaml`` as approved by the curator. The rule refuses
 #: to load over any other bytes; a change to a member or a recipe fact is a new manifest version, a new
 #: pin and a new ``E1_RULE_VERSION``.
-E1_MANIFEST_SHA256 = "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0"
+E1_MANIFEST_SHA256 = "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926"
 
 _ATOMIZATION = "atomization"
 #: The route the benchmark used (manifest recipe_facts.formation_enthalpy and molecular_thermal_correction):
