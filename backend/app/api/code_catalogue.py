@@ -3001,9 +3001,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "than guess a shape. 409 because the manifest operation is "
                 "forbidden by the stored state (the same class as "
                 "manifest_already_frozen), not because the request was "
-                "malformed. Releases frozen under the retired "
-                "tckdb.dataset_release.v1 tag stop verifying until the "
-                "stored tags are migrated."
+                "malformed. Releases frozen under the retired first "
+                "manifest tag stop verifying until the stored tags are "
+                "migrated."
             )),
     ApiCode("unknown_statmech_candidate_ref", 404, Surface.coded_exception,
             "backend/app/services/statmech_selection/loader.py",
