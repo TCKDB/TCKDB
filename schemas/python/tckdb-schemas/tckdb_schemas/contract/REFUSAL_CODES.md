@@ -1799,6 +1799,7 @@ Refusals a client can receive that no producer route's code path was traced to: 
 - `unknown_curation_policy` (404)
 - `unknown_element_symbol` (422)
 - `unknown_include_token` (422)
+- `unknown_manifest_schema` (409)
 - `unknown_query_parameter` (422)
 - `unknown_record` (404)
 - `unknown_record_type` (422)

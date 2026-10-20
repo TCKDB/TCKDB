@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 125 | 29 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 329 | `backend/app/api/code_catalogue.py` |
-| **total** | **671** | |
+| Refusal codes a caller can receive | 330 | `backend/app/api/code_catalogue.py` |
+| **total** | **672** | |
 
 ## How a record is named
 
@@ -779,7 +779,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_structure_member_ref` | a thing |
 | `unknown_transition_state_entry_ref` | a thing |
 
-### HTTP 409 (25 codes)
+### HTTP 409 (26 codes)
 
 | Code | Names |
 | --- | --- |
@@ -807,6 +807,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `statmech_subject_not_exactly_one` | a thing |
 | `superseded_record_not_approvable` | a relationship — read `context` |
 | `unique_conflict` | a relationship — read `context` |
+| `unknown_manifest_schema` | a thing |
 | `username_taken` | a thing |
 
 ### HTTP 413 (2 codes)
