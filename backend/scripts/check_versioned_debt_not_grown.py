@@ -329,9 +329,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
+        patterns = load_version_patterns(_git(args.repo, "show", f"{base_sha}:{VERSION_PATH}").stdout)
+    except (SyntaxError, ValueError) as exc:  # DebtFileError is a ValueError
+        print(f"the merge base's {VERSION_PATH} is unreadable ({exc}); fix main first", file=sys.stderr)
+        return 2
+
+    try:
         head_debt = parse_debt(head_source)
         moved = parse_moved_debt(head_source)
-        patterns = load_version_patterns(_git(args.repo, "show", f"{base_sha}:{VERSION_PATH}").stdout)
         renames = parse_renames(head_source, patterns)
         problems = grown(base_debt, head_debt, moved, renames)
         allow_problems, notices = new_allowances(

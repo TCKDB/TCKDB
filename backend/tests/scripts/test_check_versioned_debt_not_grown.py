@@ -416,3 +416,15 @@ def test_a_move_that_has_already_landed_is_inert_and_silent(repo: Path, capsys: 
     base, head = _branch(repo, rows, source=source, base_source=source)
     assert _run(repo, base, head) == 0
     assert "Moved versioned-name debt row" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("broken", ["def (:\n", ""], ids=["syntax-error", "empty"])
+def test_an_unreadable_version_py_at_the_base_exits_2_with_a_message_not_a_traceback(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, broken: str
+) -> None:
+    monkeypatch.setattr(REAL_VERSION_PY.__class__, "read_text", lambda self, *a, **k: broken, raising=False)
+    # _commit copies REAL_VERSION_PY's text into the repo; patch only that read.
+    base, head = _branch(repo, BASE_ROWS)
+    monkeypatch.undo()
+    assert _run(repo, base, head) == 2
+    assert "is unreadable" in capsys.readouterr().err
