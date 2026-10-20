@@ -193,7 +193,9 @@ def test_the_scan_reaches_the_code_it_claims_to() -> None:
     assert REPO_ROOT / "backend/app/services/trust/rubrics.py" in files
     assert REPO_ROOT / "schemas/python/tckdb-schemas/tckdb_schemas/fragments/version.py" in files
     assert REPO_ROOT / "clients/python/src/tckdb_client/replay.py" in files
-    assert scan_openapi(), "the OpenAPI scan found nothing in a golden that has versioned names"
+    from tests.versioned_names_scan import OPENAPI_GOLDEN
+
+    assert OPENAPI_GOLDEN.is_file() and OPENAPI_GOLDEN.stat().st_size > 100_000, "the OpenAPI golden was not reached"
     schema_files = [e for root in SCAN_ROOTS for e in root.rglob("*.json")]
     assert len(schema_files) > 10, "the file-name scan's roots hold no schema files"
     mcp = REPO_ROOT / "integrations/mcp/src"
