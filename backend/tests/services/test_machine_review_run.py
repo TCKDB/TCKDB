@@ -45,7 +45,7 @@ from app.services.machine_review.providers.fake import (
 )
 from app.services.machine_review.run import run_machine_review_for_submission
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     MachineReviewStatus,
 )
 from app.services.submission import create_submission
@@ -85,7 +85,7 @@ class _WrongTypeProvider:
             value
             if value is not None
             else {
-                "schema_version": MACHINE_REVIEW_SCHEMA_VERSION,
+                "format": MACHINE_REVIEW_FORMAT.model_dump(),
                 "status": "machine_screened_pass",
                 "used_rag": False,
             }
@@ -190,7 +190,7 @@ def test_run_records_one_v2_audit_event(db_session, _api_test_user):
     assert len(events) == 1
     assert events[0].event_kind is SubmissionAuditEventKind.llm_precheck_recorded
     assert events[0].actor_kind is SubmissionActorKind.llm
-    assert events[0].details_json["schema_version"] == MACHINE_REVIEW_SCHEMA_VERSION
+    assert events[0].details_json["format"] == MACHINE_REVIEW_FORMAT.model_dump()
     assert events[0].details_json["status"] == "machine_screened_pass"
     # Advisory events carry no status transition: that is what makes them safe
     # to write without a curator's involvement.
@@ -324,7 +324,7 @@ def test_provider_failure_becomes_an_advisory_failed_result(
     events = _review_events(db_session, submission.id)
     assert len(events) == 1
     assert events[0].details_json["status"] == "machine_review_failed"
-    assert events[0].details_json["schema_version"] == MACHINE_REVIEW_SCHEMA_VERSION
+    assert events[0].details_json["format"] == MACHINE_REVIEW_FORMAT.model_dump()
 
 
 def test_configuration_error_becomes_an_advisory_failed_result(

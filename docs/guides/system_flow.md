@@ -254,7 +254,7 @@ ADR 0006 and ADR 0007.
 | Submissions & ingestion | `services/upload_submission.py`, `workflows/` | [`ingestion_submission_model.md`](../../backend/docs/specs/ingestion_submission_model.md) |
 | Trust & review | `services/{record_review,trust,machine_review,llm_precheck}/` | [`automated_trust_layer.md`](../../backend/docs/specs/automated_trust_layer.md) |
 | Uploads & idempotency | `api/routes/uploads.py`, `services/upload_reconciliation.py` | DR-0024 |
-| Bundles / offline | `api/routes/bundles*.py` | [`contribution-bundles/v0-format.md`](../contribution-bundles/v0-format.md) |
+| Bundles / offline | `api/routes/bundles*.py` | [`contribution-bundles/format.md`](../contribution-bundles/format.md) |
 | Read/query API | `services/scientific_read/`, `api/routes/` | `read_api_mvp.md` |
 | Curated selection & releases | `services/release/`, `db/models/dataset_release.py` | [`dataset_release_and_profiles.md`](../../backend/docs/specs/dataset_release_and_profiles.md) |
 | Async jobs | `workers/upload_worker.py`, `db/models/upload_job.py` | `upload_worker_tests_spec.md` |

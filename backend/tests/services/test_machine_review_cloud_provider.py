@@ -35,11 +35,11 @@ from app.services.machine_review.providers.openai_transport import (
     extract_text,
 )
 from app.services.machine_review.providers.prompt import (
-    MACHINE_REVIEW_PROMPT_VERSION,
+    MACHINE_REVIEW_PROMPT,
     MACHINE_REVIEW_SYSTEM_PROMPT,
     build_user_message,
 )
-from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT_VERSION
+from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT
 from app.services.machine_review.schemas import (
     MachineReviewCategory,
     MachineReviewSeverity,
@@ -144,7 +144,7 @@ def test_a_recorded_response_parses_into_a_validated_v2_result():
 
     result = provider.review_submission(a_context())
 
-    assert result.schema_version == "machine_review_v2"
+    assert result.format.name == "machine_review" and result.format.version == 1
     assert result.status is MachineReviewStatus.machine_screened_warning
     assert len(result.findings) == 2
     first = result.findings[0]
@@ -199,7 +199,7 @@ def test_the_model_cannot_name_itself():
     """
     lying = json.dumps(
         {
-            "schema_version": "machine_review_v2",
+            "format": {"name": "machine_review", "version": 1},
             "status": "machine_screened_pass",
             "model": "some-other-model",
             "provider": "SomeoneElse",
@@ -228,7 +228,7 @@ def test_a_mutation_field_is_refused():
     """
     smuggled = json.dumps(
         {
-            "schema_version": "machine_review_v2",
+            "format": {"name": "machine_review", "version": 1},
             "status": "machine_screened_pass",
             "used_rag": False,
             "set_review_status": "approved",
@@ -242,7 +242,7 @@ def test_a_mutation_field_is_refused():
 def test_a_rag_claim_is_refused():
     claimed = json.dumps(
         {
-            "schema_version": "machine_review_v2",
+            "format": {"name": "machine_review", "version": 1},
             "status": "machine_screened_pass",
             "used_rag": True,
         }
@@ -255,7 +255,7 @@ def test_a_rag_claim_is_refused():
 def test_an_out_of_vocabulary_category_is_refused():
     invented = json.dumps(
         {
-            "schema_version": "machine_review_v2",
+            "format": {"name": "machine_review", "version": 1},
             "status": "machine_screened_warning",
             "used_rag": False,
             "findings": [
@@ -387,7 +387,7 @@ def test_the_prompt_version_is_the_recipe_version():
     prompt version in. If the text is versioned separately from the recipe,
     a review can claim a prompt version whose words it never saw.
     """
-    assert MACHINE_REVIEW_PROMPT_VERSION == ACTIVE_MACHINE_REVIEW_PROMPT_VERSION
+    assert MACHINE_REVIEW_PROMPT == ACTIVE_MACHINE_REVIEW_PROMPT
 
 
 def test_the_prompt_states_the_rules_the_schema_enforces():

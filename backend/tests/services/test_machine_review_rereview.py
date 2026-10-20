@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import SubmissionKind
 from app.db.models.record_machine_review import RecordMachineReviewRow
@@ -31,11 +32,11 @@ from app.services.submission import create_submission
 _T0 = datetime(2026, 5, 31, 12, 0, 0)
 _HASH_A = "a" * 64
 _HASH_B = "b" * 64
-_PROMPT = "prompt_v3"
-_RUBRICS = {"kinetics": "computed_kinetics_v1"}
+_PROMPT = VersionRef(name="prompt", version=3)
+_RUBRIC = VersionRef(name="computed_kinetics", version=1)
 
 
-def _digest(context_hash: str = _HASH_A, schema_version: str = "v1"):
+def _digest(context_hash: str = _HASH_A, schema_version: int = 1):
     return MachineReviewContextDigest(
         context_hash=context_hash, context_schema_version=schema_version
     )
@@ -46,9 +47,9 @@ def _insert(
     *,
     reviewed_at: datetime = _T0,
     context_hash: str = _HASH_A,
-    schema_version: str = "v1",
-    prompt_version: str = _PROMPT,
-    rubric_versions: dict[str, str] | None = None,
+    schema_version: int = 1,
+    prompt: VersionRef = _PROMPT,
+    rubric: VersionRef | None = None,
     record_id: int = 9001,
 ) -> RecordMachineReviewRow:
     review = RecordMachineReview(
@@ -64,8 +65,8 @@ def _insert(
         record_id=record_id,
         review=review,
         context_digest=_digest(context_hash, schema_version),
-        prompt_version=prompt_version,
-        rubric_versions=rubric_versions if rubric_versions is not None else _RUBRICS,
+        prompt=prompt,
+        rubric=rubric if rubric is not None else _RUBRIC,
     )
     db_session.flush()
     return row
@@ -76,17 +77,17 @@ def _plan(
     *,
     record_id: int = 9001,
     current_hash: str = _HASH_A,
-    schema_version: str = "v1",
-    prompt_version: str = _PROMPT,
-    rubric_versions: dict[str, str] | None = None,
+    schema_version: int = 1,
+    prompt: VersionRef = _PROMPT,
+    rubric: VersionRef | None = None,
 ):
     return plan_record_machine_rereview(
         db_session,
         record_type="kinetics",
         record_id=record_id,
         current_context=_digest(current_hash, schema_version),
-        active_prompt_version=prompt_version,
-        active_rubric_versions=rubric_versions if rubric_versions is not None else _RUBRICS,
+        active_prompt=prompt,
+        active_rubric=rubric if rubric is not None else _RUBRIC,
     )
 
 
@@ -120,8 +121,8 @@ def test_plan_returns_run_stale_when_context_hash_mismatch(db_session):
 
 
 def test_plan_returns_run_stale_when_context_schema_version_mismatch(db_session):
-    _insert(db_session, schema_version="v1")
-    plan = _plan(db_session, schema_version="v2")
+    _insert(db_session, schema_version=1)
+    plan = _plan(db_session, schema_version=2)
     assert plan.decision is MachineReviewReReviewDecision.run_stale
     assert plan.stale_reasons == (
         MachineReviewStaleReason.context_schema_version_mismatch,
@@ -129,15 +130,15 @@ def test_plan_returns_run_stale_when_context_schema_version_mismatch(db_session)
 
 
 def test_plan_returns_run_stale_when_prompt_version_mismatch(db_session):
-    _insert(db_session, prompt_version="prompt_v3")
-    plan = _plan(db_session, prompt_version="prompt_v4")
+    _insert(db_session, prompt=VersionRef(name="prompt", version=3))
+    plan = _plan(db_session, prompt=VersionRef(name="prompt", version=4))
     assert plan.decision is MachineReviewReReviewDecision.run_stale
     assert plan.stale_reasons == (MachineReviewStaleReason.prompt_version_mismatch,)
 
 
 def test_plan_returns_run_stale_when_rubric_versions_mismatch(db_session):
-    _insert(db_session, rubric_versions={"kinetics": "computed_kinetics_v1"})
-    plan = _plan(db_session, rubric_versions={"kinetics": "computed_kinetics_v2"})
+    _insert(db_session, rubric=VersionRef(name="computed_kinetics", version=1))
+    plan = _plan(db_session, rubric=VersionRef(name="computed_kinetics", version=2))
     assert plan.decision is MachineReviewReReviewDecision.run_stale
     assert plan.stale_reasons == (MachineReviewStaleReason.rubric_versions_mismatch,)
 
@@ -164,16 +165,16 @@ def test_plan_reports_stale_reasons_in_classifier_order(db_session):
     _insert(
         db_session,
         context_hash=_HASH_A,
-        schema_version="v1",
-        prompt_version="prompt_v3",
-        rubric_versions={"kinetics": "computed_kinetics_v1"},
+        schema_version=1,
+        prompt=VersionRef(name="prompt", version=3),
+        rubric=VersionRef(name="computed_kinetics", version=1),
     )
     plan = _plan(
         db_session,
         current_hash=_HASH_B,
-        schema_version="v2",
-        prompt_version="prompt_v4",
-        rubric_versions={"kinetics": "computed_kinetics_v2"},
+        schema_version=2,
+        prompt=VersionRef(name="prompt", version=4),
+        rubric=VersionRef(name="computed_kinetics", version=2),
     )
     assert plan.stale_reasons == (
         MachineReviewStaleReason.context_schema_version_mismatch,
@@ -190,9 +191,9 @@ def test_plan_preserves_active_review_id_for_current(db_session):
     assert plan.decision is MachineReviewReReviewDecision.skip_current
     assert plan.active_review_id == row.id
     assert plan.current_context_hash == _HASH_A
-    assert plan.context_schema_version == "v1"
-    assert plan.prompt_version == _PROMPT
-    assert plan.rubric_versions == _RUBRICS
+    assert plan.context_schema_version == 1
+    assert plan.prompt == _PROMPT
+    assert plan.rubric == _RUBRIC
 
 
 # --------------------------------------------------------------------------- #

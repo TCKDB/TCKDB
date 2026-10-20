@@ -34,7 +34,7 @@ machine-review implementers.
   `trust.machine_review` is still absent here and stays that way.
 - `admin_machine_review_inspection.md` — the admin-only inspection endpoint that
   today recomputes the projection from audit events with no persistence.
-- `machine_review_provider_contract_v2.md` — the provider payload that would
+- `machine_review_provider_contract.md` — the provider payload that would
   carry the `model`/`provider`/status a persisted row records.
 - `machine_review_lifecycle.md` — the end-to-end **implementation walkthrough**
   of this policy: module map, data-flow diagram, privacy boundaries, and the
@@ -133,7 +133,7 @@ Derived from compact deterministic evidence, not raw artifacts:
 ```text
 record_type
 record_id (or a stable public record ref)
-deterministic evidence rubric name + version      (e.g. computed_kinetics_v1, 1)
+deterministic evidence rubric name + version      (e.g. computed_kinetics, 1)
 passed_checks / missing_checks / warning_checks /
   not_applicable_checks                            (as sorted sets of check keys)
 hard_fail_reason
@@ -204,26 +204,26 @@ semantics: every prior review becomes `stale` under the new recipe until
 re-reviewed, rather than silently mis-comparing across recipes.
 
 **Implemented:** `context_schema_version` (constant
-`MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION = "v1"`) is **folded into the hashed
+`MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION = 1`, an integer) is **folded into the hashed
 payload** and also returned on the `MachineReviewContextDigest`. Folding it in
 means two contexts identical except for their schema version hash differently,
-so even a hash-only comparison is recipe-safe — a v1 digest can never equal a
-v2 digest of the same inputs.
+so even a hash-only comparison is recipe-safe — a digest made under one schema
+version can never equal a digest of the same inputs made under another.
 
 ### 3.5 Currency key (currency vs. provenance)
 
 Distinguish two questions:
 
 - **Did the evidence change?** → `context_hash` (+ `context_schema_version`).
-- **Did the reviewer recipe change?** → `prompt_version`, `rubric_versions_json`.
+- **Did the reviewer recipe change?** → the prompt (`prompt_name`, `prompt_version`) and the rubric (`rubric_name`, `rubric_version`).
 
 A review is **current** iff *all* of:
 
 ```text
 context_schema_version == active recipe version
 context_hash           == hash of the record's current evidence context
-prompt_version         == active machine-review prompt version
-rubric_versions_json   == active rubric versions for the rubric that evaluated this record
+(prompt_name, prompt_version)   == active machine-review prompt (name, integer version)
+(rubric_name, rubric_version)   == active rubric for the record's kind (name, integer version)
 ```
 
 `provider`/`model` are **not** part of the hard currency key by default
@@ -295,10 +295,11 @@ persistence and no public exposure. Its naming:
   DESC NULLS LAST). Both `id` and `source_audit_event_id` may be `None` and
   sort last.
 - `MachineReviewCurrencyKey` — the four currency dimensions
-  (`context_schema_version`, `context_hash`, `prompt_version`,
-  `rubric_versions`) compared for the active recipe vs. each stored review.
-  `rubric_versions` is compared by canonical mapping equality (key order
-  irrelevant; a missing/extra/changed key is a mismatch).
+  (`context_schema_version`, `context_hash`, `prompt`, `rubric`) compared for the
+  active recipe vs. each stored review. `prompt` and `rubric` are version refs
+  (a name plus an integer version) compared whole: a differing name or a
+  differing version is a mismatch, so a review made under another rubric reads
+  stale exactly as one made under an older version of the same rubric.
 - `MachineReviewCurrencyClassification` — the result: `state`, `active_review`
   (the latest, or `None`), `historical_reviews` (non-latest, newest-first), and
   `stale_reasons`.
@@ -336,7 +337,7 @@ geometry validation status changes for a source geometry
 a new artifact kind is linked (artifact-kind summary changes)
 deterministic evidence rubric name/version bump
 machine-review prompt_version bump
-machine-review rubric_versions bump (the reviewer's own rubric recipe)
+machine-review rubric version bump (the reviewer's own rubric recipe)
 context_schema_version bump (the hash recipe itself, §3.4)
 ```
 
@@ -506,10 +507,12 @@ record_machine_review
   findings_json             -- the validated structured findings for this pass
   model                     -- provider/model string (nullable)
   provider                  -- provider name (nullable)
-  prompt_version            -- machine-review prompt version (currency key, §3.5)
-  rubric_versions_json      -- rubric name->version map seen (currency key)
+  prompt_name               -- machine-review prompt name (currency key, §3.5)
+  prompt_version            -- machine-review prompt integer version (currency key)
+  rubric_name               -- the one rubric that evaluated this record (currency key)
+  rubric_version            -- its integer version (currency key; one rubric per review)
   context_hash              -- digest of the compact evidence context (§3)
-  context_schema_version    -- version of the hash recipe (§3.4)
+  context_schema_version    -- integer version of the hash recipe (§3.4)
   source_submission_id      -- nullable; submission that triggered this review
   source_audit_event_id     -- nullable; the llm_precheck_recorded event, if any
   reviewed_at               -- when the review ran (latest-selection primary key)
@@ -517,8 +520,8 @@ record_machine_review
 ```
 
 This is the provisional spec §9 Option B sketch made precise: it adds the
-currency fields (`prompt_version`, `rubric_versions_json`,
-`context_schema_version`), the provenance link (`source_audit_event_id`), and
+currency fields (`prompt_name`, `prompt_version`, `rubric_name`,
+`rubric_version`, `context_schema_version`), the provenance link (`source_audit_event_id`), and
 states the ordering columns.
 
 **Implemented** as `RecordMachineReviewRow`
@@ -724,7 +727,7 @@ the prior and on the provisional spec's §13 non-interference tests.
    `tests/services/test_machine_review_rereview.py`. It composes the context
    adapter, query service, and currency classifier to turn the §5 trigger
    conditions (no review, or a `context_schema_version` / `context_hash` /
-   `prompt_version` / `rubric_versions` mismatch) into a read-only plan; it adds
+   prompt / rubric mismatch) into a read-only plan; it adds
    no `reviewed_at` TTL trigger and never treats provider/model as a trigger
    dimension.
    The **explicitly-invoked execution** half (append a row from a `run_*` plan

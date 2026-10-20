@@ -553,7 +553,7 @@ belong in a separate layer above the client.
 ARC is one workflow tool that has been used to exercise TCKDB
 ingestion end-to-end, but it has no special status in the schema or
 API. Any HTTP client that can POST JSON can upload — see
-[docs/specs/arc-tckdb-adapter-v0-spec.md](docs/specs/arc-tckdb-adapter-v0-spec.md)
+[docs/specs/arc-tckdb-adapter-spec.md](docs/specs/arc-tckdb-adapter-spec.md)
 for one worked-through integration.
 
 ---

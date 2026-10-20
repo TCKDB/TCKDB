@@ -45,7 +45,7 @@ from app.services.machine_review.providers import (
     MachineReviewContext,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     MachineReviewCategory,
     MachineReviewProviderFinding,
     MachineReviewProviderResult,
@@ -121,7 +121,7 @@ def _v2_result(
 ) -> MachineReviewProviderResult:
     """Build a native v2 provider result."""
     return MachineReviewProviderResult(
-        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+        format=MACHINE_REVIEW_FORMAT,
         status=status,
         curator_priority=None,
         summary=summary,
@@ -202,13 +202,13 @@ def test_persisted_v2_warning_provider_result_inspects_and_creates_task(
     # Raw details_json is persisted with the v2 marker + findings.
     assert event.event_kind is SubmissionAuditEventKind.llm_precheck_recorded
     assert event.actor_kind is SubmissionActorKind.llm
-    assert event.details_json["schema_version"] == MACHINE_REVIEW_SCHEMA_VERSION
+    assert event.details_json["format"] == MACHINE_REVIEW_FORMAT.model_dump()
 
     # DB readback (fresh load) preserves schema_version and findings.
     db_session.expire_all()
     reloaded = db_session.get(SubmissionAuditEvent, event_id)
     assert reloaded is not None
-    assert reloaded.details_json["schema_version"] == MACHINE_REVIEW_SCHEMA_VERSION
+    assert reloaded.details_json["format"] == MACHINE_REVIEW_FORMAT.model_dump()
     assert reloaded.details_json["status"] == "machine_screened_warning"
     assert len(reloaded.details_json["findings"]) == 1
     finding = reloaded.details_json["findings"][0]
@@ -392,7 +392,7 @@ def test_persisted_v2_malformed_result_becomes_parse_warning(
             actor_kind=SubmissionActorKind.llm,
             event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
             details_json={
-                "schema_version": "machine_review_v2",
+                "format": {"name": "machine_review", "version": 1},
                 "status": "machine_screened_warning",
                 "used_rag": True,
             },

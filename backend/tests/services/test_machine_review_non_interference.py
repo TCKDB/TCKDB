@@ -65,7 +65,7 @@ from app.services.machine_review import (
 from app.services.machine_review.providers.fake import FakeMachineReviewProvider
 from app.services.machine_review.run import run_machine_review_for_submission
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     MachineReviewProviderFinding,
     MachineReviewProviderResult,
 )
@@ -464,7 +464,7 @@ def test_machine_review_result_is_advisory_only(db_session, _api_test_user):
     evidence_before = _deterministic_snapshot(db_session, calc.id)
 
     fixed = MachineReviewProviderResult(
-        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+        format=MACHINE_REVIEW_FORMAT,
         status=MachineReviewStatus.machine_screened_warning,
         summary="Advisory warning with a finding",
         findings=(

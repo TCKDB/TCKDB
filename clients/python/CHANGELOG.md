@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.159.0 - 2026-10-20
+
+Follows `tckdb-schemas` 0.130.0 (versioning PR-4: a name and an integer version everywhere, every TCKDB-owned version reset to 1).
+
+- The replay sidecar's `bundle_format_version` is the integer `1` (it was the string `"0"`); `DEFAULT_FORMAT_VERSIONS` is `(1,)`. A sidecar written by an
+  older client holds `"0"` and is marked failed with `unsupported bundle_format_version`; re-export the bundle.
+- `ReproducibilityAssessmentSummary.rubric_version` is `int | None` (was `str | None`).
+- `ExecutionEnvironmentManifestRecord` carries `schema_name` and an integer `schema_version`.
+- `StatmechSelectionRequest`-shaped records carry `contract_version: 1` (was `"statmech-selection-v1"`).
+
 ## 0.158.0 - 2026-10-20
 
 `RejectionCode` gains one member, `unknown_manifest_schema` (409), for a release manifest whose stored format tag this server cannot

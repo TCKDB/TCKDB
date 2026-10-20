@@ -7,7 +7,7 @@ submissions, upload jobs, audit events, or record links.
 
 This was milestone 6 of the local-offline-and-hosted-submission
 implementation plan. The submit route it anticipated now exists
-([`hosted-submit-v0.md`](hosted-submit-v0.md)), and since #577 a dry run
+([`hosted-submit.md`](hosted-submit.md)), and since #577 a dry run
 rehearses it.
 
 ## Endpoint
@@ -33,7 +33,7 @@ POST /api/v1/bundles/dry-run
 
 ## Supported bundle kinds
 
-Hosted dry-run v0 supports the same families as bundle format v0:
+Hosted dry-run v0 supports the same families as the bundle format:
 
 - `thermo`
 - `kinetics`
@@ -240,7 +240,7 @@ rehearsal above:
 ```json
 {
   "bundle_format": "tckdb-contribution-bundle",
-  "bundle_version": "0.1",
+  "bundle_version": 1,
   "bundle_kind": "thermo",
   "created_at": "2026-04-25T00:00:00Z",
   "source_instance": {
@@ -313,7 +313,7 @@ rehearsal above:
 
 ## Difference vs. submit/import
 
-| Aspect | Dry-run (this endpoint) | Submit/import (`hosted-submit-v0.md`) |
+| Aspect | Dry-run (this endpoint) | Submit/import (`hosted-submit.md`) |
 |---|---|---|
 | HTTP method/path | `POST /api/v1/bundles/dry-run` | `POST /api/v1/bundles/submit` |
 | Checks applied | every check submit applies (it runs submit) | all of them |

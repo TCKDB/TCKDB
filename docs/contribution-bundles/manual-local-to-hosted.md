@@ -53,7 +53,7 @@ Before starting:
 |------|---------|
 | **Local instance** | A private/laptop/lab TCKDB deployment that holds the records you want to contribute. |
 | **Hosted instance** | The community TCKDB deployment that receives contributions. |
-| **Contribution bundle** | A self-contained `.tckdb.json` v0 file produced by `backend/scripts/export_contribution_bundle.py`. |
+| **Contribution bundle** | A self-contained `.tckdb.json` file (bundle format version 1) produced by `backend/scripts/export_contribution_bundle.py`. |
 | **Dry-run** | Authenticated read-only preview against hosted: `POST /bundles/dry-run`. |
 | **Submit / import** | Authenticated write call against hosted: `POST /bundles/submit`. |
 | **Submission** | A hosted DB row created at submit time that links to imported scientific rows; tracked by status. |
@@ -87,7 +87,7 @@ export HOSTED_TCKDB_API_KEY="tck_hosted_replace_me"
 ## Step 1: Export a bundle from local
 
 Bundle export is a service + CLI documented in detail in
-[`local-export-v0.md`](local-export-v0.md). The CLI converts selected
+[`local-export.md`](local-export.md). The CLI converts selected
 local rows into a validated `ContributionBundle` JSON file. Nothing is
 sent anywhere at this stage.
 
@@ -143,7 +143,7 @@ Mixed thermo + kinetics bundles are **rejected** by
 ### Optional metadata
 
 Useful optional flags (full list in
-[`local-export-v0.md`](local-export-v0.md#cli-options)):
+[`local-export.md`](local-export.md#cli-options)):
 
 | Flag | Purpose |
 |------|---------|
@@ -163,7 +163,7 @@ Bundle kind: thermo
 Records exported: 1
 ```
 
-The file on disk is a validated v0 bundle — the script refuses to write
+The file on disk is a validated bundle — the script refuses to write
 an invalid file, so a successful exit means the bundle already passes
 the structural and family-level validators.
 
@@ -173,7 +173,7 @@ Dry-run is the **preview** endpoint — it never mutates the hosted
 database. It tells you what a real import would do for each identity in
 the bundle, and whether submit would accept the bundle at all (it
 rehearses submit and rolls the rehearsal back). Full reference:
-[`hosted-dry-run-v0.md`](hosted-dry-run-v0.md).
+[`hosted-dry-run.md`](hosted-dry-run.md).
 
 ### Thermo dry-run
 
@@ -237,7 +237,7 @@ gate — it will reject the same bundles dry-run flagged.
 Submit is the **first write path** for contribution bundles. It runs the
 dry-run internally as a strict gate, then imports the records through
 the existing upload workflows in a single transaction. Full reference:
-[`hosted-submit-v0.md`](hosted-submit-v0.md).
+[`hosted-submit.md`](hosted-submit.md).
 
 ### Thermo submit
 
@@ -480,10 +480,10 @@ It contains no business logic and is functionally equivalent to the
 
 ## See also
 
-- [Bundle v0 format](v0-format.md)
-- [Local export v0](local-export-v0.md)
-- [Hosted dry-run v0](hosted-dry-run-v0.md)
-- [Hosted submit v0](hosted-submit-v0.md)
+- [Bundle format](format.md)
+- [Local export v0](local-export.md)
+- [Hosted dry-run v0](hosted-dry-run.md)
+- [Hosted submit v0](hosted-submit.md)
 - [Generic client targeting](../clients/generic-client-targeting.md)
 - [Deployment guide overview](../deployment/README.md) — TCKDB
   deployment scenarios and client environments

@@ -79,6 +79,7 @@ def test_round_trip_preserves_a_custody_row_and_an_observation(db_session):
         raw_uri="raw://thermoml/c" + "c" * 63,
         parser_name="thermoml",
         parser_version="1.0.0",
+        mapping_name="thermoml_cp_mapping",
         mapping_version="mapping-v1",
         mapping_report_json={"unsupported": [], "rejected": []},
     )

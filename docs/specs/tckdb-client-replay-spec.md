@@ -33,15 +33,15 @@ The engine is chemistry-blind: it does not parse payload content, does not valid
 | CLI entrypoint | — | ❌ this spec |
 | `[project.scripts]` table in `pyproject.toml` | `clients/python/pyproject.toml` | ❌ this spec adds `tckdb-replay = "tckdb_client.cli:main"` |
 
-## Bundle format v0 — sidecar contract
+## Bundle format version 1 — sidecar contract
 
-Two sidecar variants in v0, both identifiable by `payload_kind`. Both must include `bundle_format_version`; the engine rejects sidecars where this field is missing or its major version is unknown.
+Two sidecar variants in version 1, both identifiable by `payload_kind`. Both must include `bundle_format_version`; the engine rejects sidecars where this field is missing or its major version is unknown.
 
 ### Common fields (all sidecars)
 
 | field | type | required | meaning |
 |---|---|---|---|
-| `bundle_format_version` | string | ✅ | `"0"` for v0. Engine rejects mismatches. |
+| `bundle_format_version` | integer | ✅ | `1` for the current format. Engine rejects mismatches. |
 | `payload_kind` | string | ✅ | Dispatch key. v0 values: `conformer_calculation`, `calculation_artifact`. |
 | `endpoint` | string | ✅ | Path the engine POSTs to (e.g. `/uploads/conformers`, `/calculations/6/artifacts`). |
 | `idempotency_key` | string | ✅ | Stored at producer time per DR-0025; replay reuses unchanged. |
@@ -122,7 +122,7 @@ def replay_bundle(
     base_url_override: str | None = None,
     only_pending: bool = False,
     dry_run: bool = False,
-    supported_format_versions: tuple[str, ...] = ("0",),
+    supported_format_versions: tuple[int, ...] = (1,),
 ) -> ReplaySummary:
     """Walk bundle_dir, dispatch by payload_kind, post via a per-sidecar client, update sidecars."""
 ```
@@ -332,7 +332,7 @@ These are out of scope for the `tckdb-client` PR but must land before any v0 bun
 
 ### ARC change 1 — emit `bundle_format_version`
 
-`arc/tckdb/payload_writer.py`'s `SidecarMetadata` and `ArtifactSidecarMetadata` dataclasses gain a `bundle_format_version: str = "0"` field. ARC's adapter writes this on every sidecar from now on.
+`arc/tckdb/payload_writer.py`'s `SidecarMetadata` and `ArtifactSidecarMetadata` dataclasses gain a `bundle_format_version: int = 1` field. ARC's adapter writes this on every sidecar from now on.
 
 ### ARC change 2 — atomic sidecar writes (audit)
 
@@ -344,7 +344,7 @@ Existing on-disk bundles produced before this change have no `bundle_format_vers
 
 **The v0 engine is strict by design.** Bundles without `bundle_format_version` must be upgraded by an operator/backfill script before replay. Do not add missing-version tolerance to the v0 engine.
 
-The backfill is a small operator script that walks an old bundle directory and adds `"bundle_format_version": "0"` to each sidecar atomically (same `tempfile + os.replace` pattern as the engine). Document this in the ARC README as the "upgrade existing bundles" recipe. If a tolerant escape hatch ever becomes warranted (e.g. for a one-shot migration where backfill is impractical), it lands as an explicit `--unsafe-assume-version 0` flag in a later release; v0 ships strict.
+The backfill is a small operator script that walks an old bundle directory and adds `"bundle_format_version": 1` to each sidecar atomically (same `tempfile + os.replace` pattern as the engine). Document this in the ARC README as the "upgrade existing bundles" recipe. If a tolerant escape hatch ever becomes warranted (e.g. for a one-shot migration where backfill is impractical), it lands as an explicit `--unsafe-assume-version 0` flag in a later release; v0 ships strict.
 
 ## Test plan
 
@@ -358,7 +358,7 @@ All tests live under `clients/python/tests/test_replay.py` (engine) and `test_cl
 - **Already uploaded skip**: a sidecar with `status=uploaded`. Replay does not call the client, sidecar is unchanged.
 - **`only_pending=True`**: a bundle with one `pending` and one `failed` sidecar. Replay only attempts the `pending`; `failed` is left untouched.
 - **Unknown payload_kind**: a sidecar with `payload_kind="future_kind_not_yet_implemented"`. Sidecar transitions to `failed` with a clear `last_error`. The engine continues to other sidecars.
-- **Version mismatch**: a sidecar with `bundle_format_version="1"` (or missing). Sidecar transitions to `failed` with a clear `last_error`. The engine continues.
+- **Version mismatch**: a sidecar with `bundle_format_version=2` (or missing). Sidecar transitions to `failed` with a clear `last_error`. The engine continues.
 - **Missing payload file**: a `conformer_calculation` sidecar whose `payload_file` does not exist. Sidecar transitions to `failed`; no HTTP call attempted.
 - **Missing artifact source**: a `calculation_artifact` sidecar whose `source_path` does not exist. Same as above.
 - **File drift — sha256 mismatch**: a `calculation_artifact` sidecar with `sha256="aaaa…"` (64 chars) but `source_path` whose actual content hashes to a different value. Sidecar transitions to `failed` with `last_error` containing `"file drift"`; no HTTP call is attempted (assert via stub client call count == 0).
@@ -379,7 +379,7 @@ All tests live under `clients/python/tests/test_replay.py` (engine) and `test_cl
 
 ### ARC-side tests (separate PR)
 
-- ARC adapter emits `bundle_format_version="0"` on every sidecar. (`arc/tckdb/payload_writer_test.py` extended.)
+- ARC adapter emits `bundle_format_version=1` on every sidecar. (`arc/tckdb/payload_writer_test.py` extended.)
 - ARC adapter sidecar updates are atomic. (Add a test that simulates SIGKILL-equivalent mid-write — patch `os.replace` to raise — and assert the pre-write sidecar is intact.)
 
 ## Open questions
@@ -388,7 +388,7 @@ All tests live under `clients/python/tests/test_replay.py` (engine) and `test_cl
 
 2. **Should `dry_run` write the summary to a file, or only print it?** Today the CLI prints to stdout. For automation use cases (CI, scheduled replay) a `--summary-json <path>` would be valuable. Recommend: defer to v0.1.
 
-3. **How does the engine handle a bundle written by a producer that emitted `bundle_format_version="0"` but with extra sidecar fields the engine doesn't recognize?** Today: the engine ignores unknown fields (Pydantic-style permissive). This forward-compatibility might bite if a producer accidentally renames a load-bearing field. Recommend: be permissive on unknown additions, strict on missing required fields. Document the contract.
+3. **How does the engine handle a bundle written by a producer that emitted `bundle_format_version=1` but with extra sidecar fields the engine doesn't recognize?** Today: the engine ignores unknown fields (Pydantic-style permissive). This forward-compatibility might bite if a producer accidentally renames a load-bearing field. Recommend: be permissive on unknown additions, strict on missing required fields. Document the contract.
 
 4. **Should the engine support a "validate-only" mode (parse all sidecars, check shapes, no HTTP)?** This is `dry_run` today. The naming might be improved (`--validate` is clearer than `--dry-run` for "I just want to check the bundle is well-formed"). Recommend: alias for v0.1.
 
@@ -396,7 +396,7 @@ All tests live under `clients/python/tests/test_replay.py` (engine) and `test_cl
 
 The order intentionally puts the format spec first (so producers can update in parallel), then the engine, then the CLI, then the ARC companion changes.
 
-1. **Add the bundle format spec section to this document or split it out.** The Bundle format v0 section above is the contract. Producers (ARC) and consumers (the engine) read this section. Until it's stable, do not start coding.
+1. **Add the bundle format spec section to this document or split it out.** The Bundle format section above is the contract. Producers (ARC) and consumers (the engine) read this section. Until it's stable, do not start coding.
 2. **Write the engine** — `tckdb_client/replay.py` with the public `replay_bundle()` function and the two dispatch handlers. No CLI yet. Run engine tests against fixture bundles.
 3. **Add atomic write helper** — used in step 2; pulled into a small standalone module if useful.
 4. **Write the CLI** — `tckdb_client/cli.py` calling into the engine. Run CLI tests with a `responses` or `httpx`-mock-style stub.
@@ -408,7 +408,7 @@ The order intentionally puts the format spec first (so producers can update in p
 
 After this spec ships and is implemented:
 
-- ARC's adapter starts emitting `bundle_format_version="0"` on every sidecar.
+- ARC's adapter starts emitting `bundle_format_version=1` on every sidecar.
 - ARC's `payload_writer.py` is audited for atomic-write semantics, fixed if needed.
 - An optional `arc tckdb-replay` convenience wrapper may be added that subprocesses the `tckdb-replay` CLI. UX sugar, not architecture.
 

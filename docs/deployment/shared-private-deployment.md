@@ -50,7 +50,7 @@ A shared private deployment lets a research group:
   workflow tools,
 - keep data private to the lab while preserving the option to
   contribute selected records upstream via the
-  [manual local-to-hosted flow](../contribution-bundles/manual-local-to-hosted-v0.md).
+  [manual local-to-hosted flow](../contribution-bundles/manual-local-to-hosted.md).
 
 The reference **infrastructure strategy** is Docker Compose on the
 service node — the same stack as
@@ -110,7 +110,7 @@ Choose a shared private deployment when:
 Stay on a [single-machine private deployment](local-v0.md) if one user
 on one host is sufficient. Use the hosted community instance for
 records that are ready for public contribution (via the
-[manual local-to-hosted flow](../contribution-bundles/manual-local-to-hosted-v0.md)).
+[manual local-to-hosted flow](../contribution-bundles/manual-local-to-hosted.md)).
 
 ---
 
@@ -470,7 +470,7 @@ with separate users, separate API keys, and separate data.
   [generic-client-targeting.md §Targeting is not syncing](../clients/generic-client-targeting.md#targeting-is-not-syncing).
 - The supported way to push selected records from a shared private
   deployment to hosted is the
-  [manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted-v0.md).
+  [manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted.md).
   A shared deployment qualifies as a "local instance" for that flow;
   bundle export reads from the shared DB, and submit/dry-run uses
   *hosted* API keys.
@@ -504,6 +504,6 @@ This document deliberately does **not** include:
 - [Client access from HPC](client-access-from-hpc.md)
 - [Native advanced install](native-advanced.md)
 - [Generic client targeting](../clients/generic-client-targeting.md)
-- [Manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted-v0.md)
+- [Manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted.md)
 - DR-0022 — Auth and Roles v1
 - DR-0023 — Local/Offline and Hosted Submission Model

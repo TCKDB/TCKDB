@@ -30,6 +30,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.calculation import CalculationGeometryValidation
 from app.db.models.common import (
@@ -44,8 +45,8 @@ from app.db.models.common import (
 from app.db.models.record_machine_review import RecordMachineReviewRow
 from app.db.models.statmech import Statmech
 from app.services.machine_review.admin_trigger import (
-    active_rubric_versions_for_fragment,
-    active_rubric_versions_for_record_type,
+    active_rubric_for_fragment,
+    active_rubric_for_record_type,
     resolve_record_trust_fragment,
     run_admin_fake_machine_review,
 )
@@ -55,11 +56,7 @@ from app.services.machine_review.currency import MachineReviewCurrencyState, Mac
 from app.services.machine_review.persistence import create_record_machine_review_row
 from app.services.machine_review.query import get_record_machine_review_currency_for_record
 from app.services.machine_review.read_model import RecordMachineReview
-from app.services.machine_review.recipe import (
-    ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-    ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
-    public_rubric_name,
-)
+from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT, active_rubric
 from app.services.machine_review.schemas import MachineReviewStatus
 from app.services.trust import (
     COMPUTED_STATMECH,
@@ -131,6 +128,10 @@ def _signature(spec):
     return (spec.name, spec.kind, spec.weight, spec.runner)
 
 
+SPECIES_RUBRIC = VersionRef(name="computed_statmech", version=1)
+TS_RUBRIC = VersionRef(name="computed_ts_statmech", version=1)
+
+
 def test_the_ts_rubric_is_the_species_rubric_with_only_the_subject_check_swapped():
     ts_tail = [_signature(spec) for spec in COMPUTED_TS_STATMECH.checks[1:]]
     species_tail = [_signature(spec) for spec in COMPUTED_STATMECH.checks[1:]]
@@ -156,7 +157,7 @@ def test_the_ts_rubric_adds_no_ts_specific_check():
 
 def test_the_species_rubric_and_the_registry_default_are_untouched():
     assert RUBRICS.get(RUBRIC_NAME_FOR_RECORD_TYPE["statmech"]) is COMPUTED_STATMECH
-    assert (COMPUTED_STATMECH.name, COMPUTED_STATMECH.version) == ("computed_statmech", 2)
+    assert (COMPUTED_STATMECH.name, COMPUTED_STATMECH.version) == ("computed_statmech", 1)
     assert COMPUTED_STATMECH.checks[0].name == "species_entry_present"
     assert OWNER_SCOPED_RUBRIC_NAMES == (("statmech", "computed_ts_statmech"),)
     assert COMPUTED_TS_STATMECH.name not in RUBRIC_NAME_FOR_RECORD_TYPE.values()
@@ -272,7 +273,7 @@ def test_the_ts_record_forced_through_the_species_rubric_reads_as_it_did_before(
     """The reconstruction the report relies on: the legacy path is still reachable and still wrong for TS."""
     statmech = _make_ts_statmech(db_session)
     evaluation = evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH)
-    assert (evaluation.rubric, evaluation.rubric_version) == ("computed_statmech", 2)
+    assert (evaluation.rubric, evaluation.rubric_version) == ("computed_statmech", 1)
     assert evaluation.label is EvidenceBadge.hard_failed
     assert evaluation.hard_fail_reason is HardFailReason.species_entry_missing
     assert evaluation.checks["species_entry_present"] is EvidenceOutcome.missing
@@ -280,7 +281,7 @@ def test_the_ts_record_forced_through_the_species_rubric_reads_as_it_did_before(
 
 def test_a_missing_statmech_row_is_still_graded_by_the_species_default(db_session):
     evaluation = evaluate_computed_statmech(db_session, 2_000_000_000)
-    assert (evaluation.rubric, evaluation.rubric_version) == ("computed_statmech", 2)
+    assert (evaluation.rubric, evaluation.rubric_version) == ("computed_statmech", 1)
     assert evaluation.hard_fail_reason is HardFailReason.statmech_missing
 
 
@@ -298,7 +299,7 @@ def test_live_matches_the_species_rubric_run_directly(db_session, name):
     direct = evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH)
 
     assert live.model_dump(mode="json") == direct.model_dump(mode="json")
-    assert (live.rubric, live.rubric_version) == ("computed_statmech", 2)
+    assert (live.rubric, live.rubric_version) == ("computed_statmech", 1)
     live_fragment, direct_fragment = build_trust_fragment(live), build_trust_fragment(direct)
     assert live_fragment == direct_fragment
 
@@ -309,14 +310,14 @@ def test_live_matches_the_species_rubric_run_directly(db_session, name):
         return build_machine_review_context_hash(context)
 
     assert digest(live_fragment) == digest(direct_fragment)
-    assert active_rubric_versions_for_fragment("statmech", live_fragment) == {"computed_statmech_v2": "2"}
+    assert active_rubric_for_fragment("statmech", live_fragment) == SPECIES_RUBRIC
 
 
 def test_a_species_review_stored_before_the_change_is_current_after_it_and_nothing_is_rewritten(db_session):
     statmech = SCENARIOS["opt_freq_sp"](db_session)
     # The review as it was stored before PR 6.6: legacy evaluation, legacy (species) recipe.
     legacy = build_trust_fragment(evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH))
-    row = _store_review(db_session, statmech, legacy, {"computed_statmech_v2": "2"})
+    row = _store_review(db_session, statmech, legacy, SPECIES_RUBRIC)
     before = _row_snapshot(db_session)
 
     classification = _live_currency(db_session, statmech)
@@ -329,7 +330,7 @@ def test_a_species_review_stored_before_the_change_is_current_after_it_and_nothi
 def test_a_ts_review_stored_with_the_species_recipe_reads_stale_for_both_reasons_and_is_not_rewritten(db_session):
     statmech = _make_ts_statmech(db_session)
     legacy = build_trust_fragment(evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH))
-    row = _store_review(db_session, statmech, legacy, {"computed_statmech_v2": "2"})
+    row = _store_review(db_session, statmech, legacy, SPECIES_RUBRIC)
     before = _row_snapshot(db_session)
 
     classification = _live_currency(db_session, statmech)
@@ -346,14 +347,14 @@ def test_a_ts_review_stored_with_the_species_recipe_reads_stale_for_both_reasons
 def test_running_the_admin_trigger_appends_one_row_and_never_edits_the_stale_one(db_session):
     statmech = _make_ts_statmech(db_session)
     legacy = build_trust_fragment(evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH))
-    old = _store_review(db_session, statmech, legacy, {"computed_statmech_v2": "2"})
+    old = _store_review(db_session, statmech, legacy, SPECIES_RUBRIC)
     old_snapshot = _row_snapshot(db_session)[old.id]
 
     result = run_admin_fake_machine_review(
         db_session, record_type="statmech", record_id=statmech.id, reviewed_at=datetime(2026, 10, 12, 12)
     )
     db_session.flush()
-    assert result.rubric_versions == {"computed_ts_statmech_v1": "1"}
+    assert result.rubric == TS_RUBRIC
     snapshots = _row_snapshot(db_session)
     assert len(snapshots) == 2
     assert snapshots[old.id] == old_snapshot  # the historical row is byte-identical
@@ -373,12 +374,12 @@ def test_the_admin_trigger_stamps_the_rubric_that_actually_evaluated_the_record(
         result = run_admin_fake_machine_review(
             db_session, record_type="statmech", record_id=record.id, reviewed_at=datetime(2026, 10, 12, 12)
         )
-        stamped[label] = result.rubric_versions
+        stamped[label] = result.rubric
         row = db_session.scalars(
             select(RecordMachineReviewRow).where(RecordMachineReviewRow.record_id == record.id)
         ).one()
-        assert row.rubric_versions_json == result.rubric_versions
-    assert stamped == {"ts": {"computed_ts_statmech_v1": "1"}, "species": {"computed_statmech_v2": "2"}}
+        assert (row.rubric_name, row.rubric_version) == (result.rubric.name, result.rubric.version)
+    assert stamped == {"ts": TS_RUBRIC, "species": SPECIES_RUBRIC}
 
 
 @pytest.mark.parametrize("record_type", ["calculation", "kinetics", "thermo", "statmech", "transport", "transition_state_entry"])
@@ -386,18 +387,16 @@ def test_the_fragment_derived_recipe_equals_the_record_type_recipe_wherever_one_
     """Deriving the recipe from the evaluated rubric must not change any other record type's recipe."""
     from app.services.trust.models import TrustFragment
     rubric = RUBRICS.get(RUBRIC_NAME_FOR_RECORD_TYPE[record_type])
-    fragment = TrustFragment(trust_status="partial", evidence={"rubric": public_rubric_name(rubric)})
-    assert active_rubric_versions_for_fragment(record_type, fragment) == active_rubric_versions_for_record_type(
-        record_type
-    )
+    fragment = TrustFragment(trust_status="partial", evidence={"rubric": rubric.name, "rubric_version": rubric.version})
+    assert active_rubric_for_fragment(record_type, fragment) == active_rubric_for_record_type(record_type)
 
 
 def test_an_unlisted_rubric_fails_loudly_instead_of_falling_back():
     from app.services.trust.models import TrustFragment
 
-    for evidence in ({"rubric": "computed_made_up_v9"}, {}):
-        with pytest.raises(RuntimeError, match="no entry in the active machine-review rubric table"):
-            active_rubric_versions_for_fragment("statmech", TrustFragment(trust_status="partial", evidence=evidence))
+    for evidence in ({"rubric": "computed_made_up", "rubric_version": 9}, {"rubric": "computed_statmech", "rubric_version": 9}, {}):
+        with pytest.raises(RuntimeError, match="not registered|names no rubric"):
+            active_rubric_for_fragment("statmech", TrustFragment(trust_status="partial", evidence=evidence))
 
 
 def test_every_rubric_an_evaluator_can_emit_is_in_the_active_recipe_table(db_session):
@@ -406,12 +405,13 @@ def test_every_rubric_an_evaluator_can_emit_is_in_the_active_recipe_table(db_ses
         RUBRICS.get(name) for name in (*RUBRIC_NAME_FOR_RECORD_TYPE.values(), *(n for _, n in OWNER_SCOPED_RUBRIC_NAMES))
     ]
     for rubric in emit:
-        assert public_rubric_name(rubric) in ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, rubric.name
+        assert active_rubric(rubric.name) == rubric.ref, rubric.name
 
     # And the rubrics real evaluations actually name, one per owner kind.
     for record in (_make_ts_statmech(db_session), SCENARIOS["sparse"](db_session)):
         fragment = build_trust_fragment(evaluate_computed_statmech(db_session, record.id))
-        assert fragment.evidence["rubric"] in ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
+        assert RUBRICS.get(fragment.evidence["rubric"], fragment.evidence["rubric_version"])
+        assert "_v" not in fragment.evidence["rubric"]
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +453,7 @@ def test_importing_the_statmech_selection_package_does_not_load_the_trust_packag
 # ---------------------------------------------------------------------------
 
 
-def _store_review(db, statmech, fragment, rubric_versions):
+def _store_review(db, statmech, fragment, rubric):
     context = build_machine_review_evidence_context_from_trust(
         record_type="statmech", record_ref=str(statmech.id), trust_fragment=fragment
     )
@@ -469,8 +469,8 @@ def _store_review(db, statmech, fragment, rubric_versions):
             reviewed_at=datetime(2026, 10, 1, 12),
         ),
         context_digest=build_machine_review_context_hash(context),
-        prompt_version=ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-        rubric_versions=rubric_versions,
+        prompt=ACTIVE_MACHINE_REVIEW_PROMPT,
+        rubric=rubric,
     )
     db.flush()
     return row
@@ -486,8 +486,8 @@ def _live_currency(db, statmech):
         record_type="statmech",
         record_id=statmech.id,
         current_context=build_machine_review_context_hash(context),
-        active_prompt_version=ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-        active_rubric_versions=active_rubric_versions_for_fragment("statmech", fragment),
+        active_prompt=ACTIVE_MACHINE_REVIEW_PROMPT,
+        active_rubric=active_rubric_for_fragment("statmech", fragment),
     )
 
 

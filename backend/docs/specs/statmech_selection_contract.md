@@ -25,7 +25,7 @@ membership or post-processing settings it does not state.
 
 | Field | Meaning |
 | --- | --- |
-| `contract_version` | `statmech-selection-v1` |
+| `contract_version` | integer `1` |
 | `intent` | `qualify` (no comparison, no selection ref) or `protocol_preferred` (also compares whole recipes) |
 | `task` | one of six supported tasks, or a recognised deferred one (below) |
 | `observable` | what is qualified; implied for the three component tasks |
@@ -176,12 +176,13 @@ transition-state determination (a basin is one conformer group, a transition-sta
 The manifest carries the normalised request, profile and effective statuses, subject, population counts, every candidate's
 facts and every source calculation (no database id), each assessment, the registry entries consulted and the decision.
 Three offline operations: `reproduce_statmech_ordering` runs the decision over the *recorded* assessments (`reassessed:
-false`; a manifest made under an older supported semantics is labelled `historical`); `reassess_statmech_captured_inputs`
+false`); `reassess_statmech_captured_inputs`
 recomputes every assessment from the captured facts and refuses any difference, never trusting a recorded flag even when
 coordinated edits agree; `replay_statmech_decision` reassesses, re-decides over the recomputed assessments and refuses
 (`decision_mismatch`) a decision that is not the one recorded. A
-version, semantics or rule this release does not carry is refused, never substituted; a historical manifest is never
-reassessed under today's rubric. Digests are checksums, not signatures; replay verifies the consequences of captured
+manifest format, semantics, rule or decision version this release does not carry is refused (`UnknownVersion`, surfaced
+as the engine's `ReplayError`), never substituted. There are no replay-only legacy versions: every TCKDB-owned version is
+1, and a manifest recorded under any other one is not replayed. Digests are checksums, not signatures; replay verifies the consequences of captured
 inputs, not scientific truth, provenance or completeness of the captured population.
 
 ## Surface behavior, old and new

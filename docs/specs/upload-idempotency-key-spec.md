@@ -609,7 +609,7 @@ If implementation lands in the same milestone, also document user-facing guidanc
 
 ```text
 docs/clients/generic-client-targeting.md
-docs/contribution-bundles/manual-local-to-hosted-v0.md
+docs/contribution-bundles/manual-local-to-hosted.md
 ```
 
 Guidance should explain:

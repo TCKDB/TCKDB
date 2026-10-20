@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import func, select
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import SubmissionActorKind, SubmissionAuditEventKind, SubmissionKind
 from app.db.models.record_machine_review import RecordMachineReviewRow
@@ -38,11 +39,11 @@ from app.services.submission import create_submission
 _T0 = datetime(2026, 5, 31, 12, 0, 0)
 _HASH_A = "a" * 64
 _HASH_B = "b" * 64
-_PROMPT = "prompt_v3"
-_RUBRICS = {"kinetics": "computed_kinetics_v1"}
+_PROMPT = VersionRef(name="prompt", version=3)
+_RUBRIC = VersionRef(name="computed_kinetics", version=1)
 
 
-def _digest(context_hash: str = _HASH_A, schema_version: str = "v1"):
+def _digest(context_hash: str = _HASH_A, schema_version: int = 1):
     return MachineReviewContextDigest(
         context_hash=context_hash, context_schema_version=schema_version
     )
@@ -67,9 +68,9 @@ def _plan(
     decision: MachineReviewReReviewDecision,
     *,
     context_hash: str = _HASH_A,
-    schema_version: str = "v1",
-    prompt_version: str = _PROMPT,
-    rubric_versions: dict[str, str] | None = None,
+    schema_version: int = 1,
+    prompt: VersionRef = _PROMPT,
+    rubric: VersionRef | None = None,
 ) -> MachineReviewReReviewPlan:
     return MachineReviewReReviewPlan(
         decision=decision,
@@ -79,8 +80,8 @@ def _plan(
         currency_state=MachineReviewCurrencyState.not_run,
         current_context_hash=context_hash,
         context_schema_version=schema_version,
-        prompt_version=prompt_version,
-        rubric_versions=rubric_versions if rubric_versions is not None else dict(_RUBRICS),
+        prompt=prompt,
+        rubric=rubric if rubric is not None else _RUBRIC,
     )
 
 
@@ -92,8 +93,8 @@ def _seed_row(db_session, *, context_hash=_HASH_A, reviewed_at=_T0, record_id=90
         record_id=record_id,
         review=_review(reviewed_at=reviewed_at, record_id=record_id),
         context_digest=_digest(context_hash),
-        prompt_version=_PROMPT,
-        rubric_versions=_RUBRICS,
+        prompt=_PROMPT,
+        rubric=_RUBRIC,
     )
     db_session.flush()
     return row
@@ -158,29 +159,29 @@ def test_execute_uses_plan_context_hash_and_schema_version(db_session):
     plan = _plan(
         MachineReviewReReviewDecision.run_not_reviewed,
         context_hash=_HASH_B,
-        schema_version="v2",
+        schema_version=2,
     )
     result = _execute(db_session, plan)
     row = db_session.get(RecordMachineReviewRow, result.appended_review_id)
     assert row.context_hash == _HASH_B
-    assert row.context_schema_version == "v2"
+    assert row.context_schema_version == 2
     assert result.context_hash == _HASH_B
-    assert result.context_schema_version == "v2"
+    assert result.context_schema_version == 2
 
 
 def test_execute_uses_plan_prompt_version_and_rubric_versions(db_session):
-    rubrics = {"kinetics": "computed_kinetics_v9"}
+    rubric = VersionRef(name="computed_kinetics", version=9)
     plan = _plan(
         MachineReviewReReviewDecision.run_not_reviewed,
-        prompt_version="prompt_v9",
-        rubric_versions=rubrics,
+        prompt=VersionRef(name="prompt", version=9),
+        rubric=rubric,
     )
     result = _execute(db_session, plan)
     row = db_session.get(RecordMachineReviewRow, result.appended_review_id)
-    assert row.prompt_version == "prompt_v9"
-    assert row.rubric_versions_json == rubrics
-    assert result.prompt_version == "prompt_v9"
-    assert result.rubric_versions == rubrics
+    assert (row.prompt_name, row.prompt_version) == ("prompt", 9)
+    assert (row.rubric_name, row.rubric_version) == ("computed_kinetics", 9)
+    assert result.prompt == VersionRef(name="prompt", version=9)
+    assert result.rubric == rubric
 
 
 # --------------------------------------------------------------------------- #
@@ -330,9 +331,9 @@ def test_execute_result_forbids_mutation_payload_fields():
             record_type="kinetics",
             record_id=9001,
             context_hash=_HASH_A,
-            context_schema_version="v1",
-            prompt_version=_PROMPT,
-            rubric_versions={},
+            context_schema_version=1,
+            prompt=_PROMPT,
+            rubric=_RUBRIC,
             set_review_status="approved",  # type: ignore[call-arg]
         )
 
@@ -346,8 +347,8 @@ def test_execute_end_to_end_with_planner(db_session):
         record_type="kinetics",
         record_id=9001,
         current_context=digest,
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
     )
     assert plan.decision is MachineReviewReReviewDecision.run_not_reviewed
 
@@ -359,7 +360,7 @@ def test_execute_end_to_end_with_planner(db_session):
         record_type="kinetics",
         record_id=9001,
         current_context=digest,
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
     )
     assert replan.decision is MachineReviewReReviewDecision.skip_current

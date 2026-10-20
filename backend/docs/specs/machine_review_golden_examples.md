@@ -13,7 +13,7 @@ provider or public exposure.
 **Related specs:** `machine_review_handoff.md`,
 `admin_machine_review_inspection.md`, `admin_machine_review_curator_task_api.md`,
 `machine_review_curator_task_queue.md`, `provisional_machine_review.md`,
-`machine_review_provider_contract_v2.md` (the v2 provider contract designed to
+`machine_review_provider_contract.md` (the v2 provider contract designed to
 close the v1 vocabulary gap these examples surfaced).
 
 ---
@@ -58,7 +58,7 @@ action. The v1 transition-state golden case therefore uses the closest
 available token, `consistency`.
 
 **This gap is now closed by the v2 provider contract** (implemented; see
-`machine_review_provider_contract_v2.md`). A payload with
+`machine_review_provider_contract.md`). A payload with
 `schema_version: "machine_review_v2"` speaks the full machine-review vocabulary
 natively — native `MachineReviewStatus`, `curator_priority`,
 `recommended_action`, and all 11 `MachineReviewCategory` values including

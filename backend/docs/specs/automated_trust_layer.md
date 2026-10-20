@@ -18,9 +18,9 @@ read-API authors.
 
 ---
 
-## Trust contract version 2 (2026-10): what changed and what did not
+## Trust contract: when a hard-fail badge is an honest judgement
 
-Two corrections to the deterministic rubrics, shipped together because they share one question: when is a hard-fail badge
+Two rules in the deterministic rubrics share one question: when is a hard-fail badge
 an honest judgement?
 
 - **An automated geometry-validation `fail` is advisory, not a hard fail.** `calc_geometry_validation` documents its own `fail`
@@ -31,8 +31,8 @@ an honest judgement?
   failure stays visible: the geometry checks report `warning` (zero weight) for `fail` as well as for `warning`. Rejected
   calculation quality and a recorded artifact-integrity break still hard-fail exactly as before. A *confirmed* identity failure is
   a structure-determination finding judged by structure selection in its own role, not by this badge.
-- **The transition state badge issues no frequency verdict.** It used to hard-fail on the representative (latest) result, and a first
-  correction judged every attached result. Neither is sufficient: a saddle claim is about a *declared target* (the geometry it
+- **The transition state badge issues no frequency verdict.** Judging the representative (latest) result, or every attached
+  result, is not sufficient: a saddle claim is about a *declared target* (the geometry it
   evaluates, the role bundle supporting it, a usable source, the owner's persisted treatment of extra modes), and the badge has none of
   those. "Latest decides" lets a bad rerun on another geometry condemn a coherent older bundle; "every result must contradict" lets a
   rejected or unrelated older one-mode result rescue a disproved bundle and ignores curvature stored on optimisation and composite jobs.
@@ -47,11 +47,11 @@ an honest judgement?
   `curvature_contradicts_claim`, reports an undesignated extra mode as `reaction_coordinate_not_established`, and applies authorized
   adjudications. Reason mapping for the retired hard fails: zero modes becomes the warning above plus `curvature_contradicts_claim`;
   undesignated extra modes becomes the missing designation check plus `reaction_coordinate_not_established`.
-  From rubric version 5 (#723) the trust projection of a TS entry carries that assessment: `trust.structure_assessment` holds its
+  The trust projection of a TS entry carries that assessment: `trust.structure_assessment` holds its
   answer to one fixed evidence-only question (echoed as `task`), the zero-weight warning `declared_saddle_target_qualifies` restates
   it, and the frequency-presence checks read the result a declared target pins. The assessment runs on a single-entry detail read only; lists
   carry the status `not_assessed_on_lists` but read the declared pins in one statement per page, so the counts agree everywhere. It never moves the label, the completeness counts or `is_certified`.
-- **Undesignated imaginary modes (rubric version 4, #729).** A second zero-weight warning,
+- **Undesignated imaginary modes.** A second zero-weight warning,
   `no_frequency_result_has_undesignated_imaginary_modes`, fires when any attached frequency result with a recorded count reports
   two or more imaginary modes and does not designate the reaction coordinate. It reads the same source set as the zero-mode warning
   and applies the same rule to a null count (unknown: it neither rescues nor condemns), so an older or newer non-representative
@@ -66,21 +66,21 @@ an honest judgement?
   energy; only an authorized same-subject adjudication settles a finding (history is kept); unresolved is unresolved, not blocked;
   an unreadable kind or version is disclosed, not promoted to a failure. A heuristic geometry `fail` is not read here at all.
 
-**Versioning.** `computed_calculation`, `computed_kinetics`, `computed_thermo`, `computed_statmech` and `computed_transport`
-are now version 2 and `computed_transition_state` is version 3 (version 4 from #729; see above). The reviewer-family machine-review recipe stamps the rubric
-version, so a review made under the previous version compares **stale** and a re-review is planned. `rubric_versions_mismatch` is
-always among the reasons; on real data `context_hash_mismatch` usually accompanies it, because the machine-review context carries the
-check sets and the hard-fail reason, which these changes alter even for clean records;
-the stored review row is never rewritten and keeps its own recipe and verdict as history. The scientific-check families and the
-external-Cp runner keep their own keys and are not restaled. The context-hash schema version is unchanged (the shape did not change).
-The `HardFailReason` members are kept so stored version-1 results and reviews still parse; they are simply no longer produced for
-these two causes.
+**Versioning.** Every TCKDB-owned rubric is identified by a stable name plus a separate integer version, and every version is
+currently 1: `computed_calculation`, `computed_kinetics`, `computed_thermo`, `computed_statmech`, `computed_ts_statmech`,
+`computed_transport` and `computed_transition_state`. The reviewer-family machine-review recipe stamps the rubric name and
+version, so a review made under a different rubric version, or whose context changed (the machine-review context carries the check
+sets and the hard-fail reason), compares **stale** and a re-review is planned. `rubric_versions_mismatch` and
+`context_hash_mismatch` are the reasons; the stored review row is never rewritten and keeps its own recipe and verdict as history.
+The scientific-check families and the external-Cp runner keep their own keys. The `HardFailReason` members are kept so stored
+results and reviews still parse; the two retired causes are simply no longer produced.
 
 **Live consumers.** H298 and kinetics selection block on `evidence.hard_fail_reason`, so a record whose only flaw was an automated
 geometry fail is now eligible, and fresh answers can differ from earlier ones. Each assessment carries
-`evidence_rubric:<rubric>@<version>` in its advisory list, and each manifest records a structured `assessment_semantics` block
-(`version`, `evidence_rubric`, `source_findings`). The selection `policy` version covers only the decision procedure; assessment
-semantics are versioned separately (`ASSESSMENT_SEMANTICS_VERSION`, `2`). A manifest with no block, or a malformed or foreign
+`evidence_rubric:<name>` and `evidence_rubric_version:<N>` entries in its advisory list, and each manifest records a structured
+`assessment_semantics` block (`version`, `evidence_rubric` as `{"name": "computed_thermo", "version": 1}`, `source_findings`),
+all integers where they are versions. The selection `policy` version covers only the decision procedure; assessment
+semantics are versioned separately (`ASSESSMENT_SEMANTICS_VERSION`, `1`). A manifest with no block, or a malformed or foreign
 one, is refused. Replay reads the recorded eligibility and re-runs the ordering, never reassesses, and refuses semantics it does
 not carry. See
 `tests/services/thermo_selection/test_trust_correction_h298.py` for the exact probes.

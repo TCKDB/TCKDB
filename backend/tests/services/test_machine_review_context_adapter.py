@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from tckdb_schemas.fragments.version import VersionRef
+
 from app.services.machine_review import (
     GeometryValidationContext,
     MachineReviewCurrencyState,
@@ -41,8 +43,8 @@ _T0 = datetime(2026, 5, 31, 12, 0, 0, tzinfo=timezone.utc)
 
 _RECORD_TYPE = "kinetics"
 _RECORD_REF = "kin_9001"
-_PROMPT = "prompt_v3"
-_RUBRICS = {"kinetics": "computed_kinetics_v1"}
+_PROMPT = VersionRef(name="prompt", version=3)
+_RUBRIC = VersionRef(name="computed_kinetics", version=1)
 
 
 def _checks_map(
@@ -150,7 +152,7 @@ def test_build_context_from_trust_preserves_evidence_fields():
     assert context.record_type == _RECORD_TYPE
     assert context.record_ref == _RECORD_REF
     # Public rubric name carries the _vN suffix; version preserved separately.
-    assert context.rubric_name == "computed_kinetics_v1"
+    assert context.rubric_name == "computed_kinetics"
     assert context.rubric_version == 1
     assert context.passed_checks == ("a_present", "ea_present")
     assert context.missing_checks == ("uncertainty_present",)
@@ -181,7 +183,7 @@ def test_digest_is_unchanged_by_the_check_map_shape_move():
     pre_change = MachineReviewEvidenceContext(
         record_type=_RECORD_TYPE,
         record_ref=_RECORD_REF,
-        rubric_name="computed_kinetics_v1",
+        rubric_name="computed_kinetics",
         rubric_version=1,
         passed_checks=("a_present", "ea_present"),
         missing_checks=("uncertainty_present",),
@@ -307,8 +309,8 @@ def test_record_review_projects_to_stored_currency_projection():
     projection = stored_projection_from_record_machine_review(
         review,
         context_digest=digest,
-        prompt_version=_PROMPT,
-        rubric_versions=_RUBRICS,
+        prompt=_PROMPT,
+        rubric=_RUBRIC,
         id=42,
     )
 
@@ -317,8 +319,8 @@ def test_record_review_projects_to_stored_currency_projection():
     assert projection.status is MachineReviewStatus.machine_screened_needs_attention
     assert projection.context_hash == digest.context_hash
     assert projection.context_schema_version == digest.context_schema_version
-    assert projection.prompt_version == _PROMPT
-    assert projection.rubric_versions == _RUBRICS
+    assert projection.prompt == _PROMPT
+    assert projection.rubric == _RUBRIC
     assert projection.id == 42
 
 
@@ -329,7 +331,7 @@ def test_projection_preserves_source_audit_event_id():
 
     # Falls back to the review's audit_event_id when not supplied.
     bridged = stored_projection_from_record_machine_review(
-        review, context_digest=digest, prompt_version=_PROMPT, rubric_versions=_RUBRICS
+        review, context_digest=digest, prompt=_PROMPT, rubric=_RUBRIC
     )
     assert bridged.source_audit_event_id == 777
 
@@ -337,8 +339,8 @@ def test_projection_preserves_source_audit_event_id():
     overridden = stored_projection_from_record_machine_review(
         review,
         context_digest=digest,
-        prompt_version=_PROMPT,
-        rubric_versions=_RUBRICS,
+        prompt=_PROMPT,
+        rubric=_RUBRIC,
         source_audit_event_id=999,
     )
     assert overridden.source_audit_event_id == 999
@@ -349,7 +351,7 @@ def test_projection_preserves_reviewed_at():
     digest = build_machine_review_context_hash(_context())
     review = _review(reviewed_at=_T0)
     projection = stored_projection_from_record_machine_review(
-        review, context_digest=digest, prompt_version=_PROMPT, rubric_versions=_RUBRICS
+        review, context_digest=digest, prompt=_PROMPT, rubric=_RUBRIC
     )
     assert projection.reviewed_at == _T0
 
@@ -363,8 +365,8 @@ def _projection_for(digest, **review_kwargs):
     return stored_projection_from_record_machine_review(
         _review(**review_kwargs),
         context_digest=digest,
-        prompt_version=_PROMPT,
-        rubric_versions=_RUBRICS,
+        prompt=_PROMPT,
+        rubric=_RUBRIC,
         id=1,
     )
 
@@ -376,8 +378,8 @@ def test_current_projection_classifies_current_against_matching_digest():
     result = classify_machine_review_currency(
         [projection],
         current_context=digest,
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
     )
     assert result.state is MachineReviewCurrencyState.current
     assert result.stale_reasons == ()
@@ -394,8 +396,8 @@ def test_changed_digest_classifies_latest_review_stale():
     result = classify_machine_review_currency(
         [projection],
         current_context=digest_new,
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
     )
     assert result.state is MachineReviewCurrencyState.stale
     assert MachineReviewStaleReason.context_hash_mismatch in result.stale_reasons
@@ -408,8 +410,8 @@ def test_changed_prompt_version_classifies_latest_review_stale():
     result = classify_machine_review_currency(
         [projection],
         current_context=digest,
-        active_prompt_version="prompt_v4",  # active prompt advanced
-        active_rubric_versions=_RUBRICS,
+        active_prompt=VersionRef(name="prompt", version=4),  # active prompt advanced
+        active_rubric=_RUBRIC,
     )
     assert result.state is MachineReviewCurrencyState.stale
     assert result.stale_reasons == (
@@ -424,8 +426,8 @@ def test_changed_rubric_versions_classifies_latest_review_stale():
     result = classify_machine_review_currency(
         [projection],
         current_context=digest,
-        active_prompt_version=_PROMPT,
-        active_rubric_versions={"kinetics": "computed_kinetics_v2"},
+        active_prompt=_PROMPT,
+        active_rubric=VersionRef(name="computed_kinetics", version=2),
     )
     assert result.state is MachineReviewCurrencyState.stale
     assert result.stale_reasons == (
@@ -438,8 +440,8 @@ def test_no_reviews_classifies_not_run():
     result = classify_machine_review_currency(
         [],
         current_context=digest,
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
     )
     assert result.state is MachineReviewCurrencyState.not_run
     assert result.active_review is None
@@ -462,8 +464,8 @@ def test_end_to_end_current_then_stale_on_evidence_change():
     projection = stored_projection_from_record_machine_review(
         review,
         context_digest=digest,
-        prompt_version=_PROMPT,
-        rubric_versions=_RUBRICS,
+        prompt=_PROMPT,
+        rubric=_RUBRIC,
         id=1,
     )
 
@@ -471,8 +473,8 @@ def test_end_to_end_current_then_stale_on_evidence_change():
     current = classify_machine_review_currency(
         [projection],
         current_context=digest,
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
     )
     assert current.state is MachineReviewCurrencyState.current
     assert current.active_review is projection
@@ -489,8 +491,8 @@ def test_end_to_end_current_then_stale_on_evidence_change():
     stale = classify_machine_review_currency(
         [projection],  # still carries the OLD digest
         current_context=changed_digest,
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
     )
     assert stale.state is MachineReviewCurrencyState.stale
     assert MachineReviewStaleReason.context_hash_mismatch in stale.stale_reasons

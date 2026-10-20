@@ -302,7 +302,7 @@ If both counts are zero, `alembic upgrade head` proceeds normally and nothing be
    ```
    Species, calculations, transition states and statmech rows are **not** deleted — they are shared identity/result rows and the re-upload will resolve to the existing ones.
 4. **Migrate.** `alembic upgrade head` now runs to completion.
-5. **Re-upload** each network through `POST /api/v1/uploads/networks/pdep` with a v2 payload regenerated from its source run (for Arkane runs, `backend/scripts/pdep_ingestion` emits one). Each payload must carry per-path `channel_barriers`, an `energy_transfer` block, and, for every channel that is one elementary step, `microreaction_paths`. Since `b6e1d3a9c740` the energy-transfer block may take either form: one `scope: "per_well"` entry per `(state_key, collider_species_key)` pair, or — if the source run declared a single `energyTransferModel` for the network, as Arkane and MESS inputs usually do — one `scope: "network_wide"` entry naming neither. Do **not** duplicate a single value across the wells to make it look per-well; that is the fabrication ADR 0009 exists to stop. A chemically-activated **well-skipping** channel has no elementary step to name and instead declares `mechanism: "well_skipping"` with no paths (see `backend/docs/specs/pdep_upload_contract_v2.md`, "Well-skipping channels"). Omitting the paths *without* that declaration is still rejected.
+5. **Re-upload** each network through `POST /api/v1/uploads/networks/pdep` with a v2 payload regenerated from its source run (for Arkane runs, `backend/scripts/pdep_ingestion` emits one). Each payload must carry per-path `channel_barriers`, an `energy_transfer` block, and, for every channel that is one elementary step, `microreaction_paths`. Since `b6e1d3a9c740` the energy-transfer block may take either form: one `scope: "per_well"` entry per `(state_key, collider_species_key)` pair, or — if the source run declared a single `energyTransferModel` for the network, as Arkane and MESS inputs usually do — one `scope: "network_wide"` entry naming neither. Do **not** duplicate a single value across the wells to make it look per-well; that is the fabrication ADR 0009 exists to stop. A chemically-activated **well-skipping** channel has no elementary step to name and instead declares `mechanism: "well_skipping"` with no paths (see `backend/docs/specs/pdep_upload_contract.md`, "Well-skipping channels"). Omitting the paths *without* that declaration is still rejected.
 6. **Verify** that the re-uploaded network count matches the export, and that `network_channel.channel_key` is non-null everywhere:
    ```sql
    SELECT count(*) FROM network_channel WHERE channel_key IS NULL;  -- expect 0
@@ -395,7 +395,7 @@ an accepted record, and it cannot rewrite a primary key. Both are changes to
 *what* was accepted rather than to how it is spelled, and both need a
 replacement record and a `scientific_record_supersession` edge.
 
-The repair record is **not** carried by `tckdb.archive.v1` — it is keyed on this
+The repair record is **not** carried by the `tckdb.archive` format -- it is keyed on this
 cluster's transaction id. Keep the `pg_dump` from the upgrade if the account of
 the repair matters to you.
 

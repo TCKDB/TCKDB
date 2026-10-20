@@ -344,7 +344,7 @@ def _triggers(conn) -> dict[str, str]:
         ),
         {"tables": list(_TOUCHED)},
     ).all()
-    return {name: state for name, state in rows}
+    return {str(row[0]): str(row[1]) for row in rows}
 
 
 def test_the_freeze_is_really_on_at_the_parent_revision(harness) -> None:

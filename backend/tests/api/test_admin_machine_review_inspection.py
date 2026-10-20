@@ -35,7 +35,7 @@ from app.services.machine_review import (
     MachineReviewStatus,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     MachineReviewProviderFinding,
     MachineReviewProviderResult,
 )
@@ -101,7 +101,7 @@ def _record_mr_event(
 ) -> SubmissionAuditEvent:
     """Append a realistic machine-review (llm_precheck_recorded / llm) event."""
     result = MachineReviewProviderResult(
-        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+        format=MACHINE_REVIEW_FORMAT,
         status=status,
         summary="advisory",
         findings=findings,
@@ -321,7 +321,7 @@ def test_admin_submission_machine_review_inspection_preserves_parse_warnings(
             submission_id=submission.id,
             actor_kind=SubmissionActorKind.llm,
             event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
-            details_json={"schema_version": MACHINE_REVIEW_SCHEMA_VERSION, "status": "not-a-real-status", "findings": []},
+            details_json={"format": MACHINE_REVIEW_FORMAT.model_dump(), "status": "not-a-real-status", "findings": []},
         )
     )
     db_session.flush()

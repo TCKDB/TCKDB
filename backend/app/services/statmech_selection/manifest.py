@@ -207,7 +207,7 @@ def _check_format(manifest: dict[str, Any]) -> None:
     )
 
 
-def _check_versions(manifest: dict[str, Any], *, reassessing: bool) -> str:
+def _check_versions(manifest: dict[str, Any], *, reassessing: bool) -> int:
     """Refuse a manifest made under a version this release does not carry. Returns the assessment semantics version."""
     versions = manifest.get("versions") or {}
     running = _versions()
@@ -307,7 +307,7 @@ def _check_consistency(
         raise ReplayError("inconsistent_manifest", "the top-level outcome is not the decision's")
 
 
-def _prepare(manifest: dict[str, Any], *, reassessing: bool) -> tuple[str, StatmechRequest, SubjectFacts, list[CandidateFacts], dict[str, NormalizedCalculation]]:
+def _prepare(manifest: dict[str, Any], *, reassessing: bool) -> tuple[int, StatmechRequest, SubjectFacts, list[CandidateFacts], dict[str, NormalizedCalculation]]:
     _check_format(manifest)
     recorded = _check_versions(manifest, reassessing=reassessing)
     _check_integrity(manifest)

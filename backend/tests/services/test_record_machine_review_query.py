@@ -15,6 +15,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import (
     SubmissionActorKind,
@@ -40,11 +41,11 @@ from app.services.submission import create_submission
 _T0 = datetime(2026, 5, 31, 12, 0, 0)
 _HASH_A = "a" * 64
 _HASH_B = "b" * 64
-_PROMPT = "prompt_v3"
-_RUBRICS = {"kinetics": "computed_kinetics_v1"}
+_PROMPT = VersionRef(name="prompt", version=3)
+_RUBRIC = VersionRef(name="computed_kinetics", version=1)
 
 
-def _digest(context_hash: str = _HASH_A, schema_version: str = "v1"):
+def _digest(context_hash: str = _HASH_A, schema_version: int = 1):
     return MachineReviewContextDigest(
         context_hash=context_hash, context_schema_version=schema_version
     )
@@ -94,8 +95,8 @@ def _insert(
             model=model,
         ),
         context_digest=context_digest or _digest(),
-        prompt_version=_PROMPT,
-        rubric_versions=_RUBRICS,
+        prompt=_PROMPT,
+        rubric=_RUBRIC,
         source_audit_event_id=source_audit_event_id,
     )
     db_session.flush()
@@ -382,8 +383,8 @@ def _currency(db_session, *, current_hash=_HASH_A, record_id=9001):
         record_type="kinetics",
         record_id=record_id,
         current_context=_digest(current_hash),
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
     )
 
 

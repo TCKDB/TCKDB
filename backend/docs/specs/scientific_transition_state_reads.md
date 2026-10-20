@@ -212,7 +212,7 @@ include=statmech       — the statmech records this saddle point owns, a
                          compact projection with the refs of their source
                          calculations; the full record is
                          /scientific/statmech/{ref}.
-include=trust          — computed_transition_state_v2 fragment;
+include=trust          — computed_transition_state fragment;
                          internal-tokenized, so include=all skips it
 include=internal_ids   — Phase D policy gate
 ```
@@ -240,7 +240,7 @@ include=entries        — embed each record's parent's entry list, one
 include=validation_evidence — validation evidence per record
 include=statmech       — statmech records per record (one grouped lookup
                          per record, like validation_evidence)
-include=trust          — computed_transition_state_v2 fragment at
+include=trust          — computed_transition_state fragment at
                          records[*].trust. The page query eager-loads the
                          23-entry evidence graph once for the whole page.
                          Internal-tokenized: include=all does not reach it.

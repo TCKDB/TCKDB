@@ -43,7 +43,7 @@ from app.services.machine_review.providers.interface import (
     machine_review_result_to_details_json,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     MachineReviewProviderFinding,
     MachineReviewProviderResult,
 )
@@ -94,7 +94,7 @@ def _details(
     construction.
     """
     result = MachineReviewProviderResult(
-        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+        format=MACHINE_REVIEW_FORMAT,
         status=status,
         summary=summary,
         findings=findings,
@@ -358,7 +358,7 @@ def test_malformed_details_json_returns_parse_warning_not_exception():
     """A malformed payload degrades to no reviews + a parse warning, no raise."""
     # Carries the marker but is not a valid provider payload (status is not in the enum).
     event = _AuditEvent(
-        details_json={"schema_version": MACHINE_REVIEW_SCHEMA_VERSION, "status": "not-a-real-status", "findings": []}
+        details_json={"format": MACHINE_REVIEW_FORMAT.model_dump(), "status": "not-a-real-status", "findings": []}
     )
 
     projection = record_machine_reviews_from_submission_audit_event(

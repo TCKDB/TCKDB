@@ -39,15 +39,15 @@ from __future__ import annotations
 import hashlib
 
 from app.services.machine_review.providers.prompt import (
-    MACHINE_REVIEW_PROMPT_VERSION,
+    MACHINE_REVIEW_PROMPT,
     MACHINE_REVIEW_SYSTEM_PROMPT,
 )
-from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT_VERSION
+from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT
 
 #: SHA-256 of :data:`MACHINE_REVIEW_SYSTEM_PROMPT`, encoded UTF-8.
 #:
 #: **Changing the prompt text means changing this constant AND
-#: ``ACTIVE_MACHINE_REVIEW_PROMPT_VERSION``, in the same commit.** Updating
+#: ``ACTIVE_MACHINE_REVIEW_PROMPT``, in the same commit.** Updating
 #: only this one to get the test green re-opens exactly the hole the test
 #: exists to close: reviews stored under the old version would still read as
 #: current, and would still name a prompt whose words had changed underneath
@@ -63,7 +63,7 @@ def test_prompt_version_is_the_recipes_active_version() -> None:
     while the review is produced by the prompt's. If they part company, a
     review is stamped with a version that did not write it.
     """
-    assert MACHINE_REVIEW_PROMPT_VERSION == ACTIVE_MACHINE_REVIEW_PROMPT_VERSION
+    assert MACHINE_REVIEW_PROMPT == ACTIVE_MACHINE_REVIEW_PROMPT
 
 
 def test_prompt_text_is_pinned_to_its_version() -> None:
@@ -76,7 +76,7 @@ def test_prompt_text_is_pinned_to_its_version() -> None:
     assert digest == _PROMPT_SHA256, (
         "The machine-review system prompt changed. Decide whether this is a new "
         "prompt version: if the model is being asked something different, bump "
-        "ACTIVE_MACHINE_REVIEW_PROMPT_VERSION (and MACHINE_REVIEW_PROMPT_VERSION "
+        "ACTIVE_MACHINE_REVIEW_PROMPT (and MACHINE_REVIEW_PROMPT "
         "with it) so stored reviews re-review instead of silently claiming words "
         "they never saw. Then update _PROMPT_SHA256 here."
     )

@@ -1,27 +1,26 @@
 """Tests for the shared private machine-review recipe module.
 
-The *recipe* (active prompt version + active rubric versions) is the single
-source of truth every machine-review consumer reads (readiness-audit risk R1).
-These tests pin that it preserves the prompt version, derives rubric versions
-from the deployed trust rubric constants (never hand-maintained), that the
-filtered views consumers store are independent copies, and that the typed
-recipe model carries no mutation payload. That a stored recipe is the filtered
-view -- and so survives an unrelated rubric being added -- is pinned in
-``test_machine_review_recipe_filtering.py``.
+The *recipe* (active prompt ref + the one rubric ref a review is stamped with) is
+the single source of truth every machine-review consumer reads (readiness-audit
+risk R1). These tests pin that it preserves the prompt, reads the rubric from the
+deployed trust rubric registry (never hand-maintained), that a recipe holds
+exactly one rubric (the currency rule, structurally), and that the typed recipe
+model carries no mutation payload. That a stored recipe survives an unrelated
+rubric being added is pinned in ``test_machine_review_recipe_filtering.py``.
 """
 
 from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.services.consistency.core import AdvisoryResult
-from app.services.machine_review.admin_trigger import active_rubric_versions_for_record_type
+from app.services.machine_review.admin_trigger import active_rubric_for_record_type
 from app.services.machine_review.recipe import (
-    ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-    ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
+    ACTIVE_MACHINE_REVIEW_PROMPT,
     MachineReviewActiveRecipe,
-    public_rubric_name,
+    active_rubric,
 )
 from app.services.trust.rubrics import (
     COMPUTED_CALCULATION,
@@ -62,64 +61,52 @@ _ACTIVE_RUBRICS = (
 )
 
 
-def test_active_machine_review_recipe_preserves_prompt_version():
-    """The prompt version is the documented private constant."""
-    assert ACTIVE_MACHINE_REVIEW_PROMPT_VERSION == "machine_review_v1"
+def test_active_machine_review_recipe_preserves_the_prompt():
+    """The prompt is the documented private constant: a name beside an integer version."""
+    assert ACTIVE_MACHINE_REVIEW_PROMPT == VersionRef(name="machine_review", version=1)
 
 
-def test_active_machine_review_recipe_derives_rubric_versions_from_trust_constants():
-    """Rubric versions are derived from the trust rubric constants, not hand-set.
-
-    Every entry's key is ``<rubric.name>_v<rubric.version>`` and its value is the
-    integer rubric version as a string, taken straight from the deployed
-    ``COMPUTED_*_V1`` constants — so a rubric ``version`` bump changes the recipe
-    automatically (it cannot drift from the evaluator).
-    """
-    expected = {
-        public_rubric_name(rubric): str(rubric.version) for rubric in _ACTIVE_RUBRICS
-    }
-    assert expected == ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
-
-    # Each key carries the version it maps to (key/value can't silently diverge).
+def test_active_rubric_is_read_from_the_trust_rubric_registry():
+    """The rubric ref comes straight from each deployed rubric, so a version bump changes it with no second edit."""
     for rubric in _ACTIVE_RUBRICS:
-        name = public_rubric_name(rubric)
-        assert name.endswith(f"_v{rubric.version}")
-        assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[name] == str(rubric.version)
+        ref = active_rubric(rubric)
+        assert (ref.name, ref.version) == (rubric.name, rubric.version)
+        assert active_rubric(rubric.name) == ref
+        assert "_v" not in ref.name
 
 
-def test_filtered_recipes_are_independent_copies():
-    """Mutating a returned filtered recipe never mutates the module constant."""
-    reviewer = active_rubric_versions_for_record_type("calculation")
-    assert reviewer == {"computed_calculation_v2": "2"}
-    reviewer["computed_calculation_v2"] = "999"
-    assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS["computed_calculation_v2"] == "2"
-    assert active_rubric_versions_for_record_type("calculation") == {"computed_calculation_v2": "2"}
+def test_a_record_types_rubric_is_its_own_and_the_ref_is_a_fresh_value():
+    assert active_rubric_for_record_type("calculation") == VersionRef(name="computed_calculation", version=1)
 
     advisory = AdvisoryResult(target=None, runner="thermo_consistency", rubric=THERMO_CONSISTENCY,
                               findings=(), inputs_json="{}")
-    stamped = advisory.recipe
-    assert stamped == {"thermo_consistency_v1": "1"}
-    stamped["thermo_consistency_v1"] = "999"
-    assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS["thermo_consistency_v1"] == "1"
-    assert advisory.recipe == {"thermo_consistency_v1": "1"}
+    assert advisory.rubric_ref == VersionRef(name="thermo_consistency", version=1)
+    assert advisory.prompt == VersionRef(name="thermo_consistency", version=1)
 
 
 def test_recipe_model_forbids_mutation_payload_fields():
-    """The recipe model is frozen and rejects any extra/mutation field."""
+    """The recipe model is frozen and rejects any extra/mutation field; it holds ONE rubric, never a set."""
     field_names = set(MachineReviewActiveRecipe.model_fields)
-    assert field_names == {"prompt_version", "rubric_versions"}
+    assert field_names == {"context_schema_version", "prompt", "rubric"}
     forbidden = ("set_", "mutation", "override", "apply", "is_certified",
                  "benchmark", "review_status", "trust_status", "evidence")
     for token in forbidden:
         assert not any(token in name for name in field_names), token
 
-    recipe = MachineReviewActiveRecipe(prompt_version="machine_review_v1", rubric_versions={})
+    recipe = MachineReviewActiveRecipe(prompt=ACTIVE_MACHINE_REVIEW_PROMPT, rubric=active_rubric("computed_thermo"))
     with pytest.raises(ValidationError):
-        recipe.prompt_version = "x"  # frozen
+        recipe.prompt = VersionRef(name="x", version=1)  # frozen
 
     with pytest.raises(ValidationError):
         MachineReviewActiveRecipe(
-            prompt_version="machine_review_v1",
-            rubric_versions={},
+            prompt=ACTIVE_MACHINE_REVIEW_PROMPT,
+            rubric=active_rubric("computed_thermo"),
             set_review_status="approved",  # type: ignore[call-arg]
+        )
+
+    # A second rubric cannot be carried: the recipe has no field for it and a dict is not a ref.
+    with pytest.raises(ValidationError):
+        MachineReviewActiveRecipe(
+            prompt=ACTIVE_MACHINE_REVIEW_PROMPT,
+            rubric={"computed_thermo": 1, "computed_kinetics": 1},  # type: ignore[arg-type]
         )

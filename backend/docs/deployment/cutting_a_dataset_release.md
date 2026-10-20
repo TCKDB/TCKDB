@@ -9,7 +9,7 @@ This file is the procedure.
 
 > **A dataset release is not a backup.** It ships selected values plus the
 > candidates and review history behind them. It cannot restore a database.
-> For that, use `scripts/tckdb_archive.py` (`tckdb.archive.v1`) and
+> For that, use `scripts/tckdb_archive.py` (`tckdb.archive`, format version 1) and
 > [`migrations.md`](migrations.md).
 
 ---
@@ -314,8 +314,8 @@ checksums. If you want the newer state published, cut the next release.
 ## 5b. Build the publication deposit
 
 The curl procedure above gives you the release. A **deposit**
-(`tckdb.deposit.v1`) is the directory a paper is backed by: the release, the
-`tckdb.archive.v1` evidence archive written in the same database session,
+(`tckdb.deposit`, format version 1) is the directory a paper is backed by: the release, the
+`tckdb.archive` (format version 1) evidence archive written in the same database session,
 the exact source commit and its lockfiles, the scripts that generate every
 manuscript number, those scripts' expected outputs, a `REPRODUCE.md`
 protocol and an `ACCOUNTS.md` privacy statement -- all bound by SHA-256 in

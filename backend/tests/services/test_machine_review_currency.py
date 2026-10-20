@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from tckdb_schemas.fragments.version import VersionRef
+
 from app.services.machine_review import (
     MachineReviewContextDigest,
     MachineReviewCurrencyState,
@@ -26,11 +28,9 @@ from app.services.machine_review import (
 _T0 = datetime(2026, 5, 31, 12, 0, 0, tzinfo=timezone.utc)
 
 # The active recipe every test classifies against.
-_ACTIVE_CONTEXT = MachineReviewContextDigest(
-    context_hash="hash_current", context_schema_version="v1"
-)
-_ACTIVE_PROMPT = "prompt_v3"
-_ACTIVE_RUBRICS = {"kinetics": "computed_kinetics_v1", "calc": "computed_calculation_v1"}
+_ACTIVE_CONTEXT = MachineReviewContextDigest(context_hash="hash_current", context_schema_version=1)
+_ACTIVE_PROMPT = VersionRef(name="prompt", version=3)
+_ACTIVE_RUBRIC = VersionRef(name="computed_kinetics", version=1)
 
 
 def _review(
@@ -39,9 +39,9 @@ def _review(
     id: int | None = 1,
     source_audit_event_id: int | None = 100,
     context_hash: str = "hash_current",
-    context_schema_version: str = "v1",
-    prompt_version: str = "prompt_v3",
-    rubric_versions: dict[str, str] | None = None,
+    context_schema_version: int = 1,
+    prompt: VersionRef = _ACTIVE_PROMPT,
+    rubric: VersionRef = _ACTIVE_RUBRIC,
     record_type: str = "kinetics",
     record_id: int | str = 9001,
 ) -> StoredMachineReviewProjection:
@@ -52,8 +52,8 @@ def _review(
         reviewed_at=reviewed_at,
         context_schema_version=context_schema_version,
         context_hash=context_hash,
-        prompt_version=prompt_version,
-        rubric_versions=rubric_versions if rubric_versions is not None else dict(_ACTIVE_RUBRICS),
+        prompt=prompt,
+        rubric=rubric,
         id=id,
         source_audit_event_id=source_audit_event_id,
     )
@@ -63,8 +63,8 @@ def _classify(reviews):
     return classify_machine_review_currency(
         reviews,
         current_context=_ACTIVE_CONTEXT,
-        active_prompt_version=_ACTIVE_PROMPT,
-        active_rubric_versions=_ACTIVE_RUBRICS,
+        active_prompt=_ACTIVE_PROMPT,
+        active_rubric=_ACTIVE_RUBRIC,
     )
 
 
@@ -108,7 +108,7 @@ def test_context_hash_mismatch_is_stale():
 
 def test_context_schema_version_mismatch_is_stale():
     """A different context_schema_version makes the latest review stale."""
-    result = _classify([_review(context_schema_version="v0")])
+    result = _classify([_review(context_schema_version=0)])
     assert result.state is MachineReviewCurrencyState.stale
     assert result.stale_reasons == (
         MachineReviewStaleReason.context_schema_version_mismatch,
@@ -116,8 +116,8 @@ def test_context_schema_version_mismatch_is_stale():
 
 
 def test_prompt_version_mismatch_is_stale():
-    """A different prompt_version makes the latest review stale."""
-    result = _classify([_review(prompt_version="prompt_v2")])
+    """A different prompt version makes the latest review stale."""
+    result = _classify([_review(prompt=VersionRef(name="prompt", version=2))])
     assert result.state is MachineReviewCurrencyState.stale
     assert result.stale_reasons == (
         MachineReviewStaleReason.prompt_version_mismatch,
@@ -125,11 +125,8 @@ def test_prompt_version_mismatch_is_stale():
 
 
 def test_rubric_versions_mismatch_is_stale():
-    """A different rubric version makes the latest review stale."""
-    result = _classify(
-        [_review(rubric_versions={"kinetics": "computed_kinetics_v2",
-                                  "calc": "computed_calculation_v1"})]
-    )
+    """A different version of the same rubric makes the latest review stale."""
+    result = _classify([_review(rubric=VersionRef(name="computed_kinetics", version=2))])
     assert result.state is MachineReviewCurrencyState.stale
     assert result.stale_reasons == (
         MachineReviewStaleReason.rubric_versions_mismatch,
@@ -141,10 +138,10 @@ def test_multiple_mismatches_report_all_reasons_in_fixed_order():
     result = _classify(
         [
             _review(
-                context_schema_version="v0",
+                context_schema_version=0,
                 context_hash="hash_old",
-                prompt_version="prompt_v2",
-                rubric_versions={"kinetics": "computed_kinetics_v2"},
+                prompt=VersionRef(name="prompt", version=2),
+                rubric=VersionRef(name="computed_kinetics", version=2),
             )
         ]
     )
@@ -158,31 +155,27 @@ def test_multiple_mismatches_report_all_reasons_in_fixed_order():
 
 
 # --------------------------------------------------------------------------- #
-# Rubric-version canonical comparison
+# Rubric comparison is by whole ref
 # --------------------------------------------------------------------------- #
 
 
-def test_rubric_version_key_order_does_not_matter():
-    """Same rubric mapping in a different key order is still current."""
-    reordered = {"calc": "computed_calculation_v1", "kinetics": "computed_kinetics_v1"}
-    result = _classify([_review(rubric_versions=reordered)])
-    assert result.state is MachineReviewCurrencyState.current
-
-
-def test_missing_rubric_key_is_stale():
-    """A rubric mapping missing an active key is stale."""
-    result = _classify([_review(rubric_versions={"kinetics": "computed_kinetics_v1"})])
+def test_a_different_rubric_at_the_same_version_is_stale():
+    """The name matters as much as the version: a review made under another rubric is not current."""
+    result = _classify([_review(rubric=VersionRef(name="computed_calculation", version=1))])
     assert result.state is MachineReviewCurrencyState.stale
-    assert MachineReviewStaleReason.rubric_versions_mismatch in result.stale_reasons
+    assert result.stale_reasons == (MachineReviewStaleReason.rubric_versions_mismatch,)
 
 
-def test_extra_rubric_key_is_stale():
-    """A rubric mapping with an extra key beyond the active set is stale."""
-    result = _classify(
-        [_review(rubric_versions={**_ACTIVE_RUBRICS, "thermo": "computed_thermo_v1"})]
-    )
+def test_a_different_prompt_name_at_the_same_version_is_stale():
+    result = _classify([_review(prompt=VersionRef(name="other_prompt", version=3))])
     assert result.state is MachineReviewCurrencyState.stale
-    assert MachineReviewStaleReason.rubric_versions_mismatch in result.stale_reasons
+    assert result.stale_reasons == (MachineReviewStaleReason.prompt_version_mismatch,)
+
+
+def test_a_stored_version_above_the_current_one_is_stale_too():
+    """Stale means "not the current ref", not "older": a future version is not current either."""
+    result = _classify([_review(rubric=VersionRef(name="computed_kinetics", version=9))])
+    assert result.state is MachineReviewCurrencyState.stale
 
 
 # --------------------------------------------------------------------------- #
