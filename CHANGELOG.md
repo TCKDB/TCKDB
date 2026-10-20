@@ -32,6 +32,7 @@ Pre-release, so only the current version of anything is read. Removed, with thei
 - **Deploy note:** a release frozen under the retired `tckdb.dataset_release.v1` tag makes `verify_release` (and any re-render) raise `unknown_manifest_schema`. Releases frozen under the old tag stop verifying until PR-4's migration rewrites the stored tags; there is no compatibility path.
 - Removed environment variable: `LLM_PRECHECK_PROVIDER` (setting `llm_precheck_provider`, type `LLMPrecheckProviderName`). Nothing read it after the precheck provider factory was deleted; `AI_REVIEW_ASSISTANT_MODE` selects the provider.
 - `verify_release` now has a test that fails if the recorded `content_sha256` is not compared with the stored document.
+- New refusal code `unknown_manifest_schema` (409), catalogued in `code_catalogue.py`. `tckdb-schemas` is 0.128.0 and `tckdb-client` is 0.158.0 (generated contract and `RejectionCode`).
 - Schema impact: none. No migration. No new environment variable.
 
 ## One way to version things: `VersionRef`, `VersionRegistry`, and a guard (2026-10-19)

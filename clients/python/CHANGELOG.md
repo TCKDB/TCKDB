@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.158.0 - 2026-10-20
+
+`RejectionCode` gains one member, `unknown_manifest_schema` (409), for a release manifest whose stored format tag this server cannot
+render. `tckdb-schemas` is 0.128.0 (the same code in the shipped contract).
+
 ## 0.157.0 - 2026-10-19
 
 The two curator routes for structure-evidence findings (`POST` and `GET /api/v1/curation/structure-evidence-findings`) are registered in

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.128.0 - 2026-10-20
+
+One new refusal code in the shipped producer contract, `unknown_manifest_schema` (409): a release manifest row names a format tag this
+build has no renderer for, so the manifest operation (render, verify) is refused instead of guessing a shape. It can only be returned by
+the release read and verify routes, not by an upload; no producer route and no upload payload changes.
+
 ## 0.127.0 - 2026-10-20
 
 Twelve new refusal codes, all prefixed `structure_finding_`, and one new curator route in the shipped producer contract:
