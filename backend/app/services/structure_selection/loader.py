@@ -681,7 +681,12 @@ def _normalize_calculations(
             owner_ref=owner_refs[c.id],
             level=levels[c.id],
             software=(
-                f"{c.software_release.software.name}@{c.software_release.version}"
+                c.software_release.software.name
+                if c.software_release is not None and c.software_release.software is not None
+                else None
+            ),
+            software_version=(
+                c.software_release.version
                 if c.software_release is not None and c.software_release.software is not None
                 else None
             ),

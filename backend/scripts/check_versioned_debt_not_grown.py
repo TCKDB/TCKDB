@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -118,84 +117,6 @@ def parse_new_allowances(source: str) -> set[tuple[str, str, str]]:
     return result
 
 
-VERSION_PATH = "schemas/python/tckdb-schemas/tckdb_schemas/fragments/version.py"
-
-
-def load_version_patterns(version_source: str) -> tuple[re.Pattern[str], ...]:
-    """The "embeds a version" patterns, read from the source of ``tckdb_schemas/fragments/version.py``.
-
-    The module imports pydantic, which this script must not need, so only its top-level ``re.compile``
-    assignments are executed (nothing else is), and the tuple ``VERSIONED_NAME_PATTERNS`` selects among them.
-    The caller passes the merge base's copy, so the author cannot weaken the patterns in the same change.
-    """
-    tree = ast.parse(version_source)
-    namespace: dict[str, object] = {"re": re}
-    chosen: list[str] = []
-    for node in tree.body:
-        value = node.value if isinstance(node, (ast.Assign, ast.AnnAssign)) else None
-        if isinstance(value, ast.Call) and isinstance(value.func, ast.Attribute) and value.func.attr == "compile":
-            target = node.targets[0] if isinstance(node, ast.Assign) else node.target
-            if isinstance(target, ast.Name):
-                exec(compile(ast.Module([node], []), VERSION_PATH, "exec"), namespace)
-        if isinstance(node, (ast.Assign, ast.AnnAssign)) and isinstance(value, ast.Tuple):
-            target = node.targets[0] if isinstance(node, ast.Assign) else node.target
-            if isinstance(target, ast.Name) and target.id == "VERSIONED_NAME_PATTERNS":
-                chosen = [elt.id for elt in value.elts if isinstance(elt, ast.Name)]
-    patterns = tuple(namespace[name] for name in chosen if isinstance(namespace.get(name), re.Pattern))
-    if not patterns or len(patterns) != len(chosen):
-        raise DebtFileError("the version patterns could not be read from the merge base's version.py")
-    return patterns  # type: ignore[return-value]
-
-
-def parse_renames(source: str, patterns: tuple[re.Pattern[str], ...]) -> dict[str, str]:
-    """``RENAMES`` as {old identifier: new identifier}: the only text change a move may contain.
-
-    A new identifier that itself embeds a version is refused (a rename into another violation is a swap), and
-    an old identifier may be renamed once.
-    """
-    result: dict[str, str] = {}
-    for row in literal_binding(source, "RENAMES"):
-        if not (isinstance(row, tuple) and len(row) == 2 and all(isinstance(part, str) and part for part in row)):
-            raise DebtFileError(f"a RENAMES row is not (old identifier, new identifier): {row!r}")
-        old, new = row
-        if old in result:
-            raise DebtFileError(f"RENAMES renames {old!r} twice")
-        if any(pattern.search(new) for pattern in patterns):
-            raise DebtFileError(f"RENAMES maps {old!r} to {new!r}, which itself embeds a version")
-        result[old] = new
-    return result
-
-
-def apply_renames(text: str, renames: dict[str, str]) -> str:
-    """*text* with every whole-word identifier in *renames* replaced, and nothing else changed."""
-    if not renames:
-        return text
-    pattern = re.compile(r"(?<![A-Za-z0-9_])(" + "|".join(sorted(map(re.escape, renames), key=len, reverse=True)) + r")(?![A-Za-z0-9_])")
-    return pattern.sub(lambda m: renames[m.group(1)], text)
-
-
-def parse_moved_debt(source: str) -> dict[tuple[str, str, str], tuple[str, str, str]]:
-    """``MOVED_DEBT`` as {new key: old key}: debt rows whose text changed with a rename, nothing else.
-
-    Each row is ``(path, kind, old token, new token)``. The path and kind cannot change, which keeps a move
-    from being a way to relocate a violation to another file. A new key and an old key may each appear once:
-    one old row cannot fan out into two.
-    """
-    result: dict[tuple[str, str, str], tuple[str, str, str]] = {}
-    claimed: set[tuple[str, str, str]] = set()
-    for row in literal_binding(source, "MOVED_DEBT"):
-        if not (isinstance(row, tuple) and len(row) == 4 and all(isinstance(part, str) for part in row)):
-            raise DebtFileError(f"a MOVED_DEBT row is not (path, kind, old token, new token): {row!r}")
-        path, kind, old_token, new_token = row
-        if (path, kind, new_token) in result:
-            raise DebtFileError(f"MOVED_DEBT names {(path, kind, new_token)!r} twice")
-        if (path, kind, old_token) in claimed:
-            raise DebtFileError(f"MOVED_DEBT claims the old row {(path, kind, old_token)!r} more than once")
-        claimed.add((path, kind, old_token))
-        result[(path, kind, new_token)] = (path, kind, old_token)
-    return result
-
-
 def _annotation(message: str) -> str:
     """A GitHub ``warning`` annotation, so a declared allowance shows on the PR's checks summary."""
     escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
@@ -227,42 +148,14 @@ def new_allowances(
 def grown(
     base: dict[tuple[str, str, str], int],
     head: dict[tuple[str, str, str], int],
-    moved: dict[tuple[str, str, str], tuple[str, str, str]] | None = None,
-    renames: dict[str, str] | None = None,
 ) -> list[str]:
-    """What the head's debt has that the base's does not allow.
-
-    *moved* maps a head row to the base row it is the renamed text of. A move is a declaration, not a
-    permission: the old row must exist at the merge base, the old row must be gone from the head, the
-    new text must be the old text with only the identifiers in *renames* replaced, and the count may not
-    exceed the old row's. Anything else is a new row and is refused as before. A move whose new row the
-    base already has has landed: it is inert and is not checked again.
-    """
-    moved = moved or {}
-    renames = renames or {}
+    """What the head's debt has that the base's does not allow: a new row, or a count that went up."""
     problems = []
     for key, count in sorted(head.items()):
-        old = moved.get(key)
-        if old is not None and key not in base:
-            if old not in base:
-                problems.append(f"MOVED_DEBT says {key!r} was {old!r}, which the merge base does not have")
-            elif old in head:
-                problems.append(f"MOVED_DEBT says {key!r} replaced {old!r}, but the head still lists the old row")
-            elif apply_renames(old[2], renames) != key[2]:
-                problems.append(
-                    f"MOVED_DEBT says {key!r} is {old!r} renamed, but the text differs beyond RENAMES: "
-                    f"expected {apply_renames(old[2], renames)!r}"
-                )
-            elif count > base[old]:
-                problems.append(f"moved debt row {key!r} grew from x{base[old]} (as {old!r}) to x{count}")
-            continue
         if key not in base:
             problems.append(f"new debt row {key!r} (x{count}); a new violation must be fixed, not listed")
         elif count > base[key]:
             problems.append(f"debt row {key!r} grew from x{base[key]} to x{count}")
-    for new_key in sorted(moved):
-        if new_key not in head:
-            problems.append(f"MOVED_DEBT names {new_key!r}, which is not in DEBT")
     return problems
 
 
@@ -329,16 +222,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        patterns = load_version_patterns(_git(args.repo, "show", f"{base_sha}:{VERSION_PATH}").stdout)
-    except (SyntaxError, ValueError) as exc:  # DebtFileError is a ValueError
-        print(f"the merge base's {VERSION_PATH} is unreadable ({exc}); fix main first", file=sys.stderr)
-        return 2
-
-    try:
         head_debt = parse_debt(head_source)
-        moved = parse_moved_debt(head_source)
-        renames = parse_renames(head_source, patterns)
-        problems = grown(base_debt, head_debt, moved, renames)
+        problems = grown(base_debt, head_debt)
         allow_problems, notices = new_allowances(
             parse_allowed(base_file.stdout),
             parse_allowed(head_source),
@@ -350,14 +235,6 @@ def main(argv: list[str] | None = None) -> int:
     problems += allow_problems
     for notice in notices:
         print(notice)
-    for new_key, old_key in sorted(moved.items()):
-        if new_key in base_debt or old_key not in base_debt:
-            continue  # landed already, or refused above: nothing new for the reviewer to read
-        print(
-            _annotation(f"debt row moved with a rename: {old_key!r} -> {new_key[2]!r}").replace(
-                "New versioned-name allowance", "Moved versioned-name debt row"
-            )
-        )
     if problems:
         print(f"The versioned-names debt grew relative to the merge base {base_sha[:9]}:", file=sys.stderr)
         for problem in problems:

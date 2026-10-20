@@ -503,6 +503,8 @@ class NormalizedCalculation:
     owner_ref: str
     level: LevelFacts
     software: str | None
+    #: The software release the producer ran: someone else's version, kept as text beside the software name.
+    software_version: str | None
     declaration_state: str
     declaration: dict[str, Any] | None
     constraint_rows: int
@@ -532,6 +534,7 @@ class NormalizedCalculation:
             "owner_ref": self.owner_ref,
             "level": self.level.to_dict(),
             "software": self.software,
+            "software_version": self.software_version,
             "declaration_state": self.declaration_state,
             "declaration": self.declaration,
             "constraint_rows": self.constraint_rows,

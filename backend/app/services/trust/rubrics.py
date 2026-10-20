@@ -2700,7 +2700,7 @@ def _ts_representative_freq_result(ts_entry: TransitionStateEntry, context: Tran
 #: The structure-selection semantics the badge's fixed question is asked under. ``scoped_ts_context`` refuses to run
 #: when the live versions differ, and a test pins the same equality, so a change to the assessor, the normaliser or
 #: the decision rules forces a deliberate TS rubric version bump instead of silently changing what the badge's warning means.
-TS_SCOPED_STRUCTURE_VERSIONS: dict[str, str] = {"assessment": "1", "normalizer": "1", "decision": "1"}
+TS_SCOPED_STRUCTURE_VERSIONS: dict[str, int] = {"assessment": 1, "normalizer": 1, "decision": 1}
 
 
 def _ts_has_calc_type(

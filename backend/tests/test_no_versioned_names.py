@@ -18,11 +18,9 @@ Two lists keep the rule honest (both in ``tests/versioned_names_debt.py``):
 
 * ``ALLOWED`` is permanent and short, each entry with the reason it is not a
   TCKDB version (a botocore class name, NIST's archive name).
-* ``DEBT`` is everything that already violates the rule when this guard
-  landed. It can only shrink: a new violation fails, a debt entry the scan no
-  longer finds fails, a debt entry whose count differs fails, and the ceilings
-  below fail any growth in the list itself. Later PRs of the versioning
-  programme empty it; the last one deletes it and asserts the scan is clean.
+* ``DEBT`` is what the guard still owes, and it is **empty**: the versioning programme finished with PR-4, so
+  every match is fixed or carries an ``ALLOWED`` entry. Its ceilings below are zero, so a deferred violation means
+  raising a ceiling in the same change, in plain sight of the review.
 
 ``/api/v1`` is not a finding and needs no allowance: the API's own version
 lives in the URL, and ``/v1`` has no name before it for a version to be fused
@@ -55,8 +53,8 @@ from tests.versioned_names_scan import (
 )
 
 #: Upper bounds on the debt list. Lower them (never raise them) as entries go.
-DEBT_ENTRY_CEILING = 57
-DEBT_OCCURRENCE_CEILING = 61
+DEBT_ENTRY_CEILING = 0
+DEBT_OCCURRENCE_CEILING = 0
 
 REMOVING_PRS = frozenset({"PR-2", "PR-3", "PR-4"})
 
@@ -117,7 +115,7 @@ def test_the_debt_list_cannot_grow() -> None:
     assert len(keys) == len(set(keys)), "DEBT lists the same (path, kind, token) twice"
     assert all(row[3] >= 1 for row in DEBT), "DEBT holds an entry with no occurrences"
     assert {row[4] for row in DEBT} <= REMOVING_PRS, "every DEBT entry names the PR that removes it"
-    assert DEBT, "DEBT is empty: delete it and the tests above that read it (PR-4)"
+    assert not DEBT, "DEBT is empty at the end of the versioning programme; a row means a violation was deferred"
     assert COMPLETED_PRS <= REMOVING_PRS, "COMPLETED_PRS names a PR the programme does not have"
     done = sorted(row[:3] for row in DEBT if row[4] in COMPLETED_PRS)
     assert not done, f"these rows name a PR already listed in COMPLETED_PRS, which said it was done: {done}"
@@ -195,7 +193,6 @@ def test_the_scan_reaches_the_code_it_claims_to() -> None:
     assert REPO_ROOT / "backend/app/services/trust/rubrics.py" in files
     assert REPO_ROOT / "schemas/python/tckdb-schemas/tckdb_schemas/fragments/version.py" in files
     assert REPO_ROOT / "clients/python/src/tckdb_client/replay.py" in files
-    assert [row for row in DEBT if row[1] == "openapi"], "the OpenAPI golden was not reached"
     assert scan_openapi(), "the OpenAPI scan found nothing in a golden that has versioned names"
     schema_files = [e for root in SCAN_ROOTS for e in root.rglob("*.json")]
     assert len(schema_files) > 10, "the file-name scan's roots hold no schema files"
