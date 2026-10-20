@@ -21,6 +21,7 @@ from tckdb_schemas.bundle_source_rules import (
 )
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
+from tckdb_schemas.fragments.version import ParserStamp
 from tckdb_schemas.energy_correction import AppliedEnergyCorrectionUploadPayload
 from tckdb_schemas.enums import (
     CalculationDependencyRole,
@@ -192,7 +193,7 @@ class CalculationInBundle(SchemaBase):
 
     parameters_json: dict | None = None
     parameters: list[CalculationParameterObservation] | None = None
-    parameters_parser_version: str | None = None
+    parameters_parser: ParserStamp | None = None
     parameters_extracted_at: datetime | None = None
 
     opt_result: OptResultPayload | None = None

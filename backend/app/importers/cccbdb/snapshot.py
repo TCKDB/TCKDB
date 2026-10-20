@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from app.importers.cccbdb import (
+    PARSER_NAME,
     PARSER_VERSION,
     SOURCE_DATABASE_DOI,
     SOURCE_NAME,
@@ -50,9 +51,11 @@ from app.importers.cccbdb.parsers import (
     parse_molecule_catalog_page,
     parse_species_all_data_page,
 )
+from app.services.parser_registry import PARSERS
 
 SNAPSHOT_VERSION = 1
-BUILDER_VERSION = "cccbdb-experimental-payload-builder/0.1.0"
+BUILDER_NAME = "cccbdb_payload_builder"
+BUILDER_VERSION = str(PARSERS.get(BUILDER_NAME).version)
 
 _DEFAULT_USER_AGENT = (
     "tckdb-cccbdb-importer/0.1 "
@@ -363,7 +366,9 @@ def run_snapshot(
         "source_database_doi": SOURCE_DATABASE_DOI,
         "snapshot_version": SNAPSHOT_VERSION,
         "created_at": _now_utc_iso(),
+        "parser_name": PARSER_NAME,
         "parser_version": PARSER_VERSION,
+        "builder_name": BUILDER_NAME,
         "builder_version": BUILDER_VERSION,
         "records": [r.to_manifest() for r in records],
     }
@@ -742,6 +747,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 __all__ = [
+    "BUILDER_NAME",
     "BUILDER_VERSION",
     "SNAPSHOT_VERSION",
     "FetchResult",

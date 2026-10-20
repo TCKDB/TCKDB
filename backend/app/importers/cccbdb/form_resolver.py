@@ -43,6 +43,7 @@ from typing import Any, Callable, Protocol
 from urllib.parse import urljoin
 
 from app.importers.cccbdb import (
+    PARSER_NAME,
     PARSER_VERSION,
     SOURCE_DATABASE_DOI,
     SOURCE_NAME,
@@ -63,8 +64,11 @@ from app.importers.cccbdb.parsers import (
 from app.importers.cccbdb.parsers.species_selection import (
     structural_to_hill_formula,
 )
+from app.services.parser_registry import PARSERS
 
 _logger = logging.getLogger(__name__)
+
+FORM_RESOLVER_NAME = "cccbdb_form_resolver"
 
 
 DEFAULT_USER_AGENT = (
@@ -972,11 +976,13 @@ def _merge_manifest(
 
     path = output_dir / "manifest.json"
     existing: dict[str, Any] = {
-        "builder_version": "cccbdb-form-resolver/0.1.0",
+        "builder_name": FORM_RESOLVER_NAME,
+        "builder_version": str(PARSERS.get(FORM_RESOLVER_NAME).version),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "source": SOURCE_NAME,
         "source_release": SOURCE_RELEASE,
         "source_database_doi": SOURCE_DATABASE_DOI,
+        "parser_name": PARSER_NAME,
         "parser_version": PARSER_VERSION,
         "records": [],
     }

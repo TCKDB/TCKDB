@@ -223,6 +223,7 @@ def _build_row(
         external_source_record_key=meta.source_record_key,
         external_source_page_kind=meta.page_kind,
         external_source_content_sha256=meta.content_sha256,
+        external_source_parser_name=meta.parser_name,
         external_source_parser_version=meta.parser_version,
         reference_label=(
             row.reference.reference_label if row.reference else None

@@ -143,7 +143,9 @@ from app.db.models.molecular_property_observation import (
 from app.importers.thermoml import (
     ARCHIVE_SHA256,
     ARCHIVE_URL,
+    MAPPING_NAME,
     MAPPING_VERSION,
+    PARSER_NAME,
     PARSER_VERSION,
     SOURCE_DATABASE_DOI,
     SOURCE_NAME,
@@ -193,7 +195,7 @@ _DEDUPE_COLUMNS = (
 )
 
 #: This importer's fixed identity for ``external_source_record.parser_name``.
-_PARSER_NAME = "thermoml"
+_PARSER_NAME = PARSER_NAME
 
 #: Schema id recorded on the custody row: the XSD this article validated
 #: against, named and pinned by digest, not by ThermoML's own ``<Version>``
@@ -210,7 +212,7 @@ _SCHEMA_ID = f"ThermoML.xsd v4.0 sha256:{XSD_SHA256}"
 #: ``SOURCE_NAME``/``SOURCE_RELEASE`` name the NIST *database*, not the
 #: NIST staff member who curated a given article into it.
 UPLOAD_SOURCE_NAME = "TCKDB depositor ThermoML upload"
-UPLOAD_SOURCE_RELEASE = "v1"
+UPLOAD_SOURCE_RELEASE = "1"
 
 #: Recorded as ``external_source_record.source_uri`` for an uploaded
 #: document. Not a fetched URL -- there is nothing to fetch, the bytes
@@ -472,7 +474,9 @@ def _get_or_create_custody(
             ExternalSourceRecord.external_source_id == external_source.id,
             ExternalSourceRecord.source_record_key == doi,
             ExternalSourceRecord.content_sha256 == article.xml_sha256,
+            ExternalSourceRecord.parser_name == PARSER_NAME,
             ExternalSourceRecord.parser_version == PARSER_VERSION,
+            ExternalSourceRecord.mapping_name == MAPPING_NAME,
             ExternalSourceRecord.mapping_version == MAPPING_VERSION,
         )
     )
@@ -500,6 +504,7 @@ def _get_or_create_custody(
         schema_valid=schema_valid,
         parser_name=_PARSER_NAME,
         parser_version=PARSER_VERSION,
+        mapping_name=MAPPING_NAME,
         mapping_version=MAPPING_VERSION,
         mapping_report_json=mapping_report_json,
     )

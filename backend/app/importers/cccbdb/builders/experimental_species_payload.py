@@ -115,6 +115,7 @@ def _enthalpy_observations(record: CCCBDBExperimentalSpeciesRecord) -> list[dict
             external_source_doi=meta.source_database_doi,
             external_source_url=meta.source_url,
             external_source_record_key=meta.source_record_key,
+            external_source_parser_name=meta.parser_name,
             external_source_parser_version=meta.parser_version,
             raw_payload_json={
                 "identity_hint": record.identity.model_dump(mode="json"),

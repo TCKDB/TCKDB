@@ -258,7 +258,8 @@ class ExecutionEnvironmentManifestPayload(SchemaBase):
     docstring for why both are accepted.
     """
 
-    schema_version: Literal["tckdb.execution-environment.v1"]
+    schema_name: Literal["tckdb.execution-environment"]
+    schema_version: Literal[1]
     runtime: DescribedRuntime | ContainerRuntime | CondaRuntime | HPCModuleRuntime = Field(
         discriminator="runtime_kind"
     )
@@ -330,6 +331,7 @@ class ExecutionEnvironmentManifestPayload(SchemaBase):
 
     def canonical_payload(self) -> dict:
         return {
+            "schema_name": self.schema_name,
             "schema_version": self.schema_version,
             "runtime": self.runtime.model_dump(mode="json"),
             "software_release": self.software_release.model_dump(mode="json"),

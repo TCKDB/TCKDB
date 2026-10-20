@@ -95,6 +95,7 @@ class MolecularPropertyObservationBase(BaseModel):
     external_source_record_key: str | None = None
     external_source_page_kind: str | None = None
     external_source_content_sha256: str | None = None
+    external_source_parser_name: str | None = None
     external_source_parser_version: str | None = None
 
     # Phase C-E1 source custody. Follows the same convention as the FK ids
@@ -230,4 +231,5 @@ class MolecularPropertyObservationSourceMetadata(BaseModel):
     external_source_record_key: str | None = None
     external_source_page_kind: str | None = None
     external_source_content_sha256: str | None = None
+    external_source_parser_name: str | None = None
     external_source_parser_version: str | None = None

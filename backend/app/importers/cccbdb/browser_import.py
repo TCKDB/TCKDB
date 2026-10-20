@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 from app.importers.cccbdb import (
+    PARSER_NAME,
     PARSER_VERSION,
     SOURCE_DATABASE_DOI,
     SOURCE_NAME,
@@ -64,6 +65,7 @@ from app.importers.cccbdb.diagnostics.classifier import (
 )
 from app.importers.cccbdb.parsers import parse_species_all_data_page
 from app.importers.cccbdb.snapshot import (
+    BUILDER_NAME,
     BUILDER_VERSION,
     SNAPSHOT_VERSION,
     RecordResult,
@@ -291,7 +293,9 @@ def _merge_manifest(
             "source_database_doi": SOURCE_DATABASE_DOI,
             "snapshot_version": SNAPSHOT_VERSION,
             "created_at": _now_utc_iso(),
+            "parser_name": PARSER_NAME,
             "parser_version": PARSER_VERSION,
+            "builder_name": BUILDER_NAME,
             "builder_version": BUILDER_VERSION,
             "records": [],
         }

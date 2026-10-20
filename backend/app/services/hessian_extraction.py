@@ -96,7 +96,7 @@ from app.services.calculation_geometry_composition import (
 )
 from app.services.hessian_parsing import (
     GAUSSIAN_HESSIAN_MARKER,
-    HESSIAN_PARSER_VERSION,
+    HESSIAN_PARSER,
     MOLPRO_HESSIAN_MARKER,
     ParsedHessian,
     parse_hessian_from_artifact,
@@ -433,7 +433,8 @@ def _insert(
                 natoms=parsed.natoms,
                 lower_triangle_hartree_bohr2=parsed.lower_triangle_hartree_bohr2,
                 source=parsed.source,
-                parser_version=HESSIAN_PARSER_VERSION,
+                parser_name=HESSIAN_PARSER.name,
+                parser_version=str(HESSIAN_PARSER.version),
             )
         )
         session.flush()

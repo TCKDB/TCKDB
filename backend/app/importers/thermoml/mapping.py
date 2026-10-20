@@ -32,7 +32,7 @@ from app.db.models.common import (
     ObservedUncertaintyAssessor,
     ObservedUncertaintyKind,
 )
-from app.importers.thermoml import MAPPING_VERSION, PARSER_VERSION
+from app.importers.thermoml import MAPPING_NAME, MAPPING_VERSION, PARSER_NAME, PARSER_VERSION
 from app.importers.thermoml.models import (
     ThermoMLCompound,
     ThermoMLCpTable,
@@ -46,7 +46,7 @@ from app.schemas.entities.molecular_property_observation import (
     MolecularPropertyObservationCreate,
 )
 
-REPORT_SCHEMA = "thermoml.mapping.v1"
+REPORT_SCHEMA = "thermoml.mapping"
 
 #: kPa -> bar divisor. 1 bar = 100 kPa exactly (both SI-derived units);
 #: this is the one unit conversion this mapper performs, and it must be
@@ -76,7 +76,7 @@ _STATE_BASIS_BY_PHASE = {
 _SUPPORTED_STANDARD_STATE = "Pure compound"
 
 #: Observed-method-string rule (plan C2 amendment, ``rule
-#: id=origin.smethodname_allowlist.v1``): when a Cp property carries
+#: id=origin.smethodname_allowlist``): when a Cp property carries
 #: neither ``eMethodName`` nor a ``Prediction`` but does carry a free-text
 #: ``sMethodName``, origin is decided from this EXPLICIT allowlist of
 #: verbatim strings -- never a keyword/substring match. A string not in
@@ -110,7 +110,7 @@ _S_METHOD_NAME_ORIGIN: dict[str, ScientificOriginKind] = {
     "Statistical thermodynamic calculations": ScientificOriginKind.computed,
 }
 
-#: Uncertainty precedence, versioned as ``uncertainty.precedence.v1``:
+#: Uncertainty precedence, versioned as ``uncertainty.precedence``:
 #: the typed columns hold the first present of combined expanded,
 #: combined standard, expanded, standard.
 _PRECEDENCE: tuple[tuple[str, str, ObservedUncertaintyKind], ...] = (
@@ -156,7 +156,7 @@ class MappingReport(BaseModel):
     :param mapping_version: :data:`app.importers.thermoml.MAPPING_VERSION`
         at the time of the run.
     :param transformed: Rule ids that fired at least once (e.g.
-        ``"unit.j_mol_k.identity"``, ``"uncertainty.precedence.v1"``).
+        ``"unit.j_mol_k.identity"``, ``"uncertainty.precedence"``).
     :param retained_only: Rule ids naming content carried through
         verbatim into ``raw_payload_json`` without further
         interpretation (e.g. every non-selected uncertainty entry).
@@ -174,7 +174,9 @@ class MappingReport(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     schema_: str = Field(default=REPORT_SCHEMA, alias="schema")
+    parser_name: str = PARSER_NAME
     parser_version: str = PARSER_VERSION
+    mapping_name: str = MAPPING_NAME
     mapping_version: str = MAPPING_VERSION
     transformed: list[str] = Field(default_factory=list)
     retained_only: list[str] = Field(default_factory=list)
@@ -363,7 +365,7 @@ def map_cp_table(
             table.compound
         )
 
-    base_rules: set[str] = {"state_basis.phase_map.v1"}
+    base_rules: set[str] = {"state_basis.phase_map"}
 
     if table.method_kind == "eMethodName":
         scientific_origin = ScientificOriginKind.experimental
@@ -378,7 +380,7 @@ def map_cp_table(
                     "detail": (
                         f"sMethodName={table.method_name!r} not on the "
                         "observed-method-string allowlist "
-                        "(origin.smethodname_allowlist.v1)"
+                        "(origin.smethodname_allowlist)"
                     ),
                     "block_index": table.block_index,
                 }
@@ -388,7 +390,7 @@ def map_cp_table(
             )
         scientific_origin = origin
         method_note = table.method_name
-        base_rules.add("origin.smethodname_allowlist.v1")
+        base_rules.add("origin.smethodname_allowlist")
     else:
         prediction_type = table.prediction_type or ""
         if prediction_type in _COMPUTED_PREDICTION_TYPES:
@@ -396,7 +398,7 @@ def map_cp_table(
         else:
             scientific_origin = ScientificOriginKind.estimated
         method_note = table.prediction_type
-        base_rules.add("origin.prediction_type_map.v1")
+        base_rules.add("origin.prediction_type_map")
 
     transformed.update(base_rules)
 
@@ -437,7 +439,7 @@ def map_cp_table(
             pressure_kpa / _KPA_PER_BAR if pressure_kpa is not None else None
         )
         if pressure_kpa is not None:
-            row_rules.add("pressure.kpa_to_bar.v1")
+            row_rules.add("pressure.kpa_to_bar")
 
         chosen, kind, scalar_uncertainty, retained, unc_unsupported, unc_fatal = (
             _select_uncertainty(value, definitions)
@@ -455,7 +457,7 @@ def map_cp_table(
         uncertainty_level_of_confidence_pct: float | None = None
         uncertainty_assessor: ObservedUncertaintyAssessor | None = None
         if chosen is not None and kind is not None:
-            row_rules.add("uncertainty.precedence.v1")
+            row_rules.add("uncertainty.precedence")
             uncertainty_kind = kind
             definition = definitions.get((chosen.source, chosen.assess_num))
             if definition is not None:
@@ -475,7 +477,9 @@ def map_cp_table(
         raw_payload_json = {
             "mapping": {
                 "schema": REPORT_SCHEMA,
+                "parser_name": PARSER_NAME,
                 "parser_version": PARSER_VERSION,
+                "mapping_name": MAPPING_NAME,
                 "mapping_version": MAPPING_VERSION,
                 # Per-row, not the table-wide accumulator: this is a
                 # fresh set built for THIS row alone, so it is

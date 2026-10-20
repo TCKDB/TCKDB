@@ -130,6 +130,7 @@ class ExternalSourceRecord(Base, TimestampMixin):
     schema_valid: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     parser_name: Mapped[str] = mapped_column(Text, nullable=False)
     parser_version: Mapped[str] = mapped_column(Text, nullable=False)
+    mapping_name: Mapped[str] = mapped_column(Text, nullable=False)
     mapping_version: Mapped[str] = mapped_column(Text, nullable=False)
     mapping_report_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 

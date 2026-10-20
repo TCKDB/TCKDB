@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from app.services.parser_registry import PARSERS
+
 # ---------------------------------------------------------------------------
 # Canonical key mapping — initial seed (core + secondary tier)
 # ---------------------------------------------------------------------------
@@ -612,7 +614,7 @@ def _guess_value_type(value: str) -> str:
 # Top-level API
 # ---------------------------------------------------------------------------
 
-PARSER_VERSION = "gaussian_v1"
+PARSER = PARSERS.get("gaussian_parameters")
 
 
 def parse_gaussian_log(filepath: str | Path) -> dict:
@@ -625,7 +627,7 @@ def parse_gaussian_log(filepath: str | Path) -> dict:
       - software: software version info (or None)
       - charge_multiplicity: (charge, mult) tuple (or None)
       - method_basis: {"method": ..., "basis": ...} (or None)
-      - parser_version: version tag for this parser
+      - parser: the parser's stamp (name and version)
     """
     text = Path(filepath).read_text()
 
@@ -650,7 +652,7 @@ def parse_gaussian_log(filepath: str | Path) -> dict:
         "software": parse_software_version(text),
         "charge_multiplicity": parse_charge_multiplicity(text),
         "method_basis": parse_method_basis(route),
-        "parser_version": PARSER_VERSION,
+        "parser": PARSER.stamp().model_dump(),
     }
 
 

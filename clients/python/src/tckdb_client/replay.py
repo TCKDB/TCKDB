@@ -38,7 +38,7 @@ boundary.
 
 RESPONSE_BODY_CAP = 4096
 SIDECAR_GLOB = "*.meta.json"
-DEFAULT_FORMAT_VERSIONS: tuple[str, ...] = ("0",)
+DEFAULT_FORMAT_VERSIONS: tuple[int, ...] = (1,)
 
 # Terminal sidecar status: a calculation_artifact sidecar whose target
 # /calculations/{id} no longer exists on the server (typically after a
@@ -95,7 +95,7 @@ def replay_bundle(
     base_url_override: str | None = None,
     only_pending: bool = False,
     dry_run: bool = False,
-    supported_format_versions: tuple[str, ...] = DEFAULT_FORMAT_VERSIONS,
+    supported_format_versions: tuple[int, ...] = DEFAULT_FORMAT_VERSIONS,
 ) -> ReplaySummary:
     """Walk ``bundle_dir`` and replay every actionable sidecar.
 
@@ -132,7 +132,7 @@ def _process_one(
     base_url_override: str | None,
     only_pending: bool,
     dry_run: bool,
-    supported_format_versions: tuple[str, ...],
+    supported_format_versions: tuple[int, ...],
     counts: _CountAccumulator,
 ) -> None:
     try:
@@ -153,7 +153,7 @@ def _process_one(
     kind = sidecar.get("payload_kind") or "__unknown__"
 
     version = sidecar.get("bundle_format_version")
-    if version not in supported_format_versions:
+    if type(version) is not int or version not in supported_format_versions:
         last_error = f"unsupported bundle_format_version: {version!r}"
         _mark_failed(
             sidecar_path,
@@ -520,7 +520,7 @@ def _mark_uploaded(
     updated = dict(sidecar)
     updated.update(
         {
-            "bundle_format_version": sidecar.get("bundle_format_version", "0"),
+            "bundle_format_version": sidecar.get("bundle_format_version", 1),
             "status": "uploaded",
             "uploaded_at": _utc_now_iso(),
             "response_status_code": response.status_code,
@@ -556,7 +556,7 @@ def _mark_failed(
     updated = dict(sidecar)
     updated.update(
         {
-            "bundle_format_version": sidecar.get("bundle_format_version", "0"),
+            "bundle_format_version": sidecar.get("bundle_format_version", 1),
             "status": "failed",
             "last_attempted_at": _utc_now_iso(),
             "last_error": last_error,
@@ -588,7 +588,7 @@ def _mark_needs_regeneration(
     updated = dict(sidecar)
     updated.update(
         {
-            "bundle_format_version": sidecar.get("bundle_format_version", "0"),
+            "bundle_format_version": sidecar.get("bundle_format_version", 1),
             "status": STATUS_NEEDS_REGENERATION,
             "last_attempted_at": _utc_now_iso(),
             "last_error": last_error,

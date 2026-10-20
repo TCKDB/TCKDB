@@ -92,7 +92,9 @@ class ObservationExternalSource(BaseModel):
     record_key: str | None = None
     content_sha256: str | None = None
     schema_label: str | None = None
+    parser_name: str | None = None
     parser_version: str | None = None
+    mapping_name: str | None = None
     mapping_version: str | None = None
 
 

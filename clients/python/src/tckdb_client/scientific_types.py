@@ -18,7 +18,7 @@ class ReproducibilityAssessmentSummary(TypedDict):
     state: Required[str]
     assessment_ref: str | None
     rubric: str | None
-    rubric_version: str | None
+    rubric_version: int | None
     grade: str | None
     assessed_at: str | None
 
@@ -432,7 +432,8 @@ class WorkflowToolReleaseIdentity(TypedDict):
 class ExecutionEnvironmentManifestRecord(TypedDict):
     """Canonical nested public execution-environment response."""
 
-    schema_version: Required[str]
+    schema_name: Required[str]
+    schema_version: Required[int]
     runtime: Required[ExecutionEnvironmentRuntime]
     software_release: Required[ScientificSoftwareReleaseIdentity]
     workflow_tool_release: NotRequired[WorkflowToolReleaseIdentity | None]
@@ -2132,7 +2133,7 @@ class StatmechSelectionRequest(TypedDict, total=False):
     public ref. Nothing here is a database id, a bound, a page, a sort or a rule.
     """
 
-    contract_version: Literal["statmech-selection-v1"]
+    contract_version: Literal[1]
     intent: Literal["qualify", "protocol_preferred"]
     task: str
     observable: str

@@ -49,7 +49,7 @@ class RecordReproducibilityAssessment(Base, TimestampMixin, PublicRefMixin):
         nullable=False,
     )
     rubric_name: Mapped[str] = mapped_column(String(128), nullable=False)
-    rubric_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    rubric_version: Mapped[int] = mapped_column(Integer, nullable=False)
     context_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     context_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 

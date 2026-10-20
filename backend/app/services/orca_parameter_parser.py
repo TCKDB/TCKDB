@@ -15,6 +15,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from app.services.parser_registry import PARSERS
+
 # ---------------------------------------------------------------------------
 # Canonical key mapping — ORCA-specific entries
 # ---------------------------------------------------------------------------
@@ -1139,7 +1141,7 @@ def parse_orca_log(
     :param text: Raw log text (provide one of text or path).
     :param path: Path to log file.
     :returns: Dict with keys: parameters, parameters_json, software,
-              charge_multiplicity, method_basis, parser_version.
+              charge_multiplicity, method_basis, parser.
     """
     if text is None and path is not None:
         text = Path(path).read_text()
@@ -1180,7 +1182,7 @@ def parse_orca_log(
         "software": parse_software_version(text),
         "charge_multiplicity": parse_charge_multiplicity(text),
         "method_basis": parse_method_basis(text),
-        "parser_version": "orca_v2",
+        "parser": PARSERS.get("orca_parameters").stamp().model_dump(),
     }
 
 

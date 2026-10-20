@@ -912,7 +912,7 @@ def _bundle_submit_envelope(thermo_upload: dict) -> dict:
     """
     return {
         "bundle_format": "tckdb-contribution-bundle",
-        "bundle_version": "0.1",
+        "bundle_version": 1,
         "bundle_kind": "thermo",
         "created_at": "2026-04-25T00:00:00Z",
         "source_instance": {

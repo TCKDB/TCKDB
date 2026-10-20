@@ -30,6 +30,7 @@ from typing import Any
 from app.importers.thermoml import (
     ARCHIVE_SHA256,
     ARCHIVE_URL,
+    PARSER_NAME,
     PARSER_VERSION,
     SOURCE_DATABASE_DOI,
     SOURCE_NAME,
@@ -353,6 +354,7 @@ def write_snapshot(
         "archive_sha256": ARCHIVE_SHA256,
         "doi": doi,
         "retrieved_at": retrieved_at or datetime.now(timezone.utc).isoformat(),
+        "parser_name": PARSER_NAME,
         "parser_version": PARSER_VERSION,
         "xml_sha256": article.xml_sha256,
         "json_sha256": article.json_sha256,

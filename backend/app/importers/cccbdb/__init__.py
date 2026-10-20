@@ -10,12 +10,16 @@ See ``backend/docs/specs/cccbdb_importer.md`` for the design spec and
 
 from __future__ import annotations
 
-PARSER_VERSION = "cccbdb-experimental-species-parser/0.1.0"
+from app.services.parser_registry import PARSERS
+
+PARSER_NAME = "cccbdb_experimental_species"
+PARSER_VERSION = str(PARSERS.get(PARSER_NAME).version)
 SOURCE_NAME = "CCCBDB"
 SOURCE_RELEASE = "22"
 SOURCE_DATABASE_DOI = "10.18434/T47C7Z"
 
 __all__ = [
+    "PARSER_NAME",
     "PARSER_VERSION",
     "SOURCE_DATABASE_DOI",
     "SOURCE_NAME",

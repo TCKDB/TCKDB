@@ -448,7 +448,8 @@ const pathSearchSchema = z.object({
 
 const executionEnvironmentSchema = z.object({
     environment_ref: z.string(),
-    schema_version: z.string().optional(),
+    schema_name: z.string().optional(),
+    schema_version: z.number().optional(),
     runtime: z.object({ runtime_kind: z.string() }).passthrough().optional(),
     software_release: z.unknown().optional(),
     executable: z.object({ locator: z.string() }).passthrough().optional(),

@@ -28,7 +28,7 @@ from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 
 BUNDLE_FORMAT: Literal["tckdb-contribution-bundle"] = "tckdb-contribution-bundle"
-BUNDLE_VERSION: Literal["0.1"] = "0.1"
+BUNDLE_VERSION: Literal[1] = 1
 
 # Bundle-local reference keys are namespaced strings like ``species:ethanol``.
 # The namespace is one or more lowercase ascii words separated by ``_``,
@@ -200,7 +200,7 @@ class ContributionBundle(SchemaBase):
             "examples": [
                 {
                     "bundle_format": "tckdb-contribution-bundle",
-                    "bundle_version": "0.1",
+                    "bundle_version": 1,
                     "bundle_kind": "thermo",
                     "created_at": "2026-09-29T00:00:00Z",
                     "source_instance": {
@@ -240,7 +240,7 @@ class ContributionBundle(SchemaBase):
     )
 
     bundle_format: Literal["tckdb-contribution-bundle"]
-    bundle_version: Literal["0.1"]
+    bundle_version: Literal[1]
     bundle_kind: BundleKind
     created_at: datetime
 

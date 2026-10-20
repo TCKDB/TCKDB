@@ -84,7 +84,7 @@ from app.services.monatomic import single_atom_element
 # See ``__all__`` at the foot of this module for the re-exported set.
 
 # Layer 1b: parser fidelity. A freq calculation that declares a parser
-# (``parameters_parser_version`` is set) but provides no per-mode
+# (``parameters_parser`` is set) but provides no per-mode
 # frequencies is suspicious — either the parser didn't run a freq job
 # or the producer dropped the mode list. Surface as a warning, not a
 # blocker, since manual uploads without a parser version remain valid.
@@ -284,7 +284,7 @@ def check_freq_parser_fidelity(
 ) -> list[UploadWarning]:
     """Warn when a parsed freq calc has no per-mode frequencies.
 
-    A calculation that declares ``parameters_parser_version`` (the marker
+    A calculation that declares ``parameters_parser`` (the marker
     that an automated ESS parser produced this payload) but ships a
     freq result without ``modes`` likely lost the mode list somewhere
     in the pipeline. Manual uploads with no parser version are left
@@ -297,7 +297,7 @@ def check_freq_parser_fidelity(
     for index, calc in enumerate(calcs):
         if calc.freq_result is None:
             continue
-        if calc.parameters_parser_version is None:
+        if calc.parameters_parser is None:
             continue
         if calc.freq_result.modes:
             continue
@@ -307,7 +307,7 @@ def check_freq_parser_fidelity(
                 code=W_FREQ_PARSED_NO_MODES,
                 message=(
                     "freq_result was emitted by an ESS parser "
-                    f"(parameters_parser_version={calc.parameters_parser_version!r}) "
+                    f"(parameters_parser={calc.parameters_parser!r}) "
                     "but carries no per-mode frequencies. Per-mode rows "
                     "are required for downstream statmech recomputation; "
                     "re-run the parser or attach the mode list before "

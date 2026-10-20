@@ -29,8 +29,10 @@ from app.importers.cccbdb.diagnostics.form_discovery import (
     DiscoveredForm,
     discover_forms,
 )
+from app.services.parser_registry import PARSERS
 
-DIAGNOSTIC_VERSION = "cccbdb-resolver-diagnostics/0.1.0"
+DIAGNOSTIC_NAME = "cccbdb_resolver_diagnostics"
+DIAGNOSTIC_VERSION = str(PARSERS.get(DIAGNOSTIC_NAME).version)
 _DEFAULT_USER_AGENT = (
     "tckdb-cccbdb-resolver-diagnostics/0.1 "
     "(+https://github.com/TCKDB/TCKDB; "
@@ -240,6 +242,7 @@ class DiagnosticResult:
 class DiagnosticReport:
     created_at: str
     user_agent: str
+    diagnostic_name: str
     diagnostic_version: str
     records: list[DiagnosticResult] = field(default_factory=list)
 
@@ -247,6 +250,7 @@ class DiagnosticReport:
         return {
             "created_at": self.created_at,
             "user_agent": self.user_agent,
+            "diagnostic_name": self.diagnostic_name,
             "diagnostic_version": self.diagnostic_version,
             "records": [r.to_json() for r in self.records],
         }
@@ -469,6 +473,7 @@ def run_diagnostics(
     report = DiagnosticReport(
         created_at=datetime.now(timezone.utc).isoformat(),
         user_agent=user_agent,
+        diagnostic_name=DIAGNOSTIC_NAME,
         diagnostic_version=DIAGNOSTIC_VERSION,
     )
 

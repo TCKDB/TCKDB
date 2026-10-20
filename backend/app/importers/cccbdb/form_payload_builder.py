@@ -41,6 +41,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.db.models.common import MolecularPropertyKind, ScientificOriginKind
 from app.importers.cccbdb import (
+    PARSER_NAME,
     PARSER_VERSION,
     SOURCE_DATABASE_DOI,
     SOURCE_NAME,
@@ -203,6 +204,7 @@ def _build_row(
             external_source_record_key=record_key,
             external_source_page_kind="experimental_form_result",
             external_source_content_sha256=parsed.content_sha256,
+            external_source_parser_name=PARSER_NAME,
             external_source_parser_version=PARSER_VERSION,
             raw_payload_json=raw_payload,
         )
