@@ -53,7 +53,32 @@ WORKFLOW_TOOLS_NOT_ESS: dict[str, str] = {
 #: A version token trailing a name: ``" 1.1.0"``, ``"-1.1.0"``, ``"_v3"``,
 #: ``" v3.0"``. Only a token that starts with a digit (optionally after a
 #: ``v``) counts, so a name like ``ARChem`` is never shortened.
-_TRAILING_VERSION = re.compile(r"[\s._-]+v?\d[\w.+-]*$", re.IGNORECASE)
+def _is_version_body(ch: str) -> bool:
+    return ch.isalnum() or ch in "_.+-"
+
+
+def _strip_trailing_version(folded: str) -> str:
+    """*folded* without a trailing version token; linear in its length.
+
+    Equivalent to ``re.sub(r"[\\s._-]+v?\\d[\\w.+-]*$", "", folded, flags=re.I)`` for a name whose whitespace is
+    already single spaces (what :func:`_workflow_tool_key` passes). The regex re-scans an overlapping run from every
+    start (quadratic on a long ``a___...b``), and the name is depositor-supplied, so the scan is written out.
+    """
+    end = len(folded)
+    start = end
+    while start > 0 and _is_version_body(folded[start - 1]):
+        start -= 1  # folded[start:] is the longest tail made only of version-body characters
+    for j in range(max(start, 1), end):
+        if folded[j - 1] not in " ._-":
+            continue
+        starts_token = folded[j].isdecimal() or (folded[j] in "vV" and j + 1 < end and folded[j + 1].isdecimal())
+        if not starts_token:
+            continue
+        run = j
+        while run > 0 and folded[run - 1] in " ._-":
+            run -= 1
+        return folded[:run]
+    return folded
 _SEPARATORS = re.compile(r"[\s._-]+")
 
 
@@ -79,7 +104,7 @@ def _workflow_tool_key(name: str) -> str:
     """
 
     folded = " ".join(name.split()).lower()
-    return _SEPARATORS.sub("", _TRAILING_VERSION.sub("", folded))
+    return _SEPARATORS.sub("", _strip_trailing_version(folded))
 
 
 def _null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement[bool]:

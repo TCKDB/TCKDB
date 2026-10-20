@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -292,3 +293,70 @@ def test_resolve_or_create_literature_reused_row_does_not_refetch_or_warn(
 
             assert resolved.id == existing.id
             assert warnings == []
+
+
+# --- trailing-punctuation stripping: linear, and the same answer as the regex it replaced ------------------
+
+
+def _old_normalize_title_for_comparison(title: str) -> str:
+    import html
+    import re
+
+    collapsed = re.sub(r"\s+", " ", html.unescape(title)).strip()
+    return re.sub(r"[\s.,;:!?]+$", "", collapsed).casefold()
+
+
+_TITLE_CASES = [
+    "Methane",
+    "Methane.",
+    "Methane . , ; : ! ?",
+    "Methane \t\n\r\x0b\x0c ..",
+    "Methane\u00a0.\u2003,\u2028",
+    "Methane\u3000\u2009!?",
+    "A: B; C, D. E",
+    "A: B; C, D. E:;",
+    "  leading . and . interior ...  ",
+    "Title &amp; more &amp;&amp;.",
+    "Title &amp;",
+    "...",
+    " . ",
+    "",
+    "x",
+    "a.b.c.",
+    "What?!?! ",
+    "Étude: sur l'énergie.",
+]
+
+
+@pytest.mark.parametrize("title", _TITLE_CASES, ids=repr)
+def test_title_normalisation_agrees_with_the_regex_it_replaced(title: str) -> None:
+    from app.services.literature_resolution import _normalize_title_for_comparison
+
+    assert _normalize_title_for_comparison(title) == _old_normalize_title_for_comparison(title)
+
+
+def test_title_normalisation_keeps_interior_punctuation_and_drops_only_the_tail() -> None:
+    from app.services.literature_resolution import _normalize_title_for_comparison
+
+    assert _normalize_title_for_comparison("A: B; C, D. E ...") == "a: b; c, d. e"
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "a" + "\t" * 50_000 + "b",
+        "a" + " " * 50_000 + "b",
+        "a" + "\t" * 50_000,
+        "a" + ". " * 50_000,
+        "a" + "\u00a0" * 50_000 + "b",
+    ],
+    ids=["tabs-between", "spaces-between", "trailing-tabs", "trailing-punctuation", "nbsp-between"],
+)
+def test_title_normalisation_is_fast_on_long_runs(title: str) -> None:
+    import time
+
+    from app.services.literature_resolution import _normalize_title_for_comparison
+
+    started = time.perf_counter()
+    _normalize_title_for_comparison(title)
+    assert time.perf_counter() - started < 0.5
