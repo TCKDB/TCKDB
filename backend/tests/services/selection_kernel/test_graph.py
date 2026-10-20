@@ -32,7 +32,7 @@ def node(ref, rank, *, status=S.approved, age=0):
     return AdminNode(ref=ref, id_rank=rank, review_status=status, created_at=T0 - timedelta(days=age))
 
 
-def edge(a, b, rule="R1", version="1"):
+def edge(a, b, rule="R1", version=1):
     return Edge(a, b, rule, version)
 
 
@@ -85,7 +85,7 @@ def test_an_opposing_pair_is_a_conflict_unless_one_rule_supersedes_the_other():
     edges = [edge("a", "b", "R1"), edge("b", "a", "R2")]
     unresolved = decide(ABC[:2], edges)
     assert unresolved.outcome is Outcome.policy_conflict
-    assert unresolved.opposing_pairs == ({"between": ["a", "b"], "rules": ["R1@1", "R2@1"]},)
+    assert unresolved.opposing_pairs == ({"between": ["a", "b"], "rules": [{"rule_id": "R1", "rule_version": 1}, {"rule_id": "R2", "rule_version": 1}]},)
     resolved = decide(ABC[:2], edges, supersedes={"R2": ("R1",)})
     assert resolved.outcome is Outcome.policy_preferred and resolved.selected_ref == "b"
     assert [(o["rule_id"], o["overridden_by_rule_id"]) for o in resolved.overridden_edges] == [("R1", "R2")]
@@ -111,7 +111,7 @@ def test_a_superseded_rule_is_removed_even_when_the_superseding_rule_is_itself_o
     edges = [edge("a", "b", "R1"), edge("b", "a", "R2"), edge("a", "b", "R5")]
     verdict = decide(ABC[:2], edges, supersedes={"R2": ("R1",)})
     assert verdict.outcome is Outcome.policy_conflict
-    assert verdict.opposing_pairs == ({"between": ["a", "b"], "rules": ["R2@1", "R5@1"]},)
+    assert verdict.opposing_pairs == ({"between": ["a", "b"], "rules": [{"rule_id": "R2", "rule_version": 1}, {"rule_id": "R5", "rule_version": 1}]},)
     assert [o["rule_id"] for o in verdict.overridden_edges] == ["R1"]
 
 
@@ -123,7 +123,7 @@ def test_a_rule_overridden_by_two_winners_is_reported_once_per_winner():
 
 
 def test_a_later_version_is_not_supersession():
-    edges = [edge("a", "b", "R1", "1"), edge("b", "a", "R2", "9")]
+    edges = [edge("a", "b", "R1", 1), edge("b", "a", "R2", 9)]
     assert decide(ABC[:2], edges).outcome is Outcome.policy_conflict
 
 

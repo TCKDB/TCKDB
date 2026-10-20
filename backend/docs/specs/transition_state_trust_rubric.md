@@ -1,6 +1,6 @@
-# Transition-State Trust Rubric — `computed_transition_state_v2`
+# Transition-State Trust Rubric — `computed_transition_state`
 
-> **Version 5 (#723, 2026-10).** `computed_transition_state` is now version 5. It brings the scoped structure assessment into the
+> **Structure assessment.** `computed_transition_state` brings the scoped structure assessment into the
 > TS trust projection without moving the badge. (1) The block `trust.structure_assessment` carries the assessment's own answer to
 > one fixed, evidence-only question, echoed as `task` (`qualify_evidence`, `first_order_saddle`, `known_values`, no connectivity
 > requirement); sending `task` to `POST /scientific/transition-state-entries/{ref}/evidence/select` returns the same answer.
@@ -21,23 +21,23 @@
 > own page; one declared target costs 46 more statements than an identical undeclared graph (measured; pinned at 70 or fewer).
 > Under `profile=curated` the assessment runs under that profile: a target resting on a hidden calculation is
 > unresolved and warns, and nothing is cached across profiles. Label, completeness, score and `is_certified` never read the
-> assessment. Machine reviews stamped version 4 (or 3) read as stale and are re-planned, never rewritten.
+> assessment.
 
-> **Version 4 (#729, 2026-10).** `computed_transition_state` is now version 4. It adds one zero-weight warning,
+> **Undesignated imaginary modes.** `computed_transition_state` carries one zero-weight warning,
 > `no_frequency_result_has_undesignated_imaginary_modes`: it fires when any attached frequency result with a recorded count
 > reports two or more imaginary modes and does not designate the reaction coordinate (the same source set and the same null rule
 > as `no_frequency_result_lacks_an_imaginary_mode`; a null count is unknown). The required completeness check
 > `reaction_coordinate_designated_for_ts` is unchanged and still reads the representative result. A warning means that attached
 > result needs investigation, not that the transition state is disproved; its absence certifies nothing. It never moves the label,
-> the completeness counts or `is_certified`. Machine reviews stamped version 3 read as stale and are re-planned.
+> the completeness counts or `is_certified`.
 
-> **Superseded in part by `computed_transition_state_v3` (2026-10).** An automated geometry-validation `fail` on a source
+> **Superseded in part.** An automated geometry-validation `fail` on a source
 > calculation is a warning, no longer the hard fail `geometry_validation_failed_for_source_calculation`, and the badge issues no
 > frequency verdict at all (the scoped judgement is the structure assessment's; the badge only warns, via
 > `no_frequency_result_lacks_an_imaginary_mode`). See
-> [automated_trust_layer.md](automated_trust_layer.md), "Trust contract version 2". The text below describes version 2.
+> [automated_trust_layer.md](automated_trust_layer.md), "Trust contract". Where the text below conflicts with the notes above, the notes above and that spec govern.
 
-**Status:** implemented — `computed_transition_state_v2` ships in
+**Status:** implemented — `computed_transition_state` ships in
 `app/services/trust/rubrics.py` and is wired into the standalone
 transition-state-entry detail read and propagated into the composite
 `reaction-entries/{id}/full` read (updated 2026-07-13; original design
@@ -62,11 +62,11 @@ The deterministic trust layer ships rubrics for the following record
 families today:
 
 ```text
-computed_calculation_v1
-computed_kinetics_v1
-computed_thermo_v1
-computed_statmech_v1
-computed_transport_v1
+computed_calculation
+computed_kinetics
+computed_thermo
+computed_statmech
+computed_transport
 ```
 
 The reaction-entry composite read
@@ -80,7 +80,7 @@ summaries, but **not** into the transition-state sections. That is
 correct given the current state — no rubric exists for transition
 states, so there is nothing honest to attach.
 
-This spec closes that gap by defining `computed_transition_state_v2`. It
+This spec closes that gap by defining `computed_transition_state`. It
 answers exactly one question:
 
 > How much **structured evidence** supports this transition-state entry?
@@ -111,7 +111,7 @@ explainable per-check breakdown.
   reaction-entry trust is introduced.
 - **No reaction-level rollup.** TS trust does not roll up into kinetics
   trust either. Kinetics already has its own rubric
-  (`computed_kinetics_v1`) with its own TS evidence checks.
+  (`computed_kinetics`) with its own TS evidence checks.
 - **No LLM / RAG involvement.** Per
   [§3 principle 4](automated_trust_layer.md#3-core-principles), LLM
   output remains submission-scoped and advisory; it cannot influence
@@ -127,7 +127,7 @@ explainable per-check breakdown.
 
 ## 3. Rubric target
 
-`computed_transition_state_v2` evaluates a **`transition_state_entry`**.
+`computed_transition_state` evaluates a **`transition_state_entry`**.
 
 Rationale:
 
@@ -162,10 +162,10 @@ each record matches **at most one** rubric per evaluator call.
 
 ```text
 record_type == transition_state_entry
-  → computed_transition_state_v2   (the only TS rubric defined)
+  → computed_transition_state   (the only TS rubric defined)
 ```
 
-There is no `experimental_transition_state_v1` and no plan to add one;
+There is no `experimental_transition_state` and no plan to add one;
 experimental transition states are not a concept TCKDB stores.
 
 ---
@@ -174,8 +174,8 @@ experimental transition states are not a concept TCKDB stores.
 
 Naming follows the existing trust layer convention
 (`<noun_or_evidence_phrase>_present` / `_passed` / `_not_failed`),
-matching the style of `computed_kinetics_v1` and
-`computed_calculation_v1`.
+matching the style of `computed_kinetics` and
+`computed_calculation`.
 
 Kinds match
 [§5.1](automated_trust_layer.md#51-evidencecheck): **R** = required,
@@ -217,7 +217,7 @@ of those rows. Discovery rules are spelled out in §5.
 
 ### 4.3 Source-calculation provenance roll-up
 
-These checks **summarize** facts from `computed_calculation_v1`
+These checks **summarize** facts from `computed_calculation`
 applied to the source set. They do not duplicate every calculation-level
 check — they exist so a TS-entry consumer can answer "do my
 supporting calcs carry enough provenance?" without crawling the
@@ -233,13 +233,13 @@ otherwise stated.
 | `source_calculation_software_present` | O | Every calc in the source set resolves to a `software_release`. (All-source semantics same as above.) |
 | `source_calculation_workflow_tool_present` | O | At least one calc in the source set carries a `workflow_tool_release`. (At-least-one — workflow tool is optional per-calc, common at TS-set level.) |
 | `source_calculation_artifacts_present` | O | At least one calc in the source set has ≥1 `calculation_artifact`. |
-| `source_calculation_has_non_hard_failed_evidence` | R | At least one calc in the source set evaluates under `computed_calculation_v1` to a non-`hard_failed` label. If every supporting calc is itself hard-failed, the TS entry inherits a hard fail (see §6). Weight 2. |
+| `source_calculation_has_non_hard_failed_evidence` | R | At least one calc in the source set evaluates under `computed_calculation` to a non-`hard_failed` label. If every supporting calc is itself hard-failed, the TS entry inherits a hard fail (see §6). Weight 2. |
 
 ### 4.4 Geometry validation
 
 `calc_geometry_validation` is the existing per-calculation automatic
 geometry-validation row (`ValidationStatus ∈ {passed, warning, fail}`),
-already used by `computed_calculation_v1`.
+already used by `computed_calculation`.
 
 | Check | Kind | Notes |
 |---|---|---|
@@ -262,7 +262,7 @@ missing signal on its own.
 | Check | Kind | Notes |
 |---|---|---|
 | `imaginary_frequency_count_recorded` | O | `calc_freq_result.n_imag IS NOT NULL`. |
-| `reaction_coordinate_designated_for_ts` | R | Passes when `n_imag == 1` (nothing to disambiguate) or `calc_freq_result.reaction_coordinate_mode_index IS NOT NULL`. Replaced `single_imaginary_frequency_for_ts` in `v2`; see §8. |
+| `reaction_coordinate_designated_for_ts` | R | Passes when `n_imag == 1` (nothing to disambiguate) or `calc_freq_result.reaction_coordinate_mode_index IS NOT NULL`. See §8. |
 | `extra_imaginary_modes_not_flagged` | W | Reports `calc_freq_result.imaginary_mode_structural_flag` — ADR 0012's recorded flag for an extra imaginary mode at or above the protocol's τ. Read, never recomputed; `NULL` is `not_applicable`. |
 | `imaginary_frequency_value_present` | O | `calc_freq_result.imag_freq_cm1 IS NOT NULL`. |
 | `frequency_source_consistent_with_ts_status` | W | Conditional warning. Fires when `transition_state_entry.status ∈ {optimized, validated}` and the most-recent freq result is **not** strictly compatible with a TS. The hard-fail branch in §8 overrides this when the violation is severe enough. |
@@ -313,23 +313,23 @@ walker. If a project records additional intermediate calcs that the
 evaluator should reach, they should either be attached directly via
 `transition_state_entry_id` or surfaced through additional
 `calculation_dependency` rows; spec-time expansion of the traversal is
-left to a future rubric version (`v2`).
+left to a future rubric version.
 
 ### 5.3 De-duplication
 
 The source set is keyed by `calculation.id`. The same calc reached by
 both direct attachment and dependency traversal is counted once.
 
-### 5.4 Reuse of `computed_calculation_v1`
+### 5.4 Reuse of `computed_calculation`
 
 Each calc in the source set is independently evaluable under
-`computed_calculation_v1`. The TS rubric **does not** re-implement
+`computed_calculation`. The TS rubric **does not** re-implement
 calculation-level checks; it summarizes the source-set's
 calculation-level evaluations into the four checks under §4.3.
 
 When the rubric is wired into `/full?include=trust` (see §10), the
 calculation summaries embedded in the reaction-full payload already
-carry their own `computed_calculation_v1` trust fragments. The TS-entry
+carry their own `computed_calculation` trust fragments. The TS-entry
 trust fragment under that response refers to the same evaluations
 implicitly — clients can inspect per-calc detail by following the
 existing calculation refs already documented in
@@ -352,10 +352,10 @@ low completeness alone is **never** a hard fail.
 | `reaction_entry_missing` | Parent TS does not resolve to a `reaction_entry`. | Same defensive rationale. |
 | `ts_entry_status_rejected` | `transition_state_entry.status == rejected`. | Already excluded by default by the existing trust-layer status mapping; the rubric records the hard-fail explicitly so the trust fragment under `/full?include=trust&include_rejected=true` is honest. |
 | `multiplicity_invalid` | `multiplicity < 1`. | Mirrors the CheckConstraint. |
-| `supporting_required_calculation_hard_failed` | At least one calc in the source set is required to support a passed required check (e.g. it is the only source for `source_calculation_lot_present`) AND it evaluates to `hard_failed` under `computed_calculation_v1`. | Avoid the "everything else is bad, but we pass anyway" trap. |
+| `supporting_required_calculation_hard_failed` | At least one calc in the source set is required to support a passed required check (e.g. it is the only source for `source_calculation_lot_present`) AND it evaluates to `hard_failed` under `computed_calculation`. | Avoid the "everything else is bad, but we pass anyway" trap. |
 | `geometry_validation_failed_for_required_source` | Any calc in the source set has `calc_geometry_validation.status == fail`. | If even one supporting calc has failed geometry validation, the TS evidence is structurally compromised. |
 | `frequency_source_has_zero_imaginary_modes_for_validated_ts` | `transition_state_entry.status ∈ {optimized, validated}` AND the most-recent `calc_freq_result.n_imag == 0`. | Stationary point that is not a TS. See §8. |
-| `frequency_source_reaction_coordinate_not_designated_for_validated_ts` | `transition_state_entry.status ∈ {optimized, validated}` AND the most-recent `calc_freq_result.n_imag > 1` AND `reaction_coordinate_mode_index IS NULL`. | No usable reaction coordinate. Replaced `frequency_source_has_multiple_imaginary_modes_for_validated_ts` in `v2`: a declared higher-order saddle is now a record rather than a defect, so only the *undeclared* case fails. See §8. |
+| `frequency_source_reaction_coordinate_not_designated_for_validated_ts` | `transition_state_entry.status ∈ {optimized, validated}` AND the most-recent `calc_freq_result.n_imag > 1` AND `reaction_coordinate_mode_index IS NULL`. | No usable reaction coordinate. A declared higher-order saddle is now a record rather than a defect, so only the *undeclared* case fails. See §8. |
 
 ### 6.2 Explicit non-hard-fails
 
@@ -374,8 +374,8 @@ though they all lower completeness:
   yet; it should land in `partial` or `sparse`, not `hard_failed`).
 
 This list is exhaustive on purpose. If a future evolution wants to
-hard-fail one of these signals, that is a **rubric version bump**
-(`v2`), not an in-place change.
+hard-fail one of these signals, that is a **rubric version bump**,
+not an in-place change.
 
 ---
 
@@ -431,23 +431,23 @@ An older version stays parseable for as long as existing records carry
 its historical label — no retroactive re-evaluation under stricter
 rules.
 
-> **The v2 bump was spent on ADR 0012, not on IRC.** `v1` asserted that
-> a TS's representative frequency result reports exactly one imaginary
-> mode. ADR 0012 retired that rule at the upload tier, at which point the
-> read-time copy stopped being a duplicate and became a contradiction —
-> a record accepted with a warning at deposit would have been hard-failed
-> here. `v2` replaces the required check and the corresponding hard-fail
-> reason; the IRC tightening above remains available for a later bump.
+> **ADR 0012 and the frequency check.** The rubric does not assert that a
+> TS's representative frequency result reports exactly one imaginary
+> mode. ADR 0012 retired that rule at the upload tier; a read-time copy would
+> have become a contradiction, hard-failing here a record accepted with a
+> warning at deposit. The required check asks for the reaction-coordinate
+> designation instead; the IRC tightening above remains available for a later
+> version bump.
 
 ---
 
 ## 8. Frequency evidence policy
 
-**Rewritten for `v2` by [ADR 0012](../../../docs/adr/0012-imaginary-modes-are-judged-by-magnitude-not-counted.md).**
-`v1` read this layer as the place to confirm mechanically that a
-structure is a first-order saddle point, by requiring `n_imag == 1`.
-That is no longer TCKDB's position, and continuing to assert it here
-would have put the read layer in direct contradiction with the upload
+**Governed by [ADR 0012](../../../docs/adr/0012-imaginary-modes-are-judged-by-magnitude-not-counted.md).**
+This layer is not the place to confirm mechanically that a
+structure is a first-order saddle point by requiring `n_imag == 1`.
+That is not TCKDB's position, and asserting it here
+would put the read layer in direct contradiction with the upload
 tier that owns the rule.
 
 The governing constraint is ADR 0008 §9: where the same fact is checked
@@ -459,10 +459,10 @@ structural flag. This layer reads those columns. It re-derives nothing.
 
 ### 8.1 What is asked, and why it is a different question
 
-`v1` asked *is `n_imag` equal to one?* — a question about physics, which
-the upload tier had already answered, possibly differently.
+The rubric does not ask *is `n_imag` equal to one?* — a question about physics, which
+the upload tier has already answered, possibly differently.
 
-`v2` asks *does this record carry the reaction-coordinate designation the
+It asks *does this record carry the reaction-coordinate designation the
 blocking tier required of it?* — a question about persisted state. Any
 record that passed upload validation carries it, so the two tiers cannot
 disagree. Only a record written around the upload path (direct DB access,
@@ -554,19 +554,19 @@ When multiple freq calcs exist in the source set, the rubric picks
 Multiple freq calcs are normal — for example a coarse freq before
 an SP, a finer freq for thermo. The picked representative drives
 §4.5's pass/fail. Future versions may make this configurable per
-project; v1 stays prescriptive to keep the rubric deterministic.
+project; the rubric stays prescriptive to keep it deterministic.
 
 ---
 
-## 9. Relationship to `computed_calculation_v1`
+## 9. Relationship to `computed_calculation`
 
-The TS rubric **composes** `computed_calculation_v1` rather than
+The TS rubric **composes** `computed_calculation` rather than
 duplicating it.
 
 ### 9.1 What the TS rubric reuses
 
 Every calc in the source set (§5) is independently evaluable under
-`computed_calculation_v1`. The TS rubric summarizes that evaluation
+`computed_calculation`. The TS rubric summarizes that evaluation
 into:
 
 ```text
@@ -578,7 +578,7 @@ source_calculation_has_non_hard_failed_evidence
 ```
 
 This avoids re-implementing per-calculation checks and keeps the two
-rubric layers independent — a bump to `computed_calculation_v1`
+rubric layers independent — a bump to `computed_calculation`
 automatically improves what the TS rubric sees, without a TS rubric
 version bump.
 
@@ -634,7 +634,7 @@ gains the same opt-in pattern documented in
 ```text
 GET /api/v1/scientific/transition-state-entries/{ref}?include=trust
   → attaches the standard trust fragment under record.trust,
-    using computed_transition_state_v2
+    using computed_transition_state
 ```
 
 Behavior to mirror the existing trust-enabled endpoints:
@@ -655,7 +655,7 @@ GET /api/v1/scientific/transition-states/{ts_ref_or_id}?include=trust
 
 The TS-concept endpoint already embeds its child TS entries. Under
 `include=trust`, **each embedded entry** carries its own
-`computed_transition_state_v2` trust fragment. **No top-level
+`computed_transition_state` trust fragment. **No top-level
 TS-concept trust is emitted** — the concept does not own evidence;
 the entries do. This mirrors the reaction-entry `/full` posture
 (no top-level reaction-entry trust).
@@ -668,15 +668,15 @@ GET /api/v1/scientific/reaction-entries/{id}/full?include=trust
 
 Today this read propagates trust to:
 
-- Embedded kinetics records (`computed_kinetics_v1`).
-- Embedded calculation summaries (`computed_calculation_v1`).
+- Embedded kinetics records (`computed_kinetics`).
+- Embedded calculation summaries (`computed_calculation`).
 
-Once `computed_transition_state_v2` lands and the loaded-variant
+Once `computed_transition_state` lands and the loaded-variant
 evaluator exists, the same composite endpoint will additionally
 propagate trust to:
 
 - Each embedded `transition_state_entry` under the TS section
-  (`computed_transition_state_v2`).
+  (`computed_transition_state`).
 
 The propagation stays additive — top-level reaction-entry trust is
 still **not** emitted, and the existing kinetics / calculation trust
@@ -706,7 +706,7 @@ and
 - The AI Review Assistant produces advisory, submission-scoped output.
 - AI Review Assistant audit events
   (`llm_precheck_*` `SubmissionAuditEventKind` values) do not
-  influence `computed_transition_state_v2`:
+  influence `computed_transition_state`:
   - They do not flip any check pass/fail/missing state.
   - They do not change the completeness ratio.
   - They do not change the rubric label or `trust_status`.
@@ -744,10 +744,10 @@ deliverables of this spec.
 | `tests/trust/test_ts_geometry_validation_warning_warns.py` | `status == warning` on a source-calc validation → warning, no hard fail. |
 | `tests/trust/test_ts_loaded_matches_session_evaluator.py` | `evaluate_loaded_transition_state_entry` and `evaluate_transition_state_entry` produce byte-identical fragments for the same record. |
 | `tests/trust/test_ts_fragment_shape.py` | The TS trust fragment matches the standard envelope in [trust_read_api_current.md §Common Trust Fragment Shape](trust_read_api_current.md#common-trust-fragment-shape) exactly. |
-| `tests/trust/test_ts_full_include_trust_embeds_ts.py` | `/scientific/reaction-entries/{id}/full?include=trust` attaches `computed_transition_state_v2` to each embedded TS entry once the wiring lands. |
+| `tests/trust/test_ts_full_include_trust_embeds_ts.py` | `/scientific/reaction-entries/{id}/full?include=trust` attaches `computed_transition_state` to each embedded TS entry once the wiring lands. |
 | `tests/trust/test_ts_detail_include_trust.py` | Standalone TS-entry detail respects `include=trust` opt-in (default omits; explicit include attaches; `include=all` does not include trust). |
 | `tests/trust/test_ts_llm_precheck_disabled.py` | `trust.llm_precheck` ships `{enabled: false, label: "not_run", summary: null}` regardless of any AI Review Assistant audit events on the originating submission. |
-| `tests/trust/test_ts_rubric_version_stability.py` | Re-running `computed_transition_state_v2` on a frozen fixture produces byte-identical output. (Pins the public contract.) |
+| `tests/trust/test_ts_rubric_version_stability.py` | Re-running `computed_transition_state` on a frozen fixture produces byte-identical output. (Pins the public contract.) |
 
 ---
 
@@ -757,7 +757,7 @@ deliverables of this spec.
    traversal at one hop. If real projects start chaining
    path-search → preopt → opt → freq → sp → composite-sp, the rubric
    may miss the deepest evidence. Resolution path: bump to
-   `computed_transition_state_v2` with explicit deeper traversal
+   `computed_transition_state` with explicit deeper traversal
    rules. Do not relax silently.
 
 2. **Tie-breaking the freq source.** §8.5 picks "latest" deterministically.
@@ -773,7 +773,7 @@ deliverables of this spec.
    TS-concept-level label? Not in scope here. The current design
    keeps the grain at TS-entry, exactly as the read surface does.
 
-4. **TS rubric in kinetics rollup.** `computed_kinetics_v1` already
+4. **TS rubric in kinetics rollup.** `computed_kinetics` already
    has its own TS evidence checks
    (`ts_energy_source_present`, `frequency_source_present`). Should
    kinetics trust *read* the TS trust fragment instead of computing
@@ -795,7 +795,7 @@ deliverables of this spec.
    guess). Should we promote it to a hard fail when
    `transition_state_entry.status ∈ {optimized, validated}`? This
    would parallel the §8 status-aware hard fails. Tentative: yes,
-   but as a `v2` change once we see real records. v1 keeps the
+   but as a later version change once we see real records. The rubric keeps the
    conservative posture: missing supporting calcs → low
    completeness, not exclusion.
 
@@ -806,8 +806,8 @@ deliverables of this spec.
 A small, self-contained slice that follows
 [automated_trust_layer.md §14](automated_trust_layer.md#14-recommended-implementation-order):
 
-1. **Add `computed_transition_state_v2` rubric class** in
-   `app/services/trust/rubrics/computed_transition_state_v2.py`,
+1. **Add `computed_transition_state` rubric class** in
+   `app/services/trust/rubrics/computed_transition_state.py`,
    with the §4 checks. No read-API wiring yet.
 2. **Add the loaded-variant evaluator entrypoint** that takes
    pre-loaded TS entry + source calcs + freq results + validation
@@ -832,7 +832,7 @@ A small, self-contained slice that follows
    so embedded TS entries carry their fragment. No top-level
    reaction-entry trust.
 7. **Update `trust_read_api_current.md`** to list
-   `computed_transition_state_v2` in the rubric table and the TS-entry
+   `computed_transition_state` in the rubric table and the TS-entry
    detail and `/full` propagation rows.
 
 Each step ships in isolation, with tests, behind an additive read
@@ -850,7 +850,7 @@ request `include=trust`.
 | Checks defined | §4: identity, supporting calcs, source-calc provenance roll-up, geometry validation, frequency / imaginary modes, curator review |
 | Hard-fail policy | §6: structural identity, rejection, multiplicity validity, required supporting calc hard fail, source-calc geometry-validation fail, status-aware imaginary-mode contradiction |
 | IRC / path-search policy | §7: both raise completeness when present; both missing is **not** a hard fail; future tightening goes through a further version bump |
-| Frequency-evidence policy | §8 (rewritten for `v2` by ADR 0012): the read layer cites the persisted reaction-coordinate designation rather than recounting; `n_imag == 0`, and `n_imag > 1` **without** a designation, are hard fails **only** for `optimized` / `validated` entries; for `guess` they are warnings |
+| Frequency-evidence policy | §8 (governed by ADR 0012): the read layer cites the persisted reaction-coordinate designation rather than recounting; `n_imag == 0`, and `n_imag > 1` **without** a designation, are hard fails **only** for `optimized` / `validated` entries; for `guess` they are warnings |
 | Future read integration | §10: `/scientific/transition-state-entries/{ref}?include=trust`; embedded entries under TS-concept detail and `/full`; no top-level reaction-entry trust |
 | LLM relationship | §11: AI Review Assistant is advisory, submission-scoped, and never influences this rubric |
 | Open questions | §13: traversal depth, freq tie-break, TS aggregation, cross-rubric kinetics linkage, curator escalation, status-aware support-calc hard fail |
@@ -865,7 +865,7 @@ request `include=trust`.
 `irc`, `energy_ordering` and `imaginary_mode`. This rubric reads calculation
 results (the representative frequency result, the geometry validations, the
 supporting calculations) and has never read an evidence row, so the new kinds
-change no check and `computed_transition_state` stays at version 2.
+change no check.
 
 Ruling, stated so it is not re-derived:
 

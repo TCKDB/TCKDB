@@ -150,7 +150,7 @@ def test_the_manifest_replays_without_the_database_and_reproduces_the_decision(d
     wire = json.loads(json.dumps(result.manifest))  # what a client would hold: plain JSON
     assert replay_matches(wire, rules=(RULE,))
     assert replay_decision(wire, rules=(RULE,)) == result.decision.to_dict()
-    assert result.manifest["policy"] == {"name": "kinetics_method_preferred", "version": "1"}
+    assert result.manifest["policy"] == {"name": "kinetics_method_preferred", "version": 1}
     assert result.manifest["snapshot_isolation"] in {"read committed", "repeatable read", "serializable"}
 
 
@@ -169,9 +169,9 @@ def test_the_manifest_records_what_a_reader_needs_to_audit_the_decision(db_sessi
     "tamper,message",
     [
         (lambda m: m.update(manifest_format_version=99), "unknown manifest format"),
-        (lambda m: m["policy"].update(version="2"), "this registry replays"),
+        (lambda m: m["policy"].update(version=2), "this registry replays"),
         (lambda m: m["policy"].update(name="h298_method_preferred"), "this registry replays"),
-        (lambda m: m["decision"]["rules"][0].update(version="9"), "not in the running registry"),
+        (lambda m: m["decision"]["rules"][0].update(version=9), "not in the running registry"),
         (lambda m: m["decision"]["rules"][0].update(rule_id="OTHER"), "not in the running registry"),
         (lambda m: m["decision"]["rules"][0].update(status="inactive"), "a rule's status change is a new version"),
         (lambda m: m["decision"]["rules"][0].update(manifest_sha256="0" * 64), "different audited manifest"),
@@ -207,7 +207,9 @@ def test_a_replayed_inactive_rule_set_reproduces_its_edge_free_decision(db_sessi
 
 #: Every integer a manifest may hold, by exact path: ordinals and counts, never a row id.
 ALLOWED_INTEGER_PATHS = {
-    "manifest_format_version",
+    "manifest_format_version", "policy.version", "assessment_semantics.version", "assessment_semantics.source_findings",
+    "assessment_semantics.evidence_rubric.version", "decision.rules[].version", "decision.edges[].rule_version",
+    "decision.pair_checks[].rule_version", "decision.rule_matches[].rule_version",
     "subject.reactants[].charge", "subject.reactants[].multiplicity",
     "subject.products[].charge", "subject.products[].multiplicity",
     "request.max_candidates", "request.pressure", "population.kinetics_rows_for_entry",

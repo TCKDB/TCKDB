@@ -1207,7 +1207,7 @@ def test_smoke_a_species_row_appended_now_is_current_and_carries_the_original_ru
     assert reproducibility["state"] == "current"
     assert reproducibility["assessment_ref"] == row.public_ref
     assert reproducibility["rubric"] == "tckdb_reproducibility"
-    assert reproducibility["rubric_version"] == "v1"
+    assert reproducibility["rubric_version"] == 1
     assert reproducibility["grade"] == row.grade.value
 
 

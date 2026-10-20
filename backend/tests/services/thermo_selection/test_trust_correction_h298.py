@@ -112,7 +112,7 @@ def test_p6_the_geometry_fail_stays_visible_as_advisory_evidence(db_session, met
     advisory = next(a for a in result.assessments if a.thermo_ref == thermo.public_ref).advisory
     assert any(item.startswith("evidence_check_warning:") and "geometry_validation" in item for item in advisory), advisory
     # ...and the assessment names the trust-contract version that produced its verdict.
-    assert "evidence_rubric:computed_thermo@2" in advisory, advisory
+    assert {"evidence_rubric:computed_thermo", "evidence_rubric_version:1"} <= set(advisory), advisory
 
 
 def test_p7_two_g4_records_one_with_a_geometry_fail_now_compete_and_say_why_there_are_two(db_session, methane):

@@ -81,7 +81,7 @@ def _signed() -> dict:
 def test_the_shipped_manifest_is_exactly_the_pinned_bytes_and_loads():
     assert hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest() == STRUCTURE_RULE_MANIFEST_SHA256
     manifest = shipped()
-    assert manifest.sha256 == STRUCTURE_RULE_MANIFEST_SHA256 and manifest.version == "0.2.0"
+    assert manifest.sha256 == STRUCTURE_RULE_MANIFEST_SHA256 and manifest.version == 1
     assert {c.rule_id for c in manifest.candidates} == RULE_IDS
     # No shipped entry is approved, and none is activatable: that is the owner's signed act, never ours.
     assert [c.activatable for c in manifest.candidates] == [False] * len(manifest.candidates)
@@ -198,9 +198,7 @@ def test_the_sources_are_pinned_by_sha256_with_what_each_was_used_for_and_the_ve
     assert "arXiv v2 p." in sources["SANTRA_MARTIN_2022_ARXIV_V2"]["version"] or "arXiv v2 p. N" in sources["SANTRA_MARTIN_2022_ARXIV_V2"]["version"]
     assert "NOT opened" in sources["SANTRA_MARTIN_2022_SI_DATA"]["used_for"]
     assert "NOT extracted" in sources["SANTRA_MARTIN_2022_SI_PDF"]["used_for"]
-    header = MANIFEST_PATH.read_text().split("manifest_version")[0]
-    # 0.2.0 corrects the 0.1.0 statement rather than repeating it as fact: the header names it as the old claim.
-    assert "Manifest 0.1.0 said the published PDF could not be downloaded" in header
+    header = MANIFEST_PATH.read_text().split("\nname:")[0]
     assert "Table 4 of the article itself" in header
 
 
@@ -398,7 +396,7 @@ def test_a_decision_made_under_the_shipped_registry_replays_and_a_changed_pin_re
         replay_structure_decision(reseal(forged))
     assert exc.value.code == "rule_manifest_changed"
     renamed = copy.deepcopy(manifest)
-    renamed["decision"]["protocol"]["rules"][0]["version"] = "9.9.9"
+    renamed["decision"]["protocol"]["rules"][0]["version"] = 9
     with pytest.raises(ReplayError) as exc:
         replay_structure_decision(reseal(renamed))
     assert exc.value.code == "rule_unavailable"

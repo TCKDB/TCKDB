@@ -719,6 +719,70 @@ holder whose target a merged row already holds (expect none).
 
 ---
 
+## Names and versions split (revision `c7d4a9e2b6f1`)
+
+Every versioned thing TCKDB owns is now stored as a stable **name** plus a
+separate **integer version**, never one string with the version glued on, and
+every TCKDB-owned version is reset to 1. Versions owned by others (an ESS
+release such as Gaussian 16, NIST's ThermoML, QCSchema, a producer's own parser)
+stay text in their own field. The module docstring of
+`backend/alembic/versions/c7d4a9e2b6f1_split_versioned_names.py` is the
+authority on what is rewritten; in short:
+
+- `record_machine_review`: `prompt_version` text becomes `prompt_name` +
+  integer `prompt_version`; `rubric_versions_json` becomes `rubric_name` +
+  integer `rubric_version` (one rubric per review, structurally);
+  `context_schema_version` becomes an integer; `model`
+  `external_cp_comparison_v1` becomes `external_cp_comparison`.
+- `record_reproducibility_assessment`: `rubric_version` becomes an integer and
+  the two reason tokens lose their `_v1` suffix.
+- `submission_audit_event.details_json`: the `schema_version` marker
+  `machine_review_v2` becomes `format: {name: machine_review, version: 1}`.
+- `release_manifest` / `release_artifact` / `dataset_release`: the three fused
+  format columns become `*_name` + `*_version` pairs (`manifest_format_*`,
+  `recovery_archive_format_*`, `review_policy_*`).
+- `execution_environment_manifest`: `schema_name` + integer `schema_version`,
+  with `canonical_json` rewritten and `content_digest` recomputed.
+- Parser stamps on `calculation`, `calculation_parameter` and `calc_hessian`;
+  ThermoML and CCCBDB custody stamps; `conformer_assignment_scheme`
+  `torsion_basin` version `1` (its content-derived `public_ref` is recomputed).
+
+**It unpublishes every dataset release.** The format tag sits inside the frozen
+release checksum, so a published manifest cannot be relabelled. The revision
+deletes every `release_manifest` and `release_artifact` row and sets each
+published or withdrawn release back to `draft`; the DOI and the curated
+`release_selection` rows are kept. **Back up first** (section 2 above), and
+re-publish each release afterwards (`cutting_a_dataset_release.md`). The
+deletion cannot be undone by `downgrade()`.
+
+**It bypasses the accepted-science triggers, for this one revision.** The
+relabel rewrites provenance stamps on approved calculations and frozen
+documents; no scientific value (energy, frequency, geometry, correction,
+result) is read or written. Inside its own transaction the revision records and
+disables the user triggers on the tables it touches, runs the rewrites, enables
+exactly those triggers again, and **raises** (rolling everything back) if any
+user trigger on a touched table is still disabled. It does not use the
+declared-repair mechanism described above.
+
+**It aborts on an unexpected machine review.** If any `record_machine_review`
+row has a `rubric_versions_json` that does not hold exactly one key, the
+revision raises before changing anything. The currency rule says that cannot
+happen; the migration checks instead of dropping a second key silently.
+
+**Downgrade refuses while a release manifest exists.** A manifest frozen after
+this revision carries the new format header and cannot be reproduced under the
+old one. Remove or accept the loss of those manifests before downgrading.
+
+**Every stored machine review and reproducibility assessment reads stale
+afterwards, by design.** The stored rubric version (for example 2 for
+`computed_thermo`) is kept, the application now runs every rubric at version 1,
+and the context hash changes; both are the stale-assessment mechanism working as
+intended. Nothing is rewritten or deleted: the stored verdicts remain visible,
+labelled stale, until a re-review or re-assessment is run. The same reset makes
+selection manifests recorded under any other version unreplayable (refused, not
+reinterpreted), and the SHA-256 pins of the rule manifests move; a pin is the
+owner's approval of reviewed bytes, so pin changes need the owner's approval.
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:

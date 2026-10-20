@@ -284,8 +284,8 @@ def test_detail_include_trust_returns_transport_fragment(client, db_session):
     trust = body["record"]["trust"]
     assert trust["review_status"] == "not_reviewed"
     assert trust["evidence"]["record_type"] == "transport"
-    assert trust["evidence"]["rubric"] == "computed_transport_v2"
-    assert trust["evidence"]["rubric_version"] == 2
+    assert trust["evidence"]["rubric"] == "computed_transport"
+    assert trust["evidence"]["rubric_version"] == 1
     assert trust["llm_precheck"] == {
         "enabled": False,
         "label": "not_run",
@@ -972,7 +972,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         record_id=tr.id,
         grade=ReproducibilityGrade.described,
         rubric_name="tckdb_reproducibility",
-        rubric_version="v1",
+        rubric_version=1,
         context_json={"outdated": True},
         assessor_kind=ReproducibilityAssessorKind.system,
     )

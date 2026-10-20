@@ -373,15 +373,15 @@ def test_admin_fake_machine_review_response_contains_context_hash(
     body = client.post(_url("calculation", calc.id)).json()
 
     assert isinstance(body["context_hash"], str) and len(body["context_hash"]) == 64
-    assert body["context_schema_version"]
-    assert body["prompt_version"] == "machine_review_v1"
-    assert body["rubric_versions"] == {"computed_calculation_v2": "2"}
+    assert body["context_schema_version"] == 1
+    assert body["prompt"] == {"name": "machine_review", "version": 1}
+    assert body["rubric"] == {"name": "computed_calculation", "version": 1}
 
     # The stored row's currency key matches what the response reported.
     row = db_session.get(RecordMachineReviewRow, body["appended_review_id"])
     assert row.context_hash == body["context_hash"]
-    assert row.prompt_version == body["prompt_version"]
-    assert dict(row.rubric_versions_json) == body["rubric_versions"]
+    assert {"name": row.prompt_name, "version": row.prompt_version} == body["prompt"]
+    assert {"name": row.rubric_name, "version": row.rubric_version} == body["rubric"]
 
 
 def test_admin_fake_trigger_uses_shared_active_recipe(
@@ -393,24 +393,17 @@ def test_admin_fake_trigger_uses_shared_active_recipe(
     ``machine_review.recipe`` module, so a recipe change flows through without a
     second source of truth (readiness-audit risk R1).
     """
-    from app.services.machine_review.recipe import (
-        ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-        ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
-    )
+    from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT, active_rubric
 
     calc = _make_opt_calc(db_session)
     login_as(_api_admin_user)
 
     body = client.post(_url("calculation", calc.id)).json()
 
-    assert body["prompt_version"] == ACTIVE_MACHINE_REVIEW_PROMPT_VERSION
+    assert body["prompt"] == ACTIVE_MACHINE_REVIEW_PROMPT.model_dump()
     # Only the rubric relevant to the record type is stamped, taken from the
     # shared recipe (not re-derived locally).
-    assert body["rubric_versions"] == {
-        "computed_calculation_v2": ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[
-            "computed_calculation_v2"
-        ]
-    }
+    assert body["rubric"] == active_rubric("computed_calculation").model_dump()
 
 
 # --------------------------------------------------------------------------- #

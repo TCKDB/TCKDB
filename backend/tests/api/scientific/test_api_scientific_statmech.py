@@ -558,8 +558,8 @@ def test_detail_include_trust_adds_statmech_trust_fragment(
 
     evidence = trust["evidence"]
     assert evidence["record_type"] == "statmech"
-    assert evidence["rubric"] == "computed_statmech_v2"
-    assert evidence["rubric_version"] == 2
+    assert evidence["rubric"] == "computed_statmech"
+    assert evidence["rubric_version"] == 1
     assert evidence["is_certified"] is False
     assert "record_id" not in evidence
 
@@ -592,7 +592,7 @@ def test_detail_include_trust_sparse_statmech_reports_missing_checks(
     body = client.get(_detail_url(sm.public_ref, include="trust")).json()
     evidence = body["record"]["trust"]["evidence"]
 
-    assert evidence["rubric"] == "computed_statmech_v2"
+    assert evidence["rubric"] == "computed_statmech"
     assert evidence["checks"]["source_calculations_present"] == "missing"
     assert evidence["checks"]["statmech_treatment_present"] == "missing"
 
@@ -1267,7 +1267,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         record_id=sm.id,
         grade=ReproducibilityGrade.described,
         rubric_name="tckdb_reproducibility",
-        rubric_version="v1",
+        rubric_version=1,
         context_json={"outdated": True},
         assessor_kind=ReproducibilityAssessorKind.system,
     )

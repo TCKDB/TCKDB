@@ -131,7 +131,7 @@ def test_a_component_task_implies_its_observable_and_an_internal_model_echoes_in
         ({"offset": 5}, "Extra inputs"),
         ({"task": "within_basin_thermall"}, "Input should be"),
         ({"observable": "gibbs_energy"}, "accepts observable"),
-        ({"contract_version": "statmech-selection-v2"}, "statmech-selection-v1"),
+        ({"contract_version": 2}, "contract_version"),
     ],
 )
 def test_a_contradictory_or_malformed_thermal_request_is_refused(changes, fragment):

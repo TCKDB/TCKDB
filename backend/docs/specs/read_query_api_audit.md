@@ -280,15 +280,15 @@ modules are authoritative; this table is verified against them.
 
 | Endpoint | Legal `trust` token | Rubric | Source |
 |---|---|---|---|
-| `GET /scientific/calculations/{ref_or_id}` | ✓ | `computed_calculation_v1` | `services/scientific_read/calculations.py:144,209,361` |
-| `GET /scientific/reaction-entries/{id}/kinetics` | ✓ | `computed_kinetics_v1` | `services/scientific_read/kinetics.py:94,182,208,370` |
-| `GET /scientific/species-entries/{id}/thermo` | ✓ | `computed_thermo_v1` | `services/scientific_read/thermo.py:84,174,200,366` |
-| `GET /scientific/statmech/{ref_or_id}` | ✓ | `computed_statmech_v1` | `services/scientific_read/statmech.py:109,195,202,325` (detail uses `_DETAIL_LEGAL_INCLUDE_TOKENS`; the search-shared `_LEGAL_INCLUDE_TOKENS` excludes `trust`) |
-| `GET /scientific/species-entries/{id}/statmech` | ✓ | `computed_statmech_v1` | `services/scientific_read/species_statmech.py` (reuses `_DETAIL_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `build_statmech_record`; `trust` is an internal token) |
-| `GET /scientific/transport/{ref_or_id}` | ✓ | `computed_transport_v1` | `services/scientific_read/transport.py:74,124,129,224` |
-| `GET /scientific/species-entries/{id}/transport` | ✓ | `computed_transport_v1` | `services/scientific_read/species_transport.py` (reuses `_DETAIL_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `build_transport_record`; `trust` is an internal token) |
-| `GET /scientific/transition-state-entries/{ref_or_id}` | ✓ | `computed_transition_state_v1` | `services/scientific_read/transition_states.py` (`_TSE_DETAIL_LEGAL_INCLUDE_TOKENS`, `_TSE_DETAIL_INTERNAL_INCLUDE_TOKENS`, `_TRUST_EAGER_LOADS`, `build_transition_state_entry_trust_fragment`) |
-| `GET /scientific/reaction-entries/{id}/full` | ✓ (modifier) | `computed_kinetics_v1` on embedded kinetics; `computed_calculation_v1` on embedded calculations; `computed_transition_state_v1` on embedded transition-state entries | `services/scientific_read/provenance.py` (`_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `_build_kinetics_section`, `_build_calculations_section`, `_build_calculation_trust_fragments`, `_build_transition_states_section`, `build_transition_state_entry_trust_fragment`) |
+| `GET /scientific/calculations/{ref_or_id}` | ✓ | `computed_calculation` | `services/scientific_read/calculations.py:144,209,361` |
+| `GET /scientific/reaction-entries/{id}/kinetics` | ✓ | `computed_kinetics` | `services/scientific_read/kinetics.py:94,182,208,370` |
+| `GET /scientific/species-entries/{id}/thermo` | ✓ | `computed_thermo` | `services/scientific_read/thermo.py:84,174,200,366` |
+| `GET /scientific/statmech/{ref_or_id}` | ✓ | `computed_statmech` | `services/scientific_read/statmech.py:109,195,202,325` (detail uses `_DETAIL_LEGAL_INCLUDE_TOKENS`; the search-shared `_LEGAL_INCLUDE_TOKENS` excludes `trust`) |
+| `GET /scientific/species-entries/{id}/statmech` | ✓ | `computed_statmech` | `services/scientific_read/species_statmech.py` (reuses `_DETAIL_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `build_statmech_record`; `trust` is an internal token) |
+| `GET /scientific/transport/{ref_or_id}` | ✓ | `computed_transport` | `services/scientific_read/transport.py:74,124,129,224` |
+| `GET /scientific/species-entries/{id}/transport` | ✓ | `computed_transport` | `services/scientific_read/species_transport.py` (reuses `_DETAIL_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `build_transport_record`; `trust` is an internal token) |
+| `GET /scientific/transition-state-entries/{ref_or_id}` | ✓ | `computed_transition_state` | `services/scientific_read/transition_states.py` (`_TSE_DETAIL_LEGAL_INCLUDE_TOKENS`, `_TSE_DETAIL_INTERNAL_INCLUDE_TOKENS`, `_TRUST_EAGER_LOADS`, `build_transition_state_entry_trust_fragment`) |
+| `GET /scientific/reaction-entries/{id}/full` | ✓ (modifier) | `computed_kinetics` on embedded kinetics; `computed_calculation` on embedded calculations; `computed_transition_state` on embedded transition-state entries | `services/scientific_read/provenance.py` (`_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `_build_kinetics_section`, `_build_calculations_section`, `_build_calculation_trust_fragments`, `_build_transition_states_section`, `build_transition_state_entry_trust_fragment`) |
 
 The TS-entry trust token is wired to the **standalone** TS-entry detail
 surface and to the embedded `transition_states[*]` records of the
@@ -335,10 +335,10 @@ All six surfaces share these invariants, verified by inspection:
 
 | Surface | Trust status | Notes |
 |---|---|---|
-| `/scientific/calculations/{ref_or_id}` | **enabled** | per-calculation `computed_calculation_v1`. |
+| `/scientific/calculations/{ref_or_id}` | **enabled** | per-calculation `computed_calculation`. |
 | `/scientific/calculations/search` | omitted by policy | search surfaces skip trust. |
-| `/scientific/reaction-entries/{id}/full` | **enabled (embedded)** | `?include=trust` propagates `computed_kinetics_v1` to each embedded kinetics record, `computed_calculation_v1` to each embedded calculation summary, and `computed_transition_state_v1` to each embedded transition-state-entry record. No top-level reaction-entry rubric exists yet; conformer, path-search, IRC, scan, and artifact sections still lack trust because they have no rubric. |
-| `/scientific/transition-state-entries/{ref_or_id}` | **enabled** | standalone TS-entry detail emits `computed_transition_state_v1` under `include=trust`. Status-aware frequency policy; IRC/path-search additive. Also propagated into `/full` under `transition_states[*].trust`. |
+| `/scientific/reaction-entries/{id}/full` | **enabled (embedded)** | `?include=trust` propagates `computed_kinetics` to each embedded kinetics record, `computed_calculation` to each embedded calculation summary, and `computed_transition_state` to each embedded transition-state-entry record. No top-level reaction-entry rubric exists yet; conformer, path-search, IRC, scan, and artifact sections still lack trust because they have no rubric. |
+| `/scientific/transition-state-entries/{ref_or_id}` | **enabled** | standalone TS-entry detail emits `computed_transition_state` under `include=trust`. Status-aware frequency policy; IRC/path-search additive. Also propagated into `/full` under `transition_states[*].trust`. |
 | `/scientific/transition-states/{ref_or_id}` | **not enabled** | TS-concept detail (and its embedded `entries`) reject `include=trust`; only the standalone TS-entry surface carries the rubric. No top-level TS-concept aggregation rubric exists. |
 | `/scientific/conformer-groups/{ref_or_id}`, `/scientific/conformer-observations/{ref_or_id}` | **not enabled** | no conformer rubric. |
 | `/scientific/networks/*` (network / network-solve / network-kinetics) | **not enabled** | no network/PDep rubric. |
@@ -369,8 +369,8 @@ non-canonical surface; "✗" means no documented surface answers it.
 |---|---|---|---|---|
 | 1 | Find species by SMILES / InChI / InChIKey | ✓ | `GET /scientific/species/search` | Identifiers required; `formula` also accepted. AND-combined; deterministic ordering. |
 | 2 | Find thermo for a species | ✓ | `GET /scientific/species-entries/{id}/thermo` (per-entry), `GET\|POST /scientific/thermo/search` (chemistry-first) | Both support `include=trust`; on search it sits at `records[*].thermo.trust`, one level inside the wrapper. `include=all` reaches it on neither. |
-| 3 | Find transport for a species | ✓ | `GET /scientific/species-entries/{id}/transport` (per-entry), `GET\|POST /scientific/transport/search` (chemistry-first) | The per-entry surface now mirrors species-entry thermo: review-aware, public-handle, `include=trust` → `computed_transport_v1`. Search accepts the same token, at `records[*].trust`; `include=all` reaches it on neither. |
-| 4 | Find statmech for a species | ✓ | `GET /scientific/species-entries/{id}/statmech` (per-entry), `GET\|POST /scientific/statmech/search` (chemistry-first) | The per-entry surface now mirrors species-entry thermo: review-aware, public-handle, `include=trust` → `computed_statmech_v1`. Search accepts the same token, at `records[*].trust`; `include=all` reaches it on neither. |
+| 3 | Find transport for a species | ✓ | `GET /scientific/species-entries/{id}/transport` (per-entry), `GET\|POST /scientific/transport/search` (chemistry-first) | The per-entry surface now mirrors species-entry thermo: review-aware, public-handle, `include=trust` → `computed_transport`. Search accepts the same token, at `records[*].trust`; `include=all` reaches it on neither. |
+| 4 | Find statmech for a species | ✓ | `GET /scientific/species-entries/{id}/statmech` (per-entry), `GET\|POST /scientific/statmech/search` (chemistry-first) | The per-entry surface now mirrors species-entry thermo: review-aware, public-handle, `include=trust` → `computed_statmech`. Search accepts the same token, at `records[*].trust`; `include=all` reaches it on neither. |
 | 5 | Find reactions by reactants / products | ✓ | `GET\|POST /scientific/reactions/search` | Reactants/products as identifier lists; direction `forward\|reverse\|either`; `match=contains` (default, set containment per role) or `match=exact`. |
 | 6 | Find kinetics for a reaction | ✓ | `GET /scientific/reaction-entries/{id}/kinetics`, `GET\|POST /scientific/kinetics/search` | Both expose `include=trust`; on search it sits at `records[*].kinetics.trust`, one level inside the wrapper. `include=all` reaches it on neither. |
 | 7 | Inspect calculation / provenance for a record | ✓ | `GET /scientific/calculations/{ref_or_id}`, `GET /scientific/reaction-entries/{id}/full` | `/full` is the only composite "provenance projection" today; no generic `/scientific/records/{type}/{id}/provenance`. |
@@ -398,7 +398,7 @@ non-canonical surface; "✗" means no documented surface answers it.
   `/scientific/records/{type}/{id}/provenance` projection still stands.
 - Story #8 has a clear policy (detail-only, opt-in, internal-IDs
   gated). The composite read (`reaction-entry /full`) now propagates
-  the same `computed_kinetics_v1` and `computed_calculation_v1`
+  the same `computed_kinetics` and `computed_calculation`
   fragments to its embedded kinetics and calculation records, so the
   composite and standalone surfaces stay in sync.
 
@@ -561,7 +561,7 @@ without broad rewrites.
 1. **Propagate trust to reaction-entry `/full` embedded records
    (smallest, highest user-visible value).** Make `include=trust` on
    `/scientific/reaction-entries/{id}/full` re-use the existing
-   `computed_kinetics_v1` and `computed_calculation_v1` builders to
+   `computed_kinetics` and `computed_calculation` builders to
    attach trust to embedded kinetics and (where present) calculation
    summaries. Reuses tested helpers; no new rubric. Keeps the
    detail-only policy intact because `/full` is a detail read. Adds a
@@ -645,7 +645,7 @@ Carries forward the relevant subset of §15 plus trust-era specifics.
    but a one-time decision avoids drift.
 5. **Trust on reaction-entry top-level.** Should `/full` *itself*
    carry a top-level `trust` block aggregating embedded record trust?
-   Probably not — there is no `computed_reaction_entry_v1` rubric and
+   Probably not — there is no `computed_reaction_entry` rubric and
    aggregation policy would be its own design discussion.
 
 ---

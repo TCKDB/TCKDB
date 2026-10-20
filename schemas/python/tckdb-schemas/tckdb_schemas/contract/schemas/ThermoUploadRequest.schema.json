@@ -891,7 +891,7 @@
     },
     "CalculationWithResultsPayload": {
       "additionalProperties": false,
-      "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan\nresult fields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param composite_result: Inline composite energy (type must be ``composite``,\n    and a ``composite`` calculation must carry it). See\n    :class:`CompositeResultPayload`.\n:param sp_energy_components: Inline parts of the single point's\n    electronic energy (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param scan_result: Inline scan result (type must be ``scan``): the\n    stepped coordinates and the points along them. Whether a route accepts\n    a ``scan`` calculation at all is that route's own allow-list; this\n    field is only where the points go when it does.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
+      "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan\nresult fields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param composite_result: Inline composite energy (type must be ``composite``,\n    and a ``composite`` calculation must carry it). See\n    :class:`CompositeResultPayload`.\n:param sp_energy_components: Inline parts of the single point's\n    electronic energy (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param scan_result: Inline scan result (type must be ``scan``): the\n    stepped coordinates and the points along them. Whether a route accepts\n    a ``scan`` calculation at all is that route's own allow-list; this\n    field is only where the points go when it does.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser: Optional stamp (name and version) of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
       "properties": {
         "actual_protocol_declaration": {
           "anyOf": [
@@ -1049,17 +1049,16 @@
           "default": null,
           "title": "Parameters Json"
         },
-        "parameters_parser_version": {
+        "parameters_parser": {
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/$defs/ParserStamp"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Parameters Parser Version"
+          "default": null
         },
         "path_search_result": {
           "anyOf": [
@@ -2233,10 +2232,15 @@
           ],
           "title": "Runtime"
         },
-        "schema_version": {
-          "const": "tckdb.execution-environment.v1",
-          "title": "Schema Version",
+        "schema_name": {
+          "const": "tckdb.execution-environment",
+          "title": "Schema Name",
           "type": "string"
+        },
+        "schema_version": {
+          "const": 1,
+          "title": "Schema Version",
+          "type": "integer"
         },
         "software_release": {
           "$ref": "#/$defs/ScientificSoftwareReleaseIdentity"
@@ -2254,6 +2258,7 @@
         }
       },
       "required": [
+        "schema_name",
         "schema_version",
         "runtime",
         "software_release",
@@ -2752,7 +2757,7 @@
     },
     "HessianPayload": {
       "additionalProperties": false,
-      "description": "Optional inline Cartesian Hessian (second-derivative) matrix.\n\nThe Hessian is the primitive from which harmonic frequencies, normal\nmodes, and thermochemistry are derived. It is meaningful only relative\nto a specific atomic configuration, ordering, and orientation, so the\npayload carries its own ``geometry``: the resolution layer dedupes it\nthrough the content-addressed geometry seam (so it usually coincides\nwith the calculation's input geometry with no duplication) and stores\nthe resulting ``geometry_id`` as a mandatory binding.\n\nOnly the lower triangle including the diagonal of the symmetric 3N×3N\nmatrix is stored, row-major, in fixed units of hartree/bohr². For\n``N`` atoms that is exactly ``3N(3N+1)/2`` values.\n\nAttaches to ``freq`` calculations and to ``opt`` calculations run with\nan analytic Hessian (``opt=calcall``-style). See DR-0030.\n\n:param geometry: The geometry the Hessian was computed at.\n:param lower_triangle_hartree_bohr2: Packed lower triangle (with\n    diagonal), row-major, length ``3N(3N+1)/2``, in hartree/bohr².\n:param source: Where the matrix was obtained from.\n:param parser_version: Optional version tag of the parser that\n    produced the matrix.\n:param note: Optional free-text annotation.",
+      "description": "Optional inline Cartesian Hessian (second-derivative) matrix.\n\nThe Hessian is the primitive from which harmonic frequencies, normal\nmodes, and thermochemistry are derived. It is meaningful only relative\nto a specific atomic configuration, ordering, and orientation, so the\npayload carries its own ``geometry``: the resolution layer dedupes it\nthrough the content-addressed geometry seam (so it usually coincides\nwith the calculation's input geometry with no duplication) and stores\nthe resulting ``geometry_id`` as a mandatory binding.\n\nOnly the lower triangle including the diagonal of the symmetric 3N×3N\nmatrix is stored, row-major, in fixed units of hartree/bohr². For\n``N`` atoms that is exactly ``3N(3N+1)/2`` values.\n\nAttaches to ``freq`` calculations and to ``opt`` calculations run with\nan analytic Hessian (``opt=calcall``-style). See DR-0030.\n\n:param geometry: The geometry the Hessian was computed at.\n:param lower_triangle_hartree_bohr2: Packed lower triangle (with\n    diagonal), row-major, length ``3N(3N+1)/2``, in hartree/bohr².\n:param source: Where the matrix was obtained from.\n:param parser: Optional stamp (name and version) of the parser that\n    produced the matrix.\n:param note: Optional free-text annotation.",
       "properties": {
         "geometry": {
           "$ref": "#/$defs/GeometryPayload"
@@ -2777,17 +2782,16 @@
           "default": null,
           "title": "Note"
         },
-        "parser_version": {
+        "parser": {
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/$defs/ParserStamp"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Parser Version"
+          "default": null
         },
         "source": {
           "$ref": "#/$defs/HessianSource"
@@ -3520,6 +3524,32 @@
         "role"
       ],
       "title": "OutputGeometryEntry",
+      "type": "object"
+    },
+    "ParserStamp": {
+      "additionalProperties": false,
+      "description": "The parser that produced a recorded value: its ``name`` beside its ``version``, as text.\n\nThis is the stamp for a parser the *producer* owns (a client's own log reader, say): its version is somebody\nelse's and is recorded as given, never renumbered, which is why it is text where a :class:`VersionRef` is an\ninteger. A parser TCKDB owns writes the same stamp with its integer version spelled as text. The name never\ncontains the version.",
+      "properties": {
+        "name": {
+          "description": "Stable name of the parser. Never contains a version.",
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "description": "The parser's version, exactly as its owner spells it.",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "ParserStamp",
       "type": "object"
     },
     "PathSearchMethod": {

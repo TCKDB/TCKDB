@@ -91,7 +91,7 @@ def test_a_fit_inherits_its_solves_review_and_is_never_qualified_separately(db_s
 
 def test_the_documented_bounds_are_the_planned_ones_and_versioned():
     assert DEFAULT_BOUNDS == SelectionBounds(
-        version="1",
+        version=1,
         solves=200,
         kinetics_parents=2000,
         channel_nodes=500,
@@ -105,7 +105,7 @@ def test_the_documented_bounds_are_the_planned_ones_and_versioned():
     )
     with pytest.raises(CodedValueError) as caught:
         check_bound(DEFAULT_BOUNDS, "solves", 201)
-    assert caught.value.context == {"bound": "solves", "visible": 201, "limit": 200, "bounds_version": "1"}
+    assert caught.value.context == {"bound": "solves", "visible": 201, "limit": 200, "bounds_version": 1}
     check_bound(DEFAULT_BOUNDS, "solves", 200)  # the limit itself is decided
 
 
@@ -115,7 +115,7 @@ def test_the_solve_bound_is_applied_to_the_whole_population_at_and_beyond_its_li
     assert len(assess(db_session, with_bounds(channel_request(world), solves=2)).solves) == 2
     add_solve(db_session, world, fits=[fit_spec("assoc", det="d2")])
     context = refused(db_session, with_bounds(channel_request(world), solves=2))
-    assert context == {"bound": "solves", "visible": 3, "limit": 2, "bounds_version": "1"}
+    assert context == {"bound": "solves", "visible": 3, "limit": 2, "bounds_version": 1}
 
 
 def test_the_bound_counts_before_applicability_so_a_population_of_incompatible_solves_still_refuses(db_session, world):
@@ -205,7 +205,7 @@ def test_the_number_of_required_outputs_is_bounded_when_the_request_is_built(wor
     with pytest.raises(CodedValueError) as caught:  # a coded refusal, so the route maps it to the 422
         with_bounds(bundle_request(world, "assoc", "elim"), required_outputs=1)
     assert caught.value.code == "network_selection_population_too_large"
-    assert caught.value.context == {"bound": "required_outputs", "visible": 2, "limit": 1, "bounds_version": "1"}
+    assert caught.value.context == {"bound": "required_outputs", "visible": 2, "limit": 1, "bounds_version": 1}
     check_bound(dataclasses.replace(DEFAULT_BOUNDS, required_outputs=1), "required_outputs", 1)
     with pytest.raises(CodedValueError):
         check_bound(dataclasses.replace(DEFAULT_BOUNDS, required_outputs=1), "required_outputs", 2)

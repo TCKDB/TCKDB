@@ -772,7 +772,7 @@ class TestAuditEventsVisibility:
             "curator_priority": None,
             "summary": "Fake machine review inspected 1 linked record(s).",
             "findings": [],
-            "model": "fake_test/machine-review-v2",
+            "model": "fake_test/machine-review",
             "provider": "FakeMachineReviewProvider",
             "used_rag": False,
         }

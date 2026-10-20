@@ -185,8 +185,10 @@ None of this mutates the science; it decides *how much to trust it*.
 - **`machine_review/orchestration.py`** — optional AI re-review. Appends
   an append-only `RecordMachineReview` verdict; **never** mutates
   `review_status`, `submission.status`, or public trust output.
-- **`llm_precheck/service.py`** — optional submission-level advisory
-  ("pass / needs_review / concerns"). Advisory only, disabled by default.
+- **`llm_precheck/`** — the submission-level context builder the optional
+  machine-review run reads (`LLMPrecheckContext`). Advisory only, disabled by
+  default; the provider payload it feeds is the single machine-review contract
+  (root `format` marker, `{"name": "machine_review", "version": 1}`).
 
 ### Step 5 — Reads select the best product *at query time* (`app/services/scientific_read/`)
 

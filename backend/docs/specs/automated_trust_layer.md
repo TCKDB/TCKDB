@@ -203,7 +203,7 @@ no longer this design.
    submission having come from a specific tool (ARC, RMG,
    ChemPyMechWriter, …).
 10. **Versioned rubrics.** Each rubric has an explicit
-    `rubric_name@vN` identifier and is implemented in code (not data),
+    stable `rubric_name` plus a separate integer `rubric_version` and is implemented in code (not data),
     so historical labels remain reproducible.
 
 ---
@@ -258,8 +258,8 @@ inspection over a record. Each check has:
 
 ### 5.2 `EvidenceRubric`
 
-A versioned bundle of checks. Identified as
-`<name>@v<n>` (e.g. `computed_kinetics_v1`). Each rubric defines:
+A versioned bundle of checks. Identified by a
+stable name and a separate integer version (e.g. `computed_kinetics`, version 1). Each rubric defines:
 
 - `applies_to`: a record-type discriminator (e.g.
   `kinetics` with `scientific_origin == computed`).
@@ -361,7 +361,8 @@ strong ratio **and** zero failed required-checks.
 ```json
 {
   "evidence": {
-    "rubric": "computed_kinetics_v1",
+    "rubric": "computed_kinetics",
+    "rubric_version": 1,
     "label": "well_supported",
     "checks": {
       "reaction_entry_present": "passed",
@@ -498,10 +499,10 @@ or `warning` (W). `applies_when` predicates are spelled out only where
 non-obvious.
 
 The check set is the **MVP shape**; weights and exact predicate
-wording will be tuned during implementation and bumped to `vN+1`
+wording will be tuned during implementation and given a new rubric version
 rather than mutated in place.
 
-### 9.1 `computed_kinetics_v1`
+### 9.1 `computed_kinetics`
 
 **Purpose:** evidence checklist for a computed `kinetics` record
 (`scientific_origin == computed`).
@@ -538,7 +539,7 @@ reactants/products).
 
 **Example output:** see §6.2.
 
-### 9.2 `computed_thermo_v1`
+### 9.2 `computed_thermo`
 
 **Purpose:** evidence checklist for a computed `thermo` record.
 
@@ -569,7 +570,7 @@ upstream calculations are linked via `thermo_source_calculation`.
 **Hard-fail signals:** `geometry_validation_failed` on the species opt
 geom; missing `species_entry`.
 
-### 9.3 `computed_statmech_v1`
+### 9.3 `computed_statmech`
 
 **Purpose:** evidence checklist for `statmech` (partition-function /
 mode treatment record).
@@ -592,29 +593,29 @@ mode treatment record).
 
 **Hard-fail signals:** `missing_required_identity`.
 
-### 9.3.1 `computed_ts_statmech_v1` (owner-scoped)
+### 9.3.1 `computed_ts_statmech` (owner-scoped)
 
 A statmech row is owned by exactly one of a species entry or a transition-state entry (the
-`statmech_exactly_one_subject` CHECK). `computed_statmech` (v2) asks for a species entry first, so a
+`statmech_exactly_one_subject` CHECK). `computed_statmech` asks for a species entry first, so a
 transition-state-owned record could never pass its first required check and was badged `hard_failed` /
 `species_entry_missing` however complete it was. A hard fail is a discrete structural signal (section 8), and that record
 was internally consistent and validly owned, so the badge was a defect.
 
-**The rubric.** `computed_ts_statmech` v1 is `computed_statmech` v2 with one check swapped: `transition_state_entry_present`
+**The rubric.** `computed_ts_statmech` is `computed_statmech` with one check swapped: `transition_state_entry_present`
 (required, "Statmech must be attached to a transition_state_entry.") replaces `species_entry_present`. Every other check is the
 *same spec object*, so the two cannot drift. It adds no transition-state-specific check: no imaginary-mode count, no
 reaction-coordinate designation, no IRC requirement.
 
 **Selection.** `statmech_rubric_for(statmech)` returns the *name* of the TS rubric (`computed_ts_statmech`; resolve it with `RUBRICS.get(name)`) iff `species_entry_id is None and transition_state_entry_id is
-not None`, else `computed_statmech` v2 (a row with neither or both owners, impossible under the CHECK, keeps v2).
-`RUBRIC_NAME_FOR_RECORD_TYPE["statmech"]` stays `computed_statmech` (v2): it is the record-type default. The TS rubric is listed in `OWNER_SCOPED_RUBRIC_NAMES`, which the
+not None`, else `computed_statmech` (a row with neither or both owners, impossible under the CHECK, keeps the species rubric).
+`RUBRIC_NAME_FOR_RECORD_TYPE["statmech"]` stays `computed_statmech`: it is the record-type default. The TS rubric is listed in `OWNER_SCOPED_RUBRIC_NAMES`, which the
 API vocabulary also reads. The structural hard-fail check differs only in its first line (`transition_state_entry_missing`, an
 existing `HardFailReason`); external symmetry, torsion dimension and required-role source calculations are shared code.
 
 **What does not change.**
 
 - *Species-owned records.* Rubric, version, check map, badge and completeness are byte-identical, and so are their stored machine
-  reviews' currency. The shared species rubric version is not bumped, because a shared bump would restale every species review
+  reviews' currency. The species rubric version is not touched by the TS rubric, because a shared bump would restale every species review
   while nothing those records claim changed.
 - *Completeness is not certification.* `is_certified` is false on every evaluation.
 - *A geometry-validation fail stays advisory.* The shared warning-kind check and the shared hard-fail detector are reused unchanged.
@@ -624,11 +625,12 @@ existing `HardFailReason`); external symmetry, torsion dimension and required-ro
   `app.services.trust` (pinned by a test).
 - *The reproducibility rubric* has the same species-only assumption (`scientific_context`); it is a separate tier with a
   separate decision (issue #760), now made: a transition-state-owned statmech is graded under
-  `tckdb_reproducibility_ts_statmech` v1. See `reproducibility_assessments.md`.
+  `tckdb_reproducibility_ts_statmech` (version 1). See `reproducibility_assessments.md`.
 
 **Machine-review recipe.** A reviewer-family review is stamped with the rubric that actually evaluated the record
-(`active_rubric_versions_for_fragment`), not with the record type's default: `{"computed_ts_statmech_v1": "1"}` for a
-TS-owned statmech, `{"computed_statmech_v2": "2"}` for a species-owned one. `active_rubric_versions_for_record_type` is not
+(`active_rubric_for_fragment`), not with the record type's default: `computed_ts_statmech` (version 1) for a
+TS-owned statmech, `computed_statmech` (version 1) for a species-owned one. A review stores exactly one rubric
+(`rubric_name`, `rubric_version`). `active_rubric_for_record_type` is not
 owner-aware and remains the species default for statmech. A rubric absent from the active table raises (HTTP 500) instead of
 falling back.
 
@@ -647,7 +649,7 @@ falling back.
   species review stored by earlier code reads `current`, and a moved species badge would turn it stale.
 
 
-### 9.4 `computed_transport_v1`
+### 9.4 `computed_transport`
 
 **Purpose:** evidence checklist for a computed `transport` record.
 
@@ -664,7 +666,7 @@ falling back.
 
 **Hard-fail signals:** missing `species_entry`.
 
-### 9.5 `computed_calculation_v1`
+### 9.5 `computed_calculation`
 
 **Purpose:** evidence checklist for an individual `calculation` row
 viewed as a primary record (e.g. via `/scientific/calculations/...`).
@@ -689,7 +691,7 @@ viewed as a primary record (e.g. via `/scientific/calculations/...`).
 output geometry; `result_block` absent for a calc declared as
 successful.
 
-### 9.6 `experimental_kinetics_v1`
+### 9.6 `experimental_kinetics`
 
 **Purpose:** evidence checklist for an **experimental** `kinetics`
 record (`scientific_origin == experimental`).
@@ -709,7 +711,7 @@ record (`scientific_origin == experimental`).
 **Hard-fail signals:** `missing_required_identity` (reaction_entry
 without reactants/products); zero literature sources.
 
-### 9.7 `computed_transition_state_v2`
+### 9.7 `computed_transition_state`
 
 Defined in its own spec file:
 [transition_state_trust_rubric.md](transition_state_trust_rubric.md).
@@ -745,7 +747,7 @@ levels of theory, and a single verdict for the collection would be an
 aggregation rather than a reading.
 See `trust_read_api_current.md` for the exact contract per endpoint.
 
-### 9.8 `experimental_thermo_v1`
+### 9.8 `experimental_thermo`
 
 **Purpose:** evidence checklist for an experimental `thermo` record.
 
@@ -785,7 +787,7 @@ shipped code, verified against `app/services/trust/` and
   (`include_unreviewed`, `min_evidence_label`, `trust_status=`, etc.) were
   never implemented; they remain a design sketch only.
 - **The TS rubric is implemented, not spec-only.**
-  `computed_transition_state_v2` ships in `app/services/trust/rubrics.py`
+  `computed_transition_state` ships in `app/services/trust/rubrics.py`
   and is wired into the standalone transition-state-entry detail read and
   propagated into `reaction-entries/{id}/full`. §9.7 below is updated
   accordingly; `transition_state_trust_rubric.md` is a companion
@@ -820,7 +822,7 @@ be presented as a quality score.
     "review_status": "not_reviewed",
     "trust_status": "mostly_supported",
     "evidence": {
-      "rubric": "computed_kinetics_v1",
+      "rubric": "computed_kinetics",
       "rubric_version": 1,
       "label": "well_supported",
       "evidence_completeness": 0.73,
@@ -849,8 +851,8 @@ be presented as a quality score.
 |---|---|---|
 | `trust.review_status` | `record_review.status` (default `not_reviewed` when row absent) | Always present. |
 | `trust.trust_status` | Computed per §7. | Always present. |
-| `trust.evidence.rubric` | Public rubric name with version suffix (`computed_calculation_v1`, `computed_kinetics_v1`, `computed_thermo_v1`). | Always present for shipped trust reads. |
-| `trust.evidence.rubric_version` | Integer rubric version. | Retained for machine checks and future migrations. |
+| `trust.evidence.rubric` | Bare public rubric name (`computed_calculation`, `computed_kinetics`, `computed_thermo`). | Always present for shipped trust reads. |
+| `trust.evidence.rubric_version` | Integer rubric version (currently 1 for every rubric). | Separate from the name; retained for machine checks and future migrations. |
 | `trust.evidence.label` | Per §6.1. | |
 | `trust.evidence.evidence_completeness` | `passed_weight / possible_weight`, rounded by the evaluator. | Not exposed as a percentage; reader formats as it likes. |
 | `trust.evidence.passed_count` | Count of `kind in {required, optional}` checks that passed. | |
@@ -919,7 +921,7 @@ required so pagination is stable across requests.
 - Zero migration cost.
 - Single source of truth: `record_review` for curator state, raw
   domain rows for evidence, plus rubric code.
-- Rubric bumps (`v1 → v2`) take effect immediately on next read.
+- Rubric version bumps (e.g. 1 to 2) take effect immediately on next read.
 - Cannot drift.
 
 **Cons:**
@@ -940,7 +942,7 @@ trust_evaluation
   id                 BIGINT PK
   record_type        SubmissionRecordType    -- reuses existing enum
   record_id          BIGINT
-  rubric_name        TEXT                    -- e.g. computed_kinetics_v1
+  rubric_name        TEXT                    -- e.g. computed_kinetics
   rubric_version     INT
   label              EvidenceBadge           -- new enum (computed values only)
   completeness_ratio NUMERIC(5,4)
@@ -988,7 +990,7 @@ real pressure point** — typically one of:
   cannot afford to recompute per row.
 - A real interactive UI on top of TCKDB is fielding enough traffic
   to make recomputation cost visible.
-- Curators want to query "how many records would a rubric v2 promote
+- Curators want to query "how many records would a rubric version 2 promote
   from `needs_attention` to `auto_validated`?" — this needs
   persisted historical evaluations.
 
@@ -1013,17 +1015,17 @@ app/services/trust/
   __init__.py
   models.py     # EvidenceCheckSpec, EvidenceCheckResult, EvidenceEvaluation,
                  # EvidenceRubric, TrustFragment, TrustLLMPrecheck, label_from_completeness
-  rubrics.py    # all EvidenceRubric definitions (computed_calculation_v1,
-                 # computed_kinetics_v1, computed_thermo_v1, computed_statmech_v1,
-                 # computed_transport_v1, computed_transition_state_v2) + the
+  rubrics.py    # all EvidenceRubric definitions (computed_calculation,
+                 # computed_kinetics, computed_thermo, computed_statmech,
+                 # computed_transport, computed_transition_state) + the
                  # record_type -> rubric registry
   evaluator.py  # select_rubric(record_type), per-record hard-fail detection,
                  # evaluate/aggregate helpers -> EvidenceEvaluation
   fragment.py   # build_trust_fragment(evaluation, review_status=...) -> TrustFragment
 ```
 
-The experimental rubrics (`experimental_kinetics_v1`,
-`experimental_thermo_v1`) sketched in §9.6/§9.8 are not present in
+The experimental rubrics (`experimental_kinetics`,
+`experimental_thermo`) sketched in §9.6/§9.8 are not present in
 `rubrics.py` as of this update; treat them as still design-only.
 
 The evaluator entrypoint:
@@ -1064,7 +1066,7 @@ Required tests (paths illustrative):
 | `tests/trust/test_exclusion_defaults.py` | Records in `rejected` / `deprecated` / `hard_failed` are absent from default list responses; appear with explicit opt-in. |
 | `tests/trust/test_deterministic_order.py` | Two records with identical `completeness_ratio` sort by the §10.3 tie-breaker stably across runs. |
 | `tests/trust/test_fragment_shape.py` | Generated fragment matches the §10.1 schema exactly (no extra keys, no missing required keys). |
-| `tests/trust/test_rubric_version_stability.py` | Re-running `computed_kinetics_v1` on a frozen fixture produces byte-identical output. (Pins the contract.) |
+| `tests/trust/test_rubric_version_stability.py` | Re-running `computed_kinetics` on a frozen fixture produces byte-identical output. (Pins the contract.) |
 | `tests/trust/test_geometry_validation_hard_fail.py` | A record whose TS geom has `ValidationStatus.fail` returns `trust_status == hard_failed`, regardless of how many other checks pass. |
 | `tests/trust/test_llm_precheck_advisory.py` | Toggling LLM precheck `passed` ↔ `flagged` on the originating submission **does not** change `trust_status`, `label`, or any entry in `checks`. |
 | `tests/trust/test_no_llm_dependency.py` | Evaluator runs and produces a complete trust fragment with the LLM provider disabled / unconfigured. |
@@ -1075,15 +1077,15 @@ Required tests (paths illustrative):
 ## 14. Recommended implementation order
 
 1. **Land the rubric base classes** (`EvidenceCheck`, `EvidenceRubric`,
-   registry) with `computed_calculation_v1` only. Smallest scope.
+   registry) with `computed_calculation` only. Smallest scope.
 2. **Wire `trust` fragment into the existing calculation read endpoint
    under a flag** (e.g. `include=trust`). Existing `RecordReviewBadge`
    is left intact during the transition.
-3. **Add `computed_kinetics_v1` and `computed_thermo_v1`.** These are
+3. **Add `computed_kinetics` and `computed_thermo`.** These are
    the highest-value rubrics for downstream consumers.
-4. **Add `computed_statmech_v1`, `computed_transport_v1`.**
-5. **Add the experimental rubrics** (`experimental_kinetics_v1`,
-   `experimental_thermo_v1`). These need the literature-policy
+4. **Add `computed_statmech`, `computed_transport`.**
+5. **Add the experimental rubrics** (`experimental_kinetics`,
+   `experimental_thermo`). These need the literature-policy
    helpers to be settled.
 6. **Promote `trust` fragment to always-on** on detail endpoints.
    Remove the include flag.
@@ -1135,7 +1137,7 @@ These are intentionally left for implementation review.
    want a diagnostic endpoint (admin-only) that reports, per rubric,
    the histogram of completeness ratios and the checks most often
    `missing`. This is a tool for tuning rubric versions, not
-   a public-facing thing. Out of scope for v1 of this spec.
+   a public-facing thing. Out of scope for this spec.
 
 ---
 

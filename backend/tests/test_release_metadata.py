@@ -212,7 +212,7 @@ def test_known_operational_boundaries_are_recorded_where_a_reader_will_look():
     assert "DISABLE TRIGGER" in spec
     assert "database_roles.md" in spec
 
-    archive_spec = (BACKEND_ROOT / "docs" / "specs" / "tckdb_archive_v1.md").read_text()
+    archive_spec = (BACKEND_ROOT / "docs" / "specs" / "tckdb_archive.md").read_text()
     assert "$bytes" in archive_spec
     assert "Revisit when" in archive_spec
 

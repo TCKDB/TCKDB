@@ -115,10 +115,11 @@ def test_the_default_registry_is_empty_and_replay_needs_no_rules():
 def test_the_manifest_names_what_it_was_made_under_and_leaks_no_database_id():
     manifest = make_manifest()
     assert manifest["versions"] == {
-        "contract": "statmech-selection-v1", "assessment": "1", "normalizer": "1", "decision": "1",
-        "administrative_key": "1", "rules": "1", "finding_semantics": [1],
+        "contract": 1, "assessment": 1, "normalizer": 1, "decision": 1,
+        "administrative_key": 1, "rules": 1, "finding_semantics": [1],
     }
-    assert manifest["assessment_semantics"]["version"] == "1"
+    assert manifest["assessment_semantics"]["version"] == 1
+    assert manifest["assessment_semantics"]["evidence_rubric"] == {"name": "statmech_qualification", "version": 1}
 
     def keys(value):
         if isinstance(value, dict):
@@ -290,36 +291,45 @@ def test_two_captured_candidates_cannot_share_a_reference_or_an_ordinal():
 
 @pytest.mark.parametrize("name", ["contract", "decision", "administrative_key", "rules"])
 def test_a_manifest_made_under_a_version_this_release_does_not_carry_is_refused(name):
-    tampered = retamper(make_manifest(), lambda b: b["versions"].update({name: "0"}))
+    tampered = retamper(make_manifest(), lambda b: b["versions"].update({name: 0}))
     refused("unsupported_semantic_version", reproduce_statmech_ordering, tampered)
     refused("unsupported_semantic_version", replay_statmech_decision, tampered)
 
 
 def test_assessment_semantics_are_never_substituted_with_the_current_ones():
     manifest = make_manifest()
-    refused("unsupported_assessment_semantics", reproduce_statmech_ordering, retamper(manifest, lambda b: b["assessment_semantics"].update(version="0")))
+    refused("unsupported_assessment_semantics", reproduce_statmech_ordering, retamper(manifest, lambda b: b["assessment_semantics"].update(version=0)))
     refused("unsupported_assessment_semantics", reproduce_statmech_ordering, retamper(manifest, lambda b: b.pop("assessment_semantics")))
     refused("unsupported_assessment_semantics", reproduce_statmech_ordering, retamper(manifest, lambda b: b.update(assessment_semantics="x")))
     refused("unsupported_manifest_format", reproduce_statmech_ordering, retamper(manifest, lambda b: b.update(manifest_format_version=99)))
-    # The previous format (1) is retired with its readers: refused like any other format this release does not carry.
-    refused("unsupported_manifest_format", reproduce_statmech_ordering, retamper(manifest, lambda b: b.update(manifest_format_version=1)))
-    refused("unsupported_manifest_format", replay_statmech_decision, retamper(manifest, lambda b: b.update(manifest_format_version=1)))
+    # Another format (no earlier one is kept): refused like any format this release does not carry.
+    refused("unsupported_manifest_format", reproduce_statmech_ordering, retamper(manifest, lambda b: b.update(manifest_format_version=2)))
+    refused("unsupported_manifest_format", replay_statmech_decision, retamper(manifest, lambda b: b.update(manifest_format_version=2)))
 
 
 @pytest.mark.parametrize("name", ["assessment", "normalizer", "finding_semantics"])
 def test_reassessment_needs_the_running_assessment_normalizer_and_finding_versions(name):
     manifest = make_manifest()
-    tampered = retamper(manifest, lambda b: b["versions"].update({name: "0"}))
+    tampered = retamper(manifest, lambda b: b["versions"].update({name: 0}))
     refused("unsupported_semantic_version", reassess_statmech_captured_inputs, tampered)
     assert reproduce_statmech_ordering(tampered)  # reproducing a recorded ordering does not run today's assessor
 
 
 def test_an_older_supported_manifest_is_labelled_historical_and_never_reassessed(monkeypatch):
     manifest = make_manifest()
-    monkeypatch.setattr(manifest_module, "ASSESSMENT_VERSION", "2")
-    monkeypatch.setattr(manifest_module, "SUPPORTED_ASSESSMENT_SEMANTICS", frozenset({"1", "2"}))
+    from tckdb_schemas.fragments.version import VersionRef
+
+    from app.versioning import VersionRegistry
+
+    # A release that moved to semantics 2 and still reads 1 (for a published release that cites it): 1 is registered, not current.
+    both = VersionRegistry("test_semantics")
+    name = manifest_module.ASSESSMENT_SEMANTICS_NAME
+    both.register(name, 1, VersionRef(name=name, version=1), current=False)
+    both.register(name, 2, VersionRef(name=name, version=2), current=True)
+    monkeypatch.setattr(manifest_module, "ASSESSMENT_VERSION", 2)
+    monkeypatch.setattr(manifest_module, "ASSESSMENT_SEMANTICS", both)
     label = reproduce_statmech_ordering(manifest)["label"]
-    assert label["kind"] == "historical" and label["recorded_assessment_semantics"] == "1" and label["reassessed"] is False
+    assert label["kind"] == "historical" and label["recorded_assessment_semantics"] == 1 and label["reassessed"] is False
     assert "made under 1" in label["statement"] and "assessed under 2" in label["statement"]
     refused("historical_manifest_cannot_be_reassessed", reassess_statmech_captured_inputs, manifest)
     refused("historical_manifest_cannot_be_reassessed", replay_statmech_decision, manifest)

@@ -22,6 +22,57 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Stored and wire strings split into a name and an integer version; every TCKDB-owned version reset to 1 (versioning PR-4, 2026-10-20)
+
+**The last of four versioning PRs, and the one clients see: a deliberate wire break, once.** Migration: `c7d4a9e2b6f1_split_versioned_names`
+(both directions; it rewrites stored data, bypasses the accepted-science freeze inside its own transaction and **unpublishes every release**,
+see below). New environment variable: none. `tckdb-schemas` 0.130.0, `tckdb-client` 0.159.0; `tckdb-mcp` unchanged. OpenAPI snapshot, producer
+contract and API vocabulary regenerated. Four rule-manifest SHA pins moved and need the owner's explicit approval (listed in the pull request).
+
+In plain terms: anywhere TCKDB used to write one string with a version stuck on it (`computed_thermo_v2`, `tckdb.dataset_release.v2`,
+`gaussian_v1`, `"computed_thermo@2"`) it now writes the name and the version as two fields (`computed_thermo` and `1`), and the numbers all start
+again at 1 because the earlier numbering referred to versions nothing can read any more. Versions that belong to someone else (Gaussian 16,
+NIST's ThermoML release, a producer's own parser) are left exactly as given.
+
+- **Stored columns (migration).** `record_machine_review`: `prompt_name` + int `prompt_version`, `rubric_name` + int `rubric_version`, int
+  `context_schema_version`, `model` `external_cp_comparison` (the `rubric_versions_json` dict is gone: a review holds exactly one rubric). The
+  migration **aborts** if any review's `rubric_versions_json` is not exactly one key. `record_reproducibility_assessment.rubric_version` is an
+  integer. `submission_audit_event.details_json["schema_version"] = "machine_review_v2"` becomes `["format"] = {"name": "machine_review", "version": 1}`.
+  `release_manifest`: `manifest_format_*`, `recovery_archive_format_*`, `review_policy_*` pairs replace the three fused columns.
+  `execution_environment_manifest`: `schema_name` + int `schema_version`, `canonical_json` rewritten and `content_digest` recomputed with a frozen copy
+  of the canonicaliser. `calculation` / `calculation_parameter` / `calc_hessian`: `*_parser_name` beside the text version (`gaussian_v1` becomes
+  `gaussian_parameters` / `1`, a producer's own stamp is kept verbatim under the name `producer`). `external_source_record`: `mapping_name`, ThermoML
+  stamps `thermoml_cp` / `thermoml_cp_mapping` at `1`; `molecular_property_observation.external_source_parser_name`;
+  `conformer_assignment_scheme` `torsion_basin` `v1` becomes `1` and its content-derived `public_ref` is recomputed.
+- **Releases are unpublished (owner decision 3).** A release manifest's format tag sits inside its frozen checksum, so it cannot be relabelled.
+  The migration deletes every `release_manifest` and `release_artifact` row, sets each published or withdrawn `dataset_release` back to `draft`
+  (`published_at`, `withdrawn_at`, `withdrawn_reason` cleared; the DOI and every `release_selection` row are kept) and the owner re-publishes.
+  Downgrade cannot restore them and refuses to run while a manifest exists.
+- **The accepted-science freeze is bypassed, for this one revision only (owner decision 3).** The relabel touches provenance stamps on approved
+  calculations. The migration disables every user trigger on the tables it writes, rewrites, re-enables exactly those triggers and then raises (rolling
+  everything back) if any user trigger on those tables is still off. No scientific value is read or written; no declared-repair machinery is used.
+- **Everything stored as machine review or reproducibility assessment now reads stale, by design.** Stored rubric versions (2, 5) no longer match the
+  current ones (1), and the context hash changed, so `rubric_versions_mismatch` / `context_hash_mismatch` mark every earlier review for re-review.
+  Nothing is rewritten: that is the stale-assessment mechanism doing its job.
+- **Reset to 1.** All fourteen trust rubrics, the reproducibility rubric, the machine-review prompt, context schema and provider format, every
+  selection engine's manifest format, policy, assessment-semantics and component versions, relative-energy, every rule (E1, XYG3, the network and
+  structure candidates, the inactive council rules) and the four rule manifests, the document formats (dataset release, archive, export, ML export,
+  deposit, review policy, execution environment, contribution bundle, replay sidecar) and TCKDB's own parsers. The four rule YAML files carry
+  `name:` and `version: 1`, no `manifest_history`; their SHA-256 pins moved (every rule stays inactive; E1's approved status is unchanged).
+- **Wire and API.** Trust `evidence.rubric` is the bare name with an integer `evidence.rubric_version`; `rubric_version` is an integer in the
+  assessment summaries; the admin run-fake response carries `context_schema_version: int`, `prompt: {name, version}`, `rubric: {name, version}`;
+  document headers are `format: {name, version}` objects (release, archive, export, ML export, deposit); release summaries carry `manifest_format`,
+  `review_policy` and `recovery_archive` refs; selection manifests carry integer versions, `evidence_rubric` as `{name, version}`, `software` and
+  `software_version` as two fields, and rule references as `{rule_id, rule_version}`; the producer-facing `parameters_parser_version` is
+  `parameters_parser: {name, version}` and a Hessian's `parser_version` is `parser: {name, version}`; `bundle_version` is the integer 1.
+- **More registries (dispatch by integer version, unknown refused).** Each engine's rules (`rules_registry`, with `rule_recorded_in` turning
+  `UnknownVersion` into that engine's replay refusal), the dataset-release renderer, the machine-review audit-adapter payload formats, the
+  document formats, TCKDB's own parsers, and each engine's assessment semantics.
+- **Debt list: empty.** All 57 remaining rows are fixed, `MOVED_DEBT` and `RENAMES` and their script support are deleted, `COMPLETED_PRS` is
+  {PR-2, PR-3, PR-4} and both ceilings are 0; only reasoned `ALLOWED` entries remain (botocore, the Gaussian IOp keyword, NIST's ThermoML
+  release, a base64 payload, an arXiv id, an HPC module label, a database URL).
+- **Kept, and still bite:** stale marking, refusal of unknown versions, checksums, append-only results.
+
 ## Code names no longer carry a version; versions go through one registry (versioning PR-3, 2026-10-20)
 
 **Renames plus registry dispatch; no stored value, no wire value and no version number changes.** Migration: none. New environment

@@ -71,10 +71,9 @@ Supporting axes also present: `schemas.py`, `derivation.py`, `mapping.py`,
    `c9d0e1f2a3b4` migration. The pytest fixture rebuilds the DB from migrations
    and the suite is green, so the runtime schema matches the model.
 8. **Active prompt/rubric ownership — single source, see risk R1.** The active
-   recipe lives **only** in `admin_trigger.py`
-   (`ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"`,
-   `ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS` derived from the trust rubric
-   constants). No duplicate/contradictory definition exists. Only the admin
+   recipe lives **only** in `recipe.py`
+   (`ACTIVE_MACHINE_REVIEW_PROMPT`, a `VersionRef` of name `machine_review`
+   and integer version 1; the rubric is read from the trust rubrics). No duplicate/contradictory definition exists. Only the admin
    trigger consumes it today.
 9. **Internal-ID exposure — contained, see risk R2.** Internal ids
    (`record_id`, `appended_review_id`, `source_audit_event_id`) appear only on
@@ -113,8 +112,8 @@ executor/orchestration/trigger never add, delete, merge, or bulk-update.
 - **Table:** `record_machine_review` (`c9d0e1f2a3b4`), append-only, no uniqueness
   over `(record_type, record_id)` — multiple historical rows are expected and
   "which is live" is a read-time classification (policy §4).
-- **Currency key:** `context_hash` + `context_schema_version` + `prompt_version`
-  + `rubric_versions_json`. `provider`/`model` are deliberately not currency
+- **Currency key:** `context_hash` + `context_schema_version` + the prompt
+  (`prompt_name`, `prompt_version`) + the rubric (`rubric_name`, `rubric_version`). `provider`/`model` are deliberately not currency
   dimensions. Latest selection is `reviewed_at DESC, source_audit_event_id DESC
   NULLS LAST, id DESC NULLS LAST`, backed by matching indexes.
 - **Classifier:** pure; the persisted wrapper only loads/projects rows. current /
@@ -160,8 +159,8 @@ APIs. The OpenAPI golden snapshot includes the run-fake route.
 **Gaps (minor, not blocking):**
 
 - No explicit test asserts the active-recipe constants stay derived from the
-  trust rubric constants (a rubric `version` bump should change
-  `ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS`). Worth a tiny contract test before a
+  trust rubric constants (a rubric `version` change should change
+  the active rubric ref). Worth a tiny contract test before a
   real provider relies on the recipe.
 - No test pins the `record_ref` basis used by the admin trigger
   (`str(record_id)`); see risk R2 — relevant only when public projection lands.
@@ -172,14 +171,15 @@ APIs. The OpenAPI golden snapshot includes the run-fake route.
 
 - **R1 — Active-recipe ownership — RESOLVED.** The recipe now lives in the
   shared `machine_review/recipe.py`
-  (`ACTIVE_MACHINE_REVIEW_PROMPT_VERSION`, `ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS`
-  derived from the trust rubric constants, plus `MachineReviewActiveRecipe`);
+  (`ACTIVE_MACHINE_REVIEW_PROMPT`, a `VersionRef`; the rubric is read from the
+  deployed trust rubrics through `active_rubric(...)`, plus
+  `MachineReviewActiveRecipe`);
   `admin_trigger.py` imports it. A future real provider / background re-review
   job reads the same module, so all consumers agree on prompt/rubric versions
   from one source. Each consumer stores only the *filtered* view -- its own
-  rubric's key (`active_rubric_versions_for_record_type`,
-  `AdvisoryResult.recipe`) -- never the whole table; the unfiltered accessor
-  `get_active_machine_review_recipe()` was removed for that reason (#553).
+  one rubric (`active_rubric_for_record_type`,
+  `active_rubric_for_fragment`, `AdvisoryResult.recipe`) -- never the whole table;
+  a recipe structurally holds a single rubric ref.
 - **R2 — `record_ref` is internal-id based (medium for public projection).**
   Persisted rows' `context_hash` is computed from `record_ref = str(record_id)`.
   A public projection keyed by `public_ref` must either keep the same id-based

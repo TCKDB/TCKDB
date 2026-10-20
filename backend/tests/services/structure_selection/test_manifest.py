@@ -97,7 +97,7 @@ def test_a_calculation_selection_reports_the_minimum_and_its_replayable_manifest
     assert result.manifest["outcome"] == "recorded_minimum"
     assert result.manifest["request"]["intent"] == "recorded_minimum"
     assert result.manifest["versions"] == {
-        "assessment": "1", "normalizer": "1", "decision": "1", "administrative_key": "1", "rules": "1",
+        "assessment": 1, "normalizer": 1, "decision": 1, "administrative_key": 1, "rules": 1,
         "finding_semantics": [1],
     }
     assert result.manifest["read_profile"] == {"profile": "exploratory", "review_floor": None}
@@ -244,12 +244,12 @@ def test_a_forged_input_is_caught_by_its_checksum_and_a_resealed_one_by_the_reco
     ("path", "value", "code"),
     [
         (("manifest_format_version",), 99, "unsupported_manifest_format"),
-        # The previous format (1) is retired with its reader: refused like any format this release does not carry.
-        (("manifest_format_version",), 1, "unsupported_manifest_format"),
-        (("versions", "assessment"), "2", "unsupported_semantic_version"),
-        (("versions", "normalizer"), "9", "unsupported_semantic_version"),
-        (("versions", "decision"), "2", "unsupported_semantic_version"),
-        (("versions", "administrative_key"), "2", "unsupported_semantic_version"),
+        # A format other than the one this release reads (no earlier format is kept): refused.
+        (("manifest_format_version",), 2, "unsupported_manifest_format"),
+        (("versions", "assessment"), 2, "unsupported_semantic_version"),
+        (("versions", "normalizer"), 9, "unsupported_semantic_version"),
+        (("versions", "decision"), 2, "unsupported_semantic_version"),
+        (("versions", "administrative_key"), 2, "unsupported_semantic_version"),
         (("versions", "finding_semantics"), [1, 2], "unsupported_semantic_version"),
     ],
 )

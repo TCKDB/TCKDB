@@ -250,12 +250,12 @@ def test_the_administrative_key_directions_are_the_documented_ones():
     assert admin_key(AdminPolicy.earliest, review=ok, quality_rank=0, created_at=T0, ordinal=1) < admin_key(
         AdminPolicy.earliest, review=ok, quality_rank=0, created_at=later, ordinal=1
     )
-    assert ADMIN_KEY_SPEC["version"] == "1" and "ordinal descending" in ADMIN_KEY_SPEC["default"]
+    assert ADMIN_KEY_SPEC["version"] == 1 and "ordinal descending" in ADMIN_KEY_SPEC["default"]
 
 
 def test_a_decision_echoes_the_administrative_key_and_the_boundary_of_its_coverage():
     d = run([calc("c1")], request()).to_dict()
-    assert d["administrative_key"] == ADMIN_KEY_SPEC and d["decision_version"] == "1"
+    assert d["administrative_key"] == ADMIN_KEY_SPEC and d["decision_version"] == 1
     assert "authorized population" in d["search_completeness"] and "exhaustive" in d["search_completeness"]
 
 
@@ -411,7 +411,7 @@ class Pref(StructureRule):
 
     def __init__(self, rule_id, *, prefer, yield_, status=RULE_ACTIVE, objective=Objective.physical_accuracy,
                  supersedes=(), reference_model=None, sha="a" * 64):
-        self.rule_id, self.version = rule_id, "1"
+        self.rule_id, self.version = rule_id, 1
         self.prefer, self.yield_ = prefer, yield_
         self._status = status
         self.objective = objective

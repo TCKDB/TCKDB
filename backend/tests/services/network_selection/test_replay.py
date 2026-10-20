@@ -181,10 +181,10 @@ def test_the_recorded_outcome_is_compared_as_well_as_the_decision(scenario):
         (("manifest_format_version",), 99),
         # The previous format (2) is retired with its reader: refused like any format this release does not carry.
         (("manifest_format_version",), 2),
-        (("policy", "version"), "999"),
+        (("policy", "version"), 999),
         (("policy", "name"), "kinetics_method_preferred"),
-        (("policy", "assessment_version"), "999"),
-        (("policy", "bounds_version"), "999"),
+        (("policy", "assessment_version"), 999),
+        (("policy", "bounds_version"), 999),
     ],
 )
 def test_an_unavailable_format_policy_assessment_or_bounds_version_refuses_replay(scenario, path, value):

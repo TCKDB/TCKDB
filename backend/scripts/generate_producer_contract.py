@@ -1420,7 +1420,7 @@ to your write:
 | 5xx | The server or a store failed; your request may be fine. | Retry with backoff unless the code is marked as never succeeding on replay. |
 
 Further reading: `backend/docs/specs/ingestion_submission_model.md`
-(submissions), `docs/contribution-bundles/v0-format.md` (bundles),
+(submissions), `docs/contribution-bundles/format.md` (bundles),
 `docs/adr/0008-validation-tiers-definitions-block-expectations-warn.md`
 (why some checks refuse and others only warn),
 `docs/guides/scientific_check_register.md` (the chemistry positions TCKDB

@@ -137,7 +137,7 @@ def _seed(conn) -> dict[str, int]:
             {"rid": record_id, "h": "a" * 64, "s": schema, "p": prompt, "r": json.dumps(rubrics), "m": model, "pr": provider},
         )
 
-    ids["mr_reviewer"] = review("fake_test/machine-review-v2", None, "machine_review_v1", {"computed_thermo_v2": "2"}, 1)
+    ids["mr_reviewer"] = review("fake_test/machine-review", None, "machine_review_v1", {"computed_thermo_v2": "2"}, 1)
     ids["mr_ts"] = review(None, None, "machine_review_v1", {"computed_transition_state_v5": "5"}, 2)
     ids["mr_cp"] = review(
         "external_cp_comparison_v1", "tckdb.scientific_checks", "external_cp_comparison_v1", {"external_cp_comparison_v2": "2"}, 3
@@ -381,7 +381,7 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
                 )
             )
         }
-        assert mr[ids["mr_reviewer"]] == ("fake_test/machine-review-v2", 1, "machine_review", 1, "computed_thermo", 2)
+        assert mr[ids["mr_reviewer"]] == ("fake_test/machine-review", 1, "machine_review", 1, "computed_thermo", 2)
         assert mr[ids["mr_ts"]][2:] == ("machine_review", 1, "computed_transition_state", 5)
         assert mr[ids["mr_cp"]] == ("external_cp_comparison", 1, "external_cp_comparison", 1, "external_cp_comparison", 2)
         assert mr[ids["mr_check"]] == ("thermo_consistency", 1, "thermo_consistency", 1, "thermo_consistency", 1)

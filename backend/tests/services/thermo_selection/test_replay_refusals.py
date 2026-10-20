@@ -48,11 +48,13 @@ def test_a_current_manifest_replays_to_the_decision_it_recorded(name):
 def test_a_manifest_built_now_records_the_structured_block():
     """Built by the code (not read from the committed golden), so dropping the block cannot hide behind a stale file."""
     manifest = _generate()["manifests"]["single"]["manifest"]
-    assert manifest["assessment_semantics"] == {"version": "2", "evidence_rubric": "computed_thermo@2", "source_findings": "1"}
-    assert manifest["policy"]["version"] == POLICY_VERSION == "2"
+    assert manifest["assessment_semantics"] == {
+        "version": 1, "evidence_rubric": {"name": "computed_thermo", "version": 1}, "source_findings": 1,
+    }
+    assert manifest["policy"]["version"] == POLICY_VERSION == 1
 
 
-@pytest.mark.parametrize("block", [{"version": "3"}, {"version": 2}, "two", {}], ids=["future", "wrong_type", "string", "empty"])
+@pytest.mark.parametrize("block", [{"version": 3}, {"version": "1"}, {"version": True}, "two", {}], ids=["future", "string", "bool", "not_a_block", "empty"])
 def test_a_manifest_recording_semantics_this_release_does_not_carry_is_refused(block):
     manifest = _manifest("single")
     manifest["assessment_semantics"] = block
@@ -71,7 +73,7 @@ def test_a_manifest_with_no_assessment_block_is_refused_not_read_as_current():
 def test_only_the_current_manifest_format_is_read():
     """Kills: the previous format (1) registered in MANIFEST_FORMATS."""
     assert {ref.version for ref in MANIFEST_FORMATS.refs()} == {MANIFEST_FORMAT_VERSION}
-    for bad in (1, MANIFEST_FORMAT_VERSION + 1, None):
+    for bad in (0, MANIFEST_FORMAT_VERSION + 1, None):
         manifest = _manifest("single")
         manifest["manifest_format_version"] = bad
         with pytest.raises(ReplayError, match="unknown manifest format"):
@@ -97,8 +99,8 @@ def test_replay_refuses_a_rule_resting_on_different_audited_bytes():
 
 def test_a_rule_version_this_release_does_not_carry_is_refused():
     manifest = _manifest("e1_g4_over_g3")
-    _e1(manifest)["version"] = "0.9.0"
-    with pytest.raises(ReplayError, match="0.9.0"):
+    _e1(manifest)["version"] = 9
+    with pytest.raises(ReplayError, match="not in the running registry"):
         replay_decision(manifest, rules=RULES["e1_g4_over_g3"])
 
 

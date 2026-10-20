@@ -455,11 +455,9 @@ def test_trust_and_assessments_report_the_same_verdict(
             f"assessments.deterministic_trust.grade={deterministic['grade']!r}. "
             f"Two answers to one question."
         )
-        # The fragment's rubric carries an explicit ``_vN`` suffix; the
-        # compact readout reports name and version separately. Same rubric.
-        assert fragment["evidence"]["rubric"] == (
-            f"{deterministic['rubric']}_v{deterministic['rubric_version']}"
-        )
+        # The fragment and the compact readout both report the rubric's name and its version apart. Same rubric.
+        assert fragment["evidence"]["rubric"] == deterministic["rubric"]
+        assert fragment["evidence"]["rubric_version"] == deterministic["rubric_version"]
 
 
 # ---------------------------------------------------------------------------

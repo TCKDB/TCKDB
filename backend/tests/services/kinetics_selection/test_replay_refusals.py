@@ -35,15 +35,15 @@ def test_a_manifest_made_now_carries_the_block_and_replays_to_its_recorded_decis
     manifest = _fresh(db_session, world)
     assert manifest["assessment_semantics"] == {
         "version": ASSESSMENT_SEMANTICS_VERSION,
-        "evidence_rubric": "computed_kinetics@2",
-        "source_findings": "1",
+        "evidence_rubric": {"name": "computed_kinetics", "version": 1},
+        "source_findings": 1,
     }
     assert manifest["policy"] == {"name": "kinetics_method_preferred", "version": POLICY_VERSION}
     assert replay_matches(manifest)
     assert replay_decision(manifest) == manifest["decision"]
 
 
-@pytest.mark.parametrize("block", [{"version": "3"}, {"version": 2}, "two", {}], ids=["future", "wrong_type", "string", "empty"])
+@pytest.mark.parametrize("block", [{"version": 3}, {"version": "1"}, {"version": True}, "two", {}], ids=["future", "string", "bool", "not_a_block", "empty"])
 def test_a_manifest_recording_semantics_this_release_does_not_carry_is_refused(db_session, world, block):
     manifest = _fresh(db_session, world)
     manifest["assessment_semantics"] = block
@@ -63,18 +63,18 @@ def test_only_the_current_manifest_format_is_read(db_session, world):
     """Kills: the previous format (1) registered in MANIFEST_FORMATS."""
     assert {ref.version for ref in MANIFEST_FORMATS.refs()} == {MANIFEST_FORMAT_VERSION}
     manifest = _fresh(db_session, world)
-    for bad in (1, MANIFEST_FORMAT_VERSION + 1, None):
+    for bad in (0, MANIFEST_FORMAT_VERSION + 1, None):
         candidate = {**manifest, "manifest_format_version": bad}
         with pytest.raises(ReplayError, match="unknown manifest format"):
             replay_decision(candidate)
 
 
-@pytest.mark.parametrize("version", ["0.2.0", "0.1.9", "9.9.9"])
+@pytest.mark.parametrize("version", [2, 0, 9, "1", "0.2.0", True, None])
 def test_a_rule_version_this_release_does_not_carry_is_refused_naming_it(db_session, world, version):
-    """Kills: a replay-only rule version (0.2.0 over manifest 0.3.0) being re-registered."""
+    """Kills: a replay-only rule version being re-registered, or a text/bool version read as 1."""
     manifest = _fresh(db_session, world)
     _xyg3_entry(manifest)["version"] = version
-    with pytest.raises(ReplayError, match=version):
+    with pytest.raises(ReplayError, match="not in the running registry"):
         replay_decision(manifest)
 
 

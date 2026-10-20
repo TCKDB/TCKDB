@@ -74,7 +74,7 @@ _CASES = (
     "malformed_payload_parse_warning_only",
 )
 
-# Provider-contract golden cases (machine_review_provider_contract_v2.md). They
+# Provider-contract golden cases (machine_review_provider_contract.md). They
 # run through the SAME pipeline helpers; the adapter requires the schema_version
 # marker in the payload.
 _V2_CASES = (

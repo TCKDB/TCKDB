@@ -359,7 +359,7 @@ submission.status
 RecordReviewStatus
 benchmark_reference
 is_certified
-deterministic evidence (computed_*_v1 outputs, evidence_completeness, checks)
+deterministic evidence (computed_* rubric outputs, evidence_completeness, checks)
 scientific records (species/reaction/kinetics/thermo/... domain tables)
 public trust fragments (trust.*, including trust.machine_review)
 ```

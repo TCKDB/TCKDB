@@ -254,7 +254,7 @@ def test_t7_a_forged_identity_with_a_matching_hash_reads_stale(client, db_sessio
     ts = _ts_statmech(db_session)
     fresh = _evaluate(db_session, ts)
     # Context equals the fresh TS context, so the hash matches; only the identity comparison can catch the label.
-    _append(db_session, fresh, rubric_name="tckdb_reproducibility", rubric_version="v1")
+    _append(db_session, fresh, rubric_name="tckdb_reproducibility", rubric_version=1)
     assert _state(client, ts)["state"] == "stale"
 
 

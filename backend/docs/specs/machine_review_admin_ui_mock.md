@@ -222,7 +222,7 @@ mapping_warnings           list (projection problems: a finding referenced a
                            record identity that could not be matched within
                            this submission)
 parse_warnings             list (provider/payload problems: the reviewer's
-                           output could not be validated as an LLMPrecheckResult)
+                           output could not be validated against the machine-review provider contract)
 unmapped_findings_count    int  (findings that did not apply to any record:
                            submission-scoped or unresolved)
 source_audit_event_ids     list (which submission_audit_event rows contributed)

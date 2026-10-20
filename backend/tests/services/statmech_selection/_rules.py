@@ -41,8 +41,9 @@ class SyntheticRule(StatmechRule):
         compat: Tri = Tri.true,
         digest: str | None = DIGEST,
     ) -> None:
-        self.rule_id = rule_id
-        self.version = "1"
+        # A rule id is a registry name (at least two characters, no version in it); a one-letter test id is doubled.
+        self.rule_id = rule_id if len(rule_id) >= 2 else rule_id * 2
+        self.version = 1
         self._prefer, self._yield = prefer or {}, yield_ or {}
         self.objective = objective
         self.reference_model = reference_model

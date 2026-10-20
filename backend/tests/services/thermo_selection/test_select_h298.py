@@ -89,7 +89,7 @@ def test_an_older_qualifying_g4_is_selected_over_a_newer_qualifying_g3_while_bro
     assert result.outcome is Outcome.policy_preferred
     assert result.selected_ref == old_g4.public_ref
     assert result.decision.fronts == ((old_g4.public_ref,), (new_g3.public_ref,))
-    assert result.decision.edges[0].rule_id == "E1" and result.decision.edges[0].rule_version == "1.0.0"
+    assert result.decision.edges[0].rule_id == "E1" and result.decision.edges[0].rule_version == 1
     assert result.decision.administrative_order[0] == new_g3.public_ref  # administrative order alone says G3
 
 
@@ -370,10 +370,10 @@ def test_the_decision_manifest_replays_without_the_database(db_session, methane)
 def test_the_manifest_records_inputs_rules_comparisons_and_order_with_public_refs_only(db_session, methane):
     result = _scenario(db_session, methane)
     m = result.manifest
-    assert m["policy"] == {"name": "h298_method_preferred", "version": "2"}
+    assert m["policy"] == {"name": "h298_method_preferred", "version": 1}
     assert m["request"]["administrative_policy"] == "latest" and m["request"]["quantity"] == "formation_enthalpy_298k"
-    assert m["decision"]["rules"][0]["rule_id"] == "E1" and m["decision"]["rules"][0]["version"] == "1.0.0"
-    assert m["decision"]["rules"][0]["manifest"]["manifest_version"] == "1.0.0"
+    assert m["decision"]["rules"][0]["rule_id"] == "E1" and m["decision"]["rules"][0]["version"] == 1
+    assert m["decision"]["rules"][0]["manifest"]["manifest_version"] == 1
     assert m["decision"]["edges"] and m["decision"]["fronts"] and m["decision"]["administrative_order"]
     assert m["decision"]["rule_matches"][0]["candidates"]
     assert m["subject"]["species_entry_ref"] == methane.public_ref
@@ -432,10 +432,10 @@ def test_swapped_timestamps_reorder_within_a_front_but_cannot_move_a_record_acro
 def test_replay_refuses_a_rule_version_the_registry_does_not_carry(db_session, methane):
     manifest = json.loads(json.dumps(_scenario(db_session, methane).manifest))
     newer = E1Rule()
-    newer.version = "2.0.0"
-    with pytest.raises(ReplayError, match="E1 version 1.0.0"):
+    newer.version = 2
+    with pytest.raises(ReplayError, match="E1 version 1 is not in the running registry"):
         replay_decision(manifest, rules=(newer,))
-    manifest["policy"]["version"] = "0"
+    manifest["policy"]["version"] = 0
     with pytest.raises(ReplayError, match="policy"):
         replay_decision(manifest)
 

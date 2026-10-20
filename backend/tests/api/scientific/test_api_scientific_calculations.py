@@ -469,8 +469,8 @@ def test_detail_include_trust_returns_fragment(client, db_session):
     }
     evidence = trust["evidence"]
     assert evidence["record_type"] == "calculation"
-    assert evidence["rubric"] == "computed_calculation_v2"
-    assert evidence["rubric_version"] == 2
+    assert evidence["rubric"] == "computed_calculation"
+    assert evidence["rubric_version"] == 1
     assert "evidence_completeness" in evidence
     assert evidence["checks"], "the calculation rubric ran, so checks cannot be empty"
     assert set(evidence["checks"].values()) <= LEGAL_OUTCOMES

@@ -1307,6 +1307,7 @@ Table calc_hessian {
   natoms int [not null]
   lower_triangle_hartree_bohr2 array [not null]
   source HessianSource [not null]
+  parser_name text
   parser_version text
   note text
   created_at timestamp [not null, default: 'now']
@@ -1609,6 +1610,7 @@ Table calculation {
   execution_environment_manifest_id bigint [ref: > execution_environment_manifest.id]
   conformer_observation_id bigint [ref: > conformer_observation.id]
   parameters_json jsonb
+  parameters_parser_name text
   parameters_parser_version text
   parameters_extracted_at timestamp
   software_reconciliation_status SoftwareReconciliationStatus
@@ -1781,6 +1783,7 @@ Table calculation_parameter {
   unit text
   parameter_index int
   source ParameterSource [not null, default: 'upload']
+  parser_name text
   parser_version text
   created_at timestamp [not null, default: 'now']
 
@@ -2104,7 +2107,8 @@ Table energy_correction_scheme_component_param {
 
 Table execution_environment_manifest {
   id bigint [pk, not null]
-  schema_version string [not null]
+  schema_name string [not null]
+  schema_version int [not null]
   content_digest string [not null]
   runtime_kind string [not null]
   runtime_locator text [not null]
@@ -2161,6 +2165,7 @@ Table external_source_record {
   schema_valid boolean
   parser_name text [not null]
   parser_version text [not null]
+  mapping_name text [not null]
   mapping_version text [not null]
   mapping_report_json jsonb
   created_at timestamp [not null, default: 'now']
@@ -2697,6 +2702,7 @@ Table molecular_property_observation {
   external_source_record_key text
   external_source_page_kind text
   external_source_content_sha256 text
+  external_source_parser_name text
   external_source_parser_version text
   external_source_record_id bigint [ref: > external_source_record.id]
   reference_label text
@@ -3250,9 +3256,11 @@ Table record_machine_review {
   model string
   provider string
   context_hash string [not null]
-  context_schema_version string [not null]
-  prompt_version string [not null]
-  rubric_versions_json jsonb [not null]
+  context_schema_version int [not null]
+  prompt_name string [not null]
+  prompt_version int [not null]
+  rubric_name string [not null]
+  rubric_version int [not null]
   source_submission_id bigint [ref: > submission.id]
   source_audit_event_id bigint [ref: > submission_audit_event.id]
   reviewed_at timestamp [not null]
@@ -3269,6 +3277,7 @@ Table record_machine_review {
   checks {
     `char_length(context_hash) = 64` [name: 'ck_record_machine_review_context_hash_len']
     `jsonb_typeof(findings_json) = 'array'` [name: 'ck_record_machine_review_findings_json_is_array']
+    `context_schema_version >= 1 AND prompt_version >= 1 AND rubric_version >= 1` [name: 'ck_record_machine_review_versions_positive']
   }
 
   Note: 'One persisted machine-review pass over one scientific record (append-only).'
@@ -3280,7 +3289,7 @@ Table record_reproducibility_assessment {
   record_id bigint [not null]
   grade ReproducibilityGrade [not null]
   rubric_name string [not null]
-  rubric_version string [not null]
+  rubric_version int [not null]
   context_hash string [not null]
   context_json jsonb [not null]
   passed_json jsonb [not null, default: '[]'::jsonb']
@@ -3387,14 +3396,17 @@ Table release_artifact {
 Table release_manifest {
   id bigint [pk, not null]
   dataset_release_id bigint [not null, ref: > dataset_release.id]
-  manifest_schema string [not null]
+  manifest_format_name string [not null]
+  manifest_format_version int [not null]
   profile ReadProfile [not null, default: 'curated']
   alembic_revision string [not null]
   backend_version string [not null]
   schemas_package_version string [not null]
-  review_policy_version string [not null]
+  review_policy_name string [not null]
+  review_policy_version int [not null]
   curation_policy_id bigint [not null, ref: > curation_policy.id]
-  recovery_archive_schema string [not null]
+  recovery_archive_format_name string [not null]
+  recovery_archive_format_version int [not null]
   release_public_ref string [not null]
   release_published_at timestamp
   release_tag string [not null]

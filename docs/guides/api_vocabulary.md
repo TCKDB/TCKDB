@@ -275,7 +275,7 @@ A check name is an assertion, so read it together with its value: `"irc_evidence
 
 `kind` decides what a failure costs: **required** — failing it stops the record reaching `well_supported`, however good the ratio is; **optional** — contributes to completeness; its absence blocks no badge; **warning** — informational; carries zero weight. `weight` is that check's share of the completeness ratio.
 
-Which rubric applies is decided by the kind of record, and for a statmech record by what owns it (`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): `computed_calculation` (v2), `computed_kinetics` (v2), `computed_statmech` (v2), `computed_thermo` (v2), `computed_transition_state` (v5), `computed_transport` (v2), `computed_ts_statmech` (v1).
+Which rubric applies is decided by the kind of record, and for a statmech record by what owns it (`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): `computed_calculation` (v1), `computed_kinetics` (v1), `computed_statmech` (v1), `computed_thermo` (v1), `computed_transition_state` (v1), `computed_transport` (v1), `computed_ts_statmech` (v1).
 
 | Check | Rubric | Kind | Weight | What it asks |
 | --- | --- | --- | --- | --- |

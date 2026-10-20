@@ -25,10 +25,10 @@ GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/full?include=trust
 The composite reaction-entry `/full` read does not own its own rubric.
 When `include=trust` is requested, it propagates trust fragments down to
 the embedded records that already have a real rubric: embedded kinetics
-records carry `computed_kinetics_v1`, embedded calculation summaries
-under the `calculations` section carry `computed_calculation_v1`, and
+records carry `computed_kinetics`, embedded calculation summaries
+under the `calculations` section carry `computed_calculation`, and
 embedded transition-state-entry records under the `transition_states`
-section carry `computed_transition_state_v1`. No top-level
+section carry `computed_transition_state`. No top-level
 reaction-entry trust is emitted, and no top-level transition-state
 *concept* trust is emitted (no aggregation rubric exists yet).
 
@@ -36,16 +36,18 @@ Current implemented deterministic trust rubrics:
 
 | Public rubric | Applies to |
 | --- | --- |
-| `computed_calculation_v1` | Calculation detail reads |
-| `computed_kinetics_v1` | Reaction-entry kinetics reads |
-| `computed_thermo_v1` | Species-entry thermo reads |
-| `computed_statmech_v2` | Statmech detail, search and species-entry reads of a species-owned record |
-| `computed_ts_statmech_v1` | The same reads, for a transition-state-owned record (owner-scoped) |
-| `computed_transport_v1` | Transport detail reads and species-entry transport reads |
-| `computed_transition_state_v1` | Standalone transition-state-entry detail reads |
+| `computed_calculation` | Calculation detail reads |
+| `computed_kinetics` | Reaction-entry kinetics reads |
+| `computed_thermo` | Species-entry thermo reads |
+| `computed_statmech` | Statmech detail, search and species-entry reads of a species-owned record |
+| `computed_ts_statmech` | The same reads, for a transition-state-owned record (owner-scoped) |
+| `computed_transport` | Transport detail reads and species-entry transport reads |
+| `computed_transition_state` | Standalone transition-state-entry detail reads |
 
-Public rubric names are versioned. Clients should treat the full rubric string
-as the stable public identifier for the scoring contract used by that response.
+`evidence.rubric` is the bare rubric name and `evidence.rubric_version` is a separate
+integer. Clients should treat the pair (name, version) as the stable public
+identifier for the scoring contract used by that response. Every rubric is currently
+at version 1.
 
 ## Trust Include Behavior
 
@@ -106,7 +108,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | --- | --- |
 | Path | `GET /api/v1/scientific/calculations/{calculation_ref_or_id}` |
 | Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
-| Rubric used | `computed_calculation_v1` |
+| Rubric used | `computed_calculation` |
 | Default behavior | Without `include=trust`, the response omits `record.trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | `include=all` does not include trust. Calculation trust evaluates deterministic evidence completeness for the calculation record and attached provenance, not scientific correctness. |
@@ -117,7 +119,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | --- | --- |
 | Path | `GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics` |
 | Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
-| Rubric used | `computed_kinetics_v1` |
+| Rubric used | `computed_kinetics` |
 | Default behavior | Without `include=trust`, each kinetics record omits `trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | Trust is computed for returned kinetics records only. `GET`/`POST /scientific/kinetics/search` also accept `include=trust`, at `records[*].kinetics.trust` — the field is one level down, inside the `kinetics` wrapper. `include=all` does not expand to trust on either surface. |
@@ -128,7 +130,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | --- | --- |
 | Path | `GET /api/v1/scientific/species-entries/{species_entry_id}/thermo` |
 | Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
-| Rubric used | `computed_thermo_v1` |
+| Rubric used | `computed_thermo` |
 | Default behavior | Without `include=trust`, each thermo record omits `trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | Trust is computed for returned thermo records only. `GET`/`POST /scientific/thermo/search` also accept `include=trust`, at `records[*].thermo.trust` — the field is one level down, inside the `thermo` wrapper. `include=all` does not expand to trust on either surface. |
@@ -139,7 +141,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | --- | --- |
 | Path | `GET /api/v1/scientific/statmech/{statmech_ref_or_id}` |
 | Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
-| Rubric used | `computed_statmech_v2` for a species-owned record, `computed_ts_statmech_v1` for a transition-state-owned one |
+| Rubric used | `computed_statmech` for a species-owned record, `computed_ts_statmech` for a transition-state-owned one |
 | Default behavior | Without `include=trust`, the response omits `record.trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | `include=all` does not include trust. `GET`/`POST /scientific/statmech/search` also accept `include=trust`, at `records[*].trust`; the search path loads the 19-entry evidence graph once per page. |
@@ -150,7 +152,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | --- | --- |
 | Path | `GET /api/v1/scientific/transport/{transport_ref_or_id}` |
 | Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
-| Rubric used | `computed_transport_v1` |
+| Rubric used | `computed_transport` |
 | Default behavior | Without `include=trust`, the response omits `record.trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | `include=all` does not include trust. `GET`/`POST /scientific/transport/search` also accept `include=trust`, at `records[*].trust`; the search path loads the 9-entry evidence graph once per page. |
@@ -161,7 +163,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | --- | --- |
 | Path | `GET /api/v1/scientific/species-entries/{species_entry_id}/statmech` |
 | Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
-| Rubric used | `computed_statmech_v2` (per returned record; the records are species-owned) |
+| Rubric used | `computed_statmech` (per returned record; the records are species-owned) |
 | Default behavior | Without `include=trust`, each statmech record omits `trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | `include=all` does not include trust. A species-entry-scoped subresource read (mirrors species-entry thermo), not a broad search; it reuses the statmech record projection and deterministic ordering. `/scientific/statmech/search` exposes trust under the same token. |
@@ -172,7 +174,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | --- | --- |
 | Path | `GET /api/v1/scientific/species-entries/{species_entry_id}/transport` |
 | Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
-| Rubric used | `computed_transport_v1` (per returned record) |
+| Rubric used | `computed_transport` (per returned record) |
 | Default behavior | Without `include=trust`, each transport record omits `trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | `include=all` does not include trust. A species-entry-scoped subresource read (mirrors species-entry thermo), not a broad search; it reuses the transport record projection and deterministic ordering. `/scientific/transport/search` exposes trust under the same token. |
@@ -183,10 +185,10 @@ This is true even when a submission has AI Review Assistant audit events.
 | --- | --- |
 | Path | `GET /api/v1/scientific/transition-state-entries/{transition_state_entry_ref_or_id}` |
 | Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
-| Rubric used | `computed_transition_state_v1` |
+| Rubric used | `computed_transition_state` |
 | Default behavior | Without `include=trust`, the response omits `record.trust` and is byte-identical to its pre-trust shape. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
-| Notes/limitations | Current rubric `computed_transition_state_v5` (the Rubric row above is the v1 history): the fragment is a `TransitionStateTrustFragment`, the shared fragment plus `structure_assessment` (see `transition_state_trust_rubric.md`, version 5). The assessment runs on this single-entry read only; `/transition-states/search`, the sibling `entries` and the `/full` document carry `structure_assessment.status = "not_assessed_on_lists"` and read the declared curvature pins in one grouped statement, so the badge counts equal the entry page's; `saddle_point.basis` is `declared_curvature_witness` when a declaration pins the result it describes. `include=all` does not include trust. Trust is wired to the two **entry-grained** surfaces: this one and `GET`/`POST /scientific/transition-states/search`, where it sits at `records[*].trust`. The parent **TS-concept** detail (`/scientific/transition-states/{ref}`, including its embedded `entries`) still rejects the token with 422 `unknown_include_token` and never populates `trust` — a concept is a collection of entries evaluated at different levels of theory, and one verdict for the collection would be an aggregation rather than a reading. The search path loads the 23-entry evidence graph once per page, never once per record. Frequency policy is status-aware: `optimized`/`validated` TS entries with `n_imag` in `{0, >1}` hard-fail; `guess`-stage entries with the same signal only lower evidence completeness. IRC and path-search evidence are additive (missing is never a hard fail in v1). TS-entry trust is **also** propagated into the composite `/reaction-entries/{id}/full` read under `transition_states[*].trust` (same `computed_transition_state_v1` fragment) — see the Reaction-Entry Full row below. |
+| Notes/limitations | The fragment is a `TransitionStateTrustFragment`, the shared fragment plus `structure_assessment` (see `transition_state_trust_rubric.md`). The assessment runs on this single-entry read only; `/transition-states/search`, the sibling `entries` and the `/full` document carry `structure_assessment.status = "not_assessed_on_lists"` and read the declared curvature pins in one grouped statement, so the badge counts equal the entry page's; `saddle_point.basis` is `declared_curvature_witness` when a declaration pins the result it describes. `include=all` does not include trust. Trust is wired to the two **entry-grained** surfaces: this one and `GET`/`POST /scientific/transition-states/search`, where it sits at `records[*].trust`. The parent **TS-concept** detail (`/scientific/transition-states/{ref}`, including its embedded `entries`) still rejects the token with 422 `unknown_include_token` and never populates `trust` — a concept is a collection of entries evaluated at different levels of theory, and one verdict for the collection would be an aggregation rather than a reading. The search path loads the 23-entry evidence graph once per page, never once per record. Frequency policy is status-aware: `optimized`/`validated` TS entries with `n_imag` in `{0, >1}` hard-fail; `guess`-stage entries with the same signal only lower evidence completeness. IRC and path-search evidence are additive (missing is never a hard fail in v1). TS-entry trust is **also** propagated into the composite `/reaction-entries/{id}/full` read under `transition_states[*].trust` (same `computed_transition_state` fragment) — see the Reaction-Entry Full row below. |
 
 ### Reaction-Entry Full (composite)
 
@@ -194,7 +196,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | --- | --- |
 | Path | `GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/full` |
 | Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` and section tokens like `?include=calculations,trust` |
-| Rubric used | Embedded kinetics records carry `computed_kinetics_v1`; embedded calculation summaries carry `computed_calculation_v1`; embedded transition-state-entry records (`transition_states[*]`) carry `computed_transition_state_v1`. No top-level reaction-entry rubric exists, and no top-level transition-state *concept* rubric exists. |
+| Rubric used | Embedded kinetics records carry `computed_kinetics`; embedded calculation summaries carry `computed_calculation`; embedded transition-state-entry records (`transition_states[*]`) carry `computed_transition_state`. No top-level reaction-entry rubric exists, and no top-level transition-state *concept* rubric exists. |
 | Default behavior | Without `include=trust`, every embedded kinetics record, calculation summary, and transition-state-entry record omits `trust`. The default response shape is unchanged from the pre-propagation behavior. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. The policy applies recursively to every embedded trust block. |
 | Notes/limitations | `include=all` does not include trust. Trust is only attached to embedded records that already have a real deterministic rubric (kinetics, calculations, transition-state entries); conformer, path-search, IRC, scan, artifact, and review-records sections do not gain trust here, and neither does the top-level reaction entry. `trust.llm_precheck` on every embedded trust block ships disabled (`{enabled:false, label:"not_run"}`). |
@@ -212,7 +214,7 @@ surfaces. Values vary by record and rubric, but the shape is:
     "evidence": {
       "record_type": "kinetics",
       "record_id": null,
-      "rubric": "computed_kinetics_v1",
+      "rubric": "computed_kinetics",
       "rubric_version": 1,
       "label": "well_supported",
       "checks": {},
@@ -233,9 +235,8 @@ surfaces. Values vary by record and rubric, but the shape is:
 
 `record_id` is shown as `null` here to illustrate the hidden-default public
 contract. In actual default responses the field may be omitted; it is present
-only when internal ids are requested and allowed. Public rubric names carry the
-version suffix, such as `_v1`; `rubric_version` is the numeric version field
-currently returned by the backend.
+only when internal ids are requested and allowed. `rubric` is the bare rubric name, and `rubric_version`
+is its integer version, returned as a separate field.
 
 ## AI Review Assistant Admin Read Surfaces
 

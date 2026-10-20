@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.130.0 - 2026-10-20
+
+**Breaking, once: every stored or wire string that fused a name with a version is now a name beside an integer version, and every TCKDB-owned
+version restarts at 1 (versioning PR-4).** Versions that belong to somebody else (an ESS release, a producer's own parser, NIST's ThermoML) are
+untouched and stay text.
+
+What changes for a producer:
+
+- `ExecutionEnvironmentManifestPayload` (`runtime`/`software_release`/`executable`/`closure` unchanged): `schema_version: "tckdb.execution-environment.v1"`
+  becomes two fields, `schema_name: "tckdb.execution-environment"` and `schema_version: 1` (an integer). The manifest's `content_digest` changes with it
+  (the canonical payload carries both fields); the server recomputed the stored digests.
+- Parser stamps: `parameters_parser_version: str` on a calculation becomes `parameters_parser: {name, version}` (`ParserStamp`, both text, the version
+  exactly as the parser's owner spells it), and a Hessian's `parser_version: str` becomes `parser: {name, version}`.
+- `bundle_version` on a contribution bundle is the integer `1` (it was the string `"0.1"`); `bundle_format` is unchanged.
+- New `tckdb_schemas.fragments.version.ParserStamp`, beside `VersionRef`.
+
+Reads gain no new endpoints. `rubric_version` is an integer wherever it appears (`DeterministicTrustSummary`, the reproducibility summary), the trust
+`evidence.rubric` is the bare rubric name, and document headers (`format: {name, version}`) replace the `schema` strings of the release, archive,
+export, ML-export and deposit documents; see the backend CHANGELOG for the full map.
+
 ## 0.129.0 - 2026-10-20
 
 The contribution bundle surface is now named `ContributionBundle` in the shipped producer contract: the generated JSON Schema file is

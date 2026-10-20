@@ -102,7 +102,7 @@ and then the result, and refuses any difference. The digests are checksums, not 
 snapshot of the current data, not a retrieval of a stored answer. `tckdb_client` has no replay function for this
 manifest (nor for structure manifests).
 
-**Versions.** `versions.relative_energy` is `"3"`, and only the running version is read: a manifest of any other version
+**Versions.** `versions.relative_energy` is the integer `1`, and only the running version is read: a manifest of any other version
 is refused with `unsupported_semantic_version`, whatever fields it carries. A manifest that claims the current version and
 lacks a field (for instance `value_geometry_ref` on a member) is refused with `result_mismatch`, as is any other difference
 between the recorded and the recomputed result. A comparison manifest is made, and replayed, under the running version only,

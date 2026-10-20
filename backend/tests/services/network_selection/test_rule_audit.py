@@ -52,7 +52,7 @@ def raw_manifest() -> dict:
 def test_the_shipped_manifest_is_exactly_the_pinned_bytes_and_loads():
     assert hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest() == NETWORK_RULE_MANIFEST_SHA256
     manifest = manifest_module.load_network_rule_manifest(expected_sha256=NETWORK_RULE_MANIFEST_SHA256)
-    assert manifest.sha256 == NETWORK_RULE_MANIFEST_SHA256 and manifest.version == "0.2.0"
+    assert manifest.sha256 == NETWORK_RULE_MANIFEST_SHA256 and manifest.version == 1
     assert {c.rule_id for c in manifest.candidates} >= set(COUNCIL_EXAMPLES)
     # No shipped entry is approved, and none is activatable: that is the owner's signed act, never ours.
     assert [c.activatable for c in manifest.candidates] == [False] * len(manifest.candidates)
@@ -356,7 +356,7 @@ def test_the_jasper_miller_entries_are_anchored_to_the_pinned_full_article():
     assert source["sha256"] == JASPER_MILLER_SHA256 and source["used_for"] and source["open_access"] is False
     for rule_id in ("N-JM-CH4-TRANSFER", "N-JM-CH4-RATE"):
         rule = manifest.candidate(rule_id)
-        assert rule.source_ids == ("JASPER_MILLER_2011",) and rule.version == "0.2.0"
+        assert rule.source_ids == ("JASPER_MILLER_2011",) and rule.version == 1
         assert rule.anchors and all(a["claim"] and a["where"] for a in rule.anchors)
         assert all("p. 64" in a["where"] or "Fig" in a["where"] or "Table" in a["where"] for a in rule.anchors)
     transfer = " ".join(a["where"] + a["claim"] for a in manifest.candidate("N-JM-CH4-TRANSFER").anchors)
@@ -367,10 +367,10 @@ def test_the_jasper_miller_entries_are_anchored_to_the_pinned_full_article():
     assert manifest.candidate("N-JM-CH4-RATE").objective.value == "physical_accuracy"
 
 
-def test_the_manifest_history_ends_at_the_shipped_version():
+def test_the_manifest_is_named_and_versioned_with_an_integer_and_keeps_no_history():
     raw = raw_manifest()
-    assert raw["history"][-1]["version"] == raw["manifest_version"]
-    assert [h["version"] for h in raw["history"]] == ["0.1.0", "0.2.0"]
+    assert raw["name"] == "network_rule_candidates" and raw["version"] == 1
+    assert "manifest_version" not in raw and "history" not in raw
 
 
 def test_an_edited_number_in_the_jasper_miller_anchors_makes_the_pin_refuse():
