@@ -1,4 +1,4 @@
-# Candidate pressure-dependent network preference rules, audit manifest version 0.2.0 (2026-10-05).
+# Candidate pressure-dependent network preference rules, audit manifest (2026-10-05).
 #
 # NOTHING HERE IS ACTIVE. Every entry has activation_approved: false, no curator acceptance and a list of
 # blockers, and the registry (app.services.network_selection.rules) loads this file only against its pinned
@@ -7,36 +7,18 @@
 # an entry, a blocker or a source list is a new manifest version, a new pin and a new rule version, never an
 # in-place edit.
 #
-# Provenance of what follows. These are the council examples of the Network-v1 proposal (council rationale of
+# Provenance of what follows. These are the council examples of the first network-selection proposal (council rationale of
 # 2026-10-04, section 3). The Amedro entry was audited against the open-access article and its supplement, both
 # pinned below by SHA-256 (the two numbers it quotes are anchored to page and figure). The Jasper/Miller entries
-# (0.2.0) were audited against the full article, supplied by the owner, pinned below by SHA-256 and anchored to
+# were audited against the full article, supplied by the owner, pinned below by SHA-256 and anchored to
 # journal page, table and figure; the article is licensed, is not in this repository and must never be committed.
 # Its Supporting Information was not supplied. Johnson/Green was seen only through indexed passages and its entry
 # says so. Each entry says what is missing, and `evidence_needed`
 # lists exactly which paper, table or data would have to be supplied or authorised before any of them could be
 # considered.
-manifest_version: 0.2.0
+name: network_rule_candidates
+version: 1
 manifest_date: '2026-10-05'
-history:
-- version: 0.1.0
-  date: '2026-10-04'
-  change: Registered the council examples inactive (#708). Jasper/Miller from the abstract only.
-- version: 0.2.0
-  date: '2026-10-05'
-  change: >-
-    Audited Jasper/Miller against the owner-supplied full article (pinned source JASPER_MILLER_2011) and anchored
-    both N-JM rules to page, table and figure (both rules now 0.2.0). Corrected the abstract-level text: direct
-    dynamics was run for four baths (He, Ne, H2, CH4), not three; the reference is a validated low-level surface
-    (SAC for H2), not an exact one; the Lennard-Jones comparison is He only; the intramolecular-potential
-    insensitivity is He and Ne only; the diatomic uncertainty is stated as 20-40 %, 10-50 % and up to 50 % in
-    different places; the experimental comparison covers four baths (He, Ar, Kr, CH4; the Kr data are plotted
-    against the Ar prediction, Fig. 12a) with no error metric and ranks no competing solves. The exp/6-over-LJ
-    preference is He only (LJ was not considered for any other bath, p. 6444) and covers 300-2000 K; for Ne exp/6
-    reproduces MP2 direct dynamics with no competitor tested. The Supporting Information, as the article
-    describes it, holds fitted V_TM parameters and approach-geometry and potential-comparison figures, not
-    transfer averages, so the earlier expectation of tabulated averages there was wrong. Decisions exported under
-    the 0.1.0 pin do not replay against 0.2.0, by design. All rules remain inactive.
 audit_status: inactive_registered_with_missing_prerequisites
 sources:
 - id: AMEDRO_2020
@@ -66,7 +48,7 @@ sources:
 rules:
 
 - rule_id: N-AMEDRO-HE-FC
-  version: 0.1.0
+  version: 1
   objective: representation_fidelity
   objective_key: named_dataset_reproduction_falloff_broadening
   observable: rate_coefficient
@@ -122,7 +104,7 @@ rules:
     items: whether a Troe-falloff comparison is in scope for network selection at all
 
 - rule_id: N-JG-REDUCTION-FIDELITY
-  version: 0.1.0
+  version: 1
   objective: model_fidelity
   objective_key: reduction_fidelity_to_energy_grained_flux
   observable: rate_coefficient
@@ -172,7 +154,7 @@ rules:
     items: whether to add simulation_least_squares to the reduction_method vocabulary, and a time-regime mapping
 
 - rule_id: N-JM-CH4-TRANSFER
-  version: 0.2.0
+  version: 1
   objective: model_fidelity
   objective_key: energy_transfer_fidelity_to_direct_dynamics
   observable: rate_coefficient
@@ -280,7 +262,7 @@ rules:
     items: a typed energy-transfer treatment declaration (a new protocol vocabulary entry)
 
 - rule_id: N-JM-CH4-RATE
-  version: 0.2.0
+  version: 1
   objective: physical_accuracy
   objective_key: ch4_rate_agreement_with_experiment
   observable: rate_coefficient
@@ -355,7 +337,7 @@ rules:
     items: the verification procedure that would turn a declared validation entry into a verified one
 
 - rule_id: N-ME-CONVERGENCE
-  version: 0.1.0
+  version: 1
   objective: model_fidelity
   objective_key: same_model_numerical_convergence
   observable: rate_coefficient
@@ -397,7 +379,7 @@ rules:
     items: the grain, energy-ceiling and reduction sweeps with their error metric over the stated domain
 
 - rule_id: N-REP-HELDOUT
-  version: 0.1.0
+  version: 1
   objective: representation_fidelity
   objective_key: heldout_representation_validation
   observable: rate_coefficient

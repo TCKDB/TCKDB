@@ -245,8 +245,8 @@ class NetworkSelectionReview(BaseModel):
 
 class NetworkSelectionPolicyInfo(BaseModel):
     name: str
-    version: str
-    bounds_version: str
+    version: int
+    bounds_version: int
     rules_applied: bool = Field(
         description="False under an administrative policy: no rule was consulted, only the administrative order."
     )

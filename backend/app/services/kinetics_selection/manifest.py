@@ -22,10 +22,11 @@ from typing import Any
 
 from app.services.kinetics_selection.engine import KineticsDecision, build_candidates, decide
 from app.services.kinetics_selection.models import (
+    ASSESSMENT_SEMANTICS,
+    ASSESSMENT_SEMANTICS_NAME,
     ASSESSMENT_SEMANTICS_VERSION,
     POLICY_NAME,
     POLICY_VERSION,
-    SUPPORTED_ASSESSMENT_SEMANTICS,
     KineticsAssessmentResult,
     KineticsRequest,
     KineticsSubject,
@@ -33,6 +34,7 @@ from app.services.kinetics_selection.models import (
 )
 from app.services.kinetics_selection.rules import KineticsRule, default_rules
 from app.services.manifest_formats import new_format_registry, read_manifest_format
+from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
     check_supported,
@@ -42,7 +44,7 @@ from app.services.trust.rubrics import COMPUTED_KINETICS
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused.
-MANIFEST_FORMAT_VERSION = 2
+MANIFEST_FORMAT_VERSION = 1
 MANIFEST_FORMAT_NAME = "kinetics_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "kinetics_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -62,7 +64,7 @@ def build_manifest(result: KineticsAssessmentResult, decision: KineticsDecision)
         "policy": {"name": POLICY_NAME, "version": POLICY_VERSION},
         "assessment_semantics": semantics_block(
             version=ASSESSMENT_SEMANTICS_VERSION,
-            evidence_rubric=f"{COMPUTED_KINETICS.name}@{COMPUTED_KINETICS.version}",
+            evidence_rubric=COMPUTED_KINETICS.ref,
         ),
         "request": {
             **result.request.to_dict(),
@@ -99,14 +101,11 @@ def build_manifest(result: KineticsAssessmentResult, decision: KineticsDecision)
 
 
 def _rules_for(manifest: dict[str, Any], rules: Sequence[KineticsRule] | None) -> tuple[KineticsRule, ...]:
-    registry = tuple(default_rules() if rules is None else rules)
-    available = {(r.rule_id, r.version): r for r in registry}
+    registry = rules_registry("kinetics_selection_rules", default_rules() if rules is None else rules)
     used: list[KineticsRule] = []
     for entry in manifest["decision"]["rules"]:
         key = (entry["rule_id"], entry["version"])
-        if key not in available:
-            raise ReplayError(f"rule {key[0]} version {key[1]} is not in the running registry")
-        rule = available[key]
+        rule = rule_recorded_in(registry, entry, ReplayError)
         described = rule.describe()
         if described["status"] != entry["status"]:
             raise ReplayError(
@@ -130,10 +129,10 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] |
     read_manifest_format(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME, manifest, ReplayError)
     if manifest["policy"] != {"name": POLICY_NAME, "version": POLICY_VERSION}:
         raise ReplayError(
-            f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} v{POLICY_VERSION}"
+            f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} version {POLICY_VERSION}"
         )
     try:
-        check_supported(manifest, supported=SUPPORTED_ASSESSMENT_SEMANTICS)
+        check_supported(manifest, semantics=ASSESSMENT_SEMANTICS, name=ASSESSMENT_SEMANTICS_NAME)
     except UnsupportedAssessmentSemantics as exc:
         raise ReplayError(str(exc)) from exc
     used = _rules_for(manifest, rules)

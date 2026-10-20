@@ -1783,14 +1783,15 @@ def _check_transport_not_rejected_or_deprecated_if_applicable(
 # one-atom calculation): trust is computed on read, and the machine-review
 # context_hash already folds in the per-check sets (context_adapter.py); same
 # ruling as #393, #463, #78.
-# Trust contract version 2 (2026-10), applying to the five computed rubrics below at version 2 and to the transition
-# state rubric at version 3: an automated geometry-validation ``fail`` is advisory (a ``warning`` outcome on the geometry
-# checks), no longer a hard fail, and the "non hard failed evidence" checks mirror the narrowed hard fail (rejected quality
-# only). A machine review stamped with the previous version is genuinely stale, which is what the bump is for. Never edit
-# a stored review; see ``backend/docs/specs/automated_trust_layer.md``.
+# Every rubric is at version 1, the release baseline: the numbering that preceded it (computed rubrics at 2, the
+# transition-state rubric at 5) was discarded with the readers of those versions. Contract of the baseline: an automated
+# geometry-validation ``fail`` is advisory (a ``warning`` outcome on the geometry checks), no longer a hard fail, and
+# the "non hard failed evidence" checks mirror the narrowed hard fail (rejected quality only). A machine review stamped
+# under a different version of a rubric reads stale and is re-planned, never rewritten; see
+# ``backend/docs/specs/automated_trust_layer.md``.
 COMPUTED_CALCULATION: EvidenceRubric = EvidenceRubric(
     name="computed_calculation",
-    version=2,
+    version=1,
     record_type="calculation",
     checks=(
         EvidenceCheckSpec(
@@ -1893,7 +1894,7 @@ COMPUTED_CALCULATION: EvidenceRubric = EvidenceRubric(
 
 COMPUTED_KINETICS: EvidenceRubric = EvidenceRubric(
     name="computed_kinetics",
-    version=2,
+    version=1,
     record_type="kinetics",
     checks=(
         EvidenceCheckSpec(
@@ -2042,7 +2043,7 @@ COMPUTED_KINETICS: EvidenceRubric = EvidenceRubric(
 
 COMPUTED_THERMO: EvidenceRubric = EvidenceRubric(
     name="computed_thermo",
-    version=2,
+    version=1,
     record_type="thermo",
     checks=(
         EvidenceCheckSpec(
@@ -2222,7 +2223,7 @@ COMPUTED_THERMO: EvidenceRubric = EvidenceRubric(
 
 COMPUTED_STATMECH: EvidenceRubric = EvidenceRubric(
     name="computed_statmech",
-    version=2,
+    version=1,
     record_type="statmech",
     checks=(
         EvidenceCheckSpec(
@@ -2387,7 +2388,7 @@ COMPUTED_STATMECH: EvidenceRubric = EvidenceRubric(
 
 COMPUTED_TRANSPORT: EvidenceRubric = EvidenceRubric(
     name="computed_transport",
-    version=2,
+    version=1,
     record_type="transport",
     checks=(
         EvidenceCheckSpec(
@@ -2663,7 +2664,7 @@ def _ts_representative_freq_result(ts_entry: TransitionStateEntry, context: Tran
     ``calculation.id DESC`` tie-break. Returns ``None`` when no freq calc
     in the source set carries a ``calc_freq_result`` row.
 
-    Rubric v5 (#723, owner decision O2): when the entry declares a saddle target, the pool is first narrowed to the
+    Owner decision O2 (#723): when the entry declares a saddle target, the pool is first narrowed to the
     frequency calculations a declared target pins in role ``curvature`` (``context.declared_curvature_refs``), so the
     frequency-presence checks read the result the declaration points at and an unrelated newer rerun cannot fail a
     required check of a qualifying declared saddle. This stays a presence read: it chooses which result to look at, and
@@ -2698,7 +2699,7 @@ def _ts_representative_freq_result(ts_entry: TransitionStateEntry, context: Tran
 
 #: The structure-selection semantics the badge's fixed question is asked under. ``scoped_ts_context`` refuses to run
 #: when the live versions differ, and a test pins the same equality, so a change to the assessor, the normaliser or
-#: the decision rules forces a deliberate TS rubric bump instead of silently changing what the badge's warning means.
+#: the decision rules forces a deliberate TS rubric version bump instead of silently changing what the badge's warning means.
 TS_SCOPED_STRUCTURE_VERSIONS: dict[str, str] = {"assessment": "1", "normalizer": "1", "decision": "1"}
 
 
@@ -2990,7 +2991,7 @@ def _check_ts_geometry_validation_not_failed_for_source_calculations(
     """Return warning when any source calc carries a ``warning`` or ``fail`` geometry status.
 
     ``fail`` (an automated heuristic mismatch) is reported as a warning too:
-    from rubric v3 it is advisory, never a hard fail.
+    it is advisory, never a hard fail.
     """
     validations = [
         calc.geometry_validation
@@ -3162,32 +3163,20 @@ def _check_ts_review_not_rejected_or_deprecated_if_applicable(
     return EvidenceOutcome.not_applicable
 
 
-# Version 2 (ADR 0012). v1 asserted that a transition state's
-# representative frequency result has exactly one imaginary mode, which
-# duplicated the upload-time rule and, once ADR 0012 replaced that rule,
-# contradicted it: a record accepted with a warning at deposit would have
-# been hard-failed here. The required check is replaced by
-# ``reaction_coordinate_designated_for_ts``, which cites the persisted
-# designation instead of recounting, and a new advisory check surfaces
-# the recorded structural flag. Bumping the version is deliberate — a
-# machine review performed under the counting rule is genuinely stale.
-#
-# Version 3 (#722) added the zero-weight ``no_frequency_result_lacks_an_imaginary_mode``
-# warning and removed the frequency verdict. Version 4 (#729) adds the zero-weight
-# ``no_frequency_result_has_undesignated_imaginary_modes`` warning. It supersedes v3;
-# machine reviews stamped v3 read as stale (``rubric_versions_mismatch``) and are
-# re-planned, never rewritten.
-#
-# Version 5 (#723) brings the scoped structure assessment into the projection and supersedes v4;
-# machine reviews stamped v4 read as stale and are re-planned, never rewritten. Two things change what the
-# badge reports: the zero-weight ``declared_saddle_target_qualifies`` warning, and the representative frequency
-# result, which for an entry that declares a saddle target is the one the declaration pins (owner decision O2).
-# Label, completeness, score and ``is_certified`` never read the assessment: the assessment itself is the
-# ``trust.structure_assessment`` block, and only the pinned-result rule can move a completeness number, and only
-# for an entry that declares a target.
+# Contract of the baseline version (ADR 0012, #722, #723, #729). A transition state's representative frequency result is
+# not asked to have exactly one imaginary mode (that duplicated the upload-time rule and, once ADR 0012 replaced it,
+# contradicted it): the required check is ``reaction_coordinate_designated_for_ts``, which cites the persisted
+# designation instead of recounting, beside the advisory check that surfaces the recorded structural flag. Two zero-weight
+# warnings report on the frequency result, ``no_frequency_result_lacks_an_imaginary_mode`` and
+# ``no_frequency_result_has_undesignated_imaginary_modes``. The scoped structure assessment is brought into the
+# projection, and the zero-weight ``declared_saddle_target_qualifies`` warning is reported. The representative frequency
+# result, for an entry that declares a saddle target, is the one the declaration pins (owner decision O2). Label,
+# completeness, score and ``is_certified`` never read the assessment: the assessment itself is the
+# ``trust.structure_assessment`` block, and only the pinned-result rule can move a completeness number, and only for an
+# entry that declares a target.
 COMPUTED_TRANSITION_STATE: EvidenceRubric = EvidenceRubric(
     name="computed_transition_state",
-    version=5,
+    version=1,
     record_type="transition_state_entry",
     checks=(
         EvidenceCheckSpec(
@@ -3521,7 +3510,7 @@ def statmech_rubric_for(statmech: Statmech) -> str:
 # (``app.scientific_checks.external_comparison``,
 # ``app.services.external_comparison.cp``, ``app.services.consistency``) a
 # versioned name in the machine-review currency recipe
-# (``app.services.machine_review.recipe.ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS``). They declare
+# (``app.services.machine_review.recipe.active_rubric``). They declare
 # ``checks=()`` deliberately: no computed-trust evaluator ever runs them, so none
 # is added to RUBRIC_NAME_FOR_RECORD_TYPE -- doing so would offer it to
 # get_rubric_for_record_type for the "thermo" record type, colliding with
@@ -3529,7 +3518,7 @@ def statmech_rubric_for(statmech: Statmech) -> str:
 # every other rubric.
 
 # Advisory-only recipes, deliberately outside RUBRIC_NAME_FOR_RECORD_TYPE.
-EXTERNAL_CP_COMPARISON = EvidenceRubric(name="external_cp_comparison", version=2, record_type="thermo", checks=())
+EXTERNAL_CP_COMPARISON = EvidenceRubric(name="external_cp_comparison", version=1, record_type="thermo", checks=())
 THERMO_CONSISTENCY = EvidenceRubric(name="thermo_consistency", version=1, record_type="thermo", checks=())
 THERMO_KINETICS_CONSISTENCY = EvidenceRubric(
     name="thermo_kinetics_consistency", version=1, record_type="kinetics", checks=(),

@@ -1,4 +1,4 @@
-"""Deployer-facing factory for native v2 machine-review providers.
+"""Deployer-facing factory for native machine-review providers.
 
 Resolves ``AI_REVIEW_ASSISTANT_MODE`` (+ ``LLM_PRECHECK_*`` config) to a
 provider:

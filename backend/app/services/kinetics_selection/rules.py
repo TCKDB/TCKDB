@@ -32,7 +32,9 @@ from app.chemistry.kinetics_rules.xyg3_barrier_manifest import (
 )
 from app.chemistry.manifest_attestation import is_attested
 from app.services.kinetics_selection.models import KineticsRequest, KineticsSubject, NormalizedKinetics, SpeciesFact
+from app.services.rule_registry import rules_registry
 from app.services.selection_kernel import RuleMatch, Tri
+from app.versioning import VersionRegistry
 
 RULE_ACTIVE = "active"
 RULE_INACTIVE = "inactive"
@@ -41,7 +43,7 @@ RULE_REVOKED = "revoked"
 #: What an edge from a benchmark rule is, in the manifest and everywhere it is shown.
 EDGE_LABEL = "expected-performance inference"
 
-#: SHA-256 of ``xyg3_b3lyp_barrier_manifest.yaml`` as shipped (manifest 0.4.0). The rule refuses to load over any
+#: SHA-256 of ``xyg3_b3lyp_barrier_manifest.yaml`` as shipped. The rule refuses to load over any
 #: other bytes; a change to a member, a barrier height or a blocker is a new manifest version, a new pin and a new
 #: rule version.
 XYG3_MANIFEST_SHA256 = "e7f37fa3b726f632c3a264d8a62e216945eff5c8036fcf6afef7dfcafd976989"
@@ -68,7 +70,7 @@ class KineticsRule(ABC):
     """
 
     rule_id: str
-    version: str
+    version: int
     observable: str = "rate_coefficient"
     objective: str = ""
     objective_key: str = ""
@@ -171,7 +173,7 @@ class XYG3B3LYPBarrierRule(KineticsRule):
     """
 
     rule_id = "K-XYG3-B3LYP-BARRIER"
-    version = "0.3.0"
+    version = 1
     objective = (
         "expected accuracy of the classical electronic barrier of a computed rate, for the audited HTBH38/04 and "
         "NHTBH38/04 benchmark reactions"
@@ -421,7 +423,7 @@ class InactiveCouncilRule(KineticsRule):
         reasons: tuple[str, ...],
     ) -> None:
         self.rule_id = rule_id
-        self.version = "0.0.0"
+        self.version = 1
         self.objective = objective
         self.objective_key = objective_key
         self.evidence_type = "citation_only"
@@ -490,6 +492,12 @@ def default_rules() -> tuple[KineticsRule, ...]:
             ),
         ),
     )
+
+
+@lru_cache(maxsize=1)
+def default_rules_registry() -> VersionRegistry[Any]:
+    """The registered rules keyed by ``(rule id, version)``: what a replay asks for the rule a manifest recorded."""
+    return rules_registry("kinetics_selection_rules", default_rules())
 
 
 def active_rules(rules: tuple[KineticsRule, ...] | None = None) -> tuple[KineticsRule, ...]:

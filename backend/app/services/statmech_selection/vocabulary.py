@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import Enum
 
 #: Version of the request/answer vocabulary and its cross-field rules.
-CONTRACT_VERSION = "statmech-selection-v1"
+CONTRACT_VERSION = 1
 
 
 class Task(str, Enum):

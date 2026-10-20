@@ -14,7 +14,7 @@ class DeterministicTrustSummary(BaseModel):
     """Current code-defined evidence assessment; not a quality claim."""
 
     rubric: str
-    rubric_version: str
+    rubric_version: int
     grade: str
     hard_fail: str | None = None
 
@@ -29,7 +29,7 @@ class ReproducibilityAssessmentSummary(BaseModel):
     state: Literal["current", "stale", "unassessed"]
     assessment_ref: str | None = None
     rubric: str | None = None
-    rubric_version: str | None = None
+    rubric_version: int | None = None
     grade: ReproducibilityGrade | None = None
     assessed_at: datetime | None = None
 

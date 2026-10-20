@@ -34,6 +34,7 @@ from app.chemistry.structure_rules.manifest import (
     StructureRuleManifest,
     load_structure_rule_manifest,
 )
+from app.services.rule_registry import rules_registry
 from app.services.selection_kernel import RuleMatch, Tri
 from app.services.structure_selection.models import (
     NormalizedRecipe,
@@ -41,6 +42,7 @@ from app.services.structure_selection.models import (
     StructureRequest,
     StructureSubject,
 )
+from app.versioning import VersionRegistry
 
 RULE_ACTIVE = "active"
 RULE_INACTIVE = "inactive"
@@ -50,7 +52,7 @@ RULE_REVOKED = "revoked"
 EDGE_LABEL = "audited protocol preference"
 
 #: Version of the rule-registry semantics (what a rule must state to be active, how scope is evaluated).
-RULES_VERSION = "1"
+RULES_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -92,7 +94,7 @@ class StructureRule(ABC):
     """
 
     rule_id: str
-    version: str
+    version: int
     observable: str = "structure_energy"
     objective: Objective | None = None
     reference_model: str | None = None
@@ -274,6 +276,12 @@ def default_rules() -> tuple[StructureRule, ...]:
     """The rules registered in this release: the audited council examples. **None is active.**"""
     manifest = load_structure_rule_manifest(expected_sha256=STRUCTURE_RULE_MANIFEST_SHA256)
     return tuple(AuditedStructureRule(candidate, manifest) for candidate in manifest.candidates)
+
+
+@lru_cache(maxsize=1)
+def default_rules_registry() -> VersionRegistry[Any]:
+    """The registered rules keyed by ``(rule id, version)``: what a replay asks for the rule a manifest recorded."""
+    return rules_registry("structure_selection_rules", default_rules())
 
 
 def active_rules(rules: Sequence[StructureRule] | None = None) -> tuple[StructureRule, ...]:

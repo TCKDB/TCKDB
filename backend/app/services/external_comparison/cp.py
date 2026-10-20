@@ -21,6 +21,7 @@ from typing import Callable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import MolecularPropertyKind, ObservedStateBasis, ScientificOriginKind
 from app.db.models.molecular_property_observation import MolecularPropertyObservation
@@ -44,10 +45,7 @@ from app.services.machine_review.query import (
     get_record_machine_review_currency_for_record,
 )
 from app.services.machine_review.read_model import RecordMachineReview
-from app.services.machine_review.recipe import (
-    ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
-    public_rubric_name,
-)
+from app.services.machine_review.recipe import active_rubric
 from app.services.machine_review.schemas import (
     MachineReviewCategory,
     MachineReviewFinding,
@@ -61,11 +59,13 @@ from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON
 #: the mutation guard (a wrong constant must fail the NASA-7 hand-calc check).
 _J_PER_KMOL_K_TO_J_PER_MOL_K = 1.0 / 1000.0
 
-#: Model/prompt-version identity for this deterministic runner. There is no
-#: LLM prompt involved, so this single string stands in for both the
-#: ``model`` and ``prompt_version`` axes ``create_record_machine_review_row``
-#: expects: "the version of the logic that produced this review."
-RUNNER_VERSION = "external_cp_comparison_v1"
+#: Identity of this deterministic runner. There is no LLM prompt involved, so
+#: the runner's name stands in for the ``model`` axis, and the same name beside
+#: an integer version (:data:`RUNNER_PROMPT`) for the ``prompt`` axis
+#: ``create_record_machine_review_row`` expects: "the version of the logic that
+#: produced this review."
+RUNNER = "external_cp_comparison"
+RUNNER_PROMPT = VersionRef(name=RUNNER, version=1)
 
 #: Single source of truth is ``app.services.machine_review.query`` (imported,
 #: never redefined here) -- see
@@ -467,7 +467,7 @@ def run_and_record(
         record_ref=thermo.public_ref,
         status=status,
         findings=findings,
-        model=RUNNER_VERSION,
+        model=RUNNER,
         provider=PROVIDER,
         reviewed_at=reviewed_at,
         record_id=thermo.id,
@@ -482,17 +482,14 @@ def run_and_record(
     )
     digest = build_machine_review_context_hash(context)
 
-    rubric_key = public_rubric_name(EXTERNAL_CP_COMPARISON)
-    rubric_versions = {rubric_key: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[rubric_key]}
-
     return create_record_machine_review_row(
         session,
         record_type="thermo",
         record_id=thermo.id,
         review=review,
         context_digest=digest,
-        prompt_version=RUNNER_VERSION,
-        rubric_versions=rubric_versions,
+        prompt=RUNNER_PROMPT,
+        rubric=active_rubric(EXTERNAL_CP_COMPARISON),
     )
 
 
@@ -501,7 +498,7 @@ def latest_cp_comparison_for_thermo(session: Session, thermo_id: int) -> RecordM
 
     Reads its own family (:attr:`~app.services.machine_review.query.
     MachineReviewRecordFamily.scientific_check`) and model
-    (:data:`RUNNER_VERSION`), so "the latest recorded Cp comparison for this thermo"
+    (:data:`RUNNER`), so "the latest recorded Cp comparison for this thermo"
     is a well-defined notion independent of any reviewer-family (LLM /
     fake-provider) row that may also exist for the same ``(thermo, "thermo")``
     key. Callers that want the latest Cp comparison (the CLI, the paper
@@ -515,7 +512,7 @@ def latest_cp_comparison_for_thermo(session: Session, thermo_id: int) -> RecordM
         record_type="thermo",
         record_id=thermo_id,
         family=MachineReviewRecordFamily.scientific_check,
-        model=RUNNER_VERSION,
+        model=RUNNER,
     )
 
 
@@ -527,17 +524,17 @@ def cp_comparison_currency(session, thermo_id):
         record_type="thermo", record_ref=result.thermo.public_ref,
         rubric_name=rubric.name, rubric_version=rubric.version, notes=(result.inputs_json,),
     ))
-    key = public_rubric_name(rubric)
     return get_record_machine_review_currency_for_record(
         session, record_type="thermo", record_id=thermo_id, current_context=digest,
-        active_prompt_version=RUNNER_VERSION, active_rubric_versions={key: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[key]},
-        family=MachineReviewRecordFamily.scientific_check, model=RUNNER_VERSION,
+        active_prompt=RUNNER_PROMPT, active_rubric=active_rubric(rubric),
+        family=MachineReviewRecordFamily.scientific_check, model=RUNNER,
     )
 
 
 __all__ = [
     "PROVIDER",
-    "RUNNER_VERSION",
+    "RUNNER",
+    "RUNNER_PROMPT",
     "ComparisonResult",
     "CpObservationComparison",
     "ExternalCpComparisonConfigurationError",

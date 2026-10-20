@@ -1,43 +1,16 @@
-# XYG3 vs B3LYP classical-barrier audit manifest, version 0.4.0 (2026-10-13). NOT approved for activation:
+# XYG3 vs B3LYP classical-barrier audit manifest (2026-10-13). NOT approved for activation:
 # status.activation_approved is false and status.activation_blockers says why. Compiled from the owner-supplied
-# papers listed under sources (SHA-256 pinned there; the PDFs are not copied into the repository). Version 0.1.0 was
-# copied from the audit; every later version is an edit recorded in manifest_history. Loaded by app.chemistry.kinetics_rules.xyg3_barrier_manifest. A change to a member, a barrier
-# height or a blocker is a new manifest version and a new rule version, never an in-place edit.
+# papers listed under sources (SHA-256 pinned there; the PDFs are not copied into the repository). Loaded by
+# app.chemistry.kinetics_rules.xyg3_barrier_manifest. A change to a member, a barrier height or a blocker is a new
+# manifest version and a new rule version, never an in-place edit.
 rule_id: K-XYG3-B3LYP-BARRIER
 rule_statement: For a computed rate coefficient whose classical electronic barrier is evaluated with XYG3, an expected-performance
   preference over the same barrier evaluated with B3LYP, restricted to the 38 reactions (76 barrier heights) of the HTBH38/04
   and NHTBH38/04 benchmark sets, and only where the remaining treatment of the two rates is verified compatible. An expected-performance
   inference, not a validated accuracy of any individual rate.
-manifest_version: 0.4.0
+name: xyg3_b3lyp_barrier
+version: 1
 manifest_date: '2026-10-13'
-manifest_history:
-- version: 0.1.0
-  date: '2026-10-04'
-  note: Membership read in full from the supplied PDFs; rule NOT activated (see status.activation_blockers).
-- version: 0.2.0
-  date: '2026-10-04'
-  note: NHT08 and NHT10 degenerate_identity_reaction corrected from false to true (their reactant and product species are
-    identical, the same as NHT09's); no number, member or blocker changed. Rule NOT activated.
-- version: 0.3.0
-  date: '2026-10-05'
-  note: Blocker electronic_method_not_a_protocol_field replaced by declared_energy_level_not_verifiable_from_calculations. A kinetics
-    record can declare its energy-level method and basis (kinetics.energy_level_of_theory_id, PRs 699 and 700) and the
-    rule reads it; the old text said it could not. The remaining limit is that a declaration cannot be verified from
-    the record's calculations. No number, member or other blocker changed. Rule NOT activated.
-- version: 0.4.0
-  date: '2026-10-13'
-  note: 'Comparator record corrected: the B3LYP row of Zhang 2009 Table 2 is the 2005 Zhao-Gonzalez-Garcia-Truhlar B3LYP/MG3S
-    row, not 6-311+G(3df,2p). The same-basis comparison (Zhang, Luo, Xu, JCP 133, 104105 (2010), Table III and SI Table_s2.doc)
-    is added with four new SHA-256-pinned sources: at 6-311+G(3df,2p) and QCISD/MG3 geometries the 76-barrier MAD is XYG3 1.02
-    against B3LYP 4.54 kcal/mol, XYG3 closer on 69 of 76 barriers. The Table III XYG3 HAT12 typo (1.66 printed, 1.38 in the
-    SI) is recorded. The scoped claim is added with its list of what it does not license. Blocker comparator_protocol_unverified
-    is resolved, as are only_aggregate_evidence (per-barrier data now exist) and correction_changes_a_cited_total (the
-    mixed-basis gap is replaced by the same-basis one); all three move to status.resolved_blockers. owner_sign_off_not_given
-    and member_level_treatment_undecided are added. The electronic-method blocker had already been resolved in 0.3.0 by the
-    declared electronic method (kinetics.energy_level_of_theory_id, PRs 699 and 700). No member or barrier height changed.
-    Geometry provenance stays unresolved: TCKDB cannot record which geometry a stored barrier used. Owner decision
-    2026-10-13: keep the rule INACTIVE for now; whether to fix that by (a) a schema change that records the geometry level or
-    (b) accepting it as a stated limitation is undecided. Rule NOT activated.'
 status:
   membership_listed_complete: true
   membership_listing_sources:
@@ -64,7 +37,6 @@ status:
   curator_acceptance: null
   resolved_blockers:
   - id: comparator_protocol_unverified
-    resolved_in: 0.4.0
     resolved_by: ZHANG_2010_JCP, ZHANG_2010_JCP_SI
     text: 'Resolved. The B3LYP row of Zhang 2009 Table 2 (4.28 / 4.23 / 8.49 / 3.25 / 2.02) is the Zhao-Gonzalez-Garcia-Truhlar
       2005 B3LYP/MG3S row (jp045141s Tables 4 and 5, with its uncorrected 4.28 total), not a 6-311+G(3df,2p) calculation; no author
@@ -72,17 +44,14 @@ status:
       133, 104105 (2010), doi:10.1063/1.3488649, Table III row B3LYP/B9 (B9 = 6-311+G(3df,2p)) and SI Table_s2.doc, at the
       Truhlar-database geometries: B3LYP UM10 2.02, NS16 3.38, HAT12 8.51, HT38 4.43, all 76 4.54; XYG3 0.98, 1.42, 1.38, 0.75, 1.02.'
   - id: electronic_method_not_a_protocol_field
-    resolved_in: 0.3.0
-    text: 'Resolved earlier, in 0.3.0 (replaced by declared_energy_level_not_verifiable_from_calculations): a kinetics record can
+    text: 'Resolved earlier (replaced by declared_energy_level_not_verifiable_from_calculations): a kinetics record can
       declare its energy-level method and basis (kinetics.energy_level_of_theory_id, PRs 699 and 700) and the rule reads it.'
   - id: only_aggregate_evidence
-    resolved_in: 0.4.0
     resolved_by: ZHANG_2010_JCP_SI
     text: 'Resolved. Zhang 2009 and its SI gave subset errors only; the JCP 2010 SI gives the XYG3 and B3LYP error of every one
       of the 76 barriers at 6-311+G(3df,2p) and the same geometries (Tables S10, S11, S13, S14 and S22, S23, S25, S26). What
       the per-barrier data show for member-level use is the open blocker member_level_treatment_undecided.'
   - id: correction_changes_a_cited_total
-    resolved_in: 0.4.0
     resolved_by: ZHANG_2010_JCP
     text: 'Resolved. The 2006 correction (jp061040d) moves the printed B3LYP/MG3S totals (non-HT(38) 4.34 -> 4.58, all(76) 4.28
       -> 4.40), and Zhang 2009 prints the uncorrected 4.28, so its all-76 gap (3.26 as printed, 3.38 corrected) is a

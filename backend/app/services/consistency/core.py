@@ -8,6 +8,7 @@ from enum import Enum
 from math import isfinite
 
 from sqlalchemy import inspect
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.services.machine_review.context_hash import MachineReviewEvidenceContext, build_machine_review_context_hash
 from app.services.machine_review.derivation import MachineReviewOutcome, derive_machine_review_status
@@ -19,9 +20,14 @@ from app.services.machine_review.query import (
     get_record_machine_review_currency_for_record,
 )
 from app.services.machine_review.read_model import RecordMachineReview
-from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, public_rubric_name
+from app.services.machine_review.recipe import active_rubric
 from app.services.machine_review.schemas import MachineReviewCategory, MachineReviewFinding, MachineReviewSeverity
 from app.services.snapshot_defaults import is_unchanged_default
+
+#: The version of the logic every scientific-check runner stands for, stamped beside the runner's name on the review's
+#: prompt axis. These runners have no prompt: the name says which check ran and this says which logic of it. A change to
+#: one check's meaning is a new version of that check's rubric, which restales only that check's reviews.
+RUNNER_LOGIC_VERSION = 1
 
 
 def canonical(value):
@@ -129,9 +135,14 @@ class AdvisoryResult:
         ))
 
     @property
-    def recipe(self):
-        key = public_rubric_name(self.rubric)
-        return {key: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[key]}
+    def prompt(self) -> VersionRef:
+        """The runner as the review's prompt axis: a deterministic runner has no prompt, so its name stands in."""
+        return VersionRef(name=self.runner, version=RUNNER_LOGIC_VERSION)
+
+    @property
+    def rubric_ref(self) -> VersionRef:
+        """The current ref of this check's own rubric: the one rubric a review of this check is stamped with."""
+        return active_rubric(self.rubric)
 
 
 def record_result(session, result):
@@ -146,7 +157,7 @@ def record_result(session, result):
     )
     return create_record_machine_review_row(
         session, record_type=target.__tablename__, record_id=target.id, review=review,
-        context_digest=result.digest, prompt_version=result.runner, rubric_versions=result.recipe,
+        context_digest=result.digest, prompt=result.prompt, rubric=result.rubric_ref,
     )
 
 
@@ -162,7 +173,7 @@ def currency(session, live_result):
     """Caller supplies a freshly resolved comparison, never a historical snapshot."""
     return get_record_machine_review_currency_for_record(
         session, record_type=live_result.target.__tablename__, record_id=live_result.target.id,
-        current_context=live_result.digest, active_prompt_version=live_result.runner,
-        active_rubric_versions=live_result.recipe,
+        current_context=live_result.digest, active_prompt=live_result.prompt,
+        active_rubric=live_result.rubric_ref,
         family=MachineReviewRecordFamily.scientific_check, model=live_result.runner,
     )

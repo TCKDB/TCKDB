@@ -28,13 +28,16 @@ import re
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 
+from app.services.rule_registry import rules_registry
 from app.services.selection_kernel import RuleMatch, Tri
 from app.services.statmech_selection.assessment import NormalizedRecipe
 from app.services.statmech_selection.facts import SubjectFacts
 from app.services.statmech_selection.models import StatmechRequest
 from app.services.statmech_selection.vocabulary import CandidateKind, Objective
+from app.versioning import VersionRegistry
 
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 
@@ -46,7 +49,7 @@ RULE_REVOKED = "revoked"
 EDGE_LABEL = "audited whole-model preference"
 
 #: Version of the rule-registry semantics (what a rule must state to be active, how scope and coverage are read).
-RULES_VERSION = "1"
+RULES_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -89,7 +92,7 @@ class StatmechRule(ABC):
     """
 
     rule_id: str
-    version: str
+    version: int
     tasks: tuple[str, ...] = ()
     observables: tuple[str, ...] = ()
     objective: Objective | None = None
@@ -196,6 +199,12 @@ def default_rules() -> tuple[StatmechRule, ...]:
     approved example alone applies nothing, and approving one rule never enables another.
     """
     return ()
+
+
+@lru_cache(maxsize=1)
+def default_rules_registry() -> VersionRegistry[Any]:
+    """The registered rules keyed by ``(rule id, version)``: what a replay asks for the rule a manifest recorded."""
+    return rules_registry("statmech_selection_rules", default_rules())
 
 
 __all__ = [

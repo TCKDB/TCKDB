@@ -63,13 +63,14 @@ from app.services.network_selection.models import (
     SolveFacts,
 )
 from app.services.network_selection.rules import NetworkRule, default_rules
+from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.scientific_read.profile import current_read_profile
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. The
 #: network's one such position, a validation entry's reference to a solve the reader cannot open, is evidence and reads
 #: as unavailable (``reference_solve_ref`` null, ``reference_withheld`` true), as on a reference to nothing; no token
 #: stands there today. Replay reads exactly this format; a manifest in any other is refused.
-MANIFEST_FORMAT_VERSION = 3
+MANIFEST_FORMAT_VERSION = 1
 MANIFEST_FORMAT_NAME = "network_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "network_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -151,8 +152,8 @@ def _check_versions(manifest: dict[str, Any]) -> None:
     }
     if policy != expected:
         raise ReplayError(
-            f"manifest was made under {policy!r}; this code replays {POLICY_NAME} v{POLICY_VERSION}, "
-            f"assessment v{ASSESSMENT_VERSION}, bounds v{DEFAULT_BOUNDS.version}"
+            f"manifest was made under {policy!r}; this code replays {POLICY_NAME} version {POLICY_VERSION}, "
+            f"assessment version {ASSESSMENT_VERSION}, bounds version {DEFAULT_BOUNDS.version}"
         )
     for solve in manifest["solves"]:
         for block in ("target", "protocol", "validation"):
@@ -166,14 +167,11 @@ def _check_versions(manifest: dict[str, Any]) -> None:
 
 
 def _rules_for(manifest: dict[str, Any], rules: Sequence[NetworkRule] | None) -> tuple[NetworkRule, ...]:
-    registry = tuple(default_rules() if rules is None else rules)
-    available = {(r.rule_id, r.version): r for r in registry}
+    registry = rules_registry("network_selection_rules", default_rules() if rules is None else rules)
     used: list[NetworkRule] = []
     for entry in manifest["decision"]["rules"]:
         key = (entry["rule_id"], entry["version"])
-        if key not in available:
-            raise ReplayError(f"rule {key[0]} version {key[1]} is not in the running registry")
-        rule = available[key]
+        rule = rule_recorded_in(registry, entry, ReplayError)
         described = rule.describe()
         if described["status"] != entry["status"]:
             raise ReplayError(

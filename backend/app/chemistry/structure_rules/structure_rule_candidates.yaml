@@ -1,4 +1,4 @@
-# Candidate structure-energy preference rules, audit manifest version 0.2.0 (2026-10-18).
+# Candidate structure-energy preference rules, audit manifest (2026-10-18).
 #
 # NOTHING HERE IS ACTIVE. Every entry has activation_approved: false, no owner acceptance and a list of blockers, and
 # the registry (app.services.structure_selection.rules) loads this file only against its pinned SHA-256 and registers
@@ -9,45 +9,28 @@
 # Provenance of what follows. The council's relative-conformer-energy example (council rationale of 2026-10-04,
 # section 3: "Revised ACONFL, Santra/Martin") was audited against Santra and Martin, J. Phys. Chem. A 126, 9375-9391
 # (2022), doi:10.1021/acs.jpca.2c06407, which is open access (PMC9791657; arXiv 2209.03285). Which version each number
-# was read from is stated in the sources below. Manifest 0.1.0 said the published PDF could not be downloaded and that
-# the per-conformer references were located in the Supporting Information archive but not extracted. That was a gap in
-# how the article was read, not a gap in what the article prints: Table 4 of the article itself (p. 9378) prints the
-# per-conformer best-estimate conformer energy in kcal/mol to two decimals. The open-access reprint is recorded as a
-# source below (URL and SHA-256 as supplied by the owner; this change fetched nothing). What was read in 0.1.0 is
-# unchanged: (1) the published open-access full text as Europe PMC serves it (JATS XML), (2) the arXiv v2 PDF, whose
-# page numbers are the page anchors used for the numbers below, and (3) the published Supporting Information PDF and
-# data archive. Nothing was digitised from a figure.
+# was read from is stated in the sources below. Table 4 of the article itself (p. 9378) prints the per-conformer
+# best-estimate conformer energy in kcal/mol to two decimals. The open-access reprint is recorded as a source below (URL
+# and SHA-256 as supplied by the owner). What was read: (1) the published open-access full text as Europe PMC serves it
+# (JATS XML), (2) the arXiv v2 PDF, whose page numbers are the page anchors used for the numbers below, and (3) the
+# published Supporting Information PDF and data archive. Nothing was digitised from a figure.
+#
+# Owner decision D (O5, 2026-10-13): relative conformer energies are a named-reference operation; descriptive mean
+# absolute deviations are useful without a numeric reference uncertainty; a claim of physical superiority, or a ranking
+# of near-tied protocols, needs stronger evidence. A relative-energy read exists (/conformers/relative-energies and
+# /conformers/relative-energies/compare); what still blocks both ACONFL rules is that no preference stage consumes the
+# relative_conformer_energy observable (blocker no_preference_stage_consumes_relative_conformer_energy). The blocker
+# descriptive_mad_is_not_preference_evidence lists the seven things (E1-E7) a preference claim would need. A footnote-marker
+# discrepancy in the article's Table 4 is recorded in noted_discrepancies, not resolved, and no blocker relies on either
+# reading for ACONF20.
 #
 # The other two council examples that could have become a preference rule are registered here too: the one proposed
 # form with no source ("controlled convergence on one fixed model") as an inactive candidate with its missing
 # prerequisites, and the three examples that support distinctions but are not preferences are listed under
 # considered_not_rules so that their absence from the rules is a recorded decision.
-manifest_version: 0.2.0
+name: structure_rule_candidates
+version: 1
 manifest_date: '2026-10-18'
-history:
-- version: 0.1.0
-  date: '2026-10-05'
-  change: >-
-    First registration (chunk 4 of the structure-ordering work). The ACONFL example was audited against the open-access
-    article and its Supporting Information. Two candidate rules were derived from it, each narrowly scoped to
-    relative conformer energies of the three n-alkanes in the dataset. The fixed-model convergence form was registered
-    with no source. All rules inactive.
-- version: 0.2.0
-  date: '2026-10-18'
-  change: >-
-    Records owner decision D (O5, 2026-10-13): relative conformer energies are a named-reference operation; descriptive
-    mean absolute deviations are useful without a numeric reference uncertainty; a claim of physical superiority, or a
-    ranking of near-tied protocols, needs stronger evidence. A relative-energy read now exists
-    (/conformers/relative-energies and /conformers/relative-energies/compare); what still blocks both ACONFL rules is
-    that no preference stage consumes the relative_conformer_energy observable. The blocker
-    relative_energy_is_not_a_supported_quantity (its premise, that no relative-energy read exists, is no longer true) is
-    renamed no_preference_stage_consumes_relative_conformer_energy. The new blocker
-    descriptive_mad_is_not_preference_evidence lists the seven things (E1-E7) a preference claim would need. The owner
-    decision items of the two ACONFL rules are marked answered. The source is corrected: the open-access reprint is
-    recorded, and Table 4 of the article prints the per-conformer best-estimate values (0.1.0 said they were located
-    but not extracted). A footnote-marker discrepancy in that table is recorded in noted_discrepancies, not resolved, and no blocker relies on either reading for ACONF20.
-    S-FIXED-MODEL-CONVERGENCE gains owner_declined_universal_form. All three rules stay inactive and unapproved; every
-    entry is version 0.2.0. Manifest 0.1.0 stays loadable for replay only (structure_rule_candidates_0_1_0.yaml).
 audit_status: inactive_registered_with_missing_prerequisites
 sources:
 - id: SANTRA_MARTIN_2022_PUBLISHED_TEXT
@@ -76,7 +59,7 @@ sources:
   read_from: https://webhome.weizmann.ac.il/home/comartin/OAreprints/320.pdf
   sha256: ef5ebc990d49a2b2569e4826966b20203206002024d4b9493c88871540bb190e
   accessed: 'not fetched in this change: the URL and the SHA-256 are recorded as supplied by the owner (owner decision O5, 2026-10-13); the digest was not re-computed here'
-  used_for: "Corrects manifest 0.1.0, which said the published PDF could not be downloaded and that the per-conformer references were located but not extracted. Table 4 (p. 9378) prints the per-conformer best-estimate conformer energy in kcal/mol to two decimals, in the article itself; no number from it is quoted in this manifest. The text on p. 9382 and the Table 4 footnote markers (see noted_discrepancies). The page numbers of the other quoted numbers remain those of arXiv v2"
+  used_for: "Table 4 (p. 9378) prints the per-conformer best-estimate conformer energy in kcal/mol to two decimals, in the article itself; no number from it is quoted in this manifest. The text on p. 9382 and the Table 4 footnote markers (see noted_discrepancies). The page numbers of the other quoted numbers remain those of arXiv v2"
 - id: SANTRA_MARTIN_2022_SI_PDF
   citation: Supporting Information (PDF) to Santra and Martin, J. Phys. Chem. A 126, 9375-9391 (2022), file jp2c06407_si_001.pdf
   version: published Supporting Information
@@ -97,7 +80,7 @@ sources:
   used_for: "Located only (spreadsheets: ACONF12 HLCs, DFT results, L-F12 results, among others); NOT opened. The per-conformer METHOD energies, which a per-conformer error or an uncertainty estimate would need, are here and have not been extracted (the best-estimate reference values are printed in Table 4 of the article, SANTRA_MARTIN_2022_OA_REPRINT)"
 noted_discrepancies:
 - id: ACONF20_REFERENCE_FOOTNOTE_MARKER
-  where: Table 4 of the open-access reprint (p. 9378), against the text on p. 9382 and manifest 0.1.0
+  where: Table 4 of the open-access reprint (p. 9378), against the text on p. 9382
   observation: >-
     The footnote marker printed on the ACONF20 column of Table 4 differs from the reference the text names for that set.
     No blocker or anchor of this manifest relies on either reading for ACONF20.
@@ -114,7 +97,7 @@ noted_discrepancies:
     ACONF20: HLC14
   readings:
   - id: text
-    says: The ACONF20 reference is HLC14 (the text on p. 9382, and manifest 0.1.0).
+    says: The ACONF20 reference is HLC14 (the text on p. 9382).
     consequence: The reference shares the LNO-CCSD(T)/vTight/AV{Q,5}Z localized component with one preferred protocol, so agreement on ACONF20 is partly circular.
   - id: table_marker
     says: The ACONF20 reference is the CCSD(F12*) silver recipe (the Table 4 marker b).
@@ -149,7 +132,7 @@ considered_not_rules:
 rules:
 
 - rule_id: S-ACONFL-LNO-LARGE-BASIS
-  version: 0.2.0
+  version: 1
   objective: expected_accuracy
   objective_key: relative_conformer_energy_benchmark_mad
   observable: relative_conformer_energy
@@ -238,8 +221,7 @@ rules:
       conformer for n-hexadecane, where conformer 00 is 0.49 kcal/mol lower). What still blocks this rule is that nothing
       consumes it as a preference. The protocol-preference stage applies only rules whose observable is structure_energy, and
       the comparison endpoint is descriptive only and never builds an edge. Until a preference stage consumes the
-      relative_conformer_energy observable the rule's observable never matches and it cannot make an edge. (Renamed in 0.2.0
-      from relative_energy_is_not_a_supported_quantity, whose premise, that no relative-energy read exists, is no longer true.)
+      relative_conformer_energy observable the rule's observable never matches and it cannot make an edge.
   - id: localized_orbital_settings_need_vocabulary
     text: The actual-protocol declaration can carry local_correlation and pair_natural_orbital approximations with a free
       setting, but the LNO accuracy threshold, the extrapolation exponents, the (T) treatment and the program-specific
@@ -286,7 +268,7 @@ rules:
       descriptive_mad_is_not_preference_evidence (E1 to E7).
 
 - rule_id: S-ACONFL-DLPNO-F12-VERYTIGHT
-  version: 0.2.0
+  version: 1
   objective: expected_accuracy
   objective_key: relative_conformer_energy_benchmark_mad
   observable: relative_conformer_energy
@@ -352,7 +334,7 @@ rules:
   - id: no_preference_stage_consumes_relative_conformer_energy
     text: As for the entry above. A relative conformer energy read exists, but no preference stage consumes the
       relative_conformer_energy observable (the protocol-preference stage applies only structure_energy rules, and the comparison
-      endpoint never builds an edge). Renamed in 0.2.0 from relative_energy_is_not_a_supported_quantity.
+      endpoint never builds an edge).
   - id: core_geometry_and_corrections_not_stated
     text: The frozen-core or all-electron treatment, the geometry level and whether the energies contain zero-point or thermal
       terms are not stated in the text read.
@@ -399,7 +381,7 @@ rules:
       descriptive_mad_is_not_preference_evidence (E1 to E7).
 
 - rule_id: S-FIXED-MODEL-CONVERGENCE
-  version: 0.2.0
+  version: 1
   objective: model_fidelity
   objective_key: numerical_convergence_on_one_fixed_model
   observable: structure_energy

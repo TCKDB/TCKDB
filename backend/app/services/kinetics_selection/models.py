@@ -30,6 +30,7 @@ from app.db.models.common import (
     RecordReviewStatus,
 )
 from app.schemas.reads.scientific_common import SelectionPolicy
+from app.services.manifest_formats import new_current_only_registry
 from app.services.selection_kernel import Applicability, Outcome  # noqa: F401  (Outcome re-exported)
 
 #: The one quantity this selector answers.
@@ -44,12 +45,15 @@ MAX_CANDIDATES = 500
 #: structured manifest block; replay reads the recorded ``eligible`` flags and never reruns the assessment.
 #: A decision manifest records both versions.
 POLICY_NAME = "kinetics_method_preferred"
-POLICY_VERSION = "1"
-#: Version of how eligibility is assessed. 2: an automated geometry-validation fail is advisory (computed rubrics
-#: at version 2) and a live confirmed finding about a source calculation excludes the record
-#: (``structure_selection.source_findings``). A manifest with no block is refused on replay.
-ASSESSMENT_SEMANTICS_VERSION = "2"
-SUPPORTED_ASSESSMENT_SEMANTICS = frozenset({ASSESSMENT_SEMANTICS_VERSION})
+POLICY_VERSION = 1
+#: Version of how eligibility is assessed: an automated geometry-validation fail is advisory and a live confirmed
+#: finding about a source calculation excludes the record (``structure_selection.source_findings``). A manifest with no
+#: block, or one recording a version the registry does not hold, is refused on replay.
+ASSESSMENT_SEMANTICS_VERSION = 1
+ASSESSMENT_SEMANTICS_NAME = "kinetics_selection_assessment"
+ASSESSMENT_SEMANTICS = new_current_only_registry(
+    "kinetics_selection_assessment_semantics", ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_SEMANTICS_VERSION
+)
 
 #: A point pressure matches a record's own pressure within this (the existing browse tolerances).
 PRESSURE_REL_TOL = 1.0e-9

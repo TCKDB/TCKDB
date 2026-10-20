@@ -25,7 +25,6 @@ def build_trust_fragment(
     """
     status = _review_status_value(review_status)
     evidence = evaluation.model_dump(mode="json", exclude={"check_results"})
-    evidence["rubric"] = _public_rubric_name(evaluation)
     return TrustFragment(
         review_status=status,
         trust_status=evaluation.label.value,
@@ -63,11 +62,6 @@ def _review_status_value(review_status: Enum | str | None) -> str:
     if isinstance(review_status, Enum):
         return str(review_status.value)
     return review_status
-
-
-def _public_rubric_name(evaluation: EvidenceEvaluation) -> str:
-    suffix = f"_v{evaluation.rubric_version}"
-    return f"{evaluation.rubric}{suffix}"
 
 
 __all__ = ["build_transition_state_trust_fragment", "build_trust_fragment"]

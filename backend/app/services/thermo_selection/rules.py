@@ -27,17 +27,19 @@ from app.chemistry.thermo_rules.e1_manifest import (
     ManifestError,
     load_e1_manifest,
 )
+from app.services.rule_registry import rules_registry
 from app.services.thermo_selection.models import QUANTITY, NormalizedCandidate, RuleMatch, Subject, Tri
+from app.versioning import VersionRegistry
 
 RULE_ACTIVE = "active"
 RULE_REVOKED = "revoked"
 
 E1_RULE_ID = "E1"
-#: Version of the rule's matching logic. Bump it on any change to :class:`E1Rule`, and whenever the
-#: manifest version changes; a decision manifest records it so a replay can refuse a different one.
-E1_RULE_VERSION = "1.0.0"
+#: Version of the rule's matching logic and data. Bump it on any change to :class:`E1Rule`, and whenever the
+#: audited manifest changes; a decision manifest records it so a replay can refuse a different one.
+E1_RULE_VERSION = 1
 
-#: SHA-256 of ``e1_g4_over_g3_manifest.yaml`` as approved by the curator (manifest 1.0.0). The rule refuses
+#: SHA-256 of ``e1_g4_over_g3_manifest.yaml`` as approved by the curator. The rule refuses
 #: to load over any other bytes; a change to a member or a recipe fact is a new manifest version, a new
 #: pin and a new ``E1_RULE_VERSION``.
 E1_MANIFEST_SHA256 = "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0"
@@ -65,7 +67,7 @@ class PreferenceRule(ABC):
     """
 
     rule_id: str
-    version: str
+    version: int
     status: str = RULE_ACTIVE
     quantity: str = QUANTITY
     objective: str = ""
@@ -153,7 +155,7 @@ class E1Rule(PreferenceRule):
         "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, "
         "derived by atomization, for the audited hydrocarbon benchmark species"
     )
-    authority = "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)"
+    authority = "repository owner, acting as curator (manifest approved 2026-10-03)"
     evidence_type = "domain_benchmark_preference_development_set"
     interpretation = (
         "A development-set average-deviation comparison supports an expected-performance judgment "
@@ -323,6 +325,12 @@ class E1Rule(PreferenceRule):
 def default_rules() -> tuple[PreferenceRule, ...]:
     """The rules registered in this release. E1 only."""
     return (E1Rule(),)
+
+
+@lru_cache(maxsize=1)
+def default_rules_registry() -> VersionRegistry[Any]:
+    """The registered rules keyed by ``(rule id, version)``: what a replay asks for the rule a manifest recorded."""
+    return rules_registry("thermo_selection_rules", default_rules())
 
 
 def active_rules(rules: tuple[PreferenceRule, ...] | None = None) -> tuple[PreferenceRule, ...]:

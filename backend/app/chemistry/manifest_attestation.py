@@ -64,3 +64,23 @@ def is_attested(manifest: Any) -> bool:
     if not isinstance(sha256, str) or not sha256:
         return False
     return _ATTESTED.get(sha256) == content_digest(manifest)
+
+
+def require_integer_version(value: Any, *, where: str, error: type[Exception]) -> int:
+    """*value* if it is exactly an integer of at least 1, else ``error(...)`` raised.
+
+    The version of a manifest or of a rule is an integer. A text version (``"1"``, ``"0.2.0"``), a float and a ``True``
+    are all refused: a version that arrives as text is the first step back to a name with a version glued on.
+    """
+    if type(value) is not int or value < 1:
+        raise error(f"{where}: version must be an integer of at least 1, not {value!r}")
+    return value
+
+
+def require_manifest_name(value: Any, *, where: str, error: type[Exception]) -> str:
+    """*value* if it is a non-empty string that does not embed a version, else ``error(...)`` raised."""
+    from tckdb_schemas.fragments.version import embeds_version
+
+    if not isinstance(value, str) or not value.strip() or embeds_version(value):
+        raise error(f"{where}: name must be a non-empty string with no version in it, not {value!r}")
+    return value

@@ -18,8 +18,8 @@ Currency vs. provenance (policy §3.5). A latest review is *current* only when
 
 * ``context_schema_version`` — the hash recipe version (policy §3.4);
 * ``context_hash`` — the digest of the record's current evidence (policy §3);
-* ``prompt_version`` — the active machine-review prompt;
-* ``rubric_versions`` — the active rubric versions for this record type.
+* ``prompt`` — the active machine-review prompt, a name and a version;
+* ``rubric`` — the active rubric for this record, a name and a version.
 
 ``provider``/``model`` are deliberately **not** currency dimensions (swapping
 models does not invalidate the evidence a prior review saw, policy §3.5).
@@ -36,10 +36,12 @@ ordering behavior is identical (higher id = strictly later event, nulls last).
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.services.machine_review.context_hash import MachineReviewContextDigest
 from app.services.machine_review.schemas import MachineReviewStatus
@@ -82,14 +84,15 @@ class MachineReviewCurrencyKey:
 
     Assembled for both sides of the comparison — the stored review and the
     record's active recipe — so the classifier compares like for like.
-    ``rubric_versions`` is compared canonically (by mapping equality, so key
-    order is irrelevant but a missing/extra/changed key matters).
+    ``prompt`` and ``rubric`` are compared as refs: a differing name *or* a
+    differing version is a mismatch, so a review made under another rubric reads
+    stale exactly as one made under an older version of the same rubric.
     """
 
-    context_schema_version: str
+    context_schema_version: int
     context_hash: str
-    prompt_version: str
-    rubric_versions: Mapping[str, str]
+    prompt: VersionRef
+    rubric: VersionRef
 
 
 @dataclass(frozen=True)
@@ -109,10 +112,10 @@ class StoredMachineReviewProjection:
     record_type: str
     record_id: int | str
     reviewed_at: datetime
-    context_schema_version: str
+    context_schema_version: int
     context_hash: str
-    prompt_version: str
-    rubric_versions: Mapping[str, str]
+    prompt: VersionRef
+    rubric: VersionRef
     status: MachineReviewStatus | None = None
     id: int | None = None
     source_audit_event_id: int | None = None
@@ -123,8 +126,8 @@ class StoredMachineReviewProjection:
         return MachineReviewCurrencyKey(
             context_schema_version=self.context_schema_version,
             context_hash=self.context_hash,
-            prompt_version=self.prompt_version,
-            rubric_versions=self.rubric_versions,
+            prompt=self.prompt,
+            rubric=self.rubric,
         )
 
 
@@ -161,7 +164,7 @@ def _nulls_last_desc_rank(value: int | None) -> tuple[int, int]:
 
 def _latest_ordering_key(
     review: StoredMachineReviewProjection,
-) -> tuple[datetime, tuple[int, int], tuple[int, int], tuple[str, ...]]:
+) -> tuple[datetime, tuple[int, int], tuple[int, int], tuple[int | str, ...]]:
     """Total, descending-sortable ordering key for latest-selection (policy §4).
 
     Primary: ``reviewed_at``. Then ``source_audit_event_id`` then ``id``, each
@@ -181,7 +184,8 @@ def _latest_ordering_key(
         (
             review.context_schema_version,
             review.context_hash,
-            review.prompt_version,
+            review.prompt.name,
+            review.prompt.version,
         ),
     )
 
@@ -193,19 +197,19 @@ def _currency_mismatches(
 ) -> tuple[MachineReviewStaleReason, ...]:
     """Return the currency dimensions where ``stored`` differs from ``active``.
 
-    Reported in a fixed order (schema version, hash, prompt, rubric versions) so
-    the result is deterministic. ``rubric_versions`` is compared by canonical
-    mapping equality: key order is irrelevant, but a missing, extra, or changed
-    rubric key is a mismatch (``dict(...) ==`` handles all three).
+    Reported in a fixed order (schema version, hash, prompt, rubric) so the result
+    is deterministic. ``prompt`` and ``rubric`` are compared as whole refs, name
+    and version together: a different rubric is a mismatch just as a different
+    version of the same rubric is.
     """
     reasons: list[MachineReviewStaleReason] = []
     if stored.context_schema_version != active.context_schema_version:
         reasons.append(MachineReviewStaleReason.context_schema_version_mismatch)
     if stored.context_hash != active.context_hash:
         reasons.append(MachineReviewStaleReason.context_hash_mismatch)
-    if stored.prompt_version != active.prompt_version:
+    if stored.prompt != active.prompt:
         reasons.append(MachineReviewStaleReason.prompt_version_mismatch)
-    if dict(stored.rubric_versions) != dict(active.rubric_versions):
+    if stored.rubric != active.rubric:
         reasons.append(MachineReviewStaleReason.rubric_versions_mismatch)
     return tuple(reasons)
 
@@ -214,8 +218,8 @@ def classify_machine_review_currency(
     reviews: Sequence[StoredMachineReviewProjection],
     *,
     current_context: MachineReviewContextDigest,
-    active_prompt_version: str,
-    active_rubric_versions: Mapping[str, str],
+    active_prompt: VersionRef,
+    active_rubric: VersionRef,
 ) -> MachineReviewCurrencyClassification:
     """Classify a record's machine-review passes as current / stale / historical.
 
@@ -228,8 +232,8 @@ def classify_machine_review_currency(
        DESC NULLS LAST). Every other review is ``historical``, newest-first.
     3. The latest review is **current** iff all four currency dimensions match
        the active recipe (``current_context`` supplies the active
-       ``context_schema_version``/``context_hash``; ``active_prompt_version`` and
-       ``active_rubric_versions`` the rest). Otherwise it is **stale**, and
+       ``context_schema_version``/``context_hash``; ``active_prompt`` and
+       ``active_rubric`` the rest). Otherwise it is **stale**, and
        ``stale_reasons`` names every mismatched dimension.
 
     A stale latest review makes the whole record ``stale`` even when an older,
@@ -248,8 +252,8 @@ def classify_machine_review_currency(
     active_key = MachineReviewCurrencyKey(
         context_schema_version=current_context.context_schema_version,
         context_hash=current_context.context_hash,
-        prompt_version=active_prompt_version,
-        rubric_versions=active_rubric_versions,
+        prompt=active_prompt,
+        rubric=active_rubric,
     )
     stale_reasons = _currency_mismatches(
         stored=latest.currency_key, active=active_key

@@ -173,7 +173,7 @@ PopulationBody = Annotated[
 class StatmechSelectionRequest(_Strict):
     """Qualify a supplied statistical model for a declared use, or compare applicable whole recipes."""
 
-    contract_version: Literal["statmech-selection-v1"] = "statmech-selection-v1"
+    contract_version: Literal[1] = 1
     intent: Intent
     task: Task | DeferredTask
     observable: Observable | None = Field(
@@ -273,7 +273,7 @@ class StatmechSelectionRequestEcho(ProfiledRequestEcho):
 
     model_config = ConfigDict(extra="allow")
 
-    contract_version: str
+    contract_version: int
     task: str
     intent: str
     observable: str | None = None

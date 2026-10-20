@@ -24,7 +24,7 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
-from app.chemistry.manifest_attestation import attest
+from app.chemistry.manifest_attestation import attest, require_integer_version, require_manifest_name
 
 MANIFEST_PATH = Path(__file__).with_name("e1_g4_over_g3_manifest.yaml")
 
@@ -69,7 +69,7 @@ class E1Manifest:
 
     rule_id: str
     rule_statement: str
-    version: str
+    version: int
     members: tuple[E1Member, ...]
     sources: tuple[dict[str, Any], ...]
     curator_acceptance: dict[str, Any]
@@ -93,6 +93,11 @@ class E1Manifest:
             "distinct_variants": list(self.distinct_variants),
             "sha256": self.sha256,
         }
+
+
+def _manifest_version(raw: dict[str, Any]) -> int:
+    require_manifest_name(raw.get("name"), where="E1 manifest", error=ManifestError)
+    return require_integer_version(raw.get("version"), where="E1 manifest", error=ManifestError)
 
 
 def _require(condition: bool, message: str) -> None:
@@ -158,7 +163,7 @@ def parse_e1_manifest(raw: dict[str, Any]) -> E1Manifest:
     return E1Manifest(
         rule_id=raw["rule_id"],
         rule_statement=" ".join(str(raw["rule_statement"]).split()),
-        version=str(raw["manifest_version"]),
+        version=_manifest_version(raw),
         members=members,
         sources=tuple(raw["sources"]),
         curator_acceptance=dict(acceptance),

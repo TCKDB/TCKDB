@@ -267,7 +267,7 @@ def _attach(
         summaries[record_id] = PublicAssessmentSummary(
             deterministic_trust=DeterministicTrustSummary(
                 rubric=trust.rubric,
-                rubric_version=str(trust.rubric_version),
+                rubric_version=trust.rubric_version,
                 grade=trust.label.value,
                 hard_fail=(trust.hard_fail_reason.value if trust.hard_fail_reason is not None else None),
             ),

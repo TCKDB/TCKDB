@@ -1,5 +1,5 @@
 # E1 audited membership manifest - G4 vs G3 hydrocarbon benchmark scope.
-# Version 1.0.0, approved for activation by the repository owner acting as curator (2026-10-03);
+# Approved for activation by the repository owner acting as curator (2026-10-03);
 # see status.curator_acceptance. Compiled 2026-10-03 from the sources listed below and copied here
 # unchanged except for this header and the read_from of source G399_2000. Loaded by
 # app.chemistry.thermo_rules.e1_manifest. Changing a member or a recipe fact is a new manifest
@@ -9,11 +9,8 @@ rule_statement: >-
   Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon
   formation-enthalpy (298 K) records, restricted to verified members of the
   published hydrocarbon benchmark subset.
-manifest_version: "1.0.0"
-manifest_history:
-  - {version: "0.1.0-draft", date: "2026-10-03", note: "21 memberships inferred; G3/99 paper not read"}
-  - {version: "1.0.0", date: "2026-10-03", note: "Curator (repository owner) accepted the count-reconciliation argument for the 5 G2-1 members; manifest approved for activating E1. No member changed."}
-  - {version: "0.2.0", date: "2026-10-03", note: "G3/99 paper read (owner-supplied PDF): 16 G3/99 hydrocarbons named in Table I and counted in text/Table III; COF2 deletion and phenyl/CF3 radical classification confirmed. No member changed."}
+name: e1_g4_over_g3_membership
+version: 1
 manifest_date: "2026-10-03"
 status:
   count_stated_by_source: 38        # G4 paper Table II "Hydrocarbons (38)"; G3/05 paper Table IV; G3X paper Table V

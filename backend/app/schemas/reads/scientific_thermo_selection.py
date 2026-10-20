@@ -175,7 +175,7 @@ class ThermoSelectionPolicyInfo(BaseModel):
     """The selection semantics and the rule versions that were applied."""
 
     name: str
-    version: str
+    version: int
     rules: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Registry entries applied: rule id, version, objective, scope, evidence type and limits.",
@@ -227,7 +227,7 @@ class ThermoSelectionEdge(BaseModel):
     preferred: str
     dispreferred: str
     rule_id: str = Field(description="The registry key of the rule (for example E1). Not a database id.")
-    rule_version: str
+    rule_version: int
 
 
 class ThermoSelectionRelations(BaseModel):
@@ -306,7 +306,7 @@ class ThermoSelectionManifest(BaseModel):
     manifest_format_version: int
     policy: dict[str, Any]
     assessment_semantics: dict[str, Any] | None = None
-    """How each candidate's eligibility was assessed: ``version`` (``2`` today), the evidence rubric and the source-finding
+    """How each candidate's eligibility was assessed: ``version``, the evidence rubric (its ``name`` and ``version``) and the source-finding
     gate. A manifest without a well-formed block is refused on replay. ``policy`` is the decision
     procedure replay re-runs; this is the assessment that produced the recorded ``eligible`` flags, which replay does not rerun."""
     request: ThermoSelectionManifestRequest

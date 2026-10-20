@@ -22,6 +22,7 @@ from typing import Any
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
 from app.services.manifest_formats import read_manifest_format
+from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
     check_supported,
@@ -29,6 +30,8 @@ from app.services.selection_kernel.assessment_semantics import (
 )
 from app.services.thermo_selection.engine import decide
 from app.services.thermo_selection.models import (
+    ASSESSMENT_SEMANTICS,
+    ASSESSMENT_SEMANTICS_NAME,
     ASSESSMENT_SEMANTICS_VERSION,
     MANIFEST_FORMAT_NAME,
     MANIFEST_FORMATS,
@@ -37,7 +40,6 @@ from app.services.thermo_selection.models import (
     POLICY_VERSION,
     QUANTITY,
     REFERENCE_TEMPERATURE_K,
-    SUPPORTED_ASSESSMENT_SEMANTICS,
     CandidateAssessment,
     Decision,
     H298Request,
@@ -73,7 +75,7 @@ def build_manifest(
         "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version,
         "policy": {"name": POLICY_NAME, "version": POLICY_VERSION},
         "assessment_semantics": semantics_block(
-            version=ASSESSMENT_SEMANTICS_VERSION, evidence_rubric=f"{COMPUTED_THERMO.name}@{COMPUTED_THERMO.version}"
+            version=ASSESSMENT_SEMANTICS_VERSION, evidence_rubric=COMPUTED_THERMO.ref
         ),
         "request": {
             "quantity": QUANTITY,
@@ -117,21 +119,18 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule]
     """
     read_manifest_format(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME, manifest, ReplayError)
     if manifest["policy"] != {"name": POLICY_NAME, "version": POLICY_VERSION}:
-        raise ReplayError(f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} v{POLICY_VERSION}")
+        raise ReplayError(f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} version {POLICY_VERSION}")
     try:
-        check_supported(manifest, supported=SUPPORTED_ASSESSMENT_SEMANTICS)
+        check_supported(manifest, semantics=ASSESSMENT_SEMANTICS, name=ASSESSMENT_SEMANTICS_NAME)
     except UnsupportedAssessmentSemantics as exc:
         raise ReplayError(str(exc)) from exc
     if manifest["decision"] is None:
         return {"outcome": manifest["outcome"]}
-    registry = tuple(default_rules() if rules is None else rules)
-    available = {(r.rule_id, r.version): r for r in registry}
+    registry = rules_registry("thermo_selection_rules", default_rules() if rules is None else rules)
     used = []
     for entry in manifest["decision"]["rules"]:
         key = (entry["rule_id"], entry["version"])
-        if key not in available:
-            raise ReplayError(f"rule {key[0]} version {key[1]} is not in the running registry")
-        rule = available[key]
+        rule = rule_recorded_in(registry, entry, ReplayError)
         # The rule's audited manifest is part of what the decision rests on: the same (id, version) over different
         # audited bytes is a different rule, so the replay is refused rather than re-answered.
         if rule.describe().get("manifest_sha256") != entry.get("manifest_sha256"):

@@ -57,7 +57,7 @@ Answer with a single JSON object and nothing else. No prose before or after,
 no markdown fence.
 
 {
-  "schema_version": "machine_review_v2",
+  "format": {"name": "machine_review", "version": 1},
   "status": one of "machine_screened_pass",
                    "machine_screened_warning",
                    "machine_screened_needs_attention",

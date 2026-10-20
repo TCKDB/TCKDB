@@ -21,6 +21,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
+from tckdb_schemas.fragments.version import VersionRef
+
 from app.versioning import UnknownVersion, VersionRegistry
 
 E = TypeVar("E", bound=Exception)
@@ -38,6 +40,18 @@ def new_format_registry(family: str, name: str, current_version: int) -> Version
     """A startup-checked registry holding one manifest format, ``(name, current_version)``, as current."""
     registry: VersionRegistry[ManifestFormat] = VersionRegistry(family, startup_checked=True)
     registry.register(name, current_version, ManifestFormat(name, current_version), current=True)
+    registry.validate()
+    return registry
+
+
+def new_current_only_registry(family: str, name: str, current_version: int) -> VersionRegistry[VersionRef]:
+    """A startup-checked registry of one versioned thing, ``(name, current_version)``, as current.
+
+    For a thing a manifest records the version of but that has no implementation to dispatch to (an assessment's
+    semantics): the registry says which versions are readable, and refuses the rest.
+    """
+    registry: VersionRegistry[VersionRef] = VersionRegistry(family, startup_checked=True)
+    registry.register(name, current_version, VersionRef(name=name, version=current_version), current=True)
     registry.validate()
     return registry
 

@@ -21,9 +21,11 @@ Three responsibilities, kept separate so each is independently testable:
    untrusted ``details_json`` is validated against the provider contract
    (:class:`~app.services.machine_review.schemas.MachineReviewProviderResult`)
    and projected onto the machine-review contract
-   (:class:`~app.services.machine_review.schemas.MachineReviewResult`). A
-   payload without the contract's ``schema_version`` marker, or with another
-   one, is refused: *no result + a parse warning*. Malformed or non-projectable
+   (:class:`~app.services.machine_review.schemas.MachineReviewResult`). The
+   reader is looked up in :data:`PAYLOAD_FORMATS` by the payload's ``format``
+   marker (a name beside an integer version); a payload without the marker, or
+   with a format the registry does not hold, is refused: *no result + a parse
+   warning*. Malformed or non-projectable
    payloads degrade the same way — they never raise.
 
 2. **Map** (delegated to
@@ -53,12 +55,13 @@ violated.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import ValidationError
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import (
     SubmissionActorKind,
@@ -73,12 +76,13 @@ from app.services.machine_review.mapping import (
 )
 from app.services.machine_review.read_model import RecordMachineReview
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     MachineReviewFinding,
     MachineReviewProviderResult,
     MachineReviewResult,
     MachineReviewStatus,
 )
+from app.versioning import UnknownVersion, VersionRegistry
 
 # Only an LLM-authored precheck-recorded event carries a machine-review payload.
 # Both conditions must hold: a non-LLM actor or any other event kind is not a
@@ -87,6 +91,20 @@ _MACHINE_REVIEW_EVENT_KIND = SubmissionAuditEventKind.llm_precheck_recorded
 _MACHINE_REVIEW_ACTOR_KIND = SubmissionActorKind.llm
 
 _KNOWN_RECORD_TYPES: frozenset[str] = frozenset(t.value for t in SubmissionRecordType)
+
+#: The payload formats this release reads, keyed by ``(name, version)``: each entry is the reader that validates
+#: a ``details_json`` payload of that format. The only format today is the current one. A payload naming a format
+#: the registry does not hold is *refused*, never read as the current one: nothing is guessed about its shape.
+PAYLOAD_FORMATS: VersionRegistry[Callable[[dict[str, Any]], MachineReviewProviderResult]] = VersionRegistry(
+    "machine_review_payload_formats", startup_checked=True
+)
+PAYLOAD_FORMATS.register(
+    MACHINE_REVIEW_FORMAT.name,
+    MACHINE_REVIEW_FORMAT.version,
+    MachineReviewProviderResult.model_validate,
+    current=True,
+)
+PAYLOAD_FORMATS.validate()
 
 
 @runtime_checkable
@@ -188,16 +206,15 @@ def machine_review_result_from_audit_event(
     """Validate and project one audit event's ``details_json`` payload.
 
     Treats ``details_json`` as **untrusted**. The payload must carry the
-    provider contract's root ``schema_version`` marker
-    (:data:`~app.services.machine_review.schemas.MACHINE_REVIEW_SCHEMA_VERSION`);
-    it is then validated against the provider contract and projected onto the
+    provider contract's root ``format`` marker (a name beside an integer version,
+    :data:`~app.services.machine_review.schemas.MACHINE_REVIEW_FORMAT`); the marker
+    selects the reader from :data:`PAYLOAD_FORMATS`, which validates the payload against the provider contract and projected onto the
     internal contract (no label->status translation: the payload carries the
     machine-review ``status`` and ``curator_priority`` natively). The payload's
     ``provider`` field, when present, takes precedence over the sibling
     ``details_json["provider"]`` key.
 
-    A payload with **no** marker, or any marker other than the one this release
-    reads, is an unknown format: ``result=None`` plus a parse warning. Nothing is
+    A payload with **no** marker, or any marker the registry does not hold, is an unknown format: ``result=None`` plus a parse warning. Nothing is
     guessed about its shape.
 
     Any validation/projection failure degrades to ``result=None`` plus a parse
@@ -214,19 +231,25 @@ def machine_review_result_from_audit_event(
     sibling_provider = details_json.get("provider")
     sibling_provider = sibling_provider if isinstance(sibling_provider, str) else None
 
-    schema_version = details_json.get("schema_version")
-    if schema_version != MACHINE_REVIEW_SCHEMA_VERSION:
+    marker = details_json.get("format")
+    reader: Callable[[dict[str, Any]], MachineReviewProviderResult] | None = None
+    try:
+        ref = VersionRef.model_validate(marker)
+        reader = PAYLOAD_FORMATS.get(ref.name, ref.version)
+    except (ValidationError, UnknownVersion):
+        reader = None
+    if reader is None:
         return ParsedMachineReviewPayload(
             result=None,
             provider=sibling_provider,
             parse_warnings=(
-                "machine-review audit payload has unknown schema_version "
-                f"{schema_version!r}.",
+                "machine-review audit payload has unknown format "
+                f"{marker!r}.",
             ),
         )
 
     try:
-        payload = MachineReviewProviderResult.model_validate(details_json)
+        payload = reader(details_json)
     except ValidationError:
         return ParsedMachineReviewPayload(
             result=None,

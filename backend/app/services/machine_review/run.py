@@ -3,7 +3,7 @@
 Until this module existed the machine-review stack had every part but an entry
 point. :func:`~app.services.machine_review.providers.factory.build_machine_review_provider`
 built a real provider, :func:`~app.services.submission.record_machine_review_audit_event`
-recorded a v2 result, and nothing under ``app/`` called either one -- only
+recorded a result, and nothing under ``app/`` called either one -- only
 tests did. The consequence was not subtle: a deployment could hold dozens of
 submissions and zero machine-review audit events, so the curator queue that
 reads those events was empty by construction rather than because nothing
@@ -63,7 +63,7 @@ from app.services.machine_review.providers.interface import (
     MachineReviewProvider,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     MachineReviewProviderResult,
     MachineReviewStatus,
 )
@@ -103,7 +103,7 @@ class MachineReviewRunOutcome:
     ``failure_reason`` is non-``None`` exactly when :attr:`status` is
     ``machine_review_failed``, and on that path it carries the same text as
     :attr:`summary`. That is deliberate rather than duplication left in by
-    accident: the v2 payload is ``extra="forbid"`` and has no error field, so
+    accident: the payload is ``extra="forbid"`` and has no error field, so
     in the *recorded event* the reason has nowhere to live but ``summary``.
     Naming it separately means a caller need not know that, and need not infer
     "this summary is an error" from the status.
@@ -205,7 +205,7 @@ def _failed_result(
     on than one that can.
     """
     return MachineReviewProviderResult(
-        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+        format=MACHINE_REVIEW_FORMAT,
         status=MachineReviewStatus.machine_review_failed,
         curator_priority=None,
         summary=reason,
@@ -304,7 +304,7 @@ def run_machine_review_for_submission(
     which is how tests and the fake provider get in without any deployment
     setting ever selecting them), builds the review context, asks the provider
     for a review, and records exactly one audit event carrying the validated
-    v2 payload.
+    payload.
 
     Writes only ``submission_audit_event``. ``submission.status``, the
     moderation columns, ``record_review``, curator tasks and every scientific

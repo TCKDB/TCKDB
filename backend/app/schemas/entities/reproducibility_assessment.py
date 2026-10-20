@@ -23,7 +23,7 @@ class ReproducibilityAssessmentAppend(SchemaBase):
     record_id: int = Field(gt=0)
     grade: ReproducibilityGrade
     rubric_name: str = Field(min_length=1, max_length=128)
-    rubric_version: str = Field(min_length=1, max_length=64)
+    rubric_version: int = Field(ge=1)
     context_json: dict[str, Any]
     expected_context_hash: str | None = Field(
         default=None,
@@ -37,7 +37,7 @@ class ReproducibilityAssessmentAppend(SchemaBase):
     source_submission_id: int | None = Field(default=None, gt=0)
     assessed_at: datetime | None = None
 
-    @field_validator("rubric_name", "rubric_version")
+    @field_validator("rubric_name")
     @classmethod
     def normalize_rubric_text(cls, value: str) -> str:
         """Strip rubric identifiers and reject whitespace-only values."""
@@ -62,7 +62,7 @@ class ReproducibilityAssessmentRead(ORMBaseSchema):
     record_id: int
     grade: ReproducibilityGrade
     rubric_name: str
-    rubric_version: str
+    rubric_version: int
     context_hash: str
     context_json: dict[str, Any]
     passed: list[Any] = Field(validation_alias="passed_json")

@@ -44,7 +44,9 @@ from app.chemistry.network_rules.manifest import (
 )
 from app.schemas.reads.scientific_common import SelectionPolicy  # noqa: F401  (re-exported for rule authors)
 from app.services.network_selection.models import FitFacts, NetworkFacts, NetworkRequest, SolveFacts
+from app.services.rule_registry import rules_registry
 from app.services.selection_kernel import AdminNode, RuleMatch, Tri
+from app.versioning import VersionRegistry
 
 RULE_ACTIVE = "active"
 RULE_INACTIVE = "inactive"
@@ -93,7 +95,7 @@ class NetworkRule(ABC):
     """
 
     rule_id: str
-    version: str
+    version: int
     level: str = LEVEL_CANDIDATE
     objective: NetworkComparisonObjective = NetworkComparisonObjective.physical_accuracy
     objective_key: str = ""
@@ -324,6 +326,12 @@ def default_rules() -> tuple[NetworkRule, ...]:
         )
         for candidate in manifest.candidates
     )
+
+
+@lru_cache(maxsize=1)
+def default_rules_registry() -> VersionRegistry[Any]:
+    """The registered rules keyed by ``(rule id, version)``: what a replay asks for the rule a manifest recorded."""
+    return rules_registry("network_selection_rules", default_rules())
 
 
 def active_rules(rules: tuple[NetworkRule, ...] | None = None) -> tuple[NetworkRule, ...]:

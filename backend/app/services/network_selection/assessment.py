@@ -61,7 +61,7 @@ from app.services.selection_kernel import Applicability
 
 #: Version of the assessment semantics (the checks, their reasons and the precedence). A change to any of them is a
 #: new version, and a decision manifest records the version it was made under; replay refuses another.
-ASSESSMENT_VERSION = "1"
+ASSESSMENT_VERSION = 1
 
 _ORDER_BY_UNITS = {
     "per_s": 1,

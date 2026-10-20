@@ -11,7 +11,7 @@ submission precheck at the type level.
 
 from app.services.machine_review.admin_trigger import (
     SUPPORTED_RECORD_TYPES,
-    active_rubric_versions_for_record_type,
+    active_rubric_for_record_type,
     resolve_record_trust_fragment,
     run_admin_fake_machine_review,
 )
@@ -108,10 +108,9 @@ from app.services.machine_review.read_model import (
     select_latest_machine_review_for_record,
 )
 from app.services.machine_review.recipe import (
-    ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-    ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
+    ACTIVE_MACHINE_REVIEW_PROMPT,
     MachineReviewActiveRecipe,
-    public_rubric_name,
+    active_rubric,
 )
 from app.services.machine_review.rereview import (
     MachineReviewReReviewDecision,
@@ -125,7 +124,7 @@ from app.services.machine_review.rereview_execution import (
     execute_record_machine_rereview_plan,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     CuratorPriority,
     MachineReviewCategory,
     MachineReviewFinding,
@@ -142,10 +141,9 @@ from app.services.machine_review.trust_adapter import (
 )
 
 __all__ = [
-    "ACTIVE_MACHINE_REVIEW_PROMPT_VERSION",
-    "ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS",
+    "ACTIVE_MACHINE_REVIEW_PROMPT",
     "MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION",
-    "MACHINE_REVIEW_SCHEMA_VERSION",
+    "MACHINE_REVIEW_FORMAT",
     "SCIENTIFIC_CHECK_PROVIDER",
     "SUPPORTED_RECORD_TYPES",
     "AuditRecordLink",
@@ -194,7 +192,8 @@ __all__ = [
     "SubmissionRecordMachineReviewInspection",
     "UnmappedFinding",
     "UnmappedReason",
-    "active_rubric_versions_for_record_type",
+    "active_rubric",
+    "active_rubric_for_record_type",
     "assign_curator_task",
     "build_curator_tasks_for_submission",
     "build_internal_machine_review_trust_fragment",
@@ -219,7 +218,6 @@ __all__ = [
     "machine_review_result_from_audit_event",
     "map_findings_to_submission_records",
     "plan_record_machine_rereview",
-    "public_rubric_name",
     "record_machine_reviews_from_audit_events",
     "record_machine_reviews_from_submission_audit_event",
     "reopen_curator_task",

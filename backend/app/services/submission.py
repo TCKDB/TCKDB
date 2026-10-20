@@ -385,11 +385,11 @@ def record_machine_review_audit_event(
     result: "MachineReviewProviderResult",
     provider: str | None = None,
 ) -> SubmissionAuditEvent:
-    """Record a native v2 machine-review provider result as an audit event.
+    """Record a native machine-review provider result as an audit event.
 
     Minimal service glue for the provider contract: the ``details_json`` carries
-    ``schema_version="machine_review_v2"`` (the marker the adapter dispatches
-    on), so the persisted event is read back by the adapter. It writes only ``submission_audit_event`` —
+    ``format`` (the name ``machine_review`` beside its integer version: the marker the adapter
+    dispatches on), so the persisted event is read back by the adapter. It writes only ``submission_audit_event`` —
     ``actor_kind=llm``, ``event_kind=llm_precheck_recorded`` — and never mutates
     submission status, moderation, summary columns, record-review rows, or
     scientific records.

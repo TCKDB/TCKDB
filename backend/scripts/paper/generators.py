@@ -54,7 +54,7 @@ from app.db.models.submission import Submission, SubmissionRecordLink
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
 from app.db.models.transition_state import TransitionStateEntry
 from app.db.models.workflow import WorkflowToolRelease
-from app.services.external_comparison.cp import RUNNER_VERSION as EXTERNAL_CP_COMPARISON_RUNNER_VERSION
+from app.services.external_comparison.cp import RUNNER as EXTERNAL_CP_COMPARISON_RUNNER
 from app.services.external_comparison.cp import latest_cp_comparison_for_thermo
 from app.services.machine_review.query import SCIENTIFIC_CHECK_PROVIDER
 
@@ -497,14 +497,14 @@ def experimental_cp_comparison(session: Session) -> dict[str, Any]:
     # Discovery only: which thermo records have ever had a Cp-comparison row
     # recorded. "Which one is current for a given thermo" is not decided
     # here -- that is latest_cp_comparison_for_thermo's job, reading its own
-    # (scientific_check family, RUNNER_VERSION) recipe, the same notion the
+    # (scientific_check family, RUNNER) recipe, the same notion the
     # currency classifier now uses (record_machine_review_policy.md, Phase
     # C-E4 review round 2).
     thermo_ids = sorted(
         set(
             session.scalars(
                 select(RecordMachineReviewRow.record_id).where(
-                    RecordMachineReviewRow.model == EXTERNAL_CP_COMPARISON_RUNNER_VERSION,
+                    RecordMachineReviewRow.model == EXTERNAL_CP_COMPARISON_RUNNER,
                     RecordMachineReviewRow.provider == SCIENTIFIC_CHECK_PROVIDER,
                     RecordMachineReviewRow.record_type == SubmissionRecordType.thermo,
                 )
@@ -533,7 +533,7 @@ def experimental_cp_comparison(session: Session) -> dict[str, Any]:
                 "species_entry_ref": species_entry.public_ref,
                 "species_smiles": species_entry.species.smiles,
                 "status": row.status.value,
-                "rubric_versions": dict(row.rubric_versions_json),
+                "rubric": {"name": row.rubric_name, "version": row.rubric_version},
                 "reviewed_at": row.reviewed_at,
                 "findings": findings,
                 "finding_count": len(findings),

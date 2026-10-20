@@ -30,7 +30,7 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
-from app.chemistry.manifest_attestation import attest
+from app.chemistry.manifest_attestation import attest, require_integer_version, require_manifest_name
 
 MANIFEST_PATH = Path(__file__).with_name("xyg3_b3lyp_barrier_manifest.yaml")
 #: Subsets and the number of barrier heights each must hold (two per reaction).
@@ -88,7 +88,7 @@ class XYG3BarrierManifest:
 
     rule_id: str
     rule_statement: str
-    version: str
+    version: int
     members: tuple[BarrierMember, ...]
     sources: tuple[dict[str, Any], ...]
     corrections_applied: tuple[dict[str, Any], ...]
@@ -123,6 +123,11 @@ class XYG3BarrierManifest:
             "evidence_limits": [dict(e) for e in self.evidence_limits],
             "sha256": self.sha256,
         }
+
+
+def _manifest_version(raw: dict[str, Any]) -> int:
+    require_manifest_name(raw.get("name"), where="XYG3 barrier manifest", error=ManifestError)
+    return require_integer_version(raw.get("version"), where="XYG3 barrier manifest", error=ManifestError)
 
 
 def _require(condition: bool, message: str) -> None:
@@ -220,7 +225,7 @@ def parse_xyg3_barrier_manifest(raw: dict[str, Any]) -> XYG3BarrierManifest:
     return XYG3BarrierManifest(
         rule_id=raw["rule_id"],
         rule_statement=" ".join(str(raw["rule_statement"]).split()),
-        version=str(raw["manifest_version"]),
+        version=_manifest_version(raw),
         members=members,
         sources=tuple(raw["sources"]),
         corrections_applied=tuple(raw["corrections_applied"]),

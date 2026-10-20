@@ -127,7 +127,7 @@ class CloudMachineReviewProvider:
         self,
         context: MachineReviewContext,
     ) -> MachineReviewProviderResult:
-        """Run one review and return the validated v2 result."""
+        """Run one review and return the validated result."""
         raw = self._client.complete(
             model=self._model,
             system=MACHINE_REVIEW_SYSTEM_PROMPT,

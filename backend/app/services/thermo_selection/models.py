@@ -14,7 +14,7 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import SelectionPolicy
-from app.services.manifest_formats import new_format_registry
+from app.services.manifest_formats import new_current_only_registry, new_format_registry
 from app.services.selection_kernel import (  # noqa: F401  (re-exported: the vocabulary moved to the kernel)
     Applicability,
     Edge,
@@ -37,18 +37,20 @@ MAX_CANDIDATES = 500
 #: structured manifest block; replay reads the recorded ``eligible`` flags and never reruns the assessment.
 #: A decision manifest records both versions.
 POLICY_NAME = "h298_method_preferred"
-#: 2: a superseded rule is removed before conflicts are judged (the shared kernel's fix; it cannot change an answer
-#: while the registry holds one rule, but a manifest made under version 1 was decided under the old semantics and
-#: is refused by ``replay_decision`` rather than silently re-answered).
-POLICY_VERSION = "2"
-#: Version of how eligibility is assessed. 2: an automated geometry-validation fail is advisory (computed rubrics
-#: at version 2 / transition state 3) and a live confirmed finding about a source calculation excludes the record
-#: (``structure_selection.source_findings``). A manifest with no block is refused on replay.
-ASSESSMENT_SEMANTICS_VERSION = "2"
-SUPPORTED_ASSESSMENT_SEMANTICS = frozenset({ASSESSMENT_SEMANTICS_VERSION})
+#: A superseded rule is removed before conflicts are judged (the shared kernel's rule). A manifest made under another
+#: version is refused by ``replay_decision`` rather than silently re-answered.
+POLICY_VERSION = 1
+#: Version of how eligibility is assessed: an automated geometry-validation fail is advisory and a live confirmed
+#: finding about a source calculation excludes the record (``structure_selection.source_findings``). A manifest with no
+#: block, or one recording a version the registry does not hold, is refused on replay.
+ASSESSMENT_SEMANTICS_VERSION = 1
+ASSESSMENT_SEMANTICS_NAME = "thermo_selection_assessment"
+ASSESSMENT_SEMANTICS = new_current_only_registry(
+    "thermo_selection_assessment_semantics", ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_SEMANTICS_VERSION
+)
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused.
-MANIFEST_FORMAT_VERSION = 2
+MANIFEST_FORMAT_VERSION = 1
 MANIFEST_FORMAT_NAME = "thermo_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "thermo_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
