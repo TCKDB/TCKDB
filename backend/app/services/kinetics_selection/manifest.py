@@ -32,17 +32,21 @@ from app.services.kinetics_selection.models import (
     NormalizedKinetics,
 )
 from app.services.kinetics_selection.rules import KineticsRule, default_rules
+from app.services.manifest_formats import new_format_registry, read_manifest_format
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
     check_supported,
     semantics_block,
 )
-from app.services.trust.rubrics import COMPUTED_KINETICS_V2
+from app.services.trust.rubrics import COMPUTED_KINETICS
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused.
 MANIFEST_FORMAT_VERSION = 2
-SUPPORTED_MANIFEST_FORMATS = frozenset({MANIFEST_FORMAT_VERSION})
+MANIFEST_FORMAT_NAME = "kinetics_selection_manifest"
+MANIFEST_FORMATS = new_format_registry(
+    "kinetics_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
+)
 
 
 class ReplayError(ValueError):
@@ -54,11 +58,11 @@ def build_manifest(result: KineticsAssessmentResult, decision: KineticsDecision)
     assessments = {a.kinetics_ref: a for a in result.assessments}
     ordered = sorted(result.candidates, key=lambda c: c.id_rank)
     return {
-        "manifest_format_version": MANIFEST_FORMAT_VERSION,
+        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version,
         "policy": {"name": POLICY_NAME, "version": POLICY_VERSION},
         "assessment_semantics": semantics_block(
             version=ASSESSMENT_SEMANTICS_VERSION,
-            evidence_rubric=f"{COMPUTED_KINETICS_V2.name}@{COMPUTED_KINETICS_V2.version}",
+            evidence_rubric=f"{COMPUTED_KINETICS.name}@{COMPUTED_KINETICS.version}",
         ),
         "request": {
             **result.request.to_dict(),
@@ -123,8 +127,7 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] |
         manifest, is not what the running registry carries; or if the manifest contradicts itself (a record's
         recorded eligibility, or the determinations it says the eligible records form).
     """
-    if manifest.get("manifest_format_version") not in SUPPORTED_MANIFEST_FORMATS:
-        raise ReplayError(f"unknown manifest format {manifest.get('manifest_format_version')!r}")
+    read_manifest_format(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME, manifest, ReplayError)
     if manifest["policy"] != {"name": POLICY_NAME, "version": POLICY_VERSION}:
         raise ReplayError(
             f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} v{POLICY_VERSION}"

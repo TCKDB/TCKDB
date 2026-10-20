@@ -10,20 +10,20 @@ side — adapter, mapping, inspection, curator tasks — already exists). It hol
   ``backend/docs/specs/machine_review_real_provider_plumbing.md`` §7 is a later
   slice and is deliberately *not* built here.
 * :class:`MachineReviewProvider` — the provider protocol. Every provider returns
-  a validated :class:`~app.services.machine_review.schemas.MachineReviewProviderResultV2`.
+  a validated :class:`~app.services.machine_review.schemas.MachineReviewProviderResult`.
 * :class:`MachineReviewProviderConfigurationError` — raised when a configured
   mode (cloud/local) is missing required configuration.
-* :func:`parse_machine_review_v2_payload` — the single strict-parse / trust
+* :func:`parse_machine_review_payload` — the single strict-parse / trust
   boundary: untrusted raw model output (``str`` or ``dict``) in, a validated v2
   model out, or an exception the caller converts to a failed review.
-* :func:`machine_review_v2_result_to_details_json` — serialize a validated v2
+* :func:`machine_review_result_to_details_json` — serialize a validated v2
   result into the ``submission_audit_event.details_json`` shape the adapter's v2
   path consumes. This is the only persistence-edge helper added in this slice;
   upload/precheck wiring of it is a later integration step (spec §5.2).
 
 Configuration namespace: ``AI_REVIEW_ASSISTANT_MODE`` + ``LLM_PRECHECK_*``
 remains the implementation/config namespace.
-:class:`~app.services.machine_review.schemas.MachineReviewProviderResultV2` is
+:class:`~app.services.machine_review.schemas.MachineReviewProviderResult` is
 the output contract. ``machine_review`` is the future *public* concept. No
 parallel ``MACHINE_REVIEW_*`` env vars are introduced (spec §4).
 
@@ -39,7 +39,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.services.llm_precheck.schemas import LLMPrecheckContext
 from app.services.machine_review.schemas import (
-    MachineReviewProviderResultV2,
+    MachineReviewProviderResult,
     MachineReviewStatus,
 )
 
@@ -83,12 +83,12 @@ class MachineReviewProvider(Protocol):
     def review_submission(
         self,
         context: MachineReviewContext,
-    ) -> MachineReviewProviderResultV2:
+    ) -> MachineReviewProviderResult:
         """Return a validated native v2 machine-review result.
 
         Implementations may receive raw model output but MUST return a
-        schema-validated :class:`MachineReviewProviderResultV2` (e.g. via
-        :func:`parse_machine_review_v2_payload`). A provider never persists,
+        schema-validated :class:`MachineReviewProviderResult` (e.g. via
+        :func:`parse_machine_review_payload`). A provider never persists,
         never mutates, and never raises for model misbehavior — malformed
         output is converted to a failed advisory result by the service layer,
         not by the provider.
@@ -131,21 +131,21 @@ class ReservedMachineReviewStatusError(ValueError):
     """
 
 
-def parse_machine_review_v2_payload(
+def parse_machine_review_payload(
     raw: str | dict[str, Any],
-) -> MachineReviewProviderResultV2:
+) -> MachineReviewProviderResult:
     """Strictly parse untrusted raw model output into the v2 contract.
 
     The single trust boundary for provider output. ``raw`` may be a JSON string
     (parsed with :func:`json.loads`) or an already-decoded ``dict``. The result
-    is validated against :class:`MachineReviewProviderResultV2`, whose
+    is validated against :class:`MachineReviewProviderResult`, whose
     ``extra="forbid"`` / ``Literal[False]`` ``used_rag`` constraints reject any
     mutation payload or RAG claim, and then against
     :data:`_PROVIDER_RESERVED_STATUSES`.
 
     **The narrowing lives here and not on the model** because the runner builds
     a ``machine_review_failed`` result of its own on every failure path, and a
-    validator on :class:`MachineReviewProviderResultV2` would refuse that too.
+    validator on :class:`MachineReviewProviderResult` would refuse that too.
     The distinction being drawn is not "is this value legal" but "who is
     entitled to say it", and this function is the one place that knows the
     answer came from a model.
@@ -163,7 +163,7 @@ def parse_machine_review_v2_payload(
             "machine-review v2 payload must be a JSON object, got "
             f"{type(raw).__name__}."
         )
-    parsed = MachineReviewProviderResultV2.model_validate(raw)
+    parsed = MachineReviewProviderResult.model_validate(raw)
     if parsed.status in _PROVIDER_RESERVED_STATUSES:
         raise ReservedMachineReviewStatusError(
             f"A machine-review provider may not report status "
@@ -173,8 +173,8 @@ def parse_machine_review_v2_payload(
     return parsed
 
 
-def machine_review_v2_result_to_details_json(
-    result: MachineReviewProviderResultV2,
+def machine_review_result_to_details_json(
+    result: MachineReviewProviderResult,
 ) -> dict[str, Any]:
     """Serialize a validated v2 result into an audit-event ``details_json`` dict.
 

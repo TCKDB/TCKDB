@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.129.0 - 2026-10-20
+
+The contribution bundle surface is now named `ContributionBundle` in the shipped producer contract: the generated JSON Schema file is
+`contract/schemas/ContributionBundle.schema.json` (it was `ContributionBundleV0.schema.json`), its `title` is `ContributionBundle`, and
+`PRODUCER_CONTRACT.md` refers to the surface by the new name. The bundle's wire fields are unchanged: `bundle_format` is still
+`tckdb-contribution-bundle` and `bundle_version` is still `"0.1"`, so a producer's bundle documents validate exactly as before. Only a
+consumer that opens the old schema file name, or matches the old surface name, has to change.
+
 ## 0.128.0 - 2026-10-20
 
 One new refusal code in the shipped producer contract, `unknown_manifest_schema` (409): a release manifest row names a format tag this

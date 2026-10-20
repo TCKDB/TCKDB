@@ -117,6 +117,23 @@ def parse_new_allowances(source: str) -> set[tuple[str, str, str]]:
     return result
 
 
+def parse_moved_debt(source: str) -> dict[tuple[str, str, str], tuple[str, str, str]]:
+    """``MOVED_DEBT`` as {new key: old key}: debt rows whose text changed with a rename, nothing else.
+
+    Each row is ``(path, kind, old token, new token)``. The path and kind cannot change, which keeps a move
+    from being a way to relocate a violation to another file.
+    """
+    result: dict[tuple[str, str, str], tuple[str, str, str]] = {}
+    for row in literal_binding(source, "MOVED_DEBT"):
+        if not (isinstance(row, tuple) and len(row) == 4 and all(isinstance(part, str) for part in row)):
+            raise DebtFileError(f"a MOVED_DEBT row is not (path, kind, old token, new token): {row!r}")
+        path, kind, old_token, new_token = row
+        if (path, kind, new_token) in result:
+            raise DebtFileError(f"MOVED_DEBT names {(path, kind, new_token)!r} twice")
+        result[(path, kind, new_token)] = (path, kind, old_token)
+    return result
+
+
 def _annotation(message: str) -> str:
     """A GitHub ``warning`` annotation, so a declared allowance shows on the PR's checks summary."""
     escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
@@ -145,14 +162,36 @@ def new_allowances(
     return problems, notices
 
 
-def grown(base: dict[tuple[str, str, str], int], head: dict[tuple[str, str, str], int]) -> list[str]:
-    """What the head's debt has that the base's does not allow."""
+def grown(
+    base: dict[tuple[str, str, str], int],
+    head: dict[tuple[str, str, str], int],
+    moved: dict[tuple[str, str, str], tuple[str, str, str]] | None = None,
+) -> list[str]:
+    """What the head's debt has that the base's does not allow.
+
+    *moved* maps a head row to the base row it is the renamed text of. A move is a declaration, not a
+    permission: the old row must exist at the merge base, the old row must be gone from the head, and the
+    count may not exceed the old row's. Anything else is a new row and is refused as before.
+    """
+    moved = moved or {}
     problems = []
     for key, count in sorted(head.items()):
+        old = moved.get(key)
+        if old is not None and key not in base:
+            if old not in base:
+                problems.append(f"MOVED_DEBT says {key!r} was {old!r}, which the merge base does not have")
+            elif old in head:
+                problems.append(f"MOVED_DEBT says {key!r} replaced {old!r}, but the head still lists the old row")
+            elif count > base[old]:
+                problems.append(f"moved debt row {key!r} grew from x{base[old]} (as {old!r}) to x{count}")
+            continue
         if key not in base:
             problems.append(f"new debt row {key!r} (x{count}); a new violation must be fixed, not listed")
         elif count > base[key]:
             problems.append(f"debt row {key!r} grew from x{base[key]} to x{count}")
+    for new_key in sorted(moved):
+        if new_key not in head:
+            problems.append(f"MOVED_DEBT names {new_key!r}, which is not in DEBT")
     return problems
 
 
@@ -220,7 +259,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         head_debt = parse_debt(head_source)
-        problems = grown(base_debt, head_debt)
+        moved = parse_moved_debt(head_source)
+        problems = grown(base_debt, head_debt, moved)
         allow_problems, notices = new_allowances(
             parse_allowed(base_file.stdout),
             parse_allowed(head_source),
@@ -232,6 +272,9 @@ def main(argv: list[str] | None = None) -> int:
     problems += allow_problems
     for notice in notices:
         print(notice)
+    for new_key, old_key in sorted(moved.items()):
+        print(_annotation(f"debt row moved with a rename: {old_key!r} -> {new_key[2]!r}").replace(
+            "New versioned-name allowance", "Moved versioned-name debt row"))
     if problems:
         print(f"The versioned-names debt grew relative to the merge base {base_sha[:9]}:", file=sys.stderr)
         for problem in problems:

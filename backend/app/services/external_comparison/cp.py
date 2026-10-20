@@ -53,7 +53,7 @@ from app.services.machine_review.schemas import (
     MachineReviewFinding,
     MachineReviewSeverity,
 )
-from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON_V2
+from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON
 
 #: Cantera's ``ThermoPhase.cp_mole`` is J/(kmol*K); TCKDB's fixed unit for
 #: this quantity is J/(mol*K) (unit policy, ``docs/unit_policy.md``). The one
@@ -476,13 +476,13 @@ def run_and_record(
     context = MachineReviewEvidenceContext(
         record_type="thermo",
         record_ref=thermo.public_ref,
-        rubric_name=EXTERNAL_CP_COMPARISON_V2.name,
-        rubric_version=EXTERNAL_CP_COMPARISON_V2.version,
+        rubric_name=EXTERNAL_CP_COMPARISON.name,
+        rubric_version=EXTERNAL_CP_COMPARISON.version,
         notes=(result.inputs_json,),
     )
     digest = build_machine_review_context_hash(context)
 
-    rubric_key = public_rubric_name(EXTERNAL_CP_COMPARISON_V2)
+    rubric_key = public_rubric_name(EXTERNAL_CP_COMPARISON)
     rubric_versions = {rubric_key: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[rubric_key]}
 
     return create_record_machine_review_row(
@@ -522,7 +522,7 @@ def latest_cp_comparison_for_thermo(session: Session, thermo_id: int) -> RecordM
 def cp_comparison_currency(session, thermo_id):
     """Re-read live inputs; latest recorded alone does not establish currency."""
     result = compare_thermo_with_cp_observations(session, thermo_id)
-    rubric = EXTERNAL_CP_COMPARISON_V2
+    rubric = EXTERNAL_CP_COMPARISON
     digest = build_machine_review_context_hash(MachineReviewEvidenceContext(
         record_type="thermo", record_ref=result.thermo.public_ref,
         rubric_name=rubric.name, rubric_version=rubric.version, notes=(result.inputs_json,),

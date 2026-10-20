@@ -8,7 +8,7 @@ trust, or moderation state.
 
 The service is pure, so these tests build lightweight event / record-link
 stand-ins and the *real* persisted ``details_json`` shape (via
-:func:`machine_review_v2_result_to_details_json`). The audit adapter, mapping,
+:func:`machine_review_result_to_details_json`). The audit adapter, mapping,
 read-model, and derivation layers are exercised through the inspection service
 end-to-end. The heavy run-time non-interference fixture lives in
 ``test_machine_review_non_interference.py`` and is not duplicated here.
@@ -39,12 +39,12 @@ from app.services.machine_review.inspection import (
     get_machine_review_summaries_for_record,
 )
 from app.services.machine_review.providers.interface import (
-    machine_review_v2_result_to_details_json,
+    machine_review_result_to_details_json,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_V2_SCHEMA_VERSION,
-    MachineReviewProviderFindingV2,
-    MachineReviewProviderResultV2,
+    MACHINE_REVIEW_SCHEMA_VERSION,
+    MachineReviewProviderFinding,
+    MachineReviewProviderResult,
 )
 
 # A fixed reference instant so tests never depend on wall-clock time.
@@ -79,20 +79,20 @@ class _Link:
 def _details(
     *,
     status: MachineReviewStatus = MachineReviewStatus.machine_screened_warning,
-    findings: tuple[MachineReviewProviderFindingV2, ...] = (),
+    findings: tuple[MachineReviewProviderFinding, ...] = (),
     model: str | None = "fake_test/simple-v1",
     provider: str | None = "FakeLLMPrecheckProvider",
 ) -> dict[str, Any]:
     """Build a realistic persisted ``details_json`` payload."""
-    result = MachineReviewProviderResultV2(
-        schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    result = MachineReviewProviderResult(
+        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
         status=status,
         summary="advisory summary",
         findings=findings,
         model=model,
         used_rag=False,
     )
-    payload = machine_review_v2_result_to_details_json(result)
+    payload = machine_review_result_to_details_json(result)
     if provider is not None:
         payload["provider"] = provider
     return payload
@@ -103,9 +103,9 @@ def _record_finding(
     record_type: str = "calculation",
     record_id: int | None = 1,
     severity: MachineReviewSeverity = MachineReviewSeverity.warning,
-) -> MachineReviewProviderFindingV2:
+) -> MachineReviewProviderFinding:
     """Build one record-addressed precheck finding."""
-    return MachineReviewProviderFindingV2(
+    return MachineReviewProviderFinding(
         severity=severity,
         category=MachineReviewCategory.provenance,
         record_type=record_type,
@@ -118,7 +118,7 @@ def _record_finding(
 def _mr_event(
     *,
     status: MachineReviewStatus = MachineReviewStatus.machine_screened_warning,
-    findings: tuple[MachineReviewProviderFindingV2, ...] = (),
+    findings: tuple[MachineReviewProviderFinding, ...] = (),
     submission_id: int = 5,
     created_at: datetime | None = _T0,
     model: str | None = "fake_test/simple-v1",
@@ -257,7 +257,7 @@ def test_inspection_sibling_record_findings_do_not_affect_latest_summary():
 
 def test_inspection_does_not_fan_out_submission_scoped_findings():
     """A submission-level finding never becomes the requested record's summary."""
-    submission_finding = MachineReviewProviderFindingV2(
+    submission_finding = MachineReviewProviderFinding(
         severity=MachineReviewSeverity.critical,
         category=MachineReviewCategory.consistency,
         record_type=None,
@@ -313,7 +313,7 @@ def test_inspection_preserves_unmapped_diagnostics():
 def test_inspection_preserves_parse_warnings():
     """A malformed payload degrades to a preserved parse warning, never a raise."""
     malformed = _AuditEvent(
-        details_json={"schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION, "status": "not-a-real-status", "findings": []},
+        details_json={"schema_version": MACHINE_REVIEW_SCHEMA_VERSION, "status": "not-a-real-status", "findings": []},
         submission_id=5,
     )
 

@@ -1,7 +1,7 @@
 """Code-defined rubrics for the deterministic trust evaluator.
 
 This module is intentionally small: a check-runner library plus the
-first MVP rubric, ``computed_calculation_v1``. Each rubric is a tuple
+first MVP rubric, ``computed_calculation``. Each rubric is a tuple
 of :class:`EvidenceCheckSpec` rows whose ``runner`` is a pure function
 over an already-loaded :class:`~app.db.models.calculation.Calculation`
 graph.
@@ -11,10 +11,13 @@ should follow the same shape:
 
 * declare a runner per check,
 * assemble them into a :class:`EvidenceRubric`,
-* register the rubric under :data:`RUBRIC_REGISTRY`.
+* register the rubric in :data:`RUBRICS` (at the foot of this module), under its
+  stable name and its integer version, and route its record type to that name in
+  :data:`RUBRIC_NAME_FOR_RECORD_TYPE`.
 
-A real plugin system is deferred until at least three rubrics exist;
-the simple dict-based registry below covers everything we need today.
+The registry is a :class:`~app.versioning.VersionRegistry`: a rubric is looked up by
+``(name, version)``, ``version=None`` means the current one, and an unknown pair is
+refused (:class:`~app.versioning.UnknownVersion`).
 """
 
 from __future__ import annotations
@@ -56,6 +59,7 @@ from app.services.trust.models import (
     TransitionStateTrustContext,
     frequency_result_designates_its_reaction_coordinate,
 )
+from app.versioning import VersionRegistry
 
 _TYPES_WITH_OUTPUT_GEOMETRY: frozenset[CalculationType] = frozenset(
     {CalculationType.opt, CalculationType.irc, CalculationType.path_search}
@@ -1784,7 +1788,7 @@ def _check_transport_not_rejected_or_deprecated_if_applicable(
 # checks), no longer a hard fail, and the "non hard failed evidence" checks mirror the narrowed hard fail (rejected quality
 # only). A machine review stamped with the previous version is genuinely stale, which is what the bump is for. Never edit
 # a stored review; see ``backend/docs/specs/automated_trust_layer.md``.
-COMPUTED_CALCULATION_V2: EvidenceRubric = EvidenceRubric(
+COMPUTED_CALCULATION: EvidenceRubric = EvidenceRubric(
     name="computed_calculation",
     version=2,
     record_type="calculation",
@@ -1887,7 +1891,7 @@ COMPUTED_CALCULATION_V2: EvidenceRubric = EvidenceRubric(
 )
 
 
-COMPUTED_KINETICS_V2: EvidenceRubric = EvidenceRubric(
+COMPUTED_KINETICS: EvidenceRubric = EvidenceRubric(
     name="computed_kinetics",
     version=2,
     record_type="kinetics",
@@ -2036,7 +2040,7 @@ COMPUTED_KINETICS_V2: EvidenceRubric = EvidenceRubric(
 )
 
 
-COMPUTED_THERMO_V2: EvidenceRubric = EvidenceRubric(
+COMPUTED_THERMO: EvidenceRubric = EvidenceRubric(
     name="computed_thermo",
     version=2,
     record_type="thermo",
@@ -2216,7 +2220,7 @@ COMPUTED_THERMO_V2: EvidenceRubric = EvidenceRubric(
 )
 
 
-COMPUTED_STATMECH_V2: EvidenceRubric = EvidenceRubric(
+COMPUTED_STATMECH: EvidenceRubric = EvidenceRubric(
     name="computed_statmech",
     version=2,
     record_type="statmech",
@@ -2381,7 +2385,7 @@ COMPUTED_STATMECH_V2: EvidenceRubric = EvidenceRubric(
 )
 
 
-COMPUTED_TRANSPORT_V2: EvidenceRubric = EvidenceRubric(
+COMPUTED_TRANSPORT: EvidenceRubric = EvidenceRubric(
     name="computed_transport",
     version=2,
     record_type="transport",
@@ -3181,7 +3185,7 @@ def _check_ts_review_not_rejected_or_deprecated_if_applicable(
 # Label, completeness, score and ``is_certified`` never read the assessment: the assessment itself is the
 # ``trust.structure_assessment`` block, and only the pinned-result rule can move a completeness number, and only
 # for an entry that declares a target.
-COMPUTED_TRANSITION_STATE_V5: EvidenceRubric = EvidenceRubric(
+COMPUTED_TRANSITION_STATE: EvidenceRubric = EvidenceRubric(
     name="computed_transition_state",
     version=5,
     record_type="transition_state_entry",
@@ -3417,12 +3421,12 @@ COMPUTED_TRANSITION_STATE_V5: EvidenceRubric = EvidenceRubric(
 )
 
 
-assert COMPUTED_STATMECH_V2.checks[0].name == "species_entry_present", (
-    "COMPUTED_TS_STATMECH_V1 swaps the first check of COMPUTED_STATMECH_V2; "
-    "if V2 is reordered, re-derive the TS rubric instead of slicing it"
+assert COMPUTED_STATMECH.checks[0].name == "species_entry_present", (
+    "COMPUTED_TS_STATMECH swaps the first check of COMPUTED_STATMECH; "
+    "if its checks are reordered, re-derive the TS rubric instead of slicing it"
 )
 
-COMPUTED_TS_STATMECH_V1: EvidenceRubric = EvidenceRubric(
+COMPUTED_TS_STATMECH: EvidenceRubric = EvidenceRubric(
     name="computed_ts_statmech",
     version=1,
     record_type="statmech",
@@ -3433,12 +3437,12 @@ COMPUTED_TS_STATMECH_V1: EvidenceRubric = EvidenceRubric(
             explain="Statmech must be attached to a transition_state_entry.",
             runner=_check_statmech_transition_state_entry_present,
         ),
-        *COMPUTED_STATMECH_V2.checks[1:],
+        *COMPUTED_STATMECH.checks[1:],
     ),
 )
 """Evidence completeness for a statmech record owned by a transition-state entry.
 
-``COMPUTED_STATMECH_V2`` with exactly one check swapped: "attached to a
+``COMPUTED_STATMECH`` with exactly one check swapped: "attached to a
 transition-state entry" replaces "attached to a species entry". Every other check
 is the *same* spec object, so the two rubrics cannot drift apart. It adds no
 transition-state-specific check (no imaginary-mode count, no reaction-coordinate
@@ -3448,59 +3452,62 @@ That judgment belongs to the statmech selection endpoint.
 """
 
 
-RUBRIC_REGISTRY: dict[str, EvidenceRubric] = {
-    "calculation": COMPUTED_CALCULATION_V2,
-    "kinetics": COMPUTED_KINETICS_V2,
-    "statmech": COMPUTED_STATMECH_V2,
-    "thermo": COMPUTED_THERMO_V2,
-    "transition_state_entry": COMPUTED_TRANSITION_STATE_V5,
-    "transport": COMPUTED_TRANSPORT_V2,
+#: Record-type discriminator -> the name of the rubric that grades it by default.
+#:
+#: A routing table, not a registry: it holds names, and the rubric itself (any
+#: version of it) comes from :data:`RUBRICS`. The six entries are the computed-trust
+#: rubrics the evaluator runs; the advisory rubrics declared further down carry no
+#: checks, are never run by a computed-trust evaluator, and are deliberately absent
+#: here, because a record type maps to one grading rubric and "thermo" already means
+#: ``computed_thermo``.
+RUBRIC_NAME_FOR_RECORD_TYPE: dict[str, str] = {
+    "calculation": COMPUTED_CALCULATION.name,
+    "kinetics": COMPUTED_KINETICS.name,
+    "statmech": COMPUTED_STATMECH.name,
+    "thermo": COMPUTED_THERMO.name,
+    "transition_state_entry": COMPUTED_TRANSITION_STATE.name,
+    "transport": COMPUTED_TRANSPORT.name,
 }
-"""Lookup of the latest active rubric per record-type discriminator.
-
-Today the registry holds one entry. As rubrics for kinetics / thermo /
-statmech / transport / experimental land, they should be added here
-keyed by the same record-type discriminator the read serializer uses.
-Multiple rubric versions can coexist; the registry stores the current
-default per type.
-"""
 
 
 def get_rubric_for_record_type(record_type: str) -> Optional[EvidenceRubric]:
-    """Return the active rubric for a record-type discriminator, or None.
+    """Return the current rubric for a record-type discriminator, or None.
 
     Returning ``None`` (rather than raising) makes "no rubric defined"
     a survivable shape — the read serializer can omit the
     ``evidence`` block for record types that do not yet have a rubric,
     rather than the API failing.
     """
-    return RUBRIC_REGISTRY.get(record_type)
+    name = RUBRIC_NAME_FOR_RECORD_TYPE.get(record_type)
+    if name is None:
+        return None
+    return RUBRICS.get(name)
 
 
-OWNER_SCOPED_RUBRICS: tuple[tuple[str, EvidenceRubric], ...] = (
-    ("statmech", COMPUTED_TS_STATMECH_V1),
+OWNER_SCOPED_RUBRIC_NAMES: tuple[tuple[str, str], ...] = (
+    ("statmech", COMPUTED_TS_STATMECH.name),
 )
-"""Rubrics that apply to one *owner kind* of a record type, outside ``RUBRIC_REGISTRY``.
+"""Rubric names that apply to one *owner kind* of a record type, outside ``RUBRIC_NAME_FOR_RECORD_TYPE``.
 
-``RUBRIC_REGISTRY`` keeps the record-type default (for statmech, the species rubric
-``COMPUTED_STATMECH_V2``). An entry here is selected per record by a router
-(``statmech_rubric_for``), never by the registry. Each entry is
-``(record_type, rubric)``. Anything that enumerates "every check a trust map can
-contain" (the API vocabulary) must read this as well as the registry.
+``RUBRIC_NAME_FOR_RECORD_TYPE`` keeps the record-type default (for statmech, the species rubric
+``computed_statmech``). An entry here is selected per record by a router
+(``statmech_rubric_for``), never by that table. Each entry is
+``(record_type, rubric name)``. Anything that enumerates "every check a trust map can
+contain" (the API vocabulary) must read this as well as the table.
 """
 
 
-def statmech_rubric_for(statmech: Statmech) -> EvidenceRubric:
-    """Return the rubric that evaluates ``statmech``, by who owns the record.
+def statmech_rubric_for(statmech: Statmech) -> str:
+    """Return the *name* of the rubric that evaluates ``statmech``, by who owns the record.
 
     A transition-state-owned record (``species_entry_id`` null, ``transition_state_entry_id``
-    set) is graded by ``COMPUTED_TS_STATMECH_V1``. Everything else, species-owned records
+    set) is graded by ``computed_ts_statmech``. Everything else, species-owned records
     and the impossible-under-the-CHECK rows with neither or both owners, keeps
-    ``COMPUTED_STATMECH_V2`` exactly as before.
+    ``computed_statmech`` exactly as before. Resolve the name with ``RUBRICS.get(name)``.
     """
     if statmech.species_entry_id is None and statmech.transition_state_entry_id is not None:
-        return COMPUTED_TS_STATMECH_V1
-    return COMPUTED_STATMECH_V2
+        return COMPUTED_TS_STATMECH.name
+    return COMPUTED_STATMECH.name
 
 
 # ---------------------------------------------------------------------------
@@ -3509,27 +3516,58 @@ def statmech_rubric_for(statmech: Statmech) -> EvidenceRubric:
 #
 # Everything above this point evaluates the deterministic *computed-trust*
 # evidence completeness for a record (ADR 0008's structural tier) and is
-# reachable through RUBRIC_REGISTRY / get_rubric_for_record_type. The rubrics
+# reachable through RUBRIC_NAME_FOR_RECORD_TYPE / get_rubric_for_record_type. The rubrics
 # below are a different thing: they exist only to give the review-tier checks
 # (``app.scientific_checks.external_comparison``,
 # ``app.services.external_comparison.cp``, ``app.services.consistency``) a
 # versioned name in the machine-review currency recipe
-# (``app.services.machine_review.recipe._ACTIVE_RUBRICS``). They declare
+# (``app.services.machine_review.recipe.ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS``). They declare
 # ``checks=()`` deliberately: no computed-trust evaluator ever runs them, so none
-# is added to RUBRIC_REGISTRY -- doing so would offer it to
+# is added to RUBRIC_NAME_FOR_RECORD_TYPE -- doing so would offer it to
 # get_rubric_for_record_type for the "thermo" record type, colliding with
-# COMPUTED_THERMO_V2's own meaning of that key.
+# COMPUTED_THERMO's own meaning of that key. They are registered in RUBRICS like
+# every other rubric.
 
-# Advisory-only recipes, deliberately outside RUBRIC_REGISTRY.
-EXTERNAL_CP_COMPARISON_V2 = EvidenceRubric(name="external_cp_comparison", version=2, record_type="thermo", checks=())
-THERMO_CONSISTENCY_V1 = EvidenceRubric(name="thermo_consistency", version=1, record_type="thermo", checks=())
-THERMO_KINETICS_CONSISTENCY_V1 = EvidenceRubric(
+# Advisory-only recipes, deliberately outside RUBRIC_NAME_FOR_RECORD_TYPE.
+EXTERNAL_CP_COMPARISON = EvidenceRubric(name="external_cp_comparison", version=2, record_type="thermo", checks=())
+THERMO_CONSISTENCY = EvidenceRubric(name="thermo_consistency", version=1, record_type="thermo", checks=())
+THERMO_KINETICS_CONSISTENCY = EvidenceRubric(
     name="thermo_kinetics_consistency", version=1, record_type="kinetics", checks=(),
 )
-GIBBS_SELF_CONSISTENCY_V1 = EvidenceRubric(name="gibbs_self_consistency", version=1, record_type="thermo", checks=())
-HESS_CONSISTENCY_V1 = EvidenceRubric(name="hess_consistency", version=1, record_type="kinetics", checks=())
-KIRCHHOFF_CONSISTENCY_V1 = EvidenceRubric(name="kirchhoff_consistency", version=1, record_type="thermo", checks=())
+GIBBS_SELF_CONSISTENCY = EvidenceRubric(name="gibbs_self_consistency", version=1, record_type="thermo", checks=())
+HESS_CONSISTENCY = EvidenceRubric(name="hess_consistency", version=1, record_type="kinetics", checks=())
+KIRCHHOFF_CONSISTENCY = EvidenceRubric(name="kirchhoff_consistency", version=1, record_type="thermo", checks=())
 # #672: a protium species entry whose calculation geometries declare a non-standard nuclide.
-ISOTOPE_IDENTITY_CONSISTENCY_V1 = EvidenceRubric(
+ISOTOPE_IDENTITY_CONSISTENCY = EvidenceRubric(
     name="isotope_identity_consistency", version=1, record_type="species_entry", checks=(),
 )
+
+
+# ---------------------------------------------------------------------------
+# The registry
+# ---------------------------------------------------------------------------
+
+#: Every rubric TCKDB runs or stamps, keyed by (name, version). Read by the
+#: evaluators (``RUBRICS.get(name)``), the machine-review recipe and the API
+#: vocabulary. ``startup_checked``: ``create_app`` validates it, so a rubric
+#: registered without a current version stops the boot.
+RUBRICS: VersionRegistry[EvidenceRubric] = VersionRegistry("trust_rubrics", startup_checked=True)
+for _rubric in (
+    COMPUTED_CALCULATION,
+    COMPUTED_KINETICS,
+    COMPUTED_THERMO,
+    COMPUTED_STATMECH,
+    COMPUTED_TS_STATMECH,
+    COMPUTED_TRANSPORT,
+    COMPUTED_TRANSITION_STATE,
+    EXTERNAL_CP_COMPARISON,
+    THERMO_CONSISTENCY,
+    THERMO_KINETICS_CONSISTENCY,
+    GIBBS_SELF_CONSISTENCY,
+    HESS_CONSISTENCY,
+    ISOTOPE_IDENTITY_CONSISTENCY,
+    KIRCHHOFF_CONSISTENCY,
+):
+    RUBRICS.register(_rubric.name, _rubric.version, _rubric, current=True)
+del _rubric
+RUBRICS.validate()

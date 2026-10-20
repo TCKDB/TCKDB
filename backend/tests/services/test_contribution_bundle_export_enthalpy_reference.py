@@ -39,7 +39,7 @@ from sqlalchemy.orm import Session
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole, ScientificOriginKind, SubmissionRecordType, ThermoModelKind
 from app.db.models.thermo import Thermo, ThermoPoint
-from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+from app.schemas.workflows.contribution_bundle import ContributionBundle
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.contribution_bundle_export import export_thermo_bundle
 from app.workflows.contribution_bundle_submit import submit_contribution_bundle
@@ -353,10 +353,10 @@ def test_legacy_gibbs_only_points_are_dropped_and_s298_survives(db_session) -> N
 # ---------------------------------------------------------------------------
 
 
-def _round_trip_through_bundle_import(db_session: Session, bundle: ContributionBundleV0) -> Thermo:
+def _round_trip_through_bundle_import(db_session: Session, bundle: ContributionBundle) -> Thermo:
     """JSON-dump the bundle the way the CLI writes it, then submit it through
     the real hosted importer (dry-run gate, then persist)."""
-    reloaded = ContributionBundleV0.model_validate(bundle.model_dump(mode="json"))
+    reloaded = ContributionBundle.model_validate(bundle.model_dump(mode="json"))
     actor = AppUser(username=f"enthexp-{uuid4().hex[:10]}", role=AppUserRole.user)
     db_session.add(actor)
     db_session.flush()

@@ -54,7 +54,7 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.services.trust import (
-    COMPUTED_TRANSITION_STATE_V5,
+    COMPUTED_TRANSITION_STATE,
     EvidenceBadge,
     EvidenceCheckKind,
     EvidenceOutcome,
@@ -1077,7 +1077,7 @@ def test_session_wrapper_returns_hard_fail_for_missing_id(db_session: Session):
 
 def test_rubric_metadata_pinned():
     """Pin the public contract of the rubric metadata."""
-    assert COMPUTED_TRANSITION_STATE_V5.name == "computed_transition_state"
+    assert COMPUTED_TRANSITION_STATE.name == "computed_transition_state"
     # Bumped by ADR 0012: the required imaginary-mode check changed from
     # counting to citing the recorded designation, and a new advisory
     # check surfaces the structural flag. A machine review performed
@@ -1086,17 +1086,17 @@ def test_rubric_metadata_pinned():
     # automated geometry-validation fail is advisory (a warning), not a hard
     # fail, and the frequency contradiction is judged over every source
     # frequency result, not the one the rubric calls representative.
-    assert COMPUTED_TRANSITION_STATE_V5.version == 5
-    assert COMPUTED_TRANSITION_STATE_V5.record_type == "transition_state_entry"
-    assert len(COMPUTED_TRANSITION_STATE_V5.checks) == 32
+    assert COMPUTED_TRANSITION_STATE.version == 5
+    assert COMPUTED_TRANSITION_STATE.record_type == "transition_state_entry"
+    assert len(COMPUTED_TRANSITION_STATE.checks) == 32
     # v4 (#729): the undesignated-modes warning sits right after the zero-mode warning and carries no weight.
-    names = [c.name for c in COMPUTED_TRANSITION_STATE_V5.checks]
+    names = [c.name for c in COMPUTED_TRANSITION_STATE.checks]
     i = names.index("no_frequency_result_lacks_an_imaginary_mode")
     assert names[i + 1] == "no_frequency_result_has_undesignated_imaginary_modes"
-    assert COMPUTED_TRANSITION_STATE_V5.checks[i + 1].kind is EvidenceCheckKind.warning
+    assert COMPUTED_TRANSITION_STATE.checks[i + 1].kind is EvidenceCheckKind.warning
     # v5 (#723): the scoped-assessment warning follows, carries no weight, and is the only check that reads the assessment.
     assert names[i + 2] == "declared_saddle_target_qualifies"
-    assert COMPUTED_TRANSITION_STATE_V5.checks[i + 2].kind is EvidenceCheckKind.warning
+    assert COMPUTED_TRANSITION_STATE.checks[i + 2].kind is EvidenceCheckKind.warning
 
 
 def test_calculation_dependencies_check_passes_when_freq_linked(db_session: Session):

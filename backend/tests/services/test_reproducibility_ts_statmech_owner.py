@@ -203,7 +203,7 @@ def test_t4_the_stamped_identity_follows_the_owner(db_session, _api_test_user):
 
 
 def test_t5_the_router_agrees_with_the_trust_tiers_owner_test():
-    from app.services.trust import COMPUTED_TS_STATMECH_V1, statmech_rubric_for
+    from app.services.trust import COMPUTED_TS_STATMECH, statmech_rubric_for
 
     cases = {
         "species": Statmech(species_entry_id=1, transition_state_entry_id=None),
@@ -213,7 +213,7 @@ def test_t5_the_router_agrees_with_the_trust_tiers_owner_test():
     }
     for name, record in cases.items():
         is_ts_here = reproducibility_rubric_for(record) == TS_STATMECH
-        is_ts_there = statmech_rubric_for(record) is COMPUTED_TS_STATMECH_V1
+        is_ts_there = statmech_rubric_for(record) == COMPUTED_TS_STATMECH.name
         assert is_ts_here == is_ts_there, name
     assert reproducibility_rubric_for(cases["ts"]) == TS_STATMECH
     assert all(reproducibility_rubric_for(cases[n]) == SHARED for n in ("species", "neither", "both"))

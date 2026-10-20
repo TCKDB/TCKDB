@@ -35,7 +35,7 @@ from app.schemas.contribution_bundle_dry_run import (
 )
 from app.schemas.workflows.contribution_bundle import (
     BundleKind,
-    ContributionBundleV0,
+    ContributionBundle,
 )
 from app.workflows.contribution_bundle_submit import (
     _is_blocking,
@@ -53,9 +53,9 @@ def _make_user(session, username: str = "submitter") -> AppUser:
     return user
 
 
-def _load_bundle(filename: str) -> ContributionBundleV0:
+def _load_bundle(filename: str) -> ContributionBundle:
     raw = json.loads((EXAMPLES_DIR / filename).read_text())
-    return ContributionBundleV0.model_validate(raw)
+    return ContributionBundle.model_validate(raw)
 
 
 def _empty_dry_run(
@@ -268,7 +268,7 @@ class TestSubmitContributionBundle:
             "reactants"
         ]:
             participant["species_entry"]["smiles"] = "this-is-not-a-smiles"
-        bundle = ContributionBundleV0.model_validate(raw)
+        bundle = ContributionBundle.model_validate(raw)
 
         before = db_session.scalar(
             select(Submission).where(Submission.created_by == user.id)

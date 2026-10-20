@@ -673,7 +673,7 @@ def test_an_export_is_logged_with_who_network_digest_format_and_member_count(cli
 def test_the_live_selection_always_runs_under_the_servers_bounds(db_session, world, one, monkeypatch):
     """Even a document that somehow carried other limits would not size the scan: the request is rebuilt with ours."""
     from app.services.network_selection import export as export_module
-    from app.services.network_selection.models import BOUNDS_V1, SelectionBounds
+    from app.services.network_selection.models import DEFAULT_BOUNDS, SelectionBounds
 
     seen = {}
 
@@ -696,7 +696,7 @@ def test_the_live_selection_always_runs_under_the_servers_bounds(db_session, wor
     }
     with pytest.raises(RuntimeError):
         export_module._live_selection(db_session, {"request": request}, require_snapshot=False)
-    assert seen["bounds"] == BOUNDS_V1
+    assert seen["bounds"] == DEFAULT_BOUNDS
 
 
 def test_editing_a_stored_chebyshev_coefficient_in_place_makes_the_manifest_stale(client, db_session, world):

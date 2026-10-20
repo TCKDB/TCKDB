@@ -344,7 +344,7 @@ def test_producer_routes_were_actually_discovered() -> None:
         "NetworkPDepUploadRequest",
         # The contribution-bundle root: the surface contributors are
         # documented towards, and under a different prefix from the rest.
-        "ContributionBundleV0",
+        "ContributionBundle",
         "SubmissionSupersedeRequest",
     ):
         assert expected in PRODUCER_ROOTS, sorted(PRODUCER_ROOTS)

@@ -17,7 +17,7 @@ from sqlalchemy import select
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole, RightsBasisKind, SubmissionRecordType
 from app.db.models.submission_rights import SubmissionRightsAttestation
-from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+from app.schemas.workflows.contribution_bundle import ContributionBundle
 from app.services.contribution_bundle_export import (
     ContributionBundleExportError,
     deposit_rights_for_records,
@@ -36,10 +36,10 @@ RIGHTS = {
 }
 
 
-def _bundle_with_rights() -> ContributionBundleV0:
+def _bundle_with_rights() -> ContributionBundle:
     raw = json.loads((EXAMPLES_DIR / "thermo-bundle-v0.json").read_text())
     raw["submission"]["rights"] = dict(RIGHTS)
-    return ContributionBundleV0.model_validate(raw)
+    return ContributionBundle.model_validate(raw)
 
 
 def _submitter(session, username: str = "bundle-rights-submitter") -> AppUser:
@@ -76,7 +76,7 @@ def test_bundle_submit_records_the_depositor_agreement(db_session):
 def test_a_bundle_without_rights_records_nothing(db_session):
     raw = json.loads((EXAMPLES_DIR / "thermo-bundle-v0.json").read_text())
     assert "rights" not in raw["submission"]
-    bundle = ContributionBundleV0.model_validate(raw)
+    bundle = ContributionBundle.model_validate(raw)
     result = submit_contribution_bundle(db_session, bundle, actor=_submitter(db_session))
     assert standing_attestation(db_session, submission_id=result.submission_id) is None
 
@@ -111,7 +111,7 @@ def test_export_carries_the_same_fragment_and_round_trips(db_session):
     assert exported_bundle is not None
     assert exported_bundle.submission.rights == bundle.submission.rights
     # …and through JSON, the way the CLI writes it.
-    again = ContributionBundleV0.model_validate(exported_bundle.model_dump(mode="json"))
+    again = ContributionBundle.model_validate(exported_bundle.model_dump(mode="json"))
     assert again.submission.rights == bundle.submission.rights
 
 
@@ -128,7 +128,7 @@ def test_a_partially_attested_selection_is_refused_not_extended(db_session):
     raw = json.loads((EXAMPLES_DIR / "thermo-bundle-v0.json").read_text())
     unattested = submit_contribution_bundle(
         db_session,
-        ContributionBundleV0.model_validate(raw),
+        ContributionBundle.model_validate(raw),
         actor=_submitter(db_session, username="bundle-rights-submitter-2"),
     )
     attested_ids = [r.record_id for r in attested.records if r.record_type.value == "thermo"]
@@ -156,7 +156,7 @@ def test_a_partially_attested_selection_is_refused_not_extended(db_session):
 
 def test_the_exporter_never_invents_consent(db_session):
     raw = json.loads((EXAMPLES_DIR / "thermo-bundle-v0.json").read_text())
-    bundle = ContributionBundleV0.model_validate(raw)
+    bundle = ContributionBundle.model_validate(raw)
     result = submit_contribution_bundle(db_session, bundle, actor=_submitter(db_session))
     thermo_ids = [
         r.record_id for r in result.records if r.record_type.value == "thermo"

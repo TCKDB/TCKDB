@@ -486,9 +486,9 @@ def test_adding_the_gibbs_rubric_restales_no_stored_review(db_session, monkeypat
     then add the key back: nothing recorded before it existed may go stale.
     """
     from app.services.machine_review.admin_trigger import active_rubric_versions_for_record_type
-    from app.services.trust.rubrics import GIBBS_SELF_CONSISTENCY_V1
+    from app.services.trust.rubrics import GIBBS_SELF_CONSISTENCY
 
-    key = public_rubric_name(GIBBS_SELF_CONSISTENCY_V1)
+    key = public_rubric_name(GIBBS_SELF_CONSISTENCY)
     thermo, _, _ = setup_records(db_session)
     with_key = dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
     monkeypatch.delitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, key)

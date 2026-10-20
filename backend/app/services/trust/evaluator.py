@@ -62,18 +62,16 @@ from app.services.trust.models import (
     label_from_completeness,
 )
 from app.services.trust.rubrics import (
-    COMPUTED_CALCULATION_V2,
-    COMPUTED_KINETICS_V2,
-    COMPUTED_STATMECH_V2,
-    COMPUTED_THERMO_V2,
-    COMPUTED_TRANSITION_STATE_V5,
-    COMPUTED_TRANSPORT_V2,
-    COMPUTED_TS_STATMECH_V1,
+    RUBRICS,
     _ts_source_calculations,
     get_rubric_for_record_type,
     statmech_rubric_for,
 )
 from app.services.trust.ts_scoped import scoped_ts_context
+
+#: Rubric names the structural checks branch on (the owner-scoped statmech pair).
+_STATMECH_RUBRIC = "computed_statmech"
+_TS_STATMECH_RUBRIC = "computed_ts_statmech"
 
 
 def select_rubric(record_type: str) -> Optional[EvidenceRubric]:
@@ -336,7 +334,7 @@ def _statmech_subject_hard_fail(
     """
     # Keyed on the rubric's name, not its object: a later version of the same owner-scoped rubric
     # must keep the transition-state owner check, or the defect this rubric fixes comes back.
-    if rubric.name == COMPUTED_TS_STATMECH_V1.name:
+    if rubric.name == _TS_STATMECH_RUBRIC:
         if statmech.transition_state_entry_id is None or statmech.transition_state_entry is None:
             return HardFailReason.transition_state_entry_missing
         return None
@@ -346,13 +344,15 @@ def _statmech_subject_hard_fail(
 
 
 def _detect_statmech_hard_fail(
-    statmech: Statmech, rubric: EvidenceRubric = COMPUTED_STATMECH_V2
+    statmech: Statmech, rubric: EvidenceRubric | None = None
 ) -> Optional[HardFailReason]:
     """Return a hard-fail reason for ``statmech`` if a structural failure is present.
 
     ``rubric`` only decides which owner the record must have; every other structural check
     (external symmetry, torsion dimension, required-role source calculations) is shared.
     """
+    if rubric is None:
+        rubric = RUBRICS.get(_STATMECH_RUBRIC)
     subject_failure = _statmech_subject_hard_fail(statmech, rubric)
     if subject_failure is not None:
         return subject_failure
@@ -717,7 +717,7 @@ def evaluate_loaded_calculation(
     which ``_check_quality_recorded`` reads to decide whether an
     independent reviewer, not the depositor, approved this calculation.
     """
-    rubric = COMPUTED_CALCULATION_V2
+    rubric = RUBRICS.get("computed_calculation")
     if calculation is None:
         return _empty_evaluation_for_missing_calculation(None, rubric)
 
@@ -779,7 +779,7 @@ def evaluate_loaded_kinetics(
     their own queries. Callers are responsible for eager-loading the
     relationships required by ``computed_kinetics_v1``.
     """
-    rubric = COMPUTED_KINETICS_V2
+    rubric = RUBRICS.get("computed_kinetics")
     if kinetics is None:
         return _empty_evaluation_for_missing_kinetics(None, rubric)
 
@@ -841,7 +841,7 @@ def evaluate_loaded_thermo(
     their own queries. Callers are responsible for eager-loading the
     relationships required by ``computed_thermo_v1``.
     """
-    rubric = COMPUTED_THERMO_V2
+    rubric = RUBRICS.get("computed_thermo")
     if thermo is None:
         return _empty_evaluation_for_missing_thermo(None, rubric)
 
@@ -909,8 +909,8 @@ def evaluate_loaded_statmech(
     (the owning species entry or transition-state entry among them).
     """
     if statmech is None:
-        return _empty_evaluation_for_missing_statmech(None, COMPUTED_STATMECH_V2)
-    return evaluate_loaded_statmech_under(statmech, statmech_rubric_for(statmech))
+        return _empty_evaluation_for_missing_statmech(None, RUBRICS.get("computed_statmech"))
+    return evaluate_loaded_statmech_under(statmech, RUBRICS.get(statmech_rubric_for(statmech)))
 
 
 def evaluate_loaded_statmech_under(
@@ -980,9 +980,9 @@ def evaluate_loaded_transport(
     This entrypoint is pure over the ORM object graph it receives: it
     does not perform a lookup and the check runners must not issue
     their own queries. Callers are responsible for eager-loading the
-    relationships required by ``computed_transport_v1``.
+    relationships required by ``computed_transport``.
     """
-    rubric = COMPUTED_TRANSPORT_V2
+    rubric = RUBRICS.get("computed_transport")
     if transport is None:
         return _empty_evaluation_for_missing_transport(None, rubric)
 
@@ -1045,7 +1045,7 @@ def evaluate_loaded_transition_state_entry(
     from inside this function or any check runner. Callers (typically the
     read serializer or the session/id wrapper below) are responsible for
     eager-loading the relationships required by
-    ``computed_transition_state_v2``: the parent ``TransitionState`` and
+    ``computed_transition_state``: the parent ``TransitionState`` and
     its ``ReactionEntry`` (and that entry's ``ChemReaction``), the
     directly-attached ``calculations`` with their result blocks,
     ``geometry_validation``, ``artifacts``, ``parent_dependencies`` /
@@ -1057,7 +1057,7 @@ def evaluate_loaded_transition_state_entry(
     assessment to offer passes :func:`app.services.trust.ts_scoped.not_assessed_on_lists_context`, which says so out
     loud; it cannot fall back to the unscoped answer by omission.
     """
-    rubric = COMPUTED_TRANSITION_STATE_V5
+    rubric = RUBRICS.get("computed_transition_state")
     if transition_state_entry is None:
         return _empty_evaluation_for_missing_transition_state_entry(None, rubric)
 
@@ -1128,7 +1128,7 @@ def evaluate_computed_calculation(
     )
     if calculation is None:
         return _empty_evaluation_for_missing_calculation(
-            calculation_id, COMPUTED_CALCULATION_V2
+            calculation_id, RUBRICS.get("computed_calculation")
         )
     return evaluate_loaded_calculation(calculation)
 
@@ -1173,7 +1173,7 @@ def evaluate_computed_kinetics(
     )
     kinetics = session.scalars(statement).one_or_none()
     if kinetics is None:
-        return _empty_evaluation_for_missing_kinetics(kinetics_id, COMPUTED_KINETICS_V2)
+        return _empty_evaluation_for_missing_kinetics(kinetics_id, RUBRICS.get("computed_kinetics"))
     return evaluate_loaded_kinetics(kinetics)
 
 
@@ -1222,7 +1222,7 @@ def evaluate_computed_thermo(
     )
     thermo = session.scalars(statement).one_or_none()
     if thermo is None:
-        return _empty_evaluation_for_missing_thermo(thermo_id, COMPUTED_THERMO_V2)
+        return _empty_evaluation_for_missing_thermo(thermo_id, RUBRICS.get("computed_thermo"))
     return evaluate_loaded_thermo(thermo)
 
 
@@ -1276,7 +1276,7 @@ def evaluate_computed_statmech(
     )
     statmech = session.scalars(statement).one_or_none()
     if statmech is None:
-        return _empty_evaluation_for_missing_statmech(statmech_id, COMPUTED_STATMECH_V2)
+        return _empty_evaluation_for_missing_statmech(statmech_id, RUBRICS.get("computed_statmech"))
     return evaluate_loaded_statmech(statmech)
 
 
@@ -1319,7 +1319,7 @@ def evaluate_computed_transport(
     transport = session.scalars(statement).one_or_none()
     if transport is None:
         return _empty_evaluation_for_missing_transport(
-            transport_id, COMPUTED_TRANSPORT_V2
+            transport_id, RUBRICS.get("computed_transport")
         )
     return evaluate_loaded_transport(transport)
 
@@ -1428,6 +1428,6 @@ def evaluate_computed_transition_state_entry(
     ts_entry = session.scalars(statement).one_or_none()
     if ts_entry is None:
         return _empty_evaluation_for_missing_transition_state_entry(
-            transition_state_entry_id, COMPUTED_TRANSITION_STATE_V5
+            transition_state_entry_id, RUBRICS.get("computed_transition_state")
         )
     return evaluate_loaded_transition_state_entry(ts_entry, context=scoped_ts_context(session, ts_entry))

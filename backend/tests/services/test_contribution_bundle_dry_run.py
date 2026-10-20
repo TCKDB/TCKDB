@@ -27,7 +27,7 @@ from app.schemas.contribution_bundle_dry_run import (
 )
 from app.schemas.workflows.contribution_bundle import (
     BundleKind,
-    ContributionBundleV0,
+    ContributionBundle,
 )
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
@@ -44,9 +44,9 @@ EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
 # ---------------------------------------------------------------------------
 
 
-def _load_bundle(filename: str) -> ContributionBundleV0:
+def _load_bundle(filename: str) -> ContributionBundle:
     raw = (EXAMPLES_DIR / filename).read_text()
-    return ContributionBundleV0.model_validate_json(raw)
+    return ContributionBundle.model_validate_json(raw)
 
 
 @contextmanager
@@ -277,7 +277,7 @@ def test_dry_run_thermo_with_literature_provenance_creates_item(db_engine) -> No
         "year": 2024,
         "doi": "10.1234/example.doi",
     }
-    bundle = ContributionBundleV0.model_validate(bundle_dict)
+    bundle = ContributionBundle.model_validate(bundle_dict)
 
     with _isolated_session(db_engine) as session:
         before = _table_counts(session)

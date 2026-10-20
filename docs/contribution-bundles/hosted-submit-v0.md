@@ -1,7 +1,7 @@
 # Hosted bundle submit/import v0
 
 The hosted submit endpoint lets an authenticated user POST a
-`ContributionBundleV0` and have its records imported into the hosted
+`ContributionBundle` and have its records imported into the hosted
 database through the existing thermo/kinetics upload workflows. A
 `submission` row plus matching audit and record-link rows are created so
 the contribution is fully traceable.
@@ -37,7 +37,7 @@ POST /api/v1/bundles/submit
   API key header (`X-API-Key`) is accepted, via `get_current_user`.
   Anonymous requests are rejected with `401`. Invalid or revoked API
   keys are rejected with `401`.
-- **Request body:** a `ContributionBundleV0` JSON document, validated
+- **Request body:** a `ContributionBundle` JSON document, validated
   by the existing bundle schema. Structurally invalid bundles fail with
   the normal `422` validation response.
 - **Response:** `ContributionBundleSubmitResult` (HTTP `201`).
@@ -55,7 +55,7 @@ Submit/import v0 supports the same families as bundle format v0:
 - `kinetics`
 
 Mixed bundles and other families (`network`, `statmech`, `transport`,
-`computed_reaction`) are rejected by `ContributionBundleV0` validation
+`computed_reaction`) are rejected by `ContributionBundle` validation
 before they reach the submit handler. An unsupported kind that somehow
 slips past validation is rejected by an explicit guard in the workflow.
 

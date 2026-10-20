@@ -20,7 +20,7 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import AppUserRole, SubmissionRecordType, ThermoTargetKind
 from app.db.models.species import ConformerGroup, ConformerObservation
 from app.db.models.thermo import Thermo
-from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+from app.schemas.workflows.contribution_bundle import ContributionBundle
 from app.services.contribution_bundle_export import export_thermo_bundle
 from app.services.species_resolution import resolve_species_entry
 from app.workflows.contribution_bundle_submit import submit_contribution_bundle
@@ -347,8 +347,8 @@ def test_reaction_bundle_undeclared_protocol_calculation_is_refused(client):
 # ---------------------------------------------------------------------------
 
 
-def _import(db_session, bundle: ContributionBundleV0) -> Thermo:
-    reloaded = ContributionBundleV0.model_validate(bundle.model_dump(mode="json"))
+def _import(db_session, bundle: ContributionBundle) -> Thermo:
+    reloaded = ContributionBundle.model_validate(bundle.model_dump(mode="json"))
     actor = AppUser(username=f"decl-{uuid4().hex[:10]}", role=AppUserRole.user)
     db_session.add(actor)
     db_session.flush()

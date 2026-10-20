@@ -15,8 +15,8 @@ plumbing (handoff §11 "Option 2"), and whoever later turns on a real model.
 **Related specs:**
 
 - `machine_review_provider_contract_v2.md` — the v2 provider output contract
-  (`MachineReviewProviderResultV2` / `MachineReviewProviderFindingV2` /
-  `MACHINE_REVIEW_V2_SCHEMA_VERSION`) that real providers must emit. This spec
+  (`MachineReviewProviderResult` / `MachineReviewProviderFinding` /
+  `MACHINE_REVIEW_SCHEMA_VERSION`) that real providers must emit. This spec
   is the *producer* in front of that contract; that spec is the *wire shape*.
 - `optional_llm_precheck.md` — the advisory precheck plumbing
   (`AI_REVIEW_ASSISTANT_MODE`, `LLM_PRECHECK_*` settings, the context builder in
@@ -80,7 +80,7 @@ What must be tested before turning any of it on?
 Real providers change the *producer*, never the *contract* or the *consumer*:
 
 ```text
-The wire shape is frozen: providers MUST emit MachineReviewProviderResultV2
+The wire shape is frozen: providers MUST emit MachineReviewProviderResult
   (schema_version="machine_review_v2"). No new payload shape is introduced here.
 Provider output is UNTRUSTED. It is schema-validated at the service boundary
   before any persistence. Malformed output degrades to a failed review.
@@ -238,7 +238,7 @@ the machine-review context; §7 says how it is wrapped.
 ### 5.2 Persistence
 
 `run_machine_review_for_submission` persists the validated payload through
-`record_machine_review_v2_audit_event` (`app/services/submission.py`). The event
+`record_machine_review_audit_event` (`app/services/submission.py`). The event
 kind (`llm_precheck_recorded`) and actor (`llm`) are as before, and
 `details_json` carries `schema_version="machine_review_v2"`, the marker the
 adapter requires.
@@ -252,7 +252,7 @@ Designed around v2 (the prompt's shape, made concrete):
 ```python
 from typing import Protocol
 from app.services.machine_review.context import MachineReviewContext
-from app.services.machine_review.schemas import MachineReviewProviderResultV2
+from app.services.machine_review.schemas import MachineReviewProviderResult
 
 
 class MachineReviewProvider(Protocol):
@@ -261,13 +261,13 @@ class MachineReviewProvider(Protocol):
     def review_submission(
         self,
         context: MachineReviewContext,
-    ) -> MachineReviewProviderResultV2:
+    ) -> MachineReviewProviderResult:
         """Return a schema-validated v2 machine-review result.
 
         Implementations call a real or fake model, then pass the raw model
-        output through ``parse_machine_review_v2_payload`` (the single trust
+        output through ``parse_machine_review_payload`` (the single trust
         boundary) so the returned value is ALWAYS a validated
-        ``MachineReviewProviderResultV2``. They never persist, never mutate,
+        ``MachineReviewProviderResult``. They never persist, never mutate,
         and never raise for model misbehavior — malformed output is converted
         to a failed review by the service, not by the provider.
         """
@@ -277,20 +277,20 @@ class MachineReviewProvider(Protocol):
 
 ```text
 A provider RECEIVES raw model output (text / JSON) and is responsible for
-  turning it into validated structure via parse_machine_review_v2_payload().
+  turning it into validated structure via parse_machine_review_payload().
 The SERVICE BOUNDARY re-validates defensively: run_machine_review_for_submission
   treats any provider return value as untrusted and calls model_validate again
   (cheap, idempotent) before persistence. Two checks, one source of truth
   (parsing.py), so a future provider that forgets to validate cannot leak an
   unvalidated payload into the audit event.
-parse_machine_review_v2_payload(raw: str | dict) -> MachineReviewProviderResultV2
+parse_machine_review_payload(raw: str | dict) -> MachineReviewProviderResult
   - json.loads if raw is str (ValueError -> caller maps to failed review)
-  - MachineReviewProviderResultV2.model_validate (ValidationError -> failed)
+  - MachineReviewProviderResult.model_validate (ValidationError -> failed)
   - returns the frozen, extra="forbid" model; nothing else is trusted.
 ```
 
 The disabled and fake providers skip the network but still return a valid
-`MachineReviewProviderResultV2` so the type contract holds for every mode.
+`MachineReviewProviderResult` so the type contract holds for every mode.
 
 ---
 
@@ -362,8 +362,8 @@ If the compacted context still exceeds LLM_PRECHECK_MAX_INPUT_TOKENS, return a
 
 ### 8.1 Output: the v2 contract, verbatim
 
-Real providers must return JSON matching `MachineReviewProviderResultV2`
-(`machine_review/schemas.py:177-200`), validated through `parse_machine_review_v2_payload`:
+Real providers must return JSON matching `MachineReviewProviderResult`
+(`machine_review/schemas.py:177-200`), validated through `parse_machine_review_payload`:
 
 ```json
 {
@@ -442,7 +442,7 @@ payload on every failure path, so the audit trail stays in one format:
 | Off mode | Disabled provider; **write nothing** by default (absence ⇒ `not_run`). |
 | Provider timeout (`LLM_PRECHECK_TIMEOUT_SECONDS`) | Synthesize v2 `status=machine_review_failed`, persist advisory audit event, **do not fail upload**. |
 | Provider error (network, auth, 5xx) | Same: v2 `machine_review_failed`, persisted, upload unaffected. |
-| Malformed / non-JSON / extra-field / `used_rag=true` output | `parse_machine_review_v2_payload` raises → caught → v2 `machine_review_failed`. Upload unaffected. |
+| Malformed / non-JSON / extra-field / `used_rag=true` output | `parse_machine_review_payload` raises → caught → v2 `machine_review_failed`. Upload unaffected. |
 | Context too large after compaction | v2 `machine_review_failed` with an explanatory summary (§7.4). |
 | Config error (missing key/base URL) | `MachineReviewProviderConfigurationError` → `machine_review_failed`; also caught at startup (§4.3). |
 | Submission has no linked records | `not_run` or a v2 `machine_screened_pass` with a summary saying there was nothing to inspect. |
@@ -507,8 +507,8 @@ A concrete cloud vendor selector (`MACHINE_REVIEW_CLOUD_PROVIDER`-style) is only
 worth adding once more than one cloud backend is implemented (§4.2). For a single
 backend, `online_api` + model + base URL is sufficient.
 
-Whatever the backend: it must produce a `MachineReviewProviderResultV2` through
-`parse_machine_review_v2_payload`, respect the timeout, and never be required for
+Whatever the backend: it must produce a `MachineReviewProviderResult` through
+`parse_machine_review_payload`, respect the timeout, and never be required for
 upload success.
 
 ---
@@ -523,7 +523,7 @@ cloud mode validates required API key env config (missing -> failed review +
 local mode validates required base URL/model config
 fake provider remains test-only                  (reachable only via test mode /
                                                    direct injection; not in user docs)
-provider output is schema-validated              (parse_machine_review_v2_payload
+provider output is schema-validated              (parse_machine_review_payload
                                                    is the single trust boundary)
 used_rag=true is rejected                         -> failed review
 extra / mutation field in output rejected         -> failed review
@@ -596,7 +596,7 @@ spec or by the stub providers it describes.
 4. Cloud provider stub with mocked tests.
    cloud.py gated on API-key-env + model; mocked transport. Same failure asserts.
 5. Prompt template + strict JSON parsing.
-   prompts.py (versioned) + parse_machine_review_v2_payload as the single trust
+   prompts.py (versioned) + parse_machine_review_payload as the single trust
    boundary. Tests: used_rag=true, extra field, bad enum, non-JSON -> failed.
 6. Optional real provider implementation behind config.
    Replace a stub's mocked transport with a real client, behind explicit

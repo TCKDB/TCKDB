@@ -29,7 +29,7 @@ from app.services.network_selection.manifest import (
     replay_network_decision,
 )
 from app.services.network_selection.models import (
-    BOUNDS_V1,
+    DEFAULT_BOUNDS,
     POLICY_NAME,
     POLICY_VERSION,
     BathRequest,
@@ -48,9 +48,9 @@ from app.services.network_selection.service import assess_network
 
 __all__ = [
     "ASSESSMENT_VERSION",
-    "BOUNDS_V1",
     "CODE_POPULATION_TOO_LARGE",
     "CODE_SNAPSHOT_TOO_LARGE",
+    "DEFAULT_BOUNDS",
     "POLICY_NAME",
     "POLICY_VERSION",
     "BathRequest",

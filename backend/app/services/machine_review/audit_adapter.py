@@ -19,7 +19,7 @@ Three responsibilities, kept separate so each is independently testable:
 
 1. **Parse** (:func:`machine_review_result_from_audit_event`): the
    untrusted ``details_json`` is validated against the provider contract
-   (:class:`~app.services.machine_review.schemas.MachineReviewProviderResultV2`)
+   (:class:`~app.services.machine_review.schemas.MachineReviewProviderResult`)
    and projected onto the machine-review contract
    (:class:`~app.services.machine_review.schemas.MachineReviewResult`). A
    payload without the contract's ``schema_version`` marker, or with another
@@ -73,9 +73,9 @@ from app.services.machine_review.mapping import (
 )
 from app.services.machine_review.read_model import RecordMachineReview
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    MACHINE_REVIEW_SCHEMA_VERSION,
     MachineReviewFinding,
-    MachineReviewProviderResultV2,
+    MachineReviewProviderResult,
     MachineReviewResult,
     MachineReviewStatus,
 )
@@ -189,7 +189,7 @@ def machine_review_result_from_audit_event(
 
     Treats ``details_json`` as **untrusted**. The payload must carry the
     provider contract's root ``schema_version`` marker
-    (:data:`~app.services.machine_review.schemas.MACHINE_REVIEW_V2_SCHEMA_VERSION`);
+    (:data:`~app.services.machine_review.schemas.MACHINE_REVIEW_SCHEMA_VERSION`);
     it is then validated against the provider contract and projected onto the
     internal contract (no label->status translation: the payload carries the
     machine-review ``status`` and ``curator_priority`` natively). The payload's
@@ -215,7 +215,7 @@ def machine_review_result_from_audit_event(
     sibling_provider = sibling_provider if isinstance(sibling_provider, str) else None
 
     schema_version = details_json.get("schema_version")
-    if schema_version != MACHINE_REVIEW_V2_SCHEMA_VERSION:
+    if schema_version != MACHINE_REVIEW_SCHEMA_VERSION:
         return ParsedMachineReviewPayload(
             result=None,
             provider=sibling_provider,
@@ -226,7 +226,7 @@ def machine_review_result_from_audit_event(
         )
 
     try:
-        payload = MachineReviewProviderResultV2.model_validate(details_json)
+        payload = MachineReviewProviderResult.model_validate(details_json)
     except ValidationError:
         return ParsedMachineReviewPayload(
             result=None,

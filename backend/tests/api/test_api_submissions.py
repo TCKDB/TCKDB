@@ -45,15 +45,15 @@ from app.services.machine_review import (
 from app.services.machine_review.providers.fake import FakeMachineReviewProvider
 from app.services.machine_review.run import run_machine_review_for_submission
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_V2_SCHEMA_VERSION,
-    MachineReviewProviderFindingV2,
-    MachineReviewProviderResultV2,
+    MACHINE_REVIEW_SCHEMA_VERSION,
+    MachineReviewProviderFinding,
+    MachineReviewProviderResult,
 )
 from app.services.submission import (
     append_audit_event,
     create_submission,
     link_record,
-    record_machine_review_v2_audit_event,
+    record_machine_review_audit_event,
 )
 from tests.services.scientific_read._factories import (
     make_calculation,
@@ -767,7 +767,7 @@ class TestAuditEventsVisibility:
         assert precheck["from_status"] is None
         assert precheck["to_status"] is None
         assert precheck["details_json"] == {
-            "schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            "schema_version": MACHINE_REVIEW_SCHEMA_VERSION,
             "status": "machine_screened_pass",
             "curator_priority": None,
             "summary": "Fake machine review inspected 1 linked record(s).",
@@ -790,12 +790,12 @@ class TestAuditEventsVisibility:
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
-        result = MachineReviewProviderResultV2(
-            schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+        result = MachineReviewProviderResult(
+            schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
             status=MachineReviewStatus.machine_screened_warning,
             summary="Configured warning",
             findings=(
-                MachineReviewProviderFindingV2(
+                MachineReviewProviderFinding(
                     severity=MachineReviewSeverity.warning,
                     category=MachineReviewCategory.provenance,
                     record_type="calculation",
@@ -808,7 +808,7 @@ class TestAuditEventsVisibility:
             used_rag=False,
         )
 
-        record_machine_review_v2_audit_event(
+        record_machine_review_audit_event(
             db_session,
             submission=sub,
             result=result,
@@ -824,7 +824,7 @@ class TestAuditEventsVisibility:
         )
         assert precheck["actor_kind"] == "llm"
         assert precheck["details_json"] == {
-            "schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            "schema_version": MACHINE_REVIEW_SCHEMA_VERSION,
             "status": "machine_screened_warning",
             "curator_priority": None,
             "summary": "Configured warning",
@@ -851,24 +851,24 @@ class TestAIReviewSummary:
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
-        older = MachineReviewProviderResultV2(
-            schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+        older = MachineReviewProviderResult(
+            schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
             status=MachineReviewStatus.machine_screened_warning,
             summary="Older warning",
             model="fake/old",
             used_rag=False,
         )
-        newer = MachineReviewProviderResultV2(
-            schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+        newer = MachineReviewProviderResult(
+            schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
             status=MachineReviewStatus.machine_screened_needs_attention,
             summary="Newer needs attention",
             model="fake/new",
             used_rag=False,
         )
-        old_event = record_machine_review_v2_audit_event(
+        old_event = record_machine_review_audit_event(
             db_session, submission=sub, result=older
         )
-        new_event = record_machine_review_v2_audit_event(
+        new_event = record_machine_review_audit_event(
             db_session, submission=sub, result=newer
         )
         old_event.created_at = datetime(2026, 1, 1, 12, 0, 0)
@@ -891,21 +891,21 @@ class TestAIReviewSummary:
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
-        first = record_machine_review_v2_audit_event(
+        first = record_machine_review_audit_event(
             db_session,
             submission=sub,
-            result=MachineReviewProviderResultV2(
-                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            result=MachineReviewProviderResult(
+                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Lower id",
                 model="fake/low",
             ),
         )
-        second = record_machine_review_v2_audit_event(
+        second = record_machine_review_audit_event(
             db_session,
             submission=sub,
-            result=MachineReviewProviderResultV2(
-                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            result=MachineReviewProviderResult(
+                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Higher id",
                 model="fake/high",
@@ -927,30 +927,30 @@ class TestAIReviewSummary:
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
-        record_machine_review_v2_audit_event(
+        record_machine_review_audit_event(
             db_session,
             submission=sub,
-            result=MachineReviewProviderResultV2(
-                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            result=MachineReviewProviderResult(
+                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Mixed severities",
                 findings=(
-                    MachineReviewProviderFindingV2(
+                    MachineReviewProviderFinding(
                         severity=MachineReviewSeverity.warning,
                         category=MachineReviewCategory.provenance,
                         message="Missing source evidence.",
                     ),
-                    MachineReviewProviderFindingV2(
+                    MachineReviewProviderFinding(
                         severity=MachineReviewSeverity.info,
                         category=MachineReviewCategory.consistency,
                         message="Review note.",
                     ),
-                    MachineReviewProviderFindingV2(
+                    MachineReviewProviderFinding(
                         severity=MachineReviewSeverity.warning,
                         category=MachineReviewCategory.units,
                         message="Check units.",
                     ),
-                    MachineReviewProviderFindingV2(
+                    MachineReviewProviderFinding(
                         severity=MachineReviewSeverity.critical,
                         category=MachineReviewCategory.geometry,
                         message="Invalid geometry.",
@@ -977,11 +977,11 @@ class TestAIReviewSummary:
         The recorded event carries the reviewer's verdict as ``status``. An event that has only the retired ``label``
         key yields no label: nothing is translated from the old vocabulary."""
         sub = _seed_submission(db_session, created_by=_api_test_user)
-        record_machine_review_v2_audit_event(
+        record_machine_review_audit_event(
             db_session,
             submission=sub,
-            result=MachineReviewProviderResultV2(
-                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            result=MachineReviewProviderResult(
+                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
                 status=MachineReviewStatus.machine_screened_needs_attention,
                 summary="Current event",
                 model="fake/test",
@@ -1015,7 +1015,7 @@ class TestAIReviewSummary:
             actor_kind=SubmissionActorKind.llm,
             summary="No findings key",
             details_json={
-                "schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                "schema_version": MACHINE_REVIEW_SCHEMA_VERSION,
                 "status": "machine_screened_warning",
                 "summary": "No findings key",
                 "model": "fake/test",
@@ -1044,7 +1044,7 @@ class TestAIReviewSummary:
             actor_kind=SubmissionActorKind.llm,
             summary="Fallback summary",
             details_json={
-                "schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                "schema_version": MACHINE_REVIEW_SCHEMA_VERSION,
                 "status": "machine_screened_warning",
                 "findings": [],
                 "model": "fake/test",
@@ -1077,11 +1077,11 @@ class TestAIReviewSummary:
         login_as,
     ):
         sub = _seed_submission(db_session, created_by=_api_other_user)
-        record_machine_review_v2_audit_event(
+        record_machine_review_audit_event(
             db_session,
             submission=sub,
-            result=MachineReviewProviderResultV2(
-                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            result=MachineReviewProviderResult(
+                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Private summary",
             ),
@@ -1104,15 +1104,15 @@ class TestAIReviewSummary:
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
-        record_machine_review_v2_audit_event(
+        record_machine_review_audit_event(
             db_session,
             submission=sub,
-            result=MachineReviewProviderResultV2(
-                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            result=MachineReviewProviderResult(
+                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Full detail summary",
                 findings=(
-                    MachineReviewProviderFindingV2(
+                    MachineReviewProviderFinding(
                         severity=MachineReviewSeverity.warning,
                         category=MachineReviewCategory.provenance,
                         message="Missing source artifact summary.",
@@ -1152,11 +1152,11 @@ class TestAIReviewSummary:
         sub = _seed_submission(db_session, created_by=_api_test_user)
         baseline_status = sub.status
         baseline_counts = _scientific_record_counts(db_session)
-        record_machine_review_v2_audit_event(
+        record_machine_review_audit_event(
             db_session,
             submission=sub,
-            result=MachineReviewProviderResultV2(
-                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            result=MachineReviewProviderResult(
+                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
                 status=MachineReviewStatus.machine_review_failed,
                 summary="AI Review Assistant could not complete review.",
                 model="fake/test",
@@ -1195,11 +1195,11 @@ class TestAIReviewSummary:
             record_id=calc.id,
             role="primary",
         )
-        record_machine_review_v2_audit_event(
+        record_machine_review_audit_event(
             db_session,
             submission=sub,
-            result=MachineReviewProviderResultV2(
-                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            result=MachineReviewProviderResult(
+                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Submission advisory warning.",
                 model="fake/test",

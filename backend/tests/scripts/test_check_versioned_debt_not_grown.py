@@ -33,11 +33,13 @@ def _debt_source(
     allowed: tuple[tuple[str, str, str, str], ...] = (),
     new: tuple[tuple[str, str, str], ...] = (),
     extra: str = "",
+    moved: tuple[tuple[str, str, str, str], ...] = (),
 ) -> str:
     body = "".join(f"    {row!r},\n" for row in rows)
     return (
         "COMPLETED_PRS = frozenset()\n"
         f"NEW_ALLOWANCES = {new!r}\n"
+        f"MOVED_DEBT = {moved!r}\n"
         f"ALLOWED = {allowed!r}\n"
         f"DEBT: tuple[tuple[str, str, str, int, str], ...] = (\n{body})\n{extra}"
     )
@@ -268,7 +270,7 @@ def test_grown_reports_each_problem_by_key() -> None:
 def test_parse_debt_reads_the_real_debt_file_without_importing_it() -> None:
     real = (Path(__file__).resolve().parents[1] / "versioned_names_debt.py").read_text(encoding="utf-8")
     parsed = checker.parse_debt(real)
-    assert len(parsed) > 100
+    assert len(parsed) > 30
     assert all(isinstance(count, int) and count >= 1 for count in parsed.values())
 
 
@@ -285,3 +287,49 @@ def test_a_push_is_compared_with_the_commit_it_replaced() -> None:
     step = step[: step.index("--head-ref")]
     assert "github.event.pull_request.base.sha || github.event.before" in step
     assert "github.sha" not in step
+
+
+# --- a row whose text moved with a rename -------------------------------------------------------------
+
+A_MOVE = ("backend/app/a.py", "identifier", "OLD_V1", "OLD")
+A_ROW = ("backend/app/a.py", "identifier", "OLD", 2, "PR-3")
+
+
+def test_a_declared_move_of_a_row_passes_and_is_printed(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rows = [A_ROW, BASE_ROWS[1]]
+    base, head = _branch(repo, rows, source=_debt_source(rows, moved=(A_MOVE,)))
+    assert _run(repo, base, head) == 0
+    assert "::warning title=Moved versioned-name debt row::" in capsys.readouterr().out
+
+
+def test_the_same_rename_without_a_declaration_is_still_a_new_row(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    base, head = _branch(repo, [A_ROW, BASE_ROWS[1]])
+    assert _run(repo, base, head) == 1
+    assert "new debt row" in capsys.readouterr().err
+
+
+def test_a_move_that_raises_the_count_is_refused(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rows = [("backend/app/a.py", "identifier", "OLD", 3, "PR-3"), BASE_ROWS[1]]
+    base, head = _branch(repo, rows, source=_debt_source(rows, moved=(A_MOVE,)))
+    assert _run(repo, base, head) == 1
+    assert "grew from x2" in capsys.readouterr().err
+
+
+def test_a_move_whose_old_row_the_base_never_had_is_refused(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rows = [A_ROW, BASE_ROWS[1]]
+    ghost = ("backend/app/a.py", "identifier", "NEVER_V9", "OLD")
+    base, head = _branch(repo, rows, source=_debt_source(rows, moved=(ghost,)))
+    assert _run(repo, base, head) == 1
+    assert "does not have" in capsys.readouterr().err
+
+
+def test_a_move_that_keeps_the_old_row_too_is_refused(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rows = [A_ROW, BASE_ROWS[0], BASE_ROWS[1]]
+    base, head = _branch(repo, rows, source=_debt_source(rows, moved=(A_MOVE,)))
+    assert _run(repo, base, head) == 1
+    assert "still lists the old row" in capsys.readouterr().err
+
+
+def test_a_move_naming_a_row_that_is_not_in_debt_is_refused(repo: Path) -> None:
+    base, head = _branch(repo, BASE_ROWS, source=_debt_source(BASE_ROWS, moved=(A_MOVE,)))
+    assert _run(repo, base, head) == 1

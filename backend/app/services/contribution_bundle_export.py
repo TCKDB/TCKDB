@@ -1,14 +1,14 @@
 """Local contribution bundle export service.
 
 This module turns selected local database rows (``Thermo``, ``Kinetics``)
-into validated :class:`ContributionBundleV0` payloads suitable for writing
+into validated :class:`ContributionBundle` payloads suitable for writing
 to disk.
 
 Scope (Local export v0, see ``docs/roadmaps/local-bundle-export-v0-spec.md``):
 
 - Read-only against the local database.
 - Reconstruct upload-equivalent payloads (``ThermoUploadRequest`` /
-  ``KineticsUploadRequest``) and embed them in a ``ContributionBundleV0``.
+  ``KineticsUploadRequest``) and embed them in a ``ContributionBundle``.
 - Validate the assembled bundle before returning it; never produce an
   invalid bundle.
 - Fail clearly when required dependency data is missing instead of
@@ -70,7 +70,7 @@ from app.schemas.workflows.contribution_bundle import (
     BundleSourceInstanceKind,
     BundleSubmissionMetadata,
     BundleSubmissionSourceKind,
-    ContributionBundleV0,
+    ContributionBundle,
 )
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.release.record_rights import linked_rights
@@ -173,7 +173,7 @@ class ThermoBundleExport:
     failure, using ``omissions`` to explain why.
     """
 
-    bundle: ContributionBundleV0 | None
+    bundle: ContributionBundle | None
     omissions: list[BundleExportOmission] = field(default_factory=list)
 
 
@@ -425,7 +425,7 @@ def export_kinetics_bundle(
     ),
     rights: DepositRights | None = None,
     omissions: list[BundleExportOmission] | None = None,
-) -> ContributionBundleV0:
+) -> ContributionBundle:
     """Export selected kinetics rows as a validated kinetics contribution bundle.
 
     :param omissions: Optional sink. A kinetics record's determination, applicability and
@@ -598,7 +598,7 @@ def _thermo_to_upload(
     ``None``.
 
     Otherwise returned as a plain ``dict`` so the bundle's
-    ``ContributionBundleV0`` constructor runs the full nested upload
+    ``ContributionBundle`` constructor runs the full nested upload
     validators (the same ones a real API upload would hit).
     """
     payload: dict[str, Any] = {
@@ -1311,7 +1311,7 @@ def _build_and_validate_bundle(
     instance_kind: BundleSourceInstanceKind,
     schema_version: str,
     software_version: str | None,
-) -> ContributionBundleV0:
+) -> ContributionBundle:
     source_instance = BundleSourceInstance(
         instance_kind=instance_kind,
         instance_name=instance_name,
@@ -1334,7 +1334,7 @@ def _build_and_validate_bundle(
     manifest = BundleManifest(sha256=None, files=[])
 
     try:
-        return ContributionBundleV0(
+        return ContributionBundle(
             bundle_format=BUNDLE_FORMAT,
             bundle_version=BUNDLE_VERSION,
             bundle_kind=bundle_kind,

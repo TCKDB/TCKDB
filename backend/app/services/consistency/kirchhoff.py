@@ -62,7 +62,7 @@ from tckdb_schemas.enthalpy_reference import shared_enthalpy_reference
 from app.services.consistency import engine
 from app.services.consistency.core import AdvisoryResult, encoded, finding, temperatures, thermo_inputs
 from app.services.consistency.stoichiometry import species_scope_reason
-from app.services.trust.rubrics import KIRCHHOFF_CONSISTENCY_V1
+from app.services.trust.rubrics import KIRCHHOFF_CONSISTENCY
 
 RUNNER = "kirchhoff_consistency"
 
@@ -363,7 +363,7 @@ def compare_kirchhoff(thermo, *, comparison=None, temperature_grid=()):
     for t in records:
         findings.extend(_jump_findings(thermo, t))
 
-    return AdvisoryResult(thermo, RUNNER, KIRCHHOFF_CONSISTENCY_V1, tuple(findings), encoded({
+    return AdvisoryResult(thermo, RUNNER, KIRCHHOFF_CONSISTENCY, tuple(findings), encoded({
         "engine": f"cantera/{engine.ENGINE_VERSION}", "grid": grid,
         "target": thermo_inputs(thermo), "target_scope": _scope_inputs(thermo),
         "comparison": thermo_inputs(comparison) if comparison else None,

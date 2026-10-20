@@ -21,6 +21,7 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
+from app.services.manifest_formats import read_manifest_format
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
     check_supported,
@@ -29,14 +30,14 @@ from app.services.selection_kernel.assessment_semantics import (
 from app.services.thermo_selection.engine import decide
 from app.services.thermo_selection.models import (
     ASSESSMENT_SEMANTICS_VERSION,
-    MANIFEST_FORMAT_VERSION,
+    MANIFEST_FORMAT_NAME,
+    MANIFEST_FORMATS,
     PHASE,
     POLICY_NAME,
     POLICY_VERSION,
     QUANTITY,
     REFERENCE_TEMPERATURE_K,
     SUPPORTED_ASSESSMENT_SEMANTICS,
-    SUPPORTED_MANIFEST_FORMATS,
     CandidateAssessment,
     Decision,
     H298Request,
@@ -45,7 +46,7 @@ from app.services.thermo_selection.models import (
     Subject,
 )
 from app.services.thermo_selection.rules import PreferenceRule, default_rules
-from app.services.trust.rubrics import COMPUTED_THERMO_V2
+from app.services.trust.rubrics import COMPUTED_THERMO
 
 
 class ReplayError(ValueError):
@@ -69,10 +70,10 @@ def build_manifest(
     """Assemble the manifest. ``decision`` is ``None`` only for a refused (over-cap) search."""
     ordered = sorted(candidates, key=lambda item: item[0].id_rank)
     return {
-        "manifest_format_version": MANIFEST_FORMAT_VERSION,
+        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version,
         "policy": {"name": POLICY_NAME, "version": POLICY_VERSION},
         "assessment_semantics": semantics_block(
-            version=ASSESSMENT_SEMANTICS_VERSION, evidence_rubric=f"{COMPUTED_THERMO_V2.name}@{COMPUTED_THERMO_V2.version}"
+            version=ASSESSMENT_SEMANTICS_VERSION, evidence_rubric=f"{COMPUTED_THERMO.name}@{COMPUTED_THERMO.version}"
         ),
         "request": {
             "quantity": QUANTITY,
@@ -114,8 +115,7 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule]
     :raises ReplayError: if the manifest's format, policy version or a rule version is not carried by
         the running registry.
     """
-    if manifest.get("manifest_format_version") not in SUPPORTED_MANIFEST_FORMATS:
-        raise ReplayError(f"unknown manifest format {manifest.get('manifest_format_version')!r}")
+    read_manifest_format(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME, manifest, ReplayError)
     if manifest["policy"] != {"name": POLICY_NAME, "version": POLICY_VERSION}:
         raise ReplayError(f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} v{POLICY_VERSION}")
     try:

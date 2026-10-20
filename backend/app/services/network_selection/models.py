@@ -72,7 +72,7 @@ class SelectionBounds:
         return cls(**raw)
 
 
-BOUNDS_V1 = SelectionBounds()
+DEFAULT_BOUNDS = SelectionBounds()
 
 
 class Scope(str, Enum):
@@ -207,7 +207,7 @@ class NetworkRequest:
     admin_policy: SelectionPolicy = SelectionPolicy.default
     first_only: bool = False
     apply_rules: bool = True
-    bounds: SelectionBounds = field(default=BOUNDS_V1)
+    bounds: SelectionBounds = field(default=DEFAULT_BOUNDS)
 
     def __post_init__(self) -> None:
         if self.coefficient_basis not in {"kernel", "composition_effective"}:

@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+from app.schemas.workflows.contribution_bundle import ContributionBundle
 from app.services.contribution_bundle_export import BundleExportOmission
 from tests.api.test_api_bundle_dry_run_submit_parity import _example
 
@@ -68,7 +68,7 @@ def test_the_kinetics_export_passes_the_sink_to_the_exporter(cli, monkeypatch):
 
 
 def test_main_prints_each_kinetics_omission_and_still_writes_the_bundle(cli, monkeypatch, tmp_path, capsys):
-    bundle = ContributionBundleV0.model_validate(_example("kinetics-bundle-v0.json"))
+    bundle = ContributionBundle.model_validate(_example("kinetics-bundle-v0.json"))
 
     def fake_export(session, args, kinetics_omissions):
         kinetics_omissions.append(OMISSION)
@@ -101,7 +101,7 @@ def test_main_prints_each_kinetics_omission_and_still_writes_the_bundle(cli, mon
 
 
 def test_main_prints_nothing_extra_when_nothing_was_left_out(cli, monkeypatch, tmp_path, capsys):
-    bundle = ContributionBundleV0.model_validate(_example("kinetics-bundle-v0.json"))
+    bundle = ContributionBundle.model_validate(_example("kinetics-bundle-v0.json"))
     monkeypatch.setattr(cli, "create_engine", lambda url: SimpleNamespace(dispose=lambda: None))
 
     class _Ctx:

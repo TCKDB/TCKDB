@@ -279,7 +279,7 @@ def test_a_historic_manifest_replays_as_captured_and_a_fresh_decision_sees_the_n
 def test_a_manifest_over_the_snapshot_size_bound_is_refused_when_the_facts_alone_are_not(db_session, world):
     import dataclasses
 
-    from app.services.network_selection import BOUNDS_V1, assess_network
+    from app.services.network_selection import DEFAULT_BOUNDS, assess_network
     from app.services.network_selection.service import snapshot_size_bytes
 
     add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(A_))
@@ -289,7 +289,7 @@ def test_a_manifest_over_the_snapshot_size_bound_is_refused_when_the_facts_alone
     facts_size = snapshot_size_bytes(request, facts.network, facts.solves)
     manifest_size = len(json.dumps(select(db_session, request).manifest, sort_keys=True, separators=(",", ":")).encode())
     assert manifest_size > facts_size
-    tight = dataclasses.replace(request, bounds=dataclasses.replace(BOUNDS_V1, snapshot_bytes=facts_size + 1))
+    tight = dataclasses.replace(request, bounds=dataclasses.replace(DEFAULT_BOUNDS, snapshot_bytes=facts_size + 1))
     assess_network(db_session, request=tight, require_snapshot=False)  # the facts fit
     with pytest.raises(CodedValueError) as caught:
         select(db_session, tight)

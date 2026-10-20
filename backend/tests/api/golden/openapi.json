@@ -15737,6 +15737,103 @@
         "title": "ContentAddressedReference",
         "type": "object"
       },
+      "ContributionBundle": {
+        "additionalProperties": false,
+        "description": "Top-level contribution bundle v0 envelope.\n\nValidates without database access. Hosted identity resolution,\ndeduplication, and moderation are deferred to the hosted-import\nmilestone.",
+        "examples": [
+          {
+            "bundle_format": "tckdb-contribution-bundle",
+            "bundle_kind": "thermo",
+            "bundle_version": "0.1",
+            "created_at": "2026-09-29T00:00:00Z",
+            "exporter": {
+              "local_user_label": "depositor"
+            },
+            "manifest": {
+              "files": []
+            },
+            "records": {
+              "thermo_uploads": [
+                {
+                  "enthalpy_reference_kind": "formation_298k",
+                  "h298_kj_mol": -74.6,
+                  "reference_pressure_bar": 1.01325,
+                  "scientific_origin": "computed",
+                  "species_entry": {
+                    "charge": 0,
+                    "multiplicity": 1,
+                    "smiles": "C"
+                  }
+                }
+              ]
+            },
+            "source_instance": {
+              "instance_kind": "local",
+              "instance_name": "my-lab-tckdb",
+              "schema_version": "d861dfd60891"
+            },
+            "submission": {
+              "summary": "One formation-referenced thermo record.",
+              "title": "Methane thermo"
+            }
+          }
+        ],
+        "properties": {
+          "bundle_format": {
+            "const": "tckdb-contribution-bundle",
+            "title": "Bundle Format",
+            "type": "string"
+          },
+          "bundle_kind": {
+            "$ref": "#/components/schemas/BundleKind"
+          },
+          "bundle_version": {
+            "const": "0.1",
+            "title": "Bundle Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "exporter": {
+            "$ref": "#/components/schemas/BundleExporter"
+          },
+          "local_refs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BundleLocalRefEntry"
+            },
+            "title": "Local Refs",
+            "type": "object"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/BundleManifest"
+          },
+          "records": {
+            "$ref": "#/components/schemas/BundleRecordSet"
+          },
+          "source_instance": {
+            "$ref": "#/components/schemas/BundleSourceInstance"
+          },
+          "submission": {
+            "$ref": "#/components/schemas/BundleSubmissionMetadata"
+          }
+        },
+        "required": [
+          "bundle_format",
+          "bundle_version",
+          "bundle_kind",
+          "created_at",
+          "source_instance",
+          "exporter",
+          "submission",
+          "records",
+          "manifest"
+        ],
+        "title": "ContributionBundle",
+        "type": "object"
+      },
       "ContributionBundleDryRunItem": {
         "additionalProperties": false,
         "description": "One preview entry in the dry-run result.\n\nEach item describes either an identity/provenance row that a real import\nwould resolve (``would_reuse`` / ``would_create``) or the append-only\nscientific product row itself (``would_append``).\n\n:param record_type: What kind of record this item describes.\n:param action: What a real import would do for this record.\n:param reason: Short, user-facing explanation for the action.\n:param local_ref: Optional structured reference back into the bundle\n    (e.g. ``thermo_uploads[0]`` or ``thermo_uploads[0].species_entry``).\n    Not the bundle's ``local_refs`` map — that is informational only.\n:param target: Optional short identity descriptor (e.g. SMILES, DOI,\n    ``\"Gaussian 16\"``). Never includes hosted database primary keys.\n:param hosted_identity: Optional structured identity hint that mirrors\n    what the importer would use to dedupe (e.g. ``{\"inchi_key\": \"...\"}``).\n:param details: Optional free-form structured extras for clients that\n    want to render richer previews.",
@@ -16162,103 +16259,6 @@
           "action"
         ],
         "title": "ContributionBundleSubmittedRecord",
-        "type": "object"
-      },
-      "ContributionBundleV0": {
-        "additionalProperties": false,
-        "description": "Top-level contribution bundle v0 envelope.\n\nValidates without database access. Hosted identity resolution,\ndeduplication, and moderation are deferred to the hosted-import\nmilestone.",
-        "examples": [
-          {
-            "bundle_format": "tckdb-contribution-bundle",
-            "bundle_kind": "thermo",
-            "bundle_version": "0.1",
-            "created_at": "2026-09-29T00:00:00Z",
-            "exporter": {
-              "local_user_label": "depositor"
-            },
-            "manifest": {
-              "files": []
-            },
-            "records": {
-              "thermo_uploads": [
-                {
-                  "enthalpy_reference_kind": "formation_298k",
-                  "h298_kj_mol": -74.6,
-                  "reference_pressure_bar": 1.01325,
-                  "scientific_origin": "computed",
-                  "species_entry": {
-                    "charge": 0,
-                    "multiplicity": 1,
-                    "smiles": "C"
-                  }
-                }
-              ]
-            },
-            "source_instance": {
-              "instance_kind": "local",
-              "instance_name": "my-lab-tckdb",
-              "schema_version": "d861dfd60891"
-            },
-            "submission": {
-              "summary": "One formation-referenced thermo record.",
-              "title": "Methane thermo"
-            }
-          }
-        ],
-        "properties": {
-          "bundle_format": {
-            "const": "tckdb-contribution-bundle",
-            "title": "Bundle Format",
-            "type": "string"
-          },
-          "bundle_kind": {
-            "$ref": "#/components/schemas/BundleKind"
-          },
-          "bundle_version": {
-            "const": "0.1",
-            "title": "Bundle Version",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "exporter": {
-            "$ref": "#/components/schemas/BundleExporter"
-          },
-          "local_refs": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/BundleLocalRefEntry"
-            },
-            "title": "Local Refs",
-            "type": "object"
-          },
-          "manifest": {
-            "$ref": "#/components/schemas/BundleManifest"
-          },
-          "records": {
-            "$ref": "#/components/schemas/BundleRecordSet"
-          },
-          "source_instance": {
-            "$ref": "#/components/schemas/BundleSourceInstance"
-          },
-          "submission": {
-            "$ref": "#/components/schemas/BundleSubmissionMetadata"
-          }
-        },
-        "required": [
-          "bundle_format",
-          "bundle_version",
-          "bundle_kind",
-          "created_at",
-          "source_instance",
-          "exporter",
-          "submission",
-          "records",
-          "manifest"
-        ],
-        "title": "ContributionBundleV0",
         "type": "object"
       },
       "CoordinateUnit": {
@@ -64030,7 +64030,7 @@
         "type": "object"
       },
       "TransitionStateInFull": {
-        "description": "Transition-state record embedded in /full.\n\nCarries the public refs that let a caller navigate to the new\nscientific TS read surface:\n\n- ``transition_state_ref`` → ``GET /scientific/transition-states/{ref}``\n- ``transition_state_entry_ref`` →\n  ``GET /scientific/transition-state-entries/{ref}``\n- ``calculations[*].calculation_ref`` →\n  ``GET /scientific/calculations/{ref}``\n\n``transition_state_ref`` is ``null`` under ``?profile=curated`` when the owning transition state is below the review\nfloor: the entry stays in the response and only its owner ref (and id) is withheld (owner decision D1).\n\nInteger ``*_id`` siblings are Phase D policy-gated. ``status``\nand ``evidence_summary`` mirror the corresponding fields on\n:class:`ScientificTransitionStateEntryRecord` so the\nfull-response block lines up byte-for-byte with the per-entry\ndetail endpoint (same counts, same booleans, same status enum).\n\n``trust`` is populated only when the caller passes ``include=trust``\nto ``/reaction-entries/{id}/full``. It reuses\n:class:`TransitionStateTrustFragment` so a trust block embedded here is\nstructurally identical to the one returned by\n``GET /scientific/transition-state-entries/{ref}?include=trust``\n(rubric ``computed_transition_state_v5``), with one difference by design:\nthis document lists the reaction's entries, so its\n``structure_assessment.status`` is ``not_assessed_on_lists`` where the\nsingle-entry detail read runs the assessment.",
+        "description": "Transition-state record embedded in /full.\n\nCarries the public refs that let a caller navigate to the new\nscientific TS read surface:\n\n- ``transition_state_ref`` → ``GET /scientific/transition-states/{ref}``\n- ``transition_state_entry_ref`` →\n  ``GET /scientific/transition-state-entries/{ref}``\n- ``calculations[*].calculation_ref`` →\n  ``GET /scientific/calculations/{ref}``\n\n``transition_state_ref`` is ``null`` under ``?profile=curated`` when the owning transition state is below the review\nfloor: the entry stays in the response and only its owner ref (and id) is withheld (owner decision D1).\n\nInteger ``*_id`` siblings are Phase D policy-gated. ``status``\nand ``evidence_summary`` mirror the corresponding fields on\n:class:`ScientificTransitionStateEntryRecord` so the\nfull-response block lines up byte-for-byte with the per-entry\ndetail endpoint (same counts, same booleans, same status enum).\n\n``trust`` is populated only when the caller passes ``include=trust``\nto ``/reaction-entries/{id}/full``. It reuses\n:class:`TransitionStateTrustFragment` so a trust block embedded here is\nstructurally identical to the one returned by\n``GET /scientific/transition-state-entries/{ref}?include=trust``\n(rubric ``computed_transition_state``), with one difference by design:\nthis document lists the reaction's entries, so its\n``structure_assessment.status`` is ``not_assessed_on_lists`` where the\nsingle-entry detail read runs the assessment.",
         "properties": {
           "calculations": {
             "additionalProperties": {
@@ -72606,7 +72606,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ContributionBundleV0"
+                "$ref": "#/components/schemas/ContributionBundle"
               }
             }
           },
@@ -72730,7 +72730,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ContributionBundleV0"
+                "$ref": "#/components/schemas/ContributionBundle"
               }
             }
           },
@@ -96787,7 +96787,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/transport": {
       "get": {
-        "description": "Return transport records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\n``computed_transport_v1`` fragment per record; ``include=all`` does\nnot include trust.\n\nTransport records are candidate products for the resolved form;\n``collapse=first`` returns the single record selected under the explicit\nnamed ``selection_policy`` (default ``default``). ``collapse=all`` (the\ndefault) returns every candidate. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
+        "description": "Return transport records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\n``computed_transport`` fragment per record; ``include=all`` does\nnot include trust.\n\nTransport records are candidate products for the resolved form;\n``collapse=first`` returns the single record selected under the explicit\nnamed ``selection_policy`` (default ``default``). ``collapse=all`` (the\ndefault) returns every candidate. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
         "operationId": "species_transport_api_v1_scientific_species_entries__species_entry_id__transport_get",
         "parameters": [
           {
@@ -100188,7 +100188,7 @@
     },
     "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref_or_id}": {
       "get": {
-        "description": "Return one transition-state-entry as a scientific record.\n\nPath handle accepts an integer ``transition_state_entry.id`` or a\npublic ref of the form ``tse_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs and unknown ids return 404.\n\nDeterministic trust / evidence metadata\n(``computed_transition_state_v2``) is attached to the record only\nwhen ``include=trust`` is supplied explicitly — ``include=all`` does\nnot pull it in, and the default response omits the field entirely so\nit stays byte-identical to its pre-trust shape.",
+        "description": "Return one transition-state-entry as a scientific record.\n\nPath handle accepts an integer ``transition_state_entry.id`` or a\npublic ref of the form ``tse_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs and unknown ids return 404.\n\nDeterministic trust / evidence metadata\n(``computed_transition_state``) is attached to the record only\nwhen ``include=trust`` is supplied explicitly — ``include=all`` does\nnot pull it in, and the default response omits the field entirely so\nit stays byte-identical to its pre-trust shape.",
         "operationId": "scientific_transition_state_entry_detail_api_v1_scientific_transition_state_entries__transition_state_entry_ref_or_id__get",
         "parameters": [
           {

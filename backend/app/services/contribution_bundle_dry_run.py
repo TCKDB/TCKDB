@@ -1,6 +1,6 @@
 """Hosted contribution-bundle dry-run preview.
 
-This service inspects a parsed :class:`ContributionBundleV0` and returns a
+This service inspects a parsed :class:`ContributionBundle` and returns a
 preview of what a real import *would* do. It performs **only read-only
 queries** — never ``resolve_or_create_*`` — so the database is guaranteed
 to be unchanged after a dry-run regardless of whether the underlying
@@ -46,7 +46,7 @@ from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.fragments.refs import SoftwareReleaseRef, WorkflowToolReleaseRef
 from app.schemas.workflows.contribution_bundle import (
     BundleKind,
-    ContributionBundleV0,
+    ContributionBundle,
 )
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
@@ -63,7 +63,7 @@ from app.services.species_resolution import null_safe_equals
 
 def dry_run_contribution_bundle(
     session: Session,
-    bundle: ContributionBundleV0,
+    bundle: ContributionBundle,
 ) -> ContributionBundleDryRunResult:
     """Preview a contribution bundle against the hosted database.
 

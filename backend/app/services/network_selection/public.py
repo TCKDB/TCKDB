@@ -86,7 +86,7 @@ def _admin_policy(policy: NetworkSelectionPolicy) -> SelectionPolicy:
 
 
 def to_service_request(body: NetworkSelectionRequest, *, network_ref: str) -> NetworkRequest:
-    """The service's request for a public one. The bounds are the server's (``BOUNDS_V1``), never the caller's."""
+    """The service's request for a public one. The bounds are the server's (``DEFAULT_BOUNDS``), never the caller's."""
     from tckdb_schemas.network_declarations import NetworkRegimeKind
 
     components = body.bath.components

@@ -72,7 +72,7 @@ def compare(session, *, check, target_ref, comparison_thermo_ref=None, reverse_k
                 raise ValueError("external-cp uses observation temperatures and the target thermo")
             from app.services.external_comparison import cp
             result = cp.compare_thermo_with_cp_observations(session, thermo.id)
-            return AdvisoryResult(thermo, cp.RUNNER_VERSION, cp.EXTERNAL_CP_COMPARISON_V2,
+            return AdvisoryResult(thermo, cp.RUNNER_VERSION, cp.EXTERNAL_CP_COMPARISON,
                                   cp.findings_for_result(result),
                                   result.inputs_json)
         raise ValueError("unknown advisory check")

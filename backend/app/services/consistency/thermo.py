@@ -3,7 +3,7 @@ from itertools import combinations, product
 
 from app.services.consistency import engine
 from app.services.consistency.core import AdvisoryResult, encoded, finding, temperatures, thermo_inputs
-from app.services.trust.rubrics import THERMO_CONSISTENCY_V1
+from app.services.trust.rubrics import THERMO_CONSISTENCY
 
 RUNNER = "thermo_consistency"
 
@@ -70,7 +70,7 @@ def compare_thermo(thermo, *, comparison=None, temperature_grid=()):
                     "right": {"ref": right.public_ref, "representation": b, "value": y},
                     "residual": x - y if reason is None else None, "reason": reason,
                 }, refs))
-    return AdvisoryResult(thermo, RUNNER, THERMO_CONSISTENCY_V1, tuple(findings), encoded({
+    return AdvisoryResult(thermo, RUNNER, THERMO_CONSISTENCY, tuple(findings), encoded({
         "engine": f"cantera/{engine.ENGINE_VERSION}", "grid": grid,
         "target": thermo_inputs(thermo), "comparison": thermo_inputs(comparison) if comparison else None,
         "units": "J/mol/K;bar;K", "boundary_policy": "nasa7-low;nasa9-upper;exact-points-v1",

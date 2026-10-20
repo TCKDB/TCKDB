@@ -29,8 +29,8 @@ Eight kinds of finding, by what carries the version:
 ``identifier``
     A name in code: variable, attribute, function, class, argument, keyword,
     import alias. Fails on a ``vN`` segment beside other segments
-    (``COMPUTED_THERMO_V2``, ``parse_machine_review_v2_payload``), a camel
-    ``...VN`` suffix (``ContributionBundleV0``, ``RuleV0_2_0``) or three numeric
+    (``COMPUTED_THERMO``, ``parse_machine_review_payload``), a camel
+    ``...VN`` suffix (``ContributionBundle``, ``RuleV0_2_0``) or three numeric
     segments (``MANIFEST_0_1_0_PATH``). A bare ``v1``/``v2`` is a vector, not a
     version, and is not a finding. The segment test is on ``_``-split parts
     because a ``\\b`` after the digits does not fire before ``_payload``.
@@ -53,7 +53,7 @@ Eight kinds of finding, by what carries the version:
     found by a tokenising regex (comments skipped), not a parser.
 ``filename``
     A file or directory name under a root: ``rules_0_1_0.yaml``,
-    ``ContributionBundleV0.schema.json``.
+    ``ContributionBundle.schema.json``.
 ``openapi``
     A component schema name, or a ``const``/``enum`` string, in the OpenAPI
     golden: a versioned value that exists only on the wire.

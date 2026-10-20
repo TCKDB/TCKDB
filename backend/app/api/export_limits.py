@@ -18,12 +18,12 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.error_contract import error_envelope
-from app.services.network_selection.models import BOUNDS_V1
+from app.services.network_selection.models import DEFAULT_BOUNDS
 
 CODE_BODY_TOO_LARGE = "network_export_body_too_large"
 #: Room for ``representation_refs`` (at most 10000 refs) and the options around the manifest.
 REQUEST_ALLOWANCE_BYTES = 1024 * 1024
-MAX_BODY_BYTES = BOUNDS_V1.snapshot_bytes + REQUEST_ALLOWANCE_BYTES
+MAX_BODY_BYTES = DEFAULT_BOUNDS.snapshot_bytes + REQUEST_ALLOWANCE_BYTES
 _PATH = re.compile(r"^/api/v1/scientific/networks/[^/]+/kinetics/export-selected$")
 
 

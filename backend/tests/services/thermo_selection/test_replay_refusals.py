@@ -16,8 +16,8 @@ import pytest
 from app.services.thermo_selection.manifest import ReplayError, replay_decision, replay_matches
 from app.services.thermo_selection.models import (
     MANIFEST_FORMAT_VERSION,
+    MANIFEST_FORMATS,
     POLICY_VERSION,
-    SUPPORTED_MANIFEST_FORMATS,
 )
 from tests.services.thermo_selection.test_h298_golden import _generate, _scenarios
 
@@ -69,8 +69,8 @@ def test_a_manifest_with_no_assessment_block_is_refused_not_read_as_current():
 
 
 def test_only_the_current_manifest_format_is_read():
-    """Kills: the previous format (1) re-added to SUPPORTED_MANIFEST_FORMATS."""
-    assert SUPPORTED_MANIFEST_FORMATS == {MANIFEST_FORMAT_VERSION}
+    """Kills: the previous format (1) registered in MANIFEST_FORMATS."""
+    assert {ref.version for ref in MANIFEST_FORMATS.refs()} == {MANIFEST_FORMAT_VERSION}
     for bad in (1, MANIFEST_FORMAT_VERSION + 1, None):
         manifest = _manifest("single")
         manifest["manifest_format_version"] = bad

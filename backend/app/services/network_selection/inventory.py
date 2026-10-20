@@ -47,7 +47,7 @@ from app.db.models.network_pdep import (
     NetworkSolve,
     NetworkSolveBathGas,
 )
-from app.services.network_selection.models import BOUNDS_V1
+from app.services.network_selection.models import DEFAULT_BOUNDS
 from app.services.scientific_read.common import fetch_review_badges
 
 TARGET_CLAIMS = ("partition", "boundaries", "regime", "validity", "bath_scope", "outputs", "product_sets")
@@ -261,7 +261,7 @@ def network_coverage_inventory(session: Session, *, batch_size: int = 100) -> di
                 solves["solves_without_fits"] += 1
 
     return {
-        "bounds_version": BOUNDS_V1.version,
+        "bounds_version": DEFAULT_BOUNDS.version,
         "network_solves": solves["solves"],
         "network_kinetics_fits": sum(fit_model.values()),
         "determinations": solves["determinations"],

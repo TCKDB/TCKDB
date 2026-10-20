@@ -14,9 +14,11 @@ who edits a manifest can recompute them, which is exactly why replay does not re
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 from app.db.models.common import RecordReviewStatus
+from app.services.manifest_formats import ManifestFormat, new_format_registry, read_manifest_format
 from app.services.relative_conformer_energy.compare import COMPARISON_VERSION, ComparisonRequest, compare_results
 from app.services.relative_conformer_energy.compute import compute_relative_energies
 from app.services.relative_conformer_energy.models import (
@@ -91,7 +93,7 @@ def build_manifest(
     """
     body: dict[str, Any] = {
         "manifest_format": MANIFEST_FORMAT,
-        "manifest_format_version": MANIFEST_FORMAT_VERSION,
+        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT).version,
         "versions": _versions(),
         "request": request.to_dict(),
         "structure_request": assessment.request.to_dict(),
@@ -125,8 +127,7 @@ def build_manifest(
 
 
 def _check_versions(manifest: dict[str, Any]) -> None:
-    if manifest.get("manifest_format") != MANIFEST_FORMAT or manifest.get("manifest_format_version") != MANIFEST_FORMAT_VERSION:
-        raise ReplayError("unsupported_manifest_format", f"unknown manifest format {manifest.get('manifest_format')!r}")
+    _check_format(manifest, MANIFEST_FORMAT)
     versions = manifest.get("versions") or {}
     for name, value in _versions().items():
         if versions.get(name) != value:
@@ -278,6 +279,34 @@ COMPARISON_MANIFEST_FORMAT = "relative_conformer_energy_comparison_manifest"
 COMPARISON_MANIFEST_FORMAT_VERSION = 1
 _RUNS = ("candidate", "reference")
 
+#: The two manifest documents this module writes and reads, each under its stable name. The reader looks up the
+#: version a manifest recorded; the writer asks for the current one. Held here, after both constants exist.
+MANIFEST_FORMATS = new_format_registry(
+    "relative_conformer_energy_manifest_formats", MANIFEST_FORMAT, MANIFEST_FORMAT_VERSION
+)
+MANIFEST_FORMATS.register(
+    COMPARISON_MANIFEST_FORMAT,
+    COMPARISON_MANIFEST_FORMAT_VERSION,
+    ManifestFormat(COMPARISON_MANIFEST_FORMAT, COMPARISON_MANIFEST_FORMAT_VERSION),
+    current=True,
+)
+MANIFEST_FORMATS.validate()
+
+
+def _refuse_format(manifest: dict[str, Any]) -> Callable[[str], ReplayError]:
+    """The refusal both manifests raise: it names the recorded format name, as it always has."""
+    return lambda _message: ReplayError(
+        "unsupported_manifest_format", f"unknown manifest format {manifest.get('manifest_format')!r}"
+    )
+
+
+def _check_format(manifest: dict[str, Any], name: str) -> None:
+    """Refuse a manifest recorded under another format name or a version the registry does not hold."""
+    refuse = _refuse_format(manifest)
+    if manifest.get("manifest_format") != name:
+        raise refuse("")
+    read_manifest_format(MANIFEST_FORMATS, name, manifest, refuse)
+
 
 def build_comparison_manifest(
     request: ComparisonRequest,
@@ -299,7 +328,7 @@ def build_comparison_manifest(
     """
     body: dict[str, Any] = {
         "manifest_format": COMPARISON_MANIFEST_FORMAT,
-        "manifest_format_version": COMPARISON_MANIFEST_FORMAT_VERSION,
+        "manifest_format_version": MANIFEST_FORMATS.current(COMPARISON_MANIFEST_FORMAT).version,
         "versions": {**_versions(), "comparison": COMPARISON_VERSION},
         "request": request.to_dict(),
         "read_profile": dict(profile),
@@ -323,11 +352,7 @@ def replay_comparison(manifest: dict[str, Any]) -> dict[str, Any]:
     :raises ReplayError: unsupported format or version, a failed checksum, runs that do not match the recorded request or
         each other, a run that does not replay, or a comparison that is not what the replayed answers give.
     """
-    if (
-        manifest.get("manifest_format") != COMPARISON_MANIFEST_FORMAT
-        or manifest.get("manifest_format_version") != COMPARISON_MANIFEST_FORMAT_VERSION
-    ):
-        raise ReplayError("unsupported_manifest_format", f"unknown manifest format {manifest.get('manifest_format')!r}")
+    _check_format(manifest, COMPARISON_MANIFEST_FORMAT)
     versions = manifest.get("versions") or {}
     for name, value in {**_versions(), "comparison": COMPARISON_VERSION}.items():
         if versions.get(name) != value:

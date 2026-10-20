@@ -144,10 +144,10 @@ class MachineReviewResult(BaseModel):
 # §3/§4/§7.
 
 #: Root marker value identifying a v2 machine-review provider payload.
-MACHINE_REVIEW_V2_SCHEMA_VERSION = "machine_review_v2"
+MACHINE_REVIEW_SCHEMA_VERSION = "machine_review_v2"
 
 
-class MachineReviewProviderFindingV2(BaseModel):
+class MachineReviewProviderFinding(BaseModel):
     """One finding in a v2 provider payload, using native machine-review terms.
 
     Mirrors :class:`MachineReviewFinding` field-for-field and adds explicit
@@ -171,7 +171,7 @@ class MachineReviewProviderFindingV2(BaseModel):
     recommended_action: str | None = Field(default=None, max_length=1000)
 
 
-class MachineReviewProviderResultV2(BaseModel):
+class MachineReviewProviderResult(BaseModel):
     """Versioned provider payload for machine-review output.
 
     Carries the machine-review ``status`` directly, an optional
@@ -189,7 +189,7 @@ class MachineReviewProviderResultV2(BaseModel):
     status: MachineReviewStatus
     curator_priority: CuratorPriority | None = None
     summary: str | None = Field(default=None, max_length=2000)
-    findings: tuple[MachineReviewProviderFindingV2, ...] = Field(
+    findings: tuple[MachineReviewProviderFinding, ...] = Field(
         default_factory=tuple, max_length=50
     )
     model: str | None = Field(default=None, max_length=128)
