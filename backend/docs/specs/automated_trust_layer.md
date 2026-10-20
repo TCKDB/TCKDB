@@ -85,6 +85,44 @@ semantics are versioned separately (`ASSESSMENT_SEMANTICS_VERSION`, `2`). A mani
 (`replay_provenance`), never reassesses, and refuses semantics it does not carry. See
 `tests/services/thermo_selection/test_trust_correction_h298.py` for the exact probes.
 
+## Recording a structure-evidence finding (curators and admins)
+
+A finding is a curator's recorded judgment about one geometry, one calculation or one structure determination: that it is the
+wrong identity, state or path, that a role it fills is invalid, that its characterization contradicts itself, or (as an
+adjudication) that an earlier finding no longer stands. It is the only way the rule above can fire on a real deployment.
+
+**Who has standing.** Only a curator or an admin. The route is `POST /api/v1/curation/structure-evidence-findings`, gated by the same
+role check as the review-queue and supersession routes, so every finding written here has `authority = authorized_adjudication` and is
+attributed (`created_by`). The request carries no authority and no author. A depositor's assertion about their own record
+(`producer_assertion`) and a challenge by a third party are separate policy decisions; this route writes neither, and the request schema
+has no field through which either could arrive.
+
+**What a request names.** The subject by public ref (`geom_`, `calc_` or `sdet_`) with a matching `scope`; a `kind`; a `verdict`
+(`invalidates`, `does_not_invalidate`, `unresolved`); a required `rationale`; a `role` exactly when the kind is `role_invalidation`;
+optionally a supporting calculation and a paper by public ref. A cited paper must carry a DOI or an ISBN, as everywhere else a source
+has to be identifiable. No request carries a row id and no refusal does either; ids are logged server-side.
+
+**Append-only.** A finding is never edited or deleted: the API has no method for it and the database refuses both
+(`trg_structure_evidence_finding_append_only`). A correction is an *adjudication* naming the earlier ruling and stating the
+replacement verdict: `does_not_invalidate` (withdraw it), `unresolved` (reopen it) or `invalidates` (reinstate it, which is how an
+earlier withdrawal is overturned). The route requires the named ruling to exist, to be about the same subject and to be still in
+force. Corrections can themselves be corrected. A ruling is replaced once: the row is locked before the in-force check, so two
+curators correcting the same ruling cannot both succeed. An ordinary finding that rules `does_not_invalidate` and names nothing is
+refused (`structure_finding_dismissal_needs_target`): it would change nothing, and withdrawing a ruling is an adjudication.
+
+**Effect.** Each chain of corrections is read at its head, the newest ruling in force, and a head that continues a `role_invalidation` or a
+`contradictory_characterization` keeps that claim's role and scope (an adjudication has none of its own). An `invalidates` head excludes the evidence from H298, kinetics and structure
+selection, scoped by role, exactly as described above. A `does_not_invalidate` head has no effect. An `unresolved` head leaves the
+product unresolved, not excluded, as an ordinary `unresolved` finding does. Replacing one role's ruling leaves the other roles' rulings
+standing, and a single append changes the effect, so there is no moment in which a record is wrongly selectable. History stays: a
+replaced ruling reads `in_force: false` and names the adjudication that replaced it. A finding that no correction names reads as it always did.
+
+**Reads.** `GET /api/v1/curation/structure-evidence-findings?subject_ref=...` (curator or admin) lists the findings about one subject with
+whether each is still in force and what settled it, and for each ruling in force the kind and role selections apply (`applied_kind`,
+`applied_role`), which for a correction continuing a role invalidation differ from the kind and role it was recorded with. It is a curator surface: curators adjudicate records the curated profile hides, so it is
+not profile-filtered. The public surface is unchanged: findings reach readers through the selection documents, which already withhold a
+hidden record's refs (the finding of a hidden subject is not loaded under the curated profile, so neither it nor the subject is named).
+
 ## 1. Why this exists
 
 TCKDB has matured past the point where manual curator review can gate

@@ -40,6 +40,27 @@ dataset must never require a code release.
   `repo-gate.yml` runs `backend/scripts/check_versioned_debt_not_grown.py`, which compares the debt list with the merge base's copy so a
   count-for-count swap is refused. A startup check (`validate_version_registries`) fails the boot for a registry name with no current version.
 
+## Curators can record structure-evidence findings (2026-10-19, #750)
+
+**Additive route.** Migration: none (the table, its append-only trigger and its constraints already exist). New environment variable: none.
+`tckdb-schemas` and `tckdb-mcp` unchanged. `tckdb-client` is 0.157.0: the two routes are registered in the parity ledger as curation workflow
+(no typed method, as for the other curator routes) and `RejectionCode` gains twelve `structure_finding_*` members.
+
+- `POST /api/v1/curation/structure-evidence-findings` (curator or admin) appends an authorized adjudication about a geometry, calculation or
+  structure determination named by public ref. `GET` on the same path lists a subject's findings and whether each is still in force.
+- Append-only: a correction is a later adjudication naming the earlier ruling on the same subject and stating the replacement verdict
+  (`does_not_invalidate`, `unresolved` or `invalidates`). Corrections can themselves be corrected; nothing is edited or deleted.
+- **Selection behaviour changes only for a corrected role invalidation or contradictory characterization.** Selections already read the newest ruling in
+  force of each chain, and a finding no correction names reads exactly as before. What changes: a correction that continues a `role_invalidation` or a
+  `contradictory_characterization` now keeps that claim's role and scope instead of reading as a whole-subject failure that bars every role.
+  No stored manifest can contain such a chain, because no finding could be written through the API before this route existed, so the
+  eligibility semantics are not re-versioned. The curator `GET` shows both the recorded `kind`/`role` and the `applied_kind`/`applied_role`
+  that selections use.
+- An in-force `invalidates` finding excludes the evidence from H298, kinetics and structure selection through the route, and a correction
+  restores or reopens it. Before this, only tests that inserted rows directly could do either.
+- Twelve new coded refusals, all prefixed `structure_finding_`; see the generated error-code docs.
+- Spec: "Recording a structure-evidence finding" in `backend/docs/specs/automated_trust_layer.md`.
+
 ## Transition-state trust carries the scoped structure assessment (2026-10-19, #723)
 
 **Additive field and a rubric bump.** Migration: none. New environment variable: none. `tckdb-schemas` and `tckdb-client` unchanged

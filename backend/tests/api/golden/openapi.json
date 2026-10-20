@@ -55984,6 +55984,303 @@
         "title": "StructureEvaluatedGeometry",
         "type": "object"
       },
+      "StructureEvidenceFindingCreate": {
+        "additionalProperties": false,
+        "description": "One finding a curator appends. Findings are never edited or deleted; a correction is a later adjudication.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/StructureFindingKind"
+          },
+          "literature_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public ref of a paper that supports the finding. It must carry a DOI or an ISBN.",
+            "title": "Literature Ref"
+          },
+          "rationale": {
+            "description": "Why the curator reached this verdict. Required.",
+            "maxLength": 2000,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__db__models__common__StructureSourceRole"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The role a role_invalidation invalidates. Required for that kind, refused for every other."
+          },
+          "scope": {
+            "$ref": "#/components/schemas/StructureFindingScope",
+            "description": "The kind of subject the finding is about."
+          },
+          "source_calculation_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public ref of a calculation whose evidence supports the finding.",
+            "title": "Source Calculation Ref"
+          },
+          "subject_ref": {
+            "description": "Public ref of the subject: a geometry (geom_), a calculation (calc_) or a determination (sdet_). Its prefix must match scope.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Subject Ref",
+            "type": "string"
+          },
+          "supersedes_finding_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public ref of the earlier ruling this one corrects. Only an adjudication names one, and it states the replacement verdict. The ruling must be about the same subject and still in force (it may itself be a correction).",
+            "title": "Supersedes Finding Ref"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/StructureFindingVerdict"
+          }
+        },
+        "required": [
+          "scope",
+          "subject_ref",
+          "kind",
+          "verdict",
+          "rationale"
+        ],
+        "title": "StructureEvidenceFindingCreate",
+        "type": "object"
+      },
+      "StructureEvidenceFindingPageRead": {
+        "properties": {
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/StructureEvidenceFindingRead"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "subject_ref": {
+            "title": "Subject Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_ref",
+          "findings",
+          "offset",
+          "limit"
+        ],
+        "title": "StructureEvidenceFindingPageRead",
+        "type": "object"
+      },
+      "StructureEvidenceFindingRead": {
+        "description": "One recorded finding, by public refs only.",
+        "properties": {
+          "applied_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StructureFindingKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The kind selections apply for this ruling while it is in force: its own kind, except that a correction continuing a role invalidation or a contradictory characterization applies that claim's kind. Null once replaced."
+          },
+          "applied_role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StructureSourceRole-Output"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The role selections apply this ruling to; null when it bars every role, or once replaced."
+          },
+          "authority": {
+            "$ref": "#/components/schemas/StructureFindingAuthority"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finding_ref": {
+            "title": "Finding Ref",
+            "type": "string"
+          },
+          "in_force": {
+            "description": "True when no adjudication has corrected this finding.",
+            "title": "In Force",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StructureFindingKind"
+          },
+          "literature_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Literature Ref"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StructureSourceRole-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "$ref": "#/components/schemas/StructureFindingScope"
+          },
+          "settled_by_finding_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The adjudication that corrected this finding, if one did. A settled finding is history and has no effect on a selection.",
+            "title": "Settled By Finding Ref"
+          },
+          "source_calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Ref"
+          },
+          "subject_ref": {
+            "title": "Subject Ref",
+            "type": "string"
+          },
+          "supersedes_finding_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Finding Ref"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/StructureFindingVerdict"
+          }
+        },
+        "required": [
+          "finding_ref",
+          "scope",
+          "subject_ref",
+          "kind",
+          "role",
+          "verdict",
+          "authority",
+          "rationale",
+          "source_calculation_ref",
+          "literature_ref",
+          "applied_kind",
+          "applied_role",
+          "supersedes_finding_ref",
+          "settled_by_finding_ref",
+          "in_force",
+          "created_at"
+        ],
+        "title": "StructureEvidenceFindingRead",
+        "type": "object"
+      },
+      "StructureFindingAuthority": {
+        "description": "Who stands behind a finding: the depositor's own assertion, or an authorized adjudication.",
+        "enum": [
+          "producer_assertion",
+          "authorized_adjudication"
+        ],
+        "title": "StructureFindingAuthority",
+        "type": "string"
+      },
+      "StructureFindingKind": {
+        "description": "What a scoped structure-evidence finding records.",
+        "enum": [
+          "identity_incompatibility",
+          "state_incompatibility",
+          "path_incompatibility",
+          "role_invalidation",
+          "contradictory_characterization",
+          "adjudication"
+        ],
+        "title": "StructureFindingKind",
+        "type": "string"
+      },
+      "StructureFindingScope": {
+        "description": "The kind of subject a finding is about: the matching subject column is the one that is set.",
+        "enum": [
+          "geometry",
+          "calculation",
+          "determination"
+        ],
+        "title": "StructureFindingScope",
+        "type": "string"
+      },
+      "StructureFindingVerdict": {
+        "description": "What the author concludes about the claim the finding names.",
+        "enum": [
+          "invalidates",
+          "does_not_invalidate",
+          "unresolved"
+        ],
+        "title": "StructureFindingVerdict",
+        "type": "string"
+      },
       "StructureMatchSummary": {
         "description": "Per-record description of how the query matched this entry.\n\n``similarity_score`` is populated only when ``mode == similarity``.\n``matched_query`` echoes the caller-supplied query string verbatim\nso the record is self-describing; ``matched_query_kind`` is the\nrequest field the query came from.",
         "properties": {
@@ -56773,7 +57070,7 @@
             "title": "Calculation Ref"
           },
           "role": {
-            "$ref": "#/components/schemas/StructureSourceRole"
+            "$ref": "#/components/schemas/tckdb_schemas__enums__StructureSourceRole"
           }
         },
         "required": [
@@ -56782,8 +57079,8 @@
         "title": "StructureSourceDeclaration",
         "type": "object"
       },
-      "StructureSourceRole": {
-        "description": "The role one pinned calculation plays in a structure determination.",
+      "StructureSourceRole-Output": {
+        "description": "The role one pinned calculation plays in a determination.\n\nOne calculation can fill several roles; each is its own source row.",
         "enum": [
           "energy",
           "geometry_optimization",
@@ -67589,6 +67886,19 @@
         "title": "SpinTreatment",
         "type": "string"
       },
+      "app__db__models__common__StructureSourceRole": {
+        "description": "The role one pinned calculation plays in a determination.\n\nOne calculation can fill several roles; each is its own source row.",
+        "enum": [
+          "energy",
+          "geometry_optimization",
+          "curvature",
+          "correction",
+          "connectivity",
+          "alternative_characterization"
+        ],
+        "title": "StructureSourceRole",
+        "type": "string"
+      },
       "app__db__models__common__TunnelingModel": {
         "description": "Tunneling correction applied to a rate coefficient (DR-0032).\n\nMachine tokens, per the project enum policy (replaces the former\nfree-text ``kinetics.tunneling_model`` column). ``other`` is the\nescape hatch for anything not yet in this set.",
         "enum": [
@@ -69588,6 +69898,19 @@
           "unknown"
         ],
         "title": "SpinTreatment",
+        "type": "string"
+      },
+      "tckdb_schemas__enums__StructureSourceRole": {
+        "description": "The role one pinned calculation plays in a structure determination.",
+        "enum": [
+          "energy",
+          "geometry_optimization",
+          "curvature",
+          "correction",
+          "connectivity",
+          "alternative_characterization"
+        ],
+        "title": "StructureSourceRole",
         "type": "string"
       },
       "tckdb_schemas__enums__TunnelingModel": {
@@ -75356,6 +75679,228 @@
           }
         },
         "summary": "Create Scientific Record Supersession",
+        "tags": [
+          "curation"
+        ]
+      }
+    },
+    "/api/v1/curation/structure-evidence-findings": {
+      "get": {
+        "description": "Curator/admin: every finding about one subject, oldest first, with whether each is still in force.",
+        "operationId": "list_structure_evidence_findings_api_v1_curation_structure_evidence_findings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "subject_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Subject Ref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StructureFindingScope"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
+          },
+          {
+            "in": "query",
+            "name": "skip",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Skip",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructureEvidenceFindingPageRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Structure Evidence Findings",
+        "tags": [
+          "curation"
+        ]
+      },
+      "post": {
+        "description": "Append an authorized adjudication about a geometry, calculation or structure determination.\n\nAppend-only: a finding is never edited or deleted, and a correction is a later adjudication naming the\nearlier finding. The authority is fixed by this route's role gate and the author is the caller.",
+        "operationId": "create_structure_evidence_finding_api_v1_curation_structure_evidence_findings_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StructureEvidenceFindingCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructureEvidenceFindingRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Structure Evidence Finding",
         "tags": [
           "curation"
         ]

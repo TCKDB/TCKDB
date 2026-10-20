@@ -18,9 +18,10 @@ The rules (they are the structure assessor's, reused, not a second set):
 * **Role.** A ``role_invalidation`` bites only the role it names. Identity, state and path incompatibilities invalidate the
   geometry for every role. A ``contradictory_characterization`` is about curvature, so it bites the roles that read
   curvature and never bans a separately valid recorded electronic energy that happens to sit on the same calculation.
-* **Settling.** Only an authorized adjudication about the same subject settles an earlier finding
-  (``live_findings``); a producer's own "does not invalidate" does not erase an authorized disproof. A settled finding is
-  history and does not affect a fresh decision.
+* **Settling.** Only an authorized adjudication about the same subject corrects an earlier finding
+  (``live_findings``); a producer's own "does not invalidate" does not erase an authorized disproof. A correction carries a
+  replacement verdict and can itself be corrected, so each chain is read at its newest ruling in force (a continued role
+  invalidation or contradictory characterization keeps its role and scope). A replaced ruling is history and does not affect a fresh decision.
 * **Unreadable is disclosed, never a failure.** An unknown kind or semantic version is noted and excludes nothing.
 * **Unresolved is not confirmed.** An ``unresolved`` verdict makes the product unresolved for the question, not blocked.
 

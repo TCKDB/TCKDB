@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.127.0 - 2026-10-20
+
+Twelve new refusal codes, all prefixed `structure_finding_`, and one new curator route in the shipped producer contract:
+`POST /api/v1/curation/structure-evidence-findings` (a curator or admin appends a structure-evidence finding). It is a curator route, not a
+producer route, so no upload payload changes; this release only adds the route and the codes to the shipped contract documents.
+
 ## 0.126.0 - 2026-10-19
 
 One new model, `tckdb_schemas.fragments.version.VersionRef`: a stable `name` and a separate integer `version` (at least 1, a real
