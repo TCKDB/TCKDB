@@ -9303,6 +9303,7 @@ Every write route of the live application that the rule left out, with the reaso
 | `POST /api/v1/conformer-groups/{conformer_group_id}/selections` | role-gated to curator or admin |
 | `POST /api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/evaluate` | role-gated to curator or admin |
 | `POST /api/v1/curation/scientific-record-supersessions` | role-gated to curator or admin |
+| `POST /api/v1/curation/structure-evidence-findings` | role-gated to curator or admin |
 | `PATCH /api/v1/record-reviews/{record_type}/{record_id}` | role-gated to curator or admin |
 | `POST /api/v1/releases` | role-gated to curator or admin |
 | `POST /api/v1/releases/policies` | role-gated to curator or admin |
