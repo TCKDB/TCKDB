@@ -90,10 +90,10 @@ def test_an_older_qualifying_g4_is_selected_over_a_newer_g3_while_browse_still_l
     assert body["fronts"] == [[old_g4.public_ref], [new_g3.public_ref]]
     assert body["administrative_order"][0] == new_g3.public_ref  # administrative order alone says G3
     assert body["relations"]["edges"] == [
-        {"preferred": old_g4.public_ref, "dispreferred": new_g3.public_ref, "rule_id": "E1", "rule_version": "1.0.0"}
+        {"preferred": old_g4.public_ref, "dispreferred": new_g3.public_ref, "rule_id": "E1", "rule_version": 1}
     ]
     assert body["policy"]["rules"][0]["rule_id"] == "E1"
-    assert body["policy"]["name"] == "h298_method_preferred" and body["policy"]["version"] == "2"
+    assert body["policy"]["name"] == "h298_method_preferred" and body["policy"]["version"] == 1
 
 
 def test_the_response_echoes_the_normalised_request_and_the_effective_floor(client, db_session, methane):
@@ -497,11 +497,23 @@ def _assert_integers_are_pinned(doc, *, is_manifest, curated):
     document; here a path outside this table fails, and so does a value that is not what the path means.
     """
     candidates = doc["candidates"]
-    pinned = {"candidates[].protocol.version": lambda values: set(values) == {1}}
+    one = lambda values: set(values) == {1}  # noqa: E731  (every TCKDB-owned version is 1)
+    pinned = {"candidates[].protocol.version": one}
+    for path in (
+        "policy.version", "policy.rules[].version", "relations.edges[].rule_version",
+        "relations.overridden_edges[].rule_version", "relations.overridden_edges[].overridden_by_rule_version",
+        "rule_matches[].rule_version", "pair_checks[].rule_version", "policy.rules[].manifest.manifest_version",
+        "assessment_semantics.version", "assessment_semantics.source_findings",
+        "assessment_semantics.evidence_rubric.version", "decision.rules[].version", "decision.edges[].rule_version",
+        "decision.pair_checks[].rule_version", "decision.rule_matches[].rule_version", "policy.version",
+        "decision.rules[].manifest.manifest_version", "decision.overridden_edges[].rule_version",
+        "decision.overridden_edges[].overridden_by_rule_version",
+    ):
+        pinned[path] = one
     if is_manifest:
         population = doc["population"]
         pinned.update({
-            "manifest_format_version": lambda v: v == [2],
+            "manifest_format_version": lambda v: v == [1],
             "candidates[].id_rank": lambda v: sorted(v) == list(range(1, len(candidates) + 1)),
             "population.visible_candidates": lambda v: v == [len(candidates)],
             "population.assessed": lambda v: v == [len(candidates)],

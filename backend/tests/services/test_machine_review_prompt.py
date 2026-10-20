@@ -53,7 +53,7 @@ from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT
 #: current, and would still name a prompt whose words had changed underneath
 #: them. If you are here because this assertion failed, the question to answer
 #: is not "what is the new hash" but "does the recipe version need to move".
-_PROMPT_SHA256 = "7e49c35c2806438f6658344e7ec38ce33683ae8f0cc4d2bee40bbbee6d75a832"
+_PROMPT_SHA256 = "c5c39a2b51054d1afb0775510068b8cb1225c5595bb08ff8a0377f5b01b90e13"
 
 
 def test_prompt_version_is_the_recipes_active_version() -> None:

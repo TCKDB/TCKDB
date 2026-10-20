@@ -805,7 +805,7 @@ class TestRubricRegistry:
         rubric = select_rubric("calculation")
         assert rubric is not None
         assert rubric.name == "computed_calculation"
-        assert rubric.version == 2
+        assert rubric.version == 1
         assert rubric is COMPUTED_CALCULATION
 
     def test_unknown_record_type_returns_none(self):
@@ -853,7 +853,7 @@ class TestMissingCalculation:
         assert result.evidence_completeness == 0.0
         # Should still name the rubric, not bail with an exception.
         assert result.rubric == "computed_calculation"
-        assert result.rubric_version == 2
+        assert result.rubric_version == 1
         assert result.record_id == 999_999_999
 
     def test_missing_calculation_does_not_raise(self, db_session):
@@ -895,7 +895,7 @@ def test_trust_fragment_normalizes_public_shape():
     assert fragment["evidence"] == {
         "record_type": "calculation",
         "record_id": 123,
-        "rubric": "computed_calculation_v1",
+        "rubric": "computed_calculation",
         "rubric_version": 1,
         "label": "hard_failed",
         "checks": {
@@ -1553,7 +1553,7 @@ class TestComputedKineticsEvaluator:
         rubric = select_rubric("kinetics")
         assert rubric is COMPUTED_KINETICS
         assert rubric.name == "computed_kinetics"
-        assert rubric.version == 2
+        assert rubric.version == 1
 
     def test_missing_loaded_kinetics_returns_hard_failed(self):
         result = evaluate_loaded_kinetics(None)
@@ -1768,7 +1768,7 @@ class TestComputedThermoEvaluator:
         rubric = select_rubric("thermo")
         assert rubric is COMPUTED_THERMO
         assert rubric.name == "computed_thermo"
-        assert rubric.version == 2
+        assert rubric.version == 1
 
     def test_missing_loaded_thermo_returns_hard_failed(self):
         result = evaluate_loaded_thermo(None)
@@ -2298,7 +2298,7 @@ class TestComputedStatmechEvaluator:
         rubric = select_rubric("statmech")
         assert rubric is COMPUTED_STATMECH
         assert rubric.name == "computed_statmech"
-        assert rubric.version == 2
+        assert rubric.version == 1
 
     def test_missing_loaded_statmech_returns_hard_failed(self):
         result = evaluate_loaded_statmech(None)
@@ -2552,7 +2552,7 @@ class TestComputedTransportEvaluator:
         rubric = select_rubric("transport")
         assert rubric is COMPUTED_TRANSPORT
         assert rubric.name == "computed_transport"
-        assert rubric.version == 2
+        assert rubric.version == 1
 
     def test_missing_loaded_transport_returns_hard_failed(self):
         result = evaluate_loaded_transport(None)

@@ -19,7 +19,7 @@ def _write_pending_conformer(tmp_path: Path) -> Path:
     sidecar_path.write_text(
         json.dumps(
             {
-                "bundle_format_version": "0",
+                "bundle_format_version": 1,
                 "payload_kind": "conformer_calculation",
                 "endpoint": "/uploads/conformers",
                 "idempotency_key": "tckdb_conformer_v0_0123456789abcdef",
@@ -216,7 +216,7 @@ def test_cli_caps_failure_groups_and_mentions_show_failures(
 ) -> None:
     monkeypatch.setattr(cli, "DEFAULT_FAILURE_GROUPS_SHOWN", 2)
     # Three distinct error groups (different bogus versions).
-    for name, ver in [("a", "1"), ("b", "2"), ("c", "3")]:
+    for name, ver in [("a", 2), ("b", 3), ("c", 4)]:
         sub = tmp_path / "conformer_calculation"
         sub.mkdir(parents=True, exist_ok=True)
         payload = sub / f"{name}.payload.json"

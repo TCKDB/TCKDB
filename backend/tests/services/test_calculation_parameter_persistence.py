@@ -102,7 +102,7 @@ def _opt_upload(
     *,
     parameters: list[CalculationParameterObservation] | None = None,
     parameters_json: dict | None = None,
-    parameters_parser_version: str | None = None,
+    parameters_parser: dict | None = None,
     parameters_extracted_at: datetime | None = None,
 ) -> CalculationWithResultsPayload:
     return CalculationWithResultsPayload(
@@ -112,7 +112,7 @@ def _opt_upload(
         opt_result=OptResultPayload(converged=True),
         parameters=parameters,
         parameters_json=parameters_json,
-        parameters_parser_version=parameters_parser_version,
+        parameters_parser=parameters_parser,
         parameters_extracted_at=parameters_extracted_at,
     )
 
@@ -287,7 +287,7 @@ def test_snapshot_and_relational_persistence_coexist(db_conn) -> None:
         upload = _opt_upload(
             parameters=observations,
             parameters_json=snapshot,
-            parameters_parser_version="gaussian_v1",
+            parameters_parser={"name": "gaussian_parameters", "version": "1"},
             parameters_extracted_at=extracted_at,
         )
 
@@ -297,7 +297,7 @@ def test_snapshot_and_relational_persistence_coexist(db_conn) -> None:
 
         stored = session.get(Calculation, calc.id)
         assert stored.parameters_json == snapshot
-        assert stored.parameters_parser_version == "gaussian_v1"
+        assert (stored.parameters_parser_name, stored.parameters_parser_version) == ("gaussian_parameters", "1")
         assert stored.parameters_extracted_at == extracted_at
 
         rows = session.scalars(

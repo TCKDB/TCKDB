@@ -11,6 +11,7 @@ import hashlib
 import json
 
 import pytest
+from tckdb_schemas.fragments.version import VersionRef
 from sqlalchemy import text
 
 from app.db.models.common import ReadProfile, SubmissionRecordType
@@ -75,12 +76,18 @@ def test_manifest_binds_versions_licenses_and_profile(
         db_session, draft_release, curator, first, species_entry
     )
 
-    assert manifest.manifest_schema == versions.MANIFEST_SCHEMA
+    assert (manifest.manifest_format_name, manifest.manifest_format_version) == (
+        versions.MANIFEST_FORMAT.name, versions.MANIFEST_FORMAT.version
+    )
     # A release is the curated contract by construction, recorded not assumed.
     assert manifest.profile is ReadProfile.curated
     assert manifest.alembic_revision and manifest.alembic_revision != ""
-    assert manifest.review_policy_version == versions.REVIEW_POLICY_VERSION
-    assert manifest.recovery_archive_schema == versions.RECOVERY_ARCHIVE_SCHEMA
+    assert (manifest.review_policy_name, manifest.review_policy_version) == (
+        versions.REVIEW_POLICY.name, versions.REVIEW_POLICY.version
+    )
+    assert (manifest.recovery_archive_format_name, manifest.recovery_archive_format_version) == (
+        versions.RECOVERY_ARCHIVE_FORMAT.name, versions.RECOVERY_ARCHIVE_FORMAT.version
+    )
     assert manifest.data_license == "CC-BY-4.0"
     assert manifest.code_license == "MIT"
     assert manifest.citation_text == draft_release.citation_text
@@ -397,8 +404,8 @@ def test_manifest_document_is_rebuildable_from_its_snapshot_columns(
     )
     rebuilt = render_manifest_document(snapshot_from_manifest(manifest))
     assert rebuilt == dict(manifest.document_json)
-    # v2: the rights block is part of the document and of the snapshot.
-    assert manifest.manifest_schema == "tckdb.dataset_release.v2"
+    # The rights block is part of the document and of the snapshot.
+    assert (manifest.manifest_format_name, manifest.manifest_format_version) == ("tckdb.dataset_release", 1)
     assert rebuilt["rights"] == manifest.rights_summary_json
     assert rebuilt["rights"]["data_license"] == "CC-BY-4.0"
     assert rebuilt["rights"]["attestation_count"] == 1
@@ -433,20 +440,20 @@ def test_verify_release_reports_a_stored_document_whose_digest_no_longer_matches
     assert verify_release(db_session, draft_release).ok
 
 
-def test_a_release_frozen_under_a_retired_tag_cannot_be_verified(
+def test_a_release_frozen_under_another_format_version_cannot_be_verified(
     db_session, draft_release, curator, thermo_candidates, species_entry
 ):
-    """``verify_release`` raises for a row whose tag no renderer is registered for.
+    """``verify_release`` raises for a row whose (name, version) no renderer is registered for.
 
-    A release frozen under the retired ``v1`` tag stops verifying until the stored tags are migrated; no
-    compatibility path renders it."""
+    A release frozen under a format version this release does not carry cannot be verified; no compatibility path
+    renders it (a version a published release cites would be registered beside the current one)."""
     from app.services.release.manifest import ReleaseManifestStateConflict
 
     chosen, _other = thermo_candidates
     manifest = _publish_with_selection(db_session, draft_release, curator, chosen, species_entry)
     try:
         with db_session.no_autoflush:
-            manifest.manifest_schema = "tckdb.dataset_release.v1"
+            manifest.manifest_format_version = 7
             with pytest.raises(ReleaseManifestStateConflict, match="unknown_manifest_schema"):
                 verify_release(db_session, draft_release)
     finally:
@@ -481,7 +488,7 @@ def test_a_manifest_row_with_an_unknown_tag_is_refused(
     assert render_manifest_document(snapshot) == dict(manifest.document_json)
     assert manifest_digest(render_manifest_document(snapshot)) == manifest.content_sha256
 
-    unknown = dataclasses.replace(snapshot, manifest_schema="not.a.known.format")
+    unknown = dataclasses.replace(snapshot, manifest_format=VersionRef(name="not.a.known.format", version=1))
     with pytest.raises(ReleaseManifestStateConflict, match="unknown_manifest_schema"):
         render_manifest_document(unknown)
 
@@ -552,15 +559,15 @@ def test_manifest_states_it_is_not_a_backup_or_a_projection(
     assert contract["citable"] is True
     assert contract["lossless_database_backup"] is False
     assert contract["reingestible"] is False
-    assert contract["distinct_from"]["recovery_archive"] == "tckdb.archive.v1"
-    assert contract["distinct_from"]["convenience_projection"] == "tckdb.export.v0"
+    assert contract["distinct_from"]["recovery_archive"] == {"name": "tckdb.archive", "version": 1}
+    assert contract["distinct_from"]["convenience_projection"] == {"name": "tckdb.export", "version": 1}
 
 
-def test_recovery_archive_schema_tag_does_not_drift():
+def test_recovery_archive_format_does_not_drift():
     """The manifest names the recovery contract; keep the two in step."""
-    from app.services.archive.core import ARCHIVE_SCHEMA
+    from app.services.archive.core import ARCHIVE_FORMAT
 
-    assert versions.RECOVERY_ARCHIVE_SCHEMA == ARCHIVE_SCHEMA
+    assert versions.RECOVERY_ARCHIVE_FORMAT == ARCHIVE_FORMAT
 
 
 def test_manifest_document_declares_the_curated_profile(
@@ -874,9 +881,9 @@ def test_verification_survives_an_edit_to_the_contract_literal(
     _publish_with_selection(db_session, draft_release, curator, chosen, species_entry)
     assert verify_release(db_session, draft_release).ok
 
-    def _edited(*, ships, recovery_archive_schema):
+    def _edited(*, ships, recovery_archive_format):
         block = manifest_module._contract_block(
-            ships=ships, recovery_archive_schema=recovery_archive_schema
+            ships=ships, recovery_archive_format=recovery_archive_format
         )
         block["omits"].append("something_a_future_maintainer_documented")
         return block
@@ -938,18 +945,19 @@ def test_the_frozen_document_depends_only_on_the_manifest_row(
     assert render_manifest_document(snapshot_from_manifest(manifest)) == before
     assert verify_release(db_session, draft_release).ok
 
-    # …and module-constant drift is equally inert. ``v99`` rather than the
-    # ``v2`` this used to set: ``v2`` became the real value with the rights
-    # block, and setting a constant to what it already is checks nothing.
-    original = versions_module.MANIFEST_SCHEMA
+    # ...and module-constant drift is equally inert. Version 99 rather than the real one:
+    # setting a constant to what it already is checks nothing.
+    from tckdb_schemas.fragments.version import VersionRef as _Ref
+
+    original = versions_module.MANIFEST_FORMAT
     try:
-        versions_module.MANIFEST_SCHEMA = "tckdb.dataset_release.v99"
-        manifest_module.versions.MANIFEST_SCHEMA = "tckdb.dataset_release.v99"
+        versions_module.MANIFEST_FORMAT = _Ref(name="tckdb.dataset_release", version=99)
+        manifest_module.versions.MANIFEST_FORMAT = _Ref(name="tckdb.dataset_release", version=99)
         assert render_manifest_document(snapshot_from_manifest(manifest)) == before
         assert verify_release(db_session, draft_release).ok
     finally:
-        versions_module.MANIFEST_SCHEMA = original
-        manifest_module.versions.MANIFEST_SCHEMA = original
+        versions_module.MANIFEST_FORMAT = original
+        manifest_module.versions.MANIFEST_FORMAT = original
 
 
 def test_network_structure_rows_name_their_channel_and_state(

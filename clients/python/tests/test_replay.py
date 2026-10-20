@@ -141,7 +141,7 @@ def _write_conformer_sidecar(
     name: str = "spc1.cnf1",
     status: str = "pending",
     base_url: str | None = "http://producer.example/api/v1",
-    bundle_format_version: str | None = "0",
+    bundle_format_version: int | None = 1,
     payload_kind: str = "conformer_calculation",
     payload: dict | None = None,
     payload_file_override: str | None = None,
@@ -183,7 +183,7 @@ def _write_artifact_sidecar(
     name: str = "spc1.calc7.output_log",
     status: str = "pending",
     base_url: str | None = "http://producer.example/api/v1",
-    bundle_format_version: str | None = "0",
+    bundle_format_version: int | None = 1,
     content: bytes = b"hello world",
     declared_sha: str | None = None,
     declared_bytes: int | None = None,
@@ -457,7 +457,7 @@ def test_factory_called_per_sidecar_with_heterogeneous_urls(tmp_path: Path) -> N
 
 
 def test_unsupported_format_version_marks_failed(tmp_path: Path) -> None:
-    sp, _ = _write_conformer_sidecar(tmp_path, bundle_format_version="1")
+    sp, _ = _write_conformer_sidecar(tmp_path, bundle_format_version=2)
     recorder = _FactoryRecorder()
     summary = replay_bundle(tmp_path, client_factory=_make_factory(recorder))
     assert summary.failed == 1
@@ -636,7 +636,7 @@ def test_dry_run_does_not_post_or_mutate(tmp_path: Path) -> None:
 def test_summary_records_failure_details(tmp_path: Path) -> None:
     """Every failure carries (sidecar_path, payload_kind, last_error)."""
     sp1, _ = _write_conformer_sidecar(
-        tmp_path, name="a", bundle_format_version="1"
+        tmp_path, name="a", bundle_format_version=2
     )
     sp2, _ = _write_conformer_sidecar(
         tmp_path,
@@ -699,7 +699,7 @@ def _write_computed_species_sidecar(
     name: str = "water.computed_species",
     status: str = "pending",
     base_url: str | None = "http://producer.example/api/v1",
-    bundle_format_version: str | None = "0",
+    bundle_format_version: int | None = 1,
     endpoint: str = "/api/v1/uploads/computed-species",
     idempotency_key: str = "tckdb_cs_v0_0123456789abcdef",
     payload: dict | None = None,
@@ -863,7 +863,7 @@ def _write_computed_reaction_sidecar(
     name: str = "rxn0.computed_reaction",
     status: str = "pending",
     base_url: str | None = "http://producer.example/api/v1",
-    bundle_format_version: str | None = "0",
+    bundle_format_version: int | None = 1,
     endpoint: str = "/api/v1/uploads/computed-reaction",
     idempotency_key: str = "tckdb_cr_v0_0123456789abcdef",
     payload: dict | None = None,

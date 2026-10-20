@@ -388,24 +388,24 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
         manifest = _post(client, route.path, route.body, "exploratory")
         versions[route.name] = (manifest.get("manifest_format_version"), (manifest.get("versions") or {}).get("relative_energy"))
     assert versions == {
-        "thermo": (2, None),
-        "kinetics": (2, None),
-        "network": (3, None),
-        "structure": (2, None),
-        "statmech": (2, None),
-        "relative_energy": (1, "3"),
+        "thermo": (1, None),
+        "kinetics": (1, None),
+        "network": (1, None),
+        "structure": (1, None),
+        "statmech": (1, None),
+        "relative_energy": (1, 1),
     }
 
 
 @pytest.mark.parametrize(
     ("name", "previous"),
-    [("thermo", 1), ("kinetics", 1), ("network", 2), ("structure", 1), ("statmech", 1)],
+    [("thermo", 2), ("kinetics", 2), ("network", 2), ("structure", 2), ("statmech", 2)],
 )
-def test_a_manifest_of_the_previous_format_version_is_refused(client, world, name, previous):
-    """Kills: the previous format version re-added to an engine's supported set.
+def test_a_manifest_of_another_format_version_is_refused(client, world, name, previous):
+    """Kills: another format version added to an engine's registry.
 
-    Rewritten as the previous release wrote it (the version, and nothing else), then resealed where the engine checks
-    a digest, so the refusal can only be the format."""
+    Rewritten with the other version (and nothing else), then resealed where the engine checks a digest, so the
+    refusal can only be the format."""
     route = next(r for r in _routes(world) if r.name == name)
     manifest = _post(client, route.path, route.body, "exploratory")
     manifest["manifest_format_version"] = previous

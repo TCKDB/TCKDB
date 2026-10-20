@@ -557,7 +557,7 @@ def test_none_input_hard_fails():
     assert result.label is EvidenceBadge.hard_failed
     assert result.hard_fail_reason is HardFailReason.transition_state_entry_missing
     assert result.rubric == "computed_transition_state"
-    assert result.rubric_version == 5
+    assert result.rubric_version == 1
     assert result.record_type == "transition_state_entry"
     assert result.record_id is None
 
@@ -1078,23 +1078,16 @@ def test_session_wrapper_returns_hard_fail_for_missing_id(db_session: Session):
 def test_rubric_metadata_pinned():
     """Pin the public contract of the rubric metadata."""
     assert COMPUTED_TRANSITION_STATE.name == "computed_transition_state"
-    # Bumped by ADR 0012: the required imaginary-mode check changed from
-    # counting to citing the recorded designation, and a new advisory
-    # check surfaces the structural flag. A machine review performed
-    # under the counting rule is genuinely stale, which is what a version
-    # bump is for. Bumped again to 3 by the trust-contract correction: an
-    # automated geometry-validation fail is advisory (a warning), not a hard
-    # fail, and the frequency contradiction is judged over every source
-    # frequency result, not the one the rubric calls representative.
-    assert COMPUTED_TRANSITION_STATE.version == 5
+    # Every rubric is at version 1, the release baseline; a later change to what a check means is a version bump.
+    assert COMPUTED_TRANSITION_STATE.version == 1
     assert COMPUTED_TRANSITION_STATE.record_type == "transition_state_entry"
     assert len(COMPUTED_TRANSITION_STATE.checks) == 32
-    # v4 (#729): the undesignated-modes warning sits right after the zero-mode warning and carries no weight.
+    # The undesignated-modes warning (#729) sits right after the zero-mode warning and carries no weight.
     names = [c.name for c in COMPUTED_TRANSITION_STATE.checks]
     i = names.index("no_frequency_result_lacks_an_imaginary_mode")
     assert names[i + 1] == "no_frequency_result_has_undesignated_imaginary_modes"
     assert COMPUTED_TRANSITION_STATE.checks[i + 1].kind is EvidenceCheckKind.warning
-    # v5 (#723): the scoped-assessment warning follows, carries no weight, and is the only check that reads the assessment.
+    # The scoped-assessment warning (#723) follows, carries no weight, and is the only check that reads the assessment.
     assert names[i + 2] == "declared_saddle_target_qualifies"
     assert COMPUTED_TRANSITION_STATE.checks[i + 2].kind is EvidenceCheckKind.warning
 

@@ -62,7 +62,7 @@ def test_a_qualify_request_lists_every_candidate_and_selects_nothing(client, db_
     assert candidate["owner_ref"] == scene.world.entry.public_ref and candidate["reasons"] == []
     assert out["request"]["profile"] == "exploratory" and out["request"]["bounds"]["candidates"] == 500
     assert out["coverage"]["authorized_population"] == "complete" and out["coverage"]["physical_search"] == "not_established"
-    assert out["population"]["visible_candidates"] == 1 and out["versions"]["contract"] == "statmech-selection-v1"
+    assert out["population"]["visible_candidates"] == 1 and out["versions"]["contract"] == 1
     assert out["review"]["effective_floor"] == "not_reviewed" and "approved" in out["review"]["effective_statuses"]
     assert out["integrity"]["algorithm"] == "sha256" and "not signatures" in out["integrity"]["note"]
     assert out["edges"] == [] and out["fronts"] == [] and out["conflicts"] == {"opposing_pairs": [], "cycles": [], "overridden_edges": []}

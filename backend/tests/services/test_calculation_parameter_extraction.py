@@ -7,7 +7,7 @@ Covers:
 - Text-sniff fallback when no software_release is wired.
 - True replace-all: re-parsing wipes prior parser rows but leaves
   upload-supplied / curated rows intact.
-- ``parameters_json``, ``parameters_parser_version``,
+- ``parameters_json``, ``parameters_parser_name`` / ``parameters_parser_version``,
   ``parameters_extracted_at`` mirroring onto the ``Calculation`` row.
 - Re-parse with empty observations still clears stale parser rows.
 - ``ParameterExtractionError`` when neither dispatch path finds software.
@@ -145,10 +145,10 @@ def test_gaussian_dispatch_via_software_release(db_conn) -> None:
         )
         assert rows, "expected at least one parameter row from Gaussian fixture"
         assert all(r.source is ParameterSource.parser for r in rows)
-        assert all(r.parser_version == "gaussian_v1" for r in rows)
+        assert all((r.parser_name, r.parser_version) == ("gaussian_parameters", "1") for r in rows)
 
         stored = session.get(Calculation, calc.id)
-        assert stored.parameters_parser_version == "gaussian_v1"
+        assert (stored.parameters_parser_name, stored.parameters_parser_version) == ("gaussian_parameters", "1")
         assert stored.parameters_json is not None
         assert "route_line" in stored.parameters_json
         assert stored.parameters_extracted_at is not None
@@ -165,10 +165,10 @@ def test_orca_dispatch_via_software_release(db_conn) -> None:
         )
         assert rows, "expected at least one parameter row from ORCA fixture"
         assert all(r.source is ParameterSource.parser for r in rows)
-        assert all(r.parser_version == "orca_v2" for r in rows)
+        assert all((r.parser_name, r.parser_version) == ("orca_parameters", "1") for r in rows)
 
         stored = session.get(Calculation, calc.id)
-        assert stored.parameters_parser_version == "orca_v2"
+        assert (stored.parameters_parser_name, stored.parameters_parser_version) == ("orca_parameters", "1")
 
 
 def test_detect_software_from_text_recognises_molpro() -> None:
@@ -188,7 +188,7 @@ def test_molpro_dispatch_via_text_sniff(db_conn) -> None:
         )
         assert rows, "expected parameter rows from the Molpro fixture"
         assert all(r.source is ParameterSource.parser for r in rows)
-        assert all(r.parser_version == "molpro_v1" for r in rows)
+        assert all((r.parser_name, r.parser_version) == ("molpro_parameters", "1") for r in rows)
 
         # The newly seeded f12.ansatz canonical key resolves through the FK.
         canonical_keys = {r.canonical_key for r in rows}
@@ -197,7 +197,7 @@ def test_molpro_dispatch_via_text_sniff(db_conn) -> None:
         assert "memory.raw" in canonical_keys
 
         stored = session.get(Calculation, calc.id)
-        assert stored.parameters_parser_version == "molpro_v1"
+        assert (stored.parameters_parser_name, stored.parameters_parser_version) == ("molpro_parameters", "1")
 
 
 def test_text_sniff_fallback_when_no_software_release(db_conn) -> None:
@@ -210,7 +210,7 @@ def test_text_sniff_fallback_when_no_software_release(db_conn) -> None:
             session, calc, text_data
         )
         assert rows
-        assert all(r.parser_version == "gaussian_v1" for r in rows)
+        assert all((r.parser_name, r.parser_version) == ("gaussian_parameters", "1") for r in rows)
 
 
 def test_extraction_raises_when_software_unknown(db_conn) -> None:

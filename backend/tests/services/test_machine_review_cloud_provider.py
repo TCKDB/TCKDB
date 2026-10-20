@@ -399,7 +399,7 @@ def test_the_prompt_states_the_rules_the_schema_enforces():
     subject matter, not wording.
     """
     prompt = MACHINE_REVIEW_SYSTEM_PROMPT
-    assert "machine_review_v2" in prompt
+    assert '"format": {"name": "machine_review", "version": 1}' in prompt
     assert "advisory" in prompt.lower()
     assert "used_rag" in prompt
     # Every status and category the model may return is named.

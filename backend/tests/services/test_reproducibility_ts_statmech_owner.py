@@ -187,14 +187,14 @@ def test_t4_the_stamped_identity_follows_the_owner(db_session, _api_test_user):
     ts_row = evaluate_and_append_reproducibility(
         db_session, record_type=SubmissionRecordType.statmech, record_id=ts.id, **_integrity_seam(db_session)
     )
-    assert (ts_row.rubric_name, ts_row.rubric_version) == ("tckdb_reproducibility_ts_statmech", "v1")
-    assert ts_row.context_json["rubric"] == {"name": "tckdb_reproducibility_ts_statmech", "version": "v1"}
+    assert (ts_row.rubric_name, ts_row.rubric_version) == ("tckdb_reproducibility_ts_statmech", 1)
+    assert ts_row.context_json["rubric"] == {"name": "tckdb_reproducibility_ts_statmech", "version": 1}
 
     species_row = evaluate_and_append_reproducibility(
         db_session, record_type=SubmissionRecordType.statmech, record_id=species.id, **_integrity_seam(db_session)
     )
-    assert (species_row.rubric_name, species_row.rubric_version) == ("tckdb_reproducibility", "v1")
-    assert species_row.context_json["rubric"] == {"name": "tckdb_reproducibility", "version": "v1"}
+    assert (species_row.rubric_name, species_row.rubric_version) == ("tckdb_reproducibility", 1)
+    assert species_row.context_json["rubric"] == {"name": "tckdb_reproducibility", "version": 1}
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +311,7 @@ def test_the_stale_list_is_opt_in_and_names_only_ts_owned_records(db_session, _a
     (entry,) = report["stale_transition_state_records"]
     assert entry["statmech_id"] == ts.id
     assert entry["stored_grade"] == "insufficient" and entry["fresh_grade"] == "described"
-    assert entry["stored_rubric"] == ["tckdb_reproducibility", "v1"]
+    assert entry["stored_rubric"] == ["tckdb_reproducibility", 1]
 
 
 def test_t8_the_report_flags_a_species_record_that_moved(db_session, _api_test_user, monkeypatch):

@@ -20,7 +20,9 @@ fix:
   (first appearance) so that two runs on two databases give the same digest. Anything else in the snapshot
   (a key added or removed, a value changed, a check's evidence edited) moves the digest.
 
-These literals are expected to stay byte-identical when the owner-scoped rubric lands. If one of them changes,
+The digests were re-captured once, in versioning PR-4, because the stored snapshot's rubric block and reason
+tokens changed shape (name plus integer version). Grades and checks did not change. Otherwise these literals are
+expected to stay byte-identical when the owner-scoped rubric lands. If one of them changes,
 species grading changed: that is the failure this file exists to catch, not a literal to refresh.
 """
 
@@ -635,7 +637,7 @@ def _observe(db_session, name: str, user: int) -> dict:
 FROZEN: dict[str, dict] = {
     "composite_source": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -650,11 +652,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "2045367116ee2f2bedfa30cc16199461735b436a4345fe0260d47ac57c085025",
+        "digest": "f2199624f6b5eb86bd6ab76e654c773060b3cd7ad084da5f0a8cc753e4fdf60f",
     },
     "computed_no_sources": {
         "grade": "insufficient",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -669,11 +671,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "5765646980c71112fd73c3d574bddd138ec7ce94549e06a4b63cdcb1e819d762",
+        "digest": "0146b4628683eb575996a492d5d435f9703ef3abb439e43e33697be432901d7c",
     },
     "computed_opt_freq_sp": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -688,11 +690,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "24ad7e726217040f8e0de5a6e5bc264a2a9f8dba6ea02c2ecbb753b5dc748d91",
+        "digest": "8cc2bb4093c98e96d36b1ab2e5101733320a8420f74bfd250ea38d596b464e9c",
     },
     "custody_break_on_source_artifact": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -707,11 +709,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'missing'],
         ],
-        "digest": "b5bc532b11ea259d98655712a94b012678a9845fc3a6562a99f193ce01346eb9",
+        "digest": "f624b537e33a61f5d5a7dd955a3583caca2a3f4aae2f82ff38711e850f2342b7",
     },
     "declaration_with_members_and_sources": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -726,11 +728,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "9be7f8a56d311d26db0b2f66088784908dc0c555d24aa35b07db26f360d3c5bb",
+        "digest": "0b2662750a1ada19bc2cf2c5d83f7a6051ddf55a7f1063040301494782ae6c80",
     },
     "dependency_cycle": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -745,11 +747,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "9532908bbc8343a3796dd6aeb08cff09a3bd98e6dabcc20756fbcb87bd59ce82",
+        "digest": "c34b3c19bfaeac24c935d936fc28088dd723471073f332eace4e4c997dad7ac5",
     },
     "dependency_edges": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -764,11 +766,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "15976d0184f9cd90f3d2e96a1016a0870fcce9542a4016d4a9f691fc1ef126a2",
+        "digest": "847d46ee843541cc7970972b864cf430c114b14adb342648b90757e0cad9dd4f",
     },
     "estimated_with_literature": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -783,11 +785,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "0e52333acfc6753332a64f108a5285d1935ccd528e4e95321bae29aca83cb9e4",
+        "digest": "43761f23bbfcca30da67c0542ee7eecf16b60e11614d8c309b518649988c2e8a",
     },
     "estimated_without_literature": {
         "grade": "insufficient",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -802,11 +804,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "e24adae0602dd6023d0470d881bc2b4ef28a963bf4ccc2fe0155aded400b12fa",
+        "digest": "8034ae2aa024e9a8ea9cdd57d43e3aa02e81fd1ffc4cd9cf8c2df6372b1c63b3",
     },
     "experimental_with_literature": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -821,11 +823,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "a3954a6ee43099bf42f82f70841519536af4dbc6d0bd72d8e350f29d354667ed",
+        "digest": "d2509d54848fab242fc4b89cafba4b22c7bfe44260d622c6f5f3d8dc1929ca5b",
     },
     "experimental_without_literature": {
         "grade": "insufficient",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -840,11 +842,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "9355fe4a776f8c5f642ca325c5c84a52189c8e750787eef8af17b83472115e3d",
+        "digest": "9937334ef6dfc198fbf3da2074011e253dbb74f0e0f9d8599856f553f32e470d",
     },
     "external_symmetry_only": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -859,11 +861,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "997b6a54a7a42e9d10e790c5ca6dbe7e7cb0f5a42a5de4710a0d0595ac48eee6",
+        "digest": "26f02c83a30dfc9727008b85ca9851b95dfc6d32585ed1bb7b51be0b6594b922",
     },
     "object_missing_break_on_source_artifact": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -878,11 +880,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'missing'],
         ],
-        "digest": "5abb93d72894c14500a3b0bf8e04f1f32825773a154fd387c2fedb8643213f59",
+        "digest": "bc9b91697fb98188214a072ed951a93e7c7e4a0a4b46b9ab3a089df28b4bc833",
     },
     "point_group_only": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -897,11 +899,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "5e889008db93916b31d2a4a9edf46f3ff360be43d4544dfa768d08ade19c7b0a",
+        "digest": "e98e5dfada93b263a2891bc7ec95f80d6a476b567be30ddeb0802350eefb1deb",
     },
     "scan_source_with_result": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -916,11 +918,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "b88fdcf0f22dc4e6991193d6006684b4ab4c343ff1763445fde2ff87b7605a7f",
+        "digest": "e16bd41713bdfe7d285b71a7fbdec3f2f027a19438f04bf9987bb6105d6d2539",
     },
     "source_geometries_and_parameters": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -935,11 +937,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "0ea10c27771f09a8e34b7de4ddcd2c1bd981ee7943ac9f13837044e31f8e934b",
+        "digest": "cbd84546070f548d0a382a0e89cca98cb0b0ad759653dd5d6ae28a79292eb30b",
     },
     "sparse": {
         "grade": "insufficient",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'missing'],
@@ -954,11 +956,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "89d3de9083ff07acd381357de99a0c04d8ff2df100ae2a48567976d738d5e456",
+        "digest": "a1282654af73123cddac60213723493ce057f04d710e647c49fad8f91cb27ed3",
     },
     "torsion_with_scan": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -973,11 +975,11 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "5fe17e6068784934ecfee4357315726dfe803bead4357639b5afc02375d01bb9",
+        "digest": "13b44054ce0f6d5120d6101ab1c58a6daaf311fc140b45d298dc9a2165d06b53",
     },
     "with_model_declaration": {
         "grade": "described",
-        "rubric": {'name': 'tckdb_reproducibility', 'version': 'v1'},
+        "rubric": {'name': 'tckdb_reproducibility', 'version': 1},
         "checks": [
             ['target_identity', 'described', 'passed'],
             ['scientific_context', 'described', 'passed'],
@@ -992,7 +994,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "3dc9dbf8958d9968e9328056f0629e4ec7cf9dbe3058b76b8d2499130fee47e2",
+        "digest": "7f0bfa89c1cd15a2d2801bd22802753f11674f745ae9b3e97b246e3e13bd9002",
     },
 }
 
@@ -1198,8 +1200,8 @@ def test_smoke_a_species_row_appended_now_is_current_and_carries_the_original_ru
         record_id=statmech.id,
         **_integrity_seam(db_session),
     )
-    assert (row.rubric_name, row.rubric_version) == ("tckdb_reproducibility", "v1")
-    assert row.context_json["rubric"] == {"name": "tckdb_reproducibility", "version": "v1"}
+    assert (row.rubric_name, row.rubric_version) == ("tckdb_reproducibility", 1)
+    assert row.context_json["rubric"] == {"name": "tckdb_reproducibility", "version": 1}
 
     response = client.get(f"/api/v1/scientific/statmech/{statmech.public_ref}", params={"include": "assessments"})
     assert response.status_code == 200, response.text

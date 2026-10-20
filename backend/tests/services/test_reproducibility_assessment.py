@@ -50,7 +50,7 @@ def _append(
         "record_id": record_id,
         "grade": ReproducibilityGrade.described,
         "rubric_name": "computed_reaction_reproducibility",
-        "rubric_version": "v1",
+        "rubric_version": 1,
         "context_json": {
             "target": {"public_ref": "rxn_example"},
             "sources": ["calc_example"],
@@ -97,7 +97,7 @@ def test_append_allows_versioned_history_and_latest_is_deterministic(db_session)
         db_session,
         record_id=target_id,
         grade="rerunnable",
-        rubric_version="v2",
+        rubric_version=2,
         context_json={"inputs": ["job.in"], "environment": {"image": "sha256:abc"}},
         assessed_at=_T0 + timedelta(hours=1),
     )
@@ -283,12 +283,12 @@ def test_database_trigger_rejects_update(db_session):
 
     with pytest.raises(DBAPIError, match="append-only"), db_session.begin_nested():
         db_session.execute(
-            text("UPDATE record_reproducibility_assessment SET rubric_version = 'tampered' WHERE id = :id"),
+            text("UPDATE record_reproducibility_assessment SET rubric_version = 999 WHERE id = :id"),
             {"id": row.id},
         )
 
     db_session.expire_all()
-    assert db_session.get(RecordReproducibilityAssessment, row.id).rubric_version == "v1"
+    assert db_session.get(RecordReproducibilityAssessment, row.id).rubric_version == 1
 
 
 def test_assessment_public_ref_round_trips_through_curator_read_schema(db_session):

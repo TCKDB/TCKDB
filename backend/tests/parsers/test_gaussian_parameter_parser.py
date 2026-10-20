@@ -17,7 +17,7 @@ from app.db.models.calculation import (
 from app.db.models.common import CalculationType, StereoKind
 from app.db.models.species import Species, SpeciesEntry
 from app.services.gaussian_parameter_parser import (
-    PARSER_VERSION,
+    PARSER,
     parse_gaussian_log,
 )
 
@@ -45,8 +45,9 @@ class TestRouteLineParsing:
         assert "opt=" in route
         assert "scf=" in route
 
-    def test_parser_version(self):
-        assert self.result["parser_version"] == PARSER_VERSION
+    def test_parser_stamp(self):
+        assert self.result["parser"] == {"name": "gaussian_parameters", "version": "1"}
+        assert PARSER.version == 1
 
     def test_software_version(self):
         sw = self.result["software"]
@@ -288,7 +289,8 @@ class TestParameterDBStorage:
             type=CalculationType.opt,
             species_entry_id=entry.id,
             parameters_json=parsed["parameters_json"],
-            parameters_parser_version=parsed["parser_version"],
+            parameters_parser_name=parsed["parser"]["name"],
+            parameters_parser_version=parsed["parser"]["version"],
             parameters_extracted_at=datetime.now(tz=timezone.utc).replace(
                 tzinfo=None
             ),
@@ -331,7 +333,7 @@ class TestParameterDBStorage:
         calc = db_session.get(Calculation, stored_calculation.id)
         assert calc.parameters_json is not None
         assert "opt" in calc.parameters_json["sections"]
-        assert calc.parameters_parser_version == PARSER_VERSION
+        assert (calc.parameters_parser_name, calc.parameters_parser_version) == ("gaussian_parameters", "1")
 
     def test_query_by_canonical_key(self, db_session, stored_calculation):
         """Can query: find calculations with tight SCF convergence."""

@@ -325,12 +325,12 @@ def test_a_payload_without_the_format_marker_is_an_unknown_format():
     legacy = {"label": "warning", "summary": "advisory", "findings": [], "model": "m", "used_rag": False}
     parsed = machine_review_result_from_audit_event(legacy)
     assert parsed.result is None
-    assert len(parsed.parse_warnings) == 1 and "schema_version None" in parsed.parse_warnings[0]
+    assert len(parsed.parse_warnings) == 1 and "unknown format None" in parsed.parse_warnings[0]
 
     # A current payload with only its marker removed is refused the same way.
     current = _details(findings=(_record_finding(),))
     assert machine_review_result_from_audit_event(current).result is not None
-    del current["schema_version"]
+    del current["format"]
     assert machine_review_result_from_audit_event(current).result is None
 
     projection = record_machine_reviews_from_submission_audit_event(
@@ -343,10 +343,10 @@ def test_a_payload_without_the_format_marker_is_an_unknown_format():
 
 def test_a_payload_with_another_marker_is_refused_not_read_as_current():
     payload = _details(findings=(_record_finding(),))
-    payload["schema_version"] = "machine_review_v3"
+    payload["format"] = {"name": "machine_review", "version": 3}
     parsed = machine_review_result_from_audit_event(payload)
     assert parsed.result is None
-    assert "machine_review_v3" in parsed.parse_warnings[0]
+    assert "machine_review" in parsed.parse_warnings[0] and "3" in parsed.parse_warnings[0]
 
 
 # --------------------------------------------------------------------------- #

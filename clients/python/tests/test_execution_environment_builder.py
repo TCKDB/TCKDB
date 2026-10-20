@@ -13,7 +13,7 @@ class _KeyMinter:
 
 def _environment() -> dict:
     return {
-        "schema_version": "tckdb.execution-environment.v1",
+        "schema_name": "tckdb.execution-environment", "schema_version": 1,
         "software_release": {"name": "Gaussian", "version": "16"},
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
@@ -55,7 +55,7 @@ def test_species_and_reaction_builder_wires_environment_on_the_calculation_paylo
 def _described_environment() -> dict:
     """What an uploader on a shared cluster can actually supply."""
     return {
-        "schema_version": "tckdb.execution-environment.v1",
+        "schema_name": "tckdb.execution-environment", "schema_version": 1,
         "software_release": {"name": "Gaussian", "version": "16"},
         "runtime": {
             "runtime_kind": "described",

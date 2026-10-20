@@ -504,7 +504,7 @@ class RelativeConformerEnergyCompareResponse(BaseModel):
     candidate: dict[str, Any]
     reference: dict[str, Any]
     claims: RelativeEnergyCompareClaims
-    comparison_version: str
+    comparison_version: int
     notes: list[str]
     versions: dict[str, Any]
     snapshot_isolation: str

@@ -131,7 +131,7 @@ def context_for(session: Session, entry: TransitionStateEntry, scope: TrustScope
     return not_assessed_on_lists_context(scope.pins.get(entry.id, frozenset()))
 
 
-def _no_declared_target(versions: dict[str, str]) -> TransitionStateTrustContext:
+def _no_declared_target(versions: dict[str, int]) -> TransitionStateTrustContext:
     return TransitionStateTrustContext(
         assessment=TransitionStateScopedAssessment(
             status=TransitionStateScopedAssessmentStatus.no_declared_target,
@@ -143,7 +143,7 @@ def _no_declared_target(versions: dict[str, str]) -> TransitionStateTrustContext
     )
 
 
-def _live_versions() -> dict[str, str]:
+def _live_versions() -> dict[str, int]:
     from app.services.structure_selection import ASSESSMENT_VERSION, DECISION_VERSION, NORMALIZER_VERSION
 
     return {"assessment": ASSESSMENT_VERSION, "normalizer": NORMALIZER_VERSION, "decision": DECISION_VERSION}

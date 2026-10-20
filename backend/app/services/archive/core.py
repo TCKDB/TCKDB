@@ -685,7 +685,7 @@ def _repair_sequences(session: Session, tables) -> None:
 class ArchiveVerificationReport:
     """Result of the offline member-hash check of one archive file."""
 
-    schema: str | None
+    format: VersionRef | None
     database_revisions: list[str]
     rows_declared: int
     blobs_declared: int
@@ -725,7 +725,7 @@ def verify_archive(source: PathOrBinaryIO) -> ArchiveVerificationReport:
     """
 
     problems: list[str] = []
-    schema: str | None = None
+    declared: VersionRef | None = None
     revisions: list[str] = []
     rows_declared = 0
     blobs_declared = 0
@@ -751,7 +751,8 @@ def verify_archive(source: PathOrBinaryIO) -> ArchiveVerificationReport:
             return ArchiveVerificationReport(None, [], 0, 0, 0, ["manifest.json is not an object"])
 
         declared_format = manifest.get("format")
-        if reads_as(declared_format, ARCHIVE) != ARCHIVE_FORMAT:
+        declared = reads_as(declared_format, ARCHIVE)
+        if declared != ARCHIVE_FORMAT:
             problems.append(f"manifest format is {declared_format!r}, expected {header_of(ARCHIVE_FORMAT)!r}")
         declared_revisions = manifest.get("database_revisions")
         if isinstance(declared_revisions, list) and all(isinstance(r, str) for r in declared_revisions):
@@ -814,7 +815,7 @@ def verify_archive(source: PathOrBinaryIO) -> ArchiveVerificationReport:
             problems.append(f"archive contains undeclared members: {undeclared}")
 
     return ArchiveVerificationReport(
-        schema=schema,
+        format=declared,
         database_revisions=revisions,
         rows_declared=rows_declared,
         blobs_declared=blobs_declared,

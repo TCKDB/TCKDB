@@ -403,7 +403,7 @@ def test_the_review_finding_flags_a_protium_entry_with_a_d_geometry(db_session) 
     assert stored.record_type.value == "species_entry"
     assert stored.provider == "tckdb.scientific_checks"
     assert stored.model == "isotope_identity_consistency"
-    assert stored.rubric_versions_json == {"isotope_identity_consistency_v1": "1"}
+    assert (stored.rubric_name, stored.rubric_version) == ("isotope_identity_consistency", 1)
 
 
 def test_the_review_finding_is_silent_on_an_ordinary_entry(db_session) -> None:

@@ -71,7 +71,7 @@ def _empty_archive_tables(session) -> None:
 
 def _execution_environment_payload() -> dict:
     return {
-        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"},
+        "schema_name": "tckdb.execution-environment", "schema_version": 1, "software_release": {"name": "Gaussian", "version": "16"},
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
         "closure": [
@@ -362,7 +362,7 @@ def test_archive_round_trip_preserves_rows_and_artifact_bytes(db_session, monkey
     write_archive(db_session, second)
     archive_bytes = first.getvalue()
     assert archive_bytes == second.getvalue()
-    assert manifest["schema"] == "tckdb.archive.v1"
+    assert manifest["format"] == {"name": "tckdb.archive", "version": 1}
     assert manifest["rows"]["count"] > 0
     assert manifest["blobs"] == [
         {

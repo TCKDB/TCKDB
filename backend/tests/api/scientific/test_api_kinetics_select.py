@@ -406,7 +406,7 @@ def test_the_manifest_route_downloads_the_same_decision_and_replays_without_the_
     select = post(client, world.entry).json()
     assert wire["outcome"] == select["outcome"] == "policy_preferred"
     assert wire["decision"]["fronts"] == select["fronts"]
-    assert wire["policy"] == {"name": "kinetics_method_preferred", "version": "1"}
+    assert wire["policy"] == {"name": "kinetics_method_preferred", "version": 1}
     assert wire["snapshot_isolation"] in {"read committed", "repeatable read", "serializable"}
     assert "max_candidates" not in wire["request"] and wire["request"]["profile"] == "exploratory"
     assert replay_matches(wire, rules=(RULE,))
@@ -453,6 +453,9 @@ ALLOWED_RESPONSE_INTEGER_PATHS = {
     "disclosures.visible_candidates", "disclosures.excluded_count", "determinations[].representation_count",
     "candidates[].applicability_declaration.version", "candidates[].applicability_declaration.reaction_order",
     "candidates[].protocol.version",
+    "policy.version", "policy.rules[].version", "relations.edges[].rule_version",
+    "pair_checks[].rule_version", "rule_matches[].rule_version", "relations.overridden_edges[].rule_version",
+    "relations.overridden_edges[].overridden_by_rule_version",
 }
 
 
