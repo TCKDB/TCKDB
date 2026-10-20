@@ -15,8 +15,8 @@ from __future__ import annotations
 
 from app.services.machine_review.providers.interface import MachineReviewContext
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_V2_SCHEMA_VERSION,
-    MachineReviewProviderResultV2,
+    MACHINE_REVIEW_SCHEMA_VERSION,
+    MachineReviewProviderResult,
     MachineReviewStatus,
 )
 
@@ -30,10 +30,10 @@ class DisabledMachineReviewProvider:
     def review_submission(
         self,
         context: MachineReviewContext,
-    ) -> MachineReviewProviderResultV2:
+    ) -> MachineReviewProviderResult:
         """Return a deterministic not-run v2 result without external dependencies."""
-        return MachineReviewProviderResultV2(
-            schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+        return MachineReviewProviderResult(
+            schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
             status=MachineReviewStatus.not_run,
             curator_priority=None,
             summary=DISABLED_SUMMARY,

@@ -1,7 +1,7 @@
 # Hosted bundle dry-run v0
 
 The hosted dry-run endpoint lets an authenticated user POST a
-`ContributionBundleV0` and receive a structured **preview** of what a
+`ContributionBundle` and receive a structured **preview** of what a
 real import would do — without creating any scientific records,
 submissions, upload jobs, audit events, or record links.
 
@@ -20,7 +20,7 @@ POST /api/v1/bundles/dry-run
   API key header (`X-API-Key`) is accepted, matching the existing
   `get_current_user` dependency. Anonymous requests are rejected with
   `401`.
-- **Request body:** a `ContributionBundleV0` JSON document. Validated
+- **Request body:** a `ContributionBundle` JSON document. Validated
   by the existing bundle schema; structurally invalid bundles fail with
   the normal `422` validation response.
 - **Response:** `ContributionBundleDryRunResult` (HTTP `200`), including when
@@ -39,7 +39,7 @@ Hosted dry-run v0 supports the same families as bundle format v0:
 - `kinetics`
 
 Other families (`network`, `statmech`, `transport`, `computed_reaction`,
-mixed) are rejected by `ContributionBundleV0` validation before they
+mixed) are rejected by `ContributionBundle` validation before they
 reach this endpoint.
 
 ## Will submit accept it? (#577)

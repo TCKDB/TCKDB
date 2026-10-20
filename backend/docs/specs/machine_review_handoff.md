@@ -61,7 +61,7 @@ All of the following exist in code with tests, and are private/admin-only.
 |---|---|---|
 | Foundational spec | `docs/specs/provisional_machine_review.md` | Vocabulary, mental model, public-exposure gate |
 | Contracts | `app/services/machine_review/schemas.py` | `MachineReviewStatus`, `MachineReviewSeverity`, `MachineReviewCategory`, `CuratorPriority`, `MachineReviewFinding`, `MachineReviewResult` (all `extra="forbid"`, no mutation field) |
-| v2 provider contract | `app/services/machine_review/schemas.py` | `MachineReviewProviderResultV2`, `MachineReviewProviderFindingV2`, `MACHINE_REVIEW_V2_SCHEMA_VERSION` — native machine-review provider payload (`extra="forbid"`, `used_rag=Literal[False]`) |
+| v2 provider contract | `app/services/machine_review/schemas.py` | `MachineReviewProviderResult`, `MachineReviewProviderFinding`, `MACHINE_REVIEW_SCHEMA_VERSION` — native machine-review provider payload (`extra="forbid"`, `used_rag=Literal[False]`) |
 | Status derivation | `app/services/machine_review/derivation.py` | `MachineReviewOutcome` + `derive_machine_review_status()` — pure, deterministic |
 | Safe mapping | `app/services/machine_review/mapping.py` | `map_findings_to_submission_records()` — exact identity, no fan-out |
 | Latest-record read model | `app/services/machine_review/read_model.py` | `RecordMachineReview`, `MachineReviewRecordSummary`, `select_latest_machine_review_for_record()` |
@@ -78,9 +78,9 @@ All of the following exist in code with tests, and are private/admin-only.
 | Curator workflow spec | `docs/specs/machine_review_curator_workflow.md` | Triage roles, queue, human-action policy, exposure gate (design; the workflow/UI layer it describes is **not** built yet) |
 | Curator task queue spec | `docs/specs/machine_review_curator_task_queue.md` | The persisted task table design — **now implemented** (see model/migration row above) |
 | Provider plumbing spec | `docs/specs/machine_review_real_provider_plumbing.md` | Producer-side design (off/cloud/local, provider package, config reuse of `LLM_PRECHECK_*`, failure contract, fake/test boundary, 1→6 order) |
-| Provider plumbing foundation | `app/services/machine_review/providers/` | `MachineReviewProvider` protocol + `MachineReviewContext` (`interface.py`); `DisabledMachineReviewProvider` (`disabled.py`); test-only `FakeMachineReviewProvider` + `make_pass/warning/critical/failed_result` (`fake.py`); `build_machine_review_provider()` factory (`factory.py`); `parse_machine_review_v2_payload()` / `machine_review_v2_result_to_details_json()` boundary helpers. **Unwired into production flow**; cloud/local validate config then raise `NotImplementedError` (no real call) |
-| v2 audit-event recorder | `app/services/submission.py` | `record_machine_review_v2_audit_event()` — minimal glue paralleling `record_llm_precheck_audit_event()`: serializes a `MachineReviewProviderResultV2` into `details_json` (carrying `schema_version`), writes an `llm`/`llm_precheck_recorded` event, flush-only, no status mutation, **not** wired into upload/precheck |
-| Persisted v2 readback tests | `tests/api/test_admin_machine_review_persisted_readback.py` | Prove the full persisted path: provider result → `record_machine_review_v2_audit_event` → real `submission_audit_event` row → DB readback → admin inspection → curator-task build → admin task API |
+| Provider plumbing foundation | `app/services/machine_review/providers/` | `MachineReviewProvider` protocol + `MachineReviewContext` (`interface.py`); `DisabledMachineReviewProvider` (`disabled.py`); test-only `FakeMachineReviewProvider` + `make_pass/warning/critical/failed_result` (`fake.py`); `build_machine_review_provider()` factory (`factory.py`); `parse_machine_review_payload()` / `machine_review_result_to_details_json()` boundary helpers. **Unwired into production flow**; cloud/local validate config then raise `NotImplementedError` (no real call) |
+| v2 audit-event recorder | `app/services/submission.py` | `record_machine_review_audit_event()` — minimal glue paralleling `record_llm_precheck_audit_event()`: serializes a `MachineReviewProviderResult` into `details_json` (carrying `schema_version`), writes an `llm`/`llm_precheck_recorded` event, flush-only, no status mutation, **not** wired into upload/precheck |
+| Persisted v2 readback tests | `tests/api/test_admin_machine_review_persisted_readback.py` | Prove the full persisted path: provider result → `record_machine_review_audit_event` → real `submission_audit_event` row → DB readback → admin inspection → curator-task build → admin task API |
 
 ---
 
@@ -122,7 +122,7 @@ provider contract — spec (`e08efbf`) + implementation (`531d3ad`) — follow. 
 last three commits are the provider-plumbing slice: its design spec
 (`48dfabb`), the unwired producer foundation (`269db30` — disabled/fake v2
 providers, factory, parse/serialize helpers), and the persisted v2
-ingestion/readback tests + `record_machine_review_v2_audit_event` glue
+ingestion/readback tests + `record_machine_review_audit_event` glue
 (`76e8305`).)
 
 ---
@@ -139,7 +139,7 @@ include=all still does NOT include trust.
 search / list endpoints still do NOT expose trust.
 No automatic curator-task creation runs on upload or precheck — task building
   is explicit/admin-triggered only.
-record_machine_review_v2_audit_event is explicit/caller-driven only; it is NOT
+record_machine_review_audit_event is explicit/caller-driven only; it is NOT
   wired into the upload/precheck flow and nothing invokes it in production.
 No real Cloud/Local model calls exist — the provider package is unwired and
   cloud/local modes validate config then raise NotImplementedError.
@@ -293,7 +293,7 @@ fake v2 provider returns a valid machine_review_v2 payload (pass/warning/critica
 fake v2 provider can emit v2-only categories (transition_state_validation, schema_gap)
 factory never exposes the fake provider for any AI_REVIEW_ASSISTANT_MODE value
 cloud/local modes validate required config, then raise NotImplementedError (no call)
-parse_machine_review_v2_payload rejects used_rag=true and extra/mutation fields
+parse_machine_review_payload rejects used_rag=true and extra/mutation fields
 v2 details_json persists schema_version and findings (survives DB readback)
 v2 recommended_action survives persistence/readback
 v2-only categories (e.g. transition_state_validation) survive persistence/readback
@@ -360,13 +360,13 @@ lifecycle.
 
 ```text
 FakeMachineReviewProvider / future Cloud|Local provider   (off=Disabled; unwired)
-  -> MachineReviewProviderResultV2     (validated v2 contract; used_rag=Literal[False])
-  -> record_machine_review_v2_audit_event (explicit/caller-driven; flush-only; no status mutation)
+  -> MachineReviewProviderResult     (validated v2 contract; used_rag=Literal[False])
+  -> record_machine_review_audit_event (explicit/caller-driven; flush-only; no status mutation)
   -> submission_audit_event.details_json  (schema_version="machine_review_v2"; event_kind=
                                         llm_precheck_recorded, actor_kind=llm)
   -> DB readback                       (real row; proven by persisted-readback tests)
   -> adapter dispatch on schema_version:
-       "machine_review_v2"  -> validate MachineReviewProviderResultV2 directly
+       "machine_review_v2"  -> validate MachineReviewProviderResult directly
        absent (legacy v1)   -> validate LLMPrecheckResult + translate
        unknown version      -> parse warning (no record reviews)
   -> MachineReviewResult               (both versions converge here)
@@ -383,7 +383,7 @@ FakeMachineReviewProvider / future Cloud|Local provider   (off=Disabled; unwired
 ```
 
 Everything in that chain is private/admin-only. The producer (provider →
-`record_machine_review_v2_audit_event`) is **not** wired into the upload/precheck
+`record_machine_review_audit_event`) is **not** wired into the upload/precheck
 flow — it runs only when an admin/test explicitly invokes it; the fake provider
 is the only producer today and no real Cloud/Local call exists. From the audit
 event onward the read/projection steps are pure (the inspection endpoint); the
@@ -418,7 +418,7 @@ inspection.py     build_submission_machine_review_inspection() + inspection data
 curator_tasks.py          build_curator_tasks_for_submission(), compute_finding_fingerprint(), CuratorTaskBuildResult
 curator_task_lifecycle.py assign / start_curator_task_review / resolve / reopen (flush-only)
 providers/interface.py    MachineReviewProvider protocol, MachineReviewContext,
-                          parse_machine_review_v2_payload(), machine_review_v2_result_to_details_json(),
+                          parse_machine_review_payload(), machine_review_result_to_details_json(),
                           MachineReviewProviderConfigurationError
 providers/disabled.py     DisabledMachineReviewProvider (off; v2 not_run)
 providers/fake.py         FakeMachineReviewProvider + make_pass/warning/critical/failed_result (TEST-ONLY)
@@ -427,7 +427,7 @@ providers/factory.py      build_machine_review_provider() (off->disabled; cloud/
 
 (Precheck source: `backend/app/services/llm_precheck/` — `schemas.py`
 `LLMPrecheckResult`, `providers.py` fake provider. v2 audit-event recorder glue:
-`backend/app/services/submission.py` `record_machine_review_v2_audit_event()`,
+`backend/app/services/submission.py` `record_machine_review_audit_event()`,
 paralleling `record_llm_precheck_audit_event()`.)
 
 **Model + migration**
@@ -543,14 +543,14 @@ v2 provider payloads are dispatched by a single root schema_version marker
   warning (never silently treated as v1). v2 is additive — no new event kind,
   no migration; the version lives in details_json. Both versions converge on
   the internal MachineReviewResult, so downstream is unchanged.
-record_machine_review_v2_audit_event PARALLELS the v1
+record_machine_review_audit_event PARALLELS the v1
   record_llm_precheck_audit_event instead of replacing it; v1 persistence stays
   until all v1 tests/fixtures are migrated.
 v2 persistence KEEPS event_kind=llm_precheck_recorded and actor_kind=llm; the
   version lives inside details_json via schema_version (no new event kind, no
   migration). A future machine_review_recorded rename is deferred.
 The provider package remains UNWIRED into the production upload/precheck flow;
-  record_machine_review_v2_audit_event is explicit/caller-driven only.
+  record_machine_review_audit_event is explicit/caller-driven only.
 The fake v2 provider is test/evaluation plumbing, NOT a deployer-facing mode;
   the factory refuses to build it for any AI_REVIEW_ASSISTANT_MODE value
   (including "test") — it is reachable only via build_fake_machine_review_provider().
@@ -586,7 +586,7 @@ Do NOT expose machine_review publicly / grant curator access to the raw admin
   APIs without a product decision passing the exposure gate.
 Do NOT replace the v1 persistence path (record_llm_precheck_audit_event) before
   all v1 tests/fixtures are migrated to v2; keep the two side by side.
-Do NOT make record_machine_review_v2_audit_event run automatically on upload/
+Do NOT make record_machine_review_audit_event run automatically on upload/
   precheck — it is explicit/caller-driven by design.
 ```
 

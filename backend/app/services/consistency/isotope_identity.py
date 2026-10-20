@@ -31,7 +31,7 @@ from collections import Counter
 from app.chemistry.geometry import resolve_element_symbol
 from app.chemistry.isotopes import implied_isotope_mass_number, most_common_isotope
 from app.services.consistency.core import AdvisoryResult, encoded, finding, snapshot
-from app.services.trust.rubrics import ISOTOPE_IDENTITY_CONSISTENCY_V1
+from app.services.trust.rubrics import ISOTOPE_IDENTITY_CONSISTENCY
 
 RUNNER = "isotope_identity_consistency"
 
@@ -99,7 +99,7 @@ def compare_isotope_identity(entry):
         if not conflicts:
             findings.append(finding(entry, {**context, "reason": NO_CONFLICT_FOUND,
                                             "geometries_examined": len(examined)}, refs))
-    return AdvisoryResult(entry, RUNNER, ISOTOPE_IDENTITY_CONSISTENCY_V1, tuple(findings), encoded({
+    return AdvisoryResult(entry, RUNNER, ISOTOPE_IDENTITY_CONSISTENCY, tuple(findings), encoded({
         "target": snapshot(entry, ("species",)),
         "geometries": examined,
         "policy": "protium-entry-only;stored-mass-else-own-symbol;non-standard-nuclide-is-a-declaration;"

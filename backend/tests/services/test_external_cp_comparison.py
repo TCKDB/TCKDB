@@ -51,7 +51,7 @@ from app.services.machine_review.rereview import (
     plan_record_machine_rereview,
 )
 from app.services.machine_review.schemas import MachineReviewStatus as ServiceMachineReviewStatus
-from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON_V2
+from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON
 from tests.services.scientific_read._factories import (
     attach_thermo_nasa,
     attach_thermo_nasa9,
@@ -537,7 +537,7 @@ def test_record_carries_rubric_version_and_context_hash_changes_with_observation
     row_one = run_and_record(db_session, thermo.id)
     db_session.flush()
 
-    rubric_key = f"{EXTERNAL_CP_COMPARISON_V2.name}_v{EXTERNAL_CP_COMPARISON_V2.version}"
+    rubric_key = f"{EXTERNAL_CP_COMPARISON.name}_v{EXTERNAL_CP_COMPARISON.version}"
     assert row_one.rubric_versions_json == {
         rubric_key: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[rubric_key]
     }

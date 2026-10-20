@@ -79,7 +79,7 @@ from app.services.consistency.stoichiometry import (
     species_scope_reason,
 )
 from app.services.machine_review.schemas import MachineReviewFinding
-from app.services.trust.rubrics import HESS_CONSISTENCY_V1
+from app.services.trust.rubrics import HESS_CONSISTENCY
 
 RUNNER = "hess_consistency"
 
@@ -350,4 +350,4 @@ def compare_hess(kinetics, thermo_by_entry, *, representations=None):
         "engine": f"cantera/{engine.ENGINE_VERSION}", "units": "kJ/mol;K",
         "element_reference_compilation": ELEMENT_REFERENCE_COMPILATION,
     }
-    return AdvisoryResult(kinetics, RUNNER, HESS_CONSISTENCY_V1, tuple(findings), encoded(inputs))
+    return AdvisoryResult(kinetics, RUNNER, HESS_CONSISTENCY, tuple(findings), encoded(inputs))

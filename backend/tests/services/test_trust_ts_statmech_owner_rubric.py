@@ -62,10 +62,11 @@ from app.services.machine_review.recipe import (
 )
 from app.services.machine_review.schemas import MachineReviewStatus
 from app.services.trust import (
-    COMPUTED_STATMECH_V2,
-    COMPUTED_TS_STATMECH_V1,
-    OWNER_SCOPED_RUBRICS,
-    RUBRIC_REGISTRY,
+    COMPUTED_STATMECH,
+    COMPUTED_TS_STATMECH,
+    OWNER_SCOPED_RUBRIC_NAMES,
+    RUBRIC_NAME_FOR_RECORD_TYPE,
+    RUBRICS,
     EvidenceBadge,
     EvidenceOutcome,
     HardFailReason,
@@ -131,42 +132,44 @@ def _signature(spec):
 
 
 def test_the_ts_rubric_is_the_species_rubric_with_only_the_subject_check_swapped():
-    ts_tail = [_signature(spec) for spec in COMPUTED_TS_STATMECH_V1.checks[1:]]
-    species_tail = [_signature(spec) for spec in COMPUTED_STATMECH_V2.checks[1:]]
+    ts_tail = [_signature(spec) for spec in COMPUTED_TS_STATMECH.checks[1:]]
+    species_tail = [_signature(spec) for spec in COMPUTED_STATMECH.checks[1:]]
     assert ts_tail, "an empty tail would make the equality below vacuous"
     assert ts_tail == species_tail  # same names, kinds, weights and the very same runner functions
-    assert len(COMPUTED_TS_STATMECH_V1.checks) == len(COMPUTED_STATMECH_V2.checks)
+    assert len(COMPUTED_TS_STATMECH.checks) == len(COMPUTED_STATMECH.checks)
 
-    ts_first, species_first = COMPUTED_TS_STATMECH_V1.checks[0], COMPUTED_STATMECH_V2.checks[0]
+    ts_first, species_first = COMPUTED_TS_STATMECH.checks[0], COMPUTED_STATMECH.checks[0]
     assert (species_first.name, ts_first.name) == ("species_entry_present", "transition_state_entry_present")
     assert ts_first.kind is species_first.kind
     assert ts_first.runner is not species_first.runner
-    assert (COMPUTED_TS_STATMECH_V1.name, COMPUTED_TS_STATMECH_V1.version) == ("computed_ts_statmech", 1)
-    assert COMPUTED_TS_STATMECH_V1.record_type == COMPUTED_STATMECH_V2.record_type == "statmech"
+    assert (COMPUTED_TS_STATMECH.name, COMPUTED_TS_STATMECH.version) == ("computed_ts_statmech", 1)
+    assert COMPUTED_TS_STATMECH.record_type == COMPUTED_STATMECH.record_type == "statmech"
 
 
 def test_the_ts_rubric_adds_no_ts_specific_check():
     """Owner condition 3: the badge reports completeness, not whether the transverse model is suitable."""
     forbidden = ("imaginary", "reaction_coordinate", "irc", "n_imag")
-    names = [spec.name for spec in COMPUTED_TS_STATMECH_V1.checks]
+    names = [spec.name for spec in COMPUTED_TS_STATMECH.checks]
     assert names and not [n for n in names if any(word in n for word in forbidden)]
-    assert set(names) - {spec.name for spec in COMPUTED_STATMECH_V2.checks} == {"transition_state_entry_present"}
+    assert set(names) - {spec.name for spec in COMPUTED_STATMECH.checks} == {"transition_state_entry_present"}
 
 
 def test_the_species_rubric_and_the_registry_default_are_untouched():
-    assert RUBRIC_REGISTRY["statmech"] is COMPUTED_STATMECH_V2
-    assert (COMPUTED_STATMECH_V2.name, COMPUTED_STATMECH_V2.version) == ("computed_statmech", 2)
-    assert COMPUTED_STATMECH_V2.checks[0].name == "species_entry_present"
-    assert OWNER_SCOPED_RUBRICS == (("statmech", COMPUTED_TS_STATMECH_V1),)
-    assert COMPUTED_TS_STATMECH_V1 not in RUBRIC_REGISTRY.values()
+    assert RUBRICS.get(RUBRIC_NAME_FOR_RECORD_TYPE["statmech"]) is COMPUTED_STATMECH
+    assert (COMPUTED_STATMECH.name, COMPUTED_STATMECH.version) == ("computed_statmech", 2)
+    assert COMPUTED_STATMECH.checks[0].name == "species_entry_present"
+    assert OWNER_SCOPED_RUBRIC_NAMES == (("statmech", "computed_ts_statmech"),)
+    assert COMPUTED_TS_STATMECH.name not in RUBRIC_NAME_FOR_RECORD_TYPE.values()
 
 
 def test_the_router_chooses_by_owner():
-    assert statmech_rubric_for(Statmech(species_entry_id=1)) is COMPUTED_STATMECH_V2
-    assert statmech_rubric_for(Statmech(transition_state_entry_id=1)) is COMPUTED_TS_STATMECH_V1
+    assert statmech_rubric_for(Statmech(species_entry_id=1)) == "computed_statmech"
+    assert statmech_rubric_for(Statmech(transition_state_entry_id=1)) == "computed_ts_statmech"
     # Impossible under the CHECK; the backstop keeps today's behaviour rather than guessing.
-    assert statmech_rubric_for(Statmech()) is COMPUTED_STATMECH_V2
-    assert statmech_rubric_for(Statmech(species_entry_id=1, transition_state_entry_id=1)) is COMPUTED_STATMECH_V2
+    assert statmech_rubric_for(Statmech()) == "computed_statmech"
+    assert statmech_rubric_for(Statmech(species_entry_id=1, transition_state_entry_id=1)) == "computed_statmech"
+    # The name resolves, through the registry, to the rubric object the evaluator grades with.
+    assert RUBRICS.get(statmech_rubric_for(Statmech(transition_state_entry_id=1))) is COMPUTED_TS_STATMECH
 
 
 # ---------------------------------------------------------------------------
@@ -248,8 +251,8 @@ def test_a_later_version_of_the_ts_rubric_keeps_the_transition_state_owner_check
     transition-state entry, not a species entry. If the check were keyed on the v1 object, a future
     v2 would silently bring back ``species_entry_missing`` on every TS-owned record.
     """
-    stand_in = COMPUTED_TS_STATMECH_V1.model_copy(update={"version": 2})
-    assert stand_in is not COMPUTED_TS_STATMECH_V1
+    stand_in = COMPUTED_TS_STATMECH.model_copy(update={"version": 2})
+    assert stand_in is not COMPUTED_TS_STATMECH
     assert (stand_in.name, stand_in.version) == ("computed_ts_statmech", 2)
 
     statmech = _make_ts_statmech(db_session)
@@ -268,7 +271,7 @@ def test_a_later_version_of_the_ts_rubric_keeps_the_transition_state_owner_check
 def test_the_ts_record_forced_through_the_species_rubric_reads_as_it_did_before(db_session):
     """The reconstruction the report relies on: the legacy path is still reachable and still wrong for TS."""
     statmech = _make_ts_statmech(db_session)
-    evaluation = evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH_V2)
+    evaluation = evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH)
     assert (evaluation.rubric, evaluation.rubric_version) == ("computed_statmech", 2)
     assert evaluation.label is EvidenceBadge.hard_failed
     assert evaluation.hard_fail_reason is HardFailReason.species_entry_missing
@@ -292,7 +295,7 @@ def test_live_matches_the_species_rubric_run_directly(db_session, name):
     assert SCENARIOS, "an empty scenario list would pass having verified nothing"
     statmech = SCENARIOS[name](db_session)
     live = evaluate_computed_statmech(db_session, statmech.id)
-    direct = evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH_V2)
+    direct = evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH)
 
     assert live.model_dump(mode="json") == direct.model_dump(mode="json")
     assert (live.rubric, live.rubric_version) == ("computed_statmech", 2)
@@ -312,7 +315,7 @@ def test_live_matches_the_species_rubric_run_directly(db_session, name):
 def test_a_species_review_stored_before_the_change_is_current_after_it_and_nothing_is_rewritten(db_session):
     statmech = SCENARIOS["opt_freq_sp"](db_session)
     # The review as it was stored before PR 6.6: legacy evaluation, legacy (species) recipe.
-    legacy = build_trust_fragment(evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH_V2))
+    legacy = build_trust_fragment(evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH))
     row = _store_review(db_session, statmech, legacy, {"computed_statmech_v2": "2"})
     before = _row_snapshot(db_session)
 
@@ -325,7 +328,7 @@ def test_a_species_review_stored_before_the_change_is_current_after_it_and_nothi
 
 def test_a_ts_review_stored_with_the_species_recipe_reads_stale_for_both_reasons_and_is_not_rewritten(db_session):
     statmech = _make_ts_statmech(db_session)
-    legacy = build_trust_fragment(evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH_V2))
+    legacy = build_trust_fragment(evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH))
     row = _store_review(db_session, statmech, legacy, {"computed_statmech_v2": "2"})
     before = _row_snapshot(db_session)
 
@@ -342,7 +345,7 @@ def test_a_ts_review_stored_with_the_species_recipe_reads_stale_for_both_reasons
 
 def test_running_the_admin_trigger_appends_one_row_and_never_edits_the_stale_one(db_session):
     statmech = _make_ts_statmech(db_session)
-    legacy = build_trust_fragment(evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH_V2))
+    legacy = build_trust_fragment(evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH))
     old = _store_review(db_session, statmech, legacy, {"computed_statmech_v2": "2"})
     old_snapshot = _row_snapshot(db_session)[old.id]
 
@@ -382,9 +385,7 @@ def test_the_admin_trigger_stamps_the_rubric_that_actually_evaluated_the_record(
 def test_the_fragment_derived_recipe_equals_the_record_type_recipe_wherever_one_rubric_exists(record_type):
     """Deriving the recipe from the evaluated rubric must not change any other record type's recipe."""
     from app.services.trust.models import TrustFragment
-    from app.services.trust.rubrics import RUBRIC_REGISTRY as registry
-
-    rubric = registry[record_type]
+    rubric = RUBRICS.get(RUBRIC_NAME_FOR_RECORD_TYPE[record_type])
     fragment = TrustFragment(trust_status="partial", evidence={"rubric": public_rubric_name(rubric)})
     assert active_rubric_versions_for_fragment(record_type, fragment) == active_rubric_versions_for_record_type(
         record_type
@@ -400,8 +401,10 @@ def test_an_unlisted_rubric_fails_loudly_instead_of_falling_back():
 
 
 def test_every_rubric_an_evaluator_can_emit_is_in_the_active_recipe_table(db_session):
-    assert OWNER_SCOPED_RUBRICS and RUBRIC_REGISTRY
-    emit = [*RUBRIC_REGISTRY.values(), *(rubric for _, rubric in OWNER_SCOPED_RUBRICS)]
+    assert OWNER_SCOPED_RUBRIC_NAMES and RUBRIC_NAME_FOR_RECORD_TYPE
+    emit = [
+        RUBRICS.get(name) for name in (*RUBRIC_NAME_FOR_RECORD_TYPE.values(), *(n for _, n in OWNER_SCOPED_RUBRIC_NAMES))
+    ]
     for rubric in emit:
         assert public_rubric_name(rubric) in ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, rubric.name
 

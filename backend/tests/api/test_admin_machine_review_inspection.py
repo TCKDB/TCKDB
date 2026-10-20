@@ -35,14 +35,14 @@ from app.services.machine_review import (
     MachineReviewStatus,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_V2_SCHEMA_VERSION,
-    MachineReviewProviderFindingV2,
-    MachineReviewProviderResultV2,
+    MACHINE_REVIEW_SCHEMA_VERSION,
+    MachineReviewProviderFinding,
+    MachineReviewProviderResult,
 )
 from app.services.submission import (
     create_submission,
     link_record,
-    record_machine_review_v2_audit_event,
+    record_machine_review_audit_event,
 )
 from app.services.trust import build_trust_fragment
 from app.services.trust.models import (
@@ -81,8 +81,8 @@ def _record_finding(
     record_id: int | None,
     record_type: str | None = "calculation",
     severity: MachineReviewSeverity = MachineReviewSeverity.warning,
-) -> MachineReviewProviderFindingV2:
-    return MachineReviewProviderFindingV2(
+) -> MachineReviewProviderFinding:
+    return MachineReviewProviderFinding(
         severity=severity,
         category=MachineReviewCategory.provenance,
         record_type=record_type,
@@ -96,19 +96,19 @@ def _record_mr_event(
     db_session: Session,
     submission: Submission,
     *,
-    findings: tuple[MachineReviewProviderFindingV2, ...] = (),
+    findings: tuple[MachineReviewProviderFinding, ...] = (),
     status: MachineReviewStatus = MachineReviewStatus.machine_screened_warning,
 ) -> SubmissionAuditEvent:
     """Append a realistic machine-review (llm_precheck_recorded / llm) event."""
-    result = MachineReviewProviderResultV2(
-        schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    result = MachineReviewProviderResult(
+        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
         status=status,
         summary="advisory",
         findings=findings,
         model="fake_test/simple-v1",
         used_rag=False,
     )
-    event = record_machine_review_v2_audit_event(
+    event = record_machine_review_audit_event(
         db_session,
         submission=submission,
         result=result,
@@ -321,7 +321,7 @@ def test_admin_submission_machine_review_inspection_preserves_parse_warnings(
             submission_id=submission.id,
             actor_kind=SubmissionActorKind.llm,
             event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
-            details_json={"schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION, "status": "not-a-real-status", "findings": []},
+            details_json={"schema_version": MACHINE_REVIEW_SCHEMA_VERSION, "status": "not-a-real-status", "findings": []},
         )
     )
     db_session.flush()

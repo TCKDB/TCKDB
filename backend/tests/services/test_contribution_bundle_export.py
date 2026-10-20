@@ -1,7 +1,7 @@
 """Tests for the local contribution bundle export service.
 
 Verifies that selected ``Thermo`` and ``Kinetics`` rows can be turned into
-valid :class:`ContributionBundleV0` payloads and that missing data fails
+valid :class:`ContributionBundle` payloads and that missing data fails
 clearly. See ``docs/roadmaps/local-bundle-export-v0-spec.md``.
 """
 
@@ -26,7 +26,7 @@ from app.schemas.workflows.contribution_bundle import (
     BUNDLE_VERSION,
     BundleKind,
     BundleSourceInstanceKind,
-    ContributionBundleV0,
+    ContributionBundle,
 )
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
@@ -156,7 +156,7 @@ def _seed_kinetics(session: Session, *, note: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Test 1 — thermo export validates as ContributionBundleV0
+# Test 1 — thermo export validates as ContributionBundle
 # ---------------------------------------------------------------------------
 
 
@@ -179,7 +179,7 @@ def test_export_thermo_bundle_validates_and_carries_thermo_only(db_engine) -> No
 
     # Re-validate by serializing through the schema; round-trip must hold.
     payload = bundle.model_dump(mode="json")
-    revalidated = ContributionBundleV0.model_validate(payload)
+    revalidated = ContributionBundle.model_validate(payload)
 
     assert revalidated.bundle_format == BUNDLE_FORMAT
     assert revalidated.bundle_version == BUNDLE_VERSION
@@ -225,9 +225,9 @@ def test_export_thermo_bundle_round_trips_nasa9(db_engine) -> None:
     bundle = result.bundle
     assert bundle is not None
 
-    # Re-validates as a full ContributionBundleV0 (the same validators a real
+    # Re-validates as a full ContributionBundle (the same validators a real
     # upload hits) — proves the reconstructed payload is well-formed.
-    revalidated = ContributionBundleV0.model_validate(bundle.model_dump(mode="json"))
+    revalidated = ContributionBundle.model_validate(bundle.model_dump(mode="json"))
     assert len(revalidated.records.thermo_uploads) == 1
     upload = revalidated.records.thermo_uploads[0]
     assert upload.model_kind is not None and upload.model_kind.value == "nasa9"
@@ -291,7 +291,7 @@ def test_export_kinetics_bundle_validates_and_carries_kinetics_only(
         )
 
     payload = bundle.model_dump(mode="json")
-    revalidated = ContributionBundleV0.model_validate(payload)
+    revalidated = ContributionBundle.model_validate(payload)
 
     assert revalidated.bundle_kind is BundleKind.kinetics
     assert revalidated.records.thermo_uploads == []
@@ -342,7 +342,7 @@ def test_kinetics_bundle_round_trip_preserves_degeneracy_convention(
         )
 
     payload = bundle.model_dump(mode="json")
-    reingested = ContributionBundleV0.model_validate(payload)
+    reingested = ContributionBundle.model_validate(payload)
     upload = reingested.records.kinetics_uploads[0]
     assert upload.degeneracy == 2.0
     assert upload.degeneracy_convention.value == "not_applied"
@@ -556,7 +556,7 @@ def test_cli_writes_valid_bundle_json(tmp_path, _seeded_thermo_for_cli) -> None:
     assert output.exists()
 
     parsed = json.loads(output.read_text(encoding="utf-8"))
-    bundle = ContributionBundleV0.model_validate(parsed)
+    bundle = ContributionBundle.model_validate(parsed)
     assert bundle.bundle_kind is BundleKind.thermo
     assert len(bundle.records.thermo_uploads) == 1
     assert "cli-test-thermo" in result.stdout or output.name in result.stdout

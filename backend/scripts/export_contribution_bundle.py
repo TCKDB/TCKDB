@@ -42,7 +42,7 @@ from app.api.config import settings
 from app.db.models.common import SubmissionRecordType
 from app.schemas.workflows.contribution_bundle import (
     BundleSourceInstanceKind,
-    ContributionBundleV0,
+    ContributionBundle,
 )
 from app.services.contribution_bundle_export import (
     DEFAULT_INSTANCE_NAME,
@@ -157,7 +157,7 @@ def _resolve_exporter_label(provided: str | None) -> str:
         return "local-user"
 
 
-def _write_bundle(bundle: ContributionBundleV0, output: Path) -> None:
+def _write_bundle(bundle: ContributionBundle, output: Path) -> None:
     """Write the bundle as deterministic, UTF-8 JSON."""
     output.parent.mkdir(parents=True, exist_ok=True)
     payload = bundle.model_dump(mode="json")
@@ -169,7 +169,7 @@ def _write_bundle(bundle: ContributionBundleV0, output: Path) -> None:
 
 def _export(
     session: Session, args: argparse.Namespace, kinetics_omissions: list[BundleExportOmission]
-) -> ThermoBundleExport | ContributionBundleV0:
+) -> ThermoBundleExport | ContributionBundle:
     exporter_label = _resolve_exporter_label(args.exporter_label)
     if args.kind == "thermo":
         # The bundle carries the rights fragment the source deposit stands

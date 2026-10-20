@@ -240,7 +240,7 @@ def test_the_analytics_kinetics_records_carry_t0_k(client, db_session, t0_k):
 
 def test_the_exported_contribution_bundle_carries_t0_k_and_reingests_it(db_session):
     """Export is the route by which a rate leaves one instance for another."""
-    from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+    from app.schemas.workflows.contribution_bundle import ContributionBundle
     from app.services.contribution_bundle_export import export_kinetics_bundle
 
     kinetics = _stored_rate(db_session, t0_k=298.15)
@@ -251,5 +251,5 @@ def test_the_exported_contribution_bundle_carries_t0_k_and_reingests_it(db_sessi
         summary="Reference temperature round trip.",
         exporter_label="tester",
     )
-    reingested = ContributionBundleV0.model_validate(bundle.model_dump(mode="json"))
+    reingested = ContributionBundle.model_validate(bundle.model_dump(mode="json"))
     assert reingested.records.kinetics_uploads[0].t0_k == 298.15

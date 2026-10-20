@@ -923,7 +923,7 @@ def test_an_exported_bundle_carries_the_portable_declarations_and_reimports_into
 
     from app.db.models.app_user import AppUser
     from app.db.models.common import AppUserRole
-    from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+    from app.schemas.workflows.contribution_bundle import ContributionBundle
     from app.services.contribution_bundle_export import BundleExportOmission, export_kinetics_bundle
     from app.workflows.contribution_bundle_submit import submit_contribution_bundle
 
@@ -966,7 +966,7 @@ def test_an_exported_bundle_carries_the_portable_declarations_and_reimports_into
     assert uploads[0].applicability.colliders[0].species.smiles == "N#N"
     assert "spc_" not in bundle.model_dump_json()
 
-    reloaded = ContributionBundleV0.model_validate_json(bundle.model_dump_json())
+    reloaded = ContributionBundle.model_validate_json(bundle.model_dump_json())
     actor = AppUser(username=f"decl-{uuid4().hex[:10]}", role=AppUserRole.user)
     db_session.add(actor)
     db_session.flush()
@@ -993,7 +993,7 @@ def test_two_unrelated_uploads_with_the_same_key_in_one_bundle_do_not_share_a_de
 
     from app.db.models.app_user import AppUser
     from app.db.models.common import AppUserRole
-    from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+    from app.schemas.workflows.contribution_bundle import ContributionBundle
     from app.services.contribution_bundle_export import export_kinetics_bundle
     from app.workflows.contribution_bundle_submit import submit_contribution_bundle
 
@@ -1010,7 +1010,7 @@ def test_two_unrelated_uploads_with_the_same_key_in_one_bundle_do_not_share_a_de
     db_session.add(actor)
     db_session.flush()
     submitted = submit_contribution_bundle(
-        db_session, ContributionBundleV0.model_validate_json(bundle.model_dump_json()), actor=actor
+        db_session, ContributionBundle.model_validate_json(bundle.model_dump_json()), actor=actor
     )
     ids = [r.record_id for r in submitted.records if r.record_type.value == SubmissionRecordType.kinetics.value]
     db_session.flush()
@@ -1024,7 +1024,7 @@ def _round_trip(db_session, kinetics_ids, omissions=None):
 
     from app.db.models.app_user import AppUser
     from app.db.models.common import AppUserRole
-    from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+    from app.schemas.workflows.contribution_bundle import ContributionBundle
     from app.services.contribution_bundle_export import export_kinetics_bundle
     from app.workflows.contribution_bundle_submit import submit_contribution_bundle
 
@@ -1036,7 +1036,7 @@ def _round_trip(db_session, kinetics_ids, omissions=None):
     db_session.add(actor)
     db_session.flush()
     submitted = submit_contribution_bundle(
-        db_session, ContributionBundleV0.model_validate_json(bundle.model_dump_json()), actor=actor
+        db_session, ContributionBundle.model_validate_json(bundle.model_dump_json()), actor=actor
     )
     db_session.flush()
     ids = [r.record_id for r in submitted.records if r.record_type.value == SubmissionRecordType.kinetics.value]

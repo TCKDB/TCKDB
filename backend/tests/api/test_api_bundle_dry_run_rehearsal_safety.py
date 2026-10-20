@@ -48,7 +48,7 @@ from app.db.models.species import Species, SpeciesEntry
 from app.db.models.submission import Submission
 from app.db.models.thermo import Thermo
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
-from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+from app.schemas.workflows.contribution_bundle import ContributionBundle
 from app.services import literature_metadata
 from app.services.species_resolution import resolve_species_entry
 from app.workflows import contribution_bundle_submit as submit_module
@@ -224,7 +224,7 @@ def test_a_dry_run_waiting_first_times_out_and_the_submit_completes(
     dry = _Worker(
         lambda: rehearse_contribution_bundle_submit(
             dry_session,
-            ContributionBundleV0.model_validate(_thermo_bundle(y, x)),
+            ContributionBundle.model_validate(_thermo_bundle(y, x)),
             actor=dry_session.get(AppUser, _api_test_user),
         )
     )
@@ -237,7 +237,7 @@ def test_a_dry_run_waiting_first_times_out_and_the_submit_completes(
     submit = _Worker(
         lambda: submit_contribution_bundle(
             submit_session,
-            ContributionBundleV0.model_validate(_thermo_bundle(y)),
+            ContributionBundle.model_validate(_thermo_bundle(y)),
             actor=submit_session.get(AppUser, _api_test_user),
         )
     )
@@ -285,7 +285,7 @@ def test_a_dry_run_that_closes_a_deadlock_is_its_victim(
     dry = _Worker(
         lambda: rehearse_contribution_bundle_submit(
             dry_session,
-            ContributionBundleV0.model_validate(_thermo_bundle(y, x)),
+            ContributionBundle.model_validate(_thermo_bundle(y, x)),
             actor=dry_session.get(AppUser, _api_test_user),
         )
     )
@@ -296,7 +296,7 @@ def test_a_dry_run_that_closes_a_deadlock_is_its_victim(
     submit = _Worker(
         lambda: submit_contribution_bundle(
             submit_session,
-            ContributionBundleV0.model_validate(_thermo_bundle(y)),
+            ContributionBundle.model_validate(_thermo_bundle(y)),
             actor=submit_session.get(AppUser, _api_test_user),
         )
     )

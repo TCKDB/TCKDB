@@ -2,7 +2,7 @@
 
 Until this module existed the machine-review stack had every part but an entry
 point. :func:`~app.services.machine_review.providers.factory.build_machine_review_provider`
-built a real provider, :func:`~app.services.submission.record_machine_review_v2_audit_event`
+built a real provider, :func:`~app.services.submission.record_machine_review_audit_event`
 recorded a v2 result, and nothing under ``app/`` called either one -- only
 tests did. The consequence was not subtle: a deployment could hold dozens of
 submissions and zero machine-review audit events, so the curator queue that
@@ -31,7 +31,7 @@ renders as a 404.
 
 **What this module deliberately does not do.** It never sees raw model output,
 so it adds no parse.
-:func:`~app.services.machine_review.providers.interface.parse_machine_review_v2_payload`,
+:func:`~app.services.machine_review.providers.interface.parse_machine_review_payload`,
 called inside the provider, stays the only boundary untrusted text crosses.
 Identity (``model``, ``provider``) is likewise the provider's to stamp from
 configuration on the success path -- see
@@ -63,13 +63,13 @@ from app.services.machine_review.providers.interface import (
     MachineReviewProvider,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_V2_SCHEMA_VERSION,
-    MachineReviewProviderResultV2,
+    MACHINE_REVIEW_SCHEMA_VERSION,
+    MachineReviewProviderResult,
     MachineReviewStatus,
 )
-from app.services.submission import record_machine_review_v2_audit_event
+from app.services.submission import record_machine_review_audit_event
 
-#: ``MachineReviewProviderResultV2.summary`` is capped at 2000 characters and
+#: ``MachineReviewProviderResult.summary`` is capped at 2000 characters and
 #: ``model`` at 128. A failure summary is built from an exception message,
 #: which has no length bound at all -- a client library is free to put a whole
 #: response body in one. Clipping here is not cosmetic: an over-long summary
@@ -112,7 +112,7 @@ class MachineReviewRunOutcome:
     written is a fact a caller can act on; which row it was is not.
     """
 
-    result: MachineReviewProviderResultV2
+    result: MachineReviewProviderResult
     audit_event_recorded: bool
     failure_reason: str | None = None
 
@@ -196,7 +196,7 @@ def _failed_result(
     reason: str,
     settings_obj: Any,
     provider_name: str | None,
-) -> MachineReviewProviderResultV2:
+) -> MachineReviewProviderResult:
     """Build the advisory failed result for a run that could not complete.
 
     Identity is stamped from configuration here, not read from anywhere: on
@@ -204,8 +204,8 @@ def _failed_result(
     failure that cannot say which model was being asked is much harder to act
     on than one that can.
     """
-    return MachineReviewProviderResultV2(
-        schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    return MachineReviewProviderResult(
+        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
         status=MachineReviewStatus.machine_review_failed,
         curator_priority=None,
         summary=reason,
@@ -220,7 +220,7 @@ def _record(
     session: Session,
     *,
     submission: Submission,
-    result: MachineReviewProviderResultV2,
+    result: MachineReviewProviderResult,
     provider_name: str | None,
 ) -> bool:
     """Record the audit event; report whether it landed, never raise.
@@ -233,7 +233,7 @@ def _record(
     field is not cosmetic.
     """
     try:
-        record_machine_review_v2_audit_event(
+        record_machine_review_audit_event(
             session,
             submission=submission,
             result=result,
@@ -376,10 +376,10 @@ def run_machine_review_for_submission(
             provider_name=provider_name,
         )
 
-    if not isinstance(result, MachineReviewProviderResultV2):
+    if not isinstance(result, MachineReviewProviderResult):
         # A type check, not a parse. Re-validating an object that is already
         # supposed to be validated would stand a second, more forgiving
-        # boundary next to ``parse_machine_review_v2_payload`` -- and a second
+        # boundary next to ``parse_machine_review_payload`` -- and a second
         # boundary that coerces is how a payload the strict one would have
         # refused gets in anyway. So this refuses; it does not repair.
         return _failed_outcome(
@@ -388,7 +388,7 @@ def run_machine_review_for_submission(
             reason=_clip(
                 "Machine review provider returned "
                 f"{type(result).__name__}, not a validated "
-                "MachineReviewProviderResultV2.",
+                "MachineReviewProviderResult.",
                 _MAX_SUMMARY_CHARS,
             ),
             settings_obj=settings_obj,

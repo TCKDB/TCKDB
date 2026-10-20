@@ -310,7 +310,7 @@ class TransitionStateInFull(BaseModel):
     :class:`TransitionStateTrustFragment` so a trust block embedded here is
     structurally identical to the one returned by
     ``GET /scientific/transition-state-entries/{ref}?include=trust``
-    (rubric ``computed_transition_state_v5``), with one difference by design:
+    (rubric ``computed_transition_state``), with one difference by design:
     this document lists the reaction's entries, so its
     ``structure_assessment.status`` is ``not_assessed_on_lists`` where the
     single-entry detail read runs the assessment.

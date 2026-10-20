@@ -17,7 +17,7 @@ from app.schemas.workflows.contribution_bundle import (
     BUNDLE_FORMAT,
     BUNDLE_VERSION,
     BundleKind,
-    ContributionBundleV0,
+    ContributionBundle,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -95,19 +95,19 @@ def _bundle(kind: str, **overrides) -> dict:
 
 class TestValidBundles:
     def test_minimal_thermo_bundle(self) -> None:
-        bundle = ContributionBundleV0.model_validate(_bundle("thermo"))
+        bundle = ContributionBundle.model_validate(_bundle("thermo"))
         assert bundle.bundle_kind is BundleKind.thermo
         assert len(bundle.records.thermo_uploads) == 1
         assert bundle.records.kinetics_uploads == []
 
     def test_minimal_kinetics_bundle(self) -> None:
-        bundle = ContributionBundleV0.model_validate(_bundle("kinetics"))
+        bundle = ContributionBundle.model_validate(_bundle("kinetics"))
         assert bundle.bundle_kind is BundleKind.kinetics
         assert len(bundle.records.kinetics_uploads) == 1
         assert bundle.records.thermo_uploads == []
 
     def test_local_refs_accepted(self) -> None:
-        bundle = ContributionBundleV0.model_validate(
+        bundle = ContributionBundle.model_validate(
             _bundle(
                 "thermo",
                 local_refs={
@@ -119,7 +119,7 @@ class TestValidBundles:
         assert "species:ethanol" in bundle.local_refs
 
     def test_manifest_with_files(self) -> None:
-        bundle = ContributionBundleV0.model_validate(
+        bundle = ContributionBundle.model_validate(
             _bundle(
                 "thermo",
                 manifest={
@@ -152,7 +152,7 @@ class TestExampleJsonFiles:
     def test_example_parses(self, filename: str) -> None:
         path = EXAMPLES_DIR / filename
         data = json.loads(path.read_text())
-        ContributionBundleV0.model_validate(data)
+        ContributionBundle.model_validate(data)
 
 
 # ---------------------------------------------------------------------------
@@ -164,23 +164,23 @@ class TestInvalidTopLevel:
     def test_wrong_bundle_format(self) -> None:
         data = _bundle("thermo", bundle_format="not-a-tckdb-bundle")
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_unsupported_bundle_version(self) -> None:
         data = _bundle("thermo", bundle_version="0.2")
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_unsupported_bundle_kind(self) -> None:
         data = _bundle("thermo", bundle_kind="network")
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_unknown_top_level_field_rejected(self) -> None:
         data = _bundle("thermo")
         data["species_id"] = 123  # raw DB identity must not be accepted
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
 
 class TestMissingMetadata:
@@ -192,19 +192,19 @@ class TestMissingMetadata:
         data = _bundle("thermo")
         del data[field]
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_missing_source_instance_kind(self) -> None:
         data = _bundle("thermo")
         del data["source_instance"]["instance_kind"]
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_missing_exporter_user_label(self) -> None:
         data = _bundle("thermo")
         del data["exporter"]["local_user_label"]
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
 
 class TestRecordFamilyRules:
@@ -212,25 +212,25 @@ class TestRecordFamilyRules:
         data = _bundle("thermo")
         data["records"]["thermo_uploads"] = []
         with pytest.raises(ValidationError, match="thermo bundles must contain"):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_kinetics_bundle_with_no_kinetics_records_rejected(self) -> None:
         data = _bundle("kinetics")
         data["records"]["kinetics_uploads"] = []
         with pytest.raises(ValidationError, match="kinetics bundles must contain"):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_mixed_thermo_with_kinetics_rejected(self) -> None:
         data = _bundle("thermo")
         data["records"]["kinetics_uploads"] = [_kinetics_upload()]
         with pytest.raises(ValidationError, match="must not carry kinetics_uploads"):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_mixed_kinetics_with_thermo_rejected(self) -> None:
         data = _bundle("kinetics")
         data["records"]["thermo_uploads"] = [_thermo_upload()]
         with pytest.raises(ValidationError, match="must not carry thermo_uploads"):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
 
 class TestManifestRules:
@@ -244,7 +244,7 @@ class TestManifestRules:
             ],
         }
         with pytest.raises(ValidationError, match="unique 'path'"):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_invalid_sha256_rejected(self) -> None:
         data = _bundle("thermo")
@@ -253,10 +253,10 @@ class TestManifestRules:
             "files": [{"path": "out.log", "sha256": "not-hex"}],
         }
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_empty_files_list_accepted(self) -> None:
-        bundle = ContributionBundleV0.model_validate(
+        bundle = ContributionBundle.model_validate(
             _bundle("thermo", manifest={"sha256": None, "files": []})
         )
         assert bundle.manifest.files == []
@@ -281,7 +281,7 @@ class TestLocalRefRules:
             local_refs={bad_key: {"record_type": "species", "label": "x"}},
         )
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_unknown_record_type_rejected(self) -> None:
         data = _bundle(
@@ -291,7 +291,7 @@ class TestLocalRefRules:
             },
         )
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
 
 class TestSourceInstanceRules:
@@ -299,7 +299,7 @@ class TestSourceInstanceRules:
         data = _bundle("thermo")
         data["source_instance"]["instance_kind"] = "hosted"
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
 
 class TestSubmissionRules:
@@ -307,7 +307,7 @@ class TestSubmissionRules:
         data = _bundle("thermo")
         data["submission"]["source_kind"] = "api"
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
 
 class TestNestedUploadValidation:
@@ -323,7 +323,7 @@ class TestNestedUploadValidation:
         data = _bundle("thermo")
         data["records"]["thermo_uploads"] = [bad_thermo]
         with pytest.raises(ValidationError, match="at least one"):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)
 
     def test_kinetics_upload_without_reactants_rejected(self) -> None:
         bad_kinetics = copy.deepcopy(_kinetics_upload())
@@ -331,4 +331,4 @@ class TestNestedUploadValidation:
         data = _bundle("kinetics")
         data["records"]["kinetics_uploads"] = [bad_kinetics]
         with pytest.raises(ValidationError):
-            ContributionBundleV0.model_validate(data)
+            ContributionBundle.model_validate(data)

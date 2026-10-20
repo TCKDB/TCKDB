@@ -27,7 +27,7 @@ from app.schemas.contribution_bundle_submit import (
     ContributionBundleSubmitMessage,
     ContributionBundleSubmitResult,
 )
-from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+from app.schemas.workflows.contribution_bundle import ContributionBundle
 from app.services.contribution_bundle_dry_run import (
     dry_run_contribution_bundle,
     with_import_warnings,
@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
     status_code=200,
 )
 def dry_run_bundle(
-    bundle: ContributionBundleV0,
+    bundle: ContributionBundle,
     request: Request,
     session: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
@@ -145,7 +145,7 @@ def dry_run_bundle(
     status_code=201,
 )
 def submit_bundle(
-    bundle: ContributionBundleV0,
+    bundle: ContributionBundle,
     session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),

@@ -717,3 +717,19 @@ def test_an_answer_that_lists_no_member_at_all_has_no_reference_conformer_value_
     one_sided = {p["conformer_ref"]: p for p in run(side(ANCHOR, {"cg_b": (3.0, G)}), empty)["pairs"]}
     assert one_sided["cg_b"]["excluded_reason"] == "reference_protocol_value_missing"
     assert one_sided["cg_b"]["reference_geometry_ref"] is None
+
+
+def test_the_comparison_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_bool_or_missing_one(db_session):
+    from app.services.relative_conformer_energy.manifest import COMPARISON_MANIFEST_FORMAT, MANIFEST_FORMATS
+    from tests.services._format_cases import bad_format_versions
+
+    world, cand_lot, (a, *_) = two_level_world(db_session)
+    manifest = run_service(db_session, world, request_for(world, a, cand_lot, world.lot)).manifest
+    current = MANIFEST_FORMATS.current(COMPARISON_MANIFEST_FORMAT).version
+    assert manifest["manifest_format_version"] == current and type(current) is int
+    for bad in [*bad_format_versions(current), "absent"]:
+        tampered = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
+        if bad != "absent":
+            tampered["manifest_format_version"] = bad
+        with pytest.raises(ReplayError, match="unknown manifest format"):
+            replay_comparison(tampered)

@@ -8,7 +8,7 @@ Local-offline implementation plan
 ## What this milestone does
 
 Local export v0 turns selected local database rows into validated
-[`ContributionBundleV0`](../../backend/app/schemas/workflows/contribution_bundle.py)
+[`ContributionBundle`](../../backend/app/schemas/workflows/contribution_bundle.py)
 JSON files.
 
 This is a **service + CLI** milestone. The service
@@ -41,7 +41,7 @@ as later milestones.
 
 Both selectors are repeatable, so a single bundle can carry multiple
 records of the same family. Mixed thermo + kinetics bundles are
-explicitly rejected by `ContributionBundleV0`; export one of each
+explicitly rejected by `ContributionBundle`; export one of each
 family separately.
 
 Future bundle families (`statmech`, `transport`, `network`,
@@ -150,7 +150,7 @@ exits non-zero) when:
 - a thermo's species entry or species identity is missing
 - a kinetics row's reaction entry, chem reaction, or structured
   participants are missing
-- the assembled bundle fails `ContributionBundleV0` validation for any
+- the assembled bundle fails `ContributionBundle` validation for any
   reason (including nested upload-schema validation)
 
 The bundle file is **not** written when any of these fail.
@@ -204,7 +204,7 @@ record and its immediate dependencies:
 | Kinetics | `kinetics:k<id>`, `reaction:r<id>`, `species_entry:se<id>`, `species:s<id>` (one per distinct participant) |
 
 Labels are deliberately prefixed (`t1`, `se42`, `s5`) so they pass the
-`ContributionBundleV0` validator's "no purely numeric label" rule, which
+`ContributionBundle` validator's "no purely numeric label" rule, which
 exists to discourage shipping raw DB primary keys as portable identity.
 The local DB ids are still embedded for **debug/traceability only** —
 the bundle does not claim them as hosted identities, and the hosted
@@ -220,7 +220,7 @@ The v0 schema does not enforce coverage between `local_refs` and
 - 2-space indentation, key order matches schema field order
 - `created_at` is set at export time in UTC
 - `manifest.sha256 == null` and `manifest.files == []` (no artifacts in v0)
-- the assembled bundle is validated against `ContributionBundleV0`
+- the assembled bundle is validated against `ContributionBundle`
   *before* the file is written, so a written file is always a valid v0
   bundle
 
@@ -234,10 +234,10 @@ external CI step):
 import json
 from pathlib import Path
 
-from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+from app.schemas.workflows.contribution_bundle import ContributionBundle
 
 raw = json.loads(Path("./thermo-bundle.tckdb.json").read_text(encoding="utf-8"))
-ContributionBundleV0.model_validate(raw)
+ContributionBundle.model_validate(raw)
 ```
 
 This re-runs every nested upload validator

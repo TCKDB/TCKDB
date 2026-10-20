@@ -45,7 +45,7 @@ from app.services.machine_review.providers.fake import (
 )
 from app.services.machine_review.run import run_machine_review_for_submission
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    MACHINE_REVIEW_SCHEMA_VERSION,
     MachineReviewStatus,
 )
 from app.services.submission import create_submission
@@ -85,7 +85,7 @@ class _WrongTypeProvider:
             value
             if value is not None
             else {
-                "schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                "schema_version": MACHINE_REVIEW_SCHEMA_VERSION,
                 "status": "machine_screened_pass",
                 "used_rag": False,
             }
@@ -190,7 +190,7 @@ def test_run_records_one_v2_audit_event(db_session, _api_test_user):
     assert len(events) == 1
     assert events[0].event_kind is SubmissionAuditEventKind.llm_precheck_recorded
     assert events[0].actor_kind is SubmissionActorKind.llm
-    assert events[0].details_json["schema_version"] == MACHINE_REVIEW_V2_SCHEMA_VERSION
+    assert events[0].details_json["schema_version"] == MACHINE_REVIEW_SCHEMA_VERSION
     assert events[0].details_json["status"] == "machine_screened_pass"
     # Advisory events carry no status transition: that is what makes them safe
     # to write without a curator's involvement.
@@ -324,7 +324,7 @@ def test_provider_failure_becomes_an_advisory_failed_result(
     events = _review_events(db_session, submission.id)
     assert len(events) == 1
     assert events[0].details_json["status"] == "machine_review_failed"
-    assert events[0].details_json["schema_version"] == MACHINE_REVIEW_V2_SCHEMA_VERSION
+    assert events[0].details_json["schema_version"] == MACHINE_REVIEW_SCHEMA_VERSION
 
 
 def test_configuration_error_becomes_an_advisory_failed_result(
@@ -382,7 +382,7 @@ def test_provider_returning_the_wrong_type_becomes_a_failed_result(
 
     The runner adds no second parse boundary: a provider that hands back a raw
     ``dict`` (however plausible) failed to cross
-    ``parse_machine_review_v2_payload``, and the runner says so rather than
+    ``parse_machine_review_payload``, and the runner says so rather than
     doing that work leniently on its behalf.
     """
     submission = _seed_submission(db_session, _api_test_user)
@@ -582,7 +582,7 @@ def test_a_failed_audit_write_leaves_a_usable_session(
         session.execute(text("SELECT 1 / 0"))
 
     monkeypatch.setattr(
-        "app.services.machine_review.run.record_machine_review_v2_audit_event",
+        "app.services.machine_review.run.record_machine_review_audit_event",
         explode,
     )
 

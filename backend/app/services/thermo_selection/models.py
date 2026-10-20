@@ -14,6 +14,7 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import SelectionPolicy
+from app.services.manifest_formats import new_format_registry
 from app.services.selection_kernel import (  # noqa: F401  (re-exported: the vocabulary moved to the kernel)
     Applicability,
     Edge,
@@ -48,7 +49,10 @@ SUPPORTED_ASSESSMENT_SEMANTICS = frozenset({ASSESSMENT_SEMANTICS_VERSION})
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused.
 MANIFEST_FORMAT_VERSION = 2
-SUPPORTED_MANIFEST_FORMATS = frozenset({MANIFEST_FORMAT_VERSION})
+MANIFEST_FORMAT_NAME = "thermo_selection_manifest"
+MANIFEST_FORMATS = new_format_registry(
+    "thermo_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
+)
 
 
 @dataclass(frozen=True)

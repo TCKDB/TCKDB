@@ -22,6 +22,44 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Code names no longer carry a version; versions go through one registry (versioning PR-3, 2026-10-20)
+
+**Renames plus registry dispatch; no stored value, no wire value and no version number changes.** Migration: none. New environment
+variable: none. `tckdb-schemas` 0.129.0 (the contribution-bundle contract file and surface name); `tckdb-client` and `tckdb-mcp`
+unchanged (neither used a renamed name). OpenAPI snapshot: the component `ContributionBundleV0` is now `ContributionBundle`, and
+three route descriptions no longer cite `computed_transport_v1` / `computed_transition_state_v2`; nothing else moves.
+
+In plain terms: a name in the code that had a version stuck on its end (`COMPUTED_THERMO_V2`, `ContributionBundleV0`) is now the stable
+name (`COMPUTED_THERMO`, `ContributionBundle`), and the version lives in the object's own `version` field. Code that has to pick a
+behaviour by version now asks a registry instead of a hand-written dictionary or constant.
+
+- **Renamed (old to new):** the seven trust rubric constants (`COMPUTED_CALCULATION`, `COMPUTED_KINETICS`, `COMPUTED_THERMO`,
+  `COMPUTED_STATMECH`, `COMPUTED_TS_STATMECH`, `COMPUTED_TRANSPORT`, `COMPUTED_TRANSITION_STATE`), the advisory rubrics
+  (`EXTERNAL_CP_COMPARISON` and the six `*_CONSISTENCY`), `BOUNDS_V1` to `DEFAULT_BOUNDS`, `ContributionBundleV0` to `ContributionBundle`,
+  `MachineReviewProvider{Finding,Result}V2` to `MachineReviewProvider{Finding,Result}`, `MACHINE_REVIEW_V2_SCHEMA_VERSION` to
+  `MACHINE_REVIEW_SCHEMA_VERSION` (its value `"machine_review_v2"` is a stored string and moves in PR-4),
+  `parse_machine_review_v2_payload`, `machine_review_v2_result_to_details_json` and `record_machine_review_v2_audit_event` lose `_v2`.
+- **One rubric registry.** `RUBRIC_REGISTRY`, `OWNER_SCOPED_RUBRICS` and the machine-review `_ACTIVE_RUBRICS` tuple are replaced by
+  `RUBRICS` (a `VersionRegistry` of every rubric, `startup_checked`), `RUBRIC_NAME_FOR_RECORD_TYPE` (record type to rubric name) and
+  `OWNER_SCOPED_RUBRIC_NAMES`. `statmech_rubric_for` now returns the rubric *name*; callers resolve it with `RUBRICS.get(name)`. The
+  evaluators and the admin trigger look their rubric up there, and the machine-review recipe is derived from `RUBRICS` so a new rubric
+  cannot be left out of it.
+- **Manifest formats go through registries.** Each selection engine (thermo, kinetics, statmech, structure, network) and the relative
+  conformer energy manifests register their format in a `startup_checked` `MANIFEST_FORMATS` registry. The writer stamps the registry's
+  current version; the reader looks up the version the manifest recorded. A missing, non-integer or unregistered version is refused with the same
+  message as before (a manifest that records no version is never read as the current one). `SUPPORTED_MANIFEST_FORMATS` is gone.
+  **Deliberately stricter:** the readers now match the recorded version as an exact integer, so a float (`2.0`) or a bool (`True`) is
+  refused, where the old frozenset/`!=` readers accepted them because `2.0 == 2` and `True == 1`. Text, `null` and a missing key were
+  already refused. No manifest this release writes is affected (they record a plain integer); only a hand-edited or foreign manifest.
+- **Not converted, and why:** rule versions, policy versions and assessment-semantics versions are still text (`"1.0.0"`, `"2"`), and a
+  registry version is an integer from 1, so they move to registries with the reset in PR-4. The dataset-release renderer and the
+  machine-review audit adapter dispatch on a fused wire tag (`tckdb.dataset_release.v2`, `machine_review_v2`), which is also PR-4.
+- Debt list: every PR-3 row is removed (111 rows); 57 rows remain, all PR-4. Two PR-4 rows whose f-string text named a renamed
+  constant are declared in the new `MOVED_DEBT` tuple, which `check_versioned_debt_not_grown.py` accepts only for a row whose old text
+  existed at the merge base, is gone from the head, has no higher count, and whose new text is the old text with only the whole-word
+  identifiers of the declared `RENAMES` map replaced (each new name in that map must itself pass the version patterns, read from the merge
+  base). An old row can be claimed by one move only. A move is printed once, while the base still has the old row; once it has landed it is inert.
+
 ## Legacy and replay-only versions deleted (versioning PR-2, 2026-10-20)
 
 Pre-release, so only the current version of anything is read. Removed, with their fixtures and tests: the kinetics XYG3 0.2.0 replay rule and its manifest, the structure-rule 0.1.0 dual pin, pre-v2 assessment semantics, every previous selection-manifest format (thermo, kinetics, statmech and structure 1; network 2), the relative-energy v1/v2 projection, the dataset-release v1 renderer, the machine-review v1 (precheck) contract with `llm_precheck` providers and runner, the statmech owner transition report, and the dead parser stamps. Kept and tested: refusal of an unknown version, stale-assessment marking, checksums and append-only results.

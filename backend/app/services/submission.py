@@ -63,7 +63,7 @@ from app.services.scientific_read.handles import (
 )
 
 if TYPE_CHECKING:
-    from app.services.machine_review.schemas import MachineReviewProviderResultV2
+    from app.services.machine_review.schemas import MachineReviewProviderResult
 
 logger = logging.getLogger(__name__)
 
@@ -378,11 +378,11 @@ def mark_ingestion_failed(
 # ---------------------------------------------------------------------------
 
 
-def record_machine_review_v2_audit_event(
+def record_machine_review_audit_event(
     session: Session,
     *,
     submission: Submission,
-    result: "MachineReviewProviderResultV2",
+    result: "MachineReviewProviderResult",
     provider: str | None = None,
 ) -> SubmissionAuditEvent:
     """Record a native v2 machine-review provider result as an audit event.
@@ -404,10 +404,10 @@ def record_machine_review_v2_audit_event(
     :func:`append_audit_event`).
     """
     from app.services.machine_review.providers.interface import (
-        machine_review_v2_result_to_details_json,
+        machine_review_result_to_details_json,
     )
 
-    details_json = machine_review_v2_result_to_details_json(result)
+    details_json = machine_review_result_to_details_json(result)
     # The v2 result already carries ``provider`` as a first-class field; only
     # add a sibling key if an explicit override is supplied and the payload
     # didn't already set it (the adapter prefers the in-payload value).

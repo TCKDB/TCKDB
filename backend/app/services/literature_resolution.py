@@ -58,7 +58,6 @@ from app.services.provenance_warnings import (
 # there is no source-specific code to write.
 
 _WHITESPACE_RE = re.compile(r"\s+")
-_TRAILING_PUNCTUATION_RE = re.compile(r"[\s.,;:!?]+$")
 
 
 def _normalize_title_for_comparison(title: str) -> str:
@@ -76,7 +75,10 @@ def _normalize_title_for_comparison(title: str) -> str:
 
     unescaped = html.unescape(title)
     collapsed = _WHITESPACE_RE.sub(" ", unescaped).strip()
-    stripped = _TRAILING_PUNCTUATION_RE.sub("", collapsed)
+    # ``collapsed`` has only single spaces left (and no end spaces), so stripping " .,;:!?" is exactly what the
+    # old ``[\s.,;:!?]+$`` did, in linear time: that regex was quadratic on a long run of whitespace, and the
+    # title is depositor-supplied.
+    stripped = collapsed.rstrip(" .,;:!?")
     return stripped.casefold()
 
 

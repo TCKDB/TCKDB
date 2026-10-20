@@ -42,6 +42,7 @@ from typing import Any
 
 from tckdb_schemas.network_declarations import NETWORK_DECLARATION_VERSIONS
 
+from app.services.manifest_formats import new_format_registry, read_manifest_format
 from app.services.network_selection.assessment import (
     ASSESSMENT_VERSION,
     assess_bundle_scope,
@@ -50,7 +51,7 @@ from app.services.network_selection.assessment import (
 )
 from app.services.network_selection.engine import NetworkDecision, build_candidates, decide
 from app.services.network_selection.models import (
-    BOUNDS_V1,
+    DEFAULT_BOUNDS,
     POLICY_NAME,
     POLICY_VERSION,
     BundleAssessment,
@@ -69,7 +70,10 @@ from app.services.scientific_read.profile import current_read_profile
 #: as unavailable (``reference_solve_ref`` null, ``reference_withheld`` true), as on a reference to nothing; no token
 #: stands there today. Replay reads exactly this format; a manifest in any other is refused.
 MANIFEST_FORMAT_VERSION = 3
-SUPPORTED_MANIFEST_FORMATS = frozenset({MANIFEST_FORMAT_VERSION})
+MANIFEST_FORMAT_NAME = "network_selection_manifest"
+MANIFEST_FORMATS = new_format_registry(
+    "network_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
+)
 
 REPLAY_BOUNDARY = (
     "Replay reproduces the reasoning from the captured inputs. It does not authenticate their scientific truth and "
@@ -96,7 +100,7 @@ def build_manifest(result: NetworkAssessmentResult, decision: NetworkDecision) -
     """Assemble the manifest of one decision over one assessed population."""
     profile = current_read_profile()
     manifest: dict[str, Any] = {
-        "manifest_format_version": MANIFEST_FORMAT_VERSION,
+        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version,
         "policy": {
             "name": POLICY_NAME,
             "version": POLICY_VERSION,
@@ -137,19 +141,18 @@ def build_manifest(result: NetworkAssessmentResult, decision: NetworkDecision) -
 
 
 def _check_versions(manifest: dict[str, Any]) -> None:
-    if manifest.get("manifest_format_version") not in SUPPORTED_MANIFEST_FORMATS:
-        raise ReplayError(f"unknown manifest format {manifest.get('manifest_format_version')!r}")
+    read_manifest_format(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME, manifest, ReplayError)
     policy = manifest["policy"]
     expected = {
         "name": POLICY_NAME,
         "version": POLICY_VERSION,
         "assessment_version": ASSESSMENT_VERSION,
-        "bounds_version": BOUNDS_V1.version,
+        "bounds_version": DEFAULT_BOUNDS.version,
     }
     if policy != expected:
         raise ReplayError(
             f"manifest was made under {policy!r}; this code replays {POLICY_NAME} v{POLICY_VERSION}, "
-            f"assessment v{ASSESSMENT_VERSION}, bounds v{BOUNDS_V1.version}"
+            f"assessment v{ASSESSMENT_VERSION}, bounds v{DEFAULT_BOUNDS.version}"
         )
     for solve in manifest["solves"]:
         for block in ("target", "protocol", "validation"):

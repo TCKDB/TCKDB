@@ -7,7 +7,7 @@ cloud mode validates config and builds the real provider; local still
 validates and raises ``NotImplementedError``.
 
 Config namespace note: ``AI_REVIEW_ASSISTANT_MODE`` + ``LLM_PRECHECK_*`` is the
-implementation/config namespace; ``MachineReviewProviderResultV2`` is the output
+implementation/config namespace; ``MachineReviewProviderResult`` is the output
 contract; ``machine_review`` is the future *public* concept. No parallel
 ``MACHINE_REVIEW_*`` env vars are introduced.
 """
@@ -30,17 +30,17 @@ from app.services.machine_review.providers import (
     MachineReviewProviderConfigurationError,
     build_fake_machine_review_provider,
     build_machine_review_provider,
-    machine_review_v2_result_to_details_json,
+    machine_review_result_to_details_json,
     make_critical_result,
     make_failed_result,
     make_pass_result,
     make_warning_result,
-    parse_machine_review_v2_payload,
+    parse_machine_review_payload,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    MACHINE_REVIEW_SCHEMA_VERSION,
     MachineReviewCategory,
-    MachineReviewProviderResultV2,
+    MachineReviewProviderResult,
     MachineReviewSeverity,
     MachineReviewStatus,
 )
@@ -94,8 +94,8 @@ def test_disabled_provider_returns_not_run_v2_result():
 
     result = provider.review_submission(MachineReviewContext(submission_id=1))
 
-    assert isinstance(result, MachineReviewProviderResultV2)
-    assert result.schema_version == MACHINE_REVIEW_V2_SCHEMA_VERSION
+    assert isinstance(result, MachineReviewProviderResult)
+    assert result.schema_version == MACHINE_REVIEW_SCHEMA_VERSION
     assert result.status is MachineReviewStatus.not_run
     assert result.findings == ()
     assert result.used_rag is False
@@ -113,8 +113,8 @@ def test_fake_v2_provider_returns_valid_machine_review_v2_payload():
 
     result = provider.review_submission(_context_with_records(2))
 
-    assert isinstance(result, MachineReviewProviderResultV2)
-    assert result.schema_version == MACHINE_REVIEW_V2_SCHEMA_VERSION
+    assert isinstance(result, MachineReviewProviderResult)
+    assert result.schema_version == MACHINE_REVIEW_SCHEMA_VERSION
     assert result.status is MachineReviewStatus.machine_screened_pass
     assert "2 linked record(s)" in (result.summary or "")
     assert result.used_rag is False
@@ -437,8 +437,8 @@ def test_parse_helper_accepts_dict_and_json_string():
 
     payload = _valid_v2_payload()
 
-    from_dict = parse_machine_review_v2_payload(payload)
-    from_str = parse_machine_review_v2_payload(json.dumps(payload))
+    from_dict = parse_machine_review_payload(payload)
+    from_str = parse_machine_review_payload(json.dumps(payload))
 
     assert from_dict == from_str
     assert from_dict.status is MachineReviewStatus.machine_screened_warning
@@ -450,7 +450,7 @@ def test_provider_result_rejects_used_rag_true():
     payload["used_rag"] = True
 
     with pytest.raises(ValidationError):
-        parse_machine_review_v2_payload(payload)
+        parse_machine_review_payload(payload)
 
 
 def test_provider_result_rejects_extra_mutation_payload():
@@ -459,13 +459,13 @@ def test_provider_result_rejects_extra_mutation_payload():
     payload["set_record_review_status"] = "approved"
 
     with pytest.raises(ValidationError):
-        parse_machine_review_v2_payload(payload)
+        parse_machine_review_payload(payload)
 
 
 def test_parse_helper_rejects_non_object_payload():
     """A non-object payload raises TypeError, not a silent pass."""
     with pytest.raises(TypeError):
-        parse_machine_review_v2_payload("[1, 2, 3]")
+        parse_machine_review_payload("[1, 2, 3]")
 
 
 # --------------------------------------------------------------------------- #
@@ -478,9 +478,9 @@ def test_v2_provider_result_flows_through_audit_adapter():
     provider = build_fake_machine_review_provider(fixed_result=make_critical_result())
 
     result = provider.review_submission(MachineReviewContext(submission_id=1))
-    details_json = machine_review_v2_result_to_details_json(result)
+    details_json = machine_review_result_to_details_json(result)
 
-    assert details_json["schema_version"] == MACHINE_REVIEW_V2_SCHEMA_VERSION
+    assert details_json["schema_version"] == MACHINE_REVIEW_SCHEMA_VERSION
 
     parsed = machine_review_result_from_audit_event(details_json)
 
@@ -524,7 +524,7 @@ def test_a_provider_may_not_claim_a_status_only_the_runner_sets(reserved):
     payload["status"] = reserved
 
     with pytest.raises(ReservedMachineReviewStatusError, match=reserved):
-        parse_machine_review_v2_payload(payload)
+        parse_machine_review_payload(payload)
 
 
 @pytest.mark.parametrize(
@@ -540,7 +540,7 @@ def test_the_three_statuses_the_prompt_asks_for_still_parse(screening):
     payload = _valid_v2_payload()
     payload["status"] = screening
 
-    assert parse_machine_review_v2_payload(payload).status.value == screening
+    assert parse_machine_review_payload(payload).status.value == screening
 
 
 def test_a_key_pasted_into_the_env_var_name_setting_is_not_echoed(monkeypatch):

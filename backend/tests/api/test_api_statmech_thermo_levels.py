@@ -902,7 +902,7 @@ def test_thermo_inline_ensemble_with_declared_geometries_is_accepted(client):
 
 
 def _bundle_submit_envelope(thermo_upload: dict) -> dict:
-    """Minimal ``ContributionBundleV0`` envelope carrying one thermo
+    """Minimal ``ContributionBundle`` envelope carrying one thermo
     upload, mirroring ``examples/bundles/thermo-bundle-v0.json``.
     ``/bundles/submit`` imports each ``records.thermo_uploads`` entry
     through :func:`app.workflows.thermo.persist_thermo_upload` -- the

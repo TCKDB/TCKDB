@@ -245,18 +245,21 @@ def ref_prefixes() -> tuple[RefPrefix, ...]:
 def rubric_checks() -> tuple[RubricCheck, ...]:
     """Every check name a ``trust.evidence.checks`` map can contain.
 
-    Read from :data:`app.services.trust.rubrics.RUBRIC_REGISTRY` and then from
-    :data:`app.services.trust.rubrics.OWNER_SCOPED_RUBRICS` (rubrics a router selects
-    by who owns the record, which the registry does not list), in the
+    Read from :data:`app.services.trust.rubrics.RUBRIC_NAME_FOR_RECORD_TYPE` and then from
+    :data:`app.services.trust.rubrics.OWNER_SCOPED_RUBRIC_NAMES` (rubrics a router selects
+    by who owns the record, which the table does not list), each resolved through
+    :data:`app.services.trust.rubrics.RUBRICS` to its current version, in the
     rubric's own declared check order — which is also the key order of
     the serialised map, so the document and a real response list the
     checks the same way round.
     """
-    from app.services.trust.rubrics import OWNER_SCOPED_RUBRICS, RUBRIC_REGISTRY
+    from app.services.trust.rubrics import OWNER_SCOPED_RUBRIC_NAMES, RUBRIC_NAME_FOR_RECORD_TYPE, RUBRICS
 
     seen: set[tuple[str, str]] = set()
     checks: list[RubricCheck] = []
-    for record_type, rubric in (*sorted(RUBRIC_REGISTRY.items()), *OWNER_SCOPED_RUBRICS):
+    routed = (*sorted(RUBRIC_NAME_FOR_RECORD_TYPE.items()), *OWNER_SCOPED_RUBRIC_NAMES)
+    for record_type, rubric_name in routed:
+        rubric = RUBRICS.get(rubric_name)
         for spec in rubric.checks:
             key = (rubric.name, spec.name)
             if key in seen:

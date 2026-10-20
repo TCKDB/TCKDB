@@ -41,6 +41,7 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import default_visible_statuses, status_at_or_above
+from app.services.manifest_formats import new_format_registry, read_manifest_format
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.selection_kernel import assessment_semantics as semantics
 from app.services.statmech_selection.assessment import StatmechAssessment, assess_candidate
@@ -66,7 +67,10 @@ from app.services.structure_selection.models import NormalizedCalculation
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused.
 MANIFEST_FORMAT_VERSION = 2
-SUPPORTED_MANIFEST_FORMATS = frozenset({MANIFEST_FORMAT_VERSION})
+MANIFEST_FORMAT_NAME = "statmech_selection_manifest"
+MANIFEST_FORMATS = new_format_registry(
+    "statmech_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
+)
 
 #: Assessment semantics versions this release can reassess. A manifest made under another is refused, not run under today's.
 SUPPORTED_ASSESSMENT_SEMANTICS = frozenset({ASSESSMENT_VERSION})
@@ -162,7 +166,7 @@ def build_manifest(
         exceeds the request's bound; nothing is returned without its whole manifest.
     """
     body: dict[str, Any] = {
-        "manifest_format_version": MANIFEST_FORMAT_VERSION,
+        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version,
         "versions": _versions(),
         "assessment_semantics": semantics.semantics_block(version=ASSESSMENT_VERSION, evidence_rubric=EVIDENCE_RUBRIC),
         "request": result.request.to_dict(),
@@ -189,8 +193,12 @@ def build_manifest(
 
 
 def _check_format(manifest: dict[str, Any]) -> None:
-    if manifest.get("manifest_format_version") not in SUPPORTED_MANIFEST_FORMATS:
-        raise ReplayError("unsupported_manifest_format", f"unknown manifest format {manifest.get('manifest_format_version')!r}")
+    read_manifest_format(
+        MANIFEST_FORMATS,
+        MANIFEST_FORMAT_NAME,
+        manifest,
+        lambda message: ReplayError("unsupported_manifest_format", message),
+    )
 
 
 def _check_versions(manifest: dict[str, Any], *, reassessing: bool) -> str:

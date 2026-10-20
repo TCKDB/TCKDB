@@ -30,7 +30,7 @@ from app.db.models.common import EnthalpyReferenceKind
 from app.services.consistency import engine
 from app.services.consistency.core import AdvisoryResult, encoded, finding, snapshot, thermo_inputs
 from app.services.consistency.stoichiometry import species_scope_reason
-from app.services.trust.rubrics import GIBBS_SELF_CONSISTENCY_V1
+from app.services.trust.rubrics import GIBBS_SELF_CONSISTENCY
 
 RUNNER = "gibbs_self_consistency"
 
@@ -185,7 +185,7 @@ def compare_gibbs(thermo):
             findings.append(finding(thermo, _payload(
                 context, _SCALAR_SOURCE, engine.T298_K, None, None, None, None, None, None,
                 record_reason or NO_EXACT_MATCHING_POINT), refs))
-    return AdvisoryResult(thermo, RUNNER, GIBBS_SELF_CONSISTENCY_V1, tuple(findings), encoded({
+    return AdvisoryResult(thermo, RUNNER, GIBBS_SELF_CONSISTENCY, tuple(findings), encoded({
         "engine": f"cantera/{engine.ENGINE_VERSION}", "target": thermo_inputs(thermo),
         "species_entry": snapshot(thermo.species_entry, ("species",)),
         "g_definition": G_DEFINITION, "residual_definition": RESIDUAL_DEFINITION,

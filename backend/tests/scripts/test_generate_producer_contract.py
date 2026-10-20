@@ -825,7 +825,7 @@ def test_the_thermo_section_states_the_rules_the_adapter_never_learned(committed
 
 @pytest.mark.parametrize(
     "model_name",
-    ["ComputedSpeciesUploadRequest", "ComputedReactionUploadRequest", "ContributionBundleV0"],
+    ["ComputedSpeciesUploadRequest", "ComputedReactionUploadRequest", "ContributionBundle"],
 )
 def test_every_surface_that_carries_thermo_states_the_enthalpy_rule(committed_markdown: str, model_name: str) -> None:
     section = section_with_linked_rules(committed_markdown, model_name)

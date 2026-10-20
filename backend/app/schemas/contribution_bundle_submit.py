@@ -1,6 +1,6 @@
 """Response schemas for the hosted contribution-bundle submit/import endpoint.
 
-Submit/import is the first write path for ``ContributionBundleV0``. It runs
+Submit/import is the first write path for ``ContributionBundle``. It runs
 the dry-run preview as a strict gate, then — if no errors are reported —
 imports the bundle's records through the existing thermo/kinetics upload
 workflows, creates a :class:`Submission` plus matching audit/link rows, and

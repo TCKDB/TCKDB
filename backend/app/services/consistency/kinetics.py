@@ -14,7 +14,7 @@ from app.services.consistency.core import (
     thermo_inputs,
 )
 from app.services.consistency.stoichiometry import element_balance, entry_facts, is_balanced, participant_slots
-from app.services.trust.rubrics import THERMO_KINETICS_CONSISTENCY_V1
+from app.services.trust.rubrics import THERMO_KINETICS_CONSISTENCY
 
 RUNNER = "thermo_kinetics_consistency"
 
@@ -209,4 +209,4 @@ def compare_kinetics(forward, reverse, thermo_by_entry, *, temperature_grid):
         "thermo_mapping": [(key, thermo_inputs(t)) for key, t in thermo_items],
         "grid": grid, "engine": f"cantera/{engine.ENGINE_VERSION}", "units": "kmol,m,s;bar;K;kJ/mol",
     }
-    return AdvisoryResult(forward, RUNNER, THERMO_KINETICS_CONSISTENCY_V1, tuple(findings), encoded(inputs))
+    return AdvisoryResult(forward, RUNNER, THERMO_KINETICS_CONSISTENCY, tuple(findings), encoded(inputs))

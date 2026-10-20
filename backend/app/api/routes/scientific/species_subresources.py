@@ -162,7 +162,7 @@ def species_transport(
     ``sort=`` is rejected (v0). ``include=assessments`` adds compact
     deterministic-trust and reproducibility freshness summaries, while
     ``include=trust`` adds the
-    ``computed_transport_v1`` fragment per record; ``include=all`` does
+    ``computed_transport`` fragment per record; ``include=all`` does
     not include trust.
 
     Transport records are candidate products for the resolved form;

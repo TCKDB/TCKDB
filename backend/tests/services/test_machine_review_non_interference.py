@@ -65,9 +65,9 @@ from app.services.machine_review import (
 from app.services.machine_review.providers.fake import FakeMachineReviewProvider
 from app.services.machine_review.run import run_machine_review_for_submission
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_V2_SCHEMA_VERSION,
-    MachineReviewProviderFindingV2,
-    MachineReviewProviderResultV2,
+    MACHINE_REVIEW_SCHEMA_VERSION,
+    MachineReviewProviderFinding,
+    MachineReviewProviderResult,
 )
 from app.services.submission import create_submission, link_record
 from app.services.trust import build_trust_fragment, evaluate_computed_calculation
@@ -463,12 +463,12 @@ def test_machine_review_result_is_advisory_only(db_session, _api_test_user):
     )
     evidence_before = _deterministic_snapshot(db_session, calc.id)
 
-    fixed = MachineReviewProviderResultV2(
-        schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    fixed = MachineReviewProviderResult(
+        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
         status=MachineReviewStatus.machine_screened_warning,
         summary="Advisory warning with a finding",
         findings=(
-            MachineReviewProviderFindingV2(
+            MachineReviewProviderFinding(
                 severity=MachineReviewSeverity.warning,
                 category=MachineReviewCategory.provenance,
                 record_type="calculation",

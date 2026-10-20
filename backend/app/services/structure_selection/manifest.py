@@ -34,6 +34,7 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import default_visible_statuses, status_at_or_above
+from app.services.manifest_formats import new_format_registry, read_manifest_format
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.structure_selection.assessment import assess_unit
 from app.services.structure_selection.bounds import check_manifest_size
@@ -64,7 +65,10 @@ from app.services.structure_selection.rules import (
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused.
 MANIFEST_FORMAT_VERSION = 2
-SUPPORTED_MANIFEST_FORMATS = frozenset({MANIFEST_FORMAT_VERSION})
+MANIFEST_FORMAT_NAME = "structure_selection_manifest"
+MANIFEST_FORMATS = new_format_registry(
+    "structure_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
+)
 
 INTEGRITY_NOTE = (
     "sha256 checksums over the canonical JSON of each normalised input and of the whole manifest; they detect "
@@ -157,7 +161,7 @@ def build_manifest(
         request's bound; nothing is returned without its whole manifest.
     """
     body: dict[str, Any] = {
-        "manifest_format_version": MANIFEST_FORMAT_VERSION,
+        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version,
         "versions": {
             "assessment": ASSESSMENT_VERSION,
             "normalizer": NORMALIZER_VERSION,
@@ -195,8 +199,12 @@ def build_manifest(
 
 
 def _check_versions(manifest: dict[str, Any]) -> None:
-    if manifest.get("manifest_format_version") not in SUPPORTED_MANIFEST_FORMATS:
-        raise ReplayError("unsupported_manifest_format", f"unknown manifest format {manifest.get('manifest_format_version')!r}")
+    read_manifest_format(
+        MANIFEST_FORMATS,
+        MANIFEST_FORMAT_NAME,
+        manifest,
+        lambda message: ReplayError("unsupported_manifest_format", message),
+    )
     versions = manifest.get("versions") or {}
     running = {
         "assessment": ASSESSMENT_VERSION,

@@ -1,7 +1,7 @@
 """Hosted contribution-bundle submit/import workflow.
 
 Composes the existing dry-run preview (as a strict gate) with the existing
-thermo and kinetics upload workflows to import a :class:`ContributionBundleV0`
+thermo and kinetics upload workflows to import a :class:`ContributionBundle`
 into the hosted database. Owns:
 
 * the dry-run gate (anything blocking → reject before any write),
@@ -59,7 +59,7 @@ from app.schemas.contribution_bundle_submit import (
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.contribution_bundle import (
     BundleKind,
-    ContributionBundleV0,
+    ContributionBundle,
 )
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.contribution_bundle_dry_run import dry_run_contribution_bundle
@@ -222,7 +222,7 @@ def _import_warning_messages(
 
 def _import_thermo_bundle(
     session: Session,
-    bundle: ContributionBundleV0,
+    bundle: ContributionBundle,
     *,
     actor_id: int,
     review_policy: ReviewPolicy,
@@ -275,7 +275,7 @@ def _import_thermo_bundle(
 
 def _import_kinetics_bundle(
     session: Session,
-    bundle: ContributionBundleV0,
+    bundle: ContributionBundle,
     *,
     actor_id: int,
     review_policy: ReviewPolicy,
@@ -352,7 +352,7 @@ _SUBMITTED_TO_LINK_TYPE: dict[SubmittedRecordType, SubmissionRecordType] = {
 
 def submit_contribution_bundle(
     session: Session,
-    bundle: ContributionBundleV0,
+    bundle: ContributionBundle,
     *,
     actor: AppUser,
 ) -> ContributionBundleSubmitResult:
@@ -544,7 +544,7 @@ def _literature_requests(node: object) -> Iterator[LiteratureUploadRequest]:
 
 def rehearse_contribution_bundle_submit(
     session: Session,
-    bundle: ContributionBundleV0,
+    bundle: ContributionBundle,
     *,
     actor: AppUser,
     import_warnings_out: list[ContributionBundleSubmitMessage] | None = None,

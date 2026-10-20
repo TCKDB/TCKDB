@@ -76,17 +76,9 @@ from app.services.trust.evaluator import (
 from app.services.trust.fragment import build_trust_fragment
 from app.services.trust.models import (
     EvidenceEvaluation,
-    EvidenceRubric,
     TrustFragment,
 )
-from app.services.trust.rubrics import (
-    COMPUTED_CALCULATION_V2,
-    COMPUTED_KINETICS_V2,
-    COMPUTED_STATMECH_V2,
-    COMPUTED_THERMO_V2,
-    COMPUTED_TRANSITION_STATE_V5,
-    COMPUTED_TRANSPORT_V2,
-)
+from app.services.trust.rubrics import RUBRICS
 
 
 @dataclass(frozen=True)
@@ -96,14 +88,14 @@ class _RecordTypeResolver:
     ``model`` is used only for the existence check (404); ``evaluate`` is the
     existing computed trust evaluator that owns rubric logic (never duplicated
     here); ``submission_record_type`` keys the human-review lookup that feeds
-    the read-only ``review_status`` context input; ``rubric`` is the code-defined
-    rubric whose versioned public name forms this record type's currency key.
+    the read-only ``review_status`` context input; ``rubric_name`` names the code-defined
+    rubric (resolved through ``RUBRICS``) whose versioned public name forms this record type's currency key.
     """
 
     model: type
     evaluate: Callable[[Session, int], EvidenceEvaluation]
     submission_record_type: SubmissionRecordType
-    rubric: EvidenceRubric
+    rubric_name: str
 
 
 # The supported record types: exactly those that have BOTH a computed trust
@@ -113,37 +105,37 @@ _RESOLVERS: dict[str, _RecordTypeResolver] = {
         Calculation,
         evaluate_computed_calculation,
         SubmissionRecordType.calculation,
-        COMPUTED_CALCULATION_V2,
+        "computed_calculation",
     ),
     "kinetics": _RecordTypeResolver(
         Kinetics,
         evaluate_computed_kinetics,
         SubmissionRecordType.kinetics,
-        COMPUTED_KINETICS_V2,
+        "computed_kinetics",
     ),
     "thermo": _RecordTypeResolver(
         Thermo,
         evaluate_computed_thermo,
         SubmissionRecordType.thermo,
-        COMPUTED_THERMO_V2,
+        "computed_thermo",
     ),
     "statmech": _RecordTypeResolver(
         Statmech,
         evaluate_computed_statmech,
         SubmissionRecordType.statmech,
-        COMPUTED_STATMECH_V2,
+        "computed_statmech",
     ),
     "transport": _RecordTypeResolver(
         Transport,
         evaluate_computed_transport,
         SubmissionRecordType.transport,
-        COMPUTED_TRANSPORT_V2,
+        "computed_transport",
     ),
     "transition_state_entry": _RecordTypeResolver(
         TransitionStateEntry,
         evaluate_computed_transition_state_entry,
         SubmissionRecordType.transition_state_entry,
-        COMPUTED_TRANSITION_STATE_V5,
+        "computed_transition_state",
     ),
 }
 
@@ -170,7 +162,7 @@ def active_rubric_versions_for_record_type(record_type: str) -> dict[str, str]:
     :class:`DomainError` for an unsupported type.
     """
     resolver = _require_resolver(record_type)
-    name = public_rubric_name(resolver.rubric)
+    name = public_rubric_name(RUBRICS.get(resolver.rubric_name))
     return {name: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[name]}
 
 

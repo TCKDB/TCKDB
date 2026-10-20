@@ -11,7 +11,7 @@ trust, or moderation state.
 
 The adapter under test is pure, so these tests build lightweight event /
 record-link stand-ins and the *real* persisted ``details_json`` shape (via
-:func:`machine_review_v2_result_to_details_json`) rather than touching the database.
+:func:`machine_review_result_to_details_json`) rather than touching the database.
 The mapper, derivation, and read-model layers are exercised through the adapter
 end-to-end.
 """
@@ -40,12 +40,12 @@ from app.services.machine_review.audit_adapter import (
     record_machine_reviews_from_submission_audit_event,
 )
 from app.services.machine_review.providers.interface import (
-    machine_review_v2_result_to_details_json,
+    machine_review_result_to_details_json,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_V2_SCHEMA_VERSION,
-    MachineReviewProviderFindingV2,
-    MachineReviewProviderResultV2,
+    MACHINE_REVIEW_SCHEMA_VERSION,
+    MachineReviewProviderFinding,
+    MachineReviewProviderResult,
 )
 
 # A fixed reference instant so tests never depend on wall-clock time.
@@ -80,7 +80,7 @@ class _Link:
 def _details(
     *,
     status: MachineReviewStatus = MachineReviewStatus.machine_screened_warning,
-    findings: tuple[MachineReviewProviderFindingV2, ...] = (),
+    findings: tuple[MachineReviewProviderFinding, ...] = (),
     model: str | None = "fake_test/simple-v1",
     summary: str | None = "advisory summary",
     provider: str | None = "FakeLLMPrecheckProvider",
@@ -88,20 +88,20 @@ def _details(
 ) -> dict[str, Any]:
     """Build a realistic persisted ``details_json`` payload.
 
-    Mirrors ``record_machine_review_v2_audit_event``: a provider-contract dump
+    Mirrors ``record_machine_review_audit_event``: a provider-contract dump
     (``schema_version`` marker included) with the optional ``provider`` key.
     ``used_rag`` is set on the dump, since the contract refuses ``True`` at
     construction.
     """
-    result = MachineReviewProviderResultV2(
-        schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    result = MachineReviewProviderResult(
+        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
         status=status,
         summary=summary,
         findings=findings,
         model=model,
         provider=None,
     )
-    payload = machine_review_v2_result_to_details_json(result)
+    payload = machine_review_result_to_details_json(result)
     if provider is not None:
         payload["provider"] = provider
     if used_rag:
@@ -116,9 +116,9 @@ def _record_finding(
     severity: MachineReviewSeverity = MachineReviewSeverity.warning,
     category: MachineReviewCategory = MachineReviewCategory.provenance,
     message: str = "Missing source artifact summary.",
-) -> MachineReviewProviderFindingV2:
+) -> MachineReviewProviderFinding:
     """Build one provider finding, optionally addressing a record by internal id."""
-    return MachineReviewProviderFindingV2(
+    return MachineReviewProviderFinding(
         severity=severity,
         category=category,
         record_type=record_type,
@@ -260,7 +260,7 @@ def test_failed_review_status_with_record_finding_yields_failed_status():
 
 def test_submission_scoped_finding_does_not_create_record_review():
     """A finding with no ``record_type`` stays submission-scoped (no fan-out)."""
-    submission_finding = MachineReviewProviderFindingV2(
+    submission_finding = MachineReviewProviderFinding(
         severity=MachineReviewSeverity.critical,
         category=MachineReviewCategory.consistency,
         record_type=None,
@@ -358,7 +358,7 @@ def test_malformed_details_json_returns_parse_warning_not_exception():
     """A malformed payload degrades to no reviews + a parse warning, no raise."""
     # Carries the marker but is not a valid provider payload (status is not in the enum).
     event = _AuditEvent(
-        details_json={"schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION, "status": "not-a-real-status", "findings": []}
+        details_json={"schema_version": MACHINE_REVIEW_SCHEMA_VERSION, "status": "not-a-real-status", "findings": []}
     )
 
     projection = record_machine_reviews_from_submission_audit_event(

@@ -88,7 +88,7 @@ export HOSTED_TCKDB_API_KEY="tck_hosted_replace_me"
 
 Bundle export is a service + CLI documented in detail in
 [`local-export-v0.md`](local-export-v0.md). The CLI converts selected
-local rows into a validated `ContributionBundleV0` JSON file. Nothing is
+local rows into a validated `ContributionBundle` JSON file. Nothing is
 sent anywhere at this stage.
 
 > The export script lives at `backend/scripts/export_contribution_bundle.py`.
@@ -138,7 +138,7 @@ family.
 ### Mixing kinds
 
 Mixed thermo + kinetics bundles are **rejected** by
-`ContributionBundleV0` validation. Export one bundle per family.
+`ContributionBundle` validation. Export one bundle per family.
 
 ### Optional metadata
 

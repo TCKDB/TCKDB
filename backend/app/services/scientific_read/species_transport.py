@@ -84,7 +84,7 @@ def get_species_transport(
 
     Records are pinned to ``species_entry_id`` and returned in the
     shared deterministic order. ``include=trust`` adds the
-    ``computed_transport_v1`` fragment per record; ``include=all``
+    ``computed_transport`` fragment per record; ``include=all``
     never expands to trust. The response reuses
     :class:`ScientificTransportSearchResponse`; the pinned entry is
     echoed in ``request.filter.species_entry_ref``.

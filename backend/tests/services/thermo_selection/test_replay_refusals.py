@@ -16,8 +16,8 @@ import pytest
 from app.services.thermo_selection.manifest import ReplayError, replay_decision, replay_matches
 from app.services.thermo_selection.models import (
     MANIFEST_FORMAT_VERSION,
+    MANIFEST_FORMATS,
     POLICY_VERSION,
-    SUPPORTED_MANIFEST_FORMATS,
 )
 from tests.services.thermo_selection.test_h298_golden import _generate, _scenarios
 
@@ -69,8 +69,8 @@ def test_a_manifest_with_no_assessment_block_is_refused_not_read_as_current():
 
 
 def test_only_the_current_manifest_format_is_read():
-    """Kills: the previous format (1) re-added to SUPPORTED_MANIFEST_FORMATS."""
-    assert SUPPORTED_MANIFEST_FORMATS == {MANIFEST_FORMAT_VERSION}
+    """Kills: the previous format (1) registered in MANIFEST_FORMATS."""
+    assert {ref.version for ref in MANIFEST_FORMATS.refs()} == {MANIFEST_FORMAT_VERSION}
     for bad in (1, MANIFEST_FORMAT_VERSION + 1, None):
         manifest = _manifest("single")
         manifest["manifest_format_version"] = bad
@@ -100,3 +100,19 @@ def test_a_rule_version_this_release_does_not_carry_is_refused():
     _e1(manifest)["version"] = "0.9.0"
     with pytest.raises(ReplayError, match="0.9.0"):
         replay_decision(manifest, rules=RULES["e1_g4_over_g3"])
+
+
+def test_the_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_bool_or_missing_one():
+    from app.services.thermo_selection.models import MANIFEST_FORMAT_NAME
+    from tests.services._format_cases import bad_format_versions
+
+    manifest = _manifest("single")
+    current = MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version
+    assert manifest["manifest_format_version"] == current and type(current) is int
+    for bad in bad_format_versions(current):
+        tampered = {**manifest, "manifest_format_version": bad}
+        with pytest.raises(ReplayError, match="unknown manifest format"):
+            replay_decision(tampered, rules=RULES["single"])
+    missing = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
+    with pytest.raises(ReplayError, match="unknown manifest format"):
+        replay_decision(missing, rules=RULES["single"])

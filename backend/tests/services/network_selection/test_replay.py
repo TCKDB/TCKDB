@@ -279,7 +279,7 @@ def test_a_historic_manifest_replays_as_captured_and_a_fresh_decision_sees_the_n
 def test_a_manifest_over_the_snapshot_size_bound_is_refused_when_the_facts_alone_are_not(db_session, world):
     import dataclasses
 
-    from app.services.network_selection import BOUNDS_V1, assess_network
+    from app.services.network_selection import DEFAULT_BOUNDS, assess_network
     from app.services.network_selection.service import snapshot_size_bytes
 
     add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(A_))
@@ -289,7 +289,7 @@ def test_a_manifest_over_the_snapshot_size_bound_is_refused_when_the_facts_alone
     facts_size = snapshot_size_bytes(request, facts.network, facts.solves)
     manifest_size = len(json.dumps(select(db_session, request).manifest, sort_keys=True, separators=(",", ":")).encode())
     assert manifest_size > facts_size
-    tight = dataclasses.replace(request, bounds=dataclasses.replace(BOUNDS_V1, snapshot_bytes=facts_size + 1))
+    tight = dataclasses.replace(request, bounds=dataclasses.replace(DEFAULT_BOUNDS, snapshot_bytes=facts_size + 1))
     assess_network(db_session, request=tight, require_snapshot=False)  # the facts fit
     with pytest.raises(CodedValueError) as caught:
         select(db_session, tight)
@@ -400,3 +400,22 @@ def test_the_visibility_profile_must_be_the_profile_the_request_was_made_under(d
     consistent["request"]["profile"] = "exploratory"  # the echo a route adds; agrees, so it replays
     reseal(consistent)
     assert replay_network(consistent) == manifest["decision"]
+
+
+def test_the_writer_stamps_the_registered_format_and_every_reader_refuses_a_float_bool_or_missing_one(
+    db_session, world, scenario
+):
+    from app.services.network_selection.manifest import MANIFEST_FORMAT_NAME, MANIFEST_FORMATS
+    from tests.services._format_cases import bad_format_versions
+
+    result, manifest, _ = scenario
+    current = MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version
+    assert manifest["manifest_format_version"] == current and type(current) is int
+    for bad in [*bad_format_versions(current), "absent"]:
+        tampered = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
+        if bad != "absent":
+            tampered["manifest_format_version"] = bad
+        tampered = reseal(tampered)  # the digest is checked by some readers first; the format is what is under test
+        for read in (replay_network, replay_network_decision, replay_network_assessment):
+            with pytest.raises(ReplayError, match="unknown manifest format"):
+                read(tampered)

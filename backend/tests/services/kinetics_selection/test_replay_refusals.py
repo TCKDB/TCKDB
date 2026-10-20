@@ -15,7 +15,7 @@ import pytest
 from app.chemistry.kinetics_rules.xyg3_barrier_manifest import MANIFEST_PATH
 from app.db.models.common import RecordReviewStatus
 from app.services.kinetics_selection import ReplayError, replay_decision, replay_matches
-from app.services.kinetics_selection.manifest import MANIFEST_FORMAT_VERSION, SUPPORTED_MANIFEST_FORMATS
+from app.services.kinetics_selection.manifest import MANIFEST_FORMAT_VERSION, MANIFEST_FORMATS
 from app.services.kinetics_selection.models import ASSESSMENT_SEMANTICS_VERSION, POLICY_VERSION
 from app.services.kinetics_selection.rules import XYG3_MANIFEST_SHA256, default_rules
 from tests.services.kinetics_selection.test_selection import PREFERRED, YIELDING, select, with_protocol
@@ -60,8 +60,8 @@ def test_a_manifest_with_no_assessment_block_is_refused_not_read_as_current(db_s
 
 
 def test_only_the_current_manifest_format_is_read(db_session, world):
-    """Kills: the previous format (1) re-added to SUPPORTED_MANIFEST_FORMATS."""
-    assert SUPPORTED_MANIFEST_FORMATS == {MANIFEST_FORMAT_VERSION}
+    """Kills: the previous format (1) registered in MANIFEST_FORMATS."""
+    assert {ref.version for ref in MANIFEST_FORMATS.refs()} == {MANIFEST_FORMAT_VERSION}
     manifest = _fresh(db_session, world)
     for bad in (1, MANIFEST_FORMAT_VERSION + 1, None):
         candidate = {**manifest, "manifest_format_version": bad}
@@ -93,3 +93,17 @@ def test_the_pinned_digest_is_the_shipped_bytes():
     for rule in default_rules():
         if rule.rule_id == "K-XYG3-B3LYP-BARRIER":
             assert rule.describe()["manifest_sha256"] == XYG3_MANIFEST_SHA256
+
+
+def test_the_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_bool_or_missing_one(db_session, world):
+    from app.services.kinetics_selection.manifest import MANIFEST_FORMAT_NAME
+    from tests.services._format_cases import bad_format_versions
+
+    manifest = _fresh(db_session, world)
+    current = MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version
+    assert manifest["manifest_format_version"] == current and type(current) is int
+    for bad in bad_format_versions(current):
+        with pytest.raises(ReplayError, match="unknown manifest format"):
+            replay_decision({**manifest, "manifest_format_version": bad})
+    with pytest.raises(ReplayError, match="unknown manifest format"):
+        replay_decision({k: v for k, v in manifest.items() if k != "manifest_format_version"})

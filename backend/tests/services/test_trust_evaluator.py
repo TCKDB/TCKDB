@@ -103,11 +103,11 @@ from app.db.models.transport import Transport, TransportSourceCalculation
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.services.record_review import set_record_review_status
 from app.services.trust import (
-    COMPUTED_CALCULATION_V2,
-    COMPUTED_KINETICS_V2,
-    COMPUTED_STATMECH_V2,
-    COMPUTED_THERMO_V2,
-    COMPUTED_TRANSPORT_V2,
+    COMPUTED_CALCULATION,
+    COMPUTED_KINETICS,
+    COMPUTED_STATMECH,
+    COMPUTED_THERMO,
+    COMPUTED_TRANSPORT,
     EvidenceBadge,
     EvidenceEvaluation,
     EvidenceOutcome,
@@ -806,13 +806,13 @@ class TestRubricRegistry:
         assert rubric is not None
         assert rubric.name == "computed_calculation"
         assert rubric.version == 2
-        assert rubric is COMPUTED_CALCULATION_V2
+        assert rubric is COMPUTED_CALCULATION
 
     def test_unknown_record_type_returns_none(self):
         assert select_rubric("not_a_real_record_type") is None
 
     def test_rubric_contains_expected_checks(self):
-        names = {c.name for c in COMPUTED_CALCULATION_V2.checks}
+        names = {c.name for c in COMPUTED_CALCULATION.checks}
         # Spot-check a representative subset of names from spec §9.5.
         expected_subset = {
             "calculation_has_owner",
@@ -1551,7 +1551,7 @@ class TestComputedKineticsEvaluator:
 
     def test_kinetics_rubric_registered(self):
         rubric = select_rubric("kinetics")
-        assert rubric is COMPUTED_KINETICS_V2
+        assert rubric is COMPUTED_KINETICS
         assert rubric.name == "computed_kinetics"
         assert rubric.version == 2
 
@@ -1766,7 +1766,7 @@ class TestComputedThermoEvaluator:
 
     def test_thermo_rubric_registered(self):
         rubric = select_rubric("thermo")
-        assert rubric is COMPUTED_THERMO_V2
+        assert rubric is COMPUTED_THERMO
         assert rubric.name == "computed_thermo"
         assert rubric.version == 2
 
@@ -2296,7 +2296,7 @@ class TestComputedStatmechEvaluator:
 
     def test_statmech_rubric_registered(self):
         rubric = select_rubric("statmech")
-        assert rubric is COMPUTED_STATMECH_V2
+        assert rubric is COMPUTED_STATMECH
         assert rubric.name == "computed_statmech"
         assert rubric.version == 2
 
@@ -2550,7 +2550,7 @@ class TestComputedTransportEvaluator:
 
     def test_transport_rubric_registered(self):
         rubric = select_rubric("transport")
-        assert rubric is COMPUTED_TRANSPORT_V2
+        assert rubric is COMPUTED_TRANSPORT
         assert rubric.name == "computed_transport"
         assert rubric.version == 2
 
@@ -2905,7 +2905,7 @@ class TestCheckMapShape:
         calc = _make_minimal_opt_calc(db_session)
         result = evaluate_computed_calculation(db_session, calc.id)
 
-        declared = [spec.name for spec in COMPUTED_CALCULATION_V2.checks]
+        declared = [spec.name for spec in COMPUTED_CALCULATION.checks]
         position = {name: index for index, name in enumerate(declared)}
         keys = list(result.checks)
         assert keys == sorted(keys, key=position.__getitem__)
@@ -2936,7 +2936,7 @@ class TestCheckMapShape:
         calc = _make_minimal_opt_calc(db_session)
         result = evaluate_computed_calculation(db_session, calc.id)
 
-        declared = {spec.name for spec in COMPUTED_CALCULATION_V2.checks}
+        declared = {spec.name for spec in COMPUTED_CALCULATION.checks}
         assert set(result.checks) <= declared
         assert set(result.checks.values()) <= set(EvidenceOutcome)
 

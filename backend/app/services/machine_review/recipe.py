@@ -13,7 +13,7 @@ background re-review later — reads the **same** recipe from one place
 Design constraints kept here:
 
 * The rubric versions are **derived from the deployed trust rubric constants**
-  (`COMPUTED_*_V1`), never hand-maintained, so a rubric ``version`` bump changes
+  (`COMPUTED_*`, registered in ``RUBRICS``), never hand-maintained, so a rubric ``version`` bump changes
   the currency key automatically and cannot drift from the evaluator.
 * No environment/config parsing is introduced — these are private constants. If
   the project later grows a settings pattern, this module is the single seam to
@@ -28,22 +28,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from app.services.trust.models import EvidenceRubric
-from app.services.trust.rubrics import (
-    COMPUTED_CALCULATION_V2,
-    COMPUTED_KINETICS_V2,
-    COMPUTED_STATMECH_V2,
-    COMPUTED_THERMO_V2,
-    COMPUTED_TRANSITION_STATE_V5,
-    COMPUTED_TRANSPORT_V2,
-    COMPUTED_TS_STATMECH_V1,
-    EXTERNAL_CP_COMPARISON_V2,
-    GIBBS_SELF_CONSISTENCY_V1,
-    HESS_CONSISTENCY_V1,
-    ISOTOPE_IDENTITY_CONSISTENCY_V1,
-    KIRCHHOFF_CONSISTENCY_V1,
-    THERMO_CONSISTENCY_V1,
-    THERMO_KINETICS_CONSISTENCY_V1,
-)
+from app.services.trust.rubrics import RUBRICS
 
 #: Active machine-review prompt version (private constant; no config system yet).
 ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"
@@ -80,29 +65,19 @@ ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"
 # one never restales another's review: a rubric-version change makes only that
 # check's own past rows read stale against its own current recipe.
 #
-# ``COMPUTED_TS_STATMECH_V1`` is the owner-scoped statmech rubric for
+# ``COMPUTED_TS_STATMECH`` is the owner-scoped statmech rubric for
 # transition-state-owned records. It is one more key, filtered like every other:
 # the reviewer recipe for a record comes from the rubric that actually evaluated it
 # (``admin_trigger.active_rubric_versions_for_fragment``), not from the record type
 # alone. ``tests/services/test_trust_ts_statmech_owner_rubric.py`` pins both halves.
-_ACTIVE_RUBRICS: tuple[EvidenceRubric, ...] = (
-    COMPUTED_CALCULATION_V2,
-    COMPUTED_KINETICS_V2,
-    COMPUTED_THERMO_V2,
-    COMPUTED_STATMECH_V2,
-    COMPUTED_TS_STATMECH_V1,
-    COMPUTED_TRANSPORT_V2,
-    COMPUTED_TRANSITION_STATE_V5,
-    EXTERNAL_CP_COMPARISON_V2,
-    THERMO_CONSISTENCY_V1,
-    THERMO_KINETICS_CONSISTENCY_V1,
-    GIBBS_SELF_CONSISTENCY_V1,
-    # D6 (Hess): same kind of entry as D1/D3 above -- one more key, read
-    # only by its own runner's currency, so no stored review is restaled.
-    HESS_CONSISTENCY_V1,
-    ISOTOPE_IDENTITY_CONSISTENCY_V1,
-    KIRCHHOFF_CONSISTENCY_V1,
+_ACTIVE_RUBRICS: tuple[EvidenceRubric, ...] = tuple(
+    RUBRICS.get(ref.name, ref.version) for ref in RUBRICS.refs() if RUBRICS.is_current(ref)
 )
+"""Every current rubric in :data:`~app.services.trust.rubrics.RUBRICS`, in (name, version) order.
+
+Derived, never listed: a rubric registered in ``RUBRICS`` is in the recipe, so a new rubric cannot be
+forgotten here. Each is one key of the lookup table below, filtered by its consumer (the currency rule).
+"""
 
 
 def public_rubric_name(rubric: EvidenceRubric) -> str:

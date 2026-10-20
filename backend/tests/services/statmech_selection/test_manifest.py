@@ -353,3 +353,20 @@ def test_an_unresolved_comparability_and_a_conflict_replay_to_the_same_outcome()
     conflict = [beats("r1", "a", "b"), beats("r2", "b", "a")]
     manifest = make_manifest(rules=conflict)
     assert manifest["outcome"] == "policy_conflict" and replay_matches(manifest, rules=conflict)
+
+
+def test_the_writer_stamps_the_registered_format_and_every_reader_refuses_a_float_bool_or_missing_one():
+    from app.services.statmech_selection.manifest import MANIFEST_FORMAT_NAME, MANIFEST_FORMATS
+    from tests.services._format_cases import bad_format_versions
+
+    manifest = make_manifest()
+    current = MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version
+    assert manifest["manifest_format_version"] == current and type(current) is int
+    readers = (replay_statmech_decision, reproduce_statmech_ordering, reassess_statmech_captured_inputs)
+    for bad in [*bad_format_versions(current), "absent"]:
+        tampered = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
+        if bad != "absent":
+            tampered["manifest_format_version"] = bad
+        for read in readers:
+            with pytest.raises(ReplayError, match="unknown manifest format"):
+                read(tampered)

@@ -21,7 +21,7 @@ three are the reason for the shape:
   sibling needs.
 
 **What the provider trusts and what it does not.** The model's output is
-untrusted: it goes through :func:`parse_machine_review_v2_payload`, the single
+untrusted: it goes through :func:`parse_machine_review_payload`, the single
 strict boundary, whose ``extra="forbid"`` refuses any mutation field and whose
 ``Literal[False]`` refuses a RAG claim. What the provider does *not* take from
 the model is its own identity -- ``model`` and ``provider`` are stamped from
@@ -43,13 +43,13 @@ from typing import Protocol, runtime_checkable
 
 from app.services.machine_review.providers.interface import (
     MachineReviewContext,
-    parse_machine_review_v2_payload,
+    parse_machine_review_payload,
 )
 from app.services.machine_review.providers.prompt import (
     MACHINE_REVIEW_SYSTEM_PROMPT,
     build_user_message,
 )
-from app.services.machine_review.schemas import MachineReviewProviderResultV2
+from app.services.machine_review.schemas import MachineReviewProviderResult
 
 #: Ceiling on the model's reply, used only when a caller constructs a provider
 #: directly. :func:`~app.services.machine_review.providers.factory.build_machine_review_provider`
@@ -126,7 +126,7 @@ class CloudMachineReviewProvider:
     def review_submission(
         self,
         context: MachineReviewContext,
-    ) -> MachineReviewProviderResultV2:
+    ) -> MachineReviewProviderResult:
         """Run one review and return the validated v2 result."""
         raw = self._client.complete(
             model=self._model,
@@ -135,7 +135,7 @@ class CloudMachineReviewProvider:
             max_output_tokens=self._max_output_tokens,
             timeout_seconds=self._timeout_seconds,
         )
-        result = parse_machine_review_v2_payload(raw)
+        result = parse_machine_review_payload(raw)
         # Identity is stamped, never accepted. A model asked to name itself can
         # be wrong or stale, and a stored review that misattributes its author
         # cannot be re-run or compared against a later one.

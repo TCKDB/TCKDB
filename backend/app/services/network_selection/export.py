@@ -50,7 +50,7 @@ from app.db.models.network_pdep import (
 )
 from app.db.models.species import Species, SpeciesEntry
 from app.services.network_selection.manifest import ReplayError, replay_network
-from app.services.network_selection.models import BOUNDS_V1, NetworkRequest
+from app.services.network_selection.models import DEFAULT_BOUNDS, NetworkRequest
 from app.services.network_selection.public import profile_has_floor, redact_manifest
 from app.services.network_selection.selection import select_network
 from app.services.scientific_read.chemkin_serialize import (
@@ -115,18 +115,18 @@ def _check_complete(manifest: dict[str, Any], network_ref: str) -> None:
             reason="incomplete", missing=missing,
         )
     size = len(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8"))
-    if size > BOUNDS_V1.snapshot_bytes:
+    if size > DEFAULT_BOUNDS.snapshot_bytes:
         raise _refuse(
             CODE_MANIFEST_INVALID, "the submitted manifest is over the snapshot size bound; nothing was exported.",
-            reason="too_large", limit_bytes=BOUNDS_V1.snapshot_bytes,
+            reason="too_large", limit_bytes=DEFAULT_BOUNDS.snapshot_bytes,
         )
     request = manifest["request"]
-    if isinstance(request, dict) and request.get("bounds") != BOUNDS_V1.to_dict():
+    if isinstance(request, dict) and request.get("bounds") != DEFAULT_BOUNDS.to_dict():
         # The document's own limits would otherwise size the live scan: a caller could lift every bound (or lower one to
         # force a refusal) and re-seal. The bounds are the server's, never the document's.
         raise _refuse(
             CODE_MANIFEST_INVALID, "the submitted manifest was not made under the server's selection bounds.",
-            reason="bounds_not_server_bounds", bounds_version=BOUNDS_V1.version,
+            reason="bounds_not_server_bounds", bounds_version=DEFAULT_BOUNDS.version,
         )
     if not isinstance(request, dict) or request.get("network_ref") != network_ref:
         raise _refuse(
@@ -150,7 +150,7 @@ def _live_selection(session: Session, manifest: dict[str, Any], *, require_snaps
     request = NetworkRequest.from_dict(
         {k: v for k, v in manifest["request"].items() if k != "effective_review_statuses"}
     )
-    request = dataclasses.replace(request, bounds=BOUNDS_V1)  # never the document's own limits
+    request = dataclasses.replace(request, bounds=DEFAULT_BOUNDS)  # never the document's own limits
     return select_network(session, request=request, require_snapshot=require_snapshot).manifest
 
 

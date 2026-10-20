@@ -8313,6 +8313,6 @@
     "records",
     "manifest"
   ],
-  "title": "ContributionBundleV0",
+  "title": "ContributionBundle",
   "type": "object"
 }

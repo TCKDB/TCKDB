@@ -24,41 +24,41 @@ from app.services.machine_review.recipe import (
     public_rubric_name,
 )
 from app.services.trust.rubrics import (
-    COMPUTED_CALCULATION_V2,
-    COMPUTED_KINETICS_V2,
-    COMPUTED_STATMECH_V2,
-    COMPUTED_THERMO_V2,
-    COMPUTED_TRANSITION_STATE_V5,
-    COMPUTED_TRANSPORT_V2,
-    COMPUTED_TS_STATMECH_V1,
-    EXTERNAL_CP_COMPARISON_V2,
-    GIBBS_SELF_CONSISTENCY_V1,
-    HESS_CONSISTENCY_V1,
-    ISOTOPE_IDENTITY_CONSISTENCY_V1,
-    KIRCHHOFF_CONSISTENCY_V1,
-    THERMO_CONSISTENCY_V1,
-    THERMO_KINETICS_CONSISTENCY_V1,
+    COMPUTED_CALCULATION,
+    COMPUTED_KINETICS,
+    COMPUTED_STATMECH,
+    COMPUTED_THERMO,
+    COMPUTED_TRANSITION_STATE,
+    COMPUTED_TRANSPORT,
+    COMPUTED_TS_STATMECH,
+    EXTERNAL_CP_COMPARISON,
+    GIBBS_SELF_CONSISTENCY,
+    HESS_CONSISTENCY,
+    ISOTOPE_IDENTITY_CONSISTENCY,
+    KIRCHHOFF_CONSISTENCY,
+    THERMO_CONSISTENCY,
+    THERMO_KINETICS_CONSISTENCY,
 )
 
 _ACTIVE_RUBRICS = (
-    COMPUTED_CALCULATION_V2,
-    COMPUTED_KINETICS_V2,
-    COMPUTED_THERMO_V2,
-    COMPUTED_STATMECH_V2,
-    COMPUTED_TRANSPORT_V2,
-    COMPUTED_TRANSITION_STATE_V5,
+    COMPUTED_CALCULATION,
+    COMPUTED_KINETICS,
+    COMPUTED_THERMO,
+    COMPUTED_STATMECH,
+    COMPUTED_TRANSPORT,
+    COMPUTED_TRANSITION_STATE,
     # The owner-scoped rubric for transition-state-owned statmech.
-    COMPUTED_TS_STATMECH_V1,
+    COMPUTED_TS_STATMECH,
     # Phase C-E4: not a computed-trust rubric (checks=()), but it is part of
     # the machine-review recipe -- see the comment on _ACTIVE_RUBRICS in
     # app.services.machine_review.recipe.
-    EXTERNAL_CP_COMPARISON_V2,
-    THERMO_CONSISTENCY_V1,
-    THERMO_KINETICS_CONSISTENCY_V1,
-    GIBBS_SELF_CONSISTENCY_V1,
-    HESS_CONSISTENCY_V1,
-    ISOTOPE_IDENTITY_CONSISTENCY_V1,
-    KIRCHHOFF_CONSISTENCY_V1,
+    EXTERNAL_CP_COMPARISON,
+    THERMO_CONSISTENCY,
+    THERMO_KINETICS_CONSISTENCY,
+    GIBBS_SELF_CONSISTENCY,
+    HESS_CONSISTENCY,
+    ISOTOPE_IDENTITY_CONSISTENCY,
+    KIRCHHOFF_CONSISTENCY,
 )
 
 
@@ -95,7 +95,7 @@ def test_filtered_recipes_are_independent_copies():
     assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS["computed_calculation_v2"] == "2"
     assert active_rubric_versions_for_record_type("calculation") == {"computed_calculation_v2": "2"}
 
-    advisory = AdvisoryResult(target=None, runner="thermo_consistency", rubric=THERMO_CONSISTENCY_V1,
+    advisory = AdvisoryResult(target=None, runner="thermo_consistency", rubric=THERMO_CONSISTENCY,
                               findings=(), inputs_json="{}")
     stamped = advisory.recipe
     assert stamped == {"thermo_consistency_v1": "1"}

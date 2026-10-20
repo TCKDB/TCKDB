@@ -22,7 +22,7 @@ from app.db.models.network_pdep import (
     NetworkKineticsPlog,
     NetworkSolve,
 )
-from app.services.network_selection import BOUNDS_V1, Scope, SelectionBounds, assess_network, check_bound
+from app.services.network_selection import DEFAULT_BOUNDS, Scope, SelectionBounds, assess_network, check_bound
 from app.services.network_selection import service as service_module
 from app.services.read_snapshot import SnapshotNotConsistentError
 from app.services.scientific_read.profile import (
@@ -44,7 +44,7 @@ def assess(session, request):
 
 
 def with_bounds(request, **limits):
-    return dataclasses.replace(request, bounds=dataclasses.replace(BOUNDS_V1, **limits))
+    return dataclasses.replace(request, bounds=dataclasses.replace(DEFAULT_BOUNDS, **limits))
 
 
 def refused(session, request) -> dict:
@@ -90,7 +90,7 @@ def test_a_fit_inherits_its_solves_review_and_is_never_qualified_separately(db_s
 
 
 def test_the_documented_bounds_are_the_planned_ones_and_versioned():
-    assert BOUNDS_V1 == SelectionBounds(
+    assert DEFAULT_BOUNDS == SelectionBounds(
         version="1",
         solves=200,
         kinetics_parents=2000,
@@ -104,9 +104,9 @@ def test_the_documented_bounds_are_the_planned_ones_and_versioned():
         snapshot_bytes=8 * 1024 * 1024,
     )
     with pytest.raises(CodedValueError) as caught:
-        check_bound(BOUNDS_V1, "solves", 201)
+        check_bound(DEFAULT_BOUNDS, "solves", 201)
     assert caught.value.context == {"bound": "solves", "visible": 201, "limit": 200, "bounds_version": "1"}
-    check_bound(BOUNDS_V1, "solves", 200)  # the limit itself is decided
+    check_bound(DEFAULT_BOUNDS, "solves", 200)  # the limit itself is decided
 
 
 def test_the_solve_bound_is_applied_to_the_whole_population_at_and_beyond_its_limit(db_session, world):
@@ -206,9 +206,9 @@ def test_the_number_of_required_outputs_is_bounded_when_the_request_is_built(wor
         with_bounds(bundle_request(world, "assoc", "elim"), required_outputs=1)
     assert caught.value.code == "network_selection_population_too_large"
     assert caught.value.context == {"bound": "required_outputs", "visible": 2, "limit": 1, "bounds_version": "1"}
-    check_bound(dataclasses.replace(BOUNDS_V1, required_outputs=1), "required_outputs", 1)
+    check_bound(dataclasses.replace(DEFAULT_BOUNDS, required_outputs=1), "required_outputs", 1)
     with pytest.raises(CodedValueError):
-        check_bound(dataclasses.replace(BOUNDS_V1, required_outputs=1), "required_outputs", 2)
+        check_bound(dataclasses.replace(DEFAULT_BOUNDS, required_outputs=1), "required_outputs", 2)
 
 
 def test_a_snapshot_over_the_size_limit_is_its_own_coded_refusal(db_session, world):

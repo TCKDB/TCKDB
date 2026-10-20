@@ -8,7 +8,7 @@ Implements the read-time, code-defined rubrics specified in
 ``confidence_score``).
 
 This package contains the rubric foundation plus the first MVP rubric,
-``computed_calculation_v1``. Additional rubrics (kinetics, thermo,
+``computed_calculation``. Additional rubrics (kinetics, thermo,
 statmech, transport, experimental) land in later slices per
 §14 of the spec.
 """
@@ -47,28 +47,30 @@ from app.services.trust.models import (
     label_from_completeness,
 )
 from app.services.trust.rubrics import (
-    COMPUTED_CALCULATION_V2,
-    COMPUTED_KINETICS_V2,
-    COMPUTED_STATMECH_V2,
-    COMPUTED_THERMO_V2,
-    COMPUTED_TRANSITION_STATE_V5,
-    COMPUTED_TRANSPORT_V2,
-    COMPUTED_TS_STATMECH_V1,
-    OWNER_SCOPED_RUBRICS,
-    RUBRIC_REGISTRY,
+    COMPUTED_CALCULATION,
+    COMPUTED_KINETICS,
+    COMPUTED_STATMECH,
+    COMPUTED_THERMO,
+    COMPUTED_TRANSITION_STATE,
+    COMPUTED_TRANSPORT,
+    COMPUTED_TS_STATMECH,
+    OWNER_SCOPED_RUBRIC_NAMES,
+    RUBRIC_NAME_FOR_RECORD_TYPE,
+    RUBRICS,
     statmech_rubric_for,
 )
 
 __all__ = [
-    "COMPUTED_CALCULATION_V2",
-    "COMPUTED_KINETICS_V2",
-    "COMPUTED_STATMECH_V2",
-    "COMPUTED_THERMO_V2",
-    "COMPUTED_TRANSITION_STATE_V5",
-    "COMPUTED_TRANSPORT_V2",
-    "COMPUTED_TS_STATMECH_V1",
-    "OWNER_SCOPED_RUBRICS",
-    "RUBRIC_REGISTRY",
+    "COMPUTED_CALCULATION",
+    "COMPUTED_KINETICS",
+    "COMPUTED_STATMECH",
+    "COMPUTED_THERMO",
+    "COMPUTED_TRANSITION_STATE",
+    "COMPUTED_TRANSPORT",
+    "COMPUTED_TS_STATMECH",
+    "OWNER_SCOPED_RUBRIC_NAMES",
+    "RUBRICS",
+    "RUBRIC_NAME_FOR_RECORD_TYPE",
     "EvidenceBadge",
     "EvidenceCheckKind",
     "EvidenceCheckResult",

@@ -31,7 +31,7 @@ from tckdb_schemas.coded_error import CodedValidationError
 
 from app.api.config import settings
 from app.api.error_contract import error_envelope
-from app.schemas.workflows.contribution_bundle import ContributionBundleV0
+from app.schemas.workflows.contribution_bundle import ContributionBundle
 
 #: The routes that take a bundle. Matched on the exact path, POST only.
 BUNDLE_BODY_PATHS = frozenset({
@@ -40,12 +40,12 @@ BUNDLE_BODY_PATHS = frozenset({
 })
 
 
-def bundle_record_count(bundle: ContributionBundleV0) -> int:
+def bundle_record_count(bundle: ContributionBundle) -> int:
     """Records a bundle would import: thermo plus kinetics uploads."""
     return len(bundle.records.thermo_uploads) + len(bundle.records.kinetics_uploads)
 
 
-def enforce_bundle_record_cap(bundle: ContributionBundleV0) -> int:
+def enforce_bundle_record_cap(bundle: ContributionBundle) -> int:
     """Refuse a bundle with more records than the configured cap.
 
     :returns: the record count, for callers that log it.

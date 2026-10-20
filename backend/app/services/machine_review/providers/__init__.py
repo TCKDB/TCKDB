@@ -13,7 +13,7 @@ until the real providers land (spec
 
 Config namespace: ``AI_REVIEW_ASSISTANT_MODE`` + ``LLM_PRECHECK_*`` (no parallel
 ``MACHINE_REVIEW_*`` env vars). Output contract:
-:class:`~app.services.machine_review.schemas.MachineReviewProviderResultV2`.
+:class:`~app.services.machine_review.schemas.MachineReviewProviderResult`.
 ``machine_review`` remains the future *public* concept.
 """
 
@@ -36,8 +36,8 @@ from app.services.machine_review.providers.interface import (
     MachineReviewContext,
     MachineReviewProvider,
     MachineReviewProviderConfigurationError,
-    machine_review_v2_result_to_details_json,
-    parse_machine_review_v2_payload,
+    machine_review_result_to_details_json,
+    parse_machine_review_payload,
 )
 
 __all__ = [
@@ -49,10 +49,10 @@ __all__ = [
     "MachineReviewProviderConfigurationError",
     "build_fake_machine_review_provider",
     "build_machine_review_provider",
-    "machine_review_v2_result_to_details_json",
+    "machine_review_result_to_details_json",
     "make_critical_result",
     "make_failed_result",
     "make_pass_result",
     "make_warning_result",
-    "parse_machine_review_v2_payload",
+    "parse_machine_review_payload",
 ]

@@ -8,8 +8,8 @@ create/read curator tasks via the admin API.
 
 ```text
 FakeMachineReviewProvider / make_* result
-  -> machine_review_v2_result_to_details_json
-  -> record_machine_review_v2_audit_event   (real submission_audit_event row)
+  -> machine_review_result_to_details_json
+  -> record_machine_review_audit_event   (real submission_audit_event row)
   -> DB readback
   -> GET .../machine-review-inspection       (record summaries)
   -> POST .../curator-tasks/build-for-submission
@@ -45,17 +45,17 @@ from app.services.machine_review.providers import (
     MachineReviewContext,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    MACHINE_REVIEW_SCHEMA_VERSION,
     MachineReviewCategory,
-    MachineReviewProviderFindingV2,
-    MachineReviewProviderResultV2,
+    MachineReviewProviderFinding,
+    MachineReviewProviderResult,
     MachineReviewSeverity,
     MachineReviewStatus,
 )
 from app.services.submission import (
     create_submission,
     link_record,
-    record_machine_review_v2_audit_event,
+    record_machine_review_audit_event,
 )
 from app.services.trust import build_trust_fragment
 from app.services.trust.models import (
@@ -116,12 +116,12 @@ def _link_kinetics(db_session: Session, submission: Submission, record_id: int) 
 def _v2_result(
     *,
     status: MachineReviewStatus,
-    findings: tuple[MachineReviewProviderFindingV2, ...],
+    findings: tuple[MachineReviewProviderFinding, ...],
     summary: str = "advisory",
-) -> MachineReviewProviderResultV2:
+) -> MachineReviewProviderResult:
     """Build a native v2 provider result."""
-    return MachineReviewProviderResultV2(
-        schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    return MachineReviewProviderResult(
+        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
         status=status,
         curator_priority=None,
         summary=summary,
@@ -139,8 +139,8 @@ def _kinetics_finding(
     category: MachineReviewCategory,
     recommended_action: str,
     record_type: str | None = "kinetics",
-) -> MachineReviewProviderFindingV2:
-    return MachineReviewProviderFindingV2(
+) -> MachineReviewProviderFinding:
+    return MachineReviewProviderFinding(
         severity=severity,
         category=category,
         record_type=record_type,
@@ -154,7 +154,7 @@ def _kinetics_finding(
 def _persist_via_provider(
     db_session: Session,
     submission: Submission,
-    result: MachineReviewProviderResultV2,
+    result: MachineReviewProviderResult,
 ) -> SubmissionAuditEvent:
     """Run a fixed result through the fake provider, then persist it as a row.
 
@@ -165,7 +165,7 @@ def _persist_via_provider(
     produced = provider.review_submission(
         MachineReviewContext(submission_id=submission.id)
     )
-    event = record_machine_review_v2_audit_event(
+    event = record_machine_review_audit_event(
         db_session,
         submission=submission,
         result=produced,
@@ -202,13 +202,13 @@ def test_persisted_v2_warning_provider_result_inspects_and_creates_task(
     # Raw details_json is persisted with the v2 marker + findings.
     assert event.event_kind is SubmissionAuditEventKind.llm_precheck_recorded
     assert event.actor_kind is SubmissionActorKind.llm
-    assert event.details_json["schema_version"] == MACHINE_REVIEW_V2_SCHEMA_VERSION
+    assert event.details_json["schema_version"] == MACHINE_REVIEW_SCHEMA_VERSION
 
     # DB readback (fresh load) preserves schema_version and findings.
     db_session.expire_all()
     reloaded = db_session.get(SubmissionAuditEvent, event_id)
     assert reloaded is not None
-    assert reloaded.details_json["schema_version"] == MACHINE_REVIEW_V2_SCHEMA_VERSION
+    assert reloaded.details_json["schema_version"] == MACHINE_REVIEW_SCHEMA_VERSION
     assert reloaded.details_json["status"] == "machine_screened_warning"
     assert len(reloaded.details_json["findings"]) == 1
     finding = reloaded.details_json["findings"][0]

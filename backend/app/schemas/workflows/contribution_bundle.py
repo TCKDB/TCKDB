@@ -184,7 +184,7 @@ class BundleManifest(SchemaBase):
         return self
 
 
-class ContributionBundleV0(SchemaBase):
+class ContributionBundle(SchemaBase):
     """Top-level contribution bundle v0 envelope.
 
     Validates without database access. Hosted identity resolution,

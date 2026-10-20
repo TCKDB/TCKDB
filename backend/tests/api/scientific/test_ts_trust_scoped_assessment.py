@@ -39,7 +39,7 @@ from app.services.structure_selection.models import (
     StructureOutcome,
 )
 from app.services.trust import (
-    COMPUTED_TRANSITION_STATE_V5,
+    COMPUTED_TRANSITION_STATE,
     EvidenceCheckKind,
     TransitionStateTrustFragment,
     TrustFragment,
@@ -413,7 +413,7 @@ def test_a_refuted_declared_witness_changes_only_the_warning_and_the_block(clien
 
 
 def test_the_warning_is_zero_weight_and_an_unresolved_target_is_not_a_pass(client, db_session):
-    spec = next(c for c in COMPUTED_TRANSITION_STATE_V5.checks if c.name == WARNING)
+    spec = next(c for c in COMPUTED_TRANSITION_STATE.checks if c.name == WARNING)
     assert spec.kind is EvidenceCheckKind.warning
     unresolved = detail(client, _scenario_undesignated_modes(db_session).entry)
     assert unresolved["structure_assessment"]["outcome"] != "qualified_evidence"
@@ -424,7 +424,7 @@ def test_the_warning_is_zero_weight_and_an_unresolved_target_is_not_a_pass(clien
 
 
 def test_no_wording_of_the_check_or_the_block_says_validated_certified_or_disproved():
-    spec = next(c for c in COMPUTED_TRANSITION_STATE_V5.checks if c.name == WARNING)
+    spec = next(c for c in COMPUTED_TRANSITION_STATE.checks if c.name == WARNING)
     text = spec.explain.lower()
     assert "needs investigation" in text and "not that the transition state is disproved" in text
     for word in ("validated", "certified"):
@@ -896,7 +896,7 @@ def test_the_pin_is_a_literal_tied_to_rubric_version_5():
 
     Kills: changing the structure versions (or the dict) while the TS rubric stays at version 5.
     """
-    assert (COMPUTED_TRANSITION_STATE_V5.version, TS_SCOPED_STRUCTURE_VERSIONS) == (
+    assert (COMPUTED_TRANSITION_STATE.version, TS_SCOPED_STRUCTURE_VERSIONS) == (
         5,
         {"assessment": "1", "normalizer": "1", "decision": "1"},
     )
