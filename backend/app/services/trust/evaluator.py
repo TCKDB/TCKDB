@@ -920,9 +920,9 @@ def evaluate_loaded_statmech_under(
     """Evaluate ``statmech`` under an explicitly named statmech rubric.
 
     :func:`evaluate_loaded_statmech` is this with the owner's rubric. Naming the rubric lets
-    the operator report (``statmech_owner_report``) reconstruct what a record read before
-    the owner-scoped rubric existed, by running it under ``COMPUTED_STATMECH_V2``. Nothing on
-    a read path should call this directly.
+    a test reconstruct a review stored under the other rubric (the stale-assessment mechanism
+    compares what a review was made under with what is current). Nothing on a read path
+    should call this directly.
     """
     hard_fail = _detect_statmech_hard_fail(statmech, rubric)
 

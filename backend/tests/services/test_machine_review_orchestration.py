@@ -236,7 +236,7 @@ def test_fake_orchestration_never_calls_real_provider(db_session):
         / "machine_review"
         / "orchestration.py"
     ).read_text(encoding="utf-8")
-    for forbidden in ("llm_precheck.providers", "openai", "anthropic", "online_api", "local_http"):
+    for forbidden in ("openai", "anthropic", "online_api", "local_http"):
         assert forbidden not in source
 
 

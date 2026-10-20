@@ -3509,26 +3509,18 @@ def statmech_rubric_for(statmech: Statmech) -> EvidenceRubric:
 #
 # Everything above this point evaluates the deterministic *computed-trust*
 # evidence completeness for a record (ADR 0008's structural tier) and is
-# reachable through RUBRIC_REGISTRY / get_rubric_for_record_type. The rubric
-# below is a different thing: it exists only to give the review-tier
-# external-Cp-comparison check
+# reachable through RUBRIC_REGISTRY / get_rubric_for_record_type. The rubrics
+# below are a different thing: they exist only to give the review-tier checks
 # (``app.scientific_checks.external_comparison``,
-# ``app.services.external_comparison.cp``) a versioned name in the
-# machine-review currency recipe
-# (``app.services.machine_review.recipe._ACTIVE_RUBRICS``). It declares
-# ``checks=()`` deliberately: no computed-trust evaluator ever runs it, so it
-# is NOT added to RUBRIC_REGISTRY -- doing so would offer it to
+# ``app.services.external_comparison.cp``, ``app.services.consistency``) a
+# versioned name in the machine-review currency recipe
+# (``app.services.machine_review.recipe._ACTIVE_RUBRICS``). They declare
+# ``checks=()`` deliberately: no computed-trust evaluator ever runs them, so none
+# is added to RUBRIC_REGISTRY -- doing so would offer it to
 # get_rubric_for_record_type for the "thermo" record type, colliding with
 # COMPUTED_THERMO_V2's own meaning of that key.
-EXTERNAL_CP_COMPARISON_V1: EvidenceRubric = EvidenceRubric(
-    name="external_cp_comparison",
-    version=1,
-    record_type="thermo",
-    checks=(),
-)
 
-# Phase D recipes are advisory only, deliberately outside RUBRIC_REGISTRY.
-# V1 remains a historical recipe; no persisted row is rewritten.
+# Advisory-only recipes, deliberately outside RUBRIC_REGISTRY.
 EXTERNAL_CP_COMPARISON_V2 = EvidenceRubric(name="external_cp_comparison", version=2, record_type="thermo", checks=())
 THERMO_CONSISTENCY_V1 = EvidenceRubric(name="thermo_consistency", version=1, record_type="thermo", checks=())
 THERMO_KINETICS_CONSISTENCY_V1 = EvidenceRubric(

@@ -25,12 +25,6 @@ from app.services.structure_selection.models import CoverageRequirement, RepeatP
 #: records them. 3: a hidden ref in the captured facts is a placeholder token (``withheld:<n>``) under a profile with a
 #: review floor (guard PR-3); nothing is differenced differently.
 RELATIVE_ENERGY_VERSION = "3"
-#: Earlier semantic versions whose manifests still replay, and the member fields each did not carry. Version 1 (the
-#: first release of the route) recorded no ``value_geometry_ref``; version 2 carried every field version 3 does (its
-#: refs are the real ones, which replay never reads). Replay compares such a manifest's recorded answer with the
-#: recomputed one projected onto the fields that version carried. The rule is keyed to the recorded version: a
-#: manifest that claims the current version and lacks a field is refused, not projected.
-LEGACY_MEMBER_FIELDS: dict[str, tuple[str, ...]] = {"1": ("value_geometry_ref",), "2": ()}
 #: Version of the engineering bounds below.
 BOUNDS_VERSION = "1"
 #: The most conformer groups one request is answered for. Same number as the structure candidate bound.

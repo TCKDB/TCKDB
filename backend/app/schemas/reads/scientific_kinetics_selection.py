@@ -420,7 +420,7 @@ class KineticsSelectionManifest(BaseModel):
     policy: dict[str, Any]
     assessment_semantics: dict[str, Any] | None = None
     """How each candidate's eligibility was assessed: ``version`` (``2`` today), the evidence rubric and the source-finding
-    gate. Absent on a manifest made before this field existed, which is then ``pre_v2_assessment``. ``policy`` is the decision
+    gate. A manifest without a well-formed block is refused on replay. ``policy`` is the decision
     procedure replay re-runs; this is the assessment that produced the recorded ``eligible`` flags, which replay does not rerun."""
     request: KineticsSelectionManifestRequest
     snapshot_isolation: str

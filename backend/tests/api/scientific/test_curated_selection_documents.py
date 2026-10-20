@@ -10,7 +10,7 @@ every nested position of every engine (``_curated_sweep_selection_world``):
 * **Rename.** The curated document equals the document over the same population with the seam off (real refs) after
   each real ref is renamed to its token and the checksums are set aside. Nothing is added, removed or substituted.
 * **Replay.** The curated manifest of every engine replays, and reproduces its decision byte for byte.
-* **Previous formats.** A manifest of the previous format version still replays; a version nobody wrote does not.
+* **Retired formats.** A manifest of the previous format version is refused, like a version nobody wrote.
 * **Exploratory.** With the seam off, an exploratory document is byte-identical and costs the same statements.
 * **Stability.** Two identical requests make the same tokens and the same digest, whatever order the facts load in.
 * **Equality.** The same real ref has one token, so an equality the engine reads survives the renaming.
@@ -397,37 +397,40 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
     }
 
 
-def test_a_manifest_of_the_previous_format_version_still_replays(client, world):
-    """An exploratory manifest (real refs), rewritten as the previous release wrote it: version, and nothing else."""
+@pytest.mark.parametrize(
+    ("name", "previous"),
+    [("thermo", 1), ("kinetics", 1), ("network", 2), ("structure", 1), ("statmech", 1)],
+)
+def test_a_manifest_of_the_previous_format_version_is_refused(client, world, name, previous):
+    """Kills: the previous format version re-added to an engine's supported set.
+
+    Rewritten as the previous release wrote it (the version, and nothing else), then resealed where the engine checks
+    a digest, so the refusal can only be the format."""
+    route = next(r for r in _routes(world) if r.name == name)
+    manifest = _post(client, route.path, route.body, "exploratory")
+    manifest["manifest_format_version"] = previous
+    if name == "network":
+        _reseal_network(manifest)
+    elif name == "structure":
+        _reseal_integrity(manifest, structure_manifest.digest)
+    elif name == "statmech":
+        _reseal_integrity(manifest, statmech_manifest.digest)
+    with pytest.raises(Exception, match="manifest format|unsupported_manifest_format"):
+        _replay(name, manifest)
+
+
+@pytest.mark.parametrize("retired", ["1", "2"])
+def test_a_relative_energy_manifest_of_a_retired_version_is_refused(client, world, retired):
     routes = {r.name: r for r in _routes(world)}
-
-    thermo = _post(client, routes["thermo"].path, routes["thermo"].body, "exploratory")
-    thermo["manifest_format_version"] = 1
-    assert thermo_manifest.replay_matches(thermo)
-
-    kinetics = _post(client, routes["kinetics"].path, routes["kinetics"].body, "exploratory")
-    kinetics["manifest_format_version"] = 1
-    assert kinetics_manifest.replay_matches(kinetics)
-
-    network = _post(client, routes["network"].path, routes["network"].body, "exploratory")
-    network["manifest_format_version"] = 2
-    assert network_manifest.replay_matches(_reseal_network(network))
-
-    structure = _post(client, routes["structure"].path, routes["structure"].body, "exploratory")
-    structure["manifest_format_version"] = 1
-    assert structure_manifest.replay_matches(_reseal_integrity(structure, structure_manifest.digest))
-
-    statmech = _post(client, routes["statmech"].path, routes["statmech"].body, "exploratory")
-    statmech["manifest_format_version"] = 1
-    assert statmech_manifest.replay_matches(_reseal_integrity(statmech, statmech_manifest.digest))
-
     relative = _post(client, routes["relative_energy"].path, routes["relative_energy"].body, "exploratory")
-    relative["versions"]["relative_energy"] = "2"
-    relative["result"]["relative_energy_version"] = "2"
-    assert relative_manifest.replay_matches(_reseal_integrity(relative, relative_manifest.digest))
+    relative["versions"]["relative_energy"] = retired
+    relative["result"]["relative_energy_version"] = retired
+    with pytest.raises(relative_manifest.ReplayError) as raised:
+        relative_manifest.replay_matches(_reseal_integrity(relative, relative_manifest.digest))
+    assert raised.value.code == "unsupported_semantic_version"
 
 
-def test_a_comparison_manifest_of_the_previous_relative_energy_version_still_replays(client, world):
+def test_a_comparison_manifest_of_a_retired_relative_energy_version_is_refused(client, world):
     from tests.api.scientific import _curated_sweep_inputs as inputs
 
     path = f"/species-entries/{world.extra['species_entry'].public_ref}/conformers/relative-energies/compare/manifest"
@@ -438,7 +441,9 @@ def test_a_comparison_manifest_of_the_previous_relative_energy_version_still_rep
         run["versions"]["relative_energy"] = "2"
         run["result"]["relative_energy_version"] = "2"
         _reseal_integrity(run, relative_manifest.digest)
-    assert relative_manifest.replay_comparison_matches(_reseal_integrity(manifest, relative_manifest.digest))
+    with pytest.raises(relative_manifest.ReplayError) as raised:
+        relative_manifest.replay_comparison_matches(_reseal_integrity(manifest, relative_manifest.digest))
+    assert raised.value.code == "unsupported_semantic_version"
 
 
 @pytest.mark.parametrize("name", ["thermo", "kinetics", "network", "structure", "statmech"])

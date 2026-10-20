@@ -32,17 +32,20 @@ from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.network import Network
 from app.db.models.record_review import RecordReview
 from app.db.models.submission import Submission
-from app.services.llm_precheck.schemas import (
-    LLMFinding,
-    LLMFindingCategory,
-    LLMFindingSeverity,
-    LLMPrecheckLabel,
-    LLMPrecheckResult,
+from app.services.machine_review import (
+    MachineReviewCategory,
+    MachineReviewSeverity,
+    MachineReviewStatus,
+)
+from app.services.machine_review.schemas import (
+    MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    MachineReviewProviderFindingV2,
+    MachineReviewProviderResultV2,
 )
 from app.services.submission import (
     create_submission,
     link_record,
-    record_llm_precheck_audit_event,
+    record_machine_review_v2_audit_event,
 )
 from app.services.trust import build_trust_fragment
 from app.services.trust.models import (
@@ -92,11 +95,11 @@ def _record_finding(
     *,
     record_id: int | None,
     record_type: str | None = "calculation",
-    severity: LLMFindingSeverity = LLMFindingSeverity.warning,
-) -> LLMFinding:
-    return LLMFinding(
+    severity: MachineReviewSeverity = MachineReviewSeverity.warning,
+) -> MachineReviewProviderFindingV2:
+    return MachineReviewProviderFindingV2(
         severity=severity,
-        category=LLMFindingCategory.provenance,
+        category=MachineReviewCategory.provenance,
         record_type=record_type,
         record_id=record_id,
         message="Missing source artifact summary.",
@@ -108,17 +111,18 @@ def _record_mr_event(
     db_session: Session,
     submission: Submission,
     *,
-    findings: tuple[LLMFinding, ...] = (),
-    label: LLMPrecheckLabel = LLMPrecheckLabel.warning,
+    findings: tuple[MachineReviewProviderFindingV2, ...] = (),
+    status: MachineReviewStatus = MachineReviewStatus.machine_screened_warning,
 ) -> None:
-    result = LLMPrecheckResult(
-        label=label,
+    result = MachineReviewProviderResultV2(
+        schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+        status=status,
         summary="advisory",
         findings=findings,
         model="fake_test/simple-v1",
         used_rag=False,
     )
-    record_llm_precheck_audit_event(
+    record_machine_review_v2_audit_event(
         db_session,
         submission=submission,
         result=result,
@@ -140,7 +144,7 @@ def _seed_submission_with_warning(db_session: Session, user_id: int) -> Submissi
     _record_mr_event(
         db_session,
         submission,
-        findings=(_record_finding(record_id=9001, severity=LLMFindingSeverity.warning),),
+        findings=(_record_finding(record_id=9001, severity=MachineReviewSeverity.warning),),
     )
     return submission
 

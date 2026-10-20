@@ -1,26 +1,22 @@
-"""Structure rule manifest 0.2.0 and the dual pin: 0.1.0 stays loadable for replay only.
+"""Structure rule manifest 0.2.0: the one audited manifest, its pin, and what replay refuses.
 
-A recorded decision names (rule, version, manifest digest) and replay holds all three. Manifest 0.2.0 changed every
-entry, so the live registry carries 0.2.0 and the 0.1.0 entries rest on the preserved 0.1.0 bytes, kept for replay and
-labelled historical, exactly as the kinetics XYG3 rule did for its 0.3.0 manifest. ``golden/structure_manifest_rules_0_1_0.json``
-is a manifest recorded under rule version 0.1.0 before the move; it is never regenerated.
+A recorded decision names (rule, version, manifest digest) and replay holds all three. Only the current version exists:
+a manifest naming any other rule version, or the current version over other bytes, is refused. The pin is the checksum
+mechanism: the registry refuses to load over bytes other than the ones the owner approved.
 """
 
 from __future__ import annotations
 
 import copy
 import hashlib
-import json
-from pathlib import Path
 
 import pytest
 import yaml
 
-from app.chemistry.structure_rules.manifest import MANIFEST_0_1_0_PATH, MANIFEST_PATH
+from app.chemistry.structure_rules.manifest import MANIFEST_PATH
 from app.services.structure_selection import (
     ReplayError,
     replay_matches,
-    replay_provenance,
     replay_structure_decision,
     select_entry_structures,
 )
@@ -28,15 +24,11 @@ from app.services.structure_selection import rules as rules_module
 from app.services.structure_selection.rules import (
     RULES_WITH_IMPLEMENTED_PREDICATES,
     STRUCTURE_RULE_MANIFEST_SHA256,
-    STRUCTURE_RULE_VERSION_PINS,
     default_rules,
-    replay_rules,
 )
 from tests.services.structure_selection.test_manifest import reseal
 from tests.services.structure_selection.test_rule_audit import RULE_IDS, _protocol_request, _two_protocols
 
-GOLDEN = Path(__file__).parent / "golden" / "structure_manifest_rules_0_1_0.json"
-PIN_0_1_0 = "cff519d81754e1cb42ac52d86d6a9988b7702455cc96d699f3d7c3413e535048"
 ACONFL = ("S-ACONFL-LNO-LARGE-BASIS", "S-ACONFL-DLPNO-F12-VERYTIGHT")
 
 #: Written out here, not imported, so editing the manifest and its definition together cannot hide a change.
@@ -51,134 +43,86 @@ EVIDENCE = {
 }
 
 
-def _golden() -> dict:
-    return json.loads(GOLDEN.read_text(encoding="utf-8"))
-
-
 def _rule_entries(manifest: dict) -> list[dict]:
     return manifest["decision"]["protocol"]["rules"]
 
 
-# -- the version <-> pin ledger -----------------------------------------------------------------------------------
+# -- the pin -----------------------------------------------------------------------------------------------------
 
 
-def test_each_rule_version_is_tied_to_one_manifest_digest_and_moving_a_pin_needs_a_new_version():
-    """The ledger is written out here, so editing a pin together with its test cannot hide a move."""
-    ledger = {
-        "0.1.0": "cff519d81754e1cb42ac52d86d6a9988b7702455cc96d699f3d7c3413e535048",
-        "0.2.0": "812301928688c9a921b70c8b1195881489b40078564483145a8dcb7d67b84621",
-    }
-    assert STRUCTURE_RULE_VERSION_PINS == ledger
-    assert STRUCTURE_RULE_MANIFEST_SHA256 == ledger["0.2.0"]
+def test_the_live_pin_is_written_out_and_is_the_shipped_bytes():
+    """Written out here, so editing the manifest and its pin together cannot hide a change."""
+    assert STRUCTURE_RULE_MANIFEST_SHA256 == "812301928688c9a921b70c8b1195881489b40078564483145a8dcb7d67b84621"
     # The file on disk hashes to the live pin: editing the manifest without moving the pin fails here.
-    assert hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest() == ledger["0.2.0"]
-    assert hashlib.sha256(MANIFEST_0_1_0_PATH.read_bytes()).hexdigest() == ledger["0.1.0"]
-    for rule in replay_rules():
-        assert rule.describe()["manifest_sha256"] == ledger[rule.version], (rule.rule_id, rule.version)
-    assert {r.version for r in replay_rules()} == set(ledger)
+    assert hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest() == STRUCTURE_RULE_MANIFEST_SHA256
+    for rule in default_rules():
+        assert rule.describe()["manifest_sha256"] == STRUCTURE_RULE_MANIFEST_SHA256, (rule.rule_id, rule.version)
 
 
-# -- new decisions are 0.2.0; 0.1.0 is replay only ---------------------------------------------------------------------
+def test_the_loader_refuses_bytes_under_the_wrong_pin():
+    from app.chemistry.structure_rules.manifest import ManifestError, load_structure_rule_manifest
+
+    with pytest.raises(ManifestError, match="pinned digest"):
+        load_structure_rule_manifest(expected_sha256="0" * 64)
 
 
-def test_the_live_registry_carries_only_0_2_0_and_replay_adds_0_1_0_for_the_same_rules():
+# -- the registry carries one version; a decision made now replays; anything else is refused ---------------------------
+
+
+def test_the_registry_carries_exactly_0_2_0():
     live = {(r.rule_id, r.version) for r in default_rules()}
     assert live == {(rule_id, "0.2.0") for rule_id in RULE_IDS}
-    replayable = {(r.rule_id, r.version) for r in replay_rules()}
-    assert replayable == live | {(rule_id, "0.1.0") for rule_id in RULE_IDS}
     assert {r.describe()["manifest_version"] for r in default_rules()} == {"0.2.0"}
 
 
-def test_a_decision_made_now_carries_0_2_0_and_its_digest_and_is_labelled_current(db_session):
+def _made_now(db_session) -> dict:
     world = _two_protocols(db_session)
-    result = select_entry_structures(
+    return select_entry_structures(
         db_session, entry_id=world.entry.id, request=_protocol_request(), require_snapshot=False
-    )
-    entries = _rule_entries(result.manifest)
+    ).manifest
+
+
+def test_a_decision_made_now_carries_0_2_0_and_its_digest_and_replays(db_session):
+    manifest = _made_now(db_session)
+    entries = _rule_entries(manifest)
     assert {e["rule_id"] for e in entries} == RULE_IDS
     assert {e["version"] for e in entries} == {"0.2.0"}
-    assert {e["manifest_sha256"] for e in entries} == {STRUCTURE_RULE_VERSION_PINS["0.2.0"]}
-    assert replay_matches(result.manifest)
-    label = replay_provenance(result.manifest)
-    assert label["kind"] == "current" and label["superseded_rule_versions"] == [] and label["reassessed"] is False
+    assert {e["manifest_sha256"] for e in entries} == {STRUCTURE_RULE_MANIFEST_SHA256}
+    assert replay_matches(manifest)
+    assert replay_structure_decision(manifest) == manifest["decision"]
 
 
-# -- a decision recorded under 0.1.0 still replays ----------------------------------------------------------------------
-
-
-def test_the_golden_manifest_really_was_recorded_under_0_1_0():
-    old = _golden()
-    entries = _rule_entries(old)
-    assert {e["rule_id"] for e in entries} == RULE_IDS
-    assert {e["version"] for e in entries} == {"0.1.0"}
-    assert {e["manifest_sha256"] for e in entries} == {PIN_0_1_0}
-
-
-def test_a_structure_manifest_recorded_under_0_1_0_replays_and_is_labelled_historical():
-    old = _golden()
-    assert replay_matches(old)
-    assert replay_structure_decision(old) == old["decision"]
-    label = replay_provenance(old)
-    assert label["kind"] == "historical" and label["reassessed"] is False
-    assert set(label["superseded_rule_versions"]) == {f"{rule_id} 0.1.0" for rule_id in RULE_IDS}
-    assert "kept for replay only" in label["statement"] and "0.1.0" in label["statement"]
-
-
-def test_the_0_1_0_rules_are_replay_only_inactive_and_unapproved():
-    old = [r for r in replay_rules() if r.version == "0.1.0"]
-    assert {r.rule_id for r in old} == RULE_IDS
-    assert not ({(r.rule_id, r.version) for r in old} & {(r.rule_id, r.version) for r in default_rules()})
-    for rule in old:
-        described = rule.describe()
-        assert rule.status == "inactive" and described["activation_approved"] is False
-        assert described["manifest_version"] == "0.1.0"
-    # The old blocker id is part of the 0.1.0 record and stays there; the live record has the renamed one.
-    old_ids = {b["id"] for r in old for b in r.describe()["activation_blockers"]}
-    new_ids = {b["id"] for r in default_rules() for b in r.describe()["activation_blockers"]}
-    assert "relative_energy_is_not_a_supported_quantity" in old_ids
-    assert "relative_energy_is_not_a_supported_quantity" not in new_ids
-
-
-def test_a_0_1_0_entry_naming_the_current_digest_is_refused():
-    forged = _golden()
-    _rule_entries(forged)[0]["manifest_sha256"] = STRUCTURE_RULE_MANIFEST_SHA256  # 0.1.0 does not rest on 0.2.0's bytes
+def test_an_entry_resting_on_other_bytes_is_refused(db_session):
+    forged = _made_now(db_session)
+    _rule_entries(forged)[0]["manifest_sha256"] = "0" * 64
     with pytest.raises(ReplayError) as exc:
         replay_structure_decision(reseal(forged))
     assert exc.value.code == "rule_manifest_changed"
 
 
-@pytest.mark.parametrize("version", ["0.1.9", "0.3.0", "9.9.9", ""])
-def test_a_version_that_never_existed_is_still_refused_naming_it(version):
-    renamed = copy.deepcopy(_golden())
+@pytest.mark.parametrize("version", ["0.1.0", "0.1.9", "0.3.0", "9.9.9", ""])
+def test_a_rule_version_this_release_does_not_carry_is_refused_naming_it(db_session, version):
+    """Kills: the retired 0.1.0 dual pin (or any replay-only version) being re-registered."""
+    renamed = copy.deepcopy(_made_now(db_session))
     _rule_entries(renamed)[0]["version"] = version
     with pytest.raises(ReplayError, match="rule_unavailable") as exc:
         replay_structure_decision(reseal(renamed))
     assert exc.value.code == "rule_unavailable" and version in str(exc.value)
 
 
-def test_the_loader_refuses_the_preserved_bytes_under_the_wrong_pin():
-    from app.chemistry.structure_rules.manifest import ManifestError, load_structure_rule_manifest
-
-    with pytest.raises(ManifestError, match="pinned digest"):
-        load_structure_rule_manifest(expected_sha256=STRUCTURE_RULE_MANIFEST_SHA256, path=MANIFEST_0_1_0_PATH)
-    with pytest.raises(ManifestError, match="pinned digest"):
-        load_structure_rule_manifest(expected_sha256=PIN_0_1_0)
-
-
 # -- nothing is activated -------------------------------------------------------------------------------------------
 
 
-def test_no_rule_of_either_version_is_activated_and_no_predicate_is_implemented():
+def test_no_rule_is_activated_and_no_predicate_is_implemented():
     assert RULES_WITH_IMPLEMENTED_PREDICATES == frozenset()
     assert rules_module.RULES_WITH_IMPLEMENTED_PREDICATES == frozenset()
-    for rule in replay_rules():
+    for rule in default_rules():
         described = rule.describe()
         assert described["activation_approved"] is False and described["owner_acceptance"] is None, rule.rule_id
         assert rule.status == "inactive" and rule.predicates_implemented is False, rule.rule_id
-    for path in (MANIFEST_PATH, MANIFEST_0_1_0_PATH):
-        raw = yaml.safe_load(path.read_bytes())
-        assert {r["activation_approved"] for r in raw["rules"]} == {False}
-        assert {r["owner_acceptance"] for r in raw["rules"]} == {None}
+    raw = yaml.safe_load(MANIFEST_PATH.read_bytes())
+    assert {r["activation_approved"] for r in raw["rules"]} == {False}
+    assert {r["owner_acceptance"] for r in raw["rules"]} == {None}
 
 
 # -- what 0.2.0 says -------------------------------------------------------------------------------------------------------
@@ -338,49 +282,13 @@ def test_the_unedited_manifest_still_parses_so_a_refusal_is_not_a_loader_that_re
     parse_structure_rule_manifest(_raw())
 
 
-# -- the live registry stays strict; only replay holds two versions of a rule ----------------------------------------------
+# -- the live registry is strict ------------------------------------------------------------------------------------------
 
 
-def test_the_live_validator_refuses_two_versions_of_one_rule():
-    from app.services.structure_selection.rules import active_rules, validate_rules
+def test_the_live_validator_refuses_two_entries_for_one_rule():
+    from app.services.structure_selection.rules import validate_rules
 
-    old = next(r for r in replay_rules() if r.version == "0.1.0")
-    new = next(r for r in default_rules() if r.rule_id == old.rule_id)
+    rules = default_rules()
     with pytest.raises(ValueError, match="rule names must be distinct"):
-        validate_rules([new, old])
-    with pytest.raises(ValueError, match="rule names must be distinct"):
-        active_rules(replay_rules())  # the live path never takes the replay registry
-    validate_rules(default_rules())
-
-
-def test_a_replay_manifest_naming_one_rule_at_two_versions_is_refused():
-    manifest = copy.deepcopy(_golden())
-    entries = _rule_entries(manifest)
-    twin = copy.deepcopy(entries[0])
-    twin["version"] = "0.2.0"
-    twin["manifest_sha256"] = STRUCTURE_RULE_MANIFEST_SHA256
-    entries.append(twin)
-    with pytest.raises(ReplayError) as exc:
-        replay_structure_decision(reseal(manifest))
-    assert exc.value.code == "rule_version_ambiguous"
-
-
-def test_the_replay_registry_itself_is_valid_one_version_at_a_time():
-    from app.services.structure_selection.rules import validate_replay_rules
-
-    validate_replay_rules(replay_rules())
-    dup = [*replay_rules(), replay_rules()[0]]
-    with pytest.raises(ValueError, match="rule names must be distinct"):
-        validate_replay_rules(dup)
-
-
-# -- a version in neither set is refused, never labelled ---------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("version", ["9.9.9", "0.1.9"])
-def test_replay_provenance_refuses_a_version_in_neither_set(version):
-    manifest = copy.deepcopy(_golden())
-    _rule_entries(manifest)[0]["version"] = version
-    with pytest.raises(ReplayError) as exc:
-        replay_provenance(reseal(manifest))
-    assert exc.value.code == "rule_unavailable" and version in str(exc.value)
+        validate_rules([*rules, rules[0]])
+    validate_rules(rules)

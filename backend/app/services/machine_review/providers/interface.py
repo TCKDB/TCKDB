@@ -12,10 +12,7 @@ side — adapter, mapping, inspection, curator tasks — already exists). It hol
 * :class:`MachineReviewProvider` — the provider protocol. Every provider returns
   a validated :class:`~app.services.machine_review.schemas.MachineReviewProviderResultV2`.
 * :class:`MachineReviewProviderConfigurationError` — raised when a configured
-  mode (cloud/local) is missing required configuration. A subclass of the v1
-  :class:`~app.services.llm_precheck.providers.LLMPrecheckConfigurationError` so
-  the existing service-layer ``except`` paths (which convert it to a failed
-  advisory result) keep working unchanged.
+  mode (cloud/local) is missing required configuration.
 * :func:`parse_machine_review_v2_payload` — the single strict-parse / trust
   boundary: untrusted raw model output (``str`` or ``dict``) in, a validated v2
   model out, or an exception the caller converts to a failed review.
@@ -40,7 +37,6 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict
 
-from app.services.llm_precheck.providers import LLMPrecheckConfigurationError
 from app.services.llm_precheck.schemas import LLMPrecheckContext
 from app.services.machine_review.schemas import (
     MachineReviewProviderResultV2,
@@ -48,13 +44,8 @@ from app.services.machine_review.schemas import (
 )
 
 
-class MachineReviewProviderConfigurationError(LLMPrecheckConfigurationError):
-    """Raised when a configured machine-review mode is not usable.
-
-    Subclasses the v1 :class:`LLMPrecheckConfigurationError` so any caller that
-    already catches the v1 error (converting it into an advisory failed result)
-    handles this one too, while machine-review code can still be specific.
-    """
+class MachineReviewProviderConfigurationError(RuntimeError):
+    """Raised when a configured machine-review mode is not usable."""
 
 
 class MachineReviewContext(BaseModel):

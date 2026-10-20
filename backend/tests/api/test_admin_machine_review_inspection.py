@@ -29,17 +29,20 @@ from app.db.models.common import (
     SubmissionRecordType,
 )
 from app.db.models.submission import Submission, SubmissionAuditEvent
-from app.services.llm_precheck.schemas import (
-    LLMFinding,
-    LLMFindingCategory,
-    LLMFindingSeverity,
-    LLMPrecheckLabel,
-    LLMPrecheckResult,
+from app.services.machine_review import (
+    MachineReviewCategory,
+    MachineReviewSeverity,
+    MachineReviewStatus,
+)
+from app.services.machine_review.schemas import (
+    MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    MachineReviewProviderFindingV2,
+    MachineReviewProviderResultV2,
 )
 from app.services.submission import (
     create_submission,
     link_record,
-    record_llm_precheck_audit_event,
+    record_machine_review_v2_audit_event,
 )
 from app.services.trust import build_trust_fragment
 from app.services.trust.models import (
@@ -77,11 +80,11 @@ def _record_finding(
     *,
     record_id: int | None,
     record_type: str | None = "calculation",
-    severity: LLMFindingSeverity = LLMFindingSeverity.warning,
-) -> LLMFinding:
-    return LLMFinding(
+    severity: MachineReviewSeverity = MachineReviewSeverity.warning,
+) -> MachineReviewProviderFindingV2:
+    return MachineReviewProviderFindingV2(
         severity=severity,
-        category=LLMFindingCategory.provenance,
+        category=MachineReviewCategory.provenance,
         record_type=record_type,
         record_id=record_id,
         message="Missing source artifact summary.",
@@ -93,18 +96,19 @@ def _record_mr_event(
     db_session: Session,
     submission: Submission,
     *,
-    findings: tuple[LLMFinding, ...] = (),
-    label: LLMPrecheckLabel = LLMPrecheckLabel.warning,
+    findings: tuple[MachineReviewProviderFindingV2, ...] = (),
+    status: MachineReviewStatus = MachineReviewStatus.machine_screened_warning,
 ) -> SubmissionAuditEvent:
     """Append a realistic machine-review (llm_precheck_recorded / llm) event."""
-    result = LLMPrecheckResult(
-        label=label,
+    result = MachineReviewProviderResultV2(
+        schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+        status=status,
         summary="advisory",
         findings=findings,
         model="fake_test/simple-v1",
         used_rag=False,
     )
-    event = record_llm_precheck_audit_event(
+    event = record_machine_review_v2_audit_event(
         db_session,
         submission=submission,
         result=result,
@@ -230,7 +234,7 @@ def test_admin_submission_machine_review_inspection_maps_record_finding(
     event = _record_mr_event(
         db_session,
         submission,
-        findings=(_record_finding(record_id=9001, severity=LLMFindingSeverity.warning),),
+        findings=(_record_finding(record_id=9001, severity=MachineReviewSeverity.warning),),
     )
     login_as(_api_admin_user)
 
@@ -266,9 +270,9 @@ def test_admin_submission_machine_review_inspection_does_not_fan_out_submission_
     _record_mr_event(
         db_session,
         submission,
-        label=LLMPrecheckLabel.needs_attention,
+        status=MachineReviewStatus.machine_screened_needs_attention,
         findings=(_record_finding(record_id=None, record_type=None,
-                                  severity=LLMFindingSeverity.critical),),
+                                  severity=MachineReviewSeverity.critical),),
     )
     login_as(_api_admin_user)
 
@@ -311,13 +315,13 @@ def test_admin_submission_machine_review_inspection_preserves_parse_warnings(
 ):
     """A malformed machine-review event degrades to a preserved parse warning."""
     submission = _new_submission(db_session, _api_admin_user)
-    # A raw, malformed llm_precheck_recorded event (label not in the enum).
+    # A raw, malformed llm_precheck_recorded event (status not in the enum).
     db_session.add(
         SubmissionAuditEvent(
             submission_id=submission.id,
             actor_kind=SubmissionActorKind.llm,
             event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
-            details_json={"label": "not-a-real-label", "findings": []},
+            details_json={"schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION, "status": "not-a-real-status", "findings": []},
         )
     )
     db_session.flush()
@@ -454,7 +458,7 @@ def test_inspection_resolves_the_public_ref_of_a_real_record(
             _record_finding(
                 record_id=species.id,
                 record_type="species",
-                severity=LLMFindingSeverity.warning,
+                severity=MachineReviewSeverity.warning,
             ),
         ),
     )
@@ -498,7 +502,7 @@ def test_inspection_never_publishes_the_old_name(
             _record_finding(
                 record_id=species.id,
                 record_type="species",
-                severity=LLMFindingSeverity.warning,
+                severity=MachineReviewSeverity.warning,
             ),
         ),
     )

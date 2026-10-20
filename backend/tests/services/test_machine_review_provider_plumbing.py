@@ -18,7 +18,6 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.config import Settings
-from app.services.llm_precheck.providers import LLMPrecheckConfigurationError
 from app.services.llm_precheck.schemas import LLMPrecheckContext, LLMRecordRef
 from app.services.machine_review.audit_adapter import (
     machine_review_result_from_audit_event,
@@ -180,7 +179,7 @@ def test_factory_does_not_expose_fake_as_deployer_mode():
         )
         try:
             provider = build_machine_review_provider(settings)
-        except (NotImplementedError, LLMPrecheckConfigurationError):
+        except (NotImplementedError, MachineReviewProviderConfigurationError):
             # cloud/local (not implemented) and test (refused) never build a fake.
             continue
         assert not isinstance(provider, FakeMachineReviewProvider)

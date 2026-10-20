@@ -1,11 +1,16 @@
 {
   "case": "transition_state_critical_creates_task",
-  "description": "A critical finding mapped to one linked transition_state_entry record. Maps to one record summary (machine_screened_needs_attention) and builds one needs_curator_review task. NOTE: the persisted precheck category vocabulary (LLMFindingCategory) does not include 'transition_state_validation'; the closest available token 'consistency' is used. The broader service-layer MachineReviewCategory has 'transition_state_validation' but the precheck source cannot emit it.",
+  "description": "A critical finding mapped to one linked transition_state_entry record. Maps to one record summary (machine_screened_needs_attention) and builds one needs_curator_review task. The finding uses the general category ``consistency``; the ``transition_state_validation`` category has its own case.",
   "linked_records": [
-    {"record_type": "transition_state_entry", "record_id": 9002, "role": "ts"}
+    {
+      "record_type": "transition_state_entry",
+      "record_id": 9002,
+      "role": "ts"
+    }
   ],
   "audit_event_details_json": {
-    "label": "needs_attention",
+    "schema_version": "machine_review_v2",
+    "status": "machine_screened_needs_attention",
     "summary": "A critical contradiction on a transition-state entry.",
     "findings": [
       {
@@ -14,12 +19,15 @@
         "record_type": "transition_state_entry",
         "record_id": 9002,
         "message": "Validated TS has contradictory imaginary-frequency evidence: marked validated yet the frequency set shows no single imaginary mode.",
-        "evidence_keys": ["ts.imaginary_frequency_count", "ts.validated"]
+        "evidence_keys": [
+          "ts.imaginary_frequency_count",
+          "ts.validated"
+        ]
       }
     ],
-    "model": "fake_test/simple-v1",
-    "used_rag": false,
-    "provider": "FakeLLMPrecheckProvider"
+    "model": "fake_test/machine-review-v2",
+    "provider": "FakeMachineReviewProvider",
+    "used_rag": false
   },
   "expected": {
     "record_summary_count": 1,

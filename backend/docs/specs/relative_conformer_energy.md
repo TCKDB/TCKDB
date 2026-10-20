@@ -102,13 +102,11 @@ and then the result, and refuses any difference. The digests are checksums, not 
 snapshot of the current data, not a retrieval of a stored answer. `tckdb_client` has no replay function for this
 manifest (nor for structure manifests).
 
-**Versions and old manifests.** `versions.relative_energy` is `"2"`. Version `"1"`, the first release of the route, did not
-record `value_geometry_ref` on a member. A version-1 manifest still replays: every assessment is recomputed and
-compared as before, and the recorded `result` is compared with the recomputed one **projected onto the fields version 1
-carried** (the member field removed, `relative_energy_version` set to `"1"`). The projection is keyed to the recorded
-version, never to what happens to be missing: a manifest that claims version 2 and lacks `value_geometry_ref` is refused
-with `result_mismatch`, as is any other difference. A version the release does not know is `unsupported_semantic_version`.
-A comparison manifest is made, and replayed, under version 2 only, and so are the two runs inside it.
+**Versions.** `versions.relative_energy` is `"3"`, and only the running version is read: a manifest of any other version
+is refused with `unsupported_semantic_version`, whatever fields it carries. A manifest that claims the current version and
+lacks a field (for instance `value_geometry_ref` on a member) is refused with `result_mismatch`, as is any other difference
+between the recorded and the recomputed result. A comparison manifest is made, and replayed, under the running version only,
+and so are the two runs inside it.
 
 ## Descriptive benchmark comparison (`/compare`)
 

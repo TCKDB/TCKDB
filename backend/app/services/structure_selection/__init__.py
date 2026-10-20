@@ -11,7 +11,6 @@ from app.services.structure_selection.decision import DECISION_VERSION, Structur
 from app.services.structure_selection.manifest import (
     ReplayError,
     replay_matches,
-    replay_provenance,
     replay_structure_assessment,
     replay_structure_decision,
 )
@@ -54,7 +53,6 @@ __all__ = [
     "assess_entry_structures",
     "decide_structures",
     "replay_matches",
-    "replay_provenance",
     "replay_structure_assessment",
     "replay_structure_decision",
     "select_entry_structures",

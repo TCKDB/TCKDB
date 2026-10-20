@@ -22,7 +22,6 @@ from app.services.relative_conformer_energy import (
     RelativeEnergyRequest,
     replay_comparison,
     replay_comparison_matches,
-    replay_relative_energies,
     run_comparison,
 )
 from app.services.relative_conformer_energy import compare as compare_module
@@ -685,7 +684,7 @@ def test_the_combined_comparison_manifest_is_held_to_the_size_bound(db_session):
     assert one < combined - 1
 
 
-def test_a_comparison_manifest_embedding_older_version_runs_is_refused_not_crashed(db_session):
+def test_a_comparison_manifest_embedding_runs_of_another_version_is_refused_not_crashed(db_session):
     world, cand_lot, (a, *_) = two_level_world(db_session)
     manifest = run_service(db_session, world, request_for(world, a, cand_lot, world.lot)).manifest
     old = copy.deepcopy(manifest)
@@ -695,8 +694,7 @@ def test_a_comparison_manifest_embedding_older_version_runs_is_refused_not_crash
             del member["value_geometry_ref"]
         run_["result"]["relative_energy_version"] = "1"
         run_["versions"]["relative_energy"] = "1"
-        old["runs"][name] = _resealed(run_)  # a valid version-1 run: it replays on its own
-        assert replay_relative_energies(old["runs"][name])
+        old["runs"][name] = _resealed(run_)
     with pytest.raises(ReplayError) as raised:  # not a KeyError from the pairing
         replay_comparison(_resealed(old))
     assert raised.value.code == "inconsistent_manifest"

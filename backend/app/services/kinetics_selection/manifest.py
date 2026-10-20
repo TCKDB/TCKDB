@@ -31,19 +31,18 @@ from app.services.kinetics_selection.models import (
     KineticsSubject,
     NormalizedKinetics,
 )
-from app.services.kinetics_selection.rules import KineticsRule, default_rules, replay_rules
+from app.services.kinetics_selection.rules import KineticsRule, default_rules
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
     check_supported,
-    describe_replay,
     semantics_block,
 )
 from app.services.trust.rubrics import COMPUTED_KINETICS_V2
 
-#: 2: a hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor (guard
-#: PR-3). A format-1 manifest, made before that, still replays: replay only compares the refs it is given with each other.
+#: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
+#: reads exactly this format; a manifest in any other is refused.
 MANIFEST_FORMAT_VERSION = 2
-SUPPORTED_MANIFEST_FORMATS = frozenset({1, MANIFEST_FORMAT_VERSION})
+SUPPORTED_MANIFEST_FORMATS = frozenset({MANIFEST_FORMAT_VERSION})
 
 
 class ReplayError(ValueError):
@@ -96,7 +95,7 @@ def build_manifest(result: KineticsAssessmentResult, decision: KineticsDecision)
 
 
 def _rules_for(manifest: dict[str, Any], rules: Sequence[KineticsRule] | None) -> tuple[KineticsRule, ...]:
-    registry = tuple(replay_rules() if rules is None else rules)
+    registry = tuple(default_rules() if rules is None else rules)
     available = {(r.rule_id, r.version): r for r in registry}
     used: list[KineticsRule] = []
     for entry in manifest["decision"]["rules"]:
@@ -181,34 +180,3 @@ def replay_matches(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] | 
     replayed = replay_decision(manifest, rules=rules)
     return replayed == manifest["decision"] and replayed["outcome"] == manifest["outcome"]
 
-
-def replay_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
-    """Label a replay as historical or current: the assessment semantics the manifest was made under versus today's.
-
-    :raises ReplayError: when the manifest records assessment semantics this release does not carry.
-    """
-    try:
-        label = describe_replay(
-            manifest, current=ASSESSMENT_SEMANTICS_VERSION, supported=SUPPORTED_ASSESSMENT_SEMANTICS
-        )
-    except UnsupportedAssessmentSemantics as exc:
-        raise ReplayError(str(exc)) from exc
-    live = {(r.rule_id, r.version) for r in default_rules()}
-    replayable = {(r.rule_id, r.version) for r in replay_rules()}
-    superseded = []
-    for e in manifest["decision"]["rules"]:
-        key = (e["rule_id"], e["version"])
-        if key in live:
-            continue
-        if key not in replayable:
-            # Neither live nor kept for replay: never labelled "historical", which would suggest it can be replayed.
-            raise ReplayError(f"rule {key[0]} version {key[1]} is not in the running registry")
-        superseded.append(f"{key[0]} {key[1]}")
-    label["superseded_rule_versions"] = superseded
-    if superseded:
-        label["kind"] = "historical"
-        label["statement"] += (
-            f" It names rule version(s) kept for replay only ({', '.join(superseded)}); "
-            "a fresh selection uses the current versions."
-        )
-    return label

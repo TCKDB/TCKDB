@@ -22,7 +22,6 @@ from app.services.relative_conformer_energy.compute import compute_relative_ener
 from app.services.relative_conformer_energy.models import (
     GROUP_BELOW_REVIEW_FLOOR,
     GROUP_TERMINAL_REVIEW_STATUS,
-    LEGACY_MEMBER_FIELDS,
     RELATIVE_ENERGY_VERSION,
     RelativeEnergyRequest,
     RelativeEnergyResult,
@@ -130,27 +129,11 @@ def _check_versions(manifest: dict[str, Any]) -> None:
         raise ReplayError("unsupported_manifest_format", f"unknown manifest format {manifest.get('manifest_format')!r}")
     versions = manifest.get("versions") or {}
     for name, value in _versions().items():
-        if name == "relative_energy" and versions.get(name) in LEGACY_MEMBER_FIELDS:
-            continue  # an earlier version this release still replays, by projection (see ``_project_to_recorded_version``)
         if versions.get(name) != value:
             raise ReplayError(
                 "unsupported_semantic_version",
                 f"manifest was made under {name} version {versions.get(name)!r}; this release replays {value!r}",
             )
-
-
-def _project_to_recorded_version(replayed: dict[str, Any], recorded_version: str) -> dict[str, Any]:
-    """The recomputed answer as the recorded version would have written it (the fields it carried, its version).
-
-    Only for a version in ``LEGACY_MEMBER_FIELDS``: for the current version this changes nothing, so a current-version
-    manifest that lacks a field still differs from the recomputed answer and is refused.
-    """
-    dropped = LEGACY_MEMBER_FIELDS.get(recorded_version)
-    if dropped is None:
-        return replayed
-    out = {**replayed, "relative_energy_version": recorded_version}
-    out["members"] = [{k: v for k, v in m.items() if k not in dropped} for m in replayed["members"]]
-    return out
 
 
 def _check_integrity(manifest: dict[str, Any]) -> None:
@@ -276,7 +259,7 @@ def replay_relative_energies(manifest: dict[str, Any]) -> dict[str, Any]:
         assessments=recomputed,
         calculations=by_ref,
     )
-    replayed = _project_to_recorded_version(_canon(result.to_dict()), manifest["versions"]["relative_energy"])
+    replayed = _canon(result.to_dict())
     if replayed != _canon(manifest["result"]) or result.outcome.value != manifest["outcome"]:
         raise ReplayError("result_mismatch", "the recorded answer is not what the recomputed assessments give")
     return replayed
@@ -293,9 +276,6 @@ def replay_matches(manifest: dict[str, Any]) -> bool:
 
 COMPARISON_MANIFEST_FORMAT = "relative_conformer_energy_comparison_manifest"
 COMPARISON_MANIFEST_FORMAT_VERSION = 1
-#: Earlier relative-energy versions a comparison manifest may record and still replay (its two runs are manifests of that
-#: version). Version 1 is not among them: a comparison never existed under it.
-_COMPARISON_LEGACY_VERSIONS = frozenset({"2"})
 _RUNS = ("candidate", "reference")
 
 
@@ -350,8 +330,6 @@ def replay_comparison(manifest: dict[str, Any]) -> dict[str, Any]:
         raise ReplayError("unsupported_manifest_format", f"unknown manifest format {manifest.get('manifest_format')!r}")
     versions = manifest.get("versions") or {}
     for name, value in {**_versions(), "comparison": COMPARISON_VERSION}.items():
-        if name == "relative_energy" and versions.get(name) in _COMPARISON_LEGACY_VERSIONS:
-            continue  # the previous version, whose runs are version-2 manifests (checked against it below)
         if versions.get(name) != value:
             raise ReplayError(
                 "unsupported_semantic_version",
@@ -382,8 +360,8 @@ def replay_comparison(manifest: dict[str, Any]) -> dict[str, Any]:
         if first["population"].get(key) != second["population"].get(key):
             raise ReplayError("inconsistent_manifest", "the two runs were not made over one population")
     for name in _RUNS:
-        # Both runs are made under the comparison's own relative-energy version (the current one, or the previous one).
-        if runs[name].get("versions") != _canon({**_versions(), "relative_energy": versions["relative_energy"]}):
+        # Both runs are made under the comparison's own versions, which are the running ones (checked above).
+        if runs[name].get("versions") != _canon(_versions()):
             raise ReplayError("inconsistent_manifest", f"the {name} run was made under another semantic version")
     replayed = {name: replay_relative_energies(runs[name]) for name in _RUNS}
     result = _canon(

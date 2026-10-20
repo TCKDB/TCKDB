@@ -40,13 +40,6 @@ from app.db.models.common import (
 )
 from app.db.models.record_review import RecordReview
 from app.db.models.submission import Submission, SubmissionAuditEvent
-from app.services.llm_precheck.schemas import (
-    LLMFinding,
-    LLMFindingCategory,
-    LLMFindingSeverity,
-    LLMPrecheckLabel,
-    LLMPrecheckResult,
-)
 from app.services.machine_review.providers import (
     FakeMachineReviewProvider,
     MachineReviewContext,
@@ -62,7 +55,6 @@ from app.services.machine_review.schemas import (
 from app.services.submission import (
     create_submission,
     link_record,
-    record_llm_precheck_audit_event,
     record_machine_review_v2_audit_event,
 )
 from app.services.trust import build_trust_fragment
@@ -422,14 +414,18 @@ def test_persisted_v2_malformed_result_becomes_parse_warning(
 
 
 # --------------------------------------------------------------------------- #
-# Legacy v1: marker-less payload still works
+# Retired contract: a marker-less payload is an unknown format, refused
 # --------------------------------------------------------------------------- #
 
 
-def test_persisted_v1_legacy_event_still_inspects_and_creates_task(
+def test_a_marker_less_event_is_an_unknown_format_and_creates_nothing(
     client, db_session, login_as, _api_admin_user
 ):
-    """A marker-less v1 LLMPrecheckResult event still maps and creates a task."""
+    """The retired precheck (v1) payload carries no ``schema_version``: it is refused, not translated.
+
+    Kills: the no-marker branch (label -> status translation) coming back. The payload is well-formed in the retired
+    contract and links a real record, so only the format decides the outcome.
+    """
     submission = _new_submission(db_session, _api_admin_user)
     link_record(
         db_session,
@@ -438,42 +434,38 @@ def test_persisted_v1_legacy_event_still_inspects_and_creates_task(
         record_id=9001,
         role="primary",
     )
-    v1_result = LLMPrecheckResult(
-        label=LLMPrecheckLabel.warning,
-        summary="legacy advisory",
-        findings=(
-            LLMFinding(
-                severity=LLMFindingSeverity.warning,
-                category=LLMFindingCategory.provenance,
-                record_type="calculation",
-                record_id=9001,
-                message="Missing source artifact summary.",
-                evidence_keys=("missing_checks.source_artifact_present",),
-            ),
-        ),
-        model="fake_test/simple-v1",
-        used_rag=False,
-    )
-    event = record_llm_precheck_audit_event(
-        db_session,
-        submission=submission,
-        result=v1_result,
-        provider="FakeLLMPrecheckProvider",
+    db_session.add(
+        SubmissionAuditEvent(
+            submission_id=submission.id,
+            actor_kind=SubmissionActorKind.llm,
+            event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
+            details_json={
+                "label": "warning",
+                "summary": "retired advisory",
+                "findings": [
+                    {
+                        "severity": "warning",
+                        "category": "provenance",
+                        "record_type": "calculation",
+                        "record_id": 9001,
+                        "message": "Missing source artifact summary.",
+                        "evidence_keys": ["missing_checks.source_artifact_present"],
+                    }
+                ],
+                "model": "retired/model",
+                "used_rag": False,
+            },
+        )
     )
     db_session.flush()
 
-    # The legacy payload has no v2 marker -> it takes the adapter's v1 path.
-    assert "schema_version" not in event.details_json
-
     login_as(_api_admin_user)
     body = client.get(_inspect_url(submission.id)).json()
-    assert len(body["record_summaries"]) == 1
-    assert body["record_summaries"][0]["latest_summary"]["status"] == (
-        "machine_screened_warning"
-    )
+    assert body["record_summaries"] == []
+    assert len(body["parse_warnings"]) == 1
 
     build = client.post(_build_url(submission.id)).json()
-    assert build["created_count"] == 1
+    assert build["created_count"] == 0
 
 
 # --------------------------------------------------------------------------- #

@@ -58,15 +58,13 @@ from app.services.structure_selection.models import (
 from app.services.structure_selection.rules import (
     RULES_VERSION,
     StructureRule,
-    replay_only_keys,
-    replay_rules,
-    validate_replay_rules,
+    default_rules,
 )
 
-#: 2: a hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor (guard
-#: PR-3). A format-1 manifest, made before that, still replays: replay only compares the refs it is given with each other.
+#: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
+#: reads exactly this format; a manifest in any other is refused.
 MANIFEST_FORMAT_VERSION = 2
-SUPPORTED_MANIFEST_FORMATS = frozenset({1, MANIFEST_FORMAT_VERSION})
+SUPPORTED_MANIFEST_FORMATS = frozenset({MANIFEST_FORMAT_VERSION})
 
 INTEGRITY_NOTE = (
     "sha256 checksums over the canonical JSON of each normalised input and of the whole manifest; they detect "
@@ -307,16 +305,10 @@ def replay_structure_assessment(manifest: dict[str, Any]) -> list[StructureAsses
 
 
 def _rules_for(manifest: dict[str, Any], rules: Sequence[StructureRule] | None) -> tuple[StructureRule, ...]:
-    # A replay may name a rule version this release no longer applies live (kept loadable for replay only); a version
-    # in neither list is refused below.
-    registry = tuple(replay_rules() if rules is None else rules)
-    validate_replay_rules(registry)
+    # A rule version this release does not carry is refused below.
+    registry = tuple(default_rules() if rules is None else rules)
     available = {(r.rule_id, r.version): r for r in registry}
     protocol = manifest["decision"].get("protocol") or {}
-    named = [e["rule_id"] for e in protocol.get("rules", [])]
-    if len(set(named)) != len(named):
-        # A live decision never holds two versions of one rule, and its supersession is keyed by rule id.
-        raise ReplayError("rule_version_ambiguous", "the manifest names one rule at more than one version")
     used: list[StructureRule] = []
     for entry in protocol.get("rules", []):
         key = (entry["rule_id"], entry["version"])
@@ -363,42 +355,3 @@ def replay_matches(manifest: dict[str, Any], *, rules: Sequence[StructureRule] |
     replayed = replay_structure_decision(manifest, rules=rules)
     return _canon(replayed) == _canon(manifest["decision"]) and replayed["outcome"] == manifest["outcome"]
 
-
-def replay_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
-    """Label a replay as historical or current: the rule versions the manifest was made under versus today's registry.
-
-    A manifest that names a rule version in the replay-only set is historical: replay reproduces what that decision
-    recorded, and a fresh selection uses the current versions. A (rule, version) in neither the live nor the replay-only
-    set is never labelled: it is refused. Pure; it does not replay or reassess anything.
-
-    The kinetics fields ``recorded_assessment_semantics`` and ``current_assessment_semantics`` do not apply: a structure
-    manifest records no assessment-semantics block, only per-rule versions and digests, and those are what is checked here.
-
-    :raises ReplayError: ``rule_unavailable`` when a named rule version is in neither set.
-    """
-    replay_only = replay_only_keys()
-    protocol = manifest["decision"].get("protocol") or {}
-    superseded = []
-    for e in protocol.get("rules", []):
-        key = (e["rule_id"], e["version"])
-        if key in replay_only:
-            superseded.append(f"{key[0]} {key[1]}")
-        elif key not in {(r.rule_id, r.version) for r in replay_rules()}:
-            raise ReplayError("rule_unavailable", f"rule {key[0]} version {key[1]} is not in the running registry")
-    statement = (
-        "Replay reproduces the decision from the inputs recorded in the manifest. It does not reassess any candidate "
-        "and is not an endorsement under today's rules"
-    )
-    if superseded:
-        statement += (
-            f". It names rule version(s) kept for replay only ({', '.join(superseded)}); "
-            "a fresh selection uses the current versions."
-        )
-    else:
-        statement += "."
-    return {
-        "kind": "historical" if superseded else "current",
-        "reassessed": False,
-        "superseded_rule_versions": superseded,
-        "statement": statement,
-    }

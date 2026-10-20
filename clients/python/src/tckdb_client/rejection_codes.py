@@ -388,6 +388,7 @@ class RejectionCode(str, Enum):
     UNKNOWN_ELEMENT_SYMBOL = "unknown_element_symbol"
     UNKNOWN_INCLUDE_TOKEN = "unknown_include_token"
     UNKNOWN_KINETICS_DETERMINATION_REF = "unknown_kinetics_determination_ref"
+    UNKNOWN_MANIFEST_SCHEMA = "unknown_manifest_schema"
     UNKNOWN_NETWORK_CHANNEL = "unknown_network_channel"
     UNKNOWN_NETWORK_KINETICS_REF = "unknown_network_kinetics_ref"
     UNKNOWN_NETWORK_SOLVE_REF = "unknown_network_solve_ref"
@@ -719,6 +720,7 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STATMECH_SUBJECT_NOT_EXACTLY_ONE,
         RejectionCode.SUPERSEDED_RECORD_NOT_APPROVABLE,
         RejectionCode.UNIQUE_CONFLICT,
+        RejectionCode.UNKNOWN_MANIFEST_SCHEMA,
         RejectionCode.USERNAME_TAKEN,
     }
 )
@@ -1040,6 +1042,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNKNOWN_ELEMENT_SYMBOL: frozenset({422}),
     RejectionCode.UNKNOWN_INCLUDE_TOKEN: frozenset({422}),
     RejectionCode.UNKNOWN_KINETICS_DETERMINATION_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_MANIFEST_SCHEMA: frozenset({409}),
     RejectionCode.UNKNOWN_NETWORK_CHANNEL: frozenset({404}),
     RejectionCode.UNKNOWN_NETWORK_KINETICS_REF: frozenset({404}),
     RejectionCode.UNKNOWN_NETWORK_SOLVE_REF: frozenset({404}),

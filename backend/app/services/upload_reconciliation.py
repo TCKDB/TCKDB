@@ -227,7 +227,6 @@ def build_ess_result_from_upload(
         meta=meta,
         freq=freq,
         symmetry=symmetry,
-        parser_version="upload_payload_v1",
     )
 
 

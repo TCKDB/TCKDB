@@ -117,11 +117,6 @@ from app.services.geometry_resolution import resolve_geometry_payload
 
 logger = logging.getLogger(__name__)
 
-#: Bumped when the parsing contract changes. Not currently stored anywhere
-#: (``calculation_input_geometry`` carries no parser-version column), kept
-#: for parity with the sibling extractors and for log lines.
-INPUT_GEOMETRY_PARSER_VERSION = "input_geometry_v1"
-
 #: ``opt`` only -- see the module docstring. ``freq``/``sp`` already get a
 #: non-degenerate input fallback and cannot reach the state this repairs.
 _ELIGIBLE_CALC_TYPES = (CalculationType.opt,)
@@ -1171,7 +1166,6 @@ def extract_and_link_input_geometry_from_stored_artifacts(
 
 
 __all__ = [
-    "INPUT_GEOMETRY_PARSER_VERSION",
     "InputGeometryOutcome",
     "InputGeometryOutcomeKind",
     "InputGeometryParseAction",

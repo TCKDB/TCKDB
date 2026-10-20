@@ -9,9 +9,7 @@ submissions and zero machine-review audit events, so the curator queue that
 reads those events was empty by construction rather than because nothing
 needed a curator. This module is the call that was missing.
 
-It is the v2 counterpart of
-:func:`~app.services.llm_precheck.service.run_llm_precheck_for_submission` and
-keeps that function's two load-bearing properties.
+It keeps the two load-bearing properties of the precheck runner it replaced.
 
 **Advisory, and only that.** A run writes exactly one row: one
 ``submission_audit_event``. It does not touch ``submission.status``, the

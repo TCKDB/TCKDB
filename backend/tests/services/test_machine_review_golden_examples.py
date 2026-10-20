@@ -21,10 +21,7 @@ for exact wall-clock values; the assertions are on statuses, counts, mapping/
 parse diagnostics, task workflow state, and fingerprint stability.
 
 See `backend/docs/specs/machine_review_golden_examples.md` for the per-case
-narrative. NB: the persisted precheck vocabulary (`LLMFindingCategory`) is a
-subset of the service-layer `MachineReviewCategory`, so the transition-state
-case uses `consistency` (the precheck path cannot emit
-`transition_state_validation`).
+narrative.
 """
 
 from __future__ import annotations
@@ -77,9 +74,9 @@ _CASES = (
     "malformed_payload_parse_warning_only",
 )
 
-# v2 provider-contract golden cases (machine_review_provider_contract_v2.md).
-# They run through the SAME pipeline helpers; the adapter dispatches on the
-# schema_version marker in the payload.
+# Provider-contract golden cases (machine_review_provider_contract_v2.md). They
+# run through the SAME pipeline helpers; the adapter requires the schema_version
+# marker in the payload.
 _V2_CASES = (
     "v2_transition_state_validation_critical_with_recommended_action",
     "v2_schema_gap_warning_with_recommended_action",
@@ -349,16 +346,22 @@ def test_v2_transition_state_case_closes_v1_gap(db_session, _api_test_user):
     )
 
 
-def test_legacy_v1_payload_without_marker_uses_v1_path(db_session, _api_test_user):
-    """A payload with no schema_version still takes the v1 translate path and
-    still creates a task — v2 is additive, not a replacement."""
+def test_a_payload_without_the_format_marker_is_refused_and_creates_no_task(db_session, _api_test_user):
+    """A payload with no ``schema_version`` is an unknown format: a parse warning, no summary, no task.
+
+    The marker-less shape belonged to the retired precheck contract. Everything else about this payload is well
+    formed and addresses a linked record, so only the missing marker decides the outcome.
+    """
     fixture = _load("kinetics_warning_creates_task")
-    assert "schema_version" not in fixture["audit_event_details_json"]
+    fixture["audit_event_details_json"] = {
+        k: v for k, v in fixture["audit_event_details_json"].items() if k != "schema_version"
+    }
     submission = _seed(db_session, _api_test_user, fixture)
     inspection = _inspect(db_session, submission)
-    assert len(inspection.record_inspections) == 1
+    assert inspection.record_inspections == ()
+    assert len(inspection.parse_warnings) == 1
     result = build_curator_tasks_for_submission(db_session, inspection=inspection)
-    assert result.created_count == 1
+    assert result.created_count == 0
 
 
 def test_v2_provider_field_supersedes_sibling_provider(db_session, _api_test_user):
