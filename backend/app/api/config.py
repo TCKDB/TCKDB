@@ -13,12 +13,6 @@ from pydantic_settings import BaseSettings
 
 DeploymentMode = Literal["local", "shared_private", "hosted_public"]
 AIReviewAssistantMode = Literal["off", "cloud", "local", "test"]
-LLMPrecheckProviderName = Literal[
-    "disabled",
-    "fake_test",
-    "online_api",
-    "local_http",
-]
 
 
 class Settings(BaseSettings):
@@ -234,7 +228,6 @@ class Settings(BaseSettings):
     # no API key, no local model, no network call, no Docker service, and
     # no dependency for uploads, reads, validation, or deterministic trust.
     ai_review_assistant_mode: AIReviewAssistantMode = "off"
-    llm_precheck_provider: LLMPrecheckProviderName = "disabled"
     llm_precheck_model: str | None = None
     llm_precheck_api_key_env: str | None = None
     llm_precheck_base_url: str | None = None

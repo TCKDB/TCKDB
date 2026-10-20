@@ -29,6 +29,9 @@ Pre-release, so only the current version of anything is read. Removed, with thei
 - A manifest of a retired format, an assessment block that is missing or foreign, a rule version this release does not carry, or a machine-review payload without the current `schema_version` marker is now refused.
 - `GET /submissions/{id}/ai-review-summary` reads the event's `status` (it read a `label` key no current event wrote, so `label` was always null).
 - Thermo replay now refuses a rule resting on a different audited manifest digest, as kinetics, statmech and network already did.
+- **Deploy note:** a release frozen under the retired `tckdb.dataset_release.v1` tag makes `verify_release` (and any re-render) raise `unknown_manifest_schema`. Releases frozen under the old tag stop verifying until PR-4's migration rewrites the stored tags; there is no compatibility path.
+- Removed environment variable: `LLM_PRECHECK_PROVIDER` (setting `llm_precheck_provider`, type `LLMPrecheckProviderName`). Nothing read it after the precheck provider factory was deleted; `AI_REVIEW_ASSISTANT_MODE` selects the provider.
+- `verify_release` now has a test that fails if the recorded `content_sha256` is not compared with the stored document.
 - Schema impact: none. No migration. No new environment variable.
 
 ## One way to version things: `VersionRef`, `VersionRegistry`, and a guard (2026-10-19)

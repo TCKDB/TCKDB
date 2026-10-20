@@ -80,9 +80,9 @@ these two causes.
 geometry fail is now eligible, and fresh answers can differ from earlier ones. Each assessment carries
 `evidence_rubric:<rubric>@<version>` in its advisory list, and each manifest records a structured `assessment_semantics` block
 (`version`, `evidence_rubric`, `source_findings`). The selection `policy` version covers only the decision procedure; assessment
-semantics are versioned separately (`ASSESSMENT_SEMANTICS_VERSION`, `2`). A manifest made before the block existed is read as
-`pre_v2_assessment`; replay reads the recorded eligibility and re-runs the ordering, labels itself historical or current
-(`replay_provenance`), never reassesses, and refuses semantics it does not carry. See
+semantics are versioned separately (`ASSESSMENT_SEMANTICS_VERSION`, `2`). A manifest with no block, or a malformed or foreign
+one, is refused. Replay reads the recorded eligibility and re-runs the ordering, never reassesses, and refuses semantics it does
+not carry. See
 `tests/services/thermo_selection/test_trust_correction_h298.py` for the exact probes.
 
 ## Recording a structure-evidence finding (curators and admins)
@@ -640,17 +640,12 @@ falling back.
   reviews stay `current`.
 - There is no automatic or bulk re-review. Re-review stays the existing per-record admin action; a fresh pass from the fake
   producer would carry no information.
-- Runbook: (1) restore the latest backup into a scratch database; (2) with this code, run
-  `PYTHONPATH=. python scripts/ops/statmech_trust_owner_report.py --database-url <scratch url>` from `backend`; (3) read
-  `species_entry_unchanged`, the `transition_state_entry` rows of `badge_transitions` and `machine_review_currency`, and the
-  species rows of `machine_review_currency`. `species_entry_unchanged` checks **routing only**: it compares the live router
-  with the species rubric run explicitly, both from this code, so `false` is a defect in the change but `true` does not show
-  that the shared checks are untouched (an edit to a check both rubrics share moves both sides together). The check anchored
-  to the code on `main` is that **every `species_entry` row of `machine_review_currency` reads `current`**: stored species
-  reviews were made by the old code, so a moved species badge turns them stale (a species record with no stored review is not covered by this). The code-level guard for species badges is the
-  frozen-literal test `tests/services/test_trust_statmech_species_frozen.py`; (4) decide, then deploy. The report is read-only by construction (a
-  `REPEATABLE READ`, `READ ONLY` transaction; no apply mode) and prints counts only. Record the commit, the rubric name and
-  version, and the report output with the deploy.
+- Checks that guard species badges. There is no operator report script: the routing is pinned by
+  `tests/services/test_trust_ts_statmech_owner_rubric.py` (the owner router and the stale classification of a review stored under
+  the other rubric), and species badges are pinned by the frozen-literal test `tests/services/test_trust_statmech_species_frozen.py`.
+  After a deploy, the check to read on a live database is the machine-review currency of each species-owned statmech record: a
+  species review stored by earlier code reads `current`, and a moved species badge would turn it stale.
+
 
 ### 9.4 `computed_transport_v1`
 

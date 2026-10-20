@@ -179,6 +179,8 @@ def test_the_recorded_outcome_is_compared_as_well_as_the_decision(scenario):
     "path, value",
     [
         (("manifest_format_version",), 99),
+        # The previous format (2) is retired with its reader: refused like any format this release does not carry.
+        (("manifest_format_version",), 2),
         (("policy", "version"), "999"),
         (("policy", "name"), "kinetics_method_preferred"),
         (("policy", "assessment_version"), "999"),

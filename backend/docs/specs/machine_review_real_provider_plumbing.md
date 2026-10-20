@@ -18,9 +18,9 @@ plumbing (handoff §11 "Option 2"), and whoever later turns on a real model.
   (`MachineReviewProviderResultV2` / `MachineReviewProviderFindingV2` /
   `MACHINE_REVIEW_V2_SCHEMA_VERSION`) that real providers must emit. This spec
   is the *producer* in front of that contract; that spec is the *wire shape*.
-- `optional_llm_precheck.md` — the v1 advisory precheck plumbing
-  (`AI_REVIEW_ASSISTANT_MODE`, `LLM_PRECHECK_*` settings, the
-  `llm_precheck/` package, the failure contract) this spec reuses and extends.
+- `optional_llm_precheck.md` — the advisory precheck plumbing
+  (`AI_REVIEW_ASSISTANT_MODE`, `LLM_PRECHECK_*` settings, the context builder in
+  `llm_precheck/`, the failure contract) this spec reuses and extends.
 - `machine_review_handoff.md` — the workstream checkpoint; this spec fills in
   its §11 "Option 2: implement real provider plumbing behind off/cloud/local".
 - `provisional_machine_review.md` — the machine-review vocabulary and the
@@ -32,28 +32,31 @@ plumbing (handoff §11 "Option 2"), and whoever later turns on a real model.
 
 ## 1. Problem statement
 
-The machine-review **consumer** side is complete and tested: a v2 payload on a
-`submission_audit_event` flows through `audit_adapter.py` (version dispatch) →
+The machine-review **consumer** side is complete and tested: a payload on a
+`submission_audit_event` flows through `audit_adapter.py` (which requires the
+`schema_version` marker) →
 `MachineReviewResult` → `map_findings_to_submission_records` →
 `RecordMachineReview` → `MachineReviewRecordSummary` → admin inspection →
 `build_curator_tasks_for_submission` → the admin curator-task API.
 
-What does **not** exist is a real **producer**. Today the only producers are:
+The producer is the provider layer in front of that contract. The only providers
+are:
 
 ```text
-DisabledLLMPrecheckProvider   off; returns a v1 not_run result
-FakeLLMPrecheckProvider       test-only; returns a deterministic v1 result
-build_llm_precheck_provider   raises LLMPrecheckConfigurationError for
-                              online_api / local_http ("not implemented yet")
+DisabledMachineReviewProvider   off; returns not_run, writes nothing
+FakeMachineReviewProvider       test-only; deterministic output, never selectable
+                                through AI_REVIEW_ASSISTANT_MODE
+cloud / local                   built by build_machine_review_provider(settings);
+                                missing configuration raises
+                                MachineReviewProviderConfigurationError
 ```
 
-Both real modes are stubs that refuse to build (`providers.py:108-115`). This
-spec designs the producer so that, when implemented later:
+This spec describes the producer so that:
 
 ```text
 Off    -> no model call, no API key, no extra service (writes nothing)
-Cloud  -> external model API emits a v2 payload, validated, persisted
-Local  -> local HTTP model server emits a v2 payload, validated, persisted
+Cloud  -> external model API emits a payload, validated, persisted
+Local  -> local HTTP model server emits a payload, validated, persisted
 ```
 
 It does **not** implement any of it. It answers the eight questions the handoff
@@ -65,7 +68,7 @@ Where should provider implementations live?
 What prompt/input context should providers receive?
 What exact output schema must they return?
 How are failures handled?
-How is v1 legacy support preserved?
+What happens to a payload in any other format?
 What remains fake/test-only?
 What must be tested before turning any of it on?
 ```
@@ -97,8 +100,8 @@ that is out of scope and a sign the producer is reaching past its boundary.
 ## 3. Mode model (Off / Cloud / Local)
 
 Reuse the existing user-facing mode model from `optional_llm_precheck.md` §3 — it
-is already in `config.py` as `AI_REVIEW_ASSISTANT_MODE` and already drives
-`resolve_llm_precheck_provider_name()`:
+is already in `config.py` as `AI_REVIEW_ASSISTANT_MODE` and drives
+`build_machine_review_provider()`:
 
 | User mode | Meaning | Requirements | Internal provider |
 |---|---|---|---|
@@ -137,7 +140,7 @@ Rationale:
 
 ```text
 The LLM_PRECHECK_* settings already exist, are typed, are documented inline,
-  and are the settings the v1 producer already consults.
+  and are the settings the producer consults.
 A second MACHINE_REVIEW_* namespace would be two config surfaces to keep
   aligned, two sets of env vars every deployment's .env / compose / Pi config
   would have to learn, and a silent-drift risk (set one, forget the other).
@@ -158,7 +161,6 @@ truth.
 
 ```text
 AI_REVIEW_ASSISTANT_MODE       off|cloud|local|test   high-level switch
-LLM_PRECHECK_PROVIDER          disabled|fake_test|online_api|local_http
 LLM_PRECHECK_MODEL             model name passed to the provider
 LLM_PRECHECK_API_KEY_ENV       NAME of the env var holding the secret (cloud)
 LLM_PRECHECK_BASE_URL          model server / gateway base URL (local; cloud opt)
@@ -174,8 +176,8 @@ Forward-map of the prompt's suggested names to the reused settings (for the
 deferred rename only — do **not** add these now):
 
 ```text
-MACHINE_REVIEW_CLOUD_PROVIDER   ~ (new) cloud vendor selector; today folded into
-                                  LLM_PRECHECK_PROVIDER=online_api + base_url
+MACHINE_REVIEW_CLOUD_PROVIDER   ~ (new) cloud vendor selector; today the cloud mode
+                                  plus LLM_PRECHECK_BASE_URL
 MACHINE_REVIEW_MODEL            -> LLM_PRECHECK_MODEL
 MACHINE_REVIEW_API_KEY_ENV      -> LLM_PRECHECK_API_KEY_ENV
 MACHINE_REVIEW_BASE_URL         -> LLM_PRECHECK_BASE_URL
@@ -210,9 +212,9 @@ Deployment-level disable -> a deployment may force Off regardless of provider
           settings (e.g. hosted_public default). Off always wins.
 ```
 
-Missing required config raises `LLMPrecheckConfigurationError` (the existing
-exception in `providers.py:19`), which the service already converts into a
-**failed review**, never a crash mid-upload (`service.py:76-85`). The startup
+Missing required config raises `MachineReviewProviderConfigurationError`, which
+`run_machine_review_for_submission` converts into a **failed review**, never a
+crash mid-upload. The startup
 check surfaces the same error earlier so operators see it at deploy time.
 
 ---
@@ -221,60 +223,25 @@ check surfaces the same error earlier so operators see it at deploy time.
 
 ### 5.1 Decision: a v2-native provider package beside the v2 contract
 
-Real providers emit the **machine-review** v2 contract, which lives in
-`app/services/machine_review/schemas.py`. Put the producer there too, in a new
-sub-package, and leave the v1 `app/services/llm_precheck/` package **frozen** as
-the legacy source-contract producer:
+Real providers emit the **machine-review** provider contract, which lives in
+`app/services/machine_review/schemas.py`. The producer lives beside it in
+`app/services/machine_review/providers/` (`interface.py` for the protocol, the
+strict parser and the error type; `disabled.py`, `fake.py`, `cloud.py`,
+`factory.py`), with the orchestration in
+`app/services/machine_review/run.py` (`run_machine_review_for_submission`). The
+`app/services/llm_precheck/` package now holds only the compact submission
+context and its builder.
 
-```text
-app/services/machine_review/providers/
-  __init__.py
-  base.py        MachineReviewProvider Protocol + provider errors (re-uses
-                 LLMPrecheckConfigurationError or a thin machine-review alias)
-  disabled.py    DisabledMachineReviewProvider (off; emits a v2 not_run/failed-
-                 free result, or signals "write nothing" — see §9)
-  fake.py        FakeMachineReviewProvider (TEST-ONLY; deterministic v2 output)
-  cloud.py       CloudMachineReviewProvider (online_api; STUB until §10 step 6)
-  local.py       LocalMachineReviewProvider (local_http; STUB until §10 step 6)
-  factory.py     build_machine_review_provider(settings) -> MachineReviewProvider
-                 (mode -> provider, with the §4.3 config validation)
-  parsing.py     parse_machine_review_v2_payload(raw) -> MachineReviewProviderResultV2
-                 (the single strict-parse / trust boundary, §7)
-app/services/machine_review/context.py
-  MachineReviewContext + build_machine_review_context(session, submission_id)
-app/services/machine_review/provider_service.py
-  run_machine_review_for_submission(...)  (orchestration, §8/§9)
-```
+The `llm_precheck` context builder (`build_llm_precheck_context`) is the seed for
+the machine-review context; §7 says how it is wrapped.
 
-Why a new package rather than extending `llm_precheck/`:
+### 5.2 Persistence
 
-```text
-v1 llm_precheck is the LEGACY source contract (LLMPrecheckResult). It stays
-  valid forever (v2 contract spec §2) and should not grow v2 concerns.
-v2-native producers belong next to the v2 schemas they import and emit.
-The adapter already treats v1 and v2 as two parsed shapes; mirroring that on
-  the producer side (two packages, one per contract) keeps the split honest.
-```
-
-The existing `llm_precheck` context builder (`build_llm_precheck_context`) is the
-seed for `build_machine_review_context`; §7 says whether to reuse or wrap it.
-
-### 5.2 Migration note for the orchestration layer
-
-Today `run_llm_precheck_for_submission` (`service.py`) builds a v1 provider and
-persists a v1 `LLMPrecheckResult`. The new `run_machine_review_for_submission`
-builds a v2 provider and persists a v2 payload via the **same**
-`record_llm_precheck_audit_event` helper (`submission.py:300`) — the event kind
-(`llm_precheck_recorded`) and actor (`llm`) are unchanged; only the
-`details_json` shape carries `schema_version="machine_review_v2"`. The v1 service
-stays for backward compatibility and is not deleted.
-
-`record_llm_precheck_audit_event` currently types its `result` param as
-`LLMPrecheckResult` and serializes via `llm_precheck_result_to_details_json`. To
-persist v2 it needs a small, additive change: accept a pre-serialized
-`details_json` dict (the v2 `model_dump(mode="json")`) **or** overload on a v2
-result type. This is the only existing helper that needs touching, and the change
-is additive — v1 callers are unaffected.
+`run_machine_review_for_submission` persists the validated payload through
+`record_machine_review_v2_audit_event` (`app/services/submission.py`). The event
+kind (`llm_precheck_recorded`) and actor (`llm`) are as before, and
+`details_json` carries `schema_version="machine_review_v2"`, the marker the
+adapter requires.
 
 ---
 
@@ -329,10 +296,10 @@ The disabled and fake providers skip the network but still return a valid
 
 ## 7. Context builder
 
-### 7.1 Decision: a new `MachineReviewContext`, seeded from the v1 builder
+### 7.1 Decision: a `MachineReviewContext`, seeded from the precheck context builder
 
 The prompt names `MachineReviewContext`, and v2 providers want richer context
-than the current `LLMPrecheckContext` carries (it has submission metadata +
+than `LLMPrecheckContext` carries (it has submission metadata +
 record_refs + an empty `trust_summaries` placeholder, `schemas.py:65-80`). Define
 a `MachineReviewContext` that **extends** that shape with the deterministic
 evidence the reviewer is supposed to reason over, and build it by enriching the
@@ -467,9 +434,8 @@ record review). The prompt reduces noise; the schema + mapping guarantee safety.
 
 ## 9. Failure behavior
 
-`run_machine_review_for_submission` mirrors the existing v1 failure contract
-(`service.py`, `optional_llm_precheck.md` §13) but synthesizes a **v2**
-`machine_review_failed` payload so the audit trail stays v2-native:
+`run_machine_review_for_submission` synthesizes a `machine_review_failed`
+payload on every failure path, so the audit trail stays in one format:
 
 | Scenario | Behavior |
 |---|---|
@@ -478,7 +444,7 @@ record review). The prompt reduces noise; the schema + mapping guarantee safety.
 | Provider error (network, auth, 5xx) | Same: v2 `machine_review_failed`, persisted, upload unaffected. |
 | Malformed / non-JSON / extra-field / `used_rag=true` output | `parse_machine_review_v2_payload` raises → caught → v2 `machine_review_failed`. Upload unaffected. |
 | Context too large after compaction | v2 `machine_review_failed` with an explanatory summary (§7.4). |
-| Config error (missing key/base URL) | `LLMPrecheckConfigurationError` → v2 `machine_review_failed`; also caught at startup (§4.3). |
+| Config error (missing key/base URL) | `MachineReviewProviderConfigurationError` → `machine_review_failed`; also caught at startup (§4.3). |
 | Submission has no linked records | `not_run` or a v2 `machine_screened_pass` with a summary saying there was nothing to inspect. |
 | DB rollback | Audit event rolls back with the surrounding transaction; no separate durability guarantee in MVP. |
 
@@ -495,7 +461,7 @@ a failed review is visible only as an advisory audit event
 A `machine_review_failed` payload, by the adapter's existing rules, does **not**
 become a record review or a record summary (handoff §5, "failed review payloads
 do NOT become record reviews"), so it never seeds a curator task — exactly the
-behavior the v1 path already has.
+behavior of every failure path.
 
 ---
 
@@ -515,8 +481,7 @@ schema_version = "machine_review_v2"   inside details_json (the version marker)
 No record_machine_review table.
 No automatic task creation on upload/precheck (build remains admin-triggered).
 No new SubmissionAuditEventKind value (that would be a deployed-enum migration).
-The only code change to the persistence layer is the additive
-  record_llm_precheck_audit_event signature tweak in §5.2 to accept a v2 payload.
+The persistence layer is the one recorder in §5.2.
 ```
 
 The future `llm_precheck_recorded` → `machine_review_recorded` event-kind rename
@@ -570,7 +535,7 @@ v2 payload flows through inspection and (when admin-triggered) creates a
   curator task for warning/critical exact-mapped findings
 provider NEVER mutates submission.status, RecordReviewStatus, scientific records,
   evidence, or public trust
-v1 legacy producer + golden v1 fixtures still pass unchanged
+golden fixtures (all in the current format) still pass unchanged
 deterministic trust values are byte-identical before and after a real review
 context excludes raw artifacts / coordinates / secrets by default; includes
   deterministic evidence output
@@ -578,37 +543,31 @@ invented record_ref in a finding does not map (diagnostic only), never a record
   review or task
 ```
 
-These extend (not replace) the v1 test list in `optional_llm_precheck.md` §17 and
-the invariants proven in `machine_review_handoff.md` §5.
+These extend the test list in `optional_llm_precheck.md` §17 and the invariants proven in `machine_review_handoff.md` §5.
 
 ---
 
-## 13. v1 legacy support
+## 13. Other formats are refused
 
-Preserved exactly as the v2 contract spec §2 requires:
+The adapter reads exactly one format: a payload carrying
+`schema_version="machine_review_v2"`.
 
 ```text
-The v1 llm_precheck package and LLMPrecheckResult contract stay valid forever.
-Existing llm_precheck_recorded events with no schema_version still parse via the
-  adapter's v1 path. No backfill, no rewrite.
-run_llm_precheck_for_submission (the v1 producer) is NOT deleted; it remains the
-  producer for the v1 contract. The new v2 producer is additive.
-A submission may carry a mix of v1 and v2 audit events over time; each event is
-  parsed by its own version (adapter dispatch, already implemented).
-The fake v1 provider and v1 golden fixtures keep their tests green.
+A payload with no schema_version, or with another one, is an unknown format:
+  no result, one parse warning. Nothing is translated or guessed.
+The retired precheck contract (a `label`, no marker) and its providers, runner
+  and result models were deleted; only LLMPrecheckContext and its builder remain.
+Golden fixtures under backend/tests/fixtures/machine_review/ are all in the
+  current format.
 ```
-
-When a real provider is turned on, new events are v2; old events stay v1; both
-converge on `MachineReviewResult` downstream.
 
 ---
 
 ## 14. What stays fake / test-only
 
 ```text
-FakeLLMPrecheckProvider (v1)            test/dev only; golden v1 fixtures.
-FakeMachineReviewProvider (v2, new)     test/dev only; deterministic v2 output
-                                        for golden v2 fixtures + adapter tests.
+FakeMachineReviewProvider               test/dev only; deterministic output
+                                        for golden fixtures + adapter tests.
 AI_REVIEW_ASSISTANT_MODE=test           the only way to select a fake provider by
                                         config; never a user-facing mode.
 The golden fixtures under backend/tests/fixtures/machine_review/ remain the

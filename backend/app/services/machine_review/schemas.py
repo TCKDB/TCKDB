@@ -137,14 +137,11 @@ class MachineReviewResult(BaseModel):
 # v2 provider output contract (machine_review_provider_contract_v2.md)
 # ---------------------------------------------------------------------------
 #
-# The v1 source contract (``app/services/llm_precheck/schemas.py``:
-# ``LLMPrecheckResult`` / ``LLMFinding``) is narrower than this machine-review
-# vocabulary: it has only a precheck ``label`` (translated to a status), no
-# ``curator_priority``, no ``recommended_action``, and a smaller category set.
-# The v2 provider payload speaks this vocabulary natively, so the adapter can
-# validate it directly with no label->status translation. v2 is detected by a
-# single root marker (``schema_version``); its absence means a legacy v1
-# payload. See ``machine_review_provider_contract_v2.md`` §3/§4/§7.
+# The provider payload speaks the machine-review vocabulary natively: a
+# ``status``, a ``curator_priority``, ``recommended_action`` and the full
+# category set. It is identified by a single root marker (``schema_version``),
+# which the audit adapter requires. See ``machine_review_provider_contract_v2.md``
+# §3/§4/§7.
 
 #: Root marker value identifying a v2 machine-review provider payload.
 MACHINE_REVIEW_V2_SCHEMA_VERSION = "machine_review_v2"
@@ -175,15 +172,15 @@ class MachineReviewProviderFindingV2(BaseModel):
 
 
 class MachineReviewProviderResultV2(BaseModel):
-    """Versioned provider payload for native machine-review output (v2).
+    """Versioned provider payload for machine-review output.
 
-    Carries the machine-review ``status`` directly (no precheck ``label`` to
-    translate), an optional ``curator_priority``, a first-class ``provider``
-    field (in v1 the provider is a sibling key on the audit event), and the
-    full :class:`MachineReviewCategory` vocabulary on findings. Schema-validated
+    Carries the machine-review ``status`` directly, an optional
+    ``curator_priority``, a first-class ``provider`` field, and the full
+    :class:`MachineReviewCategory` vocabulary on findings. Schema-validated
     before any use; ``extra="forbid"`` rejects mutation payloads and
-    ``used_rag`` is constrained to ``False`` (RAG is a non-goal). Backward
-    compatible: v1 payloads have no ``schema_version`` and take the legacy path.
+    ``used_rag`` is constrained to ``False`` (RAG is a non-goal). The root
+    ``schema_version`` marker is required: a payload without it, or with
+    another value, is refused.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")

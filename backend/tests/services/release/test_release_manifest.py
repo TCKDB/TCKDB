@@ -405,6 +405,55 @@ def test_manifest_document_is_rebuildable_from_its_snapshot_columns(
     assert rebuilt["rights"]["basis_kinds"] == {"depositor_agreement": 1}
 
 
+def test_verify_release_reports_a_stored_document_whose_digest_no_longer_matches(
+    db_session, draft_release, curator, thermo_candidates, species_entry
+):
+    """The recorded ``content_sha256`` is actually checked against the stored document.
+
+    The row is immutable in the database, so the mismatch is made on the loaded object and never flushed. Only the
+    digest differs: the document still matches the snapshot columns and the artifacts still match theirs, so the one
+    problem reported can only come from the digest comparison.
+
+    Kills: the ``content_sha256`` comparison removed from ``verify_release`` (every other release test stays green)."""
+    chosen, _other = thermo_candidates
+    manifest = _publish_with_selection(db_session, draft_release, curator, chosen, species_entry)
+    assert verify_release(db_session, draft_release).ok
+    recorded = manifest.content_sha256
+    try:
+        with db_session.no_autoflush:
+            manifest.content_sha256 = "0" * 64
+            report = verify_release(db_session, draft_release)
+    finally:
+        db_session.expire(manifest)
+    assert not report.ok
+    assert len(report.problems) == 1
+    assert report.problems[0].startswith("manifest: stored document hashes to")
+    assert report.content_sha256_recorded == "0" * 64
+    assert report.content_sha256_recomputed == recorded
+    assert verify_release(db_session, draft_release).ok
+
+
+def test_a_release_frozen_under_a_retired_tag_cannot_be_verified(
+    db_session, draft_release, curator, thermo_candidates, species_entry
+):
+    """``verify_release`` raises for a row whose tag no renderer is registered for.
+
+    A release frozen under the retired ``v1`` tag stops verifying until the stored tags are migrated; no
+    compatibility path renders it."""
+    from app.services.release.manifest import ReleaseManifestStateConflict
+
+    chosen, _other = thermo_candidates
+    manifest = _publish_with_selection(db_session, draft_release, curator, chosen, species_entry)
+    try:
+        with db_session.no_autoflush:
+            manifest.manifest_schema = "tckdb.dataset_release.v1"
+            with pytest.raises(ReleaseManifestStateConflict, match="unknown_manifest_schema"):
+                verify_release(db_session, draft_release)
+    finally:
+        db_session.expire(manifest)
+    assert verify_release(db_session, draft_release).ok
+
+
 def test_a_manifest_row_with_an_unknown_tag_is_refused(
     db_session, draft_release, curator, thermo_candidates, species_entry
 ):
