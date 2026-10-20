@@ -11,6 +11,11 @@ which turns it into ``unresolved``.
 Versions. ``ASSESSMENT_VERSION`` is the semantics of eligibility (what blocks, what is unresolved, what is
 unsupported) and ``NORMALIZER_VERSION`` the semantics of recipe normalisation (which facts establish a comparable
 cohort). A change to either is a new version, and a decision manifest records the versions it was made under.
+
+The one change to what blocks that kept ``ASSESSMENT_VERSION`` unchanged: a correction that continues a role invalidation or a
+contradictory characterization keeps that claim's role and scope (``live_findings``). No stored manifest can contain such a
+chain, because no finding could be written through the API before the route that records them existed, so there is no earlier
+reading to disagree with.
 """
 
 from __future__ import annotations

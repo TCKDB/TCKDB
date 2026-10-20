@@ -33,7 +33,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError
@@ -52,7 +52,9 @@ from app.db.models.literature import Literature
 from app.db.models.structure_determination import StructureDetermination, StructureEvidenceFinding
 from app.services.public_refs import PREFIXES
 from app.services.scientific_read.handles import is_ref_handle
-from app.services.structure_selection.models import SUPPORTED_FINDING_VERSIONS
+from app.services.structure_selection.assessment import live_findings
+from app.services.structure_selection.loader import to_finding_facts
+from app.services.structure_selection.models import SUPPORTED_FINDING_VERSIONS, FindingFacts
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +114,12 @@ def _resolve_reference(session: Session, model: Any, ref: str, *, field: str) ->
             context={"field": field, "ref": ref},
         )
     return row_id
+
+
+def _require_read_committed(session: Session) -> None:
+    level = session.execute(text("SHOW transaction_isolation")).scalar()
+    if level != "read committed":  # pragma: no cover - the write session is always READ COMMITTED
+        raise RuntimeError(f"a finding correction needs READ COMMITTED isolation, not {level!r}")
 
 
 def append_structure_evidence_finding(
@@ -197,7 +205,10 @@ def append_structure_evidence_finding(
         supersedes_id = _resolve_reference(
             session, StructureEvidenceFinding, supersedes_finding_ref, field="supersedes_finding_ref"
         )
-        # Serialise two curators correcting the same finding: the second sees it already settled.
+        # Serialise two curators correcting the same finding: the second sees it already settled. This is sound only under
+        # READ COMMITTED: the waiting transaction's next statement must see the row the first one committed. Under
+        # REPEATABLE READ both would read the pre-lock snapshot, find nothing settled, and both would insert.
+        _require_read_committed(session)
         target = session.scalar(
             select(StructureEvidenceFinding).where(StructureEvidenceFinding.id == supersedes_id).with_for_update()
         )
@@ -278,8 +289,28 @@ def list_findings_for_subject(
     return scope, present_findings(session, rows, subject_ref)
 
 
+def _applied_readings(session: Session, rows, subject_ref: str) -> dict[str, FindingFacts]:
+    """What the selections apply for each finding of the subject that is in force, by finding ref.
+
+    Computed with the selections' own ``live_findings`` over the subject's complete set of findings (not just the page), so
+    this read cannot drift from the effect: a correction that continues a role invalidation shows the role it bars.
+    """
+    if not rows:
+        return {}
+    scope, subject_id = _subject_column(rows[0])
+    _model, column = _SUBJECTS[scope]
+    every = session.scalars(
+        select(StructureEvidenceFinding)
+        .where(getattr(StructureEvidenceFinding, column) == subject_id)
+        .order_by(StructureEvidenceFinding.id)
+    ).all()
+    facts = to_finding_facts(session, list(every), {(scope.value, subject_id): subject_ref})
+    return {f.finding_ref: f for f in live_findings(facts)}
+
+
 def present_findings(session: Session, rows, subject_ref: str) -> list[dict]:
     """The read form of findings about ``subject_ref``: public refs only, and whether each is still in force."""
+    applied = _applied_readings(session, rows, subject_ref)
     ids = {r.id for r in rows}
     settlers: dict[int, str] = {}
     if ids:
@@ -324,6 +355,8 @@ def present_findings(session: Session, rows, subject_ref: str) -> list[dict]:
             "rationale": r.rationale,
             "source_calculation_ref": calc_refs.get(r.source_calculation_id),
             "literature_ref": lit_refs.get(r.literature_id),
+            "applied_kind": applied[r.public_ref].kind if r.public_ref in applied else None,
+            "applied_role": applied[r.public_ref].role if r.public_ref in applied else None,
             "supersedes_finding_ref": by_id.get(r.supersedes_finding_id),
             "settled_by_finding_ref": settlers.get(r.id),
             "in_force": r.id not in settlers,

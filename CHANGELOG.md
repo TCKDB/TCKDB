@@ -53,6 +53,9 @@ dataset must never require a code release.
 - **Selection behaviour changes only for a corrected role invalidation or contradictory characterization.** Selections already read the newest ruling in
   force of each chain, and a finding no correction names reads exactly as before. What changes: a correction that continues a `role_invalidation` or a
   `contradictory_characterization` now keeps that claim's role and scope instead of reading as a whole-subject failure that bars every role.
+  No stored manifest can contain such a chain, because no finding could be written through the API before this route existed, so the
+  eligibility semantics are not re-versioned. The curator `GET` shows both the recorded `kind`/`role` and the `applied_kind`/`applied_role`
+  that selections use.
 - An in-force `invalidates` finding excludes the evidence from H298, kinetics and structure selection through the route, and a correction
   restores or reopens it. Before this, only tests that inserted rows directly could do either.
 - Twelve new coded refusals, all prefixed `structure_finding_`; see the generated error-code docs.

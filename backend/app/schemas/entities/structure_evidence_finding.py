@@ -66,6 +66,13 @@ class StructureEvidenceFindingRead(ORMBaseSchema):
     rationale: str
     source_calculation_ref: str | None
     literature_ref: str | None
+    applied_kind: StructureFindingKind | None = Field(
+        description="The kind selections apply for this ruling while it is in force: its own kind, except that a correction "
+        "continuing a role invalidation or a contradictory characterization applies that claim's kind. Null once replaced."
+    )
+    applied_role: StructureSourceRole | None = Field(
+        description="The role selections apply this ruling to; null when it bars every role, or once replaced."
+    )
     supersedes_finding_ref: str | None
     settled_by_finding_ref: str | None = Field(
         description="The adjudication that corrected this finding, if one did. A settled finding is history and has no "

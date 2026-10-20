@@ -56106,6 +56106,28 @@
       "StructureEvidenceFindingRead": {
         "description": "One recorded finding, by public refs only.",
         "properties": {
+          "applied_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StructureFindingKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The kind selections apply for this ruling while it is in force: its own kind, except that a correction continuing a role invalidation or a contradictory characterization applies that claim's kind. Null once replaced."
+          },
+          "applied_role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StructureSourceRole-Output"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The role selections apply this ruling to; null when it bars every role, or once replaced."
+          },
           "authority": {
             "$ref": "#/components/schemas/StructureFindingAuthority"
           },
@@ -56207,6 +56229,8 @@
           "rationale",
           "source_calculation_ref",
           "literature_ref",
+          "applied_kind",
+          "applied_role",
           "supersedes_finding_ref",
           "settled_by_finding_ref",
           "in_force",

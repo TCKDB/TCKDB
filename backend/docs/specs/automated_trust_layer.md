@@ -118,7 +118,8 @@ standing, and a single append changes the effect, so there is no moment in which
 replaced ruling reads `in_force: false` and names the adjudication that replaced it. A finding that no correction names reads as it always did.
 
 **Reads.** `GET /api/v1/curation/structure-evidence-findings?subject_ref=...` (curator or admin) lists the findings about one subject with
-whether each is still in force and what settled it. It is a curator surface: curators adjudicate records the curated profile hides, so it is
+whether each is still in force and what settled it, and for each ruling in force the kind and role selections apply (`applied_kind`,
+`applied_role`), which for a correction continuing a role invalidation differ from the kind and role it was recorded with. It is a curator surface: curators adjudicate records the curated profile hides, so it is
 not profile-filtered. The public surface is unchanged: findings reach readers through the selection documents, which already withhold a
 hidden record's refs (the finding of a hidden subject is not loaded under the curated profile, so neither it nor the subject is named).
 

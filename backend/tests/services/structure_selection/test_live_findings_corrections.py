@@ -35,7 +35,7 @@ def _main_live_findings(findings):
 
 
 def _worlds_without_a_verdict_carrying_correction() -> list[tuple[FindingFacts, ...]]:
-    """Every finding-set shape that has no correction ruling ``invalidates`` or ``unresolved``, including withdrawals."""
+    """Every finding-set shape that reads as on main: no correction of a scoped claim, plus verdict-carrying corrections of the rest."""
     worlds: list[tuple[FindingFacts, ...]] = [()]
     for kind, verdict, authority, version in itertools.product(
         (*KINDS, "role_invalidation", "a_kind_this_release_cannot_read"),
@@ -65,12 +65,40 @@ def _worlds_without_a_verdict_carrying_correction() -> list[tuple[FindingFacts, 
     b = finding_facts("sfnd_b", kind="role_invalidation", role="energy")
     c = finding_facts("sfnd_c", kind="adjudication", verdict="does_not_invalidate", supersedes="sfnd_a")
     worlds.append((a, b, c))
+    worlds.extend(_verdict_carrying_corrections_of_unscoped_claims())
     return worlds
 
 
-def test_every_world_without_a_verdict_carrying_correction_reads_exactly_as_on_main():
+def _verdict_carrying_corrections_of_unscoped_claims() -> list[tuple[FindingFacts, ...]]:
+    """Corrections that rule ``invalidates`` or ``unresolved`` over identity, state or path claims: the cases that read as on main.
+
+    A head over one of these keeps its own kind, ``adjudication``, which already blocked or left the product unresolved; only a
+    head over a scoped claim (role invalidation, contradictory characterization) changes. Included: one correction, chains of
+    corrections of corrections, a chain that returns to the first verdict, and two corrections of one ruling.
+    """
+    worlds: list[tuple[FindingFacts, ...]] = []
+    verdicts = ("invalidates", "unresolved", "does_not_invalidate")
+    for kind in ("identity_incompatibility", "state_incompatibility", "path_incompatibility"):
+        root = finding_facts("sfnd_0", kind=kind)
+        for length in (1, 2, 3):
+            for chain_verdicts in itertools.product(verdicts, repeat=length):
+                links = [
+                    finding_facts(f"sfnd_{i}", kind="adjudication", verdict=v, supersedes=f"sfnd_{i - 1}")
+                    for i, v in enumerate(chain_verdicts, start=1)
+                ]
+                worlds.append((root, *links))
+                worlds.append((*reversed(links), root))
+        for first, second in itertools.product(verdicts, repeat=2):  # two corrections of the same ruling
+            one = finding_facts("sfnd_1", kind="adjudication", verdict=first, supersedes="sfnd_0")
+            two = finding_facts("sfnd_2", kind="adjudication", verdict=second, supersedes="sfnd_0")
+            worlds.append((root, one, two))
+            worlds.append((two, one, root))
+    return worlds
+
+
+def test_every_world_except_a_corrected_scoped_claim_reads_exactly_as_on_main():
     worlds = _worlds_without_a_verdict_carrying_correction()
-    assert len(worlds) > 200  # the product above is not accidentally empty
+    assert len(worlds) > 1000  # the product above is not accidentally empty
     for world in worlds:
         assert live_findings(world) == _main_live_findings(world), world
 

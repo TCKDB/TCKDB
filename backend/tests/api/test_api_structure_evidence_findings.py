@@ -579,13 +579,41 @@ def test_under_curated_a_finding_on_a_hidden_source_is_not_applied_and_its_refs_
     assert hidden_calc.public_ref not in hidden_text and finding not in hidden_text
 
 
-def test_the_curator_read_is_not_filtered_by_a_read_profile(client, db_session, curator):
-    """Curators adjudicate records the curated profile hides, so this curator surface ignores ``profile``: the finding
-    about a never-reviewed calculation is listed with or without ``profile=curated``."""
+def test_the_curator_read_lists_findings_about_a_record_no_public_read_shows(client, db_session, curator):
+    """Curators adjudicate records the curated profile hides, so this curator surface lists the finding about a
+    never-reviewed calculation. (It is not under the scientific router, so no read profile reaches it; that is by design,
+    and the test pins that the listing is not narrowed by review state.)"""
     world = make_world(db_session)
     hidden = world.sp("h", -76.9, status=None)
     world.settle()
     ref = ref_of(calc_finding(client, hidden))
-    for params in ({}, {"profile": "curated"}):
-        rows = client.get(URL, params={"subject_ref": hidden.public_ref, **params}).json()["findings"]
-        assert [r["finding_ref"] for r in rows] == [ref], params
+    rows = client.get(URL, params={"subject_ref": hidden.public_ref}).json()["findings"]
+    assert [r["finding_ref"] for r in rows] == [ref]
+
+
+def test_the_curator_read_shows_the_kind_and_role_the_selections_apply(client, db_session, curator):
+    entry = species_entry_for(db_session, "Methane")
+    energy_user = make_thermo(db_session, entry, proto=protocol("g4"))
+    curvature_user = make_thermo(db_session, entry, proto=protocol("g3"))
+    shared = make_calculation(db_session, type=CalculationType.opt, species_entry_id=entry.id)
+    attach_opt_result(db_session, calculation=shared, final_energy_hartree=-76.4, converged=True)
+    attach_output_geometry(db_session, calculation=shared, geometry=make_geometry(db_session))
+    attach_thermo_source_calculation(db_session, thermo=energy_user, calculation=shared, role=ThermoCalculationRole.sp)
+    attach_thermo_source_calculation(db_session, thermo=curvature_user, calculation=shared, role=ThermoCalculationRole.freq)
+    db_session.flush()
+    energy = ref_of(post(client, scope="calculation", subject_ref=shared.public_ref, kind="role_invalidation", role="energy"))
+    withdrawn = ref_of(correct(client, shared, energy, "does_not_invalidate"))
+    reinstated = ref_of(correct(client, shared, withdrawn, "invalidates"))
+    rows = {r["finding_ref"]: r for r in client.get(URL, params={"subject_ref": shared.public_ref}).json()["findings"]}
+    head = rows[reinstated]
+    assert (head["kind"], head["role"]) == ("adjudication", None)  # as recorded
+    assert (head["applied_kind"], head["applied_role"]) == ("role_invalidation", "energy")  # as applied
+    assert rows[energy]["applied_kind"] is None and rows[withdrawn]["applied_kind"] is None  # replaced: nothing applies
+    blocked = {a.thermo_ref: bool(a.blocking) for a in _h298(db_session, entry).assessments}
+    assert blocked == {energy_user.public_ref: True, curvature_user.public_ref: False}  # the read says energy only, and so it is
+
+    identity = make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
+    first = ref_of(calc_finding(client, identity))
+    upheld = ref_of(correct(client, identity, first, "invalidates"))
+    row = next(r for r in client.get(URL, params={"subject_ref": identity.public_ref}).json()["findings"] if r["finding_ref"] == upheld)
+    assert (row["applied_kind"], row["applied_role"]) == ("adjudication", None)  # an unscoped claim applies as an adjudication
