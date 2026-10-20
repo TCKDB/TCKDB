@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 
-from app.services.parser_registry import PARSERS
+from app.parser_registry import PARSERS
 
 PARSER = PARSERS.get("psi4_parameters")
 

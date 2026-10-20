@@ -29,7 +29,7 @@ from app.importers.cccbdb.diagnostics.form_discovery import (
     DiscoveredForm,
     discover_forms,
 )
-from app.services.parser_registry import PARSERS
+from app.parser_registry import PARSERS
 
 DIAGNOSTIC_NAME = "cccbdb_resolver_diagnostics"
 DIAGNOSTIC_VERSION = str(PARSERS.get(DIAGNOSTIC_NAME).version)

@@ -10,7 +10,7 @@ See ``backend/docs/specs/cccbdb_importer.md`` for the design spec and
 
 from __future__ import annotations
 
-from app.services.parser_registry import PARSERS
+from app.parser_registry import PARSERS
 
 PARSER_NAME = "cccbdb_experimental_species"
 PARSER_VERSION = str(PARSERS.get(PARSER_NAME).version)

@@ -71,13 +71,13 @@ from tckdb_schemas.fragments.calculation import composite_arithmetic_tolerance_h
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.chemistry.method_names import method_identity_key
+from app.parser_registry import PARSERS
 from app.services.ess_software_detection import detect_software_from_text
 from app.services.gaussian_composite_parser import (
     GaussianCompositeSummary,
     implied_electronic_energy_hartree,
     parse_gaussian_composite_summary,
 )
-from app.services.parser_registry import PARSERS
 
 #: The version of the composite-log parsing and comparison that draws a conclusion. Bump it when a fix to
 #: :mod:`app.services.gaussian_composite_parser` or to this comparison could change what a log concludes: the

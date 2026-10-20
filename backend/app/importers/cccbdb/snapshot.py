@@ -51,7 +51,7 @@ from app.importers.cccbdb.parsers import (
     parse_molecule_catalog_page,
     parse_species_all_data_page,
 )
-from app.services.parser_registry import PARSERS
+from app.parser_registry import PARSERS
 
 SNAPSHOT_VERSION = 1
 BUILDER_NAME = "cccbdb_payload_builder"

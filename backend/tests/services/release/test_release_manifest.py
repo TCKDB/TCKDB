@@ -11,8 +11,8 @@ import hashlib
 import json
 
 import pytest
-from tckdb_schemas.fragments.version import VersionRef
 from sqlalchemy import text
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import ReadProfile, SubmissionRecordType
 from app.services.release import versions

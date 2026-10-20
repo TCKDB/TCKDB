@@ -19,6 +19,7 @@ from app.chemistry.kinetics_rules.xyg3_barrier_manifest import MANIFEST_PATH as 
 from app.chemistry.network_rules.manifest import MANIFEST_PATH as NETWORK_PATH
 from app.chemistry.structure_rules.manifest import MANIFEST_PATH as STRUCTURE_PATH
 from app.chemistry.thermo_rules.e1_manifest import MANIFEST_PATH as E1_PATH
+from app.parser_registry import PARSERS
 from app.services import document_formats
 from app.services.kinetics_selection.manifest import MANIFEST_FORMATS as KINETICS_FORMATS
 from app.services.kinetics_selection.models import ASSESSMENT_SEMANTICS as KINETICS_SEMANTICS
@@ -28,7 +29,6 @@ from app.services.machine_review.audit_adapter import PAYLOAD_FORMATS
 from app.services.network_selection.manifest import MANIFEST_FORMATS as NETWORK_FORMATS
 from app.services.network_selection.rules import NETWORK_RULE_MANIFEST_SHA256
 from app.services.network_selection.rules import default_rules_registry as network_rules
-from app.services.parser_registry import PARSERS
 from app.services.relative_conformer_energy.manifest import MANIFEST_FORMATS as RELATIVE_FORMATS
 from app.services.release.manifest import RENDERERS
 from app.services.statmech_selection.manifest import ASSESSMENT_SEMANTICS as STATMECH_SEMANTICS

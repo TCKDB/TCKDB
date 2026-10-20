@@ -64,7 +64,7 @@ from app.importers.cccbdb.parsers import (
 from app.importers.cccbdb.parsers.species_selection import (
     structural_to_hill_formula,
 )
-from app.services.parser_registry import PARSERS
+from app.parser_registry import PARSERS
 
 _logger = logging.getLogger(__name__)
 

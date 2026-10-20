@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from app.services.parser_registry import PARSERS
+from app.parser_registry import PARSERS
 
 # ---------------------------------------------------------------------------
 # Canonical key mapping — initial seed (core + secondary tier)

@@ -891,14 +891,14 @@ def test_every_production_call_site_passes_the_context():
     assert exempted == 1  # the exemption covers exactly the one call that justifies it
 
 
-def test_the_pin_is_a_literal_tied_to_rubric_version_5():
+def test_the_pin_is_a_literal_tied_to_the_rubric_version():
     """Editing the pin dict without a rubric bump fails here: the pair is written out, not derived.
 
-    Kills: changing the structure versions (or the dict) while the TS rubric stays at version 5.
+    Kills: changing the structure versions (or the dict) while the TS rubric stays at its version.
     """
     assert (COMPUTED_TRANSITION_STATE.version, TS_SCOPED_STRUCTURE_VERSIONS) == (
-        5,
-        {"assessment": "1", "normalizer": "1", "decision": "1"},
+        1,
+        {"assessment": 1, "normalizer": 1, "decision": 1},
     )
     assert TS_SCOPED_STRUCTURE_VERSIONS == {
         "assessment": ASSESSMENT_VERSION,
@@ -912,7 +912,7 @@ def test_drift_fails_the_boot_not_a_request(monkeypatch):
     from app.api.app import create_app
     from app.services.trust import rubrics, ts_scoped
 
-    monkeypatch.setitem(rubrics.TS_SCOPED_STRUCTURE_VERSIONS, "decision", "999")
+    monkeypatch.setitem(rubrics.TS_SCOPED_STRUCTURE_VERSIONS, "decision", 999)
     with pytest.raises(RuntimeError, match="deliberate rubric bump"):
         ts_scoped.validate_ts_scoped_structure_versions()
     with pytest.raises(RuntimeError, match="deliberate rubric bump"):

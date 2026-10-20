@@ -55,8 +55,8 @@ import re
 from dataclasses import dataclass
 
 from app.db.models.common import HessianSource
+from app.parser_registry import PARSERS
 from app.services.ess_software_detection import detect_software_from_text
-from app.services.parser_registry import PARSERS
 
 #: Bumped when the parsing/packing contract changes; stored on every row.
 HESSIAN_PARSER = PARSERS.get("hessian")

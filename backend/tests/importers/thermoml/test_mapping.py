@@ -312,7 +312,7 @@ def test_smethodname_allowlist_hit_is_computed():
     for payload in result.payloads:
         assert payload.scientific_origin == ScientificOriginKind.computed
         assert payload.method_note == "statistical thermodynamics"
-        assert "origin.smethodname_allowlist.v1" in payload.raw_payload_json["mapping"]["rules"]
+        assert "origin.smethodname_allowlist" in payload.raw_payload_json["mapping"]["rules"]
 
 
 def test_smethodname_not_on_allowlist_is_rejected():
@@ -567,7 +567,7 @@ def test_mapping_rules_are_deterministic_per_row():
     unit rule (``unit.j_mol_k.identity``) -- a shared, order-dependent
     accumulator snapshotted mid-loop would give row 0 fewer rules than
     a later row that triggered an additional rule first (e.g.
-    ``pressure.kpa_to_bar.v1``)."""
+    ``pressure.kpa_to_bar``)."""
 
     result = _map("cp_gas_variable_pressure.xml")
     assert len(result.payloads) == 3
@@ -584,11 +584,11 @@ def test_mapping_rules_are_deterministic_per_row():
 
 def test_mapping_rules_reflect_only_that_rows_own_conditions():
     """Stronger version of the row-0-vs-last-row check above: two rows
-    in the SAME table where only one triggers ``pressure.kpa_to_bar.v1``
+    in the SAME table where only one triggers ``pressure.kpa_to_bar``
     (row 0 has a pressure, row 1 does not -- both legal for an "Ideal
     gas" table, which never requires pressure). A shared accumulator
     that is never reset per row would leak row 0's
-    ``pressure.kpa_to_bar.v1`` into row 1's own rules list (or, in the
+    ``pressure.kpa_to_bar`` into row 1's own rules list (or, in the
     opposite iteration order, would omit it from row 0 until row 1 had
     already added it)."""
 
@@ -642,8 +642,8 @@ def test_mapping_rules_reflect_only_that_rows_own_conditions():
     assert len(payloads) == 2
     row0_rules = payloads[0].raw_payload_json["mapping"]["rules"]
     row1_rules = payloads[1].raw_payload_json["mapping"]["rules"]
-    assert "pressure.kpa_to_bar.v1" in row0_rules
-    assert "pressure.kpa_to_bar.v1" not in row1_rules
+    assert "pressure.kpa_to_bar" in row0_rules
+    assert "pressure.kpa_to_bar" not in row1_rules
 
 
 # ---------------------------------------------------------------------------

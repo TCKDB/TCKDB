@@ -41663,7 +41663,7 @@
           },
           "comparison_version": {
             "title": "Comparison Version",
-            "type": "string"
+            "type": "integer"
           },
           "coverage_requirement": {
             "$ref": "#/components/schemas/CoverageRequirement-Output"
@@ -64511,7 +64511,7 @@
             "anyOf": [
               {
                 "additionalProperties": {
-                  "type": "string"
+                  "type": "integer"
                 },
                 "type": "object"
               },

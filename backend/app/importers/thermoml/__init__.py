@@ -32,7 +32,7 @@ with the non-ideality flagged (``state_basis``), not rejected.
 
 from __future__ import annotations
 
-from app.services.parser_registry import PARSERS
+from app.parser_registry import PARSERS
 
 #: Human-readable source name, used in ``external_source.name``.
 SOURCE_NAME = "NIST TRC ThermoML Archive"

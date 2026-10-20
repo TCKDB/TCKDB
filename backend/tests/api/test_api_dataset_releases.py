@@ -130,21 +130,20 @@ def test_cite_and_reproduce_a_release_end_to_end(
 
     manifest = body["manifest"]
     document = manifest["document"]
-    # ``v2`` since the rights block (B1); a ``v1`` row keeps its own shape.
-    assert manifest["manifest_schema"] == "tckdb.dataset_release.v2"
+    assert manifest["manifest_format"] == {"name": "tckdb.dataset_release", "version": 1}
     assert manifest["profile"] == "curated"
 
     # Version binding — what a reproducer needs to know.
     versions = manifest["versions"]
     assert versions["alembic_revision"]
-    assert versions["review_policy_version"] == "record_review.v1"
-    assert versions["recovery_archive_schema"] == "tckdb.archive.v1"
+    assert versions["review_policy"] == {"name": "record_review", "version": 1}
+    assert versions["recovery_archive"] == {"name": "tckdb.archive", "version": 1}
     assert set(versions) == {
         "alembic_revision",
         "backend_version",
         "schemas_package_version",
-        "review_policy_version",
-        "recovery_archive_schema",
+        "review_policy",
+        "recovery_archive",
     }
 
     # --- 3. Recompute the manifest digest independently. -------------------
@@ -217,8 +216,8 @@ def test_release_states_it_is_not_a_backup(client, login_as, _api_curator_user, 
     contract = document["contract"]
     assert contract["kind"] == "curated_dataset_release"
     assert contract["lossless_database_backup"] is False
-    assert contract["distinct_from"]["recovery_archive"] == "tckdb.archive.v1"
-    assert contract["distinct_from"]["convenience_projection"] == "tckdb.export.v0"
+    assert contract["distinct_from"]["recovery_archive"] == {"name": "tckdb.archive", "version": 1}
+    assert contract["distinct_from"]["convenience_projection"] == {"name": "tckdb.export", "version": 1}
 
 
 def test_release_endpoints_echo_the_read_profile(
