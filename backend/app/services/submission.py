@@ -63,7 +63,6 @@ from app.services.scientific_read.handles import (
 )
 
 if TYPE_CHECKING:
-    from app.services.llm_precheck.schemas import LLMPrecheckResult
     from app.services.machine_review.schemas import MachineReviewProviderResultV2
 
 logger = logging.getLogger(__name__)
@@ -379,41 +378,6 @@ def mark_ingestion_failed(
 # ---------------------------------------------------------------------------
 
 
-def record_llm_precheck_audit_event(
-    session: Session,
-    *,
-    submission: Submission,
-    result: "LLMPrecheckResult",
-    provider: str | None = None,
-    mode: str | None = None,
-    error_kind: str | None = None,
-) -> SubmissionAuditEvent:
-    """Record an advisory LLM precheck result as an append-only audit event.
-
-    This helper deliberately writes only ``submission_audit_event``. It does
-    not change submission status, approval/rejection fields, precheck summary
-    columns, record-review rows, or scientific records.
-    """
-    from app.services.llm_precheck.schemas import llm_precheck_result_to_details_json
-
-    details_json = llm_precheck_result_to_details_json(result)
-    if provider is not None:
-        details_json["provider"] = provider
-    if mode is not None:
-        details_json["mode"] = mode
-    if error_kind is not None:
-        details_json["error_kind"] = error_kind
-
-    return append_audit_event(
-        session,
-        submission=submission,
-        event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
-        actor_kind=SubmissionActorKind.llm,
-        summary=result.summary,
-        details_json=details_json,
-    )
-
-
 def record_machine_review_v2_audit_event(
     session: Session,
     *,
@@ -423,11 +387,9 @@ def record_machine_review_v2_audit_event(
 ) -> SubmissionAuditEvent:
     """Record a native v2 machine-review provider result as an audit event.
 
-    Minimal service glue paralleling :func:`record_llm_precheck_audit_event`,
-    but for the native v2 contract: the ``details_json`` carries
+    Minimal service glue for the provider contract: the ``details_json`` carries
     ``schema_version="machine_review_v2"`` (the marker the adapter dispatches
-    on), so the persisted event takes the adapter's v2 path on readback. Like
-    the v1 helper it writes only ``submission_audit_event`` —
+    on), so the persisted event is read back by the adapter. It writes only ``submission_audit_event`` —
     ``actor_kind=llm``, ``event_kind=llm_precheck_recorded`` — and never mutates
     submission status, moderation, summary columns, record-review rows, or
     scientific records.
@@ -436,8 +398,8 @@ def record_machine_review_v2_audit_event(
     :func:`~app.services.machine_review.run.run_machine_review_for_submission`,
     which is reached only from the admin-triggered
     ``POST /api/v1/admin/machine-review/run-for-submission/{submission_id}``.
-    It remains an explicit, caller-driven recorder: nothing on the upload or
-    precheck path calls it, and uploading never produces one of these events.
+    It remains an explicit, caller-driven recorder: nothing on the upload
+    path calls it, and uploading never produces one of these events.
     Commit control stays with the caller (this only flushes, via
     :func:`append_audit_event`).
     """

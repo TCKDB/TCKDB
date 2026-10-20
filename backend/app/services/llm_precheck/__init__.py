@@ -1,26 +1,10 @@
-"""Optional AI Review Assistant service package.
+"""Submission context for machine review.
 
-This package contains only local plumbing for disabled and fake/test LLM
-precheck providers. It intentionally performs no online API calls, local model
-calls, RAG lookups, upload workflow wiring, or public read integration.
+Holds only :class:`LLMPrecheckContext` and the builder that assembles it. It performs no online API calls, local model
+calls, RAG lookups, upload workflow wiring, or public read integration; the runner lives in
+:mod:`app.services.machine_review`.
 """
 
-from app.services.llm_precheck.schemas import (
-    LLMFinding,
-    LLMFindingCategory,
-    LLMFindingSeverity,
-    LLMPrecheckContext,
-    LLMPrecheckLabel,
-    LLMPrecheckResult,
-)
-from app.services.llm_precheck.service import run_llm_precheck_for_submission
+from app.services.llm_precheck.schemas import LLMPrecheckContext
 
-__all__ = [
-    "LLMFinding",
-    "LLMFindingCategory",
-    "LLMFindingSeverity",
-    "LLMPrecheckContext",
-    "LLMPrecheckLabel",
-    "LLMPrecheckResult",
-    "run_llm_precheck_for_submission",
-]
+__all__ = ["LLMPrecheckContext"]

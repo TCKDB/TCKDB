@@ -70,71 +70,21 @@ ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"
 # ``tests/services/test_machine_review_recipe_filtering.py``, which stores each
 # filtered recipe, adds an unrelated key, and asserts nothing restales.
 #
-# EXTERNAL_CP_COMPARISON_V2 (Phase C-E4, bumped to v2 in Phase D's review
-# round 2 -- see docs/research/tckdb-phase-d-verification.md) is not a
-# computed-trust rubric -- it carries no checks and is never run by the trust
-# evaluator (see its definition in ``app.services.trust.rubrics``) -- but it
-# is listed here for the same reason every other entry is: so the
-# review-tier external-Cp-comparison runner
-# (``app.services.external_comparison.cp.run_and_record``) reads its rubric
-# version from this one recipe rather than restating a version number by
-# hand. THERMO_CONSISTENCY_V1 and THERMO_KINETICS_CONSISTENCY_V1 (Phase D's
-# D1/D3 advisory checks, ``app.services.consistency``) are the same kind of
-# entry for the same reason. Adding any of these three changes
-# ``ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS`` (below) by one key each; every
-# currency-check call site in this package filters that dict to the single
-# rubric relevant to a record's own type
-# (``active_rubric_versions_for_record_type`` in ``admin_trigger.py``), so no
-# existing calculation/kinetics/thermo/statmech/transport/transition-state
-# review is restaled by any of them -- only a future run of that same
-# advisory check would ever compare against its own key. The v1->v2 bump is
-# safe by the same argument that made adding v1 safe: it is still one key in
-# this dict, still filtered to its own record type, and a rubric-version
-# change is exactly the mechanism that is supposed to make a check's own
-# past rows read as stale against its own current recipe -- it does not
-# touch any other rubric's key or any other record's currency.
+# The review-tier and advisory-check rubrics (the external-Cp comparison, the
+# consistency checks, the isotope-identity check) are not computed-trust rubrics:
+# they carry no checks and the trust evaluator never runs them. They are listed
+# here for the same reason as every other entry, so each runner reads its rubric
+# version from this one recipe rather than restating a number by hand. Each is one
+# more key, filtered to its own record type and its own scientific-check family
+# (``app.services.machine_review.query.MachineReviewRecordFamily``), so a run of
+# one never restales another's review: a rubric-version change makes only that
+# check's own past rows read stale against its own current recipe.
 #
-# That claim is about the rubric-version *dict*, and it held even before the
-# family fix below. What was never true, until
-# ``app.services.machine_review.query.MachineReviewRecordFamily`` existed, was
-# the companion claim a reader might assume: that running the Cp check
-# couldn't restale a thermo's existing *reviewer*-family review either. It
-# could and did -- the currency query loaded every row for a thermo
-# regardless of provider, so the Cp runner's own appended row (never matching
-# the reviewer recipe, always newest) demoted the true current reviewer
-# review to historical on every run. See the Phase C-E4 review round 2
-# correction in ``docs/research/tckdb-phase-c-implementation-plan.md`` C4.
-# ``get_record_machine_review_currency_for_record`` now defaults to the
-# ``reviewer`` family, so this file's calls (via ``admin_trigger.py``) are
-# unaffected by any Cp row and this second effect can no longer happen. The
-# same family separation is what makes the D1/D3 restale regression tests in
-# ``tests/services/test_phase_d_persistence.py`` pass.
-#
-# ``cp.RUNNER_VERSION`` (``"external_cp_comparison_v1"``) deliberately still
-# reads "v1" even though it now stamps the v2 rubric above -- that is not
-# drift. ``RUNNER_VERSION`` is the runner's own identity (the ``model``
-# under which its rows are recorded and looked up by
-# ``latest_cp_comparison_for_thermo``); the rubric version is a separate axis
-# that already carries "has this record's comparison gone stale" via the
-# currency check, so bumping it needs no matching bump to the runner
-# identity, and NOT bumping it keeps every already-recorded v1-era row
-# discoverable under the same ``model`` as the runner's newest rows.
-#
-# GIBBS_SELF_CONSISTENCY_V1 (Phase D4, ``app.services.consistency.gibbs``) is
-# one more entry of the D1/D3 kind, added for the same reason and safe by the
-# same argument: one new key, read only by the D4 runner's own
-# ``AdvisoryResult.recipe`` under its own scientific-check family and model.
-# That no existing review is restaled by adding it is pinned by
-# ``test_adding_the_gibbs_rubric_restales_no_stored_review`` in
-# ``tests/services/test_phase_d_persistence.py``.
-#
-# COMPUTED_TS_STATMECH_V1 is the owner-scoped statmech rubric for transition-state-owned
-# records. It is one more key, filtered like every other: a species-owned statmech review keeps its
-# ``computed_statmech_v2`` key and reads current; only the latest reviewer-family review of a
-# TS-owned statmech reads stale (its context was hashed under the species rubric). The reviewer
-# recipe for a record comes from the rubric that actually evaluated it
-# (``admin_trigger.active_rubric_versions_for_fragment``), not from the record type alone.
-# ``tests/services/test_trust_ts_statmech_owner_rubric.py`` pins both halves.
+# ``COMPUTED_TS_STATMECH_V1`` is the owner-scoped statmech rubric for
+# transition-state-owned records. It is one more key, filtered like every other:
+# the reviewer recipe for a record comes from the rubric that actually evaluated it
+# (``admin_trigger.active_rubric_versions_for_fragment``), not from the record type
+# alone. ``tests/services/test_trust_ts_statmech_owner_rubric.py`` pins both halves.
 _ACTIVE_RUBRICS: tuple[EvidenceRubric, ...] = (
     COMPUTED_CALCULATION_V2,
     COMPUTED_KINETICS_V2,

@@ -33,10 +33,6 @@ from app.chemistry.manifest_attestation import attest
 
 MANIFEST_PATH = Path(__file__).with_name("structure_rule_candidates.yaml")
 
-#: The preserved bytes of manifest 0.1.0, which rule version 0.1.0 rests on. Kept for replay only: a decision recorded
-#: before manifest 0.2.0 names the digest of these bytes, and replay must be able to load them. Never edit this file.
-MANIFEST_0_1_0_PATH = Path(__file__).with_name("structure_rule_candidates_0_1_0.yaml")
-
 #: The objectives a structure rule may compare on (the request's ``Objective`` values).
 OBJECTIVES = ("physical_accuracy", "expected_accuracy", "model_fidelity")
 
@@ -324,9 +320,6 @@ def parse_structure_rule_manifest_bytes(data: bytes, *, expected_sha256: str | N
     return attest(dataclasses.replace(parse_structure_rule_manifest(yaml.safe_load(data)), sha256=actual))
 
 
-def load_structure_rule_manifest(*, expected_sha256: str, path: Path | None = None) -> StructureRuleManifest:
-    """A shipped manifest, which must be exactly the bytes the registry pins.
-
-    :param path: Another shipped manifest file (the preserved 0.1.0 bytes, for replay); default is the current one.
-    """
-    return parse_structure_rule_manifest_bytes((path or MANIFEST_PATH).read_bytes(), expected_sha256=expected_sha256)
+def load_structure_rule_manifest(*, expected_sha256: str) -> StructureRuleManifest:
+    """The shipped manifest, which must be exactly the bytes the registry pins."""
+    return parse_structure_rule_manifest_bytes(MANIFEST_PATH.read_bytes(), expected_sha256=expected_sha256)

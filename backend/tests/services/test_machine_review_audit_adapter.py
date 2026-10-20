@@ -2,8 +2,8 @@
 
 These prove the bridge in ``app/services/machine_review/audit_adapter.py``:
 given a persisted ``submission_audit_event``-like object (an LLM-authored
-``llm_precheck_recorded`` event whose ``details_json`` is an
-:class:`LLMPrecheckResult` dump) plus the submission's record links, project
+``llm_precheck_recorded`` event whose ``details_json`` is a provider-contract
+dump, the shape the runner records) plus the submission's record links, project
 record-addressed findings into internal
 :class:`~app.services.machine_review.read_model.RecordMachineReview` objects —
 without persistence, public exposure, or any mutation of scientific, evidence,
@@ -11,7 +11,7 @@ trust, or moderation state.
 
 The adapter under test is pure, so these tests build lightweight event /
 record-link stand-ins and the *real* persisted ``details_json`` shape (via
-:func:`llm_precheck_result_to_details_json`) rather than touching the database.
+:func:`machine_review_v2_result_to_details_json`) rather than touching the database.
 The mapper, derivation, and read-model layers are exercised through the adapter
 end-to-end.
 """
@@ -27,15 +27,8 @@ from app.db.models.common import (
     SubmissionAuditEventKind,
     SubmissionRecordType,
 )
-from app.services.llm_precheck.schemas import (
-    LLMFinding,
-    LLMFindingCategory,
-    LLMFindingSeverity,
-    LLMPrecheckLabel,
-    LLMPrecheckResult,
-    llm_precheck_result_to_details_json,
-)
 from app.services.machine_review import (
+    MachineReviewCategory,
     MachineReviewSeverity,
     MachineReviewStatus,
     build_machine_review_record_summary,
@@ -45,6 +38,14 @@ from app.services.machine_review.audit_adapter import (
     machine_review_result_from_audit_event,
     record_machine_reviews_from_audit_events,
     record_machine_reviews_from_submission_audit_event,
+)
+from app.services.machine_review.providers.interface import (
+    machine_review_v2_result_to_details_json,
+)
+from app.services.machine_review.schemas import (
+    MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    MachineReviewProviderFindingV2,
+    MachineReviewProviderResultV2,
 )
 
 # A fixed reference instant so tests never depend on wall-clock time.
@@ -78,8 +79,8 @@ class _Link:
 
 def _details(
     *,
-    label: LLMPrecheckLabel = LLMPrecheckLabel.warning,
-    findings: tuple[LLMFinding, ...] = (),
+    status: MachineReviewStatus = MachineReviewStatus.machine_screened_warning,
+    findings: tuple[MachineReviewProviderFindingV2, ...] = (),
     model: str | None = "fake_test/simple-v1",
     summary: str | None = "advisory summary",
     provider: str | None = "FakeLLMPrecheckProvider",
@@ -87,19 +88,24 @@ def _details(
 ) -> dict[str, Any]:
     """Build a realistic persisted ``details_json`` payload.
 
-    Mirrors ``record_llm_precheck_audit_event``: an :class:`LLMPrecheckResult`
-    dump plus the optional ``provider`` key the recorder attaches.
+    Mirrors ``record_machine_review_v2_audit_event``: a provider-contract dump
+    (``schema_version`` marker included) with the optional ``provider`` key.
+    ``used_rag`` is set on the dump, since the contract refuses ``True`` at
+    construction.
     """
-    result = LLMPrecheckResult(
-        label=label,
+    result = MachineReviewProviderResultV2(
+        schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+        status=status,
         summary=summary,
         findings=findings,
         model=model,
-        used_rag=used_rag,
+        provider=None,
     )
-    payload = llm_precheck_result_to_details_json(result)
+    payload = machine_review_v2_result_to_details_json(result)
     if provider is not None:
         payload["provider"] = provider
+    if used_rag:
+        payload["used_rag"] = True
     return payload
 
 
@@ -107,12 +113,12 @@ def _record_finding(
     *,
     record_type: str = "calculation",
     record_id: int | None = 1,
-    severity: LLMFindingSeverity = LLMFindingSeverity.warning,
-    category: LLMFindingCategory = LLMFindingCategory.provenance,
+    severity: MachineReviewSeverity = MachineReviewSeverity.warning,
+    category: MachineReviewCategory = MachineReviewCategory.provenance,
     message: str = "Missing source artifact summary.",
-) -> LLMFinding:
-    """Build one precheck finding, optionally addressing a record."""
-    return LLMFinding(
+) -> MachineReviewProviderFindingV2:
+    """Build one provider finding, optionally addressing a record by internal id."""
+    return MachineReviewProviderFindingV2(
         severity=severity,
         category=category,
         record_type=record_type,
@@ -173,7 +179,7 @@ def test_valid_audit_event_maps_record_finding_to_record_review():
     """A finding naming a linked record produces exactly one record review."""
     event = _AuditEvent(
         details_json=_details(
-            label=LLMPrecheckLabel.warning,
+            status=MachineReviewStatus.machine_screened_warning,
             findings=(_record_finding(record_type="calculation", record_id=42),),
         ),
     )
@@ -220,17 +226,17 @@ def test_record_review_carries_source_audit_event_id():
     assert projection.record_reviews[0].audit_event_id == 777
 
 
-def test_failed_review_label_with_record_finding_yields_failed_status():
-    """A failed reviewer label dominates the record-finding-derived status.
+def test_failed_review_status_with_record_finding_yields_failed_status():
+    """A failed reviewer status dominates the record-finding-derived status.
 
-    The payload's ``failed_to_review`` label is the reviewer-completion signal
+    The payload's ``machine_review_failed`` status is the reviewer-completion signal
     for the pass; even though the finding alone would derive a ``warning``, the
     mapped record's status is ``machine_review_failed`` (event-level outcome,
     not a concern fanned out).
     """
     event = _AuditEvent(
         details_json=_details(
-            label=LLMPrecheckLabel.failed_to_review,
+            status=MachineReviewStatus.machine_review_failed,
             findings=(_record_finding(record_type="calculation", record_id=42),),
         ),
     )
@@ -254,16 +260,16 @@ def test_failed_review_label_with_record_finding_yields_failed_status():
 
 def test_submission_scoped_finding_does_not_create_record_review():
     """A finding with no ``record_type`` stays submission-scoped (no fan-out)."""
-    submission_finding = LLMFinding(
-        severity=LLMFindingSeverity.critical,
-        category=LLMFindingCategory.consistency,
+    submission_finding = MachineReviewProviderFindingV2(
+        severity=MachineReviewSeverity.critical,
+        category=MachineReviewCategory.consistency,
         record_type=None,
         record_id=None,
         message="Submission-level concern across the bundle.",
     )
     event = _AuditEvent(
         details_json=_details(
-            label=LLMPrecheckLabel.needs_attention,
+            status=MachineReviewStatus.machine_screened_needs_attention,
             findings=(submission_finding,),
         ),
     )
@@ -305,14 +311,55 @@ def test_unlinked_record_finding_does_not_create_record_review():
 
 
 # --------------------------------------------------------------------------- #
+# Only the current format is read: anything else is refused, not guessed at
+# --------------------------------------------------------------------------- #
+
+
+def test_a_payload_without_the_format_marker_is_an_unknown_format():
+    """Kills: a marker-less payload falling back to the retired precheck (v1) reading.
+
+    The retired contract recorded a ``label`` and no marker. Such a payload now
+    degrades to no result and a warning naming the missing marker; it is not
+    translated, even though every field it has is well-formed.
+    """
+    legacy = {"label": "warning", "summary": "advisory", "findings": [], "model": "m", "used_rag": False}
+    parsed = machine_review_result_from_audit_event(legacy)
+    assert parsed.result is None
+    assert len(parsed.parse_warnings) == 1 and "schema_version None" in parsed.parse_warnings[0]
+
+    # A current payload with only its marker removed is refused the same way.
+    current = _details(findings=(_record_finding(),))
+    assert machine_review_result_from_audit_event(current).result is not None
+    del current["schema_version"]
+    assert machine_review_result_from_audit_event(current).result is None
+
+    projection = record_machine_reviews_from_submission_audit_event(
+        event=_AuditEvent(details_json=legacy),
+        submission_record_links=[_Link(SubmissionRecordType.calculation, 1)],
+    )
+    assert projection.record_reviews == ()
+    assert len(projection.parse_warnings) == 1
+
+
+def test_a_payload_with_another_marker_is_refused_not_read_as_current():
+    payload = _details(findings=(_record_finding(),))
+    payload["schema_version"] = "machine_review_v3"
+    parsed = machine_review_result_from_audit_event(payload)
+    assert parsed.result is None
+    assert "machine_review_v3" in parsed.parse_warnings[0]
+
+
+# --------------------------------------------------------------------------- #
 # Malformed payloads degrade, they never raise
 # --------------------------------------------------------------------------- #
 
 
 def test_malformed_details_json_returns_parse_warning_not_exception():
     """A malformed payload degrades to no reviews + a parse warning, no raise."""
-    # Not a valid LLMPrecheckResult (label is not in the enum).
-    event = _AuditEvent(details_json={"label": "not-a-real-label", "findings": []})
+    # Carries the marker but is not a valid provider payload (status is not in the enum).
+    event = _AuditEvent(
+        details_json={"schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION, "status": "not-a-real-status", "findings": []}
+    )
 
     projection = record_machine_reviews_from_submission_audit_event(
         event=event,
@@ -415,14 +462,14 @@ def test_model_and_provider_are_preserved():
 
 
 def test_failed_review_payload_projects_machine_review_failed():
-    """A ``failed_to_review`` label translates to ``machine_review_failed``.
+    """A ``machine_review_failed`` payload projects ``machine_review_failed``.
 
     A failed review carries no findings, so it produces no record review; the
-    failure is captured at the translated-result layer (the status axis), which
-    is what this asserts.
+    failure is captured at the result layer (the status axis), which is what
+    this asserts.
     """
     parsed = machine_review_result_from_audit_event(
-        _details(label=LLMPrecheckLabel.failed_to_review, findings=())
+        _details(status=MachineReviewStatus.machine_review_failed, findings=())
     )
 
     assert parsed.result is not None
@@ -431,7 +478,7 @@ def test_failed_review_payload_projects_machine_review_failed():
 
     # End-to-end: a submission-scoped failure never fans out to a record review.
     event = _AuditEvent(
-        details_json=_details(label=LLMPrecheckLabel.failed_to_review, findings=())
+        details_json=_details(status=MachineReviewStatus.machine_review_failed, findings=())
     )
     projection = record_machine_reviews_from_submission_audit_event(
         event=event,
@@ -449,10 +496,10 @@ def test_multiple_audit_events_can_build_latest_record_summary():
     """Reviews from several events feed the read model's latest-wins summary."""
     older = _AuditEvent(
         details_json=_details(
-            label=LLMPrecheckLabel.needs_attention,
+            status=MachineReviewStatus.machine_screened_needs_attention,
             findings=(
                 _record_finding(
-                    record_id=7, severity=LLMFindingSeverity.critical
+                    record_id=7, severity=MachineReviewSeverity.critical
                 ),
             ),
         ),
@@ -461,10 +508,10 @@ def test_multiple_audit_events_can_build_latest_record_summary():
     )
     newer = _AuditEvent(
         details_json=_details(
-            label=LLMPrecheckLabel.warning,
+            status=MachineReviewStatus.machine_screened_warning,
             findings=(
                 _record_finding(
-                    record_id=7, severity=LLMFindingSeverity.warning
+                    record_id=7, severity=MachineReviewSeverity.warning
                 ),
             ),
         ),
@@ -492,7 +539,7 @@ def test_sibling_record_finding_does_not_affect_selected_record_summary():
     """A newer review for a sibling record never leaks into another's summary."""
     target_event = _AuditEvent(
         details_json=_details(
-            label=LLMPrecheckLabel.pass_,
+            status=MachineReviewStatus.machine_screened_pass,
             findings=(),  # a clean pass on the target record
         ),
         created_at=_T0,
@@ -500,10 +547,10 @@ def test_sibling_record_finding_does_not_affect_selected_record_summary():
     )
     sibling_event = _AuditEvent(
         details_json=_details(
-            label=LLMPrecheckLabel.needs_attention,
+            status=MachineReviewStatus.machine_screened_needs_attention,
             findings=(
                 _record_finding(
-                    record_id=20, severity=LLMFindingSeverity.critical
+                    record_id=20, severity=MachineReviewSeverity.critical
                 ),
             ),
         ),

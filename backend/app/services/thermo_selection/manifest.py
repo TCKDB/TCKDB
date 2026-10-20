@@ -3,15 +3,15 @@
 A selection is only as trustworthy as the inputs it can be re-derived from. The manifest
 holds the normalised request, the effective review floor, every assessed candidate with its
 normalised inputs and applicability verdict, the registry entries (rule id, version, evidence
-limits) that were applied, each rule's verdict per candidate, the accepted edges, the fronts,
+limits, audited manifest digest) that were applied, each rule's verdict per candidate, the accepted edges, the fronts,
 and the administrative order. It is a JSON-ready dict, built from public refs only: no
 database id, no internal key. ``id_rank`` is an ordinal standing in for the id as the last
 tie-break and cannot be turned back into one.
 
 :func:`replay_decision` re-runs the ordering engine over the manifest's eligible candidates
 with no database. A digest would only prove the manifest was not altered; replay proves the
-decision follows from what it records. A rule version the running registry does not carry
-refuses the replay rather than substituting another.
+decision follows from what it records. A rule version, or audited-manifest digest, that the running
+registry does not carry refuses the replay rather than substituting another.
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
     check_supported,
-    describe_replay,
     semantics_block,
 )
 from app.services.thermo_selection.engine import decide
@@ -132,7 +131,12 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule]
         key = (entry["rule_id"], entry["version"])
         if key not in available:
             raise ReplayError(f"rule {key[0]} version {key[1]} is not in the running registry")
-        used.append(available[key])
+        rule = available[key]
+        # The rule's audited manifest is part of what the decision rests on: the same (id, version) over different
+        # audited bytes is a different rule, so the replay is refused rather than re-answered.
+        if rule.describe().get("manifest_sha256") != entry.get("manifest_sha256"):
+            raise ReplayError(f"rule {key[0]} version {key[1]} now rests on a different audited manifest")
+        used.append(rule)
     for c in manifest["candidates"]:
         if c["eligible"] != c["assessment"]["physically_eligible"]:
             raise ReplayError(
@@ -159,15 +163,3 @@ def replay_matches(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule] 
     recorded = manifest["decision"] if manifest["decision"] is not None else {"outcome": manifest["outcome"]}
     return replayed == recorded and replayed["outcome"] == manifest["outcome"]
 
-
-def replay_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
-    """Label a replay as historical or current: the assessment semantics the manifest was made under versus today's.
-
-    :raises ReplayError: when the manifest records assessment semantics this release does not carry.
-    """
-    try:
-        return describe_replay(
-            manifest, current=ASSESSMENT_SEMANTICS_VERSION, supported=SUPPORTED_ASSESSMENT_SEMANTICS
-        )
-    except UnsupportedAssessmentSemantics as exc:
-        raise ReplayError(str(exc)) from exc

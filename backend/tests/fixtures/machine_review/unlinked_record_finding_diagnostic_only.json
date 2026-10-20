@@ -2,10 +2,15 @@
   "case": "unlinked_record_finding_diagnostic_only",
   "description": "A finding naming a kinetics record (7777) that is NOT linked to the submission. Anti-fan-out refuses it: it is kept as a diagnostic with a mapping warning, becomes no record summary, and produces no task.",
   "linked_records": [
-    {"record_type": "kinetics", "record_id": 9001, "role": "primary"}
+    {
+      "record_type": "kinetics",
+      "record_id": 9001,
+      "role": "primary"
+    }
   ],
   "audit_event_details_json": {
-    "label": "warning",
+    "schema_version": "machine_review_v2",
+    "status": "machine_screened_warning",
     "summary": "A finding about a record not linked to this submission.",
     "findings": [
       {
@@ -14,12 +19,14 @@
         "record_type": "kinetics",
         "record_id": 7777,
         "message": "Rate expression looks off for kinetics record 7777, which is not part of this submission.",
-        "evidence_keys": ["kinetics.rate"]
+        "evidence_keys": [
+          "kinetics.rate"
+        ]
       }
     ],
-    "model": "fake_test/simple-v1",
-    "used_rag": false,
-    "provider": "FakeLLMPrecheckProvider"
+    "model": "fake_test/machine-review-v2",
+    "provider": "FakeMachineReviewProvider",
+    "used_rag": false
   },
   "expected": {
     "record_summary_count": 0,

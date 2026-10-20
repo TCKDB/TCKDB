@@ -107,7 +107,9 @@ def _ai_review_summary_from_event(event) -> SubmissionAIReviewSummaryRead:
             counts[severity] += 1
 
     return SubmissionAIReviewSummaryRead(
-        label=details.get("label") if isinstance(details.get("label"), str) else None,
+        # The current event carries the reviewer's verdict as ``status``; ``label`` is the wire name the card has
+        # always had for it. (An earlier reading looked for a ``label`` key that no event ever wrote.)
+        label=details.get("status") if isinstance(details.get("status"), str) else None,
         summary=(
             details.get("summary")
             if isinstance(details.get("summary"), str)

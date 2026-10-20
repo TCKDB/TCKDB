@@ -67,8 +67,6 @@ def _review_status_value(review_status: Enum | str | None) -> str:
 
 def _public_rubric_name(evaluation: EvidenceEvaluation) -> str:
     suffix = f"_v{evaluation.rubric_version}"
-    if evaluation.rubric.endswith(suffix):
-        return evaluation.rubric
     return f"{evaluation.rubric}{suffix}"
 
 

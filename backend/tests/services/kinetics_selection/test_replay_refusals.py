@@ -1,0 +1,95 @@
+"""Replay of a kinetics decision manifest reads exactly the running versions and refuses everything else.
+
+Only the current versions exist. A manifest recording another assessment semantics, a missing or malformed block, a
+manifest format this release does not read, a rule version it does not carry, or a rule resting on different audited
+bytes is refused, never replayed under today's rules and never labelled "historical".
+"""
+
+from __future__ import annotations
+
+import copy
+import hashlib
+
+import pytest
+
+from app.chemistry.kinetics_rules.xyg3_barrier_manifest import MANIFEST_PATH
+from app.db.models.common import RecordReviewStatus
+from app.services.kinetics_selection import ReplayError, replay_decision, replay_matches
+from app.services.kinetics_selection.manifest import MANIFEST_FORMAT_VERSION, SUPPORTED_MANIFEST_FORMATS
+from app.services.kinetics_selection.models import ASSESSMENT_SEMANTICS_VERSION, POLICY_VERSION
+from app.services.kinetics_selection.rules import XYG3_MANIFEST_SHA256, default_rules
+from tests.services.kinetics_selection.test_selection import PREFERRED, YIELDING, select, with_protocol
+
+
+def _fresh(db_session, world) -> dict:
+    with_protocol(db_session, world, "good", PREFERRED, status=RecordReviewStatus.not_reviewed)
+    with_protocol(db_session, world, "other", YIELDING, status=RecordReviewStatus.approved)
+    return select(db_session, world.entry, rules=default_rules()).manifest
+
+
+def _xyg3_entry(manifest: dict) -> dict:
+    return next(r for r in manifest["decision"]["rules"] if r["rule_id"] == "K-XYG3-B3LYP-BARRIER")
+
+
+def test_a_manifest_made_now_carries_the_block_and_replays_to_its_recorded_decision(db_session, world):
+    manifest = _fresh(db_session, world)
+    assert manifest["assessment_semantics"] == {
+        "version": ASSESSMENT_SEMANTICS_VERSION,
+        "evidence_rubric": "computed_kinetics@2",
+        "source_findings": "1",
+    }
+    assert manifest["policy"] == {"name": "kinetics_method_preferred", "version": POLICY_VERSION}
+    assert replay_matches(manifest)
+    assert replay_decision(manifest) == manifest["decision"]
+
+
+@pytest.mark.parametrize("block", [{"version": "3"}, {"version": 2}, "two", {}], ids=["future", "wrong_type", "string", "empty"])
+def test_a_manifest_recording_semantics_this_release_does_not_carry_is_refused(db_session, world, block):
+    manifest = _fresh(db_session, world)
+    manifest["assessment_semantics"] = block
+    with pytest.raises(ReplayError):
+        replay_decision(manifest)
+
+
+def test_a_manifest_with_no_assessment_block_is_refused_not_read_as_current(db_session, world):
+    """Kills: an absent block falling back to a default semantics (the retired pre-v2 reading)."""
+    manifest = _fresh(db_session, world)
+    del manifest["assessment_semantics"]
+    with pytest.raises(ReplayError, match="assessment_semantics"):
+        replay_decision(manifest)
+
+
+def test_only_the_current_manifest_format_is_read(db_session, world):
+    """Kills: the previous format (1) re-added to SUPPORTED_MANIFEST_FORMATS."""
+    assert SUPPORTED_MANIFEST_FORMATS == {MANIFEST_FORMAT_VERSION}
+    manifest = _fresh(db_session, world)
+    for bad in (1, MANIFEST_FORMAT_VERSION + 1, None):
+        candidate = {**manifest, "manifest_format_version": bad}
+        with pytest.raises(ReplayError, match="unknown manifest format"):
+            replay_decision(candidate)
+
+
+@pytest.mark.parametrize("version", ["0.2.0", "0.1.9", "9.9.9"])
+def test_a_rule_version_this_release_does_not_carry_is_refused_naming_it(db_session, world, version):
+    """Kills: a replay-only rule version (0.2.0 over manifest 0.3.0) being re-registered."""
+    manifest = _fresh(db_session, world)
+    _xyg3_entry(manifest)["version"] = version
+    with pytest.raises(ReplayError, match=version):
+        replay_decision(manifest)
+
+
+def test_a_rule_resting_on_different_audited_bytes_is_refused(db_session, world):
+    manifest = _fresh(db_session, world)
+    entry = _xyg3_entry(manifest)
+    assert entry["manifest_sha256"] == XYG3_MANIFEST_SHA256
+    entry["manifest_sha256"] = "0" * 64
+    with pytest.raises(ReplayError, match="different audited manifest"):
+        replay_decision(copy.deepcopy(manifest))
+
+
+def test_the_pinned_digest_is_the_shipped_bytes():
+    """The checksum mechanism: the rule refuses to load over bytes other than the pin."""
+    assert hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest() == XYG3_MANIFEST_SHA256
+    for rule in default_rules():
+        if rule.rule_id == "K-XYG3-B3LYP-BARRIER":
+            assert rule.describe()["manifest_sha256"] == XYG3_MANIFEST_SHA256

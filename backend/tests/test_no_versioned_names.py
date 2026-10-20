@@ -55,8 +55,8 @@ from tests.versioned_names_scan import (
 )
 
 #: Upper bounds on the debt list. Lower them (never raise them) as entries go.
-DEBT_ENTRY_CEILING = 199
-DEBT_OCCURRENCE_CEILING = 338
+DEBT_ENTRY_CEILING = 171
+DEBT_OCCURRENCE_CEILING = 294
 
 REMOVING_PRS = frozenset({"PR-2", "PR-3", "PR-4"})
 
@@ -200,7 +200,7 @@ def test_the_scan_reaches_the_code_it_claims_to() -> None:
     assert scan_names(), "the file-name scan found nothing under the roots"
     mcp = REPO_ROOT / "integrations/mcp/src"
     assert mcp in SCAN_ROOTS and any(mcp in file.parents for file in files), "the MCP package was not reached"
-    assert len(list((REPO_ROOT / "backend/app/chemistry").rglob("*.yaml"))) >= 6, "rule manifests not reached"
+    assert len(list((REPO_ROOT / "backend/app/chemistry").rglob("*.yaml"))) >= 4, "rule manifests not reached"
     frontend = [f for f in (REPO_ROOT / "frontend/src").rglob("*.ts*") if ".test." not in f.name]
     assert len(frontend) > 100, "frontend sources not reached"
 

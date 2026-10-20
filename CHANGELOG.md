@@ -22,6 +22,15 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Legacy and replay-only versions deleted (versioning PR-2, 2026-10-20)
+
+Pre-release, so only the current version of anything is read. Removed, with their fixtures and tests: the kinetics XYG3 0.2.0 replay rule and its manifest, the structure-rule 0.1.0 dual pin, pre-v2 assessment semantics, every previous selection-manifest format (thermo, kinetics, statmech and structure 1; network 2), the relative-energy v1/v2 projection, the dataset-release v1 renderer, the machine-review v1 (precheck) contract with `llm_precheck` providers and runner, the statmech owner transition report, and the dead parser stamps. Kept and tested: refusal of an unknown version, stale-assessment marking, checksums and append-only results.
+
+- A manifest of a retired format, an assessment block that is missing or foreign, a rule version this release does not carry, or a machine-review payload without the current `schema_version` marker is now refused.
+- `GET /submissions/{id}/ai-review-summary` reads the event's `status` (it read a `label` key no current event wrote, so `label` was always null).
+- Thermo replay now refuses a rule resting on a different audited manifest digest, as kinetics, statmech and network already did.
+- Schema impact: none. No migration. No new environment variable.
+
 ## One way to version things: `VersionRef`, `VersionRegistry`, and a guard (2026-10-19)
 
 **New types and a guard test; no behaviour change.** Migration: none. New environment variable: none. OpenAPI snapshot: unchanged.

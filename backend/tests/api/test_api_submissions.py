@@ -21,7 +21,6 @@ from pathlib import Path
 
 from sqlalchemy import func, select
 
-from app.api.config import Settings
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     CalculationType,
@@ -38,19 +37,23 @@ from app.db.models.submission import (
     SubmissionRecordLink,
 )
 from app.db.models.thermo import Thermo
-from app.services.llm_precheck.schemas import (
-    LLMFinding,
-    LLMFindingCategory,
-    LLMFindingSeverity,
-    LLMPrecheckLabel,
-    LLMPrecheckResult,
+from app.services.machine_review import (
+    MachineReviewCategory,
+    MachineReviewSeverity,
+    MachineReviewStatus,
 )
-from app.services.llm_precheck.service import run_llm_precheck_for_submission
+from app.services.machine_review.providers.fake import FakeMachineReviewProvider
+from app.services.machine_review.run import run_machine_review_for_submission
+from app.services.machine_review.schemas import (
+    MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    MachineReviewProviderFindingV2,
+    MachineReviewProviderResultV2,
+)
 from app.services.submission import (
     append_audit_event,
     create_submission,
     link_record,
-    record_llm_precheck_audit_event,
+    record_machine_review_v2_audit_event,
 )
 from tests.services.scientific_read._factories import (
     make_calculation,
@@ -718,7 +721,7 @@ class TestAuditEventsVisibility:
         resp = client.get(f"/api/v1/submissions/{sub.id}/audit-events")
         assert resp.status_code == 403
 
-    def test_llm_precheck_audit_event_round_trips_for_creator(
+    def test_machine_review_audit_event_round_trips_for_creator(
         self, client, db_session, _api_test_user, _api_other_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
@@ -732,10 +735,10 @@ class TestAuditEventsVisibility:
         baseline_status = sub.status
         baseline_counts = _scientific_record_counts(db_session)
 
-        run_llm_precheck_for_submission(
+        run_machine_review_for_submission(
             db_session,
             sub.id,
-            settings_obj=Settings(ai_review_assistant_mode="test"),
+            provider=FakeMachineReviewProvider(),
         )
         db_session.refresh(sub)
 
@@ -760,39 +763,41 @@ class TestAuditEventsVisibility:
             if e["event_kind"] == SubmissionAuditEventKind.llm_precheck_recorded.value
         )
         assert precheck["actor_kind"] == SubmissionActorKind.llm.value
-        assert precheck["summary"] == "Fake precheck inspected 1 linked record(s)."
+        assert precheck["summary"] == "Fake machine review inspected 1 linked record(s)."
         assert precheck["from_status"] is None
         assert precheck["to_status"] is None
         assert precheck["details_json"] == {
-            "label": "pass",
-            "summary": "Fake precheck inspected 1 linked record(s).",
+            "schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            "status": "machine_screened_pass",
+            "curator_priority": None,
+            "summary": "Fake machine review inspected 1 linked record(s).",
             "findings": [],
-            "model": "fake_test/simple-v1",
+            "model": "fake_test/machine-review-v2",
+            "provider": "FakeMachineReviewProvider",
             "used_rag": False,
-            "provider": "FakeLLMPrecheckProvider",
-            "mode": "test",
         }
 
         other_sub = _seed_submission(db_session, created_by=_api_other_user)
-        run_llm_precheck_for_submission(
+        run_machine_review_for_submission(
             db_session,
             other_sub.id,
-            settings_obj=Settings(ai_review_assistant_mode="test"),
+            provider=FakeMachineReviewProvider(),
         )
         resp = client.get(f"/api/v1/submissions/{other_sub.id}/audit-events")
         assert resp.status_code == 403
 
-    def test_llm_precheck_audit_details_include_structured_findings(
+    def test_machine_review_audit_details_include_structured_findings(
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
-        result = LLMPrecheckResult(
-            label=LLMPrecheckLabel.warning,
+        result = MachineReviewProviderResultV2(
+            schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            status=MachineReviewStatus.machine_screened_warning,
             summary="Configured warning",
             findings=(
-                LLMFinding(
-                    severity=LLMFindingSeverity.warning,
-                    category=LLMFindingCategory.provenance,
+                MachineReviewProviderFindingV2(
+                    severity=MachineReviewSeverity.warning,
+                    category=MachineReviewCategory.provenance,
                     record_type="calculation",
                     record_id=42,
                     message="Missing source artifact summary.",
@@ -803,12 +808,11 @@ class TestAuditEventsVisibility:
             used_rag=False,
         )
 
-        record_llm_precheck_audit_event(
+        record_machine_review_v2_audit_event(
             db_session,
             submission=sub,
             result=result,
             provider="fake_test",
-            mode="test",
         )
 
         resp = client.get(f"/api/v1/submissions/{sub.id}/audit-events")
@@ -820,22 +824,25 @@ class TestAuditEventsVisibility:
         )
         assert precheck["actor_kind"] == "llm"
         assert precheck["details_json"] == {
-            "label": "warning",
+            "schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            "status": "machine_screened_warning",
+            "curator_priority": None,
             "summary": "Configured warning",
             "findings": [
                 {
                     "severity": "warning",
                     "category": "provenance",
                     "record_type": "calculation",
+                    "record_ref": None,
                     "record_id": 42,
                     "message": "Missing source artifact summary.",
                     "evidence_keys": ["missing_checks.source_artifact_present"],
+                    "recommended_action": None,
                 }
             ],
             "model": "fake/test",
-            "used_rag": False,
             "provider": "fake_test",
-            "mode": "test",
+            "used_rag": False,
         }
 
 
@@ -844,22 +851,24 @@ class TestAIReviewSummary:
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
-        older = LLMPrecheckResult(
-            label=LLMPrecheckLabel.warning,
+        older = MachineReviewProviderResultV2(
+            schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            status=MachineReviewStatus.machine_screened_warning,
             summary="Older warning",
             model="fake/old",
             used_rag=False,
         )
-        newer = LLMPrecheckResult(
-            label=LLMPrecheckLabel.needs_attention,
+        newer = MachineReviewProviderResultV2(
+            schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+            status=MachineReviewStatus.machine_screened_needs_attention,
             summary="Newer needs attention",
             model="fake/new",
-            used_rag=True,
+            used_rag=False,
         )
-        old_event = record_llm_precheck_audit_event(
+        old_event = record_machine_review_v2_audit_event(
             db_session, submission=sub, result=older
         )
-        new_event = record_llm_precheck_audit_event(
+        new_event = record_machine_review_v2_audit_event(
             db_session, submission=sub, result=newer
         )
         old_event.created_at = datetime(2026, 1, 1, 12, 0, 0)
@@ -870,10 +879,10 @@ class TestAIReviewSummary:
 
         assert resp.status_code == 200
         assert resp.json() == {
-            "label": "needs_attention",
+            "label": "machine_screened_needs_attention",
             "summary": "Newer needs attention",
             "model": "fake/new",
-            "used_rag": True,
+            "used_rag": False,
             "created_at": "2026-01-02T12:00:00",
             "finding_counts": {"info": 0, "warning": 0, "critical": 0},
         }
@@ -882,20 +891,22 @@ class TestAIReviewSummary:
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
-        first = record_llm_precheck_audit_event(
+        first = record_machine_review_v2_audit_event(
             db_session,
             submission=sub,
-            result=LLMPrecheckResult(
-                label=LLMPrecheckLabel.warning,
+            result=MachineReviewProviderResultV2(
+                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                status=MachineReviewStatus.machine_screened_warning,
                 summary="Lower id",
                 model="fake/low",
             ),
         )
-        second = record_llm_precheck_audit_event(
+        second = record_machine_review_v2_audit_event(
             db_session,
             submission=sub,
-            result=LLMPrecheckResult(
-                label=LLMPrecheckLabel.warning,
+            result=MachineReviewProviderResultV2(
+                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                status=MachineReviewStatus.machine_screened_warning,
                 summary="Higher id",
                 model="fake/high",
             ),
@@ -916,31 +927,32 @@ class TestAIReviewSummary:
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
-        record_llm_precheck_audit_event(
+        record_machine_review_v2_audit_event(
             db_session,
             submission=sub,
-            result=LLMPrecheckResult(
-                label=LLMPrecheckLabel.warning,
+            result=MachineReviewProviderResultV2(
+                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                status=MachineReviewStatus.machine_screened_warning,
                 summary="Mixed severities",
                 findings=(
-                    LLMFinding(
-                        severity=LLMFindingSeverity.warning,
-                        category=LLMFindingCategory.provenance,
+                    MachineReviewProviderFindingV2(
+                        severity=MachineReviewSeverity.warning,
+                        category=MachineReviewCategory.provenance,
                         message="Missing source evidence.",
                     ),
-                    LLMFinding(
-                        severity=LLMFindingSeverity.info,
-                        category=LLMFindingCategory.consistency,
+                    MachineReviewProviderFindingV2(
+                        severity=MachineReviewSeverity.info,
+                        category=MachineReviewCategory.consistency,
                         message="Review note.",
                     ),
-                    LLMFinding(
-                        severity=LLMFindingSeverity.warning,
-                        category=LLMFindingCategory.units,
+                    MachineReviewProviderFindingV2(
+                        severity=MachineReviewSeverity.warning,
+                        category=MachineReviewCategory.units,
                         message="Check units.",
                     ),
-                    LLMFinding(
-                        severity=LLMFindingSeverity.critical,
-                        category=LLMFindingCategory.geometry,
+                    MachineReviewProviderFindingV2(
+                        severity=MachineReviewSeverity.critical,
+                        category=MachineReviewCategory.geometry,
                         message="Invalid geometry.",
                     ),
                 ),
@@ -957,6 +969,41 @@ class TestAIReviewSummary:
             "critical": 1,
         }
 
+    def test_the_card_reads_the_status_the_current_event_writes(
+        self, client, db_session, _api_test_user
+    ):
+        """Kills: the card reading a ``label`` key that no current event carries (it was always null).
+
+        The recorded event carries the reviewer's verdict as ``status``. An event that has only the retired ``label``
+        key yields no label: nothing is translated from the old vocabulary."""
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        record_machine_review_v2_audit_event(
+            db_session,
+            submission=sub,
+            result=MachineReviewProviderResultV2(
+                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                status=MachineReviewStatus.machine_screened_needs_attention,
+                summary="Current event",
+                model="fake/test",
+            ),
+        )
+        resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
+        assert resp.status_code == 200
+        assert resp.json()["label"] == "machine_screened_needs_attention"
+
+        retired = _seed_submission(db_session, created_by=_api_test_user)
+        append_audit_event(
+            db_session,
+            submission=retired,
+            event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
+            actor_kind=SubmissionActorKind.llm,
+            summary="Retired shape",
+            details_json={"label": "warning", "findings": [], "model": "fake/test", "used_rag": False},
+        )
+        resp = client.get(f"/api/v1/submissions/{retired.id}/ai-review-summary")
+        assert resp.status_code == 200
+        assert resp.json()["label"] is None
+
     def test_missing_findings_behaves_like_empty_list(
         self, client, db_session, _api_test_user
     ):
@@ -968,7 +1015,8 @@ class TestAIReviewSummary:
             actor_kind=SubmissionActorKind.llm,
             summary="No findings key",
             details_json={
-                "label": "warning",
+                "schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                "status": "machine_screened_warning",
                 "summary": "No findings key",
                 "model": "fake/test",
                 "used_rag": False,
@@ -996,7 +1044,8 @@ class TestAIReviewSummary:
             actor_kind=SubmissionActorKind.llm,
             summary="Fallback summary",
             details_json={
-                "label": "warning",
+                "schema_version": MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                "status": "machine_screened_warning",
                 "findings": [],
                 "model": "fake/test",
                 "used_rag": False,
@@ -1028,11 +1077,12 @@ class TestAIReviewSummary:
         login_as,
     ):
         sub = _seed_submission(db_session, created_by=_api_other_user)
-        record_llm_precheck_audit_event(
+        record_machine_review_v2_audit_event(
             db_session,
             submission=sub,
-            result=LLMPrecheckResult(
-                label=LLMPrecheckLabel.warning,
+            result=MachineReviewProviderResultV2(
+                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                status=MachineReviewStatus.machine_screened_warning,
                 summary="Private summary",
             ),
         )
@@ -1054,16 +1104,17 @@ class TestAIReviewSummary:
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
-        record_llm_precheck_audit_event(
+        record_machine_review_v2_audit_event(
             db_session,
             submission=sub,
-            result=LLMPrecheckResult(
-                label=LLMPrecheckLabel.warning,
+            result=MachineReviewProviderResultV2(
+                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                status=MachineReviewStatus.machine_screened_warning,
                 summary="Full detail summary",
                 findings=(
-                    LLMFinding(
-                        severity=LLMFindingSeverity.warning,
-                        category=LLMFindingCategory.provenance,
+                    MachineReviewProviderFindingV2(
+                        severity=MachineReviewSeverity.warning,
+                        category=MachineReviewCategory.provenance,
                         message="Missing source artifact summary.",
                     ),
                 ),
@@ -1071,7 +1122,6 @@ class TestAIReviewSummary:
                 used_rag=False,
             ),
             provider="fake_test",
-            mode="test",
         )
 
         resp = client.get(f"/api/v1/submissions/{sub.id}/audit-events")
@@ -1087,36 +1137,37 @@ class TestAIReviewSummary:
                 "severity": "warning",
                 "category": "provenance",
                 "record_type": None,
+                "record_ref": None,
                 "record_id": None,
                 "message": "Missing source artifact summary.",
                 "evidence_keys": [],
+                "recommended_action": None,
             }
         ]
         assert precheck["details_json"]["provider"] == "fake_test"
-        assert precheck["details_json"]["mode"] == "test"
 
-    def test_failed_to_review_is_advisory_not_upload_failure(
+    def test_machine_review_failed_is_advisory_not_upload_failure(
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
         baseline_status = sub.status
         baseline_counts = _scientific_record_counts(db_session)
-        record_llm_precheck_audit_event(
+        record_machine_review_v2_audit_event(
             db_session,
             submission=sub,
-            result=LLMPrecheckResult(
-                label=LLMPrecheckLabel.failed_to_review,
+            result=MachineReviewProviderResultV2(
+                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                status=MachineReviewStatus.machine_review_failed,
                 summary="AI Review Assistant could not complete review.",
                 model="fake/test",
             ),
-            error_kind="provider_error",
         )
         db_session.refresh(sub)
 
         resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
 
         assert resp.status_code == 200
-        assert resp.json()["label"] == "failed_to_review"
+        assert resp.json()["label"] == "machine_review_failed"
         assert sub.status is baseline_status
         assert _scientific_record_counts(db_session) == baseline_counts
 
@@ -1144,11 +1195,12 @@ class TestAIReviewSummary:
             record_id=calc.id,
             role="primary",
         )
-        record_llm_precheck_audit_event(
+        record_machine_review_v2_audit_event(
             db_session,
             submission=sub,
-            result=LLMPrecheckResult(
-                label=LLMPrecheckLabel.warning,
+            result=MachineReviewProviderResultV2(
+                schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+                status=MachineReviewStatus.machine_screened_warning,
                 summary="Submission advisory warning.",
                 model="fake/test",
             ),

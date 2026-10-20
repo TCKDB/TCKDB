@@ -22,11 +22,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from pathlib import Path
 from typing import Any
 
 from app.chemistry.kinetics_rules.xyg3_barrier_manifest import (
-    MANIFEST_0_3_0_PATH,
     BarrierMember,
     ManifestError,
     XYG3BarrierManifest,
@@ -47,14 +45,6 @@ EDGE_LABEL = "expected-performance inference"
 #: other bytes; a change to a member, a barrier height or a blocker is a new manifest version, a new pin and a new
 #: rule version.
 XYG3_MANIFEST_SHA256 = "e7f37fa3b726f632c3a264d8a62e216945eff5c8036fcf6afef7dfcafd976989"
-
-#: The pin of manifest 0.3.0, which rule 0.2.0 rested on. Rule 0.2.0 is kept loadable for replay only, so a decision
-#: recorded before manifest 0.4.0 still replays; it is never in ``default_rules`` and never takes part in a live selection.
-XYG3_MANIFEST_SHA256_0_3_0 = "1ce59bde6133851d0b92324e6a563f9d7b43c5e2813226fdc91dfcfef1aedd96"
-
-#: Rule version -> the SHA-256 of the manifest bytes it rests on. Moving a pin without a new version is the error this
-#: ledger exists to catch: a recorded decision names (rule, version, manifest digest) and replay holds all three.
-XYG3_RULE_VERSION_PINS = {"0.2.0": XYG3_MANIFEST_SHA256_0_3_0, "0.3.0": XYG3_MANIFEST_SHA256}
 
 #: The protocol components, other than the one a rule compares, that must be stated and equal on both sides for the
 #: rule's evidence to speak about the whole rate.
@@ -187,7 +177,7 @@ class XYG3B3LYPBarrierRule(KineticsRule):
         "NHTBH38/04 benchmark reactions"
     )
     objective_key = "classical_electronic_barrier"
-    authority = "none: the rule is not approved (manifest 0.1.0)"
+    authority = "none: the rule is not approved"
     evidence_type = "domain_benchmark_preference_out_of_sample_aggregate"
     interpretation = (
         "A subset mean-error comparison supports an expected-performance judgment about the classical barrier "
@@ -195,20 +185,10 @@ class XYG3B3LYPBarrierRule(KineticsRule):
         "about the rate's other contributions, or a curator recommendation."
     )
 
-    #: The digest an earlier, replay-only version rests on and the shipped file it is read from; ``None`` is the current
-    #: manifest, whose pin is read from the module at construction.
-    _pin: str | None = None
-    _manifest_path: Path | None = None
-
     def __init__(self, manifest: XYG3BarrierManifest | None = None) -> None:
-        pin = self._pin or XYG3_MANIFEST_SHA256
+        pin = XYG3_MANIFEST_SHA256
         if manifest is None:
-            # The current manifest is loaded exactly as before (same cache key); only a replay-only version passes a path.
-            manifest = (
-                load_xyg3_barrier_manifest(expected_sha256=pin)
-                if self._manifest_path is None
-                else load_xyg3_barrier_manifest(expected_sha256=pin, path=self._manifest_path)
-            )
+            manifest = load_xyg3_barrier_manifest(expected_sha256=pin)
         # The checks run for the loaded default too: the loader is cached, and its object holds dicts that can be
         # changed in place. They run here, at construction; a manifest changed after the rule exists is not detected.
         if manifest.sha256 != pin:
@@ -424,21 +404,6 @@ class XYG3B3LYPBarrierRule(KineticsRule):
         return entry
 
 
-class XYG3B3LYPBarrierRuleV0_2_0(XYG3B3LYPBarrierRule):
-    """Rule 0.2.0 over manifest 0.3.0, kept so a decision recorded before manifest 0.4.0 still replays.
-
-    The logic is the same; only the audited manifest differs (the comparator-basis blocker was still open). Replay
-    only: :func:`default_rules` does not carry it, so no live selection uses it.
-
-    It subclasses the live rule, so it inherits that rule's logic. If a future version changes the logic, 0.2.0 replay
-    would silently inherit the change; only the golden fixture would catch it. Freeze the old logic before doing that.
-    """
-
-    version = "0.2.0"
-    _pin = XYG3_MANIFEST_SHA256_0_3_0
-    _manifest_path = MANIFEST_0_3_0_PATH
-
-
 class InactiveCouncilRule(KineticsRule):
     """A council example that is registered but not audited from primary sources: no scope, no edge, with reasons.
 
@@ -493,12 +458,6 @@ _ABSTRACT_ONLY = (
     "the paper was not supplied for audit",
     "not activated: an example is never activated from an abstract",
 )
-
-
-@lru_cache(maxsize=1)
-def replay_rules() -> tuple[KineticsRule, ...]:
-    """The rules a recorded decision may name: this release's, plus earlier versions kept loadable for replay only."""
-    return (*default_rules(), XYG3B3LYPBarrierRuleV0_2_0())
 
 
 @lru_cache(maxsize=1)

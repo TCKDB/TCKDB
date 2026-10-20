@@ -46,7 +46,7 @@ This is deliberately not the other two things TCKDB can emit:
 ===================================  ==============================  =========
 Format                               Contract                        Lossless?
 ===================================  ==============================  =========
-``tckdb.dataset_release.v1`` (here)  citable, immutable, curated;     no — it
+``tckdb.dataset_release.v2`` (here)  citable, immutable, curated;     no — it
                                      ships selections *and* the       is a
                                      candidates and review history    scientific
                                      they were chosen from            release,
@@ -214,33 +214,33 @@ class ManifestSnapshot:
     selected_record_count: int
     candidate_record_count: int
     artifacts: list[dict[str, Any]]
-    # ``tckdb.dataset_release.v2`` and later: the data license, how many rights
-    # attestations stand behind the shipped records, and a count per basis
-    # kind. ``None`` for a ``v1`` snapshot, whose document has no such block.
+    # The data license, how many rights attestations stand behind the shipped
+    # records, and a count per basis kind.
     rights_summary: dict[str, Any] | None = None
 
 
 def render_manifest_document(snapshot: ManifestSnapshot) -> dict[str, Any]:
     """Build the canonical manifest document from a snapshot (no digest).
 
-    Branches on the snapshot's own ``manifest_schema`` -- the tag stored on
+    Dispatches on the snapshot's own ``manifest_schema`` -- the tag stored on
     the manifest row -- and never on the live :data:`versions.MANIFEST_SCHEMA`
-    constant. A row frozen under ``v1`` renders the ``v1`` shape forever, so
-    its recorded ``content_sha256`` keeps reproducing after the constant
-    moved on; that is the whole reason the tag is stored.
+    constant, so the renderer a row was frozen under is the renderer that
+    re-renders it. A tag no renderer is registered for is refused: nothing
+    guesses a shape for a document it does not know.
+
+    :raises ReleaseManifestStateConflict: the stored tag has no renderer.
     """
-    document = _render_v1(snapshot)
-    if snapshot.manifest_schema == versions.MANIFEST_SCHEMA_V1:
-        return document
-    # v2: the rights block. Rendered from the snapshot, exactly like
-    # ``contract``, so the stored columns and the served document cannot
-    # disagree.
-    document["rights"] = snapshot.rights_summary
-    return document
+    render = _RENDERERS.get(snapshot.manifest_schema)
+    if render is None:
+        raise ReleaseManifestStateConflict(
+            "unknown_manifest_schema: this build has no renderer for the "
+            "manifest format the row was frozen under."
+        )
+    return render(snapshot)
 
 
-def _render_v1(snapshot: ManifestSnapshot) -> dict[str, Any]:
-    """The ``tckdb.dataset_release.v1`` document shape, unchanged since it shipped."""
+def _render(snapshot: ManifestSnapshot) -> dict[str, Any]:
+    """The current dataset-release document shape."""
     return {
         "schema": snapshot.manifest_schema,
         # A release is by construction the curated contract. Recorded rather
@@ -281,7 +281,16 @@ def _render_v1(snapshot: ManifestSnapshot) -> dict[str, Any]:
             "candidate_records": snapshot.candidate_record_count,
         },
         "artifacts": sorted(snapshot.artifacts, key=lambda a: a["path"]),
+        # Rendered from the snapshot, exactly like ``contract``, so the stored
+        # columns and the served document cannot disagree.
+        "rights": snapshot.rights_summary,
     }
+
+
+#: Renderer per manifest tag, bound once at import. Keyed on the tag a row
+#: stores, not read from ``versions`` at call time, so a moved constant never
+#: changes how an already-frozen row renders.
+_RENDERERS = {versions.MANIFEST_SCHEMA: _render}
 
 
 def manifest_digest(document: dict[str, Any]) -> str:

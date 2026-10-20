@@ -11,8 +11,8 @@ its serialized :class:`EvidenceEvaluation` is the oracle for the strongest
 invariant here: **byte-identical evaluator output before and after a
 machine-review run.**
 
-The advisory executor in this slice is the fake AI-Review-Assistant precheck
-provider routed through :func:`run_llm_precheck_for_submission`; the
+The advisory executor here is the fake machine-review provider routed through
+:func:`run_machine_review_for_submission`; the
 machine-review module is still contracts-only, so its
 :func:`derive_machine_review_status` is exercised only to pin the advisory
 ``failed -> machine_review_failed`` / ``not_performed -> not_run`` semantics.
@@ -55,19 +55,19 @@ from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.submission import SubmissionAuditEvent
-from app.services.llm_precheck.providers import FakeLLMPrecheckProvider
-from app.services.llm_precheck.schemas import (
-    LLMFinding,
-    LLMFindingCategory,
-    LLMFindingSeverity,
-    LLMPrecheckLabel,
-    LLMPrecheckResult,
-)
-from app.services.llm_precheck.service import run_llm_precheck_for_submission
 from app.services.machine_review import (
+    MachineReviewCategory,
     MachineReviewOutcome,
+    MachineReviewSeverity,
     MachineReviewStatus,
     derive_machine_review_status,
+)
+from app.services.machine_review.providers.fake import FakeMachineReviewProvider
+from app.services.machine_review.run import run_machine_review_for_submission
+from app.services.machine_review.schemas import (
+    MACHINE_REVIEW_V2_SCHEMA_VERSION,
+    MachineReviewProviderFindingV2,
+    MachineReviewProviderResultV2,
 )
 from app.services.submission import create_submission, link_record
 from app.services.trust import build_trust_fragment, evaluate_computed_calculation
@@ -276,10 +276,10 @@ def test_fake_machine_review_does_not_change_submission_status(db_session, _api_
         submission.rejection_reason,
     )
 
-    result = run_llm_precheck_for_submission(
+    result = run_machine_review_for_submission(
         db_session,
         submission.id,
-        provider=FakeLLMPrecheckProvider(),
+        provider=FakeMachineReviewProvider(),
     )
 
     after = (
@@ -290,7 +290,7 @@ def test_fake_machine_review_does_not_change_submission_status(db_session, _api_
         submission.rejected_by,
         submission.rejection_reason,
     )
-    assert result.label is LLMPrecheckLabel.warning  # no linked records -> advisory warning
+    assert result.status is MachineReviewStatus.machine_screened_warning  # no linked records -> advisory warning
     assert submission.status is SubmissionStatus.pending
     assert after == before
     # An advisory event may be written, but it is neutral: no status transition.
@@ -318,10 +318,10 @@ def test_fake_machine_review_does_not_mutate_scientific_records(db_session, _api
     )
     before = _scientific_record_snapshot(db_session, calc.id)
 
-    run_llm_precheck_for_submission(
+    run_machine_review_for_submission(
         db_session,
         submission.id,
-        provider=FakeLLMPrecheckProvider(),
+        provider=FakeMachineReviewProvider(),
     )
 
     assert _scientific_record_snapshot(db_session, calc.id) == before
@@ -346,14 +346,14 @@ def test_fake_machine_review_does_not_change_deterministic_evidence(db_session, 
 
     before = _deterministic_snapshot(db_session, calc.id)
 
-    result = run_llm_precheck_for_submission(
+    result = run_machine_review_for_submission(
         db_session,
         submission.id,
-        provider=FakeLLMPrecheckProvider(),
+        provider=FakeMachineReviewProvider(),
     )
 
     after = _deterministic_snapshot(db_session, calc.id)
-    assert result.label is LLMPrecheckLabel.pass_  # one linked record inspected
+    assert result.status is MachineReviewStatus.machine_screened_pass  # one linked record inspected
     assert after == before, "machine-review run perturbed deterministic evidence"
     # Spot-check every required field individually so a regression names itself.
     before_obj = json.loads(before)["evidence"]
@@ -382,13 +382,13 @@ def test_failed_machine_review_does_not_fail_upload_or_mutate_status(db_session,
     status_before = submission.status
 
     # Does not raise — the provider failure is swallowed into an advisory result.
-    result = run_llm_precheck_for_submission(
+    result = run_machine_review_for_submission(
         db_session,
         submission.id,
         provider=_RaisingProvider(),
     )
 
-    assert result.label is LLMPrecheckLabel.failed_to_review
+    assert result.status is MachineReviewStatus.machine_review_failed
     assert submission.status is status_before is SubmissionStatus.pending
     assert _deterministic_snapshot(db_session, calc.id) == evidence_before
     # The advisory failure is recorded only as a neutral audit event.
@@ -396,7 +396,8 @@ def test_failed_machine_review_does_not_fail_upload_or_mutate_status(db_session,
     assert len(events) == 1
     assert events[0].from_status is None
     assert events[0].to_status is None
-    assert events[0].details_json["error_kind"] == "RuntimeError"
+    assert events[0].details_json["status"] == "machine_review_failed"
+    assert "provider unavailable" in events[0].details_json["summary"]
     # And the contract-layer derivation agrees a reviewer failure is its own axis.
     assert (
         derive_machine_review_status((), MachineReviewOutcome.failed)
@@ -416,13 +417,13 @@ def test_not_performed_machine_review_writes_no_public_trust_state(db_session, _
     evidence_before = _deterministic_snapshot(db_session, calc.id)
     settings = Settings(ai_review_assistant_mode="off")
 
-    result = run_llm_precheck_for_submission(
+    result = run_machine_review_for_submission(
         db_session,
         submission.id,
         settings_obj=settings,
     )
 
-    assert result.label is LLMPrecheckLabel.not_run
+    assert result.status is MachineReviewStatus.not_run
     # No advisory event is persisted when the reviewer does not run.
     assert _precheck_events(db_session, submission.id) == []
     # Deterministic evidence is untouched...
@@ -462,13 +463,14 @@ def test_machine_review_result_is_advisory_only(db_session, _api_test_user):
     )
     evidence_before = _deterministic_snapshot(db_session, calc.id)
 
-    fixed = LLMPrecheckResult(
-        label=LLMPrecheckLabel.warning,
+    fixed = MachineReviewProviderResultV2(
+        schema_version=MACHINE_REVIEW_V2_SCHEMA_VERSION,
+        status=MachineReviewStatus.machine_screened_warning,
         summary="Advisory warning with a finding",
         findings=(
-            LLMFinding(
-                severity=LLMFindingSeverity.warning,
-                category=LLMFindingCategory.provenance,
+            MachineReviewProviderFindingV2(
+                severity=MachineReviewSeverity.warning,
+                category=MachineReviewCategory.provenance,
                 record_type="calculation",
                 record_id=calc.id,
                 message="Missing source artifact summary.",
@@ -479,14 +481,14 @@ def test_machine_review_result_is_advisory_only(db_session, _api_test_user):
         used_rag=False,
     )
 
-    result = run_llm_precheck_for_submission(
+    result = run_machine_review_for_submission(
         db_session,
         submission.id,
-        provider=FakeLLMPrecheckProvider(fixed_result=fixed),
+        provider=FakeMachineReviewProvider(fixed_result=fixed),
     )
 
-    assert result.label is LLMPrecheckLabel.warning
-    assert result.findings  # the advisory finding is carried through
+    assert result.status is MachineReviewStatus.machine_screened_warning
+    assert result.result.findings  # the advisory finding is carried through
     # The advisory finding cites evidence (pointer) but changes nothing.
     assert submission.status is SubmissionStatus.pending
     assert _deterministic_snapshot(db_session, calc.id) == evidence_before
@@ -516,10 +518,10 @@ def test_repeated_machine_review_runs_keep_evidence_byte_identical(db_session, _
     evidence_before = _deterministic_snapshot(db_session, calc.id)
 
     for _ in range(3):
-        run_llm_precheck_for_submission(
+        run_machine_review_for_submission(
             db_session,
             submission.id,
-            provider=FakeLLMPrecheckProvider(),
+            provider=FakeMachineReviewProvider(),
         )
 
     assert _deterministic_snapshot(db_session, calc.id) == evidence_before

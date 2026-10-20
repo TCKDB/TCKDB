@@ -405,49 +405,36 @@ def test_manifest_document_is_rebuildable_from_its_snapshot_columns(
     assert rebuilt["rights"]["basis_kinds"] == {"depositor_agreement": 1}
 
 
-def test_a_v1_manifest_row_still_reproduces_its_v1_document(
-    db_session, policy, curator, thermo_candidates, species_entry, monkeypatch
+def test_a_manifest_row_with_an_unknown_tag_is_refused(
+    db_session, draft_release, curator, thermo_candidates, species_entry
 ):
-    """A manifest frozen under ``v1`` renders the ``v1`` shape forever.
+    """A stored tag no renderer is registered for is refused, not guessed at.
 
-    The renderer branches on the tag *stored on the row*, never on the live
-    constant. A ``v1`` row has no ``rights`` block, and gaining one after the
-    constant moved to ``v2`` would break every recorded digest. Simulated by
-    freezing a second release while the constant reads ``v1``, then restoring
-    the constant and rendering again.
+    The renderer dispatches on the tag stored on the row. A row naming a
+    format this build cannot render raises instead of falling back to the
+    current shape (which would hand back a document whose digest cannot match).
+    Current-tag replay stays byte for byte (see the digest assertions in
+    ``test_the_snapshot_rebuilds_the_served_document``-style tests above).
     """
-    from app.services.release import versions as versions_module
-    from app.services.release.curation import create_release
+    import dataclasses
+
     from app.services.release.manifest import (
+        ReleaseManifestStateConflict,
         render_manifest_document,
         snapshot_from_manifest,
     )
 
-    _chosen, other = thermo_candidates
-    legacy = create_release(
-        db_session,
-        tag="2026.06.0",
-        title="A release frozen before the rights block existed",
-        curation_policy=policy,
-        data_license="CC-BY-4.0",
-        code_license="MIT",
-        citation_text="TCKDB curated dataset release 2026.06.0.",
-        contact="tckdb-maintainers@example.org",
-        created_by=curator.id,
+    chosen, _other = thermo_candidates
+    manifest = _publish_with_selection(
+        db_session, draft_release, curator, chosen, species_entry
     )
-    monkeypatch.setattr(versions_module, "MANIFEST_SCHEMA", versions_module.MANIFEST_SCHEMA_V1)
-    manifest = _publish_with_selection(db_session, legacy, curator, other, species_entry)
-    assert manifest.manifest_schema == "tckdb.dataset_release.v1"
-    assert "rights" not in manifest.document_json
-    recorded = manifest.content_sha256
+    snapshot = snapshot_from_manifest(manifest)
+    assert render_manifest_document(snapshot) == dict(manifest.document_json)
+    assert manifest_digest(render_manifest_document(snapshot)) == manifest.content_sha256
 
-    monkeypatch.undo()
-    assert versions_module.MANIFEST_SCHEMA == "tckdb.dataset_release.v2"
-    rebuilt = render_manifest_document(snapshot_from_manifest(manifest))
-    assert "rights" not in rebuilt
-    assert rebuilt == dict(manifest.document_json)
-    assert manifest_digest(rebuilt) == recorded
-    assert verify_release(db_session, legacy).ok
+    unknown = dataclasses.replace(snapshot, manifest_schema="not.a.known.format")
+    with pytest.raises(ReleaseManifestStateConflict, match="unknown_manifest_schema"):
+        render_manifest_document(unknown)
 
 
 def test_verification_fails_when_a_stored_checksum_is_tampered_with(

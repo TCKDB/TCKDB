@@ -33,10 +33,6 @@ import yaml  # type: ignore[import-untyped]
 from app.chemistry.manifest_attestation import attest
 
 MANIFEST_PATH = Path(__file__).with_name("xyg3_b3lyp_barrier_manifest.yaml")
-#: The bytes of manifest 0.3.0, kept unchanged so that a decision recorded under rule 0.2.0 still replays. Used by the
-#: replay-only rule version; never by a live selection.
-MANIFEST_0_3_0_PATH = Path(__file__).with_name("xyg3_b3lyp_barrier_manifest_0_3_0.yaml")
-
 #: Subsets and the number of barrier heights each must hold (two per reaction).
 EXPECTED_SUBSET_REACTIONS = {"HT": 19, "HAT": 6, "NS": 8, "UM": 5}
 
@@ -250,10 +246,9 @@ def parse_xyg3_barrier_manifest_bytes(data: bytes, *, expected_sha256: str | Non
 
 
 @lru_cache(maxsize=4)
-def load_xyg3_barrier_manifest(expected_sha256: str | None = None, path: Path | None = None) -> XYG3BarrierManifest:
+def load_xyg3_barrier_manifest(expected_sha256: str | None = None) -> XYG3BarrierManifest:
     """Load and validate the shipped manifest (cached; the file is immutable at runtime).
 
     :param expected_sha256: The pinned digest of the file's bytes; ``None`` skips the pin check.
-    :param path: Another shipped manifest file (the preserved 0.3.0 bytes, for replay); default is the current one.
     """
-    return parse_xyg3_barrier_manifest_bytes((path or MANIFEST_PATH).read_bytes(), expected_sha256=expected_sha256)
+    return parse_xyg3_barrier_manifest_bytes(MANIFEST_PATH.read_bytes(), expected_sha256=expected_sha256)

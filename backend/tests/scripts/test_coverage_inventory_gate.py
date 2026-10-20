@@ -27,7 +27,6 @@ SCRIPTS = {
     "network": (BACKEND / "scripts/ops/network_selection_coverage_inventory.py", "network_solves"),
     "structure": (BACKEND / "scripts/ops/structure_selection_coverage_inventory.py", "calculations"),
     "statmech": (BACKEND / "scripts/ops/statmech_selection_coverage_inventory.py", "by_profile"),
-    "statmech_trust_owner": (BACKEND / "scripts/ops/statmech_trust_owner_report.py", "by_owner"),
     "reproducibility_ts_statmech": (BACKEND / "scripts/ops/reproducibility_ts_statmech_report.py", "by_owner"),
 }
 #: Nothing listens here, so a script that tried to connect would fail with a connection error, not a usage error.
@@ -139,7 +138,6 @@ INVENTORY_FUNCTIONS = {
     "thermo": "h298_coverage_inventory",
     "network": "network_coverage_inventory",
     "statmech": "statmech_coverage_inventory",
-    "statmech_trust_owner": "statmech_trust_owner_report",
     "reproducibility_ts_statmech": "reproducibility_owner_report",
 }
 
