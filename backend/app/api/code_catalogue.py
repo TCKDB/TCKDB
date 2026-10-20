@@ -2992,6 +2992,19 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/common.py"),
     ApiCode("unknown_kinetics_determination_ref", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py"),
+    ApiCode("unknown_manifest_schema", 409, Surface.message_prefix,
+            "backend/app/services/release/manifest.py",
+            note=(
+                "A release manifest row stores the format tag it was frozen "
+                "under, and this build has no renderer registered for that "
+                "tag, so it refuses to render or verify the document rather "
+                "than guess a shape. 409 because the manifest operation is "
+                "forbidden by the stored state (the same class as "
+                "manifest_already_frozen), not because the request was "
+                "malformed. Releases frozen under the retired "
+                "tckdb.dataset_release.v1 tag stop verifying until the "
+                "stored tags are migrated."
+            )),
     ApiCode("unknown_statmech_candidate_ref", 404, Surface.coded_exception,
             "backend/app/services/statmech_selection/loader.py",
             note=(
