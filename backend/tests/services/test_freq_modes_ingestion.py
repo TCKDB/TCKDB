@@ -107,7 +107,7 @@ class TestBundleAdapterMaterializesModes:
 def _freq_calc_payload(
     *,
     modes: list[dict] | None = None,
-    parameters_parser_version: str | None = None,
+    parameters_parser: dict | None = None,
 ) -> CalculationWithResultsPayload:
     base: dict = {
         "type": "freq",
@@ -120,8 +120,8 @@ def _freq_calc_payload(
     }
     if modes is not None:
         base["freq_result"]["modes"] = modes
-    if parameters_parser_version is not None:
-        base["parameters_parser"] = {"name": "test-parser", "version": parameters_parser_version}
+    if parameters_parser is not None:
+        base["parameters_parser"] = parameters_parser
     return CalculationWithResultsPayload.model_validate(base)
 
 
@@ -147,7 +147,7 @@ class TestFreqParserFidelityWarning:
 
     def test_silent_when_no_parser_version_set(self) -> None:
         """Manual / legacy uploads must not be punished for missing modes."""
-        calc = _freq_calc_payload(modes=None, parameters_parser_version=None)
+        calc = _freq_calc_payload(modes=None, parameters_parser=None)
         warnings = check_freq_parser_fidelity([calc])
         assert warnings == []
 
