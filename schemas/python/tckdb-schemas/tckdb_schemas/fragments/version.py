@@ -30,7 +30,7 @@ patterns, so the two cannot disagree about what counts.
 from __future__ import annotations
 
 import re
-from typing import Annotated, Any, Self
+from typing import Any, Self
 
 from pydantic import BeforeValidator, ConfigDict, Field, StrictInt, model_validator
 

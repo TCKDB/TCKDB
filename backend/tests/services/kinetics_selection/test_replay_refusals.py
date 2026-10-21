@@ -16,7 +16,11 @@ from app.chemistry.kinetics_rules.xyg3_barrier_manifest import MANIFEST_PATH
 from app.db.models.common import RecordReviewStatus
 from app.services.kinetics_selection import ReplayError, replay_decision, replay_matches
 from app.services.kinetics_selection.manifest import MANIFEST_FORMAT_VERSION, MANIFEST_FORMATS
-from app.services.kinetics_selection.models import ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_SEMANTICS_VERSION, POLICY_VERSION
+from app.services.kinetics_selection.models import (
+    ASSESSMENT_SEMANTICS_NAME,
+    ASSESSMENT_SEMANTICS_VERSION,
+    POLICY_VERSION,
+)
 from app.services.kinetics_selection.rules import XYG3_MANIFEST_SHA256, default_rules
 from tests.services.kinetics_selection.test_selection import PREFERRED, YIELDING, select, with_protocol
 
