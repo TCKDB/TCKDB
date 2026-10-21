@@ -321,6 +321,14 @@ def _seed(conn) -> dict[str, int]:
     ids["calc_molpro"] = _calc(conn, entry, "molpro_v1")
     ids["calc_producer"] = _calc(conn, entry, "acme-reader 4.2")
     ids["calc_none"] = _calc(conn, entry, None)
+    # Ordinary free-text producer stamps that happen to start with a TCKDB parser family. They were legal on main, one of
+    # them sits on an APPROVED (frozen) calculation, and the operator cannot edit that row: the upgrade must carry them
+    # through as producer stamps, never refuse them.
+    ids["calc_gaussian16"] = _calc(conn, entry, "Gaussian 16")
+    ids["calc_orca504"] = _calc(conn, entry, "orca 5.0.4")
+    ids["calc_psi4_191"] = _calc(conn, entry, "psi4-1.9.1")
+    ids["calc_gaussian16_compact"] = _calc(conn, entry, "gaussian16")
+    ids["calc_molpro2024"] = _calc(conn, entry, "molpro2024.1")
     ids["param"] = conn.scalar(
         text(
             "INSERT INTO calculation_parameter (calculation_id, raw_key, raw_value, source, parser_version) VALUES "
@@ -342,6 +350,14 @@ def _seed(conn) -> dict[str, int]:
             "VALUES ('calculation', :c, 'approved', :u, now(), now())"
         ),
         {"c": ids["calc_frozen"], "u": user},
+    )
+
+    conn.execute(
+        text(
+            "INSERT INTO record_review (record_type, record_id, status, reviewed_by, reviewed_at, first_approved_at) "
+            "VALUES ('calculation', :c, 'approved', :u, now(), now())"
+        ),
+        {"c": ids["calc_gaussian16"], "u": user},
     )
 
     source = conn.scalar(
@@ -387,6 +403,7 @@ def _seed(conn) -> dict[str, int]:
         {"mapping": {"schema": "thermoml.mapping.v1", "rules": ["origin.prediction_type_map.v1"]}},
     )
     ids["obs_producer"] = observation("acme-obs 1.0", {"note": "producer"}, 2.0)
+    ids["obs_cccbdb_scrape"] = observation("CCCBDB scrape 2024", {"note": "a depositor's own CCCBDB scrape"}, 3.0)
 
     # The seeded ``torsion_basin`` scheme (``v1``) is already there; add a numeric-text one.
     ids["scheme_extra"] = conn.scalar(
@@ -532,6 +549,14 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
         assert stamps[ids["calc_psi4"]] == ("psi4_parameters", "1")
         assert stamps[ids["calc_molpro"]] == ("molpro_parameters", "1")
         assert stamps[ids["calc_producer"]] == ("producer", "acme-reader 4.2")
+        for key, text_ in (
+            ("calc_gaussian16", "Gaussian 16"),
+            ("calc_orca504", "orca 5.0.4"),
+            ("calc_psi4_191", "psi4-1.9.1"),
+            ("calc_gaussian16_compact", "gaussian16"),
+            ("calc_molpro2024", "molpro2024.1"),
+        ):
+            assert stamps[ids[key]] == ("producer", text_), key
         assert stamps[ids["calc_none"]] == (None, None)
         assert conn.execute(text("SELECT parser_name, parser_version FROM calculation_parameter")).one() == ("gaussian_parameters", "1")
         assert conn.execute(text("SELECT parser_name, parser_version FROM calc_hessian")).one() == ("hessian", "1")
@@ -555,6 +580,7 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
         }
         assert obs[ids["obs"]][:2] == ("cccbdb_experimental_species", "1")
         assert obs[ids["obs_producer"]][:2] == ("producer", "acme-obs 1.0")
+        assert obs[ids["obs_cccbdb_scrape"]][:2] == ("producer", "CCCBDB scrape 2024")
         # Verbatim upstream data: byte for byte what was deposited.
         assert obs[ids["obs"]][2] == {"mapping": {"schema": "thermoml.mapping.v1", "rules": ["origin.prediction_type_map.v1"]}}
 

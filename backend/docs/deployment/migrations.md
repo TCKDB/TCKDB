@@ -805,7 +805,11 @@ the old schema cannot spell (a parser at a version that was never a string, a Cp
 record under another parser): it restores the strings it was given exactly, or it
 stops. A manifest frozen after this revision carries the new format header and
 cannot be reproduced under the old one; remove or accept the loss of those
-manifests before downgrading.
+manifests before downgrading. **In practice, treat this revision as one-way once
+anyone deposits.** A calculation uploaded by a client such as `tckdb-qcschema`
+carries a parser stamp (`tckdb-qcschema`, ...) that has no pre-revision spelling,
+so the downgrade refuses it, and it will keep refusing for as long as such a row
+exists. The downgrade is for a database nobody has written to since the upgrade.
 
 **Every stored machine review and reproducibility assessment reads stale
 afterwards, by design, and each says why.** The rubric versions all restarted at

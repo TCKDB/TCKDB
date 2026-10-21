@@ -56,8 +56,10 @@ What it rewrites, by table (fourteen tables)
   ``molpro_parameters`` | ``psi4_parameters`` | ``hessian``, ``'1'``). **``orca_v1`` and ``orca_v2`` were two different
   parsers** and stay distinguishable: ``orca_v2`` is (``orca_parameters``, ``'1'``) and ``orca_v1`` is
   (``orca_parameters``, ``'0'``), the predecessor of version 1. Any other non-null stamp is a producer's own and is kept
-  verbatim under the name ``producer``, unless it looks like a TCKDB stamp (``gaussian_v2``, ``GAUSSIAN_V1``,
-  ``orca_v3`` ...), in which case the revision aborts.
+  verbatim under the name ``producer``, unless it is a *variant of one of the six spellings TCKDB itself wrote*
+  (``gaussian_v2``, ``GAUSSIAN_V1``, ``orca_v3``, ``psi4-0.2.0``), in which case the revision aborts. Ordinary free text
+  that merely starts with a family name (``Gaussian 16``, ``orca 5.0.4``, ``psi4-1.9.1``) is a producer stamp: it was legal
+  on main and may sit on a frozen calculation the operator cannot edit.
 * ``external_source_record`` / ``external_source``: only rows that are ThermoML (``thermoml_article``, parser
   ``thermoml`` at ``thermoml-cp-parser/0.1.0``, mapping ``thermoml-cp-mapping/0.1.0``) are rewritten; any other row
   aborts the upgrade. They become (``thermoml_cp`` / ``thermoml_cp_mapping``, ``'1'``) with a new ``mapping_name``; the
@@ -66,8 +68,9 @@ What it rewrites, by table (fourteen tables)
   ``parser_name`` and ``mapping_name``: every TCKDB version is 1, so the versions alone can no longer tell two parsers
   apart.
 * ``molecular_property_observation``: the CCCBDB parser stamp -> (``cccbdb_experimental_species``, ``'1'``) with a new
-  ``external_source_parser_name``; any other non-null stamp is a producer's (``producer``, verbatim) unless it looks like
-  a CCCBDB stamp, which aborts. ``raw_payload_json`` is verbatim upstream data and is **never** rewritten.
+  ``external_source_parser_name``; any other non-null stamp is a producer's (``producer``, verbatim) unless it is a
+  variant of the one CCCBDB spelling TCKDB wrote (``cccbdb-experimental-species-parser/0.2.0``), which aborts; a
+  depositor's ``CCCBDB scrape 2024`` is a producer stamp. ``raw_payload_json`` is verbatim upstream data and is **never** rewritten.
 * ``conformer_assignment_scheme``: ``version`` text -> integer. ``torsion_basin`` ``'v1'`` -> ``1`` and its content-derived
   ``public_ref`` recomputed from ``cas:name=torsion_basin;version=1;scope=canonical`` with a frozen copy of
   ``make_content_ref``; any other row must already be a plain integer, else the upgrade aborts.
@@ -160,9 +163,15 @@ _PARSER_OLD_TO_NEW: dict[str, tuple[str, str]] = {
 }
 _PARSER_NEW_TO_OLD: dict[tuple[str, str], str] = {new: old for old, new in _PARSER_OLD_TO_NEW.items()}
 _PRODUCER = "producer"
-#: A stamp that looks like one of TCKDB's own (family, optional separator, a version) but is none of the exact ones.
-_PARSER_LOOKALIKE = re.compile(r"^(gaussian|orca|molpro|psi4|hessian)[._@ -]?v?[0-9][0-9.]*$", re.IGNORECASE)
-_CCCBDB_LOOKALIKE = re.compile(r"^cccbdb", re.IGNORECASE)
+#: A variant of one of the six spellings TCKDB itself wrote (``gaussian_v1``, ``orca_v1``, ``orca_v2``, ``molpro_v1``,
+#: ``hessian_v1``, ``psi4-0.1.0``) that is none of the exact ones: ``gaussian_v2``, ``GAUSSIAN_V1``, ``orca_v3``,
+#: ``psi4-0.2.0``. That, and only that, is refused. Ordinary free-text producer stamps that merely start with a family
+#: name (``Gaussian 16``, ``gaussian16``, ``orca 5.0.4``, ``psi4-1.9.1``, ``molpro2024.1``) were legal on main, may sit on
+#: an approved (frozen) calculation the operator cannot edit, and become ``('producer', verbatim)``.
+_PARSER_LOOKALIKE = re.compile(r"^((gaussian|orca|molpro|hessian)_v\d+|psi4-0\.\d+\.\d+)$", re.IGNORECASE)
+#: The same for the CCCBDB parser: a variant of ``cccbdb-experimental-species-parser/0.1.0``. A depositor's own
+#: ``CCCBDB scrape 2024`` is a producer stamp.
+_CCCBDB_LOOKALIKE = re.compile(r"^cccbdb-[a-z-]+-parser/\d+\.\d+\.\d+$", re.IGNORECASE)
 
 #: ThermoML rule ids that carried ``.v1``; the suffix is removed from the stored reports.
 _RULE_IDS = (

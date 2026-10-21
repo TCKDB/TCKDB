@@ -52,6 +52,8 @@ from typing import Any, Literal
 
 from sqlalchemy import and_, or_
 
+from app.versioning import same_value
+
 #: Bumped when the cursor payload's shape changes, so an old cursor is
 #: rejected with a clear error instead of being silently misread.
 CURSOR_VERSION = 1
@@ -148,7 +150,7 @@ def decode_cursor(token: str, *, expected_signature: str) -> Cursor:
             "invalid_cursor: the cursor is not a token this API issued."
         ) from exc
 
-    if not isinstance(payload, dict) or payload.get("v") != CURSOR_VERSION:
+    if not isinstance(payload, dict) or not same_value(payload.get("v"), CURSOR_VERSION):
         raise InvalidCursorError(
             "invalid_cursor: cursor version is not supported by this server; "
             "restart the traversal without a cursor."

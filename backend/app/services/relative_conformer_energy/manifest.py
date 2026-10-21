@@ -382,7 +382,7 @@ def replay_comparison(manifest: dict[str, Any]) -> dict[str, Any]:
             raise ReplayError("inconsistent_manifest", "the two runs were not made over one population")
     for name in _RUNS:
         # Both runs are made under the comparison's own versions, which are the running ones (checked above).
-        if runs[name].get("versions") != _canon(_versions()):
+        if not same_value(runs[name].get("versions"), _canon(_versions())):
             raise ReplayError("inconsistent_manifest", f"the {name} run was made under another semantic version")
     replayed = {name: replay_relative_energies(runs[name]) for name in _RUNS}
     result = _canon(
