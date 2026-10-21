@@ -314,7 +314,7 @@ PRESEEDED_TABLES: Mapping[
     ),
     "conformer_assignment_scheme": (
         ("name", "version"),
-        frozenset({("torsion_basin", "1")}),
+        frozenset({("torsion_basin", 1)}),
     ),
 }
 

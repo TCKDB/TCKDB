@@ -311,7 +311,7 @@ class ConformerAssignmentSchemeSummary(BaseModel):
     assignment_scheme_id: int | None = None
     assignment_scheme_ref: str | None = None
     name: str
-    version: str | None = None
+    version: int | None = None
     scope: ConformerAssignmentScopeKind | None = None
     is_default: bool | None = None
 

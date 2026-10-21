@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt
 
 from app.db.models.common import (
     CalculationQuality,
@@ -159,7 +159,7 @@ class ConformerSelectionRead(ConformerSelectionBase, TimestampedCreatedByReadSch
 
 class ConformerAssignmentSchemeBase(BaseModel):
     name: str = Field(max_length=128)
-    version: str = Field(max_length=64)
+    version: StrictInt = Field(ge=1)
     scope: ConformerAssignmentScopeKind = ConformerAssignmentScopeKind.canonical
     description: str | None = None
     parameters_json: dict[str, Any] | None = None
@@ -173,7 +173,7 @@ class ConformerAssignmentSchemeCreate(ConformerAssignmentSchemeBase, SchemaBase)
 
 class ConformerAssignmentSchemeUpdate(SchemaBase):
     name: str | None = Field(default=None, max_length=128)
-    version: str | None = Field(default=None, max_length=64)
+    version: StrictInt | None = Field(default=None, ge=1)
     scope: ConformerAssignmentScopeKind | None = None
     description: str | None = None
     parameters_json: dict[str, Any] | None = None

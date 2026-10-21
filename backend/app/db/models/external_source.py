@@ -157,13 +157,15 @@ class ExternalSourceRecord(Base, TimestampMixin):
             "http_status IS NULL OR http_status BETWEEN 100 AND 599",
             name=conv("ck_external_source_record_http_status_range"),
         ),
-        # A changed parser or mapping version appends a new custody row
+        # A changed parser or mapping (its name or its version) appends a new custody row
         # rather than overwriting the old one -- see class docstring.
         UniqueConstraint(
             "external_source_id",
             "source_record_key",
             "content_sha256",
+            "parser_name",
             "parser_version",
+            "mapping_name",
             "mapping_version",
             name="uq_external_source_record_identity",
         ),

@@ -381,7 +381,7 @@ def _canonical_literature(obj: Any) -> str | None:
 def _canonical_conformer_assignment_scheme(obj: Any) -> str:
     return (
         f"cas:name={(obj.name or '').strip().lower()};"
-        f"version={(obj.version or '').strip().lower()};"
+        f"version={obj.version};"
         f"scope={getattr(obj.scope, 'value', obj.scope)}"
     )
 

@@ -540,6 +540,10 @@ class ReleaseManifest(Base, CreatedByMixin, PublicRefMixin):
         CheckConstraint(
             "content_sha256 ~ '^[0-9a-f]{64}$'", name="content_sha256_hex"
         ),
+        CheckConstraint(
+            "manifest_format_version >= 1 AND review_policy_version >= 1 AND recovery_archive_format_version >= 1",
+            name="versions_positive",
+        ),
         CheckConstraint("selected_record_count >= 0", name="selected_count_nonneg"),
         CheckConstraint("candidate_record_count >= 0", name="candidate_count_nonneg"),
         CheckConstraint(

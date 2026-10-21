@@ -1,22 +1,25 @@
 """Disposable-database contract for ``c7d4a9e2b6f1`` (versioning PR-4: split every fused name-and-version string).
 
-The revision rewrites stored provenance in nine tables, three of them behind accepted-science immutability and three
-more append-only or immutable, and does it with every guard trigger switched off. Four things have to be checkable on a
+The revision rewrites stored provenance in fourteen tables, three of them behind accepted-science immutability and
+three more append-only or immutable, and does it with every guard trigger switched off. What has to be checkable on a
 real database and not merely on an empty one:
 
 1. **Every old shape comes out split.** The seed holds one row of every fused shape the code used to write (a reviewer
-   review, a transition-state review, an external-Cp review, a consistency-runner review, a reproducibility assessment,
-   a machine-review audit event, a published release, an execution-environment manifest, the five TCKDB parser stamps and
-   a producer's own, a ThermoML source record, a CCCBDB observation, the seeded conformer scheme). Each is asserted by
-   name and integer, so one shape the revision forgets leaves one fused string and fails here.
-2. **The bypass is real, bounded and undone.** The seeded calculation is *approved*, so the freeze is genuinely on at the
-   parent revision (asserted: the same ``UPDATE`` is refused there). The upgrade must still relabel its parser stamp, and
-   afterwards **every user trigger the revision touched is enabled again**, by comparing the full trigger inventory before
-   and after, and looking for any ``tgenabled = 'D'``.
-3. **It aborts on an impossible state.** A ``record_machine_review`` whose ``rubric_versions_json`` holds two keys makes
-   the upgrade fail, name the rows, and leave the database at the parent revision with its old columns intact.
-4. **Downgrade round-trips.** upgrade -> downgrade restores the exact old strings the seed wrote (the one documented
-   exception, the unpublished release manifest and artifact, does not come back), and upgrading again reproduces the split.
+   review, a transition-state review, an external-Cp review, a consistency-runner review, the fake test provider's
+   review, a published and a withdrawn release, an execution-environment manifest, the TCKDB parser stamps and a
+   producer's own, a ThermoML source record, CCCBDB and producer-stamped observations, conformer schemes). Each is
+   asserted by name and integer, so one shape the revision forgets leaves one fused string and fails here.
+2. **The bypass is real, bounded and undone.** The seeded calculation is *approved*, so the freeze is genuinely on at
+   the parent revision. Afterwards every trigger the revision disabled is back in the exact mode it had (ENABLE,
+   ENABLE ALWAYS or ENABLE REPLICA), and a trigger that was already disabled before the upgrade is left as it was.
+3. **It aborts on what it cannot split cleanly.** A review stamped with two rubrics, a fused name the revision does not
+   know, a look-alike parser stamp, a source record that is not ThermoML, a conformer scheme with a free-text version:
+   each makes the upgrade fail, name the rows, and leave the database at the parent revision untouched.
+4. **Downgrade round-trips exactly.** upgrade -> downgrade restores the exact old strings the seed wrote, including
+   ``orca_v1`` (kept distinct from ``orca_v2`` as version ``'0'``), ``custom-prompt`` and ``runner_x_v3``. The one
+   documented exception is the unpublished release manifests and artifacts, which do not come back.
+5. **Things that must not move do not.** ``token_v10`` is not ``token_v1``, a withdrawn release stays withdrawn with its
+   reason, and ``raw_payload_json`` (verbatim upstream data) is never rewritten.
 """
 
 from __future__ import annotations
@@ -48,6 +51,8 @@ _TOUCHED = (
     "molecular_property_observation",
     "conformer_assignment_scheme",
 )
+
+_SC = "tckdb.scientific_checks"
 
 
 class _Harness:
@@ -118,47 +123,108 @@ _OLD_ENV = {
 }
 
 
+def _user(conn) -> int:
+    return conn.scalar(
+        text("INSERT INTO app_user (username, role, is_active) VALUES ('split-curator', 'curator', true) RETURNING id")
+    )
+
+
+def _review(conn, *, model, provider, prompt, rubrics, record_id, schema="v1"):
+    return conn.scalar(
+        text(
+            "INSERT INTO record_machine_review (record_type, record_id, status, context_hash, "
+            "context_schema_version, prompt_version, rubric_versions_json, model, provider, reviewed_at) "
+            "VALUES ('thermo', :rid, 'machine_screened_pass', :h, :s, :p, CAST(:r AS jsonb), :m, :pr, now()) "
+            "RETURNING id"
+        ),
+        {"rid": record_id, "h": "a" * 64, "s": schema, "p": prompt, "r": json.dumps(rubrics), "m": model, "pr": provider},
+    )
+
+
+def _entry(conn) -> int:
+    species = conn.scalar(
+        text(
+            "INSERT INTO species (inchi_key, smiles, kind, charge, multiplicity, stereo_kind, public_ref) VALUES "
+            "('AAAAAAAAAAAAAA-AAAAAAAAAA-N', '[H]', 'molecule', 0, 2, 'unspecified', 'spc_split') RETURNING id"
+        )
+    )
+    return conn.scalar(text("INSERT INTO species_entry (species_id, public_ref) VALUES (:s, 'spe_split') RETURNING id"), {"s": species})
+
+
+def _calc(conn, entry, stamp) -> int:
+    return conn.scalar(
+        text("INSERT INTO calculation (type, species_entry_id, parameters_parser_version) VALUES ('opt', :e, :v) RETURNING id"),
+        {"e": entry, "v": stamp},
+    )
+
+
+def _old_manifest(conn, release, policy, *, suffix: str) -> int:
+    return conn.scalar(
+        text(
+            "INSERT INTO release_manifest (dataset_release_id, manifest_schema, alembic_revision, backend_version, "
+            "schemas_package_version, review_policy_version, curation_policy_id, recovery_archive_schema, release_public_ref, "
+            "release_tag, release_title, release_contact, release_status_at_publication, data_license, code_license, "
+            "citation_text, curation_policy_ref, curation_policy_name, curation_policy_version, curation_policy_description, "
+            "contract_json, document_json, content_sha256, selected_record_count, candidate_record_count, public_ref) VALUES "
+            "(:r, 'tckdb.dataset_release.v2', 'rev', 'b', 's', 'record_review.v1', :p, 'tckdb.archive.v1', :ref, "
+            "'2026.10.0', 't', 'x@y', 'published', 'CC-BY-4.0', 'MIT', 'c', 'cpol_split', 'p', '1', 'd', '{}'::jsonb, "
+            "'{\"schema\": \"tckdb.dataset_release.v2\"}'::jsonb, :sha, 1, 1, :mref) RETURNING id"
+        ),
+        {"r": release, "p": policy, "sha": suffix * 64, "ref": f"drel_{suffix}", "mref": f"rman_{suffix}"},
+    )
+
+
 def _seed(conn) -> dict[str, int]:
     """One row of every old fused shape, written as raw SQL at the parent revision."""
     ids: dict[str, int] = {}
-    user = conn.scalar(
-        text("INSERT INTO app_user (username, role, is_active) VALUES ('split-curator', 'curator', true) RETURNING id")
-    )
+    user = _user(conn)
     ids["user"] = user
 
-    def review(model, provider, prompt, rubrics, record_id, schema="v1"):
+    ids["mr_reviewer"] = _review(
+        conn, model="fake_test/machine-review", provider=None, prompt="machine_review_v1", rubrics={"computed_thermo_v2": "2"}, record_id=1
+    )
+    ids["mr_ts"] = _review(
+        conn, model=None, provider=None, prompt="machine_review_v1", rubrics={"computed_transition_state_v5": "5"}, record_id=2
+    )
+    ids["mr_cp"] = _review(
+        conn, model="external_cp_comparison_v1", provider=_SC, prompt="external_cp_comparison_v1",
+        rubrics={"external_cp_comparison_v2": "2"}, record_id=3,
+    )
+    ids["mr_check"] = _review(
+        conn, model="thermo_consistency", provider=_SC, prompt="thermo_consistency", rubrics={"thermo_consistency_v1": "1"}, record_id=4
+    )
+    # The test-only fake provider: its model string used to end -v2.
+    ids["mr_fake"] = _review(
+        conn, model="fake_test/machine-review-v2", provider="FakeMachineReviewProvider", prompt="machine_review_v1",
+        rubrics={"computed_thermo_v2": "2"}, record_id=5,
+    )
+    # A runner prompt that never carried a version, and one that carried a version above 1: both must come back as written.
+    ids["mr_custom"] = _review(
+        conn, model="custom-prompt", provider=_SC, prompt="custom-prompt", rubrics={"custom_prompt_v1": "1"}, record_id=6
+    )
+    ids["mr_runner3"] = _review(
+        conn, model="runner_x_v3", provider=_SC, prompt="runner_x_v3", rubrics={"runner_x_v3": "3"}, record_id=8
+    )
+
+    def repro(record_id, note):
         return conn.scalar(
             text(
-                "INSERT INTO record_machine_review (record_type, record_id, status, context_hash, "
-                "context_schema_version, prompt_version, rubric_versions_json, model, provider, reviewed_at) "
-                "VALUES ('thermo', :rid, 'machine_screened_pass', :h, :s, :p, CAST(:r AS jsonb), :m, :pr, now()) "
-                "RETURNING id"
+                "INSERT INTO record_reproducibility_assessment (record_type, record_id, grade, rubric_name, rubric_version, "
+                "context_hash, context_json, missing_json, assessor_kind, assessed_at) "
+                "VALUES ('thermo', :rid, 'described', 'tckdb_reproducibility', 'v1', :h, CAST(:c AS jsonb), CAST(:m AS jsonb), "
+                "'system', now()) RETURNING id"
             ),
-            {"rid": record_id, "h": "a" * 64, "s": schema, "p": prompt, "r": json.dumps(rubrics), "m": model, "pr": provider},
+            {
+                "rid": record_id,
+                "h": f"{record_id:x}" * 64 if record_id < 16 else "b" * 64,
+                "c": json.dumps({"rubric": {"name": "tckdb_reproducibility", "version": "v1"}, "note": note}),
+                "m": json.dumps(["selected_collection_requires_scientific_provenance_v1"]),
+            },
         )
 
-    ids["mr_reviewer"] = review("fake_test/machine-review", None, "machine_review_v1", {"computed_thermo_v2": "2"}, 1)
-    ids["mr_ts"] = review(None, None, "machine_review_v1", {"computed_transition_state_v5": "5"}, 2)
-    ids["mr_cp"] = review(
-        "external_cp_comparison_v1", "tckdb.scientific_checks", "external_cp_comparison_v1", {"external_cp_comparison_v2": "2"}, 3
-    )
-    ids["mr_check"] = review(
-        "thermo_consistency", "tckdb.scientific_checks", "thermo_consistency", {"thermo_consistency_v1": "1"}, 4
-    )
-
-    ids["repro"] = conn.scalar(
-        text(
-            "INSERT INTO record_reproducibility_assessment (record_type, record_id, grade, rubric_name, rubric_version, "
-            "context_hash, context_json, missing_json, assessor_kind, assessed_at) "
-            "VALUES ('thermo', 7, 'described', 'tckdb_reproducibility', 'v1', :h, CAST(:c AS jsonb), CAST(:m AS jsonb), "
-            "'system', now()) RETURNING id"
-        ),
-        {
-            "h": "b" * 64,
-            "c": json.dumps({"rubric": {"name": "tckdb_reproducibility", "version": "v1"}, "note": "no_typed_result_contract_v1"}),
-            "m": json.dumps(["selected_collection_requires_scientific_provenance_v1"]),
-        },
-    )
+    ids["repro"] = repro(7, "no_typed_result_contract_v1")
+    # ``token_v10`` is a different token from ``token_v1``: the rewrite must not touch it.
+    ids["repro_v10"] = repro(9, "no_typed_result_contract_v10")
 
     submission = conn.scalar(
         text("INSERT INTO submission (created_by, submission_kind) VALUES (:u, 'computed_species') RETURNING id"), {"u": user}
@@ -221,6 +287,17 @@ def _seed(conn) -> dict[str, int]:
         ),
         {"m": manifest, "sha": "d" * 64},
     )
+    # A withdrawn release: its curator-recorded withdrawal must survive the unpublish of its manifest.
+    ids["withdrawn"] = conn.scalar(
+        text(
+            "INSERT INTO dataset_release (tag, title, status, curation_policy_id, data_license, code_license, citation_text, "
+            "contact, published_at, withdrawn_at, withdrawn_reason, public_ref, doi) VALUES ('2026.09.0', 't', 'withdrawn', :p, "
+            "'CC-BY-4.0', 'MIT', 'c', 'x@y', '2026-09-01 00:00:00', '2026-09-15 12:00:00', 'a mislabelled set', 'drel_wd', '10.1/wd') "
+            "RETURNING id"
+        ),
+        {"p": policy},
+    )
+    _old_manifest(conn, ids["withdrawn"], policy, suffix="e")
 
     software = conn.scalar(text("INSERT INTO software (name) VALUES ('gaussian') RETURNING id"))
     release_row = conn.scalar(text("INSERT INTO software_release (software_id) VALUES (:s) RETURNING id"), {"s": software})
@@ -234,29 +311,16 @@ def _seed(conn) -> dict[str, int]:
         {"d": _env_digest(_OLD_ENV), "c": json.dumps(_OLD_ENV), "sr": release_row},
     )
 
-    species = conn.scalar(
-        text(
-            "INSERT INTO species (inchi_key, smiles, kind, charge, multiplicity, stereo_kind, public_ref) VALUES "
-            "('AAAAAAAAAAAAAA-AAAAAAAAAA-N', '[H]', 'molecule', 0, 2, 'unspecified', 'spc_split') RETURNING id"
-        )
-    )
-    entry = conn.scalar(text("INSERT INTO species_entry (species_id, public_ref) VALUES (:s, 'spe_split') RETURNING id"), {"s": species})
+    entry = _entry(conn)
     geometry = conn.scalar(text("INSERT INTO geometry (geom_hash, natoms) VALUES (:h, 1) RETURNING id"), {"h": "e" * 64})
 
-    def calc(stamp):
-        return conn.scalar(
-            text(
-                "INSERT INTO calculation (type, species_entry_id, parameters_parser_version) VALUES ('opt', :e, :v) RETURNING id"
-            ),
-            {"e": entry, "v": stamp},
-        )
-
-    ids["calc_frozen"] = calc("gaussian_v1")
-    ids["calc_orca"] = calc("orca_v1")
-    ids["calc_psi4"] = calc("psi4-0.1.0")
-    ids["calc_molpro"] = calc("molpro_v1")
-    ids["calc_producer"] = calc("acme-reader 4.2")
-    ids["calc_none"] = calc(None)
+    ids["calc_frozen"] = _calc(conn, entry, "gaussian_v1")
+    ids["calc_orca1"] = _calc(conn, entry, "orca_v1")
+    ids["calc_orca2"] = _calc(conn, entry, "orca_v2")
+    ids["calc_psi4"] = _calc(conn, entry, "psi4-0.1.0")
+    ids["calc_molpro"] = _calc(conn, entry, "molpro_v1")
+    ids["calc_producer"] = _calc(conn, entry, "acme-reader 4.2")
+    ids["calc_none"] = _calc(conn, entry, None)
     ids["param"] = conn.scalar(
         text(
             "INSERT INTO calculation_parameter (calculation_id, raw_key, raw_value, source, parser_version) VALUES "
@@ -300,18 +364,33 @@ def _seed(conn) -> dict[str, int]:
                     "schema": "thermoml.mapping.v1",
                     "parser_version": "thermoml-cp-parser/0.1.0",
                     "mapping_version": "thermoml-cp-mapping/0.1.0",
-                    "transformed": ["pressure.kpa_to_bar.v1", "unit.j_mol_k.identity"],
+                    # ``.v10`` is not ``.v1``: it must come through untouched.
+                    "transformed": ["pressure.kpa_to_bar.v1", "pressure.kpa_to_bar.v10", "unit.j_mol_k.identity"],
                 }
             ),
         },
     )
-    ids["obs"] = conn.scalar(
-        text(
-            "INSERT INTO molecular_property_observation (property_kind, scientific_origin, scalar_value, scalar_unit, external_source_parser_version, "
-            "raw_payload_json) VALUES ('dipole_moment', 'experimental', 1.0, 'D', 'cccbdb-experimental-species-parser/0.1.0', "
-            "CAST(:j AS jsonb)) RETURNING id"
-        ),
-        {"j": json.dumps({"mapping": {"schema": "thermoml.mapping.v1", "rules": ["origin.prediction_type_map.v1"]}})},
+
+    def observation(stamp, payload, value=1.0):
+        return conn.scalar(
+            text(
+                "INSERT INTO molecular_property_observation (property_kind, scientific_origin, scalar_value, scalar_unit, "
+                "external_source_parser_version, raw_payload_json) VALUES ('dipole_moment', 'experimental', :x, 'D', :v, "
+                "CAST(:j AS jsonb)) RETURNING id"
+            ),
+            {"v": stamp, "j": json.dumps(payload), "x": value},
+        )
+
+    # ``raw_payload_json`` is verbatim upstream data: it is never rewritten, whatever it happens to contain.
+    ids["obs"] = observation(
+        "cccbdb-experimental-species-parser/0.1.0",
+        {"mapping": {"schema": "thermoml.mapping.v1", "rules": ["origin.prediction_type_map.v1"]}},
+    )
+    ids["obs_producer"] = observation("acme-obs 1.0", {"note": "producer"}, 2.0)
+
+    # The seeded ``torsion_basin`` scheme (``v1``) is already there; add a numeric-text one.
+    ids["scheme_extra"] = conn.scalar(
+        text("INSERT INTO conformer_assignment_scheme (name, version, scope, public_ref) VALUES ('extra', '2', 'canonical', 'cas_extra') RETURNING id")
     )
     return ids
 
@@ -330,7 +409,7 @@ def _snapshot(conn) -> dict[str, list]:
         "esr": "SELECT id, parser_name, parser_version, mapping_version, mapping_report_json FROM external_source_record ORDER BY id",
         "source": "SELECT id, source_release FROM external_source ORDER BY id",
         "obs": "SELECT id, external_source_parser_version, raw_payload_json FROM molecular_property_observation ORDER BY id",
-        "scheme": "SELECT id, version, public_ref FROM conformer_assignment_scheme ORDER BY id",
+        "scheme": "SELECT id, version::text, public_ref FROM conformer_assignment_scheme ORDER BY id",
     }
     return {name: [tuple(r) for r in conn.execute(text(q)).all()] for name, q in queries.items()}
 
@@ -339,7 +418,7 @@ def _triggers(conn) -> dict[str, str]:
     """Every user trigger on a touched table -> its enabled state."""
     rows = conn.execute(
         text(
-            "SELECT c.relname || '.' || t.tgname, t.tgenabled FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid "
+            "SELECT c.relname || '.' || t.tgname, t.tgenabled::text FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid "
             "WHERE NOT t.tgisinternal AND c.relname = ANY(:tables) ORDER BY 1"
         ),
         {"tables": list(_TOUCHED)},
@@ -385,6 +464,11 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
         assert mr[ids["mr_ts"]][2:] == ("machine_review", 1, "computed_transition_state", 5)
         assert mr[ids["mr_cp"]] == ("external_cp_comparison", 1, "external_cp_comparison", 1, "external_cp_comparison", 2)
         assert mr[ids["mr_check"]] == ("thermo_consistency", 1, "thermo_consistency", 1, "thermo_consistency", 1)
+        # The fake provider's model string no longer ends -v2.
+        assert mr[ids["mr_fake"]][0] == "fake_test/machine-review"
+        # An unversioned runner prompt is version 1; a runner prompt that carried version 3 keeps it.
+        assert mr[ids["mr_custom"]][2:4] == ("custom-prompt", 1)
+        assert mr[ids["mr_runner3"]][2:6] == ("runner_x", 3, "runner_x", 3)
         assert "rubric_versions_json" not in {
             c[0]
             for c in conn.execute(
@@ -399,6 +483,11 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
         assert repro[0] == 1
         assert repro[1] == {"rubric": {"name": "tckdb_reproducibility", "version": 1}, "note": "no_typed_result_contract"}
         assert repro[2] == ["selected_collection_requires_scientific_provenance"]
+        # ``..._v10`` is not ``..._v1``: its note is untouched (its missing token, a real ``_v1``, is split).
+        v10 = conn.scalar(
+            text("SELECT context_json ->> 'note' FROM record_reproducibility_assessment WHERE id = :i"), {"i": ids["repro_v10"]}
+        )
+        assert v10 == "no_typed_result_contract_v10"
 
         marked = conn.scalar(text("SELECT details_json FROM submission_audit_event WHERE id = :i"), {"i": ids["audit_marked"]})
         assert marked == {"format": {"name": "machine_review", "version": 1}, "status": "machine_screened_pass"}
@@ -406,7 +495,7 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
             "note": "no marker"
         }
 
-        # Unpublished: manifest and artifact gone, the release is a draft again, the curated selection is kept.
+        # Unpublished: manifest and artifact gone, the published release is a draft again, the curated selection is kept.
         assert conn.scalar(text("SELECT count(*) FROM release_manifest")) == 0
         assert conn.scalar(text("SELECT count(*) FROM release_artifact")) == 0
         release = conn.execute(
@@ -414,6 +503,16 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
         ).one()
         assert (release[0], release[1], release[2]) == ("draft", None, "10.1/abc")
         assert conn.scalar(text("SELECT count(*) FROM release_selection WHERE id = :i"), {"i": ids["selection"]}) == 1
+        # A withdrawn release stays withdrawn, with who-and-why intact; only its manifest is gone.
+        withdrawn = conn.execute(
+            text(
+                "SELECT status::text, published_at, withdrawn_at, withdrawn_reason, doi FROM dataset_release WHERE id = :i"
+            ),
+            {"i": ids["withdrawn"]},
+        ).one()
+        assert withdrawn[0] == "withdrawn"
+        assert str(withdrawn[1]).startswith("2026-09-01") and str(withdrawn[2]).startswith("2026-09-15")
+        assert (withdrawn[3], withdrawn[4]) == ("a mislabelled set", "10.1/wd")
 
         env = conn.execute(
             text("SELECT schema_name, schema_version, content_digest, canonical_json FROM execution_environment_manifest")
@@ -427,7 +526,9 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
             for row in conn.execute(text("SELECT id, parameters_parser_name, parameters_parser_version FROM calculation"))
         }
         assert stamps[ids["calc_frozen"]] == ("gaussian_parameters", "1")
-        assert stamps[ids["calc_orca"]] == ("orca_parameters", "1")
+        # ``orca_v1`` and ``orca_v2`` are different parsers: they stay different rows of provenance.
+        assert stamps[ids["calc_orca1"]] == ("orca_parameters", "0")
+        assert stamps[ids["calc_orca2"]] == ("orca_parameters", "1")
         assert stamps[ids["calc_psi4"]] == ("psi4_parameters", "1")
         assert stamps[ids["calc_molpro"]] == ("molpro_parameters", "1")
         assert stamps[ids["calc_producer"]] == ("producer", "acme-reader 4.2")
@@ -439,28 +540,66 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
             text("SELECT parser_name, parser_version, mapping_name, mapping_version, mapping_report_json FROM external_source_record")
         ).one()
         assert tuple(esr[:4]) == ("thermoml_cp", "1", "thermoml_cp_mapping", "1")
-        assert esr[4]["schema"] == "thermoml.mapping" and esr[4]["transformed"] == ["pressure.kpa_to_bar", "unit.j_mol_k.identity"]
+        assert esr[4]["schema"] == "thermoml.mapping"
+        assert esr[4]["transformed"] == ["pressure.kpa_to_bar", "pressure.kpa_to_bar.v10", "unit.j_mol_k.identity"]
         assert esr[4]["parser_version"] == "1" and esr[4]["mapping_name"] == "thermoml_cp_mapping"
         assert conn.scalar(text("SELECT source_release FROM external_source")) == "1"
-        obs = conn.execute(
-            text("SELECT external_source_parser_name, external_source_parser_version, raw_payload_json FROM molecular_property_observation")
-        ).one()
-        assert tuple(obs[:2]) == ("cccbdb_experimental_species", "1")
-        assert obs[2] == {"mapping": {"schema": "thermoml.mapping", "rules": ["origin.prediction_type_map"]}}
+        obs = {
+            row[0]: tuple(row[1:])
+            for row in conn.execute(
+                text(
+                    "SELECT id, external_source_parser_name, external_source_parser_version, raw_payload_json "
+                    "FROM molecular_property_observation"
+                )
+            )
+        }
+        assert obs[ids["obs"]][:2] == ("cccbdb_experimental_species", "1")
+        assert obs[ids["obs_producer"]][:2] == ("producer", "acme-obs 1.0")
+        # Verbatim upstream data: byte for byte what was deposited.
+        assert obs[ids["obs"]][2] == {"mapping": {"schema": "thermoml.mapping.v1", "rules": ["origin.prediction_type_map.v1"]}}
 
-        scheme = conn.execute(text("SELECT version, public_ref FROM conformer_assignment_scheme")).one()
-        assert scheme[0] == "1"
+        schemes = {
+            row[0]: (row[1], row[2])
+            for row in conn.execute(text("SELECT name, version, public_ref FROM conformer_assignment_scheme"))
+        }
         from app.services.public_refs import make_content_ref
 
-        assert scheme[1] == make_content_ref("cas", "cas:name=torsion_basin;version=1;scope=canonical")
+        assert schemes["torsion_basin"] == (1, make_content_ref("cas", "cas:name=torsion_basin;version=1;scope=canonical"))
+        assert schemes["extra"][0] == 2
+        assert conn.scalar(
+            text(
+                "SELECT data_type FROM information_schema.columns WHERE table_name = 'conformer_assignment_scheme' "
+                "AND column_name = 'version'"
+            )
+        ) == "integer"
 
-        # No column of any touched table still holds a fused name+version string.
+        # No new name column holds a fused name+version string.
         for table, column in (
             ("record_machine_review", "prompt_name"),
             ("record_machine_review", "rubric_name"),
             ("release_manifest", "manifest_format_name"),
+            ("calculation", "parameters_parser_name"),
+            ("external_source_record", "mapping_name"),
         ):
-            assert not conn.scalar(text(f"SELECT count(*) FROM {table} WHERE {column} ~ '_v[0-9]+$'"))
+            assert not conn.scalar(text(f"SELECT count(*) FROM {table} WHERE {column} ~* '[_.@-]v[0-9]+$'"))
+
+        # Every integer version the revision introduced is held at >= 1 by a CHECK.
+        constraints = {
+            row[0]
+            for row in conn.execute(text("SELECT conname FROM pg_constraint WHERE contype = 'c'"))
+        }
+        assert {
+            "ck_release_manifest_versions_positive",
+            "ck_execution_environment_manifest_schema_version_positive",
+            "ck_record_reproducibility_assessment_rubric_version_positive",
+            "ck_conformer_assignment_scheme_version_positive",
+            "ck_record_machine_review_versions_positive",
+        } <= constraints
+        # And the identity of a source record now includes the parser and mapping names.
+        identity = conn.scalar(
+            text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'uq_external_source_record_identity'")
+        )
+        assert "parser_name" in identity and "mapping_name" in identity
         upgraded = _snapshot_new(conn)
 
     # Downgrade restores the old strings exactly (the unpublished manifest is the one documented exception).
@@ -468,10 +607,7 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
     with harness.engine.begin() as conn:
         assert _triggers(conn) == before_triggers
         restored = _snapshot(conn)
-    # ``orca_v1`` and ``orca_v2`` both became (orca_parameters, '1'), so the old schema gets ``orca_v2`` back: the one
-    # documented loss of the downgrade.
-    expected = {**old, "calc": [(i, "orca_v2" if v == "orca_v1" else v) for i, v in old["calc"]]}
-    assert restored == expected
+    assert restored == old
 
     # And upgrading again reproduces the split.
     harness.run("upgrade", _MIGRATION.revision)
@@ -488,9 +624,180 @@ def _snapshot_new(conn) -> dict[str, list]:
         "env": "SELECT id, schema_name, schema_version, content_digest FROM execution_environment_manifest ORDER BY id",
         "calc": "SELECT id, parameters_parser_name, parameters_parser_version FROM calculation ORDER BY id",
         "esr": "SELECT id, parser_name, parser_version, mapping_name, mapping_version FROM external_source_record ORDER BY id",
+        "obs": "SELECT id, external_source_parser_name, external_source_parser_version FROM molecular_property_observation ORDER BY id",
         "scheme": "SELECT id, version, public_ref FROM conformer_assignment_scheme ORDER BY id",
     }
     return {name: [tuple(r) for r in conn.execute(text(q)).all()] for name, q in queries.items()}
+
+
+def test_trigger_modes_are_restored_exactly_and_a_preexisting_disabled_one_is_left_alone(harness) -> None:
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        _seed(conn)
+        names = sorted(_triggers(conn))
+        by_table = {}
+        for key in names:
+            table, trigger = key.split(".", 1)
+            by_table.setdefault(table, []).append(trigger)
+        # One of each mode the revision has to put back: ENABLE ALWAYS, ENABLE REPLICA, and one that was OFF all along.
+        always_table = "record_reproducibility_assessment"
+        replica_table = "release_manifest"
+        off_table = "calc_hessian"
+        always_name, replica_name, off_name = by_table[always_table][0], by_table[replica_table][0], by_table[off_table][0]
+        conn.execute(text(f'ALTER TABLE "{always_table}" ENABLE ALWAYS TRIGGER "{always_name}"'))
+        conn.execute(text(f'ALTER TABLE "{replica_table}" ENABLE REPLICA TRIGGER "{replica_name}"'))
+        conn.execute(text(f'ALTER TABLE "{off_table}" DISABLE TRIGGER "{off_name}"'))
+        before = _triggers(conn)
+    assert before[f"{always_table}.{always_name}"] == "A"
+    assert before[f"{replica_table}.{replica_name}"] == "R"
+    assert before[f"{off_table}.{off_name}"] == "D"
+
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        # Same mode for every trigger: A is not flattened to O, and the one that was off stays off (the revision
+        # did not disable it, so it does not claim to have to re-enable it, and does not fail).
+        assert _triggers(conn) == before
+
+    harness.run("downgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        assert _triggers(conn) == before
+
+
+# ---------------------------------------------------------------------------
+# Aborts: what the revision cannot split cleanly, it refuses to touch
+# ---------------------------------------------------------------------------
+
+
+def _abort_prompt_fused(conn):
+    _review(conn, model=None, provider=None, prompt="machine_review.v2", rubrics={"computed_thermo_v2": "2"}, record_id=90)
+
+
+def _abort_prompt_unversioned_llm(conn):
+    _review(conn, model=None, provider=None, prompt="custom-prompt", rubrics={"computed_thermo_v2": "2"}, record_id=90)
+
+
+def _abort_prompt_ambiguous_runner(conn):
+    # ``X_v1`` on a deterministic runner cannot be told apart from an unversioned ``X`` on the way back.
+    _review(conn, model="m", provider=_SC, prompt="runner_x_v1", rubrics={"runner_x_v1": "1"}, record_id=90)
+
+
+def _abort_rubric_fused(conn):
+    _review(conn, model=None, provider=None, prompt="machine_review_v1", rubrics={"computed_thermo.v2": "2"}, record_id=90)
+
+
+def _abort_rubric_value_disagrees(conn):
+    _review(conn, model=None, provider=None, prompt="machine_review_v1", rubrics={"computed_thermo_v2": "3"}, record_id=90)
+
+
+def _abort_context_schema(conn):
+    _review(conn, model=None, provider=None, prompt="machine_review_v1", rubrics={"computed_thermo_v2": "2"}, record_id=90, schema="1")
+
+
+def _abort_repro_rubric_version(conn):
+    conn.execute(
+        text(
+            "INSERT INTO record_reproducibility_assessment (record_type, record_id, grade, rubric_name, rubric_version, "
+            "context_hash, context_json, missing_json, assessor_kind, assessed_at) VALUES ('thermo', 90, 'described', "
+            "'tckdb_reproducibility', '1', :h, '{}'::jsonb, '[]'::jsonb, 'system', now())"
+        ),
+        {"h": "b" * 64},
+    )
+
+
+def _abort_env_schema(conn):
+    software = conn.scalar(text("INSERT INTO software (name) VALUES ('gaussian') RETURNING id"))
+    release_row = conn.scalar(text("INSERT INTO software_release (software_id) VALUES (:s) RETURNING id"), {"s": software})
+    conn.execute(
+        text(
+            "INSERT INTO execution_environment_manifest (schema_version, content_digest, runtime_kind, runtime_locator, "
+            "executable_locator, closure_json, canonical_json, software_release_id) VALUES "
+            "('tckdb.execution-environment.v2', :d, 'described', 'module://gaussian/16', 'file:///opt/g16/g16', '[]'::jsonb, "
+            "CAST(:c AS jsonb), :sr)"
+        ),
+        {"d": _env_digest(_OLD_ENV), "c": json.dumps(_OLD_ENV), "sr": release_row},
+    )
+
+
+def _abort_calc_lookalike(stamp):
+    def seed(conn):
+        _calc(conn, _entry(conn), stamp)
+
+    return seed
+
+
+def _abort_parameter_lookalike(conn):
+    calc = _calc(conn, _entry(conn), None)
+    conn.execute(
+        text(
+            "INSERT INTO calculation_parameter (calculation_id, raw_key, raw_value, source, parser_version) VALUES "
+            "(:c, 'k', 'v', 'parser', 'molpro_v9')"
+        ),
+        {"c": calc},
+    )
+
+
+def _abort_observation_lookalike(conn):
+    conn.execute(
+        text(
+            "INSERT INTO molecular_property_observation (property_kind, scientific_origin, scalar_value, scalar_unit, "
+            "external_source_parser_version) VALUES ('dipole_moment', 'experimental', 1.0, 'D', "
+            "'cccbdb-experimental-species-parser/0.2.0')"
+        )
+    )
+
+
+def _abort_source_record_not_thermoml(conn):
+    source = conn.scalar(text("INSERT INTO external_source (source_name, source_release) VALUES ('Some Other Source', '1') RETURNING id"))
+    conn.execute(
+        text(
+            "INSERT INTO external_source_record (external_source_id, record_kind, source_uri, source_record_key, retrieved_at, "
+            "content_sha256, content_length, raw_uri, parser_name, parser_version, mapping_version) VALUES "
+            "(:s, 'thermoml_article', 'u', 'k', now(), :h, 1, 'r', 'other_parser', 'other-parser/2.0', 'other-mapping/2.0')"
+        ),
+        {"s": source, "h": "f" * 64},
+    )
+
+
+def _abort_scheme(conn):
+    conn.execute(
+        text("INSERT INTO conformer_assignment_scheme (name, version, scope, public_ref) VALUES ('canon', 'v1', 'canonical', 'cas_canon')")
+    )
+
+
+_ABORTS = {
+    "prompt_fused": (_abort_prompt_fused, "prompt_version"),
+    "prompt_unversioned_llm": (_abort_prompt_unversioned_llm, "prompt_version"),
+    "prompt_ambiguous_runner": (_abort_prompt_ambiguous_runner, "prompt_version"),
+    "rubric_fused": (_abort_rubric_fused, "rubric"),
+    "rubric_value_disagrees": (_abort_rubric_value_disagrees, "rubric"),
+    "context_schema": (_abort_context_schema, "context_schema_version"),
+    "repro_rubric_version": (_abort_repro_rubric_version, "record_reproducibility_assessment"),
+    "env_schema": (_abort_env_schema, "execution_environment_manifest"),
+    "calc_lookalike_lower": (_abort_calc_lookalike("gaussian_v2"), "parser stamp"),
+    "calc_lookalike_upper": (_abort_calc_lookalike("GAUSSIAN_V1"), "parser stamp"),
+    "calc_lookalike_orca": (_abort_calc_lookalike("orca_v3"), "parser stamp"),
+    "parameter_lookalike": (_abort_parameter_lookalike, "parser stamp"),
+    "observation_lookalike": (_abort_observation_lookalike, "parser stamp"),
+    "source_record_not_thermoml": (_abort_source_record_not_thermoml, "external_source_record"),
+    "scheme_unrecognised": (_abort_scheme, "conformer_assignment_scheme"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_ABORTS))
+def test_upgrade_aborts_on_a_shape_it_cannot_split_cleanly(harness, case) -> None:
+    seed, fragment = _ABORTS[case]
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        seed(conn)
+        before = _triggers(conn)
+    completed = harness.run("upgrade", _MIGRATION.revision, check=False)
+    output = completed.stderr + completed.stdout
+    assert completed.returncode != 0, output
+    assert fragment in output, output
+    with harness.engine.begin() as conn:
+        # Nothing was committed: still at the parent revision, and not one guard is left in a different state.
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == _MIGRATION.parent
+        assert _triggers(conn) == before
 
 
 def test_upgrade_aborts_on_a_review_stamped_with_two_rubrics(harness) -> None:
@@ -518,6 +825,24 @@ def test_upgrade_aborts_on_a_review_stamped_with_two_rubrics(harness) -> None:
             )
         ) == 1
         assert "D" not in _triggers(conn).values()
+
+
+def test_downgrade_refuses_a_stamp_the_old_schema_cannot_spell(harness) -> None:
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        entry = _entry(conn)
+        conn.execute(
+            text(
+                "INSERT INTO calculation (type, species_entry_id, parameters_parser_name, parameters_parser_version) "
+                "VALUES ('opt', :e, 'gaussian_parameters', '2')"
+            ),
+            {"e": entry},
+        )
+    completed = harness.run("downgrade", _MIGRATION.parent, check=False)
+    assert completed.returncode != 0
+    assert "gaussian_parameters" in (completed.stderr + completed.stdout)
+    with harness.engine.begin() as conn:
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == _MIGRATION.revision
 
 
 def test_downgrade_refuses_while_a_release_manifest_exists(harness) -> None:

@@ -71,5 +71,6 @@ class ExecutionEnvironmentManifest(Base, TimestampMixin):
         CheckConstraint("content_digest ~ '^sha256:[0-9a-f]{64}$'", name="content_digest_sha256"),
         CheckConstraint("jsonb_typeof(closure_json) = 'array'", name="closure_json_array"),
         CheckConstraint("jsonb_typeof(canonical_json) = 'object'", name="canonical_json_object"),
+        CheckConstraint("schema_version >= 1", name="schema_version_positive"),
         UniqueConstraint("content_digest", name="uq_execution_environment_manifest_content_digest"),
     )
