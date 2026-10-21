@@ -276,3 +276,46 @@ def test_classification_is_deterministic_across_input_order():
     assert r1.state is MachineReviewCurrencyState.current
     # Historical is newest-first: a (T0) then c (T0 - 1h).
     assert tuple(h.id for h in r1.historical_reviews) == (1, 3)
+
+
+# --------------------------------------------------------------------------- #
+# The versioning reset (PR-4): every review stored before it reads stale, by an explicit reason
+# --------------------------------------------------------------------------- #
+
+
+def test_every_review_stored_before_the_version_reset_reads_stale_by_an_explicit_reason():
+    """The migration relabels stored reviews but cannot change what they were made under.
+
+    After ``c7d4a9e2b6f1`` a pre-reset review carries context schema 1, its prompt and rubric as (name, version)
+    pairs, and the context hash it was stored with. Every rubric and the prompt restarted at version 1, so a review
+    whose old rubric was already at version 1 matches the active prompt and rubric *numbers*; nothing in the
+    prompt/rubric dimensions can tell it from a post-reset review, and its hash is unchanged because the hash inputs
+    did not change. The one lever that does tell them apart is the recipe version, which is deliberately NOT reset: it
+    moves 1 -> 2, so the classifier reports ``context_schema_version_mismatch`` for every one of them. This test pins
+    that: it fails if the recipe version is ever put back to 1 without another way to stale the pre-reset rows.
+    """
+    from app.services.machine_review.context_hash import MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION
+    from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT
+    from app.services.trust.rubrics import RUBRICS
+
+    assert MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION == 2  # the one TCKDB-owned version the reset does not restart at 1
+    active = MachineReviewContextDigest(
+        context_hash="the_same_hash", context_schema_version=MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION
+    )
+    for rubric in (RUBRICS.get(ref.name, ref.version) for ref in RUBRICS.refs() if RUBRICS.is_current(ref)):
+        pre_reset = StoredMachineReviewProjection(
+            record_type="thermo",
+            record_id=1,
+            reviewed_at=_T0,
+            context_schema_version=1,  # what the migration made of the stored 'v1'
+            context_hash="the_same_hash",  # unchanged: the evidence the review saw is unchanged
+            prompt=ACTIVE_MACHINE_REVIEW_PROMPT,
+            rubric=rubric.ref,  # the worst case: an old rubric that was already at version 1
+            id=1,
+            source_audit_event_id=1,
+        )
+        result = classify_machine_review_currency(
+            [pre_reset], current_context=active, active_prompt=ACTIVE_MACHINE_REVIEW_PROMPT, active_rubric=rubric.ref
+        )
+        assert result.state is MachineReviewCurrencyState.stale, rubric.name
+        assert result.stale_reasons == (MachineReviewStaleReason.context_schema_version_mismatch,), rubric.name

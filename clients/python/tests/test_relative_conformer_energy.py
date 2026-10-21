@@ -159,7 +159,7 @@ def test_compare_protocol_without_a_level_is_refused_locally():
 
 
 def test_manifest_routes_and_paths():
-    seen, handler = _recorder({"manifest_format": "x"})
+    seen, handler = _recorder({"format": {"name": "x_manifest", "version": 1}})
     client = _client(handler)
     client.get_relative_conformer_energy_manifest(SPECIES, level_of_theory_ref="lot_x", **SINGLE)
     client.get_relative_conformer_energy_comparison_manifest(SPECIES, **COMPARE)
@@ -171,7 +171,7 @@ def test_manifests_come_back_exactly_as_served():
     # Kills: normalising the manifest client-side (key order, dropped or added keys, rounded numbers).
     served = (
         '{"outcome": "relative_energies", "zeta": [3, 2, 1], "a": {"y": 1.0000000000000002, "x": null}, '
-        '"manifest_format": "tckdb.relative_conformer_energy.manifest", "extra_key": true, "integrity": {"manifest_sha256": "ab"}}'
+        '"format": {"name": "relative_conformer_energy_manifest", "version": 1}, "extra_key": true, "integrity": {"manifest_sha256": "ab"}}'
     )
 
     def handler(request: httpx.Request) -> httpx.Response:

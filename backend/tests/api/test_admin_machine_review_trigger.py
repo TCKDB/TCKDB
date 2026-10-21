@@ -56,6 +56,7 @@ from app.db.models.record_machine_review import RecordMachineReviewRow
 from app.db.models.record_review import RecordReview
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
+from app.services.machine_review.context_hash import MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION
 from app.services.trust import build_trust_fragment
 from app.services.trust.models import (
     EvidenceBadge,
@@ -373,7 +374,7 @@ def test_admin_fake_machine_review_response_contains_context_hash(
     body = client.post(_url("calculation", calc.id)).json()
 
     assert isinstance(body["context_hash"], str) and len(body["context_hash"]) == 64
-    assert body["context_schema_version"] == 1
+    assert body["context_schema_version"] == MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION
     assert body["prompt"] == {"name": "machine_review", "version": 1}
     assert body["rubric"] == {"name": "computed_calculation", "version": 1}
 

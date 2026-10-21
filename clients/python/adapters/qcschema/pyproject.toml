@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-qcschema"
-version = "0.9.0"
+version = "0.9.1"
 description = "MolSSI QCSchema (QCElemental) import/export adapter for TCKDB (family dispatch + mapping + uploader + exporter)."
 requires-python = ">=3.11"
 dependencies = [
-    "tckdb-client",
-    "tckdb-schemas",
+    "tckdb-client>=0.160.0",
+    "tckdb-schemas>=0.131.0",
     "qcelemental==0.51.2",
 ]
 

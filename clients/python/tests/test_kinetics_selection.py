@@ -103,10 +103,10 @@ def test_a_server_refusal_surfaces_as_a_typed_http_error_with_its_status():
 
 
 def test_the_manifest_method_posts_to_the_manifest_path_and_forwards_the_profile():
-    seen, handler = _recorder({"manifest_format_version": 1})
+    seen, handler = _recorder({"format": {"name": "x_manifest", "version": 1}})
     with _client(handler) as client:
         out = client.get_reaction_kinetics_selection_manifest(ENTRY, **QUESTION, policy="default", profile="curated")
-    assert out == {"manifest_format_version": 1}
+    assert out == {"format": {"name": "x_manifest", "version": 1}}
     assert urlsplit(str(seen[0].url)).path.endswith(f"/reaction-entries/{ENTRY}/kinetics/select/manifest")
     assert json.loads(seen[0].content) == {**QUESTION, "policy": "default"}
     assert parse_qs(urlsplit(str(seen[0].url)).query) == {"profile": ["curated"]}
@@ -128,7 +128,7 @@ def test_the_response_type_names_the_outcome_vocabulary():
 
 
 def test_the_manifest_method_forwards_phase_so_a_conflicting_one_reaches_the_server():
-    seen, handler = _recorder({"manifest_format_version": 1})
+    seen, handler = _recorder({"format": {"name": "x_manifest", "version": 1}})
     with _client(handler) as client:
         client.get_reaction_kinetics_selection_manifest(ENTRY, **QUESTION, phase="liquid")
     assert json.loads(seen[0].content) == {**QUESTION, "phase": "liquid"}

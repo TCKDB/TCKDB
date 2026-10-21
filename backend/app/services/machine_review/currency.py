@@ -21,6 +21,12 @@ Currency vs. provenance (policy §3.5). A latest review is *current* only when
 * ``prompt`` — the active machine-review prompt, a name and a version;
 * ``rubric`` — the active rubric for this record, a name and a version.
 
+Every review stored before the 2026-10 versioning reset is stale, and it says so by name. The reset restarted every
+rubric and the prompt at version 1, so for a review whose old rubric was already at version 1 the prompt, rubric and
+hash dimensions all match the active recipe and cannot tell it from a post-reset review. The recipe version
+(``context_schema_version``) is the one version the reset does not restart (stored 1, active 2), so each such review
+reports ``context_schema_version_mismatch``. That is deliberate, not an accident of how the hash happens to be built.
+
 ``provider``/``model`` are deliberately **not** currency dimensions (swapping
 models does not invalidate the evidence a prior review saw, policy §3.5).
 

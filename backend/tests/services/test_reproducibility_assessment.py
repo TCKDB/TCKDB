@@ -326,3 +326,27 @@ def test_migration_is_direct_child_of_artifact_integrity_revision():
     assert 'down_revision: Union[str, Sequence[str], None] = "a7c9e2f4b6d8"' in migration
     assert "BEFORE UPDATE OR DELETE ON record_reproducibility_assessment" in migration
     assert 'op.drop_table("record_reproducibility_assessment")' in migration
+
+
+def test_an_assessment_stored_before_the_version_reset_reads_stale(db_session):
+    """Every stored assessment is stale after ``c7d4a9e2b6f1``, because the evidence context it was hashed over changed.
+
+    The migration rewrites a stored ``context_json`` (``rubric.version`` ``"v1"`` becomes ``1``, the two ``_v1`` reason
+    tokens lose the suffix) but keeps the ``context_hash`` it was stored with: that hash is of the document as it was.
+    The live context is now written in the new shape, so its hash differs and
+    :func:`is_reproducibility_assessment_context_current` says stale. Stale is the intended reading: a stored grade is
+    reassessed against today's rubric, not carried across a renumbering.
+    """
+    from app.services.reproducibility_rubric import RUBRIC_NAME, RUBRIC_VERSION
+
+    target_id = _make_target(db_session)
+    # What the old code stored: the rubric version as the string 'v1', a reason token ending _v1.
+    old_shape = {"rubric": {"name": RUBRIC_NAME, "version": "v1"}, "note": "no_typed_result_contract_v1"}
+    row = _append(db_session, record_id=target_id, context_json=old_shape)
+    # What the live evaluation writes now: an integer version, the token without a suffix.
+    live = {"rubric": {"name": RUBRIC_NAME, "version": RUBRIC_VERSION}, "note": "no_typed_result_contract"}
+    assert type(RUBRIC_VERSION) is int
+    assert not is_reproducibility_assessment_context_current(row, current_context_json=live)
+    # And an assessment written in the new shape is current against the same live context.
+    fresh = _append(db_session, record_id=target_id, context_json=live, rubric_version=RUBRIC_VERSION)
+    assert is_reproducibility_assessment_context_current(fresh, current_context_json=live)

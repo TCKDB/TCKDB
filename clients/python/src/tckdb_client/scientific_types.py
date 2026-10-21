@@ -1996,8 +1996,7 @@ class RelativeConformerEnergyManifest(TypedDict, total=False):
     drop any key: replay needs the manifest as served.
     """
 
-    manifest_format: str
-    manifest_format_version: int
+    format: JSONDict
     versions: JSONDict
     request: JSONDict
     structure_request: JSONDict
@@ -2090,8 +2089,7 @@ class RelativeConformerEnergyCompareResponse(TypedDict):
 class RelativeConformerEnergyCompareManifest(TypedDict, total=False):
     """The replayable manifest of the ``/compare/manifest`` download, exactly as the server sent it (extra keys allowed)."""
 
-    manifest_format: str
-    manifest_format_version: int
+    format: JSONDict
     versions: JSONDict
     request: JSONDict
     read_profile: JSONDict

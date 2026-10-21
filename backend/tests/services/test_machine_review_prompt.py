@@ -46,13 +46,22 @@ from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT
 
 #: SHA-256 of :data:`MACHINE_REVIEW_SYSTEM_PROMPT`, encoded UTF-8.
 #:
-#: **Changing the prompt text means changing this constant AND
-#: ``ACTIVE_MACHINE_REVIEW_PROMPT``, in the same commit.** Updating
-#: only this one to get the test green re-opens exactly the hole the test
-#: exists to close: reviews stored under the old version would still read as
-#: current, and would still name a prompt whose words had changed underneath
-#: them. If you are here because this assertion failed, the question to answer
-#: is not "what is the new hash" but "does the recipe version need to move".
+#: **Changing the prompt text means bumping the prompt's version in
+#: ``ACTIVE_MACHINE_REVIEW_PROMPT`` and updating this constant, in the same
+#: commit.** Updating only this one to get the test green re-opens exactly the
+#: hole the test exists to close: reviews stored under the old version would
+#: still read as current, and would still name a prompt whose words had changed
+#: underneath them. If you are here because this assertion failed, the question
+#: to answer is not "what is the new hash" but "does the prompt version need to
+#: move".
+#:
+#: The one exception was the versioning reset (PR-4): the prompt's answer format
+#: changed (a ``format`` block replaced the fused ``schema_version`` marker) in the
+#: same release that restarted every version at 1, so the prompt stayed at version 1
+#: with new words. Reviews stored before it are not read as current under those words:
+#: the context recipe version moved 1 -> 2 in that release, which makes every one of them
+#: stale (see ``MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION``). That is a one-off; from here on
+#: the rule above holds without exception.
 _PROMPT_SHA256 = "c5c39a2b51054d1afb0775510068b8cb1225c5595bb08ff8a0377f5b01b90e13"
 
 

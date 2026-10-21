@@ -20,7 +20,7 @@ from tckdb_client import NetworkSelectedKineticsExport, TCKDBClient
 from tckdb_client.errors import TCKDBHTTPError
 
 NETWORK = "net_abc123def456"
-MANIFEST = {"manifest_format_version": 1, "digest": {"algorithm": "sha256", "value": "0" * 64}}
+MANIFEST = {"format": {"name": "network_selection_manifest", "version": 1}, "digest": {"algorithm": "sha256", "value": "0" * 64}}
 CHOICE = {"manifest": MANIFEST, "node_ref": "nkdet_x", "representation_refs": ["nkin_a", "nkin_b"]}
 
 

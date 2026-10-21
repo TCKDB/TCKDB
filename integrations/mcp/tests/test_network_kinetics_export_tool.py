@@ -19,7 +19,7 @@ from tckdb_mcp.server import dispatch_tool, list_tools_payload
 
 TOOL_NAME = "tckdb_export_selected_network_kinetics"
 REF = "net_01HZ5K9X2A"
-MANIFEST = {"manifest_format_version": 1, "digest": {"algorithm": "sha256", "value": "0" * 64}}
+MANIFEST = {"format": {"name": "network_selection_manifest", "version": 1}, "digest": {"algorithm": "sha256", "value": "0" * 64}}
 CHOICE: dict[str, Any] = {"manifest": MANIFEST, "node_ref": "nkdet_x", "representation_refs": ["nkin_a", "nkin_b"]}
 
 

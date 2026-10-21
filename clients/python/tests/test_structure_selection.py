@@ -62,14 +62,14 @@ def test_posts_to_the_select_path_with_an_empty_body_when_nothing_is_supplied(me
 
 @pytest.mark.parametrize(("method", "ref", "path"), MANIFESTS)
 def test_the_manifest_methods_post_the_same_request_to_the_manifest_path(method, ref, path):
-    seen, handler = _recorder({"manifest_format_version": 1})
+    seen, handler = _recorder({"format": {"name": "x_manifest", "version": 1}})
     with _client(handler) as client:
         out = getattr(client, method)(ref, intent="qualify_evidence", quantity=None, validation_claim="local_minimum", profile="curated")
     (request,) = seen
     assert urlsplit(str(request.url)).path.endswith(path)
     assert json.loads(request.content) == {"intent": "qualify_evidence", "quantity": None, "validation_claim": "local_minimum"}
     assert parse_qs(urlsplit(str(request.url)).query) == {"profile": ["curated"]}
-    assert out == {"manifest_format_version": 1}
+    assert out == {"format": {"name": "x_manifest", "version": 1}}
 
 
 def test_quantity_none_is_json_null_and_every_other_none_is_not_sent():
