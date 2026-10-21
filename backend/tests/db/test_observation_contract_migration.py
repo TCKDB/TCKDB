@@ -435,12 +435,12 @@ def _valid_record_sql() -> str:
         "INSERT INTO external_source_record"
         " (external_source_id, record_kind, source_uri, source_record_key,"
         "  retrieved_at, http_status, content_sha256, content_length,"
-        "  raw_uri, parser_name, parser_version, mapping_version)"
+        "  raw_uri, parser_name, parser_version, mapping_name, mapping_version)"
         " VALUES"
         " (:external_source_id, 'thermoml_article', 'https://example.org/x',"
         "  :source_record_key, now(), :http_status, :content_sha256,"
-        "  :content_length, 'raw://x', 'thermoml', :parser_version,"
-        "  :mapping_version)"
+        "  :content_length, 'raw://x', :parser_name, :parser_version,"
+        "  :mapping_name, :mapping_version)"
         " RETURNING id"
     )
 
@@ -453,8 +453,10 @@ def _valid_record_params(external_source_id: int, **overrides) -> dict:
         "http_status": 200,
         "content_sha256": "a" * 64,
         "content_length": 1024,
-        "parser_version": "1.0.0",
-        "mapping_version": "mapping-v1",
+        "parser_name": "thermoml_cp",
+        "parser_version": "1",
+        "mapping_name": "thermoml_cp_mapping",
+        "mapping_version": "1",
     }
     params.update(overrides)
     return params
@@ -531,7 +533,10 @@ def test_custody_unique_constraint_rejects_an_exact_duplicate(
         savepoint.rollback()
 
 
-@pytest.mark.parametrize("column", ["parser_version", "mapping_version", "content_sha256", "source_record_key"])
+@pytest.mark.parametrize(
+    "column",
+    ["parser_name", "parser_version", "mapping_name", "mapping_version", "content_sha256", "source_record_key"],
+)
 def test_custody_unique_constraint_still_distinguishes_rows_by_each_column(
     db_session, external_source_id, column
 ):

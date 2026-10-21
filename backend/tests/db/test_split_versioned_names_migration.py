@@ -681,6 +681,11 @@ def _abort_prompt_ambiguous_runner(conn):
     _review(conn, model="m", provider=_SC, prompt="runner_x_v1", rubrics={"runner_x_v1": "1"}, record_id=90)
 
 
+def _abort_prompt_name_fused_inside(conn):
+    # ``foo.v2_v1`` splits as name ``foo.v2`` + 1: the name still ends in a version segment, so it cannot be written.
+    _review(conn, model=None, provider=None, prompt="foo.v2_v1", rubrics={"computed_thermo_v2": "2"}, record_id=90)
+
+
 def _abort_rubric_fused(conn):
     _review(conn, model=None, provider=None, prompt="machine_review_v1", rubrics={"computed_thermo.v2": "2"}, record_id=90)
 
@@ -768,6 +773,8 @@ _ABORTS = {
     "prompt_fused": (_abort_prompt_fused, "prompt_version"),
     "prompt_unversioned_llm": (_abort_prompt_unversioned_llm, "prompt_version"),
     "prompt_ambiguous_runner": (_abort_prompt_ambiguous_runner, "prompt_version"),
+    # Refused up front (the pre-check) and, were that check ever weakened, still refused by the post-rewrite check.
+    "prompt_name_fused_inside": (_abort_prompt_name_fused_inside, ("prompt_version", "fused name+version")),
     "rubric_fused": (_abort_rubric_fused, "rubric"),
     "rubric_value_disagrees": (_abort_rubric_value_disagrees, "rubric"),
     "context_schema": (_abort_context_schema, "context_schema_version"),
@@ -793,7 +800,8 @@ def test_upgrade_aborts_on_a_shape_it_cannot_split_cleanly(harness, case) -> Non
     completed = harness.run("upgrade", _MIGRATION.revision, check=False)
     output = completed.stderr + completed.stdout
     assert completed.returncode != 0, output
-    assert fragment in output, output
+    fragments = (fragment,) if isinstance(fragment, str) else fragment
+    assert any(f in output for f in fragments), output
     with harness.engine.begin() as conn:
         # Nothing was committed: still at the parent revision, and not one guard is left in a different state.
         assert conn.scalar(text("SELECT version_num FROM alembic_version")) == _MIGRATION.parent
