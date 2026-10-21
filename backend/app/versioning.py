@@ -180,6 +180,30 @@ class VersionRegistry(Generic[T]):
         )
 
 
+def same_value(recorded: object, expected: object) -> bool:
+    """Equality that does not let ``True`` pass for ``1`` or ``1.0`` for ``1``, all the way down.
+
+    A manifest records the versions it was made under; a replay compares them with the running ones. Plain ``==`` (and
+    ``!=``, and ``in``) says ``True == 1`` and ``1.0 == 1``, so a manifest recording ``true`` as a version would be read
+    as version 1. Here the types must match as well as the values: through dicts (same keys), lists and tuples
+    (same length, element by element), and for every scalar. Use this, never ``==``, to compare a recorded version or a
+    recorded ``{"name", "version"}`` block with the running one.
+    """
+    if isinstance(expected, dict):
+        return (
+            isinstance(recorded, dict)
+            and set(recorded) == set(expected)
+            and all(same_value(recorded[k], expected[k]) for k in expected)
+        )
+    if isinstance(expected, (list, tuple)):
+        return (
+            isinstance(recorded, (list, tuple))
+            and len(recorded) == len(expected)
+            and all(same_value(r, e) for r, e in zip(recorded, expected, strict=True))
+        )
+    return type(recorded) is type(expected) and recorded == expected
+
+
 def validate_startup_registries() -> None:
     """Run :meth:`VersionRegistry.validate` on every startup-checked registry.
 

@@ -386,7 +386,7 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
     versions = {}
     for route in _routes(world):
         manifest = _post(client, route.path, route.body, "exploratory")
-        versions[route.name] = (manifest.get("manifest_format_version"), (manifest.get("versions") or {}).get("relative_energy"))
+        versions[route.name] = ((manifest.get("format") or {}).get("version"), (manifest.get("versions") or {}).get("relative_energy"))
     assert versions == {
         "thermo": (1, None),
         "kinetics": (1, None),
@@ -408,7 +408,7 @@ def test_a_manifest_of_another_format_version_is_refused(client, world, name, pr
     refusal can only be the format."""
     route = next(r for r in _routes(world) if r.name == name)
     manifest = _post(client, route.path, route.body, "exploratory")
-    manifest["manifest_format_version"] = previous
+    manifest["format"]["version"] = previous
     if name == "network":
         _reseal_network(manifest)
     elif name == "structure":
@@ -450,7 +450,7 @@ def test_a_comparison_manifest_of_a_retired_relative_energy_version_is_refused(c
 def test_a_format_version_nobody_wrote_is_refused(client, world, name):
     route = next(r for r in _routes(world) if r.name == name)
     manifest = _post(client, route.path, route.body, "exploratory")
-    manifest["manifest_format_version"] = 99
+    manifest["format"]["version"] = 99
     with pytest.raises(Exception, match="manifest format|unsupported_manifest_format"):
         _replay(name, manifest)
 

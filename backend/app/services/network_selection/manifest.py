@@ -42,7 +42,7 @@ from typing import Any
 
 from tckdb_schemas.network_declarations import NETWORK_DECLARATION_VERSIONS
 
-from app.services.manifest_formats import new_format_registry, read_manifest_format
+from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
 from app.services.network_selection.assessment import (
     ASSESSMENT_VERSION,
     assess_bundle_scope,
@@ -65,6 +65,7 @@ from app.services.network_selection.models import (
 from app.services.network_selection.rules import NetworkRule, default_rules
 from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.scientific_read.profile import current_read_profile
+from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. The
 #: network's one such position, a validation entry's reference to a solve the reader cannot open, is evidence and reads
@@ -101,7 +102,7 @@ def build_manifest(result: NetworkAssessmentResult, decision: NetworkDecision) -
     """Assemble the manifest of one decision over one assessed population."""
     profile = current_read_profile()
     manifest: dict[str, Any] = {
-        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version,
+        "format": manifest_header(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME),
         "policy": {
             "name": POLICY_NAME,
             "version": POLICY_VERSION,
@@ -150,7 +151,7 @@ def _check_versions(manifest: dict[str, Any]) -> None:
         "assessment_version": ASSESSMENT_VERSION,
         "bounds_version": DEFAULT_BOUNDS.version,
     }
-    if policy != expected:
+    if not same_value(policy, expected):
         raise ReplayError(
             f"manifest was made under {policy!r}; this code replays {POLICY_NAME} version {POLICY_VERSION}, "
             f"assessment version {ASSESSMENT_VERSION}, bounds version {DEFAULT_BOUNDS.version}"
@@ -159,7 +160,7 @@ def _check_versions(manifest: dict[str, Any]) -> None:
         for block in ("target", "protocol", "validation"):
             declaration = solve.get(block)
             version = declaration.get("version") if isinstance(declaration, dict) else None
-            if declaration is not None and version not in NETWORK_DECLARATION_VERSIONS:
+            if declaration is not None and (type(version) is not int or version not in NETWORK_DECLARATION_VERSIONS):
                 raise ReplayError(
                     f"solve {solve['solve_ref']} carries a {block} declaration of version {version!r}, which this "
                     f"code does not read (supported: {sorted(NETWORK_DECLARATION_VERSIONS)})"

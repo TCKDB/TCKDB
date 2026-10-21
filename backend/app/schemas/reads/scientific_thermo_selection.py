@@ -19,6 +19,7 @@ from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from tckdb_schemas.coded_error import CodedValidationError
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import PhaseKind, RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
@@ -303,7 +304,7 @@ class ThermoSelectionManifest(BaseModel):
     order: enough to recompute the decision with no database.
     """
 
-    manifest_format_version: int
+    format: VersionRef
     policy: dict[str, Any]
     assessment_semantics: dict[str, Any] | None = None
     """How each candidate's eligibility was assessed: ``version``, the evidence rubric (its ``name`` and ``version``) and the source-finding

@@ -23,52 +23,78 @@ from tckdb_schemas.fragments.version import VersionRef
 
 from app.versioning import UnknownVersion, VersionRegistry
 
-#: The version of the source-finding gate (``structure_selection.source_findings``) recorded in the block.
-SOURCE_FINDINGS_VERSION = 1
+#: The source-finding gate (``structure_selection.source_findings``) recorded in the block, as a name beside a version.
+SOURCE_FINDINGS = VersionRef(name="structure_source_findings", version=1)
 
 
 class UnsupportedAssessmentSemantics(ValueError):
     """The manifest records assessment semantics this release does not know."""
 
 
-def semantics_block(*, version: int, evidence_rubric: VersionRef) -> dict[str, Any]:
-    """The block a new manifest records: the semantics version, the rubric that graded the evidence, the finding gate.
+def semantics_block(*, name: str, version: int, evidence_rubric: VersionRef) -> dict[str, Any]:
+    """The block a new manifest records: the semantics (name and version), the rubric that graded the evidence, the gate.
 
-    ``evidence_rubric`` is recorded as a name beside a separate integer version, never as one string.
+    Every versioned thing in it is a name beside a separate integer version, never a bare number or one string.
     """
     return {
+        "name": name,
         "version": version,
         "evidence_rubric": {"name": evidence_rubric.name, "version": evidence_rubric.version},
-        "source_findings": SOURCE_FINDINGS_VERSION,
+        "source_findings": {"name": SOURCE_FINDINGS.name, "version": SOURCE_FINDINGS.version},
     }
 
 
-def recorded_version(manifest: dict[str, Any]) -> int:
-    """The assessment semantics a manifest was made under: its block's version.
+def _well_formed_ref(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"name", "version"}
+        and isinstance(value["name"], str)
+        and type(value["version"]) is int
+    )
 
-    :raises UnsupportedAssessmentSemantics: the block is missing or malformed (a version that is not exactly an integer,
-        ``True`` and ``1.0`` included, is malformed).
+
+def recorded_semantics(manifest: dict[str, Any]) -> tuple[str, int]:
+    """The assessment semantics a manifest was made under: its block's name and version.
+
+    :raises UnsupportedAssessmentSemantics: the block is missing or malformed (a name that is not text, a version that
+        is not exactly an integer -- ``True`` and ``1.0`` included -- or an evidence rubric or source-finding gate that
+        is not itself a name beside an integer version).
     """
     block = manifest.get("assessment_semantics")
-    if not isinstance(block, dict) or type(block.get("version")) is not int:
+    if (
+        not isinstance(block, dict)
+        or set(block) != {"name", "version", "evidence_rubric", "source_findings"}
+        or not _well_formed_ref({"name": block["name"], "version": block["version"]})
+        or not _well_formed_ref(block["evidence_rubric"])
+        or not _well_formed_ref(block["source_findings"])
+    ):
         raise UnsupportedAssessmentSemantics("the manifest has no well-formed assessment_semantics block")
-    return block["version"]
+    return block["name"], block["version"]
+
+
+def recorded_version(manifest: dict[str, Any]) -> int:
+    """The assessment semantics version a manifest was made under (see :func:`recorded_semantics`)."""
+    return recorded_semantics(manifest)[1]
 
 
 def check_supported(manifest: dict[str, Any], *, semantics: VersionRegistry[VersionRef], name: str) -> int:
-    """The manifest's assessment semantics version, refusing one the registry does not hold.
+    """The manifest's assessment semantics version, refusing a name or version the registry does not hold.
 
     *semantics* is the engine's registry of the assessment semantics it can read and *name* the semantics' name in it.
+    A manifest recording another engine's semantics (another name) is refused like an unknown version.
     """
-    recorded = recorded_version(manifest)
+    recorded_name, recorded_version_ = recorded_semantics(manifest)
     try:
-        semantics.get(name, recorded)
+        if recorded_name != name:
+            raise UnknownVersion(semantics.family, recorded_name, recorded_version_)
+        semantics.get(name, recorded_version_)
     except UnknownVersion:
         known = sorted(ref.version for ref in semantics.refs() if ref.name == name)
         raise UnsupportedAssessmentSemantics(
-            f"the manifest was made under assessment semantics {recorded!r}; this release reads {known}"
+            f"the manifest was made under assessment semantics {recorded_name} version {recorded_version_!r}; "
+            f"this release reads {name} versions {known}"
         ) from None
-    return recorded
+    return recorded_version_
 
 
 def describe_replay(manifest: dict[str, Any], *, semantics: VersionRegistry[VersionRef], name: str) -> dict[str, Any]:

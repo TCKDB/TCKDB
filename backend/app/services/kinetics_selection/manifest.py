@@ -33,7 +33,7 @@ from app.services.kinetics_selection.models import (
     NormalizedKinetics,
 )
 from app.services.kinetics_selection.rules import KineticsRule, default_rules
-from app.services.manifest_formats import new_format_registry, read_manifest_format
+from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
 from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
@@ -41,6 +41,7 @@ from app.services.selection_kernel.assessment_semantics import (
     semantics_block,
 )
 from app.services.trust.rubrics import COMPUTED_KINETICS
+from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused.
@@ -60,9 +61,10 @@ def build_manifest(result: KineticsAssessmentResult, decision: KineticsDecision)
     assessments = {a.kinetics_ref: a for a in result.assessments}
     ordered = sorted(result.candidates, key=lambda c: c.id_rank)
     return {
-        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version,
+        "format": manifest_header(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME),
         "policy": {"name": POLICY_NAME, "version": POLICY_VERSION},
         "assessment_semantics": semantics_block(
+            name=ASSESSMENT_SEMANTICS_NAME,
             version=ASSESSMENT_SEMANTICS_VERSION,
             evidence_rubric=COMPUTED_KINETICS.ref,
         ),
@@ -127,7 +129,7 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] |
         recorded eligibility, or the determinations it says the eligible records form).
     """
     read_manifest_format(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME, manifest, ReplayError)
-    if manifest["policy"] != {"name": POLICY_NAME, "version": POLICY_VERSION}:
+    if not same_value(manifest["policy"], {"name": POLICY_NAME, "version": POLICY_VERSION}):
         raise ReplayError(
             f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} version {POLICY_VERSION}"
         )

@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from tckdb_schemas.fragments.version import VersionRef
 from tckdb_schemas.kinetics_declarations import MOLE_FRACTION_SUM_TOLERANCE, KineticsCoefficientBasis
 
 from app.db.models.common import (
@@ -416,7 +417,7 @@ class KineticsSelectionManifest(BaseModel):
     with no database.
     """
 
-    manifest_format_version: int
+    format: VersionRef
     policy: dict[str, Any]
     assessment_semantics: dict[str, Any] | None = None
     """How each candidate's eligibility was assessed: ``version``, the evidence rubric (its ``name`` and ``version``) and the source-finding

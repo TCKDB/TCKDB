@@ -18,9 +18,10 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
+from tckdb_schemas.fragments.version import ExactInt
 from tckdb_schemas.rights import DepositRights
 
 from app.schemas.common import SchemaBase
@@ -240,7 +241,7 @@ class ContributionBundle(SchemaBase):
     )
 
     bundle_format: Literal["tckdb-contribution-bundle"]
-    bundle_version: Literal[1]
+    bundle_version: Annotated[Literal[1], ExactInt]
     bundle_kind: BundleKind
     created_at: datetime
 

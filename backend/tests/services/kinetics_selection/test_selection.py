@@ -168,7 +168,7 @@ def test_the_manifest_records_what_a_reader_needs_to_audit_the_decision(db_sessi
 @pytest.mark.parametrize(
     "tamper,message",
     [
-        (lambda m: m.update(manifest_format_version=99), "unknown manifest format"),
+        (lambda m: m["format"].update(version=99), "unknown manifest format"),
         (lambda m: m["policy"].update(version=2), "this registry replays"),
         (lambda m: m["policy"].update(name="h298_method_preferred"), "this registry replays"),
         (lambda m: m["decision"]["rules"][0].update(version=9), "not in the running registry"),
@@ -207,7 +207,7 @@ def test_a_replayed_inactive_rule_set_reproduces_its_edge_free_decision(db_sessi
 
 #: Every integer a manifest may hold, by exact path: ordinals and counts, never a row id.
 ALLOWED_INTEGER_PATHS = {
-    "manifest_format_version", "policy.version", "assessment_semantics.version", "assessment_semantics.source_findings",
+    "format.version", "policy.version", "assessment_semantics.version", "assessment_semantics.source_findings.version",
     "assessment_semantics.evidence_rubric.version", "decision.rules[].version", "decision.edges[].rule_version",
     "decision.pair_checks[].rule_version", "decision.rule_matches[].rule_version",
     "subject.reactants[].charge", "subject.reactants[].multiplicity",

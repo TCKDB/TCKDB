@@ -503,7 +503,7 @@ def _assert_integers_are_pinned(doc, *, is_manifest, curated):
         "policy.version", "policy.rules[].version", "relations.edges[].rule_version",
         "relations.overridden_edges[].rule_version", "relations.overridden_edges[].overridden_by_rule_version",
         "rule_matches[].rule_version", "pair_checks[].rule_version", "policy.rules[].manifest.manifest_version",
-        "assessment_semantics.version", "assessment_semantics.source_findings",
+        "assessment_semantics.version", "assessment_semantics.source_findings.version",
         "assessment_semantics.evidence_rubric.version", "decision.rules[].version", "decision.edges[].rule_version",
         "decision.pair_checks[].rule_version", "decision.rule_matches[].rule_version", "policy.version",
         "decision.rules[].manifest.manifest_version", "decision.overridden_edges[].rule_version",
@@ -513,7 +513,7 @@ def _assert_integers_are_pinned(doc, *, is_manifest, curated):
     if is_manifest:
         population = doc["population"]
         pinned.update({
-            "manifest_format_version": lambda v: v == [1],
+            "format.version": lambda v: v == [1],
             "candidates[].id_rank": lambda v: sorted(v) == list(range(1, len(candidates) + 1)),
             "population.visible_candidates": lambda v: v == [len(candidates)],
             "population.assessed": lambda v: v == [len(candidates)],

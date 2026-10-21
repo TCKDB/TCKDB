@@ -49,7 +49,8 @@ def test_a_manifest_built_now_records_the_structured_block():
     """Built by the code (not read from the committed golden), so dropping the block cannot hide behind a stale file."""
     manifest = _generate()["manifests"]["single"]["manifest"]
     assert manifest["assessment_semantics"] == {
-        "version": 1, "evidence_rubric": {"name": "computed_thermo", "version": 1}, "source_findings": 1,
+        "name": "thermo_selection_assessment", "version": 1, "evidence_rubric": {"name": "computed_thermo", "version": 1},
+        "source_findings": {"name": "structure_source_findings", "version": 1},
     }
     assert manifest["policy"]["version"] == POLICY_VERSION == 1
 
@@ -75,7 +76,7 @@ def test_only_the_current_manifest_format_is_read():
     assert {ref.version for ref in MANIFEST_FORMATS.refs()} == {MANIFEST_FORMAT_VERSION}
     for bad in (0, MANIFEST_FORMAT_VERSION + 1, None):
         manifest = _manifest("single")
-        manifest["manifest_format_version"] = bad
+        manifest["format"]["version"] = bad
         with pytest.raises(ReplayError, match="unknown manifest format"):
             replay_decision(manifest, rules=RULES["single"])
 
@@ -104,17 +105,22 @@ def test_a_rule_version_this_release_does_not_carry_is_refused():
         replay_decision(manifest, rules=RULES["e1_g4_over_g3"])
 
 
+@pytest.mark.parametrize("bad", [True, 1.0])
+def test_a_policy_version_that_equals_the_integer_but_is_not_it_is_refused(bad):
+    """Kills: ``manifest["policy"] != {"name": ..., "version": 1}`` letting ``true`` pass (``True == 1``)."""
+    manifest = _manifest("single")
+    manifest["policy"]["version"] = bad
+    with pytest.raises(ReplayError, match="policy"):
+        replay_decision(manifest, rules=RULES["single"])
+
+
 def test_the_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_bool_or_missing_one():
     from app.services.thermo_selection.models import MANIFEST_FORMAT_NAME
-    from tests.services._format_cases import bad_format_versions
+    from tests.services._format_cases import bad_format_manifests
 
     manifest = _manifest("single")
     current = MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version
-    assert manifest["manifest_format_version"] == current and type(current) is int
-    for bad in bad_format_versions(current):
-        tampered = {**manifest, "manifest_format_version": bad}
+    assert manifest["format"] == {"name": MANIFEST_FORMAT_NAME, "version": current} and type(current) is int
+    for tampered in bad_format_manifests(manifest, current):
         with pytest.raises(ReplayError, match="unknown manifest format"):
             replay_decision(tampered, rules=RULES["single"])
-    missing = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
-    with pytest.raises(ReplayError, match="unknown manifest format"):
-        replay_decision(missing, rules=RULES["single"])

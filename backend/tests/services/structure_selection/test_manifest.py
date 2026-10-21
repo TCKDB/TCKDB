@@ -243,14 +243,19 @@ def test_a_forged_input_is_caught_by_its_checksum_and_a_resealed_one_by_the_reco
 @pytest.mark.parametrize(
     ("path", "value", "code"),
     [
-        (("manifest_format_version",), 99, "unsupported_manifest_format"),
+        (("format", "version"), 99, "unsupported_manifest_format"),
         # A format other than the one this release reads (no earlier format is kept): refused.
-        (("manifest_format_version",), 2, "unsupported_manifest_format"),
+        (("format", "version"), 2, "unsupported_manifest_format"),
         (("versions", "assessment"), 2, "unsupported_semantic_version"),
         (("versions", "normalizer"), 9, "unsupported_semantic_version"),
         (("versions", "decision"), 2, "unsupported_semantic_version"),
         (("versions", "administrative_key"), 2, "unsupported_semantic_version"),
         (("versions", "finding_semantics"), [1, 2], "unsupported_semantic_version"),
+        # A bool or a float is not the integer it compares equal to: True == 1 must not pass for version 1.
+        (("versions", "assessment"), True, "unsupported_semantic_version"),
+        (("versions", "decision"), 1.0, "unsupported_semantic_version"),
+        (("versions", "rules"), True, "unsupported_semantic_version"),
+        (("versions", "finding_semantics"), [True], "unsupported_semantic_version"),
     ],
 )
 def test_a_version_this_release_does_not_carry_refuses_the_replay(calc_selection, path, value, code):
@@ -424,16 +429,13 @@ def test_the_writer_stamps_the_registered_format_and_every_reader_refuses_a_floa
     db_session, calc_selection
 ):
     from app.services.structure_selection.manifest import MANIFEST_FORMAT_NAME, MANIFEST_FORMATS
-    from tests.services._format_cases import bad_format_versions
+    from tests.services._format_cases import bad_format_manifests
 
     _, result = calc_selection
     manifest = result.manifest
     current = MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version
-    assert manifest["manifest_format_version"] == current and type(current) is int
-    for bad in [*bad_format_versions(current), "absent"]:
-        tampered = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
-        if bad != "absent":
-            tampered["manifest_format_version"] = bad
+    assert manifest["format"] == {"name": MANIFEST_FORMAT_NAME, "version": current} and type(current) is int
+    for tampered in bad_format_manifests(manifest, current):
         for read in (replay_structure_assessment, replay_structure_decision, replay_matches):
             with pytest.raises(ReplayError, match="unknown manifest format"):
                 read(tampered)

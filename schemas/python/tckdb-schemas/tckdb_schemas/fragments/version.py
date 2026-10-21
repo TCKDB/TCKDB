@@ -30,9 +30,9 @@ patterns, so the two cannot disagree about what counts.
 from __future__ import annotations
 
 import re
-from typing import Self
+from typing import Annotated, Any, Self
 
-from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic import BeforeValidator, ConfigDict, Field, StrictInt, model_validator
 
 from tckdb_schemas.common import SchemaBase
 
@@ -78,6 +78,19 @@ VERSIONED_NAME_PATTERNS: tuple[re.Pattern[str], ...] = (
     SEMVER_SEGMENTS,
     AT_VERSION,
 )
+
+
+def _exact_int(value: Any) -> Any:
+    """Refuse anything that is not exactly an ``int``: a ``bool`` and a ``float`` are not versions."""
+    if type(value) is not int:
+        raise ValueError(f"a version must be an integer, not {type(value).__name__} {value!r}")
+    return value
+
+
+#: Put this on a ``Literal[N]`` version field (``Annotated[Literal[1], ExactInt]``). Pydantic matches a ``Literal`` by
+#: equality, so a bare ``Literal[1]`` accepts ``true`` and ``1.0``; ``Strict()`` cannot be applied to a ``Literal``.
+#: ``VersionRef.version`` is already ``StrictInt``; this is the same refusal for a field that is a literal.
+ExactInt = BeforeValidator(_exact_int)
 
 
 def embeds_version(name: str) -> bool:

@@ -21,7 +21,7 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
-from app.services.manifest_formats import read_manifest_format
+from app.services.manifest_formats import manifest_header, read_manifest_format
 from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
@@ -49,6 +49,7 @@ from app.services.thermo_selection.models import (
 )
 from app.services.thermo_selection.rules import PreferenceRule, default_rules
 from app.services.trust.rubrics import COMPUTED_THERMO
+from app.versioning import same_value
 
 
 class ReplayError(ValueError):
@@ -72,10 +73,10 @@ def build_manifest(
     """Assemble the manifest. ``decision`` is ``None`` only for a refused (over-cap) search."""
     ordered = sorted(candidates, key=lambda item: item[0].id_rank)
     return {
-        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version,
+        "format": manifest_header(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME),
         "policy": {"name": POLICY_NAME, "version": POLICY_VERSION},
         "assessment_semantics": semantics_block(
-            version=ASSESSMENT_SEMANTICS_VERSION, evidence_rubric=COMPUTED_THERMO.ref
+            name=ASSESSMENT_SEMANTICS_NAME, version=ASSESSMENT_SEMANTICS_VERSION, evidence_rubric=COMPUTED_THERMO.ref
         ),
         "request": {
             "quantity": QUANTITY,
@@ -118,7 +119,7 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[PreferenceRule]
         the running registry.
     """
     read_manifest_format(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME, manifest, ReplayError)
-    if manifest["policy"] != {"name": POLICY_NAME, "version": POLICY_VERSION}:
+    if not same_value(manifest["policy"], {"name": POLICY_NAME, "version": POLICY_VERSION}):
         raise ReplayError(f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} version {POLICY_VERSION}")
     try:
         check_supported(manifest, semantics=ASSESSMENT_SEMANTICS, name=ASSESSMENT_SEMANTICS_NAME)

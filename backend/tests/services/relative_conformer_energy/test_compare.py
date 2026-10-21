@@ -518,7 +518,7 @@ def test_requests_that_differ_in_more_than_their_protocol_are_refused():
 def test_the_comparison_manifest_replays_and_holds_both_runs_and_the_pairing(db_session):
     world, cand_lot, (a, *_) = two_level_world(db_session)
     manifest = run_service(db_session, world, request_for(world, a, cand_lot, world.lot)).manifest
-    assert manifest["manifest_format"] == "relative_conformer_energy_comparison_manifest"
+    assert manifest["format"] == {"name": "relative_conformer_energy_comparison_manifest", "version": 1}
     assert manifest["request"]["pairing"] == "same_basin"
     assert manifest["runs"]["candidate"]["request"]["level"]["level_of_theory_ref"] == cand_lot.public_ref
     assert manifest["runs"]["reference"]["request"]["level"]["level_of_theory_ref"] == world.lot.public_ref
@@ -721,15 +721,12 @@ def test_an_answer_that_lists_no_member_at_all_has_no_reference_conformer_value_
 
 def test_the_comparison_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_bool_or_missing_one(db_session):
     from app.services.relative_conformer_energy.manifest import COMPARISON_MANIFEST_FORMAT, MANIFEST_FORMATS
-    from tests.services._format_cases import bad_format_versions
+    from tests.services._format_cases import bad_format_manifests
 
     world, cand_lot, (a, *_) = two_level_world(db_session)
     manifest = run_service(db_session, world, request_for(world, a, cand_lot, world.lot)).manifest
     current = MANIFEST_FORMATS.current(COMPARISON_MANIFEST_FORMAT).version
-    assert manifest["manifest_format_version"] == current and type(current) is int
-    for bad in [*bad_format_versions(current), "absent"]:
-        tampered = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
-        if bad != "absent":
-            tampered["manifest_format_version"] = bad
+    assert manifest["format"] == {"name": COMPARISON_MANIFEST_FORMAT, "version": current} and type(current) is int
+    for tampered in bad_format_manifests(manifest, current):
         with pytest.raises(ReplayError, match="unknown manifest format"):
             replay_comparison(tampered)

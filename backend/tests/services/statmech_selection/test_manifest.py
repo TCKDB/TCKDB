@@ -118,7 +118,9 @@ def test_the_manifest_names_what_it_was_made_under_and_leaks_no_database_id():
         "contract": 1, "assessment": 1, "normalizer": 1, "decision": 1,
         "administrative_key": 1, "rules": 1, "finding_semantics": [1],
     }
+    assert manifest["assessment_semantics"]["name"] == "statmech_selection_assessment"
     assert manifest["assessment_semantics"]["version"] == 1
+    assert manifest["assessment_semantics"]["source_findings"] == {"name": "structure_source_findings", "version": 1}
     assert manifest["assessment_semantics"]["evidence_rubric"] == {"name": "statmech_qualification", "version": 1}
 
     def keys(value):
@@ -301,10 +303,20 @@ def test_assessment_semantics_are_never_substituted_with_the_current_ones():
     refused("unsupported_assessment_semantics", reproduce_statmech_ordering, retamper(manifest, lambda b: b["assessment_semantics"].update(version=0)))
     refused("unsupported_assessment_semantics", reproduce_statmech_ordering, retamper(manifest, lambda b: b.pop("assessment_semantics")))
     refused("unsupported_assessment_semantics", reproduce_statmech_ordering, retamper(manifest, lambda b: b.update(assessment_semantics="x")))
-    refused("unsupported_manifest_format", reproduce_statmech_ordering, retamper(manifest, lambda b: b.update(manifest_format_version=99)))
+    refused("unsupported_manifest_format", reproduce_statmech_ordering, retamper(manifest, lambda b: b["format"].update(version=99)))
     # Another format (no earlier one is kept): refused like any format this release does not carry.
-    refused("unsupported_manifest_format", reproduce_statmech_ordering, retamper(manifest, lambda b: b.update(manifest_format_version=2)))
-    refused("unsupported_manifest_format", replay_statmech_decision, retamper(manifest, lambda b: b.update(manifest_format_version=2)))
+    refused("unsupported_manifest_format", reproduce_statmech_ordering, retamper(manifest, lambda b: b["format"].update(version=2)))
+    refused("unsupported_manifest_format", replay_statmech_decision, retamper(manifest, lambda b: b["format"].update(version=2)))
+
+
+@pytest.mark.parametrize("name", ["contract", "decision", "administrative_key", "rules"])
+@pytest.mark.parametrize("bad", [True, 1.0])
+def test_a_bool_or_float_version_is_not_the_integer_it_compares_equal_to(name, bad):
+    """Kills: ``versions.get(name) != running[name]`` letting ``true`` pass for version 1."""
+    manifest = make_manifest()
+    tampered = retamper(manifest, lambda b: b["versions"].update({name: bad}))
+    refused("unsupported_semantic_version", replay_statmech_decision, tampered)
+    refused("unsupported_semantic_version", reproduce_statmech_ordering, tampered)
 
 
 @pytest.mark.parametrize("name", ["assessment", "normalizer", "finding_semantics"])
@@ -367,16 +379,13 @@ def test_an_unresolved_comparability_and_a_conflict_replay_to_the_same_outcome()
 
 def test_the_writer_stamps_the_registered_format_and_every_reader_refuses_a_float_bool_or_missing_one():
     from app.services.statmech_selection.manifest import MANIFEST_FORMAT_NAME, MANIFEST_FORMATS
-    from tests.services._format_cases import bad_format_versions
+    from tests.services._format_cases import bad_format_manifests
 
     manifest = make_manifest()
     current = MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version
-    assert manifest["manifest_format_version"] == current and type(current) is int
+    assert manifest["format"] == {"name": MANIFEST_FORMAT_NAME, "version": current} and type(current) is int
     readers = (replay_statmech_decision, reproduce_statmech_ordering, reassess_statmech_captured_inputs)
-    for bad in [*bad_format_versions(current), "absent"]:
-        tampered = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
-        if bad != "absent":
-            tampered["manifest_format_version"] = bad
+    for tampered in bad_format_manifests(manifest, current):
         for read in readers:
             with pytest.raises(ReplayError, match="unknown manifest format"):
                 read(tampered)

@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from tckdb_schemas.fragments.version import VersionRef
 from tckdb_schemas.network_declarations import (
     NetworkComparisonObjective,
     NetworkObservable,
@@ -344,7 +345,7 @@ class NetworkSelectionManifest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    manifest_format_version: int
+    format: VersionRef
     policy: dict[str, Any]
     declaration_versions: list[int] = Field(default_factory=list)
     request: NetworkSelectionRequestEcho

@@ -8409,7 +8409,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -8715,7 +8719,10 @@
      ],
      "selected_ref": "a"
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -8925,7 +8932,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -9396,7 +9407,10 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
@@ -9725,7 +9739,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -10099,7 +10117,10 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
@@ -10377,7 +10398,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -10714,7 +10739,10 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -10972,7 +11000,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -11258,7 +11290,10 @@
      ],
      "selected_ref": "g4"
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -11496,7 +11531,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -11782,7 +11821,10 @@
      ],
      "selected_ref": "g4"
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -12020,7 +12062,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [],
@@ -12165,7 +12211,10 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "no_applicable_candidate",
     "policy": {
      "name": "h298_method_preferred",
@@ -12353,7 +12402,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -12497,7 +12550,10 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -12591,7 +12647,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -12761,7 +12821,10 @@
      "rules": [],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -12835,7 +12898,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -13093,7 +13160,10 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
@@ -13301,7 +13371,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -13540,7 +13614,10 @@
      ],
      "selected_ref": "b"
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -13729,7 +13806,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -13983,7 +14064,10 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
@@ -14187,7 +14271,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -14337,7 +14425,10 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -14437,7 +14528,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -14749,7 +14844,10 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -14919,7 +15017,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -15137,7 +15239,10 @@
      "rules": [],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -15213,7 +15318,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -15522,7 +15631,10 @@
      ],
      "selected_ref": "q"
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -15689,7 +15801,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -15904,7 +16020,10 @@
      ],
      "selected_ref": "a"
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "sole_eligible_candidate",
     "policy": {
      "name": "h298_method_preferred",
@@ -16115,7 +16234,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -16409,7 +16532,10 @@
      ],
      "selected_ref": "b"
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
@@ -16653,7 +16779,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -16959,7 +17089,10 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
@@ -17123,7 +17256,11 @@
       "name": "computed_thermo",
       "version": 1
      },
-     "source_findings": 1,
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
      "version": 1
     },
     "candidates": [
@@ -17273,7 +17410,10 @@
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 1,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",

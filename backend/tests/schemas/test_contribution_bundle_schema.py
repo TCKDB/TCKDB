@@ -171,6 +171,22 @@ class TestInvalidTopLevel:
         with pytest.raises(ValidationError):
             ContributionBundle.model_validate(data)
 
+    @pytest.mark.parametrize("bad", [True, 1.0, "1", 2, 0])
+    def test_bundle_version_must_be_the_integer_one_not_a_bool_or_float(self, bad) -> None:
+        """Kills: ``Literal[1]`` accepting ``true`` and ``1.0`` (pydantic's Literal matches by equality)."""
+        data = _bundle("thermo", bundle_version=bad)
+        with pytest.raises(ValidationError):
+            ContributionBundle.model_validate(data)
+
+    @pytest.mark.parametrize("raw", ["true", "1.0"])
+    def test_bundle_version_json_true_or_float_is_refused_too(self, raw) -> None:
+        import json
+
+        text = json.dumps(_bundle("thermo")).replace('"bundle_version": 1', f'"bundle_version": {raw}')
+        assert f'"bundle_version": {raw}' in text
+        with pytest.raises(ValidationError):
+            ContributionBundle.model_validate_json(text)
+
     def test_unsupported_bundle_kind(self) -> None:
         data = _bundle("thermo", bundle_kind="network")
         with pytest.raises(ValidationError):

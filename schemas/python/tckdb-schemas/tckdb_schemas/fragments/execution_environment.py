@@ -28,11 +28,12 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
+from tckdb_schemas.fragments.version import ExactInt
 from tckdb_schemas.software import normalize_software_name
 from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 
@@ -259,7 +260,7 @@ class ExecutionEnvironmentManifestPayload(SchemaBase):
     """
 
     schema_name: Literal["tckdb.execution-environment"]
-    schema_version: Literal[1]
+    schema_version: Annotated[Literal[1], ExactInt]
     runtime: DescribedRuntime | ContainerRuntime | CondaRuntime | HPCModuleRuntime = Field(
         discriminator="runtime_kind"
     )

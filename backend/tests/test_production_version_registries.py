@@ -139,7 +139,7 @@ def test_a_manifest_format_the_registry_does_not_hold_is_refused_never_read_as_c
 
     with pytest.raises(Refused, match="unknown manifest format"):
         read_manifest_format(
-            THERMO_FORMATS, MANIFEST_FORMAT_NAME, {"manifest_format_version": recorded}, Refused
+            THERMO_FORMATS, MANIFEST_FORMAT_NAME, {"format": {"name": MANIFEST_FORMAT_NAME, "version": recorded}}, Refused
         )
     with pytest.raises(Refused, match="unknown manifest format"):
         read_manifest_format(THERMO_FORMATS, MANIFEST_FORMAT_NAME, {}, Refused)
@@ -149,7 +149,7 @@ def test_the_current_manifest_format_is_read_back_as_registered() -> None:
     from app.services.thermo_selection.models import MANIFEST_FORMAT_NAME
 
     current = THERMO_FORMATS.current(MANIFEST_FORMAT_NAME)
-    got = read_manifest_format(THERMO_FORMATS, MANIFEST_FORMAT_NAME, {"manifest_format_version": current.version}, ValueError)
+    got = read_manifest_format(THERMO_FORMATS, MANIFEST_FORMAT_NAME, {"format": {"name": MANIFEST_FORMAT_NAME, "version": current.version}}, ValueError)
     assert got == ManifestFormat(MANIFEST_FORMAT_NAME, current.version)
 
 

@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from tckdb_schemas.fragments.version import VersionRef
 from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
 from app.db.models.common import CalculationQuality, RecordReviewStatus
@@ -285,8 +286,7 @@ class RelativeConformerEnergyManifest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    manifest_format: str
-    manifest_format_version: int
+    format: VersionRef
     versions: dict[str, Any]
     request: RelativeEnergyManifestRequest
     structure_request: dict[str, Any]
@@ -533,8 +533,7 @@ class RelativeConformerEnergyCompareManifest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    manifest_format: str
-    manifest_format_version: int
+    format: VersionRef
     versions: dict[str, Any]
     request: RelativeEnergyCompareManifestRequest
     read_profile: dict[str, Any]

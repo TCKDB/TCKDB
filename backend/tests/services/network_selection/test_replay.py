@@ -178,13 +178,18 @@ def test_the_recorded_outcome_is_compared_as_well_as_the_decision(scenario):
 @pytest.mark.parametrize(
     "path, value",
     [
-        (("manifest_format_version",), 99),
+        (("format", "version"), 99),
         # The previous format (2) is retired with its reader: refused like any format this release does not carry.
-        (("manifest_format_version",), 2),
+        (("format", "version"), 2),
         (("policy", "version"), 999),
         (("policy", "name"), "kinetics_method_preferred"),
         (("policy", "assessment_version"), 999),
         (("policy", "bounds_version"), 999),
+        # A bool or a float is not the integer it compares equal to: True == 1 must not pass for version 1.
+        (("policy", "version"), True),
+        (("policy", "version"), 1.0),
+        (("policy", "assessment_version"), True),
+        (("policy", "bounds_version"), True),
     ],
 )
 def test_an_unavailable_format_policy_assessment_or_bounds_version_refuses_replay(scenario, path, value):
@@ -406,15 +411,12 @@ def test_the_writer_stamps_the_registered_format_and_every_reader_refuses_a_floa
     db_session, world, scenario
 ):
     from app.services.network_selection.manifest import MANIFEST_FORMAT_NAME, MANIFEST_FORMATS
-    from tests.services._format_cases import bad_format_versions
+    from tests.services._format_cases import bad_format_manifests
 
     result, manifest, _ = scenario
     current = MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version
-    assert manifest["manifest_format_version"] == current and type(current) is int
-    for bad in [*bad_format_versions(current), "absent"]:
-        tampered = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
-        if bad != "absent":
-            tampered["manifest_format_version"] = bad
+    assert manifest["format"] == {"name": MANIFEST_FORMAT_NAME, "version": current} and type(current) is int
+    for tampered in bad_format_manifests(manifest, current):
         tampered = reseal(tampered)  # the digest is checked by some readers first; the format is what is under test
         for read in (replay_network, replay_network_decision, replay_network_assessment):
             with pytest.raises(ReplayError, match="unknown manifest format"):
