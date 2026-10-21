@@ -121,7 +121,7 @@ class TestSubmitContributionBundle:
         self, db_session
     ) -> None:
         user = _make_user(db_session)
-        bundle = _load_bundle("thermo-bundle-v0.json")
+        bundle = _load_bundle("thermo-bundle.json")
 
         result = submit_contribution_bundle(db_session, bundle, actor=user)
 
@@ -167,7 +167,7 @@ class TestSubmitContributionBundle:
         self, db_session
     ) -> None:
         user = _make_user(db_session, "kineticist")
-        bundle = _load_bundle("kinetics-bundle-v0.json")
+        bundle = _load_bundle("kinetics-bundle.json")
 
         result = submit_contribution_bundle(db_session, bundle, actor=user)
 
@@ -206,7 +206,7 @@ class TestSubmitContributionBundle:
         from app.workflows import contribution_bundle_submit as submit_module
 
         user = _make_user(db_session, "rollback-tester")
-        bundle = _load_bundle("thermo-bundle-v0.json")
+        bundle = _load_bundle("thermo-bundle.json")
 
         def _boom(*args, **kwargs):
             raise RuntimeError("simulated workflow failure")
@@ -262,7 +262,7 @@ class TestSubmitContributionBundle:
         # canonicalization fails — strict gate must reject before any
         # row is created.
         raw = json.loads(
-            (EXAMPLES_DIR / "kinetics-bundle-v0.json").read_text()
+            (EXAMPLES_DIR / "kinetics-bundle.json").read_text()
         )
         for participant in raw["records"]["kinetics_uploads"][0]["reaction"][
             "reactants"

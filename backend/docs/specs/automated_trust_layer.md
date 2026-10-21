@@ -78,8 +78,10 @@ results and reviews still parse; the two retired causes are simply no longer pro
 **Live consumers.** H298 and kinetics selection block on `evidence.hard_fail_reason`, so a record whose only flaw was an automated
 geometry fail is now eligible, and fresh answers can differ from earlier ones. Each assessment carries
 `evidence_rubric:<name>` and `evidence_rubric_version:<N>` entries in its advisory list, and each manifest records a structured
-`assessment_semantics` block (`version`, `evidence_rubric` as `{"name": "computed_thermo", "version": 1}`, `source_findings`),
-all integers where they are versions. The selection `policy` version covers only the decision procedure; assessment
+`assessment_semantics` block (`name` and `version`, `evidence_rubric` as `{"name": "computed_thermo", "version": 1}`, and
+`source_findings` as `{"name": "structure_source_findings", "version": 1}`), every versioned thing a name beside an integer
+version. Every selection manifest also opens with a root `format` block (`{"name": "thermo_selection_manifest", "version": 1}`),
+which replaces the bare `manifest_format_version` integer. The selection `policy` version covers only the decision procedure; assessment
 semantics are versioned separately (`ASSESSMENT_SEMANTICS_VERSION`, `1`). A manifest with no block, or a malformed or foreign
 one, is refused. Replay reads the recorded eligibility and re-runs the ordering, never reassesses, and refuses semantics it does
 not carry. See

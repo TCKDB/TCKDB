@@ -13042,7 +13042,7 @@
           "version": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "integer"
               },
               {
                 "type": "null"
@@ -24144,9 +24144,8 @@
             "title": "Disclosures",
             "type": "object"
           },
-          "manifest_format_version": {
-            "title": "Manifest Format Version",
-            "type": "integer"
+          "format": {
+            "$ref": "#/components/schemas/VersionRef"
           },
           "outcome": {
             "$ref": "#/components/schemas/KineticsSelectionOutcome"
@@ -24175,7 +24174,7 @@
           }
         },
         "required": [
-          "manifest_format_version",
+          "format",
           "policy",
           "request",
           "snapshot_isolation",
@@ -33615,9 +33614,8 @@
             "title": "Disclosures",
             "type": "object"
           },
-          "manifest_format_version": {
-            "title": "Manifest Format Version",
-            "type": "integer"
+          "format": {
+            "$ref": "#/components/schemas/VersionRef"
           },
           "network": {
             "additionalProperties": true,
@@ -33663,7 +33661,7 @@
           }
         },
         "required": [
-          "manifest_format_version",
+          "format",
           "policy",
           "request",
           "visibility",
@@ -41483,16 +41481,11 @@
         "additionalProperties": true,
         "description": "The replayable manifest of the ``/compare/manifest`` download.\n\nBoth runs' complete relative-energy manifests, the shared request, the pairing and the comparison. The digests are\nchecksums, not signatures; replay recomputes both runs and the pairing and never trusts a recorded flag. Replay it\nwith ``app.services.relative_conformer_energy.replay_comparison``.",
         "properties": {
+          "format": {
+            "$ref": "#/components/schemas/VersionRef"
+          },
           "integrity": {
             "$ref": "#/components/schemas/RelativeEnergyIntegrity"
-          },
-          "manifest_format": {
-            "title": "Manifest Format",
-            "type": "string"
-          },
-          "manifest_format_version": {
-            "title": "Manifest Format Version",
-            "type": "integer"
           },
           "outcome": {
             "$ref": "#/components/schemas/ComparisonOutcome"
@@ -41526,8 +41519,7 @@
           }
         },
         "required": [
-          "manifest_format",
-          "manifest_format_version",
+          "format",
           "versions",
           "request",
           "read_profile",
@@ -41786,16 +41778,11 @@
             "title": "Effective Review Statuses",
             "type": "array"
           },
+          "format": {
+            "$ref": "#/components/schemas/VersionRef"
+          },
           "integrity": {
             "$ref": "#/components/schemas/RelativeEnergyIntegrity"
-          },
-          "manifest_format": {
-            "title": "Manifest Format",
-            "type": "string"
-          },
-          "manifest_format_version": {
-            "title": "Manifest Format Version",
-            "type": "integer"
           },
           "outcome": {
             "$ref": "#/components/schemas/RelativeEnergyOutcome"
@@ -41839,8 +41826,7 @@
           }
         },
         "required": [
-          "manifest_format",
-          "manifest_format_version",
+          "format",
           "versions",
           "request",
           "structure_request",
@@ -53406,12 +53392,11 @@
             "title": "Effective Review Statuses",
             "type": "array"
           },
+          "format": {
+            "$ref": "#/components/schemas/VersionRef"
+          },
           "integrity": {
             "$ref": "#/components/schemas/StatmechSelectionIntegrity"
-          },
-          "manifest_format_version": {
-            "title": "Manifest Format Version",
-            "type": "integer"
           },
           "outcome": {
             "$ref": "#/components/schemas/Outcome"
@@ -53445,7 +53430,7 @@
           }
         },
         "required": [
-          "manifest_format_version",
+          "format",
           "versions",
           "assessment_semantics",
           "request",
@@ -53471,9 +53456,8 @@
             "title": "Canonical Bytes",
             "type": "integer"
           },
-          "manifest_format_version": {
-            "title": "Manifest Format Version",
-            "type": "integer"
+          "manifest_format": {
+            "$ref": "#/components/schemas/VersionRef"
           },
           "manifest_sha256": {
             "title": "Manifest Sha256",
@@ -53489,7 +53473,7 @@
           }
         },
         "required": [
-          "manifest_format_version",
+          "manifest_format",
           "manifest_sha256",
           "canonical_bytes",
           "path",
@@ -56538,12 +56522,11 @@
             "title": "Effective Review Statuses",
             "type": "array"
           },
+          "format": {
+            "$ref": "#/components/schemas/VersionRef"
+          },
           "integrity": {
             "$ref": "#/components/schemas/StructureSelectionIntegrity"
-          },
-          "manifest_format_version": {
-            "title": "Manifest Format Version",
-            "type": "integer"
           },
           "outcome": {
             "$ref": "#/components/schemas/StructureOutcome"
@@ -56577,7 +56560,7 @@
           }
         },
         "required": [
-          "manifest_format_version",
+          "format",
           "versions",
           "request",
           "effective_review_statuses",
@@ -61326,9 +61309,8 @@
             "title": "Disclosures",
             "type": "object"
           },
-          "manifest_format_version": {
-            "title": "Manifest Format Version",
-            "type": "integer"
+          "format": {
+            "$ref": "#/components/schemas/VersionRef"
           },
           "outcome": {
             "$ref": "#/components/schemas/ThermoSelectionOutcome"
@@ -61353,7 +61335,7 @@
           }
         },
         "required": [
-          "manifest_format_version",
+          "format",
           "policy",
           "request",
           "subject",

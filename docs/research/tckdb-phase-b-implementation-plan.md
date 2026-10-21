@@ -128,7 +128,7 @@ Design.
   v1 row reproduces its recorded digest.
 - Bundle export (`backend/scripts/export_contribution_bundle.py:166`) emits the
   fragment from the source submission's standing attestation;
-  `docs/contribution-bundles/v0-format.md` documents it.
+  `docs/contribution-bundles/format.md` documents it.
 - Migration: one revision from the verified head, upgrade and downgrade, no
   backfill. Historical coverage is a curator action with an actor: a read-only
   depositor inventory first, then attestations; for records with no link,

@@ -88,7 +88,7 @@ def _thermo(**changes: Any) -> dict:
     absent declaration is the case under test, and ``null`` would exercise
     the same path only by coincidence.
     """
-    bundle = _example("thermo-bundle-v0.json")
+    bundle = _example("thermo-bundle.json")
     record = bundle["records"]["thermo_uploads"][0]
     for key, value in changes.items():
         if value is None:
@@ -99,7 +99,7 @@ def _thermo(**changes: Any) -> dict:
 
 
 def _kinetics(**changes: Any) -> dict:
-    bundle = _example("kinetics-bundle-v0.json")
+    bundle = _example("kinetics-bundle.json")
     bundle["records"]["kinetics_uploads"][0].update(changes)
     return bundle
 
@@ -295,7 +295,7 @@ def _thermo_rich(_session: Session) -> dict:
     literature, provenance releases, inline calculations, source links and
     an applied correction. The two example bundles reach none of them, so a
     check behind any of them was invisible to the trace test (review F5)."""
-    bundle = _example("thermo-bundle-v0.json")
+    bundle = _example("thermo-bundle.json")
     record = bundle["records"]["thermo_uploads"][0]
     record.update(
         species_entry={"smiles": "CCCC", "charge": 0, "multiplicity": 1},
@@ -408,7 +408,7 @@ def _kinetics_rich(session: Session) -> dict:
         "standard_state_convention": "ideal_gas_1_bar",
         "degeneracy_interpretation": "reaction_path_degeneracy",
     }
-    bundle = _example("kinetics-bundle-v0.json")
+    bundle = _example("kinetics-bundle.json")
     bundle["records"]["kinetics_uploads"] = [
         {
             "reaction": {
@@ -447,8 +447,8 @@ def _kinetics_rich(session: Session) -> dict:
 
 
 ACCEPTED: dict[str, Callable[[Session], dict]] = {
-    "thermo_example": lambda _s: _example("thermo-bundle-v0.json"),
-    "kinetics_example": lambda _s: _example("kinetics-bundle-v0.json"),
+    "thermo_example": lambda _s: _example("thermo-bundle.json"),
+    "kinetics_example": lambda _s: _example("kinetics-bundle.json"),
     "thermo_rich": _thermo_rich,
     "kinetics_rich": _kinetics_rich,
 }
@@ -577,7 +577,7 @@ def test_dry_run_and_submit_accept_identically(client, case: str) -> None:
 
 def test_a_schema_refusal_is_the_same_422_on_both_routes(client) -> None:
     """Request validation runs before either route; pinned so it stays so."""
-    bundle = _example("thermo-bundle-v0.json")
+    bundle = _example("thermo-bundle.json")
     del bundle["bundle_kind"]
     dry = client.post(DRY_RUN, json=copy.deepcopy(bundle))
     sub = client.post(SUBMIT, json=copy.deepcopy(bundle))
@@ -613,7 +613,7 @@ def test_dry_run_verdict_comes_from_submit_itself(client, monkeypatch) -> None:
     # The example bundle is one both routes accept unpatched (see
     # test_dry_run_and_submit_accept_identically), so this refusal can only
     # have come from the replacement.
-    dry = client.post(DRY_RUN, json=_example("thermo-bundle-v0.json"))
+    dry = client.post(DRY_RUN, json=_example("thermo-bundle.json"))
     assert dry.status_code == 200, dry.text
     assert [(e["code"], e["message"]) for e in _dry_run_errors(dry.json())] == [
         (
@@ -643,7 +643,7 @@ def test_a_rehearsal_that_tries_to_commit_fails_loudly_and_keeps_nothing(
     session = client._db_session
     before = _counts(session)
     with pytest.raises(RehearsalCommitRefused):
-        client.post(DRY_RUN, json=_example("thermo-bundle-v0.json"))
+        client.post(DRY_RUN, json=_example("thermo-bundle.json"))
     assert _counts(session) == before
 
 

@@ -1,4 +1,4 @@
-"""Build or verify a ``tckdb.deposit.v1`` publication deposit.
+"""Build or verify a ``tckdb.deposit`` publication deposit.
 
 ``build`` reads one published dataset release from the database (never over
 HTTP), writes the evidence archive from the same session, copies the source

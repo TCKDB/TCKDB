@@ -26,7 +26,7 @@ dataset must never require a code release.
 
 **The last of four versioning PRs, and the one clients see: a deliberate wire break, once.** Migration: `c7d4a9e2b6f1_split_versioned_names`
 (both directions; it rewrites stored data, bypasses the accepted-science freeze inside its own transaction and **unpublishes every release**,
-see below). New environment variable: none. `tckdb-schemas` 0.130.0, `tckdb-client` 0.159.0; `tckdb-mcp` unchanged. OpenAPI snapshot, producer
+see below). New environment variable: none. `tckdb-schemas` 0.131.0, `tckdb-client` 0.160.0 (floor `tckdb-schemas>=0.131.0`), `tckdb-qcschema` 0.9.1; `tckdb-mcp` unchanged. OpenAPI snapshot, producer
 contract and API vocabulary regenerated. Four rule-manifest SHA pins moved and need the owner's explicit approval (listed in the pull request).
 
 In plain terms: anywhere TCKDB used to write one string with a version stuck on it (`computed_thermo_v2`, `tckdb.dataset_release.v2`,
@@ -39,21 +39,30 @@ NIST's ThermoML release, a producer's own parser) are left exactly as given.
   migration **aborts** if any review's `rubric_versions_json` is not exactly one key. `record_reproducibility_assessment.rubric_version` is an
   integer. `submission_audit_event.details_json["schema_version"] = "machine_review_v2"` becomes `["format"] = {"name": "machine_review", "version": 1}`.
   `release_manifest`: `manifest_format_*`, `recovery_archive_format_*`, `review_policy_*` pairs replace the three fused columns.
+  `conformer_assignment_scheme.version` is an integer. Every integer version the revision adds has a `>= 1` CHECK constraint.
+  `uq_external_source_record_identity` includes `parser_name` and `mapping_name`.
   `execution_environment_manifest`: `schema_name` + int `schema_version`, `canonical_json` rewritten and `content_digest` recomputed with a frozen copy
   of the canonicaliser. `calculation` / `calculation_parameter` / `calc_hessian`: `*_parser_name` beside the text version (`gaussian_v1` becomes
-  `gaussian_parameters` / `1`, a producer's own stamp is kept verbatim under the name `producer`). `external_source_record`: `mapping_name`, ThermoML
-  stamps `thermoml_cp` / `thermoml_cp_mapping` at `1`; `molecular_property_observation.external_source_parser_name`;
+  `gaussian_parameters` / `1`, `orca_v1` and `orca_v2` stay two different parsers as `orca_parameters` `0` and `1`, a producer's own stamp is kept
+  verbatim under the name `producer`). `external_source_record`: `mapping_name`, ThermoML stamps `thermoml_cp` / `thermoml_cp_mapping` at `1`
+  (only rows that are ThermoML; any other row aborts the upgrade); `molecular_property_observation.external_source_parser_name`;
   `conformer_assignment_scheme` `torsion_basin` `v1` becomes `1` and its content-derived `public_ref` is recomputed.
 - **Releases are unpublished (owner decision 3).** A release manifest's format tag sits inside its frozen checksum, so it cannot be relabelled.
-  The migration deletes every `release_manifest` and `release_artifact` row, sets each published or withdrawn `dataset_release` back to `draft`
-  (`published_at`, `withdrawn_at`, `withdrawn_reason` cleared; the DOI and every `release_selection` row are kept) and the owner re-publishes.
-  Downgrade cannot restore them and refuses to run while a manifest exists.
+  The migration deletes every `release_manifest` and `release_artifact` row and sets each **published** `dataset_release` back to `draft`
+  (`published_at` cleared); a **withdrawn** release stays withdrawn with its `published_at`, `withdrawn_at` and `withdrawn_reason` intact. The DOI
+  and every `release_selection` row are kept, so **a minted DOI points at an unpublished release until it is re-published**.
+  Downgrade cannot restore the manifests and refuses to run while one exists.
 - **The accepted-science freeze is bypassed, for this one revision only (owner decision 3).** The relabel touches provenance stamps on approved
-  calculations. The migration disables every user trigger on the tables it writes, rewrites, re-enables exactly those triggers and then raises (rolling
-  everything back) if any user trigger on those tables is still off. No scientific value is read or written; no declared-repair machinery is used.
-- **Everything stored as machine review or reproducibility assessment now reads stale, by design.** Stored rubric versions (2, 5) no longer match the
-  current ones (1), and the context hash changed, so `rubric_versions_mismatch` / `context_hash_mismatch` mark every earlier review for re-review.
-  Nothing is rewritten: that is the stale-assessment mechanism doing its job.
+  calculations. The migration disables every enabled user trigger on the tables it writes (recording its exact mode), rewrites, puts each one back in
+  that mode (`ENABLE`, `ENABLE ALWAYS` or `ENABLE REPLICA`) and then raises (rolling everything back) if one it disabled is not back; a trigger that was
+  already disabled is left as it was. No scientific value is read or written; no declared-repair machinery is used.
+- **Everything stored as machine review or reproducibility assessment now reads stale, by design, and says why.** The context recipe version
+  (`MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION`) is the one TCKDB-owned version that is **not** reset: it moves 1 to 2, so every review stored before the
+  reset reports `context_schema_version_mismatch` (a review whose old rubric was already at version 1 would otherwise match the new prompt and rubric
+  exactly). Reproducibility assessments read stale because the evidence context they were hashed over changed shape. Nothing is rewritten.
+- **Split cleanly or abort.** Before writing, the migration inspects every stored shape and refuses (nothing committed) on a fused name it does not
+  know, a look-alike parser stamp (`gaussian_v2`, `GAUSSIAN_V1`), a non-ThermoML source record, or a shape its downgrade could not restore exactly;
+  afterwards it checks that no new `*_name` column still ends in a version segment. The downgrade restores the exact old strings or refuses.
 - **Reset to 1.** All fourteen trust rubrics, the reproducibility rubric, the machine-review prompt, context schema and provider format, every
   selection engine's manifest format, policy, assessment-semantics and component versions, relative-energy, every rule (E1, XYG3, the network and
   structure candidates, the inactive council rules) and the four rule manifests, the document formats (dataset release, archive, export, ML export,
@@ -71,6 +80,12 @@ NIST's ThermoML release, a producer's own parser) are left exactly as given.
 - **Debt list: empty.** All 57 remaining rows are fixed, `MOVED_DEBT` and `RENAMES` and their script support are deleted, `COMPLETED_PRS` is
   {PR-2, PR-3, PR-4} and both ceilings are 0; only reasoned `ALLOWED` entries remain (botocore, the Gaussian IOp keyword, NIST's ThermoML
   release, a base64 payload, an arXiv id, an HPC module label, a database URL).
+- **Strict wire versions.** A version written as a `Literal[1]` (`bundle_version`, the execution-environment `schema_version`) now refuses `true` and
+  `1.0` (`ExactInt`). Every replay comparison of a recorded version or `{name, version}` block uses `same_value`, which does not let `True` pass for 1
+  (thermo and kinetics `policy`, network `policy` and declaration versions, the statmech, structure and relative-energy `versions`).
+- **Selection manifests carry `format: {name, version}`** in place of the bare `manifest_format_version` (and, for relative energy, the separate
+  `manifest_format` name). The `assessment_semantics` block carries `name` and `version`, and its `source_findings` is a `{name, version}` pair
+  (`structure_source_findings`) instead of a bare integer. The reader refuses a block with another engine's name, extra keys or a non-integer version.
 - **Kept, and still bite:** stale marking, refusal of unknown versions, checksums, append-only results.
 
 ## Code names no longer carry a version; versions go through one registry (versioning PR-3, 2026-10-20)

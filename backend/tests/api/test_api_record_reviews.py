@@ -284,7 +284,7 @@ class TestDirectUploadsCreateNotReviewedSubmissions:
 
 class TestBundleSubmitCreatesNotReviewedRows:
     def test_thermo_bundle_review_rows(self, client, db_session):
-        bundle = _load_bundle("thermo-bundle-v0.json")
+        bundle = _load_bundle("thermo-bundle.json")
         resp = client.post("/api/v1/bundles/submit", json=bundle)
         assert resp.status_code == 201, resp.text
         body = resp.json()
@@ -319,7 +319,7 @@ class TestSubmissionApprovalFlipsReviewState:
     def test_approve_flips_to_approved(
         self, client, db_session, login_as, _api_curator_user
     ):
-        bundle = _load_bundle("thermo-bundle-v0.json")
+        bundle = _load_bundle("thermo-bundle.json")
         resp = client.post("/api/v1/bundles/submit", json=bundle)
         assert resp.status_code == 201
         submission_id = resp.json()["submission_id"]
@@ -345,7 +345,7 @@ class TestSubmissionApprovalFlipsReviewState:
     def test_reject_flips_to_rejected(
         self, client, db_session, login_as, _api_curator_user
     ):
-        bundle = _load_bundle("thermo-bundle-v0.json")
+        bundle = _load_bundle("thermo-bundle.json")
         resp = client.post("/api/v1/bundles/submit", json=bundle)
         assert resp.status_code == 201
         submission_id = resp.json()["submission_id"]
@@ -368,7 +368,7 @@ class TestSubmissionApprovalFlipsReviewState:
             assert r.reviewed_by == _api_curator_user
 
     def test_uploader_cannot_approve_own_submission(self, client, db_session):
-        bundle = _load_bundle("thermo-bundle-v0.json")
+        bundle = _load_bundle("thermo-bundle.json")
         resp = client.post("/api/v1/bundles/submit", json=bundle)
         assert resp.status_code == 201
         submission_id = resp.json()["submission_id"]

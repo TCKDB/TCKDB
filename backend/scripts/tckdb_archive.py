@@ -1,4 +1,4 @@
-"""Create or restore a portable ``tckdb.archive.v1`` scientific archive."""
+"""Create or restore a portable ``tckdb.archive`` scientific archive."""
 
 from __future__ import annotations
 

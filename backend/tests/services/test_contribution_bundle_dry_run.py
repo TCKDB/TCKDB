@@ -104,7 +104,7 @@ def _items_by_type(items, record_type: DryRunRecordType):
 def test_dry_run_thermo_clean_db_classifies_dependencies_as_create(db_engine) -> None:
     """A clean DB should classify the species/species_entry as ``would_create``
     and the thermo row as ``would_append``."""
-    bundle = _load_bundle("thermo-bundle-v0.json")
+    bundle = _load_bundle("thermo-bundle.json")
 
     with _isolated_session(db_engine) as session:
         before = _table_counts(session)
@@ -139,7 +139,7 @@ def test_dry_run_thermo_clean_db_classifies_dependencies_as_create(db_engine) ->
 
 def test_dry_run_thermo_existing_species_classifies_as_reuse(db_engine) -> None:
     """If the same species already exists on hosted, dry-run must say reuse."""
-    bundle = _load_bundle("thermo-bundle-v0.json")
+    bundle = _load_bundle("thermo-bundle.json")
 
     with _isolated_session(db_engine) as session:
         # Seed the same water species via a real upload — this creates the
@@ -170,7 +170,7 @@ def test_dry_run_thermo_existing_species_classifies_as_reuse(db_engine) -> None:
 
 
 def test_dry_run_kinetics_clean_db(db_engine) -> None:
-    bundle = _load_bundle("kinetics-bundle-v0.json")
+    bundle = _load_bundle("kinetics-bundle.json")
 
     with _isolated_session(db_engine) as session:
         before = _table_counts(session)
@@ -208,7 +208,7 @@ def test_dry_run_kinetics_existing_reaction_and_provenance_classifies_as_reuse(
 ) -> None:
     """Seed a matching kinetics record, then dry-run the example bundle and
     confirm the reaction graph + provenance both light up as would_reuse."""
-    bundle = _load_bundle("kinetics-bundle-v0.json")
+    bundle = _load_bundle("kinetics-bundle.json")
 
     with _isolated_session(db_engine) as session:
         seed = KineticsUploadRequest(
@@ -270,7 +270,7 @@ def test_dry_run_kinetics_existing_reaction_and_provenance_classifies_as_reuse(
 
 def test_dry_run_thermo_with_literature_provenance_creates_item(db_engine) -> None:
     """A thermo upload carrying a DOI must produce a literature preview item."""
-    bundle_dict = json.loads((EXAMPLES_DIR / "thermo-bundle-v0.json").read_text())
+    bundle_dict = json.loads((EXAMPLES_DIR / "thermo-bundle.json").read_text())
     bundle_dict["records"]["thermo_uploads"][0]["literature"] = {
         "kind": "article",
         "title": "Synthetic example",
@@ -292,7 +292,7 @@ def test_dry_run_thermo_with_literature_provenance_creates_item(db_engine) -> No
 
 
 def test_summary_counts_match_items(db_engine) -> None:
-    bundle = _load_bundle("kinetics-bundle-v0.json")
+    bundle = _load_bundle("kinetics-bundle.json")
 
     with _isolated_session(db_engine) as session:
         result = dry_run_contribution_bundle(session, bundle)

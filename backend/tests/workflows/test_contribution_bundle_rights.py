@@ -37,7 +37,7 @@ RIGHTS = {
 
 
 def _bundle_with_rights() -> ContributionBundle:
-    raw = json.loads((EXAMPLES_DIR / "thermo-bundle-v0.json").read_text())
+    raw = json.loads((EXAMPLES_DIR / "thermo-bundle.json").read_text())
     raw["submission"]["rights"] = dict(RIGHTS)
     return ContributionBundle.model_validate(raw)
 
@@ -74,7 +74,7 @@ def test_bundle_submit_records_the_depositor_agreement(db_session):
 
 
 def test_a_bundle_without_rights_records_nothing(db_session):
-    raw = json.loads((EXAMPLES_DIR / "thermo-bundle-v0.json").read_text())
+    raw = json.loads((EXAMPLES_DIR / "thermo-bundle.json").read_text())
     assert "rights" not in raw["submission"]
     bundle = ContributionBundle.model_validate(raw)
     result = submit_contribution_bundle(db_session, bundle, actor=_submitter(db_session))
@@ -125,7 +125,7 @@ def test_a_partially_attested_selection_is_refused_not_extended(db_session):
     attested = submit_contribution_bundle(
         db_session, _bundle_with_rights(), actor=_submitter(db_session)
     )
-    raw = json.loads((EXAMPLES_DIR / "thermo-bundle-v0.json").read_text())
+    raw = json.loads((EXAMPLES_DIR / "thermo-bundle.json").read_text())
     unattested = submit_contribution_bundle(
         db_session,
         ContributionBundle.model_validate(raw),
@@ -155,7 +155,7 @@ def test_a_partially_attested_selection_is_refused_not_extended(db_session):
 
 
 def test_the_exporter_never_invents_consent(db_session):
-    raw = json.loads((EXAMPLES_DIR / "thermo-bundle-v0.json").read_text())
+    raw = json.loads((EXAMPLES_DIR / "thermo-bundle.json").read_text())
     bundle = ContributionBundle.model_validate(raw)
     result = submit_contribution_bundle(db_session, bundle, actor=_submitter(db_session))
     thermo_ids = [

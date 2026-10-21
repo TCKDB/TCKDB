@@ -17,7 +17,7 @@ custody chain a new importer (ThermoML, Phase C-E2/E3) attaches to instead:
   constraint), so a re-import always has a byte-identical or explicitly
   superseding custody trail.
 
-Both tables are included in the ``tckdb.archive.v1`` registry
+Both tables are included in the ``tckdb.archive`` registry
 (``app/services/archive/registry.py``); their columns use only generic
 codec-supported SQL types, so no archive core.py change is needed.
 """

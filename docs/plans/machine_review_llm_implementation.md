@@ -18,7 +18,7 @@ Read these first — they are authoritative and this plan defers to them:
   design (Off/Cloud/Local modes, config reuse, context builder, failure contract,
   the eight open questions). **This plan implements that spec's §15 order with
   concrete Anthropic detail.**
-- `backend/docs/specs/machine_review_provider_contract_v2.md` /
+- `backend/docs/specs/machine_review_provider_contract.md` /
   `app/services/machine_review/schemas.py` — the frozen v2 wire shape a provider
   must emit (`MachineReviewProviderResultV2`).
 - `backend/docs/specs/optional_llm_precheck.md` — the v1 advisory precheck plumbing,

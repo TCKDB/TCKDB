@@ -45,7 +45,7 @@ the byte count means for each kind.
 
 Deployment-local, not science
 -----------------------------
-Excluded from ``tckdb.archive.v1``: this is an account of one
+Excluded from ``tckdb.archive``: this is an account of one
 deployment's object store, and restoring it elsewhere would import a
 storage incident that never happened to the restoring cluster.
 """

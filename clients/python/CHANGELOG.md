@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.160.0 - 2026-10-21
+
+Follows `tckdb-schemas` 0.131.0 (review fixes to versioning PR-4). The floor is raised to `tckdb-schemas>=0.131.0`: the client now speaks the
+`ParserStamp` / `{name, version}` wire that older schemas packages do not have, and the old floor (`>=0.116.0`) let a resolver pick one of them.
+
+- The selection manifests the client returns (`RelativeConformerEnergyManifest`, `RelativeConformerEnergyCompareManifest`, and the engines' manifests,
+  which the client passes through untouched) open with a root `format` block, `{"name": ..., "version": ...}`, in place of
+  `manifest_format_version` (and, for the relative-energy manifests, the separate `manifest_format` name string). A manifest's
+  `assessment_semantics` block gains a `name`, and its `source_findings` is a `{name, version}` pair instead of a bare integer.
+- `tckdb-qcschema` 0.9.1: its floors are now `tckdb-client>=0.160.0` and `tckdb-schemas>=0.131.0` (they were unpinned).
+
 ## 0.159.0 - 2026-10-20
 
 Follows `tckdb-schemas` 0.130.0 (versioning PR-4: a name and an integer version everywhere, every TCKDB-owned version reset to 1).

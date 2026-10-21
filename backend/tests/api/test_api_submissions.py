@@ -1236,7 +1236,7 @@ class TestBundleSubmissionWiring:
     def test_thermo_bundle_creates_submission_audit_and_links(
         self, client, db_session
     ):
-        bundle = _load_bundle("thermo-bundle-v0.json")
+        bundle = _load_bundle("thermo-bundle.json")
         resp = client.post("/api/v1/bundles/submit", json=bundle)
         assert resp.status_code == 201, resp.text
         submission_id = resp.json()["submission_id"]

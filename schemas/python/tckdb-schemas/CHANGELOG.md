@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.131.0 - 2026-10-21
+
+Review fixes to versioning PR-4. No field is added or removed; a version field is stricter.
+
+- `ExecutionEnvironmentManifestPayload.schema_version` is refused unless it is exactly the integer `1`. Pydantic matches a `Literal[1]` by
+  equality, so `true` and `1.0` were accepted before; they are not now (the JSON Schema is unchanged: still the constant `1`).
+- New `tckdb_schemas.fragments.version.ExactInt`, the validator that does this for any version field written as a `Literal`.
+  `VersionRef.version` was already a `StrictInt`.
+
 ## 0.130.0 - 2026-10-20
 
 **Breaking, once: every stored or wire string that fused a name with a version is now a name beside an integer version, and every TCKDB-owned

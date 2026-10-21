@@ -103,13 +103,13 @@ def _no_mutation_counts(session) -> dict[str, int]:
 
 
 def test_anonymous_dry_run_rejected(raw_client) -> None:
-    bundle = _load_bundle_dict("thermo-bundle-v0.json")
+    bundle = _load_bundle_dict("thermo-bundle.json")
     resp = raw_client.post(ENDPOINT, json=bundle)
     assert resp.status_code == 401
 
 
 def test_invalid_api_key_rejected(raw_client) -> None:
-    bundle = _load_bundle_dict("thermo-bundle-v0.json")
+    bundle = _load_bundle_dict("thermo-bundle.json")
     resp = raw_client.post(
         ENDPOINT, json=bundle, headers={"X-API-Key": "definitely-not-valid"}
     )
@@ -118,7 +118,7 @@ def test_invalid_api_key_rejected(raw_client) -> None:
 
 def test_valid_api_key_accepted(raw_client) -> None:
     """The session-scoped fixture seeds an API key (see tests/conftest.py)."""
-    bundle = _load_bundle_dict("thermo-bundle-v0.json")
+    bundle = _load_bundle_dict("thermo-bundle.json")
     resp = raw_client.post(
         ENDPOINT,
         json=bundle,
@@ -136,7 +136,7 @@ def test_valid_api_key_accepted(raw_client) -> None:
 
 
 def test_authenticated_thermo_dry_run_succeeds(client) -> None:
-    bundle = _load_bundle_dict("thermo-bundle-v0.json")
+    bundle = _load_bundle_dict("thermo-bundle.json")
 
     before = _no_mutation_counts(client._db_session)
     resp = client.post(ENDPOINT, json=bundle)
@@ -161,7 +161,7 @@ def test_authenticated_thermo_dry_run_succeeds(client) -> None:
 
 
 def test_authenticated_kinetics_dry_run_succeeds(client) -> None:
-    bundle = _load_bundle_dict("kinetics-bundle-v0.json")
+    bundle = _load_bundle_dict("kinetics-bundle.json")
 
     before = _no_mutation_counts(client._db_session)
     resp = client.post(ENDPOINT, json=bundle)
@@ -184,7 +184,7 @@ def test_authenticated_kinetics_dry_run_succeeds(client) -> None:
 def test_invalid_bundle_returns_validation_error(client) -> None:
     """Structurally invalid bundles must fail through normal validation —
     not be wrapped in a 200 dry-run result."""
-    bundle = _load_bundle_dict("thermo-bundle-v0.json")
+    bundle = _load_bundle_dict("thermo-bundle.json")
     # Drop the bundle_kind so the bundle no longer satisfies the schema.
     del bundle["bundle_kind"]
 
@@ -194,7 +194,7 @@ def test_invalid_bundle_returns_validation_error(client) -> None:
 
 def test_dry_run_response_shape(client) -> None:
     """Top-level response carries all required keys with the right types."""
-    bundle = _load_bundle_dict("thermo-bundle-v0.json")
+    bundle = _load_bundle_dict("thermo-bundle.json")
     resp = client.post(ENDPOINT, json=bundle)
     assert resp.status_code == 200
 

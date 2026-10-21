@@ -54,8 +54,8 @@ Three invariants this module exists to protect:
    the citation for it would be both wrong and undiagnosable.
 
 This layer is deliberately **not** the disaster-recovery archive
-(``tckdb.archive.v1``) and **not** a convenience projection
-(``tckdb.export.v0`` NDJSON / CHEMKIN / ML). See
+(``tckdb.archive``) and **not** a convenience projection
+(``tckdb.export`` NDJSON / CHEMKIN / ML). See
 ``backend/docs/specs/dataset_release_and_profiles.md`` §"Three formats, three
 contracts".
 """
@@ -495,7 +495,7 @@ class ReleaseManifest(Base, CreatedByMixin, PublicRefMixin):
     # mode as re-rendering the document from the live release row.
     contract_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
-    # The ``rights`` block as rendered at publication (``tckdb.dataset_release.v2``
+    # The ``rights`` block as rendered at publication (``tckdb.dataset_release``
     # and later): the data license, how many attestations stood behind the
     # shipped records, and a count per basis kind. Snapshotted for the same
     # reason as ``contract_json`` — the document must be rebuildable from this

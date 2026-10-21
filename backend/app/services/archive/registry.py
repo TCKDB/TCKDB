@@ -1,4 +1,4 @@
-"""Fail-closed table and column registry for ``tckdb.archive.v1``.
+"""Fail-closed table and column registry for ``tckdb.archive``.
 
 The archive is lossless for the declared scientific/provenance/curation
 surface.  Authentication credentials and ephemeral request/worker state are

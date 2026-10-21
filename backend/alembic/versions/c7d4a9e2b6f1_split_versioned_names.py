@@ -29,9 +29,12 @@ What it rewrites, by table (fourteen tables)
     currency rule says it cannot hold two; a second key would be silently dropped, so the revision proves it instead);
   - ``context_schema_version`` is ``vN``.
 
-  The stored rubric *version* is kept as it was (``computed_thermo`` 2, ``computed_transition_state`` 5, ...): the
-  application now runs every rubric at version 1, so every stored review reads **stale** -- the stale-assessment
-  mechanism doing its job -- and is re-run on demand.
+  The stored rubric *version* is kept as it was (``computed_thermo`` 2, ``computed_transition_state`` 5, ...), and so is
+  ``context_schema_version`` (1). Every stored review reads **stale**, and by an explicit reason: the application runs
+  every rubric at version 1, but a review whose old rubric was already at version 1 would otherwise match the active
+  prompt, rubric and hash exactly. So the context recipe version -- the one TCKDB-owned version the reset does *not*
+  restart -- moves 1 -> 2 (``MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION``), and every pre-reset review reports
+  ``context_schema_version_mismatch``. Reviews are re-run on demand.
 * ``record_reproducibility_assessment``: ``rubric_version`` text ``'vN'`` -> int, and the two reason tokens that ended
   ``_v1`` lose the suffix inside the JSON columns, on a word boundary (``token_v10`` is a different token and is not
   touched). The rewritten rows read stale (the context hash no longer matches) and are reassessed.

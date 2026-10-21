@@ -1905,7 +1905,7 @@ Table composite_scheme_term_input {
 Table conformer_assignment_scheme {
   id bigint [pk, not null]
   name string [not null]
-  version string [not null]
+  version int [not null]
   scope ConformerAssignmentScopeKind [not null, default: 'canonical']
   description text
   parameters_json jsonb
@@ -1918,6 +1918,10 @@ Table conformer_assignment_scheme {
   indexes {
     public_ref [unique, name: 'ix_conformer_assignment_scheme_public_ref']
     (name, version) [unique, name: 'uq_conformer_assignment_scheme_name']
+  }
+
+  checks {
+    `version >= 1` [name: 'ck_conformer_assignment_scheme_version_positive']
   }
 
   Note: 'Store versioned metadata about conformer-assignment or selection logic.'
@@ -2127,6 +2131,7 @@ Table execution_environment_manifest {
     `jsonb_typeof(canonical_json) = 'object'` [name: 'ck_execution_environment_manifest_canonical_json_object']
     `jsonb_typeof(closure_json) = 'array'` [name: 'ck_execution_environment_manifest_closure_json_array']
     `content_digest ~ '^sha256:[0-9a-f]{64}$'` [name: 'ck_execution_environment_manifest_content_digest_sha256']
+    `schema_version >= 1` [name: 'ck_execution_environment_manifest_schema_version_positive']
   }
 
   Note: 'A normalized, immutable manifest whose SHA-256 identifies its exact closure.'
@@ -2171,7 +2176,7 @@ Table external_source_record {
   created_at timestamp [not null, default: 'now']
 
   indexes {
-    (external_source_id, source_record_key, content_sha256, parser_version, mapping_version) [unique, name: 'uq_external_source_record_identity']
+    (external_source_id, source_record_key, content_sha256, parser_name, parser_version, mapping_name, mapping_version) [unique, name: 'uq_external_source_record_identity']
   }
 
   checks {
@@ -3316,6 +3321,7 @@ Table record_reproducibility_assessment {
     `jsonb_typeof(context_json) = 'object'` [name: 'ck_record_reproducibility_assessment_context_json_is_object']
     `jsonb_typeof(missing_json) = 'array'` [name: 'ck_record_reproducibility_assessment_missing_json_is_array']
     `jsonb_typeof(passed_json) = 'array'` [name: 'ck_record_reproducibility_assessment_passed_json_is_array']
+    `rubric_version >= 1` [name: 'ck_record_reproducibility_assessment_rubric_version_positive']
     `jsonb_typeof(warnings_json) = 'array'` [name: 'ck_record_reproducibility_assessment_warnings_json_is_array']
   }
 
@@ -3444,6 +3450,7 @@ Table release_manifest {
     `candidate_record_count >= 0` [name: 'ck_release_manifest_candidate_count_nonneg']
     `content_sha256 ~ '^[0-9a-f]{64}$'` [name: 'ck_release_manifest_content_sha256_hex']
     `selected_record_count >= 0` [name: 'ck_release_manifest_selected_count_nonneg']
+    `manifest_format_version >= 1 AND review_policy_version >= 1 AND recovery_archive_format_version >= 1` [name: 'ck_release_manifest_versions_positive']
   }
 
   Note: 'The frozen, checksummed description of one published dataset release.'

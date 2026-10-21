@@ -257,7 +257,7 @@ Each entry lists the first line of every changed hunk relative to integrated `or
 | `docs/research/tckdb-enthalpy-reference-verification.md` | `docs/research/tckdb-enthalpy-reference-verification.md:1` |
 | `docs/schema_analysis.md` | `docs/schema_analysis.md:1` |
 | `docs/unit_policy.md` | `docs/unit_policy.md:1` |
-| `examples/bundles/thermo-bundle-v0.json` | `examples/bundles/thermo-bundle-v0.json:41` |
+| `examples/bundles/thermo-bundle.json` | `examples/bundles/thermo-bundle.json:41` |
 | `schemas/python/tckdb-schemas/CHANGELOG.md` | `schemas/python/tckdb-schemas/CHANGELOG.md:1` |
 | `schemas/python/tckdb-schemas/pyproject.toml` | `schemas/python/tckdb-schemas/pyproject.toml:7` |
 | `schemas/python/tckdb-schemas/tckdb_schemas/enthalpy_reference.py` | `schemas/python/tckdb-schemas/tckdb_schemas/enthalpy_reference.py:1` |

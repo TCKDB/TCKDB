@@ -50,7 +50,7 @@ _REQUEST_WARNING = "missing_software_release_provenance"
 
 
 def _example(kind: str) -> dict:
-    return json.loads((EXAMPLES_DIR / f"{kind}-bundle-v0.json").read_text())
+    return json.loads((EXAMPLES_DIR / f"{kind}-bundle.json").read_text())
 
 
 def _thermo_record() -> dict:

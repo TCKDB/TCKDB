@@ -147,7 +147,7 @@ class TestValidBundles:
 class TestExampleJsonFiles:
     @pytest.mark.parametrize(
         "filename",
-        ["thermo-bundle-v0.json", "kinetics-bundle-v0.json"],
+        ["thermo-bundle.json", "kinetics-bundle.json"],
     )
     def test_example_parses(self, filename: str) -> None:
         path = EXAMPLES_DIR / filename

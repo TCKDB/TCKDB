@@ -478,7 +478,7 @@ def mechanism_fixture_provenance(session: Session) -> dict[str, Any]:
 
 
 def experimental_cp_comparison(session: Session) -> dict[str, Any]:
-    """Latest ``external_cp_comparison_v1`` review-tier row per thermo record.
+    """Latest ``external_cp_comparison`` review-tier row per thermo record.
 
     ``record_machine_review`` is a private, append-only table with no public
     ref of its own (``backend/docs/specs/record_machine_review_policy.md``), so this

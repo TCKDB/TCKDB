@@ -183,7 +183,7 @@ rate that omits the TS partition function emits
 
 Two gaps remain genuinely open and are documented in
 `backend/app/services/species_resolution.py` and
-`backend/docs/specs/pdep_upload_contract_v2.md` rather than left implicit. The
+`backend/docs/specs/pdep_upload_contract.md` rather than left implicit. The
 geometry/identity isotope check compares only the multiset of substitutions, so
 an isotopomer position mismatch is accepted; a real fix needs SMILES-to-XYZ atom
 correspondence, which requires 3D bond perception that fails silently on hard

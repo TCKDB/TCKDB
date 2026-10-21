@@ -838,7 +838,7 @@ def _build_calculations_section(
     """All calculations whose TS entry belongs to this reaction entry.
 
     When ``include_trust`` is True, each item additionally carries a
-    ``computed_calculation_v1`` trust fragment. The calculation graph
+    ``computed_calculation`` trust fragment. The calculation graph
     needed by the rubric is eagerly loaded via
     ``_CALCULATION_TRUST_EAGER_LOADS`` so the trust runners stay
     deterministic and do not emit hidden N+1 queries (the calculation

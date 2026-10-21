@@ -226,7 +226,7 @@ Evidence:
 
 - [`backend/app/api/routes/scientific/export.py`](../../backend/app/api/routes/scientific/export.py#L58)
 - [`backend/app/services/scientific_read/export.py`](../../backend/app/services/scientific_read/export.py#L88)
-- [`backend/docs/specs/tckdb_archive_v1.md`](../../backend/docs/specs/tckdb_archive_v1.md#L1)
+- [`backend/docs/specs/tckdb_archive.md`](../../backend/docs/specs/tckdb_archive.md#L1)
 
 Publish immutable release artifacts containing:
 
