@@ -847,8 +847,16 @@ unversioned name (or `external_cp_comparison_v1`), a rubric's latest old version
 giving version 1). It **refuses**, naming the rubric or prompt, where several older
 versions collapsed into 0 (for example `computed_transition_state`, latest 5, older
 1 to 4), for a rubric main no longer had, and for any LLM prompt other than
-`machine_review` at 0. (`orca_v1` is the same kind of case, kept distinct as
-parser version `0`.)
+`machine_review` at 0. It also refuses any version of 2 or above that is split
+out of a name (a machine-review rubric, prompt or context schema version, a
+reproducibility rubric version, an execution-environment schema version): such a
+version only exists after the reset, and written back as `<name>_v2` it would name
+a different rubric in the old numbering. The refusal names the kind of row.
+(`orca_v1` is the same kind of case, kept distinct as parser version `0`.)
+
+A prompt version of 0 in a stale reason means "stamped before the 2026-10 version
+reset"; it is true of a deterministic runner's review too, whose own check did not
+change.
 
 The same reset makes selection manifests recorded under any other format refused
 on replay (not reinterpreted), and the SHA-256 pins of the rule manifests move; a

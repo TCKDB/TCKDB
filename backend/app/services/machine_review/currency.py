@@ -80,6 +80,10 @@ class MachineReviewStaleReason(str, Enum):
     ``not_run`` classification carries none. Multiple reasons may apply at once
     (e.g. both the evidence and the prompt changed); they are reported in a
     fixed order (schema version, hash, prompt, rubric versions).
+
+    A stored prompt (or rubric) version of **0** means "stamped before the 2026-10 version reset": the stamp was
+    renumbered by that reset and is never current, so ``prompt_version_mismatch`` on a version-0 review (a
+    deterministic runner's included) says the review predates the reset, not that the runner's check changed.
     """
 
     context_schema_version_mismatch = "context_schema_version_mismatch"

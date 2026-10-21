@@ -950,3 +950,76 @@ def test_downgrade_refuses_what_a_zero_cannot_give_back(harness, rubric, rubric_
     assert fragment in output, output
     with harness.engine.begin() as conn:
         assert conn.scalar(text("SELECT version_num FROM alembic_version")) == _MIGRATION.revision
+
+
+def _post_reset_review(conn, *, prompt_version=1, rubric_version=1, context_schema=1):
+    conn.execute(
+        text(
+            "INSERT INTO record_machine_review (record_type, record_id, status, context_hash, context_schema_version, "
+            "prompt_name, prompt_version, rubric_name, rubric_version, reviewed_at) VALUES ('thermo', 1, "
+            "'machine_screened_pass', :h, :cs, 'machine_review', :pv, 'computed_thermo', :rv, now())"
+        ),
+        {"h": "a" * 64, "cs": context_schema, "pv": prompt_version, "rv": rubric_version},
+    )
+
+
+def _post_reset_review_rubric_2(conn):
+    _post_reset_review(conn, rubric_version=2)
+
+
+def _post_reset_review_prompt_2(conn):
+    _post_reset_review(conn, prompt_version=2)
+
+
+def _post_reset_review_context_2(conn):
+    _post_reset_review(conn, context_schema=2)
+
+
+def _post_reset_assessment_2(conn):
+    conn.execute(
+        text(
+            "INSERT INTO record_reproducibility_assessment (record_type, record_id, grade, rubric_name, rubric_version, "
+            "context_hash, context_json, missing_json, assessor_kind, assessed_at) VALUES ('thermo', 1, 'described', "
+            "'tckdb_reproducibility', 2, :h, '{}'::jsonb, '[]'::jsonb, 'system', now())"
+        ),
+        {"h": "b" * 64},
+    )
+
+
+def _post_reset_environment_2(conn):
+    software = conn.scalar(text("INSERT INTO software (name) VALUES ('gaussian') RETURNING id"))
+    release_row = conn.scalar(text("INSERT INTO software_release (software_id) VALUES (:s) RETURNING id"), {"s": software})
+    conn.execute(
+        text(
+            "INSERT INTO execution_environment_manifest (schema_name, schema_version, content_digest, runtime_kind, "
+            "runtime_locator, executable_locator, closure_json, canonical_json, software_release_id) VALUES "
+            "('tckdb.execution-environment', 2, :d, 'described', 'module://gaussian/16', 'file:///opt/g16/g16', '[]'::jsonb, "
+            "'{}'::jsonb, :sr)"
+        ),
+        {"d": "sha256:" + "d" * 64, "sr": release_row},
+    )
+
+
+@pytest.mark.parametrize(
+    ("seed", "fragment"),
+    [
+        (_post_reset_review_rubric_2, "rubric_version"),
+        (_post_reset_review_prompt_2, "prompt_version"),
+        (_post_reset_review_context_2, "context_schema_version"),
+        (_post_reset_assessment_2, "record_reproducibility_assessment"),
+        (_post_reset_environment_2, "execution_environment_manifest"),
+    ],
+    ids=["rubric", "prompt", "context_schema", "assessment_rubric", "environment_schema"],
+)
+def test_downgrade_refuses_a_post_reset_version_the_old_numbering_would_misread(harness, seed, fragment) -> None:
+    """A version of 2 or more only exists after the reset. Written back as ``<name>_v2`` it would name a different
+    rubric in the old numbering, so the downgrade refuses it, naming the kind of row, instead of mislabelling it."""
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        seed(conn)
+    completed = harness.run("downgrade", _MIGRATION.parent, check=False)
+    output = completed.stderr + completed.stdout
+    assert completed.returncode != 0, output
+    assert fragment in output and "version 2 or above" in output, output
+    with harness.engine.begin() as conn:
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == _MIGRATION.revision

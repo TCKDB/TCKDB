@@ -849,12 +849,22 @@ def _check_downgradable(bind: sa.engine.Connection) -> None:
             "record_machine_review prompt(s) stored at version 0 other than machine_review cannot be given back: "
             + ", ".join(sorted(lost_prompt))
         )
-    bad_runner = bind.execute(
-        sa.text("SELECT count(*) FROM record_machine_review WHERE provider = :sc AND prompt_version NOT IN (0, 1)"),
-        {"sc": _SCIENTIFIC_CHECK_PROVIDER},
-    ).scalar()
-    if bad_runner:
-        problems.append(f"{bad_runner} deterministic-runner review(s) are at a prompt version above 1, which has no old spelling")
+    # A version of 2 or more exists only after the reset. The old numbering has its own "version 2" of each of these,
+    # which is a different thing, so writing it back as ``<name>_v2`` (or ``v2``) would mislabel the row. Refuse, naming
+    # the kind of row, rather than guess.
+    for label, table, column in (
+        ("record_machine_review rubric_version", "record_machine_review", "rubric_version"),
+        ("record_machine_review prompt_version", "record_machine_review", "prompt_version"),
+        ("record_machine_review context_schema_version", "record_machine_review", "context_schema_version"),
+        ("record_reproducibility_assessment rubric_version", "record_reproducibility_assessment", "rubric_version"),
+        ("execution_environment_manifest schema_version", "execution_environment_manifest", "schema_version"),
+    ):
+        ambiguous = bind.execute(sa.text(f"SELECT count(*) FROM {table} WHERE {column} >= 2")).scalar()
+        if ambiguous:
+            problems.append(
+                f"{ambiguous} row(s) of {label} are at version 2 or above, which only exists after this revision and "
+                "would be misread as the old numbering's own version of that thing"
+            )
     if problems:
         raise RuntimeError(
             "revision c7d4a9e2b6f1 cannot be downgraded, and nothing was changed: " + "; ".join(problems[:20])

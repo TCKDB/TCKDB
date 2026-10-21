@@ -306,7 +306,9 @@ persistence and no public exposure. Its naming:
 - `MachineReviewStaleReason` (`stale_reasons`) — enum
   `context_schema_version_mismatch` / `context_hash_mismatch` /
   `prompt_version_mismatch` / `rubric_versions_mismatch`, emitted (in that fixed
-  order) only when `state` is `stale`.
+  order) only when `state` is `stale`. A stored prompt or rubric version of `0`
+  means "stamped before the 2026-10 version reset" (never current), including for a
+  deterministic runner's review whose own check did not change.
 
 A latest-selection determinism backstop: when the three policy ordering keys are
 fully tied (only possible for in-memory projections with `id is None`, never for
