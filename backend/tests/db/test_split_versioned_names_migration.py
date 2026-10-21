@@ -198,12 +198,13 @@ def _seed(conn) -> dict[str, int]:
         conn, model="fake_test/machine-review-v2", provider="FakeMachineReviewProvider", prompt="machine_review_v1",
         rubrics={"computed_thermo_v2": "2"}, record_id=5,
     )
-    # A runner prompt that never carried a version, and one that carried a version above 1: both must come back as written.
+    # A runner prompt that never carried a version: stored at 0 (an old stamp), given back as written.
     ids["mr_custom"] = _review(
-        conn, model="custom-prompt", provider=_SC, prompt="custom-prompt", rubrics={"custom_prompt_v1": "1"}, record_id=6
+        conn, model="custom-prompt", provider=_SC, prompt="custom-prompt", rubrics={"thermo_consistency_v1": "1"}, record_id=6
     )
-    ids["mr_runner3"] = _review(
-        conn, model="runner_x_v3", provider=_SC, prompt="runner_x_v3", rubrics={"runner_x_v3": "3"}, record_id=8
+    # An OLDER version of a rubric whose latest was 2: stored at 0, and given back as exactly version 1 (the only older one).
+    ids["mr_older_thermo"] = _review(
+        conn, model="fake_test/machine-review", provider=None, prompt="machine_review_v1", rubrics={"computed_thermo_v1": "1"}, record_id=10
     )
 
     def repro(record_id, note):
@@ -477,15 +478,17 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
                 )
             )
         }
-        assert mr[ids["mr_reviewer"]] == ("fake_test/machine-review", 1, "machine_review", 1, "computed_thermo", 2)
-        assert mr[ids["mr_ts"]][2:] == ("machine_review", 1, "computed_transition_state", 5)
-        assert mr[ids["mr_cp"]] == ("external_cp_comparison", 1, "external_cp_comparison", 1, "external_cp_comparison", 2)
-        assert mr[ids["mr_check"]] == ("thermo_consistency", 1, "thermo_consistency", 1, "thermo_consistency", 1)
+        # A rubric's latest old version is 1; the prompt is always 0 (its wording changed; a runner's stamp had no version).
+        assert mr[ids["mr_reviewer"]] == ("fake_test/machine-review", 1, "machine_review", 0, "computed_thermo", 1)
+        assert mr[ids["mr_ts"]][2:] == ("machine_review", 0, "computed_transition_state", 1)
+        assert mr[ids["mr_cp"]] == ("external_cp_comparison", 1, "external_cp_comparison", 0, "external_cp_comparison", 1)
+        assert mr[ids["mr_check"]] == ("thermo_consistency", 1, "thermo_consistency", 0, "thermo_consistency", 1)
+        # Any OLDER rubric version is 0.
+        assert mr[ids["mr_older_thermo"]][2:] == ("machine_review", 0, "computed_thermo", 0)
         # The fake provider's model string no longer ends -v2.
         assert mr[ids["mr_fake"]][0] == "fake_test/machine-review"
-        # An unversioned runner prompt is version 1; a runner prompt that carried version 3 keeps it.
-        assert mr[ids["mr_custom"]][2:4] == ("custom-prompt", 1)
-        assert mr[ids["mr_runner3"]][2:6] == ("runner_x", 3, "runner_x", 3)
+        # An unversioned runner prompt is stored at version 0 like every other pre-reset prompt.
+        assert mr[ids["mr_custom"]][2:4] == ("custom-prompt", 0)
         assert "rubric_versions_json" not in {
             c[0]
             for c in conn.execute(
@@ -497,8 +500,8 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
             text("SELECT rubric_version, context_json, missing_json FROM record_reproducibility_assessment WHERE id = :i"),
             {"i": ids["repro"]},
         ).one()
-        assert repro[0] == 1
-        assert repro[1] == {"rubric": {"name": "tckdb_reproducibility", "version": 1}, "note": "no_typed_result_contract"}
+        assert repro[0] == 0  # a pre-reset assessment: never current
+        assert repro[1] == {"rubric": {"name": "tckdb_reproducibility", "version": 0}, "note": "no_typed_result_contract"}
         assert repro[2] == ["selected_collection_requires_scientific_provenance"]
         # ``..._v10`` is not ``..._v1``: its note is untouched (its missing token, a real ``_v1``, is split).
         v10 = conn.scalar(
@@ -617,9 +620,9 @@ def test_upgrade_splits_every_fused_shape_and_downgrade_round_trips(harness) -> 
         assert {
             "ck_release_manifest_versions_positive",
             "ck_execution_environment_manifest_schema_version_positive",
-            "ck_record_reproducibility_assessment_rubric_version_positive",
+            "ck_record_reproducibility_assessment_rubric_version_nonneg",
             "ck_conformer_assignment_scheme_version_positive",
-            "ck_record_machine_review_versions_positive",
+            "ck_record_machine_review_versions_in_range",
         } <= constraints
         # And the identity of a source record now includes the parser and mapping names.
         identity = conn.scalar(
@@ -698,8 +701,14 @@ def _abort_prompt_fused(conn):
     _review(conn, model=None, provider=None, prompt="machine_review.v2", rubrics={"computed_thermo_v2": "2"}, record_id=90)
 
 
-def _abort_prompt_unversioned_llm(conn):
-    _review(conn, model=None, provider=None, prompt="custom-prompt", rubrics={"computed_thermo_v2": "2"}, record_id=90)
+def _abort_prompt_runner_versioned(conn):
+    # A deterministic runner's ``X_vN`` (other than the Cp runner's v1) cannot be given back exactly: refused.
+    _review(conn, model="m", provider=_SC, prompt="runner_x_v3", rubrics={"thermo_consistency_v1": "1"}, record_id=90)
+
+
+def _abort_machine_review_v2(conn):
+    # Main only ever wrote machine_review_v1; the downgrade would give back v1, so v2 is refused.
+    _review(conn, model=None, provider=None, prompt="machine_review_v2", rubrics={"computed_thermo_v2": "2"}, record_id=90)
 
 
 def _abort_prompt_ambiguous_runner(conn):
@@ -797,7 +806,8 @@ def _abort_scheme(conn):
 
 _ABORTS = {
     "prompt_fused": (_abort_prompt_fused, "prompt_version"),
-    "prompt_unversioned_llm": (_abort_prompt_unversioned_llm, "prompt_version"),
+    "prompt_runner_versioned": (_abort_prompt_runner_versioned, "prompt_version"),
+    "prompt_machine_review_v2": (_abort_machine_review_v2, "prompt_version"),
     "prompt_ambiguous_runner": (_abort_prompt_ambiguous_runner, "prompt_version"),
     # Refused up front (the pre-check) and, were that check ever weakened, still refused by the post-rewrite check.
     "prompt_name_fused_inside": (_abort_prompt_name_fused_inside, ("prompt_version", "fused name+version")),
@@ -910,3 +920,33 @@ def test_downgrade_refuses_while_a_release_manifest_exists(harness) -> None:
     completed = harness.run("downgrade", _MIGRATION.parent, check=False)
     assert completed.returncode != 0
     assert "release manifest exists" in (completed.stderr + completed.stdout)
+
+
+@pytest.mark.parametrize(
+    ("rubric", "rubric_version", "prompt", "prompt_version", "fragment"),
+    [
+        # Several older versions collapsed into 0 (latest 5, older 1-4): not one specific old version, so refused.
+        ("computed_transition_state", 0, "machine_review", 1, "computed_transition_state"),
+        # A rubric main no longer had, at 0: nothing to give back.
+        ("retired_rubric", 0, "machine_review", 1, "retired_rubric"),
+        # An LLM prompt other than machine_review at 0: its old spelling is unknown.
+        ("computed_thermo", 1, "custom-prompt", 0, "custom-prompt"),
+    ],
+)
+def test_downgrade_refuses_what_a_zero_cannot_give_back(harness, rubric, rubric_version, prompt, prompt_version, fragment) -> None:
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO record_machine_review (record_type, record_id, status, context_hash, context_schema_version, "
+                "prompt_name, prompt_version, rubric_name, rubric_version, reviewed_at) VALUES ('thermo', 1, "
+                "'machine_screened_pass', :h, 1, :pn, :pv, :rn, :rv, now())"
+            ),
+            {"h": "a" * 64, "pn": prompt, "pv": prompt_version, "rn": rubric, "rv": rubric_version},
+        )
+    completed = harness.run("downgrade", _MIGRATION.parent, check=False)
+    output = completed.stderr + completed.stdout
+    assert completed.returncode != 0, output
+    assert fragment in output, output
+    with harness.engine.begin() as conn:
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == _MIGRATION.revision

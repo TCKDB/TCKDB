@@ -39,7 +39,7 @@ NIST's ThermoML release, a producer's own parser) are left exactly as given.
   migration **aborts** if any review's `rubric_versions_json` is not exactly one key. `record_reproducibility_assessment.rubric_version` is an
   integer. `submission_audit_event.details_json["schema_version"] = "machine_review_v2"` becomes `["format"] = {"name": "machine_review", "version": 1}`.
   `release_manifest`: `manifest_format_*`, `recovery_archive_format_*`, `review_policy_*` pairs replace the three fused columns.
-  `conformer_assignment_scheme.version` is an integer. Every integer version the revision adds has a `>= 1` CHECK constraint.
+  `conformer_assignment_scheme.version` is an integer. Every integer version the revision adds has a CHECK constraint (`>= 1`; `>= 0` where the pre-reset 0 can be stored).
   `uq_external_source_record_identity` includes `parser_name` and `mapping_name`.
   `execution_environment_manifest`: `schema_name` + int `schema_version`, `canonical_json` rewritten and `content_digest` recomputed with a frozen copy
   of the canonicaliser. `calculation` / `calculation_parameter` / `calc_hessian`: `*_parser_name` beside the text version (`gaussian_v1` becomes
@@ -56,10 +56,12 @@ NIST's ThermoML release, a producer's own parser) are left exactly as given.
   calculations. The migration disables every enabled user trigger on the tables it writes (recording its exact mode), rewrites, puts each one back in
   that mode (`ENABLE`, `ENABLE ALWAYS` or `ENABLE REPLICA`) and then raises (rolling everything back) if one it disabled is not back; a trigger that was
   already disabled is left as it was. No scientific value is read or written; no declared-repair machinery is used.
-- **Everything stored as machine review or reproducibility assessment now reads stale, by design, and says why.** The context recipe version
-  (`MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION`) is the one TCKDB-owned version that is **not** reset: it moves 1 to 2, so every review stored before the
-  reset reports `context_schema_version_mismatch` (a review whose old rubric was already at version 1 would otherwise match the new prompt and rubric
-  exactly). Reproducibility assessments read stale because the evidence context they were hashed over changed shape. Nothing is rewritten.
+- **Everything stored as machine review or reproducibility assessment now reads stale, by design, and says why: old versions are stored as 0.** A
+  rubric's latest old version on main becomes 1 (the same rubric; a frozen table in the migration, read from main) and every older version becomes 0;
+  every prompt becomes 0 (the LLM prompt's wording changed while its version was reset to 1; a runner's old stamp had no version); a
+  reproducibility rubric becomes 0. Version 0 is never current (`VersionRef` and every registry refuse it; the read side holds it in
+  `StoredVersionRef`), so every pre-reset review reports `prompt_version_mismatch` and/or `rubric_versions_mismatch`. The context recipe version stays 1:
+  no version is exempt from the reset. The downgrade restores a 0 exactly where one specific older version existed and refuses where several collapsed.
 - **Split cleanly or abort.** Before writing, the migration inspects every stored shape and refuses (nothing committed) on a fused name it does not
   know, a look-alike parser stamp (`gaussian_v2`, `GAUSSIAN_V1`), a non-ThermoML source record, or a shape its downgrade could not restore exactly;
   afterwards it checks that no new `*_name` column still ends in a version segment. The downgrade restores the exact old strings or refuses.

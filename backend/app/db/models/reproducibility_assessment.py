@@ -112,7 +112,8 @@ class RecordReproducibilityAssessment(Base, TimestampMixin, PublicRefMixin):
             "context_hash ~ '^[0-9a-f]{64}$'",
             name="context_hash_lower_hex",
         ),
-        CheckConstraint("rubric_version >= 1", name="rubric_version_positive"),
+        # 0 is the pre-reset rubric stamp (never current); the live rubric is 1.
+        CheckConstraint("rubric_version >= 0", name="rubric_version_nonneg"),
         CheckConstraint(
             "jsonb_typeof(context_json) = 'object'",
             name="context_json_is_object",

@@ -45,17 +45,10 @@ from pydantic import BaseModel, ConfigDict, Field
 #: whenever the hashed inputs or their canonical form change; every prior digest
 #: then differs and prior reviews become stale until re-reviewed (policy §3.4).
 #:
-#: **Why this is 2 and not 1, when every other TCKDB-owned version restarted at 1 (versioning PR-4).** That PR
-#: relabelled every stored review (a fused ``computed_thermo_v2`` became ``computed_thermo`` and ``2``) and restarted
-#: every rubric and the prompt at version 1. A stored review whose old rubric was already at version 1 now carries
-#: exactly the (name, version) the active recipe carries, with the same context hash (the evidence it saw has not
-#: changed), and the prompt it was made under had different words (the answer format changed). Nothing in the prompt,
-#: rubric or hash dimensions can tell it from a review made after the reset, so none of them can be what makes it
-#: stale. This number is: the recipe version is the one version the reset does not restart, so every review stored
-#: before the reset (stored recipe 1) reads ``context_schema_version_mismatch`` against the active 2 -- an explicit,
-#: named reason, not a hash that happened to change. They are re-run on demand like any stale review.
-#: ``tests/services/test_machine_review_currency.py`` pins it.
-MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION = 2
+#: This is 1 like every other TCKDB-owned version: no version is exempt from the 2026-10 reset. Reviews stored before
+#: the reset are stale for a *named* reason that does not depend on this number or on the hash -- the migration stored
+#: their prompt at version 0 and their rubric at 1 or 0 (see ``currency.py``), and no registry holds a 0.
+MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION = 1
 
 
 class SourceCalculationContext(BaseModel):

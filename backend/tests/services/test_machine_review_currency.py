@@ -279,43 +279,106 @@ def test_classification_is_deterministic_across_input_order():
 
 
 # --------------------------------------------------------------------------- #
-# The versioning reset (PR-4): every review stored before it reads stale, by an explicit reason
+# The versioning reset (PR-4): every review stored before it reads stale, for a true named reason
 # --------------------------------------------------------------------------- #
 
 
-def test_every_review_stored_before_the_version_reset_reads_stale_by_an_explicit_reason():
-    """The migration relabels stored reviews but cannot change what they were made under.
-
-    After ``c7d4a9e2b6f1`` a pre-reset review carries context schema 1, its prompt and rubric as (name, version)
-    pairs, and the context hash it was stored with. Every rubric and the prompt restarted at version 1, so a review
-    whose old rubric was already at version 1 matches the active prompt and rubric *numbers*; nothing in the
-    prompt/rubric dimensions can tell it from a post-reset review, and its hash is unchanged because the hash inputs
-    did not change. The one lever that does tell them apart is the recipe version, which is deliberately NOT reset: it
-    moves 1 -> 2, so the classifier reports ``context_schema_version_mismatch`` for every one of them. This test pins
-    that: it fails if the recipe version is ever put back to 1 without another way to stale the pre-reset rows.
-    """
+def _active_recipe():
     from app.services.machine_review.context_hash import MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION
     from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT
     from app.services.trust.rubrics import RUBRICS
 
-    assert MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION == 2  # the one TCKDB-owned version the reset does not restart at 1
-    active = MachineReviewContextDigest(
+    digest = MachineReviewContextDigest(
         context_hash="the_same_hash", context_schema_version=MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION
     )
-    for rubric in (RUBRICS.get(ref.name, ref.version) for ref in RUBRICS.refs() if RUBRICS.is_current(ref)):
-        pre_reset = StoredMachineReviewProjection(
-            record_type="thermo",
-            record_id=1,
-            reviewed_at=_T0,
-            context_schema_version=1,  # what the migration made of the stored 'v1'
-            context_hash="the_same_hash",  # unchanged: the evidence the review saw is unchanged
-            prompt=ACTIVE_MACHINE_REVIEW_PROMPT,
-            rubric=rubric.ref,  # the worst case: an old rubric that was already at version 1
-            id=1,
-            source_audit_event_id=1,
-        )
-        result = classify_machine_review_currency(
-            [pre_reset], current_context=active, active_prompt=ACTIVE_MACHINE_REVIEW_PROMPT, active_rubric=rubric.ref
-        )
-        assert result.state is MachineReviewCurrencyState.stale, rubric.name
-        assert result.stale_reasons == (MachineReviewStaleReason.context_schema_version_mismatch,), rubric.name
+    rubrics = [RUBRICS.get(ref.name, ref.version) for ref in RUBRICS.refs() if RUBRICS.is_current(ref)]
+    return digest, ACTIVE_MACHINE_REVIEW_PROMPT, rubrics
+
+
+def _stored(digest, prompt, rubric):
+    return StoredMachineReviewProjection(
+        record_type="thermo",
+        record_id=1,
+        reviewed_at=_T0,
+        context_schema_version=digest.context_schema_version,
+        context_hash=digest.context_hash,  # the evidence the review saw is unchanged
+        prompt=prompt,
+        rubric=rubric,
+        id=1,
+        source_audit_event_id=1,
+    )
+
+
+def test_the_context_recipe_version_is_not_exempt_from_the_reset():
+    """Kills: a bump of the recipe version being used to make old reviews stale. It is 1, like every other version."""
+    from app.services.machine_review.context_hash import MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION
+
+    assert MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION == 1
+
+
+def test_every_review_stored_before_the_version_reset_reads_stale_by_a_prompt_or_rubric_mismatch():
+    """What the migration leaves for each pre-reset review, against the active recipe.
+
+    The migration stores every old prompt at version 0 and every rubric at 1 (its latest old version, so the same
+    rubric) or 0 (any older one), with the context schema and the hash exactly as they were. Whatever the rubric, the
+    review is stale, and the reason names the prompt: no registry holds a version 0, so it is never the active prompt.
+    Where the old rubric was an older version it is also a rubric mismatch.
+    """
+    from app.versioning import StoredVersionRef
+
+    digest, active_prompt, rubrics = _active_recipe()
+    assert rubrics
+    for rubric in rubrics:
+        for stored_rubric_version, expect_rubric_mismatch in ((1, False), (0, True)):
+            stored = _stored(
+                digest,
+                StoredVersionRef(name=active_prompt.name, version=0),
+                StoredVersionRef(name=rubric.name, version=stored_rubric_version),
+            )
+            result = classify_machine_review_currency(
+                [stored], current_context=digest, active_prompt=active_prompt, active_rubric=rubric.ref
+            )
+            assert result.state is MachineReviewCurrencyState.stale, (rubric.name, stored_rubric_version)
+            expected = (MachineReviewStaleReason.prompt_version_mismatch,) + (
+                (MachineReviewStaleReason.rubric_versions_mismatch,) if expect_rubric_mismatch else ()
+            )
+            assert result.stale_reasons == expected, (rubric.name, stored_rubric_version)
+
+
+def test_a_review_stamped_version_zero_reads_stale_and_a_fresh_one_reads_current():
+    from app.versioning import StoredVersionRef
+
+    digest, active_prompt, rubrics = _active_recipe()
+    rubric = rubrics[0]
+    fresh = _stored(digest, active_prompt, rubric.ref)
+    assert classify_machine_review_currency(
+        [fresh], current_context=digest, active_prompt=active_prompt, active_rubric=rubric.ref
+    ).state is MachineReviewCurrencyState.current
+    # Stamped (name, 0) on either axis: stale, by that axis.
+    old_prompt = _stored(digest, StoredVersionRef(name=active_prompt.name, version=0), rubric.ref)
+    old_rubric = _stored(digest, active_prompt, StoredVersionRef(name=rubric.name, version=0))
+    r1 = classify_machine_review_currency(
+        [old_prompt], current_context=digest, active_prompt=active_prompt, active_rubric=rubric.ref
+    )
+    r2 = classify_machine_review_currency(
+        [old_rubric], current_context=digest, active_prompt=active_prompt, active_rubric=rubric.ref
+    )
+    assert (r1.state, r1.stale_reasons) == (MachineReviewCurrencyState.stale, (MachineReviewStaleReason.prompt_version_mismatch,))
+    assert (r2.state, r2.stale_reasons) == (MachineReviewCurrencyState.stale, (MachineReviewStaleReason.rubric_versions_mismatch,))
+
+
+def test_version_zero_is_a_storable_stamp_but_never_a_registered_one():
+    """The registries and VersionRef still refuse 0: it is readable from a row, and never current."""
+    import pytest
+    from pydantic import ValidationError
+
+    from app.services.trust.rubrics import RUBRICS
+    from app.versioning import StoredVersionRef, UnknownVersion
+
+    with pytest.raises(ValidationError):
+        VersionRef(name="computed_thermo", version=0)
+    with pytest.raises(UnknownVersion):
+        RUBRICS.get("computed_thermo", 0)
+    assert StoredVersionRef(name="computed_thermo", version=0).version == 0
+    assert StoredVersionRef(name="xx", version=1) == VersionRef(name="xx", version=1)
+    assert StoredVersionRef(name="xx", version=0) != VersionRef(name="xx", version=1)

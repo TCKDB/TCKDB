@@ -184,6 +184,31 @@ def test_row_projects_to_stored_currency_projection(db_session):
     assert projection.id == row.id
 
 
+def test_a_row_stored_at_version_zero_projects_and_classifies_stale(db_session):
+    """A pre-reset row (prompt and rubric at version 0, as the migration stores them) is readable and reads stale.
+
+    Kills: the row projection building a ``VersionRef`` (which refuses 0), so a migrated review could not be read at
+    all; and a 0 comparing equal to an active version.
+    """
+    from sqlalchemy import text
+
+    row = _insert(db_session)
+    db_session.flush()
+    db_session.execute(
+        text("UPDATE record_machine_review SET prompt_version = 0, rubric_version = 0 WHERE id = :i"), {"i": row.id}
+    )
+    db_session.expire_all()
+    projection = stored_projection_from_record_machine_review_row(db_session.get(RecordMachineReviewRow, row.id))
+    assert (projection.prompt.version, projection.rubric.version) == (0, 0)
+    result = classify_record_machine_review_currency_from_rows(
+        [db_session.get(RecordMachineReviewRow, row.id)],
+        current_context=_digest(),
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
+    )
+    assert result.state is MachineReviewCurrencyState.stale
+
+
 def test_projection_preserves_status(db_session):
     row = _insert(
         db_session,

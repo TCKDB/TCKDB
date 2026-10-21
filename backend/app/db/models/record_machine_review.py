@@ -162,7 +162,10 @@ class RecordMachineReviewRow(Base, TimestampMixin):
             name="findings_json_is_array",
         ),
         CheckConstraint(
-            "context_schema_version >= 1 AND prompt_version >= 1 AND rubric_version >= 1",
-            name="versions_positive",
+            # 0 is allowed for a prompt or rubric: the 2026-10 reset stored every pre-reset stamp at 0 (or 1 for a
+            # rubric's latest version), and 0 is never current, so such a review reads stale. The recipe version
+            # is never 0.
+            "context_schema_version >= 1 AND prompt_version >= 0 AND rubric_version >= 0",
+            name="versions_in_range",
         ),
     )

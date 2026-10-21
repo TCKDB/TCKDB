@@ -22,10 +22,13 @@ Currency vs. provenance (policy §3.5). A latest review is *current* only when
 * ``rubric`` — the active rubric for this record, a name and a version.
 
 Every review stored before the 2026-10 versioning reset is stale, and it says so by name. The reset restarted every
-rubric and the prompt at version 1, so for a review whose old rubric was already at version 1 the prompt, rubric and
-hash dimensions all match the active recipe and cannot tell it from a post-reset review. The recipe version
-(``context_schema_version``) is the one version the reset does not restart (stored 1, active 2), so each such review
-reports ``context_schema_version_mismatch``. That is deliberate, not an accident of how the hash happens to be built.
+rubric and the prompt at version 1, and the migration (``c7d4a9e2b6f1``) stored each pre-reset stamp so that it cannot
+equal an active one: a rubric's latest old version became 1, every older version became **0**, and every old prompt
+became version **0** (the prompt's wording changed in the same release, and a deterministic runner's old stamp carried
+no version at all). Version 0 is never current -- no registry holds it -- so every pre-reset review reports
+``prompt_version_mismatch`` and/or ``rubric_versions_mismatch``, for a true reason (it was made under a prompt or rubric
+that is not the active one), not because a hash happened to differ. Stored refs are read back as
+:class:`~app.versioning.StoredVersionRef`, the one type that may hold a 0.
 
 ``provider``/``model`` are deliberately **not** currency dimensions (swapping
 models does not invalidate the evidence a prior review saw, policy §3.5).
@@ -51,6 +54,7 @@ from tckdb_schemas.fragments.version import VersionRef
 
 from app.services.machine_review.context_hash import MachineReviewContextDigest
 from app.services.machine_review.schemas import MachineReviewStatus
+from app.versioning import StoredVersionRef
 
 
 class MachineReviewCurrencyState(str, Enum):
@@ -97,8 +101,8 @@ class MachineReviewCurrencyKey:
 
     context_schema_version: int
     context_hash: str
-    prompt: VersionRef
-    rubric: VersionRef
+    prompt: VersionRef | StoredVersionRef
+    rubric: VersionRef | StoredVersionRef
 
 
 @dataclass(frozen=True)
@@ -120,8 +124,8 @@ class StoredMachineReviewProjection:
     reviewed_at: datetime
     context_schema_version: int
     context_hash: str
-    prompt: VersionRef
-    rubric: VersionRef
+    prompt: VersionRef | StoredVersionRef
+    rubric: VersionRef | StoredVersionRef
     status: MachineReviewStatus | None = None
     id: int | None = None
     source_audit_event_id: int | None = None

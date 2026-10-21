@@ -19,25 +19,37 @@ What it rewrites, by table (fourteen tables)
   ``rubric_versions_json`` (one key ``<rubric>_v<N>`` valued ``"N"``) -> ``rubric_name`` + ``rubric_version`` int;
   ``context_schema_version`` text ``'vN'`` -> int; the model strings ``external_cp_comparison_v1`` (scientific-check
   provider) and ``fake_test/machine-review-v2`` (the test-only fake provider) lose their version suffix.
-  Shapes it accepts (anything else aborts):
+  **Old versions map to 0.** Every TCKDB-owned version restarted at 1, so a stored version number can no longer say
+  which rubric or prompt a review was made under. Each stored stamp is therefore written so that it cannot equal an
+  active one unless it truly is the same thing:
 
-  - an LLM or fake provider's prompt is ``<name>_v<N>``;
-  - a deterministic runner's prompt is an *unversioned* runner name (-> version 1), or ``<name>_v<N>`` with ``N >= 2``,
-    or ``external_cp_comparison_v1``. ``<name>_v1`` for any other runner is refused: ``downgrade()`` could not tell it
-    from the unversioned ``<name>``, and the revision will not write a stamp it cannot give back;
-  - a rubric key is ``<name>_v<N>`` with ``"N"`` as its value, and the dict holds exactly one key (the machine-review
-    currency rule says it cannot hold two; a second key would be silently dropped, so the revision proves it instead);
+  - a rubric's **latest** version on main becomes ``1`` (the same rubric, unchanged) and **every older version becomes
+    ``0``** (the frozen table ``_OLD_LATEST_RUBRIC``, read from main's ``ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS``);
+  - every prompt becomes version ``0``: the LLM prompt ``machine_review_v1`` changed its wording in this release (the
+    answer format moved to a ``format`` block) while its version was reset to 1, and a deterministic runner's old stamp
+    (its unversioned name, or ``external_cp_comparison_v1``) carried no version at all;
+  - version 0 is never current -- ``VersionRef`` and every registry refuse it -- so **every pre-reset review reads stale
+    by a prompt or rubric mismatch**, a true reason, with the context recipe version left at 1.
+
+  ``context_schema_version`` ``'vN'`` -> int (kept). Shapes it accepts (anything else aborts):
+
+  - an LLM or fake provider's prompt: ``machine_review_v1`` (or any other text; only ``machine_review`` can be given
+    back);
+  - a deterministic runner's prompt: its *unversioned* name or ``external_cp_comparison_v1``; any other
+    ``<name>_v<N>`` there is refused (the downgrade could not give it back);
+  - a rubric key ``<name>_v<N>`` with ``"N"`` as its value, in a dict of exactly one key (the machine-review currency
+    rule says it cannot hold two; a second key would be silently dropped, so the revision proves it instead);
   - ``context_schema_version`` is ``vN``.
 
-  The stored rubric *version* is kept as it was (``computed_thermo`` 2, ``computed_transition_state`` 5, ...), and so is
-  ``context_schema_version`` (1). Every stored review reads **stale**, and by an explicit reason: the application runs
-  every rubric at version 1, but a review whose old rubric was already at version 1 would otherwise match the active
-  prompt, rubric and hash exactly. So the context recipe version -- the one TCKDB-owned version the reset does *not*
-  restart -- moves 1 -> 2 (``MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION``), and every pre-reset review reports
-  ``context_schema_version_mismatch``. Reviews are re-run on demand.
-* ``record_reproducibility_assessment``: ``rubric_version`` text ``'vN'`` -> int, and the two reason tokens that ended
-  ``_v1`` lose the suffix inside the JSON columns, on a word boundary (``token_v10`` is a different token and is not
-  touched). The rewritten rows read stale (the context hash no longer matches) and are reassessed.
+  The downgrade gives back exactly where a 0 or 1 names one specific old version: ``machine_review_v1``; a runner's
+  unversioned name; a rubric's latest old version (from 1); and the one older version of a rubric whose latest was 2
+  (from 0). It **refuses** where several older versions collapsed into 0 (``computed_transition_state``, latest 5, older
+  1-4), for a rubric main no longer had, and for any LLM prompt other than ``machine_review`` at 0.
+* ``record_reproducibility_assessment``: ``rubric_version`` text ``'v1'`` -> int **0** (the rubric's reason tokens were
+  renamed in this release while its version was reset to 1, so every stored assessment is a pre-reset one and is never
+  current), ``context_json.rubric.version`` likewise, and the two reason tokens that ended ``_v1`` lose the suffix inside
+  the JSON columns, on a word boundary (``token_v10`` is a different token and is not touched). The rows read stale
+  (rubric mismatch, and the context hash no longer matches) and are reassessed; the downgrade gives back ``'v1'``.
 * ``submission_audit_event``: ``details_json['schema_version'] == 'machine_review_v2'`` ->
   ``details_json['format'] == {'name': 'machine_review', 'version': 1}``.
 * ``release_manifest`` / ``release_artifact`` / ``dataset_release`` (owner decision 3, design F3): the manifest's format
@@ -75,8 +87,9 @@ What it rewrites, by table (fourteen tables)
   ``public_ref`` recomputed from ``cas:name=torsion_basin;version=1;scope=canonical`` with a frozen copy of
   ``make_content_ref``; any other row must already be a plain integer, else the upgrade aborts.
 
-Every integer version the revision introduces is held at ``>= 1`` by a named CHECK constraint
-(``ck_<table>_versions_positive`` / ``..._version_positive``).
+Every integer version the revision introduces is held by a named CHECK constraint: ``>= 1`` for the ones nothing stores
+as 0, ``>= 0`` for a machine-review prompt or rubric and a reproducibility rubric (``ck_record_machine_review_versions_in_range``,
+``ck_record_reproducibility_assessment_rubric_version_nonneg``).
 
 The accepted-science freeze is bypassed, for this one revision only (owner decision 3, 2026-10-24)
 -----------------------------------------------------------------------------------------------
@@ -151,6 +164,31 @@ _FAKE_MODEL_OLD = "fake_test/machine-review-v2"
 _FAKE_MODEL_NEW = "fake_test/machine-review"
 _CP_RUNNER = "external_cp_comparison"
 
+#: Each machine-review rubric's LATEST version on main (``2ed11e0f``, ``ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS``, read
+#: from that code, not from memory). The application restarted every rubric at version 1, so a stored review made under a
+#: rubric's latest old version is stored as ``1`` -- the same rubric, unchanged -- and one made under any OLDER version is
+#: stored as ``0``: version 0 is never current, so it reads stale for a true reason (it was graded under a rubric that is
+#: no longer the active one). A rubric name not in this table (retired before main) is stored as ``0`` too.
+_OLD_LATEST_RUBRIC: dict[str, int] = {
+    "computed_calculation": 2,
+    "computed_kinetics": 2,
+    "computed_statmech": 2,
+    "computed_thermo": 2,
+    "computed_transition_state": 5,
+    "computed_transport": 2,
+    "computed_ts_statmech": 1,
+    "external_cp_comparison": 2,
+    "gibbs_self_consistency": 1,
+    "hess_consistency": 1,
+    "isotope_identity_consistency": 1,
+    "kirchhoff_consistency": 1,
+    "thermo_consistency": 1,
+    "thermo_kinetics_consistency": 1,
+}
+#: The one LLM prompt main ever wrote. Its wording changed in this release (the answer format moved from a fused
+#: ``schema_version`` marker to a ``format`` block) while its version was reset to 1, so it is stored as version 0.
+_LLM_PROMPT = "machine_review"
+
 #: TCKDB's own parser stamps: old fused text -> (name, version). ``orca_v1`` is the predecessor of ``orca_v2`` and is
 #: kept distinct as version ``'0'``; every other stamp is version ``'1'``.
 _PARSER_OLD_TO_NEW: dict[str, tuple[str, str]] = {
@@ -196,10 +234,10 @@ _SUFFIX = re.compile(r"^(?P<name>.+)_v(?P<n>[1-9][0-9]*)$")
 _STRICT_V = re.compile(r"^v([1-9][0-9]*)$")
 
 #: Constraint names this revision adds (the models carry the same names).
-_CK_MACHINE_REVIEW = "ck_record_machine_review_versions_positive"
+_CK_MACHINE_REVIEW = "ck_record_machine_review_versions_in_range"
 _CK_MANIFEST = "ck_release_manifest_versions_positive"
 _CK_ENV = "ck_execution_environment_manifest_schema_version_positive"
-_CK_REPRO = "ck_record_reproducibility_assessment_rubric_version_positive"
+_CK_REPRO = "ck_record_reproducibility_assessment_rubric_version_nonneg"
 _CK_SCHEME = "ck_conformer_assignment_scheme_version_positive"
 _UQ_ESR = "uq_external_source_record_identity"
 
@@ -281,34 +319,42 @@ def _environment_digest(canonical: dict) -> str:
 
 
 def _split_prompt(provider: str | None, text: str) -> tuple[str, int] | None:
-    """The (name, version) of a stored prompt stamp, or ``None`` if it cannot be split and restored exactly."""
+    """The (name, version) a stored prompt stamp becomes -- always version 0 -- or ``None`` if it cannot be split cleanly.
+
+    Every pre-reset prompt stamp is stored at version 0: the LLM prompt's wording changed in this release while its
+    version was reset to 1, and a deterministic runner's old stamp carried no version at all. Version 0 is never
+    current, so every pre-reset review is stale by a prompt mismatch.
+
+    A deterministic runner's stamp is either its unversioned name or ``external_cp_comparison_v1``; any other
+    ``<name>_v<N>`` there is refused (the downgrade could not give it back). An LLM provider's ``<name>_v<N>`` loses its
+    suffix; a stamp with no suffix is kept whole.
+    """
     match = _SUFFIX.match(text)
     if provider == _SCIENTIFIC_CHECK_PROVIDER:
-        if match:
-            name, n = match["name"], int(match["n"])
-            # ``X_v1`` is only legitimate for the Cp runner; for any other runner the downgrade could not tell it
-            # from an unversioned ``X``.
-            if n == 1 and name != _CP_RUNNER:
-                return None
-        else:
-            name, n = text, 1
-    else:
-        if not match:
+        if text == _CP_RUNNER + "_v1":
+            name = _CP_RUNNER
+        elif match:
             return None
-        name, n = match["name"], int(match["n"])
+        else:
+            name = text
+    else:
+        name = match["name"] if match else text
+        if match and name == _LLM_PROMPT and match["n"] != "1":
+            return None  # main only ever wrote machine_review_v1; the downgrade would give back v1, not this
     if _VERSIONED_SEGMENT.search(name):
         return None
-    return name, n
+    return name, 0
 
 
 def _split_rubric(key: str, value: str) -> tuple[str, int] | None:
+    """The (name, version) a stored rubric key becomes: the rubric's latest old version is 1, any older one is 0."""
     match = _SUFFIX.match(key)
     if not match or match["n"] != value:
         return None
     name = match["name"]
     if _VERSIONED_SEGMENT.search(name):
         return None
-    return name, int(value)
+    return name, 1 if int(value) == _OLD_LATEST_RUBRIC.get(name) else 0
 
 
 def _parser_problem(stamp: str) -> bool:
@@ -373,8 +419,8 @@ def _check_stored_shapes(bind: sa.engine.Connection) -> None:
             problems.append(f"record_machine_review context_schema_version {schema!r} is not 'vN'")
 
     for (version,) in bind.execute(sa.text("SELECT DISTINCT rubric_version FROM record_reproducibility_assessment")):
-        if not _STRICT_V.match(version):
-            problems.append(f"record_reproducibility_assessment rubric_version {version!r} is not 'vN'")
+        if version != "v1":
+            problems.append(f"record_reproducibility_assessment rubric_version {version!r} is not 'v1', the only one main wrote")
 
     for (version,) in bind.execute(sa.text("SELECT DISTINCT schema_version FROM execution_environment_manifest")):
         if version != _ENV_NAME_OLD:
@@ -479,7 +525,7 @@ def _upgrade_machine_review(bind: sa.engine.Connection) -> None:
     bad = bind.execute(
         sa.text(
             "SELECT count(*) FROM record_machine_review WHERE prompt_name IS NULL OR prompt_version IS NULL "
-            "OR rubric_name IS NULL OR rubric_version IS NULL OR prompt_version < 1 OR rubric_version < 1 "
+            "OR rubric_name IS NULL OR rubric_version IS NULL OR prompt_version < 0 OR rubric_version < 0 "
             "OR context_schema_version < 1"
         )
     ).scalar()
@@ -493,7 +539,7 @@ def _upgrade_machine_review(bind: sa.engine.Connection) -> None:
     op.create_check_constraint(
         op.f(_CK_MACHINE_REVIEW),
         "record_machine_review",
-        "context_schema_version >= 1 AND prompt_version >= 1 AND rubric_version >= 1",
+        "context_schema_version >= 1 AND prompt_version >= 0 AND rubric_version >= 0",
     )
 
 
@@ -522,16 +568,16 @@ def _upgrade_reproducibility(bind: sa.engine.Connection) -> None:
     op.execute(
         """
         UPDATE record_reproducibility_assessment SET context_json = jsonb_set(
-            context_json, '{rubric,version}',
-            to_jsonb(substring(context_json #>> '{rubric,version}' from '^v([0-9]+)$')::integer))
+            context_json, '{rubric,version}', to_jsonb(0))
         WHERE jsonb_typeof(context_json #> '{rubric,version}') = 'string'
         """
     )
+    # The rubric's reason tokens were renamed in this release while its version was reset to 1, so every pre-reset
+    # assessment is stored at version 0: never current, so it reads stale by a rubric mismatch (and its context hash).
     op.execute(
-        "ALTER TABLE record_reproducibility_assessment ALTER COLUMN rubric_version TYPE integer USING ("
-        "substring(rubric_version from '^v([0-9]+)$')::integer)"
+        "ALTER TABLE record_reproducibility_assessment ALTER COLUMN rubric_version TYPE integer USING (0)"
     )
-    op.create_check_constraint(op.f(_CK_REPRO), "record_reproducibility_assessment", "rubric_version >= 1")
+    op.create_check_constraint(op.f(_CK_REPRO), "record_reproducibility_assessment", "rubric_version >= 0")
 
 
 def _upgrade_audit_events(bind: sa.engine.Connection) -> None:
@@ -776,12 +822,39 @@ def _check_downgradable(bind: sa.engine.Connection) -> None:
     ).scalar()
     if stray:
         problems.append(f"{stray} external_source_record row(s) are not ThermoML at parser and mapping version 1")
-    bad_cp = bind.execute(
-        sa.text("SELECT count(*) FROM record_machine_review WHERE provider = :p AND prompt_name = :cp AND prompt_version <> 1"),
-        {"p": _SCIENTIFIC_CHECK_PROVIDER, "cp": _CP_RUNNER},
+    # A 0 stands for "an older version, any of them". It can be given back only where there was exactly one older
+    # version to give back: a rubric whose latest old version was 2 (older: 1), and the one LLM prompt main wrote.
+    unique_older = sorted(name for name, latest in _OLD_LATEST_RUBRIC.items() if latest == 2)
+    lost_rubric = bind.execute(
+        sa.text(
+            "SELECT DISTINCT rubric_name FROM record_machine_review WHERE rubric_version = 0 "
+            "AND rubric_name <> ALL(CAST(:ok AS text[]))"
+        ),
+        {"ok": unique_older},
+    ).scalars().all()
+    if lost_rubric:
+        problems.append(
+            "record_machine_review rubric(s) stored at version 0 (an older version, one of several, or a rubric main no "
+            "longer had) cannot be given back as one specific old version: " + ", ".join(sorted(lost_rubric))
+        )
+    lost_prompt = bind.execute(
+        sa.text(
+            "SELECT DISTINCT prompt_name FROM record_machine_review WHERE provider IS DISTINCT FROM :sc "
+            "AND prompt_version = 0 AND prompt_name <> :llm"
+        ),
+        {"sc": _SCIENTIFIC_CHECK_PROVIDER, "llm": _LLM_PROMPT},
+    ).scalars().all()
+    if lost_prompt:
+        problems.append(
+            "record_machine_review prompt(s) stored at version 0 other than machine_review cannot be given back: "
+            + ", ".join(sorted(lost_prompt))
+        )
+    bad_runner = bind.execute(
+        sa.text("SELECT count(*) FROM record_machine_review WHERE provider = :sc AND prompt_version NOT IN (0, 1)"),
+        {"sc": _SCIENTIFIC_CHECK_PROVIDER},
     ).scalar()
-    if bad_cp:
-        problems.append(f"{bad_cp} Cp-comparison review(s) are at a prompt version other than 1")
+    if bad_runner:
+        problems.append(f"{bad_runner} deterministic-runner review(s) are at a prompt version above 1, which has no old spelling")
     if problems:
         raise RuntimeError(
             "revision c7d4a9e2b6f1 cannot be downgraded, and nothing was changed: " + "; ".join(problems[:20])
@@ -924,12 +997,14 @@ def _downgrade_reproducibility(bind: sa.engine.Connection) -> None:
     op.drop_constraint(op.f(_CK_REPRO), "record_reproducibility_assessment", type_="check")
     op.execute(
         "ALTER TABLE record_reproducibility_assessment ALTER COLUMN rubric_version TYPE varchar(64) USING "
-        "('v' || rubric_version::text)"
+        "('v' || (CASE WHEN rubric_version = 0 THEN 1 ELSE rubric_version END)::text)"
     )
     op.execute(
         """
         UPDATE record_reproducibility_assessment SET context_json = jsonb_set(
-            context_json, '{rubric,version}', to_jsonb('v' || (context_json #>> '{rubric,version}')))
+            context_json, '{rubric,version}',
+            to_jsonb('v' || (CASE WHEN (context_json #>> '{rubric,version}') = '0' THEN '1'
+                                  ELSE context_json #>> '{rubric,version}' END)))
         WHERE jsonb_typeof(context_json #> '{rubric,version}') = 'number'
         """
     )
@@ -948,9 +1023,16 @@ def _downgrade_reproducibility(bind: sa.engine.Connection) -> None:
 def _downgrade_machine_review(bind: sa.engine.Connection) -> None:
     op.drop_constraint(op.f(_CK_MACHINE_REVIEW), "record_machine_review", type_="check")
     op.add_column("record_machine_review", sa.Column("rubric_versions_json", sa.dialects.postgresql.JSONB(), nullable=True))
+    # A rubric's current version 1 is its old latest version; a 0 is its one older version (the pre-check allows 0 only
+    # where that is 1); any version above 1 is a post-reset version and is written as itself.
+    latest = " ".join(f"WHEN '{name}' THEN {value}" for name, value in sorted(_OLD_LATEST_RUBRIC.items()))
+    old = (
+        "(CASE WHEN rubric_version >= 2 THEN rubric_version WHEN rubric_version = 0 THEN 1 "
+        f"ELSE (CASE rubric_name {latest} ELSE 1 END) END)"
+    )
     op.execute(
         "UPDATE record_machine_review SET rubric_versions_json = "
-        "jsonb_build_object(rubric_name || '_v' || rubric_version::text, rubric_version::text)"
+        f"jsonb_build_object(rubric_name || '_v' || {old}::text, {old}::text)"
     )
     op.alter_column("record_machine_review", "rubric_versions_json", nullable=False)
     op.execute(
@@ -958,15 +1040,17 @@ def _downgrade_machine_review(bind: sa.engine.Connection) -> None:
         "('v' || context_schema_version::text)"
     )
     op.add_column("record_machine_review", sa.Column("prompt_version_text", sa.String(64), nullable=True))
-    # A deterministic runner's prompt was written unversioned unless it was the Cp runner or above version 1; every
-    # other prompt was ``<name>_v<N>``. The upgrade accepted only those shapes, so this gives the original back.
+    # A deterministic runner's old stamp was its unversioned name, or ``external_cp_comparison_v1``; the LLM prompt's
+    # was ``machine_review_v1``. Every pre-reset prompt is stored at 0 and a post-reset one at 1, and both are given back as
+    # that one old spelling; any other prompt at 0 was refused by the pre-check.
     bind.execute(
         sa.text(
             "UPDATE record_machine_review SET prompt_version_text = CASE "
-            "WHEN provider = :sc AND prompt_name <> :cp AND prompt_version = 1 THEN prompt_name "
+            "WHEN provider = :sc THEN (CASE WHEN prompt_name = :cp THEN :cp || '_v1' ELSE prompt_name END) "
+            "WHEN prompt_name = :llm AND prompt_version IN (0, 1) THEN :llm || '_v1' "
             "ELSE prompt_name || '_v' || prompt_version::text END"
         ),
-        {"sc": _SCIENTIFIC_CHECK_PROVIDER, "cp": _CP_RUNNER},
+        {"sc": _SCIENTIFIC_CHECK_PROVIDER, "cp": _CP_RUNNER, "llm": _LLM_PROMPT},
     )
     op.alter_column("record_machine_review", "prompt_version_text", nullable=False)
     op.drop_column("record_machine_review", "prompt_version")

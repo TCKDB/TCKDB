@@ -37,6 +37,7 @@ from app.services.machine_review.currency import (
     classify_machine_review_currency,
 )
 from app.services.machine_review.read_model import RecordMachineReview
+from app.versioning import StoredVersionRef
 
 
 def stored_projection_from_record_machine_review_row(
@@ -57,8 +58,8 @@ def stored_projection_from_record_machine_review_row(
         reviewed_at=row.reviewed_at,
         context_schema_version=row.context_schema_version,
         context_hash=row.context_hash,
-        prompt=VersionRef(name=row.prompt_name, version=row.prompt_version),
-        rubric=VersionRef(name=row.rubric_name, version=row.rubric_version),
+        prompt=StoredVersionRef(name=row.prompt_name, version=row.prompt_version),
+        rubric=StoredVersionRef(name=row.rubric_name, version=row.rubric_version),
         status=row.status,
         id=row.id,
         source_audit_event_id=row.source_audit_event_id,

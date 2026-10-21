@@ -723,7 +723,7 @@ holder whose target a merged row already holds (expect none).
 
 Every versioned thing TCKDB owns is now stored as a stable **name** plus a
 separate **integer version**, never one string with the version glued on, and
-every TCKDB-owned version is reset to 1 (one exception, below). Versions owned
+every TCKDB-owned version is reset to 1 (stored pre-reset stamps become 0, below). Versions owned
 by others (an ESS release such as Gaussian 16, NIST's ThermoML, QCSchema, a
 producer's own parser) stay text in their own field. The module docstring of
 `backend/alembic/versions/c7d4a9e2b6f1_split_versioned_names.py` is the
@@ -759,7 +759,7 @@ authority on what is rewritten; in short:
   no longer tell two parsers apart.
 - `conformer_assignment_scheme.version` becomes an integer (the seeded
   `torsion_basin` is `1`; its content-derived `public_ref` is recomputed).
-- Every integer version the revision introduces has a `>= 1` CHECK constraint.
+- Every integer version the revision introduces has a CHECK constraint (`>= 1`; `>= 0` for a machine-review prompt or rubric and a reproducibility rubric, which can hold the pre-reset 0).
 
 **It splits cleanly or it aborts; nothing is left half-labelled.** Before it
 writes anything the revision inspects every stored shape it is about to touch and
@@ -812,20 +812,48 @@ so the downgrade refuses it, and it will keep refusing for as long as such a row
 exists. The downgrade is for a database nobody has written to since the upgrade.
 
 **Every stored machine review and reproducibility assessment reads stale
-afterwards, by design, and each says why.** The rubric versions all restarted at
-1 and the prompt's answer format changed, so for a review whose old rubric was
-already at version 1 nothing in the prompt or rubric dimensions can tell it from a
-new one. The context recipe version is the one TCKDB-owned version that is **not**
-reset: it moves from 1 to 2, so every pre-reset review reports
-`context_schema_version_mismatch` against the active 2. (A stored rubric version
-above 1, such as 2 for `computed_thermo`, is also kept and also reads stale.)
-Reproducibility assessments read stale because the evidence context they were
-hashed over is now written in the new shape. Nothing is deleted: the stored
-verdicts remain visible, labelled stale, until a re-review or re-assessment is
-run. The same reset makes selection manifests recorded under any other format
-refused on replay (not reinterpreted), and the SHA-256 pins of the rule manifests
-move; a pin is the owner's approval of reviewed bytes, so pin changes need the
-owner's approval.
+afterwards, by design, and each says why: old versions are stored as 0.** The
+rubric and prompt numbers all restarted at 1, so a stored number can no longer
+say which rubric or prompt a review was made under. The migration therefore
+stores each pre-reset stamp so that it cannot equal an active one unless it truly
+is the same thing:
+
+- a rubric's **latest** old version becomes `1` (the same rubric, unchanged) and
+  **every older version becomes `0`**. The latest versions are a frozen table in
+  the migration, read from main: `computed_calculation`, `computed_kinetics`,
+  `computed_statmech`, `computed_thermo`, `computed_transport` and
+  `external_cp_comparison` at 2; `computed_transition_state` at 5;
+  `computed_ts_statmech` and the six consistency rubrics at 1;
+- **every prompt becomes version `0`**: the LLM prompt `machine_review_v1` changed
+  its wording in this release (the answer format moved to a `format` block) while
+  its version was reset to 1, and a deterministic runner's old stamp carried no
+  version at all;
+- a reproducibility assessment's rubric becomes `0` (its reason tokens were
+  renamed in this release while its version was reset to 1).
+
+Version `0` is never current: `VersionRef` and every registry refuse it, and the
+read side holds it in a `StoredVersionRef`. So every pre-reset review reports
+`prompt_version_mismatch` and, where its rubric was an older version,
+`rubric_versions_mismatch`; every pre-reset assessment reads stale on its
+rubric. The context recipe version stays 1 like every other version; no version is
+exempt from the reset. Nothing is deleted: the stored verdicts remain visible,
+labelled stale, until a re-review or re-assessment is run.
+
+**What the downgrade can and cannot give back for a stored 0.** A 0 stands for
+"an older version, any of them". The downgrade restores it exactly where there was
+one specific older version: `machine_review_v1`, a deterministic runner's
+unversioned name (or `external_cp_comparison_v1`), a rubric's latest old version
+(from 1), and the single older version of a rubric whose latest was 2 (from 0,
+giving version 1). It **refuses**, naming the rubric or prompt, where several older
+versions collapsed into 0 (for example `computed_transition_state`, latest 5, older
+1 to 4), for a rubric main no longer had, and for any LLM prompt other than
+`machine_review` at 0. (`orca_v1` is the same kind of case, kept distinct as
+parser version `0`.)
+
+The same reset makes selection manifests recorded under any other format refused
+on replay (not reinterpreted), and the SHA-256 pins of the rule manifests move; a
+pin is the owner's approval of reviewed bytes, so pin changes need the owner's
+approval.
 
 ## Self-hosted / Raspberry Pi note
 

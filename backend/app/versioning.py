@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import weakref
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Generic, TypeVar
 
 from tckdb_schemas.fragments.version import VersionRef
@@ -47,6 +48,32 @@ T = TypeVar("T")
 #: Registries that opted in to the startup check, held weakly so a registry a
 #: test builds and drops never lingers into the next ``create_app()``.
 _STARTUP_REGISTRIES: weakref.WeakSet[VersionRegistry] = weakref.WeakSet()
+
+
+@dataclass(frozen=True, eq=False)
+class StoredVersionRef:
+    """A ``(name, version)`` read back from a stored row, where version ``0`` is allowed.
+
+    ``VersionRef`` and every registry refuse version 0: nothing TCKDB runs is version 0, so 0 is never current. But a
+    row stored before the 2026-10 versioning reset can carry 0 -- the migration maps every older rubric and prompt
+    version to 0 -- and a stored review has to be readable to be called stale. This is the type for that: it compares
+    equal to a ``VersionRef`` with the same name and version (and never to a 0, since a ``VersionRef`` cannot hold one),
+    so ``stored != active`` is the mismatch test it always was.
+    """
+
+    name: str
+    version: int
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, (StoredVersionRef, VersionRef)):
+            return (self.name, self.version) == (other.name, other.version)
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash((self.name, self.version))
+
+    def __str__(self) -> str:
+        return f"{self.name} (version {self.version})"
 
 
 class UnknownVersion(LookupError):
