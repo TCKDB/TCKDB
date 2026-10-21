@@ -342,9 +342,9 @@ def test_an_assessment_stored_before_the_version_reset_reads_stale(db_session):
     target_id = _make_target(db_session)
     # What the old code stored: the rubric version as the string 'v1', a reason token ending _v1.
     old_shape = {"rubric": {"name": RUBRIC_NAME, "version": "v1"}, "note": "no_typed_result_contract_v1"}
-    # The migration stores a pre-reset assessment at rubric version 0 (never current) beside its original hash.
-    row = _append(db_session, record_id=target_id, context_json=old_shape, rubric_version=0)
-    assert row.rubric_version == 0
+    # (The migration also stores a pre-reset assessment at rubric version 0, which is never current; the append API
+    # writes live versions only, so that stamp is exercised in the migration test.)
+    row = _append(db_session, record_id=target_id, context_json=old_shape)
     # What the live evaluation writes now: an integer version, the token without a suffix.
     live = {"rubric": {"name": RUBRIC_NAME, "version": RUBRIC_VERSION}, "note": "no_typed_result_contract"}
     assert type(RUBRIC_VERSION) is int

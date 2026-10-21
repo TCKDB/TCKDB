@@ -2614,7 +2614,7 @@ the gap.
 
 - `ck_record_machine_review_context_hash_len`: `char_length(context_hash) = 64`
 - `ck_record_machine_review_findings_json_is_array`: `jsonb_typeof(findings_json) = 'array'`
-- `ck_record_machine_review_versions_positive`: `context_schema_version >= 1 AND prompt_version >= 1 AND rubric_version >= 1`
+- `ck_record_machine_review_versions_in_range`: `context_schema_version >= 1 AND prompt_version >= 0 AND rubric_version >= 0`
 
 ### `record_reproducibility_assessment`
 
@@ -2649,7 +2649,7 @@ the gap.
 - `ck_record_reproducibility_assessment_context_json_is_object`: `jsonb_typeof(context_json) = 'object'`
 - `ck_record_reproducibility_assessment_missing_json_is_array`: `jsonb_typeof(missing_json) = 'array'`
 - `ck_record_reproducibility_assessment_passed_json_is_array`: `jsonb_typeof(passed_json) = 'array'`
-- `ck_record_reproducibility_assessment_rubric_version_positive`: `rubric_version >= 1`
+- `ck_record_reproducibility_assessment_rubric_version_nonneg`: `rubric_version >= 0`
 - `ck_record_reproducibility_assessment_warnings_json_is_array`: `jsonb_typeof(warnings_json) = 'array'`
 
 ### `record_review`

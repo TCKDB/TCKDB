@@ -3282,7 +3282,7 @@ Table record_machine_review {
   checks {
     `char_length(context_hash) = 64` [name: 'ck_record_machine_review_context_hash_len']
     `jsonb_typeof(findings_json) = 'array'` [name: 'ck_record_machine_review_findings_json_is_array']
-    `context_schema_version >= 1 AND prompt_version >= 1 AND rubric_version >= 1` [name: 'ck_record_machine_review_versions_positive']
+    `context_schema_version >= 1 AND prompt_version >= 0 AND rubric_version >= 0` [name: 'ck_record_machine_review_versions_in_range']
   }
 
   Note: 'One persisted machine-review pass over one scientific record (append-only).'
@@ -3321,7 +3321,7 @@ Table record_reproducibility_assessment {
     `jsonb_typeof(context_json) = 'object'` [name: 'ck_record_reproducibility_assessment_context_json_is_object']
     `jsonb_typeof(missing_json) = 'array'` [name: 'ck_record_reproducibility_assessment_missing_json_is_array']
     `jsonb_typeof(passed_json) = 'array'` [name: 'ck_record_reproducibility_assessment_passed_json_is_array']
-    `rubric_version >= 1` [name: 'ck_record_reproducibility_assessment_rubric_version_positive']
+    `rubric_version >= 0` [name: 'ck_record_reproducibility_assessment_rubric_version_nonneg']
     `jsonb_typeof(warnings_json) = 'array'` [name: 'ck_record_reproducibility_assessment_warnings_json_is_array']
   }
 
