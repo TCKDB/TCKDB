@@ -111,7 +111,7 @@ single record `collapse=first` returns — it never reorders the full
 |--------|---------|
 | `default` | the endpoint's standard ranking — for thermo, statmech and transport: review rank → recency → id (thermo's temperature coverage and evidence score are displayed, not ranked; #648) |
 | `latest` | the most recently created candidate (recency → id) |
-| `most_reviewed` | best review status first, then recency → id |
+| `most_reviewed` | review status first (approved before the rest), then recency → id |
 
 Policies that would require a *stored* curator decision (e.g.
 `benchmark_reference`, `curator_pick`) are intentionally **absent**: they cannot

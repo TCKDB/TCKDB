@@ -1177,8 +1177,8 @@ Every scientific endpoint accepts:
 - `include_rejected: bool = False`
 - `include_deprecated: bool = False`
 
-Rank: `approved=0, under_review=1, not_reviewed=2, deprecated=3, rejected=4`
-(`scientific_common.py:37-43`).
+The floor `min_review_status` compares against is a visibility order, not the display rank; both are defined in
+[`docs/specs/browse_order.md`](../../../docs/specs/browse_order.md).
 
 Default visible set: `{approved, under_review, not_reviewed}`.
 

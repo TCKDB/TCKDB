@@ -135,9 +135,8 @@ _REVIEW = Vocabulary(
         ),
     ),
     worked_example=(
-        "When a response ranks candidates it orders them `approved`, "
-        "`under_review`, `not_reviewed`, `deprecated`, `rejected` — "
-        "`REVIEW_RANK` in `backend/app/schemas/reads/scientific_common.py`."
+        "A response lists records in a fixed display order, echoed in `request.sort`. "
+        "The review part of it is defined once, in `docs/specs/browse_order.md`; it is not a scientific preference."
     ),
 )
 
