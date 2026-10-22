@@ -23,7 +23,7 @@ from tests.services.structure_selection._support import curated
 
 
 def preferred(scene, **changes):
-    return scene.request(intent="protocol_preferred", **changes)
+    return scene.request(intent="protocol_coverage", **changes)
 
 
 def select(scene, request=None, **kw):

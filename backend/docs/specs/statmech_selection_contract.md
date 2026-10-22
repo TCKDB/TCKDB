@@ -25,7 +25,7 @@ membership or post-processing settings it does not state.
 | Field | Meaning |
 | --- | --- |
 | `contract_version` | integer `1` |
-| `intent` | `qualify` (no comparison, no selection ref) or `protocol_preferred` (also lists the qualified whole recipes in display order; nothing is ranked) |
+| `intent` | `qualify` (no comparison, no selection ref) or `protocol_coverage` (also lists the qualified whole recipes in display order; nothing is ranked) |
 | `task` | one of six supported tasks, or a recognised deferred one (below) |
 | `observable` | what is qualified; implied for the three component tasks |
 | `target` | `species_entry` or `transition_state_entry`, a scope, and the isotope, electronic-state and stereochemical conventions |
@@ -137,7 +137,7 @@ activates nothing.
 
 ## Decision
 
-Qualification is the floor. `qualify` returns the qualification summary and no selection reference. `protocol_preferred`
+Qualification is the floor. `qualify` returns the qualification summary and no selection reference. `protocol_coverage`
 compares only a decided population: if the summary is anything but `qualified_models` (an unsupported request, no
 candidates, nothing qualifying, or qualified models alongside undecided alternatives under a request for the entire
 domain) that outcome is the answer, every selection reference is null and the qualified subset stays visible.

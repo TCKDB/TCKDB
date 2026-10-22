@@ -86,7 +86,7 @@ class Intent(str, Enum):
     validated_minimum = "validated_minimum"
     validated_saddle = "validated_saddle"
     qualify_evidence = "qualify_evidence"
-    protocol_preferred = "protocol_preferred"
+    protocol_coverage = "protocol_coverage"
 
 
 class Quantity(str, Enum):
@@ -164,9 +164,9 @@ class RepeatPolicy(str, Enum):
 
 #: Which intents each grain accepts.
 INTENTS_BY_GRAIN: dict[Grain, frozenset[Intent]] = {
-    Grain.calculation: frozenset({Intent.recorded_minimum, Intent.protocol_preferred}),
-    Grain.conformer: frozenset({Intent.validated_minimum, Intent.qualify_evidence, Intent.protocol_preferred}),
-    Grain.transition_state: frozenset({Intent.validated_saddle, Intent.qualify_evidence, Intent.protocol_preferred}),
+    Grain.calculation: frozenset({Intent.recorded_minimum, Intent.protocol_coverage}),
+    Grain.conformer: frozenset({Intent.validated_minimum, Intent.qualify_evidence, Intent.protocol_coverage}),
+    Grain.transition_state: frozenset({Intent.validated_saddle, Intent.qualify_evidence, Intent.protocol_coverage}),
 }
 
 #: The claim each structure-consuming intent implies at each grain when the caller names none (plan section 6: for
@@ -177,8 +177,8 @@ DEFAULT_CLAIM: dict[tuple[Intent, Grain], ValidationClaim] = {
     # Every intent that consumes a structure states the conventional characterization when the caller names none: a
     # preferred protocol is preferred *for a minimum* (or *for a first-order saddle*), never for any stationary point
     # that happens to carry an energy.
-    (Intent.protocol_preferred, Grain.conformer): ValidationClaim.local_minimum,
-    (Intent.protocol_preferred, Grain.transition_state): ValidationClaim.first_order_saddle,
+    (Intent.protocol_coverage, Grain.conformer): ValidationClaim.local_minimum,
+    (Intent.protocol_coverage, Grain.transition_state): ValidationClaim.first_order_saddle,
 }
 
 #: The claims each intent can state (a recorded minimum states none; protocol preference may name any the grain has).
@@ -187,7 +187,7 @@ INTENT_CLAIMS: dict[Intent, frozenset[ValidationClaim]] = {
     Intent.validated_minimum: frozenset({ValidationClaim.local_minimum}),
     Intent.validated_saddle: frozenset({ValidationClaim.first_order_saddle, ValidationClaim.higher_order_saddle}),
     Intent.qualify_evidence: frozenset(ValidationClaim),
-    Intent.protocol_preferred: frozenset(ValidationClaim),
+    Intent.protocol_coverage: frozenset(ValidationClaim),
 }
 
 #: The claims each grain can be asked to support.
@@ -268,7 +268,7 @@ class StructureRequest:
                 )
         if self.require_connectivity and self.grain is not Grain.transition_state:
             raise ValueError("require_connectivity belongs to the transition_state grain")
-        if self.intent is Intent.protocol_preferred:
+        if self.intent is Intent.protocol_coverage:
             if self.grain is Grain.calculation and self.geometry_ref is None:
                 raise ValueError("protocol listing between calculations compares at one fixed geometry: state geometry_ref")
         if self.member_refs is not None and not self.member_refs:

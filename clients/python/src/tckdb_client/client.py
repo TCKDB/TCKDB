@@ -2145,9 +2145,9 @@ class TCKDBClient:
     ) -> StructureSelectionResponse:
         """``POST /scientific/species-entries/{ref}/calculations/select``.
 
-        The lowest comparable recorded energy among one species entry's calculations, or (``protocol_preferred``) the
+        The lowest comparable recorded energy among one species entry's calculations, or (``protocol_coverage``) the
         protocols that cover every requested member, listed in display order. Read-only; browse orders are unchanged.
-        ``intent`` is ``recorded_minimum`` (the server default) or ``protocol_preferred`` (which needs a fixed
+        ``intent`` is ``recorded_minimum`` (the server default) or ``protocol_coverage`` (which needs a fixed
         ``geometry_ref``).
 
         Values are ordered only inside one cohort (the same established recipe, quantity and energy convention);
@@ -2206,7 +2206,7 @@ class TCKDBClient:
 
         The lowest validated conformer basin of one cohort, the basins that support a claim, or the protocols
         that cover every requested member. ``intent`` is ``validated_minimum`` (the server default), ``qualify_evidence`` (pass
-        ``quantity=None`` and a ``validation_claim``) or ``protocol_preferred``. A basin needs curvature evidence on
+        ``quantity=None`` and a ``validation_claim``) or ``protocol_coverage``. A basin needs curvature evidence on
         its own geometry, judged by magnitude against the stored tau (never by counting imaginary modes). Repeated
         determinations of one basin are alternates, not independent confirmation. Report ``outcome`` and ``basis``
         verbatim.
@@ -2260,7 +2260,7 @@ class TCKDBClient:
 
         Which saddle determinations of one transition state *entry* support a claim (by default a conventional
         first-order saddle), or are lowest. ``intent`` is ``validated_saddle`` (the server default),
-        ``qualify_evidence`` (``quantity=None`` plus a ``validation_claim``) or ``protocol_preferred``. A higher-order
+        ``qualify_evidence`` (``quantity=None`` plus a ``validation_claim``) or ``protocol_coverage``. A higher-order
         characterization never implies first-order TST suitability; reactive connectivity is an additional claim
         (``require_connectivity``). Report ``outcome`` and ``basis`` verbatim.
         """
@@ -2442,7 +2442,7 @@ class TCKDBClient:
         """``POST /scientific/statmech/select``.
 
         Which supplied statistical models of one species or transition-state entry support a stated use
-        (``intent="qualify"``), and, with ``intent="protocol_preferred"``, the qualified whole models listed in display order.
+        (``intent="qualify"``), and, with ``intent="protocol_coverage"``, the qualified whole models listed in display order.
         ``request`` is the full body (see :class:`~tckdb_client.StatmechSelectionRequest`); the client sends it as given.
         Read-only; browse orders are unchanged and no computed thermodynamic value is returned.
 

@@ -35,7 +35,7 @@ def population(*letters: str, **per_letter):
     return out
 
 
-_PREFERRED = {**THERMAL, "intent": "protocol_preferred"}
+_PREFERRED = {**THERMAL, "intent": "protocol_coverage"}
 
 
 def run(candidates: list[CandidateFacts], request=None, **request_changes) -> tuple[StatmechDecision, list[StatmechAssessment]]:

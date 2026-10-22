@@ -397,7 +397,7 @@ def protocol_selection(db_session):
     other_lot = make_lot(db_session)
     build_basin(world, energy=-76.40)
     build_basin(world, energy=-76.50, lot=other_lot, declared=DECL_B)
-    req = StructureRequest(Grain.conformer, Intent.protocol_preferred, result_mode=ResultMode.all)
+    req = StructureRequest(Grain.conformer, Intent.protocol_coverage, result_mode=ResultMode.all)
     return select(db_session, world, req)
 
 

@@ -12,7 +12,7 @@ What is specific to structures, and lives here and not in the shared kernel:
   total energies are not on one scale. Several cohorts therefore end as ``incomparable_alternatives`` with each
   cohort's own minimum listed.
 * **A number never decides a method.** Numerical order finds the lowest *value* in a justified cohort. TCKDB carries
-  no ranking between protocols, so ``protocol_preferred`` can only list the protocols (cohorts) that cover every
+  no ranking between protocols, so ``protocol_coverage`` can only list the protocols (cohorts) that cover every
   requested member: one is a sole eligible candidate, several are incomparable alternatives in display order.
 * **Exact ties are all kept.** There is no tolerance and no "near" chain: values compare exactly, ties keep every
   tied reference, and the administrative key only orders what is already tied or already in one scientific front.
@@ -789,7 +789,7 @@ def decide_structures(
         )
 
     if request.coverage is CoverageRequirement.all_requested_members and len(eligible) != len(us):
-        if request.intent is not Intent.protocol_preferred:
+        if request.intent is not Intent.protocol_coverage:
             missing = sorted(u.ref for u in us if u not in eligible)
             return StructureDecision(
                 StructureOutcome.evidence_conflict if contested else StructureOutcome.unresolved_comparability,
@@ -805,7 +805,7 @@ def decide_structures(
                 },
             )
 
-    if request.intent is Intent.protocol_preferred:
+    if request.intent is Intent.protocol_coverage:
         return _protocol(request, eligible, us, contested)
     return _numerical(request, eligible, us, contested)
 

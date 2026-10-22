@@ -20,7 +20,7 @@ from tests.services.statmech_selection.test_request import THERMAL, make
 from tests.services.statmech_selection.test_service import _literature, build, build_ts_scene
 
 URL = "/api/v1/scientific/statmech/select"
-PREFERRED = {"intent": "protocol_preferred"}
+PREFERRED = {"intent": "protocol_coverage"}
 
 
 def body_for(scene, **changes) -> dict:

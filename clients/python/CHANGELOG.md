@@ -10,7 +10,7 @@ The method-preference rules are gone from the selection endpoints, and the brows
   `policy_conflict`, and a pick's `basis` is `sole_eligible_candidate` or `administrative_first`.
 - `select_network_kinetics` no longer takes `objective`, `reference_model_ref` or `reference_outputs`.
 - The structure selection methods no longer take `apply_rules`, `objective` or `reference_model`; `StructureSelectionOutcomeToken` has 11 values.
-  `protocol_preferred` now lists the protocols that cover every requested member, in display order.
+  `protocol_coverage` now lists the protocols that cover every requested member, in display order.
 - `StatmechSelectionRequest` loses `comparison_objective` and `reference_model_ref`; `StatmechSelectionResponse` loses `edges`, `conflicts`,
   `undecided` and `protocol` and gains `administrative_order` and `administrative_key`; `StatmechSelectionSelection` loses `scientific_ref`;
   the outcome token loses `policy_preferred`, `policy_conflict` and `unresolved_comparability`.

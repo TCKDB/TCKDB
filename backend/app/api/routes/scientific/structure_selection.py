@@ -95,7 +95,7 @@ def select_species_calculations(
     species_entry_ref: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_snapshot_db),
 ) -> StructureSelectionResponse:
-    """The lowest comparable recorded energy among the entry's calculations, or (``intent=protocol_preferred``) the protocols that cover every requested member, listed in display order.
+    """The lowest comparable recorded energy among the entry's calculations, or (``intent=protocol_coverage``) the protocols that cover every requested member, listed in display order.
 
     Values are ordered only inside one cohort (the same established recipe, quantity and energy convention); several
     cohorts end as ``incomparable_alternatives`` and a lower absolute energy never names a method winner. A calculation
@@ -135,7 +135,7 @@ def select_species_conformers(
     species_entry_ref: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_snapshot_db),
 ) -> StructureSelectionResponse:
-    """The lowest validated basin of one cohort, the basins that support a claim, or the protocol preference.
+    """The lowest validated basin of one cohort, the basins that support a claim, or the protocols that cover a request, in display order.
 
     A basin needs supported curvature evidence on its own geometry: imaginary modes are judged by magnitude against
     the stored tau (ADR 0012), never counted. Repeated determinations of one basin are alternates, not independent

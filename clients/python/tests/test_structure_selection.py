@@ -87,7 +87,7 @@ def test_forwards_every_supplied_field():
     recipe = {"version": 1, "source": {"origin": "producer_declared"}, "spin_treatment": {"state": "known", "value": "restricted"}}
     with _client(handler) as client:
         client.select_transition_state_evidence(
-            TSE, intent="protocol_preferred", quantity="zero_kelvin_energy", coverage_requirement="all_requested_members",
+            TSE, intent="protocol_coverage", quantity="zero_kelvin_energy", coverage_requirement="all_requested_members",
             validation_claim="first_order_saddle", min_review_status="approved", permitted_quality=("raw", "curated"),
             geometry_ref="geom_x", member_refs=("sdet_a", "sdet_b"), recipe=recipe, require_stable_reference=True,
             require_connectivity=True, administrative_policy="latest", result_mode="first",
@@ -95,7 +95,7 @@ def test_forwards_every_supplied_field():
             profile="curated",
         )
     assert json.loads(seen[0].content) == {
-        "intent": "protocol_preferred", "quantity": "zero_kelvin_energy", "coverage_requirement": "all_requested_members",
+        "intent": "protocol_coverage", "quantity": "zero_kelvin_energy", "coverage_requirement": "all_requested_members",
         "validation_claim": "first_order_saddle", "min_review_status": "approved", "permitted_quality": ["raw", "curated"],
         "geometry_ref": "geom_x", "member_refs": ["sdet_a", "sdet_b"], "recipe": recipe, "require_stable_reference": True,
         "require_connectivity": True, "administrative_policy": "latest", "result_mode": "first",

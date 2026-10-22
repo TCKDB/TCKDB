@@ -161,7 +161,7 @@ def _validate_against_service(body: Any, grain: Grain) -> None:
 class CalculationSelectionRequest(_StrictRequest):
     """Which of one species entry's calculations supplies the lowest comparable recorded energy (or which protocol)."""
 
-    intent: Literal[Intent.recorded_minimum, Intent.protocol_preferred] = Intent.recorded_minimum
+    intent: Literal[Intent.recorded_minimum, Intent.protocol_coverage] = Intent.recorded_minimum
 
     @model_validator(mode="after")
     def _service_rules(self) -> CalculationSelectionRequest:
@@ -177,7 +177,7 @@ class CalculationSelectionRequest(_StrictRequest):
 class ConformerSelectionRequest(_StrictRequest):
     """Which of one species entry's validated conformer basins is lowest, which support a claim, or which protocols cover it."""
 
-    intent: Literal[Intent.validated_minimum, Intent.qualify_evidence, Intent.protocol_preferred] = Intent.validated_minimum
+    intent: Literal[Intent.validated_minimum, Intent.qualify_evidence, Intent.protocol_coverage] = Intent.validated_minimum
 
     @model_validator(mode="after")
     def _service_rules(self) -> ConformerSelectionRequest:
@@ -197,7 +197,7 @@ class TransitionStateEvidenceSelectionRequest(_StrictRequest):
     release does not take, so sibling entries are assessed one at a time.
     """
 
-    intent: Literal[Intent.validated_saddle, Intent.qualify_evidence, Intent.protocol_preferred] = Intent.validated_saddle
+    intent: Literal[Intent.validated_saddle, Intent.qualify_evidence, Intent.protocol_coverage] = Intent.validated_saddle
     require_connectivity: bool = Field(
         default=False, description="Also require reactive-connectivity evidence (IRC or a supported alternative) bound to the saddle."
     )

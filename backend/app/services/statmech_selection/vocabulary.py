@@ -39,7 +39,7 @@ class DeferredTask(str, Enum):
 
 class Intent(str, Enum):
     qualify = "qualify"
-    protocol_preferred = "protocol_preferred"
+    protocol_coverage = "protocol_coverage"
 
 
 class Observable(str, Enum):

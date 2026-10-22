@@ -130,9 +130,9 @@ def test_a_request_round_trips_through_its_manifest_form(request_):
     ("grain", "intent", "claim"),
     [
         (Grain.conformer, Intent.validated_minimum, "local_minimum"),
-        (Grain.conformer, Intent.protocol_preferred, "local_minimum"),
+        (Grain.conformer, Intent.protocol_coverage, "local_minimum"),
         (Grain.transition_state, Intent.validated_saddle, "first_order_saddle"),
-        (Grain.transition_state, Intent.protocol_preferred, "first_order_saddle"),
+        (Grain.transition_state, Intent.protocol_coverage, "first_order_saddle"),
     ],
 )
 def test_every_structure_consuming_intent_defaults_to_the_conventional_characterization(grain, intent, claim):

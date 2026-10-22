@@ -44,7 +44,7 @@ defaults; the client libraries invent none.
 
 | Field | Meaning |
 | --- | --- |
-| `intent` | Calculations: `recorded_minimum`, `protocol_preferred`. Conformers: `validated_minimum`, `qualify_evidence`, `protocol_preferred`. Transition states: `validated_saddle`, `qualify_evidence`, `protocol_preferred`. |
+| `intent` | Calculations: `recorded_minimum`, `protocol_coverage`. Conformers: `validated_minimum`, `qualify_evidence`, `protocol_coverage`. Transition states: `validated_saddle`, `qualify_evidence`, `protocol_coverage`. |
 | `quantity` | `electronic_energy` or `zero_kelvin_energy`. `null` is allowed only for `qualify_evidence` (a structural claim with no number). Enthalpy, Gibbs energy, barrier and rate are recognised but deferred and are refused with `structure_selection_unsupported`. |
 | `coverage_requirement` | `known_values` (order what is known, conditional on it) or `all_requested_members` (every requested member must be eligible and comparable). |
 | `validation_claim` | `local_minimum`, `first_order_saddle`, `higher_order_saddle` or `reactive_connectivity`. |

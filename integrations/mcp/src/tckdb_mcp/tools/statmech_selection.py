@@ -3,8 +3,8 @@
 Wraps ``POST /api/v1/scientific/statmech/select``.
 
 A read, not a write: nothing is stored and the browse orders are unchanged. The tool exists so an agent can ask "which
-supplied statistical model of this species or transition-state entry supports this stated use, and is any whole model
-preferred by audited rules", and be told the server's own answer. No computed thermodynamic value is returned.
+supplied statistical model of this species or transition-state entry supports this stated use, and in what display
+order?", and be told the server's own answer. No computed thermodynamic value is returned.
 
 Policy choices enforced here (in addition to server-side validation):
 
@@ -33,7 +33,7 @@ from ._path_handles import PUBLIC_REF_MAX_LENGTH, validate_path_handle
 TOOL_NAME = "tckdb_select_statmech_models"
 
 PROFILES = ("exploratory", "curated")
-INTENTS = ("qualify", "protocol_preferred")
+INTENTS = ("qualify", "protocol_coverage")
 COVERAGE = ("entire_requested_domain", "eligible_population")
 ADMIN_POLICIES = ("default", "latest", "most_reviewed")
 MODES = ("all", "first")
@@ -51,7 +51,7 @@ _REJECTED_BOUND_FIELDS: frozenset[str] = frozenset(
 
 TOOL_DESCRIPTION = (
     "Select among one species entry's or transition-state entry's supplied statistical-mechanics models: which of them "
-    "support a stated use (intent 'qualify'), and, with intent 'protocol_preferred', the qualified whole models listed "
+    "support a stated use (intent 'qualify'), and, with intent 'protocol_coverage', the qualified whole models listed "
     "in display order. The target is {'kind': 'species_entry', 'species_entry_ref': "
     "'spe_...', 'scope': {...}, ...} or {'kind': 'transition_state_entry', 'transition_state_entry_ref': 'tse_...', "
     "'scope': {...}, ...}. Read-only. Returns the server response unchanged: report its 'outcome' and 'basis' verbatim. "

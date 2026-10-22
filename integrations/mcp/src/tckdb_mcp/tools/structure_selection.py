@@ -80,15 +80,15 @@ TOOLS: dict[str, StructureTool] = {
         name="tckdb_select_species_entry_calculations",
         description=(
             "Select among one species entry's calculations for the lowest comparable recorded energy, or (intent "
-            "'protocol_preferred') list the protocols that cover every requested member. Requires a public species_entry_ref "
-            "(starts with 'spe_'). intent is 'recorded_minimum' (default) or 'protocol_preferred' (which also needs a fixed "
+            "'protocol_coverage') list the protocols that cover every requested member. Requires a public species_entry_ref "
+            "(starts with 'spe_'). intent is 'recorded_minimum' (default) or 'protocol_coverage' (which also needs a fixed "
             "geometry_ref). " + _COMMON_DESCRIPTION
         ),
         family="species-entries",
         operation="calculations",
         ref_field="species_entry_ref",
         prefix="spe_",
-        intents=("recorded_minimum", "protocol_preferred"),
+        intents=("recorded_minimum", "protocol_coverage"),
         default_intent="recorded_minimum",
     ),
     "tckdb_select_species_entry_conformers": StructureTool(
@@ -104,7 +104,7 @@ TOOLS: dict[str, StructureTool] = {
         operation="conformers",
         ref_field="species_entry_ref",
         prefix="spe_",
-        intents=("validated_minimum", "qualify_evidence", "protocol_preferred"),
+        intents=("validated_minimum", "qualify_evidence", "protocol_coverage"),
         default_intent="validated_minimum",
     ),
     "tckdb_select_transition_state_entry_evidence": StructureTool(
@@ -120,7 +120,7 @@ TOOLS: dict[str, StructureTool] = {
         operation="evidence",
         ref_field="transition_state_entry_ref",
         prefix="tse_",
-        intents=("validated_saddle", "qualify_evidence", "protocol_preferred"),
+        intents=("validated_saddle", "qualify_evidence", "protocol_coverage"),
         default_intent="validated_saddle",
         connectivity=True,
     ),

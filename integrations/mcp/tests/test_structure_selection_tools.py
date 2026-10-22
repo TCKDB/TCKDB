@@ -64,7 +64,7 @@ def test_the_three_tools_are_listed_with_closed_schemas():
         assert "outcome" in listed[name]["description"] and "basis" in listed[name]["description"]
     assert "require_connectivity" in listed[EVIDENCE]["inputSchema"]["properties"]
     assert "require_connectivity" not in listed[CONFORMERS]["inputSchema"]["properties"]
-    assert listed[EVIDENCE]["inputSchema"]["properties"]["intent"]["enum"] == ["validated_saddle", "qualify_evidence", "protocol_preferred"]
+    assert listed[EVIDENCE]["inputSchema"]["properties"]["intent"]["enum"] == ["validated_saddle", "qualify_evidence", "protocol_coverage"]
 
 
 @pytest.mark.parametrize(("name", "ref_field", "ref", "path"), CASES)

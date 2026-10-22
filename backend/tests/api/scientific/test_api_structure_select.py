@@ -131,7 +131,7 @@ def test_a_protocol_request_ranks_nothing_and_lists_the_complete_protocols(clien
     build_basin(world, energy=-76.50, geometry=first, lot=other, declared=DECL_B)
     build_basin(world, energy=-76.51, geometry=second, lot=other, declared=DECL_B)
     world.settle()
-    response = client.post(conformer_url(world.entry), json={"intent": "protocol_preferred"})
+    response = client.post(conformer_url(world.entry), json={"intent": "protocol_coverage"})
     assert response.status_code == 200, response.text
     out = response.json()
     assert out["outcome"] == "incomparable_alternatives" and out["selected_refs"] == []

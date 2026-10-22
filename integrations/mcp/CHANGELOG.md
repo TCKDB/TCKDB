@@ -8,7 +8,7 @@ The selection tools follow the removal of the method-preference rules.
   default), `most_reviewed` or `latest`; `method_preferred` is retired. Every policy is an administrative display order. The descriptions say that
   `incomparable_alternatives` means several records are eligible and none is preferred, and that an administrative selection is first in display order.
 - `tckdb_select_network_kinetics` drops `objective`, `reference_model_ref` and `reference_outputs`.
-- The structure selection tools drop `apply_rules`, `objective` and `reference_model`; `protocol_preferred` lists the protocols that cover every
+- The structure selection tools drop `apply_rules`, `objective` and `reference_model`; `protocol_coverage` lists the protocols that cover every
   requested member in display order.
 - `tckdb_select_statmech_models` drops `comparison_objective` and `reference_model_ref`.
 

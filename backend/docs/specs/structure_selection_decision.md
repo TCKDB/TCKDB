@@ -14,7 +14,7 @@ structural claim. The decision never re-judges a unit; it compares assessed unit
 | `recorded_minimum` (calculation grain) | Which known, eligible recorded value is lowest within one justified cohort? |
 | `validated_minimum` / `validated_saddle` | Which validated, completely assessed basin or saddle is lowest within one cohort? |
 | `qualify_evidence` | Which determinations support the stated structural claim? (No number.) |
-| `protocol_preferred` | Which whole protocols (cohorts) cover every requested target? Listed in display order; none is ranked. |
+| `protocol_coverage` | Which whole protocols (cohorts) cover every requested target? Listed in display order; none is ranked. |
 
 Outcomes: `no_candidates`, `energy_unavailable`, `unresolved_comparability`, `no_applicable_candidate`,
 `recorded_minimum`, `representative_minimum`, `qualified_evidence`, `validated_corpus_minimum`,
@@ -65,7 +65,7 @@ coverage or unresolved comparability.
 
 ## Protocol listing
 
-`intent=protocol_preferred` takes no objective, no reference model and no rule switch. Candidates are whole protocols
+`intent=protocol_coverage` takes no objective, no reference model and no rule switch. Candidates are whole protocols
 (cohorts) that cover every requested target; no mixed-method profile is invented from each basin's available method.
 TCKDB carries no ranking of one protocol above another, so one covering protocol is `sole_eligible_candidate` (not
 superiority) and several are `incomparable_alternatives`, listed in one front in display order.

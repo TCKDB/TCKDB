@@ -691,9 +691,9 @@ transition-state concept (`ts_`).
 
 ```text
 <entry ref>: string                 # REQUIRED: species_entry_ref ("spe_") or transition_state_entry_ref ("tse_")
-intent?: string                     # recorded_minimum | protocol_preferred (calculations);
-                                    # validated_minimum | qualify_evidence | protocol_preferred (conformers);
-                                    # validated_saddle | qualify_evidence | protocol_preferred (transition states)
+intent?: string                     # recorded_minimum | protocol_coverage (calculations);
+                                    # validated_minimum | qualify_evidence | protocol_coverage (conformers);
+                                    # validated_saddle | qualify_evidence | protocol_coverage (transition states)
 quantity?: string | null            # electronic_energy (default) | zero_kelvin_energy; null only for qualify_evidence
 coverage_requirement?: "known_values" | "all_requested_members"
 validation_claim?: "local_minimum" | "first_order_saddle" | "higher_order_saddle" | "reactive_connectivity"
@@ -734,11 +734,11 @@ reference conformer you named. See `docs/guides/relative_conformer_energies.md`.
 ### `tckdb_select_statmech_models`
 
 Statmech selection: which supplied statistical-mechanics model of ONE species entry or transition state entry supports a
-stated use, and, with `protocol_preferred`, the qualified whole models in display order (none is preferred). Read-only; browse orders are
+stated use, and, with `protocol_coverage`, the qualified whole models in display order (none is preferred). Read-only; browse orders are
 unchanged; no computed value is returned.
 
 ```text
-intent: "qualify" | "protocol_preferred"          # REQUIRED
+intent: "qualify" | "protocol_coverage"          # REQUIRED
 task: string                                      # REQUIRED: within_basin_thermal, canonical_model, zpe_component, ...
 target: object                                    # REQUIRED: {kind: species_entry|transition_state_entry,
                                                   #   species_entry_ref ("spe_") | transition_state_entry_ref ("tse_"),

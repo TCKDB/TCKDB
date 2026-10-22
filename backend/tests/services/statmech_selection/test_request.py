@@ -230,8 +230,8 @@ def test_a_ts_transverse_request_needs_a_ts_owner_a_determination_a_dividing_sur
 
 
 def test_a_protocol_listing_takes_no_objective_or_reference_model():
-    pref = make(THERMAL, intent="protocol_preferred")
-    assert accepts(pref).intent.value == "protocol_preferred"
+    pref = make(THERMAL, intent="protocol_coverage")
+    assert accepts(pref).intent.value == "protocol_coverage"
     refuses(make(pref, comparison_objective="expected_accuracy"), "comparison_objective")
     refuses(make(pref, reference_model_ref=SMD), "reference_model_ref")
     assert "comparison_objective" not in accepts(pref).to_dict()

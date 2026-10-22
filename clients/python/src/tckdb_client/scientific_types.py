@@ -1837,13 +1837,13 @@ class _StructureSelectionRequestBase(TypedDict, total=False):
 class CalculationSelectionRequest(_StructureSelectionRequestBase, total=False):
     """Body of ``POST .../species-entries/{ref}/calculations/select``."""
 
-    intent: Literal["recorded_minimum", "protocol_preferred"]
+    intent: Literal["recorded_minimum", "protocol_coverage"]
 
 
 class ConformerSelectionRequest(_StructureSelectionRequestBase, total=False):
     """Body of ``POST .../species-entries/{ref}/conformers/select``."""
 
-    intent: Literal["validated_minimum", "qualify_evidence", "protocol_preferred"]
+    intent: Literal["validated_minimum", "qualify_evidence", "protocol_coverage"]
 
 
 class TransitionStateEvidenceSelectionRequest(_StructureSelectionRequestBase, total=False):
@@ -1853,7 +1853,7 @@ class TransitionStateEvidenceSelectionRequest(_StructureSelectionRequestBase, to
     taken yet.
     """
 
-    intent: Literal["validated_saddle", "qualify_evidence", "protocol_preferred"]
+    intent: Literal["validated_saddle", "qualify_evidence", "protocol_coverage"]
     require_connectivity: bool
 
 
@@ -2126,7 +2126,7 @@ class StatmechSelectionRequest(TypedDict, total=False):
     """
 
     contract_version: Literal[1]
-    intent: Literal["qualify", "protocol_preferred"]
+    intent: Literal["qualify", "protocol_coverage"]
     task: str
     observable: str
     target: JSONDict

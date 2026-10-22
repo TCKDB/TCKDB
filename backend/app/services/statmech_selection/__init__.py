@@ -1,8 +1,8 @@
 """Statmech selection (service layer): which supplied statistical model supports a declared use.
 
 A statmech record is an interpretation container, not a basin, a determination or a model of the whole species.
-This package qualifies *supplied* interpretations for a stated claim and, only when audited rules say so, prefers
-one applicable whole recipe over another. It never assembles a favourable mixture of records and never computes a
+This package qualifies *supplied* interpretations for a stated claim and lists the applicable whole recipes in
+display order; it ranks none above another. It never assembles a favourable mixture of records and never computes a
 partition function, a thermochemical value, a population or a rate.
 
 Stage 1 holds the contract: the vocabulary, the normalised request and its cross-field rules, the bounds, the

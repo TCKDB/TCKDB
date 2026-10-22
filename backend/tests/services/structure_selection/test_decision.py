@@ -403,7 +403,7 @@ def test_a_saddle_minimum_uses_the_same_ordering_at_the_saddle_grain():
 
 
 def protocol_request(**kw):
-    base = {"grain": Grain.conformer, "intent": Intent.protocol_preferred}
+    base = {"grain": Grain.conformer, "intent": Intent.protocol_coverage}
     return StructureRequest(**{**base, **kw})
 
 
@@ -450,11 +450,11 @@ def test_a_protocol_that_does_not_cover_the_whole_requested_set_is_not_a_candida
 
 def test_a_protocol_request_takes_no_objective_or_reference_model_and_a_calculation_one_needs_a_geometry():
     with pytest.raises(ValueError, match="fixed geometry"):
-        StructureRequest(Grain.calculation, Intent.protocol_preferred)
+        StructureRequest(Grain.calculation, Intent.protocol_coverage)
     with pytest.raises(TypeError):
-        StructureRequest(Grain.conformer, Intent.protocol_preferred, objective="physical_accuracy")  # type: ignore[call-arg]
+        StructureRequest(Grain.conformer, Intent.protocol_coverage, objective="physical_accuracy")  # type: ignore[call-arg]
     with pytest.raises(TypeError):
-        StructureRequest(Grain.conformer, Intent.protocol_preferred, apply_rules=False)  # type: ignore[call-arg]
+        StructureRequest(Grain.conformer, Intent.protocol_coverage, apply_rules=False)  # type: ignore[call-arg]
     r = StructureRequest.from_dict(protocol_request().to_dict())
     assert r == protocol_request()
     assert not {"objective", "reference_model", "apply_rules"} & set(r.to_dict())

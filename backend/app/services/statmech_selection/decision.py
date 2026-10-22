@@ -6,7 +6,7 @@ candidate's facts and its assessment; output is a :class:`StatmechDecision` over
 What is specific to statmech and lives here, and not in the shared kernel:
 
 * **Qualification is the floor.** ``intent=qualify`` returns the qualification summary and no selection reference.
-  ``protocol_preferred`` goes on to list the qualified models only when the population was decided: if the summary is
+  ``protocol_coverage`` goes on to list the qualified models only when the population was decided: if the summary is
   anything but ``qualified_models`` (an unsupported request, no candidates, nothing qualifying, or qualified models
   alongside undecided alternatives under a request for the entire domain), that outcome is the answer and every
   selection reference is null. The qualified subset stays visible. Required full coverage is never certified by a

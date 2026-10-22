@@ -47,7 +47,7 @@ No integer id, bound, page or sort is accepted; a misspelled token is a 422.
 }
 ```
 
-`intent` is `qualify` (assessments, nothing selected) or `protocol_preferred` (also lists the qualified whole models in
+`intent` is `qualify` (assessments, nothing selected) or `protocol_coverage` (also lists the qualified whole models in
 display order; nothing is ranked). The tasks are `rotational_component`, `vibrational_component`, `zpe_component`,
 `within_basin_thermal`, `canonical_model` and `conventional_ts_transverse_model`; a recognised deferred task
 (for example `numerical_evaluation`) is a valid request answered `unsupported_task`.
