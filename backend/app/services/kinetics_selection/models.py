@@ -44,8 +44,8 @@ MAX_CANDIDATES = 500
 #: structured manifest block; replay reads the recorded ``eligible`` flags and never reruns the assessment.
 #: A decision manifest records both versions. The procedure carries no method-versus-method rule.
 POLICY_NAME = "kinetics_selection"
-#: Version 2: the method-preference rules (and their edges, conflicts and rule matches) were removed.
-POLICY_VERSION = 2
+#: The name changed with the removal of the method-preference rules (it was ``kinetics_method_preferred``).
+POLICY_VERSION = 1
 #: Version of how eligibility is assessed: an automated geometry-validation fail is advisory and a live confirmed
 #: finding about a source calculation excludes the record (``structure_selection.source_findings``). A manifest with no
 #: block, or one recording a version the registry does not hold, is refused on replay.

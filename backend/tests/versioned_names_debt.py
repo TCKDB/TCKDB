@@ -67,12 +67,6 @@ ALLOWED: tuple[tuple[str, str, str, str], ...] = (
         "A base64 payload (an XML example document); the 'V1' is an accident of the encoding, not a name.",
     ),
     (
-        'backend/app/chemistry/structure_rules/*.yaml',
-        'yaml',
-        'SANTRA_MARTIN_2022_ARXIV_V2',
-        "An id for the arXiv v2 copy of a cited paper (Santra and Martin 2022); a citation of someone else's revision, not a TCKDB version.",
-    ),
-    (
         'schemas/python/tckdb-schemas/tckdb_schemas/fragments/execution_environment.py',
         'fstring',
         "f'{module.name}/{module.version}'",

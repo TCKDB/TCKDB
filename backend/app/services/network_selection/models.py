@@ -30,10 +30,10 @@ QUANTITY = "rate_coefficient"
 PHASE = "gas"
 #: Version of the selection semantics (eligibility, grouping, ordering). A change to any of them is a
 #: new version, and a decision manifest records the version it was made under. The procedure carries no
-#: method-versus-method rule. Version 2: the method-preference rules (and their edges, conflicts and rule matches),
-#: and the request's comparison objective, were removed.
+#: method-versus-method rule. The name changed with the removal of the method-preference rules and the request's
+#: comparison objective (it was ``network_method_preferred``).
 POLICY_NAME = "network_selection"
-POLICY_VERSION = 2
+POLICY_VERSION = 1
 #: Absolute tolerance on a bath mixture's mole fractions: the one the upload applies.
 MOLE_FRACTION_TOLERANCE = 1e-9
 #: A request bound matches a declared or stored bound within this (the existing browse tolerances).

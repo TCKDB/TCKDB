@@ -9,9 +9,8 @@ from __future__ import annotations
 
 from enum import Enum
 
-#: Version of the request/answer vocabulary and its cross-field rules. Version 2: the comparison objective, the
-#: reference model and the outcomes only a method rule could reach were removed.
-CONTRACT_VERSION = 2
+#: Version of the request/answer vocabulary and its cross-field rules.
+CONTRACT_VERSION = 1
 
 
 class Task(str, Enum):

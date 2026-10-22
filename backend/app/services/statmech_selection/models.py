@@ -48,8 +48,7 @@ from app.services.statmech_selection.vocabulary import (
 
 ASSESSMENT_VERSION = 1
 NORMALIZER_VERSION = 1
-#: Version 2: the method-preference rules (and their edges, conflicts and undecided comparisons) were removed.
-DECISION_VERSION = 2
+DECISION_VERSION = 1
 #: Version 2: ``under_review`` and ``not_reviewed`` rank equally in the review key (``docs/specs/browse_order.md``).
 ADMIN_KEY_VERSION = 2
 #: The finding semantics this release reads (shared with structure selection).

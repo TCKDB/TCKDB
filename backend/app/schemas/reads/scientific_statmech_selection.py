@@ -173,7 +173,7 @@ PopulationBody = Annotated[
 class StatmechSelectionRequest(_Strict):
     """Qualify a supplied statistical model for a declared use, or compare applicable whole recipes."""
 
-    contract_version: Literal[2] = 2
+    contract_version: Literal[1] = 1
     intent: Intent
     task: Task | DeferredTask
     observable: Observable | None = Field(
