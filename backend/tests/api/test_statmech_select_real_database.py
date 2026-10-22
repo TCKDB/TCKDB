@@ -118,7 +118,7 @@ def observed(monkeypatch):
 
 
 @pytest.mark.parametrize("suffix", ["", "/manifest"])
-@pytest.mark.parametrize("intent", [{"intent": "qualify"}, {"intent": "protocol_preferred", "comparison_objective": "expected_accuracy"}])
+@pytest.mark.parametrize("intent", [{"intent": "qualify"}, {"intent": "protocol_preferred"}])
 def test_each_route_checks_resolves_and_decides_inside_one_repeatable_read_read_only_snapshot(
     real_app_client, scratch_engine, committed, observed, suffix, intent
 ):

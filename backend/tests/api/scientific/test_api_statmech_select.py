@@ -1,6 +1,6 @@
 """The statmech selection route: the HTTP contract.
 
-The assessor, decision, rules and manifest are tested under ``tests/services/statmech_selection``. These tests hold
+The assessor, decision and manifest are tested under ``tests/services/statmech_selection``. These tests hold
 what only the route can break: a strict request (nothing a caller can set that is not theirs to set), public refs only,
 a scientific outcome for every question the route is for (a valid negative answer is a 200), coded refusals, visibility
 under the read profile, the advisories surfaced in the response, a manifest that downloads and replays, and no database
@@ -20,7 +20,7 @@ from tests.services.statmech_selection.test_request import THERMAL, make
 from tests.services.statmech_selection.test_service import _literature, build, build_ts_scene
 
 URL = "/api/v1/scientific/statmech/select"
-PREFERRED = {"intent": "protocol_preferred", "comparison_objective": "expected_accuracy"}
+PREFERRED = {"intent": "protocol_preferred"}
 
 
 def body_for(scene, **changes) -> dict:
@@ -56,7 +56,7 @@ def test_a_qualify_request_lists_every_candidate_and_selects_nothing(client, db_
     assert response.status_code == 200, response.text
     out = response.json()
     assert out["outcome"] == "qualified_models"
-    assert out["selection"] == {"scientific_ref": None, "sole_eligible_ref": None, "administrative_ref": None, "basis": None, "limitation": None}
+    assert out["selection"] == {"sole_eligible_ref": None, "administrative_ref": None, "basis": None, "limitation": None}
     (candidate,) = out["candidates"]
     assert candidate["candidate_ref"].startswith("smd_") and candidate["kind"] == "declared_model" and candidate["eligible"] is True
     assert candidate["owner_ref"] == scene.world.entry.public_ref and candidate["reasons"] == []
@@ -65,15 +65,16 @@ def test_a_qualify_request_lists_every_candidate_and_selects_nothing(client, db_
     assert out["population"]["visible_candidates"] == 1 and out["versions"]["contract"] == 1
     assert out["review"]["effective_floor"] == "not_reviewed" and "approved" in out["review"]["effective_statuses"]
     assert out["integrity"]["algorithm"] == "sha256" and "not signatures" in out["integrity"]["note"]
-    assert out["edges"] == [] and out["fronts"] == [] and out["conflicts"] == {"opposing_pairs": [], "cycles": [], "overridden_edges": []}
+    assert out["fronts"] == [] and out["administrative_order"] == []
+    assert not {"edges", "conflicts", "undecided", "protocol"} & set(out)
 
 
-def test_a_lone_eligible_model_is_sole_not_preferred_and_the_registry_ranks_nothing(client, db_session):
+def test_a_lone_eligible_model_is_sole_not_preferred_and_nothing_is_ranked(client, db_session):
     scene = build(db_session)
     out = client.post(URL, json=body_for(scene, **PREFERRED)).json()
     assert out["outcome"] == "sole_eligible_candidate"
-    assert out["selection"]["sole_eligible_ref"] == out["candidates"][0]["candidate_ref"] and out["selection"]["scientific_ref"] is None
-    assert out["selection"]["limitation"] and out["protocol"]["rules"] == []  # this release ships no rule
+    assert out["selection"]["sole_eligible_ref"] == out["candidates"][0]["candidate_ref"]
+    assert "scientific_ref" not in out["selection"] and out["selection"]["limitation"]
 
 
 def test_a_legacy_record_is_a_candidate_named_by_its_own_ref(client, db_session):
@@ -87,7 +88,7 @@ def test_a_negative_scientific_outcome_is_a_200(client, db_session):
     scene = build(db_session)
     out = client.post(URL, json=body_for(scene, task="canonical_model", observable="internal_partition")).json()
     assert out["outcome"] in {"missing_required_data", "unresolved_applicability", "no_applicable_candidate", "unsupported_model"}
-    assert out["selection"]["scientific_ref"] is None
+    assert out["selection"]["sole_eligible_ref"] is None
     assert any(not c["eligible"] and c["reasons"] for c in out["candidates"])
     deferred = client.post(URL, json=body_for(scene, task="numerical_evaluation", observable="entropy"))
     assert deferred.status_code == 200 and deferred.json()["outcome"] == "unsupported_task" and deferred.json()["candidates"] == []
@@ -224,8 +225,8 @@ def test_a_ref_of_the_wrong_kind_or_an_integer_id_is_refused(client, db_session)
 def test_contradictory_or_misspelled_requests_are_422_not_a_quiet_default(client, db_session):
     scene = build(db_session)
     assert client.post(URL, json=body_for(scene, task="within_basin_thermel")).status_code == 422
-    assert client.post(URL, json=body_for(scene, intent="qualify", comparison_objective="expected_accuracy")).status_code == 422
-    assert client.post(URL, json=body_for(scene, intent="protocol_preferred")).status_code == 422
+    assert client.post(URL, json=body_for(scene, comparison_objective="expected_accuracy")).status_code == 422  # retired
+    assert client.post(URL, json=body_for(scene, reference_model_ref="smd_" + "a" * 26)).status_code == 422  # retired
     assert client.post(URL, json=body_for(scene, observable="enthalpy")).status_code == 422
     assert client.post(URL, json=body_for(scene, conditions__temperature_domain_k={"min": 500, "max": 300})).status_code == 422
 
@@ -245,7 +246,6 @@ def test_an_unknown_target_basin_determination_or_declaration_is_a_404(client, d
     ghost = "a" * 26
     assert client.post(URL, json=body_for(scene, target__species_entry_ref="spe_" + ghost)).status_code == 404
     assert client.post(URL, json=body_for(scene, target__scope__conformer_group_ref="cg_" + ghost)).status_code == 404
-    assert client.post(URL, json=body_for(scene, reference_model_ref="smd_" + ghost, **{"intent": "protocol_preferred", "comparison_objective": "model_fidelity"})).status_code == 404
     ts_body = make(
         THERMAL, task="conventional_ts_transverse_model", observable="transverse_partition",
         target={"kind": "transition_state_entry", "transition_state_entry_ref": "tse_" + ghost,

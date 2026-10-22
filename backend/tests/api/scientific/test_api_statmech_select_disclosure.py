@@ -48,10 +48,6 @@ def ensemble_body(scene, ref: str, **changes) -> dict:
     )
 
 
-def fidelity_body(scene, ref: str) -> dict:
-    return body_for(scene, intent="protocol_preferred", comparison_objective="model_fidelity", reference_model_ref=ref)
-
-
 def normalised(response, ref: str) -> tuple[int, object]:
     """The response with the one ref the caller supplied masked, so two refusals can be compared as the caller sees them."""
     return response.status_code, json.loads(response.text.replace(ref, "<ref>"))
@@ -117,7 +113,7 @@ def test_a_determination_of_a_hidden_entry_answers_exactly_as_an_unknown_one(cli
     assert normalised(got, theirs.determination.public_ref) == normalised(unknown, "sdet_" + GHOST)
 
 
-@pytest.mark.parametrize("builder", [ensemble_body, fidelity_body], ids=["ensemble", "reference_model"])
+@pytest.mark.parametrize("builder", [ensemble_body], ids=["ensemble"])
 @pytest.mark.parametrize("where", ["another_entry", "own_entry"])
 def test_a_hidden_declaration_answers_exactly_as_an_unknown_one(client, db_session, builder, where):
     mine = build(db_session)
@@ -175,9 +171,7 @@ def test_another_transition_states_visible_determination_is_a_coded_owner_mismat
     assert client.post(URL, json=mine.body).status_code == 200
 
 
-@pytest.mark.parametrize(
-    ("builder", "field"), [(ensemble_body, "ensemble_declaration_ref"), (fidelity_body, "reference_model_ref")], ids=["ensemble", "reference_model"]
-)
+@pytest.mark.parametrize(("builder", "field"), [(ensemble_body, "ensemble_declaration_ref")], ids=["ensemble"])
 def test_another_entrys_visible_declaration_is_a_coded_owner_mismatch(client, db_session, builder, field):
     mine, theirs = build(db_session), build(db_session)
     approve(db_session, mine)
@@ -191,9 +185,11 @@ def test_another_entrys_visible_declaration_is_a_coded_owner_mismatch(client, db
 
 def test_a_species_entrys_record_cannot_be_cited_by_a_transition_state_question(client, db_session):
     species, ts = build(db_session), build_ts_scene(db_session)
-    response = client.post(URL, json=make(ts.body, reference_model_ref=species.host.model_declaration.public_ref,
-                                          intent="protocol_preferred", comparison_objective="model_fidelity"))
-    assert response.status_code == 422 and code_of(response) == MISMATCH
+    response = client.post(URL, json=make(
+        ts.body, task="canonical_model", observable="internal_partition",
+        target__scope={"kind": "explicit_equilibrium_ensemble", "ensemble_declaration_ref": species.host.model_declaration.public_ref},
+    ))
+    assert response.status_code == 422
 
 
 def test_the_hidden_equivalence_is_checked_before_the_mismatch(client, db_session):
@@ -222,6 +218,7 @@ def test_a_species_ref_is_not_a_transition_states_basin_and_the_error_never_name
     approve(db_session, species)
     body = make(ts.body, target__scope__determination_ref=ts.determination.public_ref)
     assert client.post(URL, json=body).status_code == 200
-    declared = species.host.model_declaration.public_ref
-    response = client.post(URL, json=make(ts.body, intent="protocol_preferred", comparison_objective="model_fidelity", reference_model_ref=declared))
-    assert response.status_code == 422 and species.world.entry.public_ref not in response.text and declared not in response.text
+    other_ts = build_ts_scene(db_session)
+    response = client.post(URL, json=make(ts.body, target__scope__determination_ref=other_ts.determination.public_ref))
+    assert response.status_code == 422 and code_of(response) == MISMATCH
+    assert species.world.entry.public_ref not in response.text and other_ts.determination.public_ref not in response.text
