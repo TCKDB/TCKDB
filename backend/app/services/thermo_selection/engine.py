@@ -16,7 +16,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from app.schemas.reads.scientific_common import SelectionPolicy
-from app.services.selection_kernel import ADMIN_FIRST_BASIS, AdminNode, decide_alternatives, order_admin
+from app.services.selection_kernel import (  # noqa: F401  (the BASIS_* sentences are re-exported unchanged)
+    ADMIN_FIRST_BASIS,
+    BASIS_INCOMPARABLE,
+    BASIS_NONE_ELIGIBLE,
+    BASIS_SOLE,
+    AdminNode,
+    decide_alternatives,
+    order_admin,
+)
 from app.services.thermo_selection.models import Decision, NormalizedCandidate
 
 

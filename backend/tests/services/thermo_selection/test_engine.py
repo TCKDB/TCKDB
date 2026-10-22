@@ -56,7 +56,7 @@ def test_the_three_selection_outcomes_carry_different_explanations():
     alternatives = decide([cand("a", proto="g4"), cand("b", proto=None)])
     none = decide([])
     assert len({sole.basis, alternatives.basis, none.basis}) == 3
-    assert "ranking" in alternatives.basis and "not" in alternatives.basis  # says it ranks nothing
+    assert "no ranking" in alternatives.basis  # says it ranks nothing
     assert alternatives.administrative_first is not None and sole.administrative_first is None
 
 
