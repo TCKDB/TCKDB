@@ -303,10 +303,11 @@ def test_two_stored_uncertainties_are_echoed_and_never_combined():
 
 
 # ---------------------------------------------------------------------------
-# The boundary: no selection kernel, no rules
+# The boundary: no selection kernel, no decision
 # ---------------------------------------------------------------------------
 
-_FORBIDDEN = ("app.services.structure_selection.rules", "selection_kernel")
+_FORBIDDEN = ("selection_kernel",)
+_FORBIDDEN_NAMES = {"Edge", "decide_alternatives", "decide_structures", "decide_graph"}
 
 
 def _imported_modules(path: Path) -> set[str]:
@@ -341,13 +342,13 @@ def _names_used(path: Path) -> set[str]:
     return out
 
 
-def test_no_comparison_path_module_imports_the_rules_or_the_selection_kernel_or_names_an_edge():
+def test_no_comparison_path_module_imports_the_selection_kernel_or_names_a_decision():
     """Direct imports and names only.
 
     This reads the four modules the comparison runs through (``compare``, ``service``, ``manifest``, ``public``). It
     does **not** follow imports transitively: the certificate legitimately comes through ``structure_selection.public``
     and the assessment, which sit beside the rules, so a transitive scan would be both wrong and unreadable. What it
-    pins is that none of these modules wires a rule or builds a kernel ``Edge`` itself.
+    pins is that none of these modules imports the selection kernel or calls a decision function: a comparison ranks nothing.
     """
     modules = _comparison_path()
     assert len(modules) == 4
@@ -355,26 +356,31 @@ def test_no_comparison_path_module_imports_the_rules_or_the_selection_kernel_or_
         imported = _imported_modules(path)
         assert imported, f"the scan read no import in {name}, so it proves nothing"
         assert not [m for m in imported if any(bad in m for bad in _FORBIDDEN)], name
-        assert "Edge" not in _names_used(path), name
+        assert not (_FORBIDDEN_NAMES & _names_used(path)), name
     assert "app.services.structure_selection.models" in _imported_modules(
         modules["app.services.relative_conformer_energy.compare"]
     )
 
 
-def test_the_name_scan_catches_an_edge_in_any_form(tmp_path):
-    for source in ("from x import Edge\n", "import x\nx.Edge(1)\n", "e = Edge(1)\n", "from x import Foo as Edge\n"):
+def test_the_name_scan_catches_a_decision_call_in_any_form(tmp_path):
+    for source in (
+        "from x import decide_alternatives\n",
+        "import x\nx.decide_structures(1)\n",
+        "e = decide_graph(1)\n",
+        "from x import Foo as Edge\n",
+    ):
         path = tmp_path / "m.py"
         path.write_text(source)
-        assert "Edge" in _names_used(path), source
+        assert _FORBIDDEN_NAMES & _names_used(path), source
 
 
 def test_the_boundary_scan_catches_a_forbidden_import(tmp_path):
     bad = tmp_path / "m.py"
     bad.write_text(
-        "from app.services.structure_selection import rules\nfrom app.services.selection_kernel import Edge\n"
+        "from app.services.selection_kernel import decide_alternatives\n"
     )
     found = [m for m in _imported_modules(bad) if any(b in m for b in _FORBIDDEN)]
-    assert found  # the scan is not vacuous: it flags the import a wired rule edge would need
+    assert found  # the scan is not vacuous: it flags the import a ranking would need
 
 
 # ---------------------------------------------------------------------------
@@ -518,7 +524,7 @@ def test_requests_that_differ_in_more_than_their_protocol_are_refused():
 def test_the_comparison_manifest_replays_and_holds_both_runs_and_the_pairing(db_session):
     world, cand_lot, (a, *_) = two_level_world(db_session)
     manifest = run_service(db_session, world, request_for(world, a, cand_lot, world.lot)).manifest
-    assert manifest["format"] == {"name": "relative_conformer_energy_comparison_manifest", "version": 1}
+    assert manifest["format"] == {"name": "relative_conformer_energy_comparison_manifest", "version": 2}
     assert manifest["request"]["pairing"] == "same_basin"
     assert manifest["runs"]["candidate"]["request"]["level"]["level_of_theory_ref"] == cand_lot.public_ref
     assert manifest["runs"]["reference"]["request"]["level"]["level_of_theory_ref"] == world.lot.public_ref

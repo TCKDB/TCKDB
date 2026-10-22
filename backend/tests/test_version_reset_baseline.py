@@ -59,6 +59,7 @@ EXPECTED: dict[str, int] = {
     "statmech_formats": 2,
     "structure_formats": 2,
     "network_formats": 2,
+    "relative_energy_formats": 2,
 }
 
 

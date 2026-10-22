@@ -31,6 +31,7 @@ from app.services.relative_conformer_energy.models import (
 from app.services.relative_conformer_energy.population import Population
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.structure_selection.assessment import assess_unit
+from app.services.structure_selection.decision import ADMIN_KEY_VERSION
 from app.services.structure_selection.bounds import check_manifest_size
 from app.services.structure_selection.manifest import (
     INTEGRITY_NOTE,
@@ -54,7 +55,7 @@ from app.services.structure_selection.models import (
 from app.versioning import same_value
 
 MANIFEST_FORMAT = "relative_conformer_energy_manifest"
-MANIFEST_FORMAT_VERSION = 1
+MANIFEST_FORMAT_VERSION = 2
 
 
 def _canon(value: Any) -> Any:
@@ -76,6 +77,8 @@ def _versions() -> dict[str, Any]:
         "assessment": ASSESSMENT_VERSION,
         "normalizer": NORMALIZER_VERSION,
         "finding_semantics": sorted(SUPPORTED_FINDING_VERSIONS),
+        # A repeat's representative is chosen by the structure administrative key, so its version is part of the answer.
+        "administrative_key": ADMIN_KEY_VERSION,
     }
 
 
@@ -276,7 +279,7 @@ def replay_matches(manifest: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 
 COMPARISON_MANIFEST_FORMAT = "relative_conformer_energy_comparison_manifest"
-COMPARISON_MANIFEST_FORMAT_VERSION = 1
+COMPARISON_MANIFEST_FORMAT_VERSION = 2
 _RUNS = ("candidate", "reference")
 
 #: The two manifest documents this module writes and reads, each under its stable name. The reader looks up the

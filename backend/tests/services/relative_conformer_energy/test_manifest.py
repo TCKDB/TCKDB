@@ -34,7 +34,7 @@ def reseal(manifest):
 
 def test_a_manifest_is_plain_json_and_replays_to_the_recorded_answer(manifest):
     assert json.loads(canonical(manifest)) == manifest
-    assert manifest["format"] == {"name": "relative_conformer_energy_manifest", "version": 1}
+    assert manifest["format"] == {"name": "relative_conformer_energy_manifest", "version": 2}
     assert replay_matches(manifest) is True
     assert replay_relative_energies(manifest)["outcome"] == "relative_energies"
     assert len(manifest["determinations"]) == 2 and len(manifest["population"]["groups"]) == 3
@@ -120,3 +120,27 @@ def test_the_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_
     for tampered in bad_format_manifests(manifest, current):
         with pytest.raises(ReplayError, match="unknown manifest format"):
             replay_relative_energies(tampered)
+
+
+def test_a_version_one_manifest_is_refused_as_an_unknown_format_not_as_a_decision_mismatch(manifest):
+    """Kills: bumping neither format version, so a manifest whose structure request carried retired fields replays."""
+    from app.services.relative_conformer_energy.manifest import MANIFEST_FORMAT
+
+    old = copy.deepcopy(manifest)
+    old["format"] = {"name": MANIFEST_FORMAT, "version": 1}
+    with pytest.raises(ReplayError) as raised:
+        replay_relative_energies(reseal(old))
+    assert raised.value.code == "unsupported_manifest_format"
+    assert "unknown manifest format" in str(raised.value)
+
+
+def test_the_structure_administrative_key_version_is_in_the_recorded_versions(manifest):
+    """Kills: leaving the key version out, so a changed representative choice replays under the old document."""
+    from app.services.structure_selection.decision import ADMIN_KEY_VERSION
+
+    assert manifest["versions"]["administrative_key"] == ADMIN_KEY_VERSION
+    forged = copy.deepcopy(manifest)
+    forged["versions"]["administrative_key"] = ADMIN_KEY_VERSION + 1
+    with pytest.raises(ReplayError) as raised:
+        replay_relative_energies(reseal(forged))
+    assert raised.value.code == "unsupported_semantic_version"
