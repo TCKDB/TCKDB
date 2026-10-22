@@ -62,14 +62,18 @@ EXPECTED: dict[str, int] = {
     "relative_energy_formats": 2,
 }
 
+#: One rubric is above the baseline: the transition-state badge lists its qualifying refs in the structure
+#: administrative key, whose version 2 changed that order.
+EXPECTED_REF: dict[tuple[str, str], int] = {("rubrics", "computed_transition_state"): 2}
+
 
 @pytest.mark.parametrize("name", sorted(REGISTRIES))
 def test_every_registered_name_is_at_its_expected_version_and_nothing_is_empty(name: str) -> None:
     registry = REGISTRIES[name]()
     refs = registry.refs()
-    expected = EXPECTED.get(name, BASELINE)
     assert refs, f"{name} holds nothing: the parametrization would pass vacuously"
     for ref in refs:
+        expected = EXPECTED_REF.get((name, ref.name), EXPECTED.get(name, BASELINE))
         assert registry.is_current(ref), (name, ref)
         assert ref.version == expected, (name, ref)
         assert registry.current(ref.name).version == expected

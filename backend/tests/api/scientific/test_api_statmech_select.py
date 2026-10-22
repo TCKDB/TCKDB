@@ -32,6 +32,13 @@ def body_for(scene, **changes) -> dict:
     return make(THERMAL, **{**defaults, **changes})
 
 
+def test_the_retired_intent_name_is_refused_not_accepted_as_an_alias(client, db_session):
+    """Kills: keeping ``protocol_preferred`` as a second spelling, so the old name still reads as a preference."""
+    scene = build(db_session)
+    response = client.post(URL, json=body_for(scene, intent="protocol_preferred"))
+    assert response.status_code == 422, response.text
+
+
 def keys(value):
     if isinstance(value, dict):
         for k, v in value.items():

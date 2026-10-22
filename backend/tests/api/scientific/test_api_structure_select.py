@@ -140,6 +140,13 @@ def test_a_protocol_request_ranks_nothing_and_lists_the_complete_protocols(clien
     assert "objective" not in out["request"] and "apply_rules" not in out["request"]
 
 
+def test_the_retired_intent_name_is_refused_not_accepted_as_an_alias(client, db_session):
+    """Kills: keeping ``protocol_preferred`` as a second spelling, so the old name still reads as a preference."""
+    world = make_world(db_session)
+    response = client.post(conformer_url(world.entry), json={"intent": "protocol_preferred"})
+    assert response.status_code == 422, response.text
+
+
 # ---------------------------------------------------------------------------
 # The manifest download
 # ---------------------------------------------------------------------------

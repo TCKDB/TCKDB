@@ -393,7 +393,7 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
         "network": (2, None),
         "structure": (2, None),
         "statmech": (2, None),
-        "relative_energy": (1, 1),
+        "relative_energy": (2, 1),
     }
 
 
