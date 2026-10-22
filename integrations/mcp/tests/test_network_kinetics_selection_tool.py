@@ -44,7 +44,7 @@ def _recording(answer: dict[str, Any] | None = None, status: int = 200):
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        return httpx.Response(status, json=answer if answer is not None else {"outcome": "policy_preferred"})
+        return httpx.Response(status, json=answer if answer is not None else {"outcome": "sole_eligible_candidate"})
 
     return seen, handler
 
@@ -90,8 +90,6 @@ def test_forwards_every_optional_field_and_the_profile():
         "regime": {"kind": "time_independent"},
         "source_composition_hash": "a" * 64,
         "sink_composition_hash": "b" * 64,
-        "objective": "model_fidelity",
-        "reference_model_ref": "nsolve_xyz",
         "policy": "latest",
         "mode": "first",
         "min_review_status": "approved",
@@ -148,8 +146,8 @@ def test_a_question_that_is_not_well_posed_is_left_for_the_server_to_refuse():
         _args(temperature_min_k="500"),
         _args(pressure_max_bar=True),
         _args(scope="whole_network"),
-        _args(objective="best"),
-        _args(reference_model_ref="net_x"),
+        _args(objective="physical_accuracy"),  # retired
+        _args(reference_model_ref="nsolve_x"),  # retired
         _args(outputs="assoc"),
         _args(outputs=[{"channel_key": "a"}]),
         _args(outputs=[{"channel_key": "a", "observable": "o", "surprise": 1}]),
@@ -187,7 +185,7 @@ def test_a_paging_argument_is_refused_with_an_explanation_of_the_fixed_bounds():
 
 def test_arguments_sent_as_null_are_omitted_not_forwarded():
     seen, handler = _recording()
-    _call(_client(handler), _args(scope=None, outputs=None, policy=None, mode=None, objective=None, profile=None))
+    _call(_client(handler), _args(scope=None, outputs=None, policy=None, mode=None, profile=None))
     assert json.loads(seen[0].content) == QUESTION
     assert None not in json.loads(seen[0].content).values()
 

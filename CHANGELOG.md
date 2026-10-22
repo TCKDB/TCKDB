@@ -22,6 +22,27 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Method-preference rules removed; one browse order, named (2026-10-22)
+
+TCKDB no longer ranks one method above another, anywhere. The manifest-backed rules (E1 G4 over G3, the XYG3 versus B3LYP barrier,
+the network and structure candidates) and everything that applied them are deleted, and the first record in a list is documented as display
+order, never as a preference.
+
+- **Selection.** With no rules, a selection over eligible records is `sole_eligible_candidate` (one), `incomparable_alternatives` (several, in one
+  front, in display order) or `no_applicable_candidate`. The outcomes `policy_preferred`, `policy_conflict` and (statmech) `unresolved_comparability`
+  are gone, as are `policy.rules[]`, `relations`, `rule_matches`, `pair_checks`, `rules_applied` and statmech's `edges`, `conflicts`, `undecided` and
+  `protocol`. The request policy `method_preferred` is retired; `default`, `most_reviewed` and `latest` remain and are administrative.
+  The request options that only applied rules are removed: network `objective`, `reference_model_ref`, `reference_outputs`; structure `apply_rules`,
+  `objective`, `reference_model`; statmech `comparison_objective`, `reference_model_ref`.
+- **Manifests.** The thermo, kinetics, network, structure and statmech decision manifests are format version 2; replay refuses the old shape as an
+  unknown format. The H298 golden was regenerated: every decision that carried an edge or a conflict is now `incomparable_alternatives` in one front.
+- **Browse order.** `under_review` now ranks equal to `not_reviewed` (a curator opening a record is not a verdict). Review floors still tell the two
+  apart. The SQL rank in structure search is generated from `REVIEW_RANK`. Analytics orders by review rank, deposition time (`created_at`), id
+  (keyset cursor version 2). Every browse and list response echoes `request.sort` as a structured display order (keys, directions, meanings, and a
+  statement that it is not a scientific preference). See `docs/specs/browse_order.md`.
+- **Schema and migration impact:** none.
+- Packages: `tckdb-client` 0.161.0, `tckdb-mcp` 0.11.0.
+
 ## Stored and wire strings split into a name and an integer version; every TCKDB-owned version reset to 1 (versioning PR-4, 2026-10-20)
 
 **The last of four versioning PRs, and the one clients see: a deliberate wire break, once.** Migration: `c7d4a9e2b6f1_split_versioned_names`

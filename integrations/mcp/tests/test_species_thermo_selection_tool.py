@@ -34,7 +34,7 @@ def _recording(answer: dict[str, Any] | None = None, status: int = 200):
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        return httpx.Response(status, json=answer if answer is not None else {"outcome": "policy_preferred"})
+        return httpx.Response(status, json=answer if answer is not None else {"outcome": "sole_eligible_candidate"})
 
     return seen, handler
 
@@ -77,7 +77,7 @@ def test_forwards_policy_mode_floor_conditions_and_profile():
 
 def test_the_servers_answer_is_returned_verbatim():
     answer = {
-        "outcome": "policy_conflict", "basis": "opposing rules; no automatic selection", "selection": None,
+        "outcome": "incomparable_alternatives", "basis": "several records are eligible", "selection": None,
         "fronts": [["thm_a", "thm_b"]], "future_field": {"kept": True},
     }
     _, handler = _recording(answer)
