@@ -40,6 +40,12 @@ order, never as a preference.
   apart. The SQL rank in structure search is generated from `REVIEW_RANK`. Analytics orders by review rank, deposition time (`created_at`), id
   (keyset cursor version 2). Every browse and list response echoes `request.sort` as a structured display order (keys, directions, meanings, and a
   statement that it is not a scientific preference). See `docs/specs/browse_order.md`.
+- **Renamed and re-pinned.** The structure and statmech intent `protocol_preferred` is now `protocol_coverage` (it lists the
+  protocols that cover the request; the old name is refused). The relative-energy manifests are format version 2 and
+  record the structure administrative-key version. The transition-state badge rubric `computed_transition_state` is
+  version 2 and pins that key version, so its stored machine reviews read stale. Species browse with a substructure or
+  similarity query echoes `heavy_atom_count` first; thermo search echoes its real entry-level order; thermo and transport
+  with `collapse=first` carry `request.effective_order`.
 - **Schema and migration impact:** none.
 - Packages: `tckdb-client` 0.161.0, `tckdb-mcp` 0.11.0.
 
