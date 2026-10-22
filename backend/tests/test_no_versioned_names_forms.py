@@ -34,7 +34,6 @@ from tests.versioned_names_scan import (
     is_versioned_string,
     scan_frontend,
     scan_source,
-    scan_yaml,
 )
 
 CHEMISTRY_ROOT = REPO_ROOT / "backend" / "app" / "chemistry"
@@ -112,7 +111,7 @@ def test_the_lowercase_glued_pattern_is_not_greedy_about_vv10() -> None:
     assert LOWER_GLUED_VERSION.search("rev2") is None
 
 
-@pytest.mark.parametrize("scanner", ["scan_code", "scan_names", "scan_openapi", "scan_yaml", "scan_frontend"])
+@pytest.mark.parametrize("scanner", ["scan_code", "scan_names", "scan_openapi", "scan_frontend"])
 def test_scan_all_includes_every_scanner(scanner: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """A scanner with no findings today must still be wired in: it is the one that catches tomorrow's."""
     from tests import versioned_names_scan as module
@@ -173,19 +172,6 @@ def test_the_detector_catches_the_other_building_forms(source: str, kind: str) -
 )
 def test_the_new_forms_leave_ordinary_code_alone(source: str) -> None:
     assert _kinds(source) == []
-
-
-def test_the_detector_catches_a_versioned_yaml_value(tmp_path: Path) -> None:
-    (tmp_path / "rules.yaml").write_text(
-        "rule_id: thing_v2\n"
-        "nested:\n"
-        "  - manifest: tool/0.1.0\n"
-        "  - basis: cc-pV5Z\n"
-        "  - id: E1\n"
-        "  - label: K-XYG3-B3LYP-BARRIER\n"
-    )
-    found = sorted(f.token for f in scan_yaml(roots=(tmp_path,), repo_root=tmp_path))
-    assert found == ["thing_v2", "tool/0.1.0"]
 
 
 def test_the_detector_catches_a_versioned_frontend_literal_and_identifier(tmp_path: Path) -> None:

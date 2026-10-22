@@ -117,9 +117,26 @@ def test_cursor_from_a_future_version_is_rejected():
         decode_cursor(token, expected_signature="sig-a")
 
 
-@pytest.mark.parametrize("raw", ["true", "1.0"])
-def test_a_cursor_whose_version_is_a_bool_or_float_is_rejected(raw):
-    """Kills: ``payload.get("v") != CURSOR_VERSION`` accepting ``true`` (``True == 1``) and ``1.0``."""
+def test_a_version_one_cursor_is_refused_as_an_old_cursor_version():
+    """Kills: leaving CURSOR_VERSION at 1 after the analytics order changed, so an old cursor resumes the new order."""
+    import base64
+    import json
+
+    assert CURSOR_VERSION == 2
+    payload = json.dumps(
+        {"v": 1, "watermark": _watermark().as_dict(), "last_values": [1], "query_signature": "sig-a"}
+    )
+    token = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    with pytest.raises(InvalidCursorError, match="cursor version"):
+        decode_cursor(token, expected_signature="sig-a")
+
+
+@pytest.mark.parametrize("raw", [f"{CURSOR_VERSION}.0", f'"{CURSOR_VERSION}"'])
+def test_a_cursor_whose_version_is_a_float_or_a_string_is_rejected(raw):
+    """Kills: ``payload.get("v") != CURSOR_VERSION`` accepting the float ``2.0`` (``2.0 == 2``).
+
+    A bool is not tested here: ``true`` is ``1``, which the current version is not, so it would be refused for the
+    wrong reason. The value must equal the current version when compared as a number and still be refused."""
     import base64
     import json
 
