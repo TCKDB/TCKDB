@@ -26,7 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-__all__ = ["Diagnostic", "DIAG_CODES"]
+__all__ = ["DIAG_CODES", "Diagnostic"]
 
 
 # Frozen so producers can safely compare, hash, or aggregate

@@ -1,11 +1,8 @@
 """``POST /scientific/networks/{ref}/kinetics/select``: the public network selection endpoint.
 
-The assessor, engine, rules and manifest are tested under ``tests/services/network_selection``. These tests hold the
+The assessor, engine and manifest are tested under ``tests/services/network_selection``. These tests hold the
 HTTP contract: the request is normalised or refused, every outcome is reachable, the response says why, visibility
 follows the read profile, the manifest replays, and no database id leaves the building.
-
-The registry shipped in this release has no active rule, so the end-to-end preference tests swap in a test-only
-active rule at the service boundary (``selection.default_rules``), exactly as the service tests do.
 """
 
 from __future__ import annotations
@@ -16,14 +13,12 @@ import pytest
 
 from app.db.models.common import RecordReviewStatus as S
 from app.services.network_selection import ReplayError, replay_network
-from app.services.network_selection import selection as selection_module
-from tests.services.network_selection._rules import ProtocolRule, protocol
+from tests.services.network_selection._protocol import protocol
 from tests.services.network_selection._world import add_solve, build_world, fit_spec, set_review, target
 
 A_, B_ = "chemically_significant_eigenvalues", "modified_strong_collision"
-RULE = ProtocolRule("T-PREFER-A", prefer=A_, yield_=B_)
-#: Names a rule or an ordinal, not a row.
-NOT_ROW_IDS = {"rule_id", "overridden_by_rule_id", "id_rank"}
+#: Names an ordinal, not a row.
+NOT_ROW_IDS = {"id_rank"}
 
 
 @pytest.fixture
@@ -66,11 +61,6 @@ def two(db_session, world):
     return a, b
 
 
-@pytest.fixture
-def active_rule(monkeypatch):
-    monkeypatch.setattr(selection_module, "default_rules", lambda: (RULE,))
-
-
 def code(response) -> str:
     return response.json()["code"]
 
@@ -88,38 +78,17 @@ def walk(value, path="$"):
 # -- the headline ------------------------------------------------------------------------------------------------
 
 
-def test_a_scoped_preference_selects_over_recency_end_to_end(client, world, two, active_rule):
+def test_two_eligible_solves_are_incomparable_and_listed_in_display_order_end_to_end(client, world, two):
     a, b = two
     out = post(client, world).json()
-    assert out["outcome"] == "policy_preferred"
-    assert out["selection"] == {
-        "node_ref": a._dets["d_assoc"].public_ref,
-        "scope": "single_channel",
-        "solve_ref": a.public_ref,
-        "members": [
-            {
-                "determination_ref": a._dets["d_assoc"].public_ref,
-                "channel_key": "assoc",
-                "kinetics_refs": [a._fits[0].public_ref],
-            }
-        ],
-        "basis": "policy_preferred",
-        "administrative": False,
-        "explanation": out["basis"],
-    }
-    assert out["fronts"] == [[a._dets["d_assoc"].public_ref], [b._dets["d_assoc"].public_ref]]
-    (edge,) = out["relations"]["edges"]
-    assert (edge["preferred"], edge["rule_id"]) == (a._dets["d_assoc"].public_ref, "T-PREFER-A")
-    assert out["policy"]["name"] == "network_method_preferred" and out["policy"]["rules_applied"] is True
-    assert out["request"]["network_ref"] == world.ref and out["request"]["profile"] == "exploratory"
-
-
-def test_with_no_active_rule_the_population_is_unranked_and_says_so(client, world, two):
-    out = post(client, world).json()
     assert out["outcome"] == "incomparable_alternatives" and out["selection"] is None
-    assert out["relations"]["edges"] == []
-    assert out["policy"]["rules"] and {r["status"] for r in out["policy"]["rules"]} == {"inactive"}
-    assert all(r["inactive_reasons"] for r in out["policy"]["rules"])
+    assert out["fronts"] == [[b._dets["d_assoc"].public_ref, a._dets["d_assoc"].public_ref]]  # approved first
+    assert out["administrative_order"] == out["fronts"][0]
+    assert out["policy"]["name"] == "network_selection" and "rules" not in out["policy"]
+    for dead in ("relations", "rule_matches", "pair_checks"):
+        assert dead not in out
+    assert out["request"]["network_ref"] == world.ref and out["request"]["profile"] == "exploratory"
+    assert "objective" not in out["request"]
 
 
 def test_mode_first_names_an_administrative_first_and_says_it_is_not_a_method_claim(client, world, two):
@@ -137,10 +106,14 @@ def test_mode_first_names_an_administrative_first_and_says_it_is_not_a_method_cl
 
 
 @pytest.mark.parametrize("policy", ["default", "most_reviewed", "latest"])
-def test_an_administrative_policy_applies_no_rule_even_when_one_is_active(client, world, two, active_rule, policy):
+def test_every_policy_is_administrative(client, world, two, policy):
     out = post(client, world, question(world, policy=policy)).json()
-    assert out["policy"]["rules_applied"] is False and out["relations"]["edges"] == []
-    assert out["outcome"] == "incomparable_alternatives" and out["policy"]["rules"] == []
+    assert out["outcome"] == "incomparable_alternatives" and len(out["fronts"]) == 1
+
+
+def test_the_method_preferred_policy_and_the_comparison_objective_are_retired(client, world, two):
+    assert post(client, world, question(world, policy="method_preferred")).status_code == 422
+    assert post(client, world, question(world, objective="physical_accuracy")).status_code == 422
 
 
 def test_a_bundle_request_selects_a_declared_product_set(client, db_session, world):
@@ -205,8 +178,6 @@ def test_an_unknown_or_integer_bath_species_ref_is_refused(client, world):
         {"bath": {"components": [{"species_ref": "spe_a"}, {"species_ref": "spe_b"}]}},  # a mixture needs fractions
         {"partition": {"retained": []}},
         {"source_composition_hash": "a" * 64},  # stated together
-        {"objective": "model_fidelity"},  # needs reference_model_ref
-        {"reference_model_ref": "nks_x"},  # only for model_fidelity
         {"regime": {"kind": "initial_population_restricted"}},
     ],
 )
@@ -258,21 +229,22 @@ def test_a_population_over_a_bound_is_refused_not_truncated(client, db_session, 
 # -- the manifest ------------------------------------------------------------------------------------------------
 
 
-def test_the_manifest_replays_with_no_database_and_its_digest_verifies(client, db_session, world, two, active_rule):
+def test_the_manifest_replays_with_no_database_and_its_digest_verifies(client, db_session, world, two):
     response = post(client, world, manifest=True)
     assert response.status_code == 200
     assert response.headers["content-disposition"] == f'attachment; filename="network_selection_{world.ref}.json"'
     manifest = response.json()
     db_session.rollback()
-    assert replay_network(manifest, rules=[RULE]) == manifest["decision"]
-    assert manifest["snapshot_isolation"] and manifest["outcome"] == "policy_preferred"
+    assert replay_network(manifest) == manifest["decision"]
+    assert manifest["snapshot_isolation"] and manifest["outcome"] == "incomparable_alternatives"
+    assert manifest["format"] == {"name": "network_selection_manifest", "version": 2}
     forged = copy.deepcopy(manifest)
     forged["decision"]["basis"] = "edited"
     with pytest.raises(ReplayError, match="recorded digest"):
-        replay_network(forged, rules=[RULE])
+        replay_network(forged)
 
 
-def test_the_two_routes_agree(client, world, two, active_rule):
+def test_the_two_routes_agree(client, world, two):
     answer = post(client, world).json()
     manifest = post(client, world, manifest=True).json()
     assert answer["outcome"] == manifest["outcome"]
@@ -281,7 +253,7 @@ def test_the_two_routes_agree(client, world, two, active_rule):
     assert answer["determinations"] == manifest["assessments"]["determinations"]
 
 
-def test_no_database_id_appears_in_either_document(client, world, two, active_rule):
+def test_no_database_id_appears_in_either_document(client, world, two):
     for manifest in (False, True):
         document = post(client, world, manifest=manifest).json()
         offenders = [

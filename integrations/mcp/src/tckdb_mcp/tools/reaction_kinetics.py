@@ -257,9 +257,9 @@ def _is_temp(value: Any, field_name: str) -> bool:
 
 
 __all__ = [
-    "TOOL_NAME",
-    "TOOL_DESCRIPTION",
     "INPUT_SCHEMA",
     "LEGAL_INCLUDE_TOKENS",
+    "TOOL_DESCRIPTION",
+    "TOOL_NAME",
     "run",
 ]

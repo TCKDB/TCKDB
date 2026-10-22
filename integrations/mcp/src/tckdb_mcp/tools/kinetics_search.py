@@ -406,11 +406,11 @@ def _present_str(value: Any) -> bool:
 
 
 __all__ = [
-    "TOOL_NAME",
-    "TOOL_DESCRIPTION",
     "INPUT_SCHEMA",
+    "LEGAL_DIRECTIONS",
     "LEGAL_INCLUDE_TOKENS",
     "LEGAL_MODEL_KINDS",
-    "LEGAL_DIRECTIONS",
+    "TOOL_DESCRIPTION",
+    "TOOL_NAME",
     "run",
 ]

@@ -23,7 +23,7 @@ inline ``TransportUploadPayload`` schema accepts.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
 from tckdb_client.builders.validation import (
@@ -32,7 +32,7 @@ from tckdb_client.builders.validation import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover — type-only import
-    from tckdb_client.builders.calculation import Calculation
+    pass
 
 __all__ = ["Transport"]
 

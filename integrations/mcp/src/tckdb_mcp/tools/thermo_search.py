@@ -324,10 +324,10 @@ def _validate_temperature(value: Any, field_name: str) -> float | None:
 
 
 __all__ = [
-    "TOOL_NAME",
-    "TOOL_DESCRIPTION",
     "INPUT_SCHEMA",
     "LEGAL_INCLUDE_TOKENS",
     "LEGAL_MODEL_KINDS",
+    "TOOL_DESCRIPTION",
+    "TOOL_NAME",
     "run",
 ]

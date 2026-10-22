@@ -46,8 +46,8 @@ if TYPE_CHECKING:  # pragma: no cover — type-only imports
 __all__ = [
     "SECTION_MARKERS",
     "UploadSummary",
-    "summarise_computed_species_upload",
     "summarise_computed_reaction_upload",
+    "summarise_computed_species_upload",
 ]
 
 

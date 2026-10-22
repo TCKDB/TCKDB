@@ -176,4 +176,4 @@ def run(client: TCKDBHttpClient, config: Config, arguments: dict[str, Any] | Non
     return client.post_json(url, body, params={"profile": profile})
 
 
-__all__ = ["TOOL_NAME", "TOOL_DESCRIPTION", "INPUT_SCHEMA", "run"]
+__all__ = ["INPUT_SCHEMA", "TOOL_DESCRIPTION", "TOOL_NAME", "run"]

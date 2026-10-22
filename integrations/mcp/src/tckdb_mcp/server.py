@@ -25,12 +25,12 @@ from .tools import reaction_full as reaction_full_tool
 from .tools import reaction_kinetics as reaction_kinetics_tool
 from .tools import reaction_kinetics_selection as reaction_kinetics_selection_tool
 from .tools import reactions as reactions_tool
+from .tools import relative_conformer_energy as relative_energy_tools
 from .tools import scientific_reads as scientific_reads_tools
 from .tools import species as species_tool
 from .tools import species_thermo as species_thermo_tool
 from .tools import species_thermo_selection as species_thermo_selection_tool
 from .tools import statmech_selection as statmech_selection_tool
-from .tools import relative_conformer_energy as relative_energy_tools
 from .tools import structure_selection as structure_selection_tools
 from .tools import thermo_search as thermo_search_tool
 
@@ -183,8 +183,8 @@ def _render_tool_result(result: dict[str, Any] | MCPToolError) -> str:
 async def _run_stdio() -> None:
     """Start the MCP server on stdio and serve tools until shutdown."""
     # Lazy imports: keep the ``mcp`` SDK out of the test import path.
-    from mcp.server import Server
     import mcp.types as types
+    from mcp.server import Server
     from mcp.server.stdio import stdio_server
 
     config = Config.from_env()

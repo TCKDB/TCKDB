@@ -102,9 +102,9 @@ def _read_float(env: Mapping[str, str], key: str, default: float) -> float:
 
 
 __all__ = [
-    "Config",
     "DEFAULT_BASE_URL",
     "DEFAULT_DEFAULT_LIMIT",
     "DEFAULT_MAX_LIMIT",
     "DEFAULT_TIMEOUT_SECONDS",
+    "Config",
 ]

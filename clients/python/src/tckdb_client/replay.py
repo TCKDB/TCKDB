@@ -639,16 +639,16 @@ def _atomic_write_sidecar(sidecar_path: Path, sidecar: dict) -> None:
 
 class _CountAccumulator:
     __slots__ = (
+        "_by_kind",
+        "dry_run",
+        "failed",
+        "failures",
+        "skipped_already_uploaded",
+        "skipped_failed_due_to_only_pending",
+        "skipped_marked_skipped",
+        "skipped_needs_regeneration",
         "total",
         "uploaded",
-        "skipped_already_uploaded",
-        "skipped_marked_skipped",
-        "skipped_failed_due_to_only_pending",
-        "skipped_needs_regeneration",
-        "failed",
-        "dry_run",
-        "_by_kind",
-        "failures",
     )
 
     def __init__(self) -> None:
@@ -701,11 +701,11 @@ class _CountAccumulator:
 
 
 __all__ = [
+    "RESPONSE_BODY_CAP",
+    "STATUS_NEEDS_REGENERATION",
+    "SUPPORTED_PAYLOAD_KINDS",
     "ClientFactory",
     "ReplayFailure",
     "ReplaySummary",
     "replay_bundle",
-    "RESPONSE_BODY_CAP",
-    "STATUS_NEEDS_REGENERATION",
-    "SUPPORTED_PAYLOAD_KINDS",
 ]

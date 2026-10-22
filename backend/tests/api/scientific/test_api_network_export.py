@@ -12,12 +12,12 @@ from __future__ import annotations
 import copy
 
 import pytest
+from tests.services.network_selection._rules import ProtocolRule, protocol
 
 from app.db.models.common import RecordReviewStatus as S
 from app.services.network_selection import manifest as manifest_module
 from app.services.network_selection import selection as selection_module
 from app.services.network_selection.manifest import manifest_digest
-from tests.services.network_selection._rules import ProtocolRule, protocol
 from tests.services.network_selection._world import add_solve, build_world, fit_spec, set_review, target
 
 A_, B_ = "chemically_significant_eigenvalues", "modified_strong_collision"

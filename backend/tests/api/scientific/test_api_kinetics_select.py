@@ -1,11 +1,8 @@
 """``POST /scientific/reaction-entries/{ref}/kinetics/select``: the public kinetics selection endpoint.
 
-The assessor, engine, rules and manifest are tested under ``tests/services/kinetics_selection``. These tests hold
+The assessor, engine and manifest are tested under ``tests/services/kinetics_selection``. These tests hold
 the HTTP contract: the request is normalised or refused, every outcome is reachable, the response says why,
 visibility follows the read profile, the manifest replays, and no database id leaves the building.
-
-The rule registry shipped in this release has no active rule, so the end-to-end preference tests swap in a
-test-only active rule at the service boundary (``selection.default_rules``), exactly as the service tests do.
 """
 
 from __future__ import annotations
@@ -18,16 +15,12 @@ import pytest
 from app.db.models.common import RecordReviewStatus as S
 from app.services.kinetics_selection import public as public_module
 from app.services.kinetics_selection import replay_decision, replay_matches
-from app.services.kinetics_selection import selection as selection_module
-from app.services.kinetics_selection.rules import default_rules
-from tests.services.kinetics_selection.test_engine import LabelRule
 from tests.services.kinetics_selection.test_selection import ALLOWED_INTEGER_PATHS, _paths
 from tests.services.kinetics_selection.test_service import declared, determination
 from tests.services.scientific_read._factories import make_species, make_transition_state, next_inchi_key
 
 PREFERRED = {"version": 1, "method_kind": "saddle_point_tst"}
 YIELDING = {"version": 1, "method_kind": "variational_tst"}
-RULE = LabelRule("TEST-R1", {"saddle_point_tst"}, {"variational_tst"})
 
 BASE = {
     "direction": "forward",
@@ -69,21 +62,14 @@ def two(db_session, world):
     return old_good, det_good, new_other, det_other
 
 
-@pytest.fixture
-def active_rule(monkeypatch):
-    monkeypatch.setattr(selection_module, "default_rules", lambda: (RULE,))
-
-
 def code(response) -> str:
     return response.json()["code"]
 
 
-# -- the headline: a scoped preference outranks recency, end to end ---------------------------------------------
+# -- the headline: no method outranks another, end to end ---------------------------------------------------------
 
 
-def test_an_older_preferred_determination_is_selected_over_a_newer_one_while_browse_order_is_unchanged(
-    client, db_session, world, two, active_rule
-):
+def test_two_eligible_determinations_are_incomparable_and_listed_in_display_order_like_browse(client, db_session, world, two):
     good, det_good, other, det_other = two
     browse = client.get(f"/api/v1/scientific/reaction-entries/{world.entry.public_ref}/kinetics")
     assert browse.status_code == 200
@@ -93,32 +79,16 @@ def test_an_older_preferred_determination_is_selected_over_a_newer_one_while_bro
     response = post(client, world.entry)
     assert response.status_code == 200, response.text
     out = response.json()
-    assert out["outcome"] == "policy_preferred"
-    assert out["selection"] == {
-        "determination_ref": det_good.public_ref,
-        "kinetics_refs": [good.public_ref],
-        "basis": "policy_preferred",
-        "administrative": False,
-        "explanation": out["basis"],
-    }
-    assert out["fronts"] == [[det_good.public_ref], [det_other.public_ref]]
-    assert out["administrative_order"][0] == det_other.public_ref  # administrative order alone says the other
-    (edge,) = out["relations"]["edges"]
-    assert (edge["preferred"], edge["dispreferred"], edge["rule_id"]) == (det_good.public_ref, det_other.public_ref, "TEST-R1")
-    assert edge["label"] == "expected-performance inference"
-    assert out["policy"]["name"] == "kinetics_method_preferred" and out["policy"]["rules_applied"] is True
-    assert [r.public_ref for r in (good, other)] and browse_refs == [r["kinetics_ref"] for r in client.get(
+    assert out["outcome"] == "incomparable_alternatives"
+    assert out["selection"] is None
+    assert out["fronts"] == [[det_other.public_ref, det_good.public_ref]]  # one front, in display order
+    assert out["administrative_order"] == [det_other.public_ref, det_good.public_ref]
+    assert out["policy"] == {"name": "kinetics_selection", "version": 1}
+    for dead in ("relations", "rule_matches", "pair_checks"):
+        assert dead not in out
+    assert browse_refs == [r["kinetics_ref"] for r in client.get(
         f"/api/v1/scientific/reaction-entries/{world.entry.public_ref}/kinetics"
     ).json()["records"]]
-
-
-def test_with_no_active_rule_the_same_population_is_unranked_and_says_so(client, db_session, world, two):
-    out = post(client, world.entry).json()
-    assert out["outcome"] == "incomparable_alternatives" and out["selection"] is None
-    assert out["relations"]["edges"] == []
-    assert {r["status"] for r in out["policy"]["rules"]} == {"active", "inactive"} - {"active"}
-    assert all(r["inactive_reasons"] for r in out["policy"]["rules"])
-    assert default_rules() and len(out["policy"]["rules"]) == len(default_rules())
 
 
 def test_the_response_echoes_the_normalised_request_and_the_effective_floor(client, db_session, world, two):
@@ -128,7 +98,7 @@ def test_the_response_echoes_the_normalised_request_and_the_effective_floor(clie
     assert echo["quantity"] == "rate_coefficient" and echo["phase"] == "gas" and echo["direction"] == "forward"
     assert echo["target"] == {"kind": "whole_reaction", "transition_state_entry_ref": None, "network_ref": None, "channel_key": None}
     assert echo["pressure"] == {"kind": "independent", "min_bar": None, "max_bar": None}
-    assert echo["collider"] is None and echo["policy"] == "method_preferred" and echo["mode"] == "all"
+    assert echo["collider"] is None and echo["policy"] == "default" and echo["mode"] == "all"
     assert echo["profile"] == "exploratory"
     assert out["review"]["effective_floor"] == "not_reviewed"
     assert out["review"]["effective_statuses"] == ["approved", "under_review", "not_reviewed"]
@@ -149,17 +119,6 @@ def test_a_single_qualifying_determination_is_sole_eligible_not_preferred(client
     assert out["outcome"] == "sole_eligible_candidate"
     assert out["selection"]["basis"] == "sole_eligible_candidate" and out["selection"]["administrative"] is False
     assert out["selection"]["determination_ref"] == det.public_ref and out["selection"]["kinetics_refs"] == [k.public_ref]
-
-
-def test_opposing_rules_are_a_policy_conflict_and_nothing_is_selected_even_in_first_mode(client, db_session, world, two, monkeypatch):
-    monkeypatch.setattr(
-        selection_module, "default_rules",
-        lambda: (RULE, LabelRule("TEST-R2", {"variational_tst"}, {"saddle_point_tst"})),
-    )
-    for mode in ("all", "first"):
-        out = post(client, world.entry, body(mode=mode)).json()
-        assert out["outcome"] == "policy_conflict" and out["selection"] is None, mode
-        assert out["relations"]["opposing_pairs"] or out["relations"]["cycles"]
 
 
 def test_first_mode_names_an_administrative_first_among_unranked_alternatives_and_says_it_is_not_a_method_claim(
@@ -200,11 +159,11 @@ def test_a_record_that_does_not_state_its_question_is_disclosed_unresolved_and_d
     assert "unresolved" in " ".join(out["disclosures"]["notes"])
 
 
-def test_an_administrative_policy_applies_no_rule(client, db_session, world, two, active_rule):
+def test_every_policy_is_administrative_and_the_method_preferred_policy_is_retired(client, db_session, world, two):
     for policy in ("default", "most_reviewed", "latest"):
         out = post(client, world.entry, body(policy=policy)).json()
-        assert out["outcome"] == "incomparable_alternatives" and out["policy"]["rules_applied"] is False, policy
-        assert out["policy"]["rules"] == [] and out["relations"]["edges"] == []
+        assert out["outcome"] == "incomparable_alternatives" and len(out["fronts"]) == 1, policy
+    assert post(client, world.entry, body(policy="method_preferred")).status_code == 422
     assert post(client, world.entry, body(policy="latest")).json()["administrative_order"] == post(
         client, world.entry, body(policy="latest", mode="first")
     ).json()["administrative_order"]
@@ -398,34 +357,35 @@ def test_under_the_exploratory_profile_records_below_the_floor_are_listed_with_t
 # -- the manifest -----------------------------------------------------------------------------------------------
 
 
-def test_the_manifest_route_downloads_the_same_decision_and_replays_without_the_database(client, db_session, world, two, active_rule):
+def test_the_manifest_route_downloads_the_same_decision_and_replays_without_the_database(client, db_session, world, two):
     response = post(client, world.entry, manifest=True)
     assert response.status_code == 200, response.text
     assert response.headers["content-disposition"] == f'attachment; filename="kinetics_selection_{world.entry.public_ref}.json"'
     wire = response.json()
     select = post(client, world.entry).json()
-    assert wire["outcome"] == select["outcome"] == "policy_preferred"
+    assert wire["outcome"] == select["outcome"] == "incomparable_alternatives"
     assert wire["decision"]["fronts"] == select["fronts"]
-    assert wire["policy"] == {"name": "kinetics_method_preferred", "version": 1}
+    assert wire["policy"] == {"name": "kinetics_selection", "version": 1}
+    assert wire["format"] == {"name": "kinetics_selection_manifest", "version": 2}
     assert wire["snapshot_isolation"] in {"read committed", "repeatable read", "serializable"}
     assert "max_candidates" not in wire["request"] and wire["request"]["profile"] == "exploratory"
-    assert replay_matches(wire, rules=(RULE,))
-    assert replay_decision(wire, rules=(RULE,)) == wire["decision"]
-    # a later change of the registry refuses the replay rather than re-answering
+    assert replay_matches(wire)
+    assert replay_decision(wire) == wire["decision"]
+    # a manifest of another format refuses the replay rather than re-answering
     from app.services.kinetics_selection import ReplayError
 
+    old = copy.deepcopy(wire)
+    old["format"]["version"] = 1
     with pytest.raises(ReplayError):
-        replay_decision(wire, rules=default_rules())
+        replay_decision(old)
 
 
-def test_the_response_and_the_manifest_cannot_disagree(client, db_session, world, two, active_rule):
+def test_the_response_and_the_manifest_cannot_disagree(client, db_session, world, two):
     out = post(client, world.entry).json()
     wire = post(client, world.entry, manifest=True).json()
     assert [c["kinetics_ref"] for c in out["candidates"]] == [c["kinetics_ref"] for c in wire["candidates"]]
     assert [c["eligible"] for c in out["candidates"]] == [c["eligible"] for c in wire["candidates"]]
-    assert out["relations"]["edges"] == wire["decision"]["edges"]
     assert out["administrative_order"] == wire["decision"]["administrative_order"]
-    assert out["rule_matches"] == wire["decision"]["rule_matches"]
     assert out["disclosures"]["visible_candidates"] == wire["population"]["visible_candidates"]
 
 
@@ -453,19 +413,17 @@ ALLOWED_RESPONSE_INTEGER_PATHS = {
     "disclosures.visible_candidates", "disclosures.excluded_count", "determinations[].representation_count",
     "candidates[].applicability_declaration.version", "candidates[].applicability_declaration.reaction_order",
     "candidates[].protocol.version",
-    "policy.version", "policy.rules[].version", "relations.edges[].rule_version",
-    "pair_checks[].rule_version", "rule_matches[].rule_version", "relations.overridden_edges[].rule_version",
-    "relations.overridden_edges[].overridden_by_rule_version",
+    "policy.version",
 }
 
 
-def test_no_database_id_appears_in_either_document_and_integers_sit_at_exact_paths(client, db_session, world, two, active_rule):
+def test_no_database_id_appears_in_either_document_and_integers_sit_at_exact_paths(client, db_session, world, two):
     good, det_good, other, det_other = two
     out = post(client, world.entry)
     wire = post(client, world.entry, manifest=True)
     for doc in (out.json(), wire.json()):
-        # no key names a row id: the only ``*_id`` key is the rule registry key, which is not a database id
-        assert {k for k in _keys(doc) if k.endswith("_id")} <= {"rule_id"}, sorted(_keys(doc))
+        # no key names a row id
+        assert not {k for k in _keys(doc) if k.endswith("_id")}, sorted(_keys(doc))
         assert "id" not in _keys(doc)
         text = json.dumps(doc)
         for row in (world.entry, good, other, det_good, det_other):
@@ -478,7 +436,7 @@ def test_no_database_id_appears_in_either_document_and_integers_sit_at_exact_pat
     assert {"disclosures.visible_candidates", "determinations[].representation_count"} <= response_paths
 
 
-def test_every_ref_in_a_response_is_a_public_ref_of_the_right_kind(client, db_session, world, two, active_rule):
+def test_every_ref_in_a_response_is_a_public_ref_of_the_right_kind(client, db_session, world, two):
     good, det_good, other, det_other = two
     out = post(client, world.entry).json()
     assert {c["kinetics_ref"][:4] for c in out["candidates"]} == {"kin_"}
@@ -488,7 +446,7 @@ def test_every_ref_in_a_response_is_a_public_ref_of_the_right_kind(client, db_se
     assert flat == {det_good.public_ref, det_other.public_ref}
 
 
-def test_the_endpoint_is_read_only_and_leaves_browse_order_alone(client, db_session, world, two, active_rule):
+def test_the_endpoint_is_read_only_and_leaves_browse_order_alone(client, db_session, world, two):
     from sqlalchemy import func, select
 
     from app.db.models.common import SubmissionRecordType  # noqa: F401
@@ -548,21 +506,6 @@ def test_the_read_profile_the_answer_was_made_under_is_stamped_on_the_response(c
     assert post(client, world.entry, profile="curated", manifest=True).json()["request"]["profile"] == "curated"
 
 
-def test_edges_under_two_objectives_are_listed_unused_and_nothing_is_selected(client, db_session, world, two, monkeypatch):
-    monkeypatch.setattr(
-        selection_module, "default_rules",
-        lambda: (
-            LabelRule("TEST-R1", {"saddle_point_tst"}, {"variational_tst"}, objective_key="barrier"),
-            LabelRule("TEST-R2", {"saddle_point_tst"}, {"variational_tst"}, objective_key="tunneling"),
-        ),
-    )
-    out = post(client, world.entry).json()
-    assert out["outcome"] == "incomparable_alternatives" and out["selection"] is None
-    assert out["relations"]["edges"] == []
-    assert {e["objective_key"] for e in out["relations"]["unused_edges"]} == {"barrier", "tunneling"}
-    assert "more than one objective" in out["basis"]
-
-
 # -- the public layer, where the live service already guarantees what the layer also guards -------------------
 
 
@@ -591,13 +534,13 @@ def test_redaction_withholds_what_the_floor_excluded_and_the_arithmetic_that_wou
     assert shown["excluded_by_review_withheld"] is False
 
 
-def test_a_first_pick_is_never_made_through_a_conflict_whatever_the_decision_carries():
+def test_a_first_pick_is_never_made_when_nothing_is_eligible_whatever_the_decision_carries():
     from app.schemas.reads.scientific_kinetics_selection import KineticsSelectionMode
 
     manifest = {
         "determinations": [{"determination_ref": "kdet_a", "representation_refs": ["kin_a"]}],
         "decision": {
-            "outcome": "policy_conflict", "basis": "b", "selected_determination_ref": None, "representation_refs": [],
+            "outcome": "no_applicable_candidate", "basis": "b", "selected_determination_ref": None, "representation_refs": [],
             "administrative_first": {"determination_ref": "kdet_a", "basis": "administrative"},
         },
     }

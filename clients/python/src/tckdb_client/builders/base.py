@@ -21,8 +21,8 @@ from tckdb_client.builders.validation import (
 )
 
 __all__ = [
-    "UploadObject",
     "KeyMinter",
+    "UploadObject",
 ]
 
 

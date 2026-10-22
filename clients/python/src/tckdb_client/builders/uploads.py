@@ -27,6 +27,7 @@ from tckdb_client.builders.validation import (
     ensure_optional_non_empty_str,
 )
 
+
 def _require_opt_primary_unless_monatomic(
     primary: Calculation, geometry: Geometry, *, subject: str
 ) -> None:
@@ -53,8 +54,8 @@ if TYPE_CHECKING:  # pragma: no cover — type-only import
 
 __all__ = [
     "CalculationEntry",
-    "ComputedSpeciesUpload",
     "ComputedReactionUpload",
+    "ComputedSpeciesUpload",
 ]
 
 

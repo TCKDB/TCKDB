@@ -234,9 +234,9 @@ def _validate_numeric(value: Any, field_name: str) -> None:
 
 
 __all__ = [
-    "TOOL_NAME",
-    "TOOL_DESCRIPTION",
     "INPUT_SCHEMA",
     "LEGAL_INCLUDE_TOKENS",
+    "TOOL_DESCRIPTION",
+    "TOOL_NAME",
     "run",
 ]

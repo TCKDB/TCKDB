@@ -41,9 +41,9 @@ TOOL_DESCRIPTION = (
     "direction (forward or reverse), target (whole_reaction, or a resolved_channel with a transition state entry or "
     "a network channel), coefficient_basis, a temperature window and a pressure (independent, high_pressure_limit "
     "or finite); a finite pressure or a composition-effective coefficient also needs a collider. Read-only. Returns "
-    "the server response unchanged: report its 'outcome' and 'basis' verbatim. 'incomparable_alternatives' and "
-    "'policy_conflict' mean nothing was scientifically selected; 'sole_eligible_candidate' is not a comparative "
-    "claim; a 'selection' with administrative=true is a review/recency choice, not a method claim. A selection "
+    "the server response unchanged: report its 'outcome' and 'basis' verbatim. 'incomparable_alternatives' means several "
+    "determinations are eligible and none is preferred; 'sole_eligible_candidate' is not a comparative "
+    "claim; a 'selection' with administrative=true is first in display order, not a method claim. A selection "
     "names a determination with every eligible fitted representation of it, and 'disclosures' lists the records "
     "that did not compete."
 )
@@ -52,7 +52,7 @@ DIRECTIONS = ("forward", "reverse")
 TARGET_KINDS = ("whole_reaction", "resolved_channel")
 BASES = ("elementary_coefficient", "third_body_kernel", "composition_effective_coefficient")
 PRESSURE_KINDS = ("independent", "high_pressure_limit", "finite")
-POLICIES = ("method_preferred", "default", "most_reviewed", "latest")
+POLICIES = ("default", "most_reviewed", "latest")
 MODES = ("all", "first")
 PROFILES = ("exploratory", "curated")
 
@@ -182,10 +182,10 @@ INPUT_SCHEMA: dict[str, Any] = {
         "policy": {
             "type": "string",
             "enum": list(POLICIES),
-            "default": "method_preferred",
+            "default": "default",
             "description": (
-                "method_preferred applies the registered audited rules (none is active in this release, so it "
-                "ranks nothing yet); default, most_reviewed and latest apply review/recency order only."
+                "An administrative display order, never a method claim: default and most_reviewed order "
+                "by review rank then newest deposited; latest by newest deposited."
             ),
         },
         "mode": {"type": "string", "enum": list(MODES), "default": "all"},
@@ -360,4 +360,4 @@ def _validate_collider(value: Any) -> dict[str, Any]:
     return {"components": out}
 
 
-__all__ = ["TOOL_NAME", "TOOL_DESCRIPTION", "INPUT_SCHEMA", "run"]
+__all__ = ["INPUT_SCHEMA", "TOOL_DESCRIPTION", "TOOL_NAME", "run"]

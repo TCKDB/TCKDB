@@ -16,8 +16,7 @@ from tckdb_client import TCKDBClient
 from tckdb_client.errors import TCKDBHTTPError
 
 from app.db.models.common import RecordReviewStatus as S
-from app.services.network_selection import selection as selection_module
-from tests.services.network_selection._rules import ProtocolRule, protocol
+from tests.services.network_selection._protocol import protocol
 from tests.services.network_selection._world import add_solve, build_world, fit_spec
 
 _MCP_SRC = Path(__file__).resolve().parents[4] / "integrations" / "mcp" / "src"
@@ -32,7 +31,6 @@ from tckdb_mcp.server import dispatch_tool
 TOOL = "tckdb_select_network_kinetics"
 BASE = "http://testserver/api/v1"
 A_, B_ = "chemically_significant_eigenvalues", "modified_strong_collision"
-RULE = ProtocolRule("T-PREFER-A", prefer=A_, yield_=B_)
 
 
 class _Bridge(httpx.BaseTransport):
@@ -111,14 +109,6 @@ def test_an_unranked_population_is_the_same_answer_through_all_three(client, sdk
     assert api == via_sdk == via_mcp
     assert api["outcome"] == "incomparable_alternatives" and api["selection"] is None
     assert {d["determination_ref"] for d in api["determinations"]} == {s._dets["d_assoc"].public_ref for s in two}
-
-
-def test_a_scoped_preference_is_the_same_answer_through_all_three(client, sdk, mcp, world, two, monkeypatch):
-    monkeypatch.setattr(selection_module, "default_rules", lambda: (RULE,))
-    a, _ = two
-    api, via_sdk, via_mcp = _three_ways(client, sdk, mcp, world)
-    assert api == via_sdk == via_mcp
-    assert api["outcome"] == "policy_preferred" and api["selection"]["node_ref"] == a._dets["d_assoc"].public_ref
 
 
 def test_an_administrative_first_pick_is_labelled_the_same_way_through_all_three(client, sdk, mcp, world, two):

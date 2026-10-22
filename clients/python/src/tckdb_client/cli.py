@@ -821,7 +821,7 @@ def _lookup_artifact_name(client: Any, digest: str) -> str:
     """
     try:
         found = client.search_artifacts(sha256=digest, limit=1)
-    except Exception:  # noqa: BLE001 - see the docstring: never fatal.
+    except Exception:
         return digest
     if not isinstance(found, dict):
         return digest

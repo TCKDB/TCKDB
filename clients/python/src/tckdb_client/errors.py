@@ -99,14 +99,14 @@ class TCKDBIdempotencyConflictError(TCKDBConflictError):
 
 
 __all__ = [
-    "TCKDBError",
-    "TCKDBConnectionError",
-    "TCKDBPaginationError",
-    "TCKDBHTTPError",
-    "TCKDBUnexpectedResponseError",
     "TCKDBAuthenticationError",
-    "TCKDBForbiddenError",
-    "TCKDBValidationError",
     "TCKDBConflictError",
+    "TCKDBConnectionError",
+    "TCKDBError",
+    "TCKDBForbiddenError",
+    "TCKDBHTTPError",
     "TCKDBIdempotencyConflictError",
+    "TCKDBPaginationError",
+    "TCKDBUnexpectedResponseError",
+    "TCKDBValidationError",
 ]

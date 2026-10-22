@@ -20,15 +20,13 @@ whether or not their calculations have artifacts attached.
 
 from __future__ import annotations
 
-import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tckdb_client.builders.validation import (
     TCKDBBuilderValidationError,
-    ensure_non_empty_str,
     ensure_optional_non_empty_str,
 )
 
@@ -37,9 +35,9 @@ if TYPE_CHECKING:  # pragma: no cover — type-only import
 
 
 __all__ = [
+    "ARTIFACT_KINDS",
     "Artifact",
     "PlannedArtifactUpload",
-    "ARTIFACT_KINDS",
 ]
 
 

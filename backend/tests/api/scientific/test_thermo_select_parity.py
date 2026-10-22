@@ -90,14 +90,13 @@ def _three_ways(client, sdk, mcp, entry, *, target, **options):
 EQ = {"kind": "equilibrium_ensemble"}
 
 
-def test_a_preferred_older_g4_is_the_same_answer_through_all_three(client, sdk, mcp, db_session, methane):
+def test_an_older_g4_and_a_newer_g3_are_the_same_answer_through_all_three(client, sdk, mcp, db_session, methane):
     g4, g3 = _seed(db_session, methane)
     api, via_sdk, via_mcp = _three_ways(client, sdk, mcp, methane, target=EQ)
     assert api == via_sdk == via_mcp
-    assert api["outcome"] == "policy_preferred" and api["selection"]["thermo_ref"] == g4.public_ref
-    assert api["fronts"] == [[g4.public_ref], [g3.public_ref]]
-    # Provenance rides along unchanged: the rule that decided it, and each candidate's declared protocol.
-    assert api["policy"]["rules"][0]["rule_id"] == "E1"
+    assert api["outcome"] == "incomparable_alternatives" and api["selection"] is None
+    assert api["fronts"] == [[g3.public_ref, g4.public_ref]]
+    # Provenance rides along unchanged: each candidate's declared protocol.
     assert {c["thermo_ref"]: c["protocol"]["recipe"]["name"] for c in api["candidates"]} == {
         g4.public_ref: "g4", g3.public_ref: "g3",
     }

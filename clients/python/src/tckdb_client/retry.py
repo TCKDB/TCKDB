@@ -53,8 +53,8 @@ from __future__ import annotations
 import random as _random
 import time as _time
 from dataclasses import dataclass, field
-from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Callable, Mapping
 
 from .rejection_codes import NON_RETRYABLE_CODES
@@ -280,6 +280,6 @@ __all__ = [
     "DEFAULT_NON_RETRYABLE_CODES",
     "DEFAULT_RETRY_STATUS_CODES",
     "IDEMPOTENT_WITH_KEY_METHODS",
-    "RetryPolicy",
     "SAFE_METHODS",
+    "RetryPolicy",
 ]

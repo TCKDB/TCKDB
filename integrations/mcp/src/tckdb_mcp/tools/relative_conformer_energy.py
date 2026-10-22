@@ -297,4 +297,4 @@ def run(name: str, client: TCKDBHttpClient, config: Config, arguments: dict[str,
     return client.post_json(url, body, params={"profile": profile})
 
 
-__all__ = ["TOOLS", "TOOL_NAMES", "INPUT_SCHEMAS", "catalogue", "run"]
+__all__ = ["INPUT_SCHEMAS", "TOOLS", "TOOL_NAMES", "catalogue", "run"]
