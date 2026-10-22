@@ -328,6 +328,9 @@ class RequestEcho(ProfiledRequestEcho):
     collapse: CollapseMode
     selection_policy: SelectionPolicy = SelectionPolicy.default
     include: list[str]
+    #: The display order that actually ordered the returned records, in the same shape as ``sort``. ``sort`` stays the
+    #: candidate-list (``collapse=all``) order; with ``collapse=first&selection_policy=latest`` this drops the review rank.
+    effective_order: OrderEcho | None = None
 
 
 class ScientificSpeciesThermoResponse(BaseModel):

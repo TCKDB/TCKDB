@@ -769,7 +769,7 @@ class OrderEcho(BaseModel):
 
 
 #: Every key any browse order uses: its default direction and what it means. The echo is built only from here, so a
-#: response cannot name a key this table does not explain (``test_browse_order_echo`` checks every echo in the code).
+#: response cannot name a key this table does not explain (``tests/api/test_browse_order_echo.py`` checks every echo against the order actually served).
 ORDER_KEY_CATALOG: dict[str, tuple[OrderDirection, str]] = {
     "review_rank": (
         "asc",
@@ -785,9 +785,12 @@ ORDER_KEY_CATALOG: dict[str, tuple[OrderDirection, str]] = {
     "reaction_entry_review_rank": ("asc", "review rank of the parent reaction entry (see review_rank)"),
     "reaction_entry_id": ("desc", "parent reaction entry tie-breaker: the newer row first"),
     "species_review_rank": ("asc", "review rank of the parent species entry (see review_rank)"),
-    "species_created_at": ("desc", "deposition time of the parent species, newest first"),
-    "species_id": ("desc", "parent species tie-breaker: the newer row first"),
     "species_entry_id": ("desc", "unique tie-breaker: the newer species entry first"),
+    "heavy_atom_count": (
+        "asc",
+        "heavy-atom count of the species, smallest first (structure search only: substructure and similarity); a "
+        "species the cartridge cannot parse last",
+    ),
     "similarity_score": ("desc", "structural similarity to the query structure, highest first"),
     "energy_hartree": ("asc", "electronic energy in hartree, lowest first; records with no energy last"),
     "artifact_created_at": ("desc", "artifact deposition time, newest first; artifacts with no time last"),

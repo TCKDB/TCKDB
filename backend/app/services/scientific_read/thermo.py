@@ -61,6 +61,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
     browse_order,
+    effective_order_echo,
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_thermo import (
@@ -714,6 +715,9 @@ def get_species_thermo(
             collapse=request.collapse,
             selection_policy=request.selection_policy,
             include=sorted(includes),
+            effective_order=effective_order_echo(
+                collapse_first=request.collapse.value == "first", policy=request.selection_policy
+            ),
         ),
         species_entry_id=species_entry_id,
         species_entry_ref=species_entry_ref,
@@ -1783,6 +1787,9 @@ def _empty_response(
             collapse=request.collapse,
             selection_policy=request.selection_policy,
             include=sorted(includes),
+            effective_order=effective_order_echo(
+                collapse_first=request.collapse.value == "first", policy=request.selection_policy
+            ),
         ),
         species_entry_id=species_entry_id,
         species_entry_ref=species_entry_ref,

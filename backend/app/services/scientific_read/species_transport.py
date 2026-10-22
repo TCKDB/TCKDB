@@ -34,6 +34,7 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     SelectionPolicy,
     browse_order,
+    effective_order_echo,
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_transport import (
@@ -179,6 +180,9 @@ def get_species_transport(
             include=sorted(includes),
             collapse=collapse,
             selection_policy=selection_policy,
+            effective_order=effective_order_echo(
+                collapse_first=collapse is CollapseMode.first, policy=selection_policy
+            ),
         ),
         review_summary=summary,
         records=records,
@@ -235,6 +239,9 @@ def _empty_response(
             include=sorted(includes),
             collapse=collapse,
             selection_policy=selection_policy,
+            effective_order=effective_order_echo(
+                collapse_first=collapse is CollapseMode.first, policy=selection_policy
+            ),
         ),
         review_summary=review_summary([]),
         records=[],

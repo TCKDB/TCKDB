@@ -90,7 +90,7 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 _THERMO_LEGAL_INCLUDES_PASSTHROUGH = {"provenance", "calculations", "review", "artifacts"}
 
 _DEFAULT_SORT_ECHO = browse_order(
-    "species_review_rank", "species_created_at", "species_id", "review_rank", "created_at", "id"
+    "species_review_rank", "species_entry_id", "review_rank", "created_at", "id"
 )
 
 

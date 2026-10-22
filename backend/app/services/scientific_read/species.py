@@ -152,6 +152,16 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 _BROWSE_LEGAL_INCLUDE_TOKENS: set[str] = {"review", "internal_ids", "all"}
 
 _DEFAULT_SORT_ECHO = browse_order("review_rank", "has_entries", "created_at", "id")
+#: A substructure or similarity browse leads with the size of the match (``order_by_size``), so it says so.
+_SIZE_FIRST_SORT_ECHO = browse_order("heavy_atom_count", "review_rank", "has_entries", "created_at", "id")
+
+
+def _browse_orders_by_size(request, structure_query) -> bool:
+    """True when a browse lists the smallest match first: a structure query in substructure or similarity mode."""
+    return structure_query is not None and request.mode in (
+        StructureSearchMode.substructure,
+        StructureSearchMode.similarity,
+    )
 
 #: The rank a species with no *visible* entry sorts at. Deliberately worse
 #: than every real review rank, so "has entries the caller may see" beats
@@ -784,10 +794,7 @@ def browse_species(
     # molecules of different sizes, which is exactly the incremental-typing
     # case the owner described (see _rank_and_slice_species's
     # ``order_by_size`` docstring for why ``exact`` is excluded).
-    order_by_size = structure_query is not None and request.mode in (
-        StructureSearchMode.substructure,
-        StructureSearchMode.similarity,
-    )
+    order_by_size = _browse_orders_by_size(request, structure_query)
 
     visible = visible_statuses(
         min_review_status=request.min_review_status,
@@ -853,7 +860,7 @@ def browse_species(
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
             filter=_browse_filter_echo(request, element_symbols, structure_query),
-            sort=_DEFAULT_SORT_ECHO,
+            sort=_SIZE_FIRST_SORT_ECHO if _browse_orders_by_size(request, structure_query) else _DEFAULT_SORT_ECHO,
             collapse=request.collapse,
             include=sorted(includes),
         ),
@@ -1808,7 +1815,7 @@ def _empty_browse_response(
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
             filter=_browse_filter_echo(request, element_symbols, structure_query),
-            sort=_DEFAULT_SORT_ECHO,
+            sort=_SIZE_FIRST_SORT_ECHO if _browse_orders_by_size(request, structure_query) else _DEFAULT_SORT_ECHO,
             collapse=request.collapse,
             include=sorted(includes),
         ),
