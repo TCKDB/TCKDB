@@ -26,7 +26,6 @@ from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_review import RecordReview
 from app.schemas.reads.scientific_common import (
     MAX_LIMIT,
-    REVIEW_RANK,
     Pagination,
     RecordReviewBadge,
     ReviewStatusSummary,
@@ -486,11 +485,6 @@ def review_summary(badges: Iterable[RecordReviewBadge]) -> ReviewStatusSummary:
             summary.rejected += 1
         summary.total += 1
     return summary
-
-
-def review_rank(badge: RecordReviewBadge) -> int:
-    """Return the L2 review_rank integer for a badge (lower = better)."""
-    return REVIEW_RANK[badge.status]
 
 
 # ---------------------------------------------------------------------------

@@ -31,8 +31,8 @@ from app.services.relative_conformer_energy.models import (
 from app.services.relative_conformer_energy.population import Population
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.structure_selection.assessment import assess_unit
-from app.services.structure_selection.decision import ADMIN_KEY_VERSION
 from app.services.structure_selection.bounds import check_manifest_size
+from app.services.structure_selection.decision import ADMIN_KEY_VERSION
 from app.services.structure_selection.manifest import (
     INTEGRITY_NOTE,
     ReplayError,

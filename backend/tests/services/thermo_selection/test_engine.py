@@ -93,7 +93,7 @@ def test_latest_orders_by_deposition_time_alone():
 
 def test_distinct_id_ranks_are_required():
     with pytest.raises(ValueError, match="id_rank"):
-        engine.order_within([cand("a", id_rank=1), cand("b", id_rank=1)], SelectionPolicy.default)
+        decide([cand("a", id_rank=1), cand("b", id_rank=1)])
 
 
 def test_refs_must_be_distinct():

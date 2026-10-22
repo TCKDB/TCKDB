@@ -32,15 +32,6 @@ def _node(c: NormalizedCandidate) -> AdminNode:
     return AdminNode(ref=c.thermo_ref, id_rank=c.id_rank, review_status=c.review_status, created_at=c.created_at)
 
 
-def order_within(
-    candidates: Sequence[NormalizedCandidate], policy: SelectionPolicy
-) -> list[NormalizedCandidate]:
-    """Administrative order: the existing ``simple_selection_sort_key`` over the candidate's own fields."""
-    ordered = order_admin([_node(c) for c in candidates], policy)  # refuses a repeated id_rank
-    by_rank = {c.id_rank: c for c in candidates}
-    return [by_rank[n.id_rank] for n in ordered]
-
-
 def decide(candidates: Sequence[NormalizedCandidate], *, admin_policy: SelectionPolicy) -> Decision:
     """Decide over eligible candidates. Pure; see the module docstring for the semantics."""
     candidates = list(candidates)
