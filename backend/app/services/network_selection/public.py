@@ -29,7 +29,7 @@ from tckdb_schemas.network_declarations import NetworkObservable
 from app.db.models.common import RecordReviewStatus
 from app.db.models.network import Network
 from app.db.models.species import SpeciesEntry
-from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, SelectionPolicy
 from app.schemas.reads.scientific_network_selection import (
     NetworkSelectionDisclosures,
     NetworkSelectionMember,
@@ -168,7 +168,7 @@ def _effective_floor(
 ) -> tuple[RecordReviewStatus, list[RecordReviewStatus]]:
     statuses = sorted(
         (RecordReviewStatus(v) for v in manifest["request"]["effective_review_statuses"]),
-        key=lambda s: REVIEW_RANK[s],
+        key=lambda s: REVIEW_FLOOR_ORDER[s],
     )
     floor = statuses[-1] if statuses else (fallback or RecordReviewStatus.approved)
     return floor, statuses

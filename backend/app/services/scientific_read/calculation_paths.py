@@ -42,6 +42,7 @@ from app.schemas.reads.scientific_calculation_paths import (
     ScientificCalculationPathSearchResponse,
     ScientificCalculationScanResponse,
 )
+from app.schemas.reads.scientific_common import browse_order
 from app.services.scientific_read.calculations import (
     _build_irc_include_summary,
     _build_owner,
@@ -183,7 +184,7 @@ def get_calculation_scan(
         request=ScanRequestEcho(
             include_geometries=include_geometries,
             include=sorted(includes),
-            sort="point_index",
+            sort=browse_order("point_index"),
             offset=offset,
             limit=limit,
         ),
@@ -408,7 +409,7 @@ def get_calculation_irc(
         request=IRCRequestEcho(
             include_geometries=include_geometries,
             include=sorted(includes),
-            sort="point_index",
+            sort=browse_order("point_index"),
             offset=offset,
             limit=limit,
         ),
@@ -569,7 +570,7 @@ def get_calculation_path_search(
         request=PathSearchRequestEcho(
             include_geometries=include_geometries,
             include=sorted(includes),
-            sort="point_index",
+            sort=browse_order("point_index"),
             offset=offset,
             limit=limit,
         ),

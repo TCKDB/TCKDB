@@ -23,6 +23,7 @@ from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
@@ -180,7 +181,7 @@ class NetworkBrowseRequest(BaseModel):
 
 class RequestEcho(ProfiledRequestEcho):
     filter: dict[str, Any]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
 
 

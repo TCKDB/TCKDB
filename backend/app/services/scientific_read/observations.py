@@ -34,7 +34,7 @@ from app.db.models.molecular_property_observation import (
 )
 from app.db.models.species import SpeciesEntry
 from app.db.models.submission import SubmissionAuditEvent
-from app.schemas.reads.scientific_common import REVIEW_RANK, RecordReviewBadge
+from app.schemas.reads.scientific_common import REVIEW_RANK, RecordReviewBadge, browse_order
 from app.schemas.reads.scientific_observation import (
     MolecularPropertyObservationRecord,
     ObservationExternalSource,
@@ -64,7 +64,7 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 # Deterministic ordering matches the sibling per-entry reads: review rank
 # ASC, created_at DESC, id DESC.
-_DEFAULT_SORT_ECHO = "review_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def get_species_observations(

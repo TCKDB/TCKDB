@@ -20,7 +20,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from app.db.models.common import RecordReviewStatus
-from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, SelectionPolicy
 from app.services.manifest_formats import manifest_header, read_manifest_format
 from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.selection_kernel.assessment_semantics import (
@@ -105,7 +105,7 @@ def build_manifest(
 
 
 def _rank(status_value: str) -> int:
-    for status, rank in REVIEW_RANK.items():
+    for status, rank in REVIEW_FLOOR_ORDER.items():
         if status.value == status_value:
             return rank
     raise ValueError(status_value)  # pragma: no cover

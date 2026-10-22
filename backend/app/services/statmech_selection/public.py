@@ -34,7 +34,7 @@ from app.db.models.species import ConformerGroup
 from app.db.models.statmech import Statmech
 from app.db.models.statmech_declaration import StatmechModelDeclaration
 from app.db.models.structure_determination import StructureDetermination
-from app.schemas.reads.scientific_common import REVIEW_RANK
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.schemas.reads.scientific_statmech_selection import (
     StatmechSelectionCandidate,
     StatmechSelectionConflicts,
@@ -218,7 +218,7 @@ def build_response(selection: StatmechSelection) -> StatmechSelectionResponse:
     decision = manifest["decision"]
     protocol = decision["protocol"]
     population = manifest["population"]
-    statuses = sorted((RecordReviewStatus(v) for v in manifest["effective_review_statuses"]), key=lambda s: REVIEW_RANK[s])
+    statuses = sorted((RecordReviewStatus(v) for v in manifest["effective_review_statuses"]), key=lambda s: REVIEW_FLOOR_ORDER[s])
     floor = statuses[-1] if statuses else RecordReviewStatus.approved
     facts = {c["candidate_ref"]: c for c in manifest["candidates"]}
     candidates = [_candidate(facts[a["candidate_ref"]], a) for a in manifest["assessments"]]

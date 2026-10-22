@@ -24,6 +24,7 @@ from app.schemas.reads.scientific_calculation import (
     ScanCoordinateSummary,
 )
 from app.schemas.reads.scientific_common import (
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
 )
@@ -45,7 +46,7 @@ class ScanRequestEcho(ProfiledRequestEcho):
 
     include_geometries: bool = False
     include: list[str] = Field(default_factory=list)
-    sort: str = ""
+    sort: OrderEcho | None = None
     offset: int = 0
     limit: int = 0
 
@@ -127,7 +128,7 @@ class IRCRequestEcho(ProfiledRequestEcho):
 
     include_geometries: bool = False
     include: list[str] = Field(default_factory=list)
-    sort: str = ""
+    sort: OrderEcho | None = None
     offset: int = 0
     limit: int = 0
 
@@ -194,7 +195,7 @@ class PathSearchRequestEcho(ProfiledRequestEcho):
 
     include_geometries: bool = False
     include: list[str] = Field(default_factory=list)
-    sort: str = ""
+    sort: OrderEcho | None = None
     offset: int = 0
     limit: int = 0
 

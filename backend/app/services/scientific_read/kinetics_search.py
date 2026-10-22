@@ -29,6 +29,7 @@ from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     CollapseMode,
     ReviewStatusSummary,
+    browse_order,
 )
 from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.schemas.reads.scientific_kinetics_search import (
@@ -97,9 +98,8 @@ _KINETICS_LEGAL_INCLUDES_PASSTHROUGH = {
     "artifacts",
 }
 
-_DEFAULT_SORT_ECHO = (
-    "reaction_entry_review_rank,reaction_entry_id;"
-    "review_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order(
+    "reaction_entry_review_rank", "reaction_entry_id", "review_rank", "created_at", "id"
 )
 
 

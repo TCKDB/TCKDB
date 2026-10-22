@@ -31,6 +31,7 @@ from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     CollapseMode,
     RecordReviewBadge,
+    browse_order,
 )
 from app.schemas.reads.scientific_reactions import (
     ReactionAvailability,
@@ -78,7 +79,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
-_DEFAULT_SORT_ECHO = "review_rank,has_kinetics,has_transition_state,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "has_kinetics", "has_transition_state", "created_at", "id")
 
 
 def search_reactions(

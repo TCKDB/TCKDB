@@ -60,6 +60,7 @@ from app.schemas.reads.scientific_common import (
     SelectionPolicy,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
+    browse_order,
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_thermo import (
@@ -195,9 +196,7 @@ _TRUST_EAGER_LOADS = (
 # calling ``evaluate_loaded_thermo``.
 THERMO_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
 
-_DEFAULT_SORT_ECHO = (
-    "review_rank,created_at,id"
-)
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 # Priority order for links that are not a typed composite: sp → composite →
 # freq → opt → any. A calculation of *type* ``composite`` ranks above all of

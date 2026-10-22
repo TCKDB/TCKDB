@@ -49,6 +49,7 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
+    browse_order,
 )
 from app.schemas.reads.scientific_species import (
     ElementMatchMode,
@@ -150,7 +151,7 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 #: should never have handed them in the first place.
 _BROWSE_LEGAL_INCLUDE_TOKENS: set[str] = {"review", "internal_ids", "all"}
 
-_DEFAULT_SORT_ECHO = "review_rank,has_entries,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "has_entries", "created_at", "id")
 
 #: The rank a species with no *visible* entry sorts at. Deliberately worse
 #: than every real review rank, so "has entries the caller may see" beats

@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.db.models.species import ConformerGroup
-from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, SelectionPolicy
 from app.schemas.reads.scientific_thermo_selection import (
     QUANTITY_H298,
     REFERENCE_TEMPERATURE_K,
@@ -172,7 +172,7 @@ def redact_manifest(manifest: dict[str, Any], *, withhold_excluded: bool) -> dic
 def _effective_floor(manifest: dict[str, Any], fallback: RecordReviewStatus | None) -> tuple[RecordReviewStatus, list[RecordReviewStatus]]:
     statuses = sorted(
         (RecordReviewStatus(v) for v in manifest["request"]["effective_review_statuses"]),
-        key=lambda s: REVIEW_RANK[s],
+        key=lambda s: REVIEW_FLOOR_ORDER[s],
     )
     floor = statuses[-1] if statuses else (fallback or RecordReviewStatus.approved)
     return floor, statuses

@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from app.db.models.common import NetworkSolveKind
 from app.schemas.reads.scientific_common import (
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
@@ -79,7 +80,7 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope."""
 
     filter: dict[str, Any]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
 
 

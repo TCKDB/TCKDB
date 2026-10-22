@@ -37,7 +37,7 @@ from app.db.models.common import (
     ArtifactIntegrityDetectionContext,
     ArtifactIntegrityFinding,
 )
-from app.schemas.reads.scientific_common import Pagination, ProfiledRequestEcho
+from app.schemas.reads.scientific_common import OrderEcho, Pagination, ProfiledRequestEcho
 
 
 class ArtifactIntegrityObservation(BaseModel):
@@ -119,7 +119,7 @@ class IntegrityRequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request, surfaced in the response envelope."""
 
     filter: dict[str, object]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
 
 

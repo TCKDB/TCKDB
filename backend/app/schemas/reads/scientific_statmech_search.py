@@ -34,7 +34,7 @@ from app.schemas.reads._field_bounds import (
 )
 from app.schemas.reads.scientific_common import (
     CollapseMode,
-    OrderKeyEcho,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
@@ -128,13 +128,13 @@ class RequestEcho(ProfiledRequestEcho):
     """
 
     filter: dict[str, Any]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
     collapse: CollapseMode | None = None
     selection_policy: SelectionPolicy | None = None
-    #: The keys and directions that actually ordered the returned records.
-    #: ``sort`` stays the candidate-list (``collapse=all``) order string.
-    effective_order: list[OrderKeyEcho] = Field(default_factory=list)
+    #: The display order that actually ordered the returned records, in the same shape as ``sort``.
+    #: ``sort`` stays the candidate-list (``collapse=all``) order.
+    effective_order: OrderEcho | None = None
     #: ``true`` only when ``collapse=first`` (the policy chose the record);
     #: ``false`` on ``collapse=all`` (the policy is echoed but orders nothing);
     #: ``null`` on broad search, which has no policy.

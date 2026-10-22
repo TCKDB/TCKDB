@@ -24,6 +24,7 @@ from app.schemas.reads.scientific_common import (
     CollapseMode,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
@@ -323,7 +324,7 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query."""
 
     filter: dict[str, object]
-    sort: str
+    sort: OrderEcho
     collapse: CollapseMode
     selection_policy: SelectionPolicy = SelectionPolicy.default
     include: list[str]

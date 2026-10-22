@@ -28,6 +28,7 @@ from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     CollapseMode,
     ReviewStatusSummary,
+    browse_order,
 )
 from app.schemas.reads.scientific_species import SpeciesSearchRequest
 from app.schemas.reads.scientific_thermo import ThermoReadRequest
@@ -88,9 +89,8 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 # either token through, add it back here and to ``_LEGAL_INCLUDE_TOKENS``.
 _THERMO_LEGAL_INCLUDES_PASSTHROUGH = {"provenance", "calculations", "review", "artifacts"}
 
-_DEFAULT_SORT_ECHO = (
-    "species_review_rank,species_created_at,species_id;"
-    "review_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order(
+    "species_review_rank", "species_created_at", "species_id", "review_rank", "created_at", "id"
 )
 
 

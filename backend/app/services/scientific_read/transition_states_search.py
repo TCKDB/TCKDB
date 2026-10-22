@@ -56,6 +56,7 @@ from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
     SoftwareReleaseSummary,
+    browse_order,
 )
 from app.schemas.reads.scientific_structure_search import StructureQueryKind
 from app.schemas.reads.scientific_transition_state import (
@@ -169,7 +170,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 )
 
 
-_DEFAULT_SORT_ECHO = "review_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def search_transition_states(

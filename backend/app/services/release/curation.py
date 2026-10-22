@@ -35,7 +35,7 @@ from app.db.models.dataset_release import (
     ReleaseSelection,
 )
 from app.db.models.record_review import RecordReview
-from app.schemas.reads.scientific_common import REVIEW_RANK
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.services.release.artifacts import release_record_universe
 from app.services.release.record_rights import linked_rights
 from app.services.release.records import (
@@ -544,7 +544,7 @@ def _assert_record_is_approved(
         )
     ).first()
     status = review.status if review is not None else RecordReviewStatus.not_reviewed
-    if REVIEW_RANK[status] > REVIEW_RANK[CURATED_REVIEW_FLOOR]:
+    if REVIEW_FLOOR_ORDER[status] > REVIEW_FLOOR_ORDER[CURATED_REVIEW_FLOOR]:
         raise ReleaseCurationError(
             "record_not_approved: a release may only select a record at or "
             f"above {CURATED_REVIEW_FLOOR.value!r} review status; this one is "

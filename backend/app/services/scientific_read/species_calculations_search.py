@@ -87,6 +87,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     ValidationSummary,
     WorkflowToolReleaseSummary,
+    browse_order,
 )
 from app.schemas.reads.scientific_species import SpeciesSearchRequest
 from app.schemas.reads.scientific_species_calculations import (
@@ -1329,19 +1330,19 @@ def _apply_ranking_sort(
             )
 
         records.sort(key=key)
-        return "energy_hartree_asc_nulls_last,review_rank,created_at_desc,id_desc"
+        return browse_order("energy_hartree", "review_rank", "created_at", "id")
 
     if ranking == CalculationRanking.latest:
         records.sort(
             key=lambda r: (-r.calculation.created_at.timestamp(), -r.calculation.calculation_id)
         )
-        return "created_at_desc,id_desc"
+        return browse_order("created_at", "id")
 
     if ranking == CalculationRanking.earliest:
         records.sort(
             key=lambda r: (r.calculation.created_at.timestamp(), r.calculation.calculation_id)
         )
-        return "created_at_asc,id_asc"
+        return browse_order(("created_at", "asc"), ("id", "asc"))
 
     # default and review_rank are equivalent for v0.
     records.sort(
@@ -1351,7 +1352,7 @@ def _apply_ranking_sort(
             -r.calculation.calculation_id,
         )
     )
-    return "review_rank,created_at_desc,id_desc"
+    return browse_order("review_rank", "created_at", "id")
 
 
 # ---------------------------------------------------------------------------
@@ -1410,10 +1411,10 @@ def _empty_response(
     limit: int,
 ) -> ScientificSpeciesCalculationsSearchResponse:
     sort_echo = {
-        CalculationRanking.lowest_energy: "energy_hartree_asc_nulls_last,review_rank,created_at_desc,id_desc",
-        CalculationRanking.latest: "created_at_desc,id_desc",
-        CalculationRanking.earliest: "created_at_asc,id_asc",
-    }.get(request.ranking, "review_rank,created_at_desc,id_desc")
+        CalculationRanking.lowest_energy: browse_order("energy_hartree", "review_rank", "created_at", "id"),
+        CalculationRanking.latest: browse_order("created_at", "id"),
+        CalculationRanking.earliest: browse_order(("created_at", "asc"), ("id", "asc")),
+    }.get(request.ranking, browse_order("review_rank", "created_at", "id"))
     return ScientificSpeciesCalculationsSearchResponse(
         request=RequestEcho(
             filter=_filter_echo(request),

@@ -49,8 +49,10 @@ from app.db.models.common import (
 )
 from app.db.models.species import Species, SpeciesEntry
 from app.schemas.reads.scientific_common import (
+    OrderEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    browse_order,
 )
 from app.schemas.reads.scientific_structure_search import (
     DEFAULT_SIMILARITY_THRESHOLD,
@@ -76,6 +78,7 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
+from app.services.scientific_read.sql_review import review_rank_case_sql
 from app.services.scientific_read.structure_query import (
     enforce_mode_query_compatibility,
     inchi_key_from_query,
@@ -88,12 +91,10 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {"review", "internal_ids", "all"}
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 
-_DEFAULT_SORT_BY_MODE: dict[StructureSearchMode, str] = {
-    StructureSearchMode.substructure: "review_rank,species_entry_id",
-    StructureSearchMode.similarity: (
-        "similarity_score_desc,review_rank,species_entry_id"
-    ),
-    StructureSearchMode.exact: "review_rank,species_entry_id",
+_DEFAULT_SORT_BY_MODE: dict[StructureSearchMode, OrderEcho] = {
+    StructureSearchMode.substructure: browse_order("review_rank", "species_entry_id"),
+    StructureSearchMode.similarity: browse_order("similarity_score", "review_rank", "species_entry_id"),
+    StructureSearchMode.exact: browse_order("review_rank", "species_entry_id"),
 }
 
 
@@ -329,17 +330,8 @@ _REVIEW_JOIN = (
 _REVIEW_STATUS_EXPR = (
     "COALESCE(rr.status::text, 'not_reviewed')"
 )
-# review_rank ASC matches REVIEW_RANK in scientific_common.py — the SQL
-# CASE keeps the Python ordering authoritative.
-_REVIEW_RANK_EXPR = (
-    f"CASE {_REVIEW_STATUS_EXPR} "
-    "WHEN 'approved' THEN 0 "
-    "WHEN 'under_review' THEN 1 "
-    "WHEN 'not_reviewed' THEN 2 "
-    "WHEN 'deprecated' THEN 3 "
-    "WHEN 'rejected' THEN 4 "
-    "ELSE 5 END"
-)
+# review_rank ASC, generated from REVIEW_RANK in scientific_common.py (the one definition of the display rank).
+_REVIEW_RANK_EXPR = review_rank_case_sql(_REVIEW_STATUS_EXPR)
 
 
 def _visible_status_values(

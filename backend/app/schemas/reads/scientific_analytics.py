@@ -54,6 +54,7 @@ from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
@@ -117,7 +118,7 @@ class AnalyticsRequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request, plus the resolved read profile."""
 
     filter: dict[str, object]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
     #: ``offset`` or ``cursor`` — which traversal contract served this page.
     pagination_mode: str

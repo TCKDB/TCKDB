@@ -35,6 +35,7 @@ from app.db.models.common import (
     StereoKind,
 )
 from app.schemas.reads.scientific_common import (
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
@@ -203,7 +204,7 @@ class RequestEcho(ProfiledRequestEcho):
 
     filter: dict[str, object]
     mode: StructureSearchMode
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
 
 

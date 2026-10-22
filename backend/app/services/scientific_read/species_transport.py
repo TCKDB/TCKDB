@@ -33,6 +33,7 @@ from app.schemas.reads.scientific_common import (
     CollapseMode,
     RecordReviewBadge,
     SelectionPolicy,
+    browse_order,
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_transport import (
@@ -63,7 +64,7 @@ from app.services.scientific_read.transport import (
 
 # Deterministic ordering matches the transport search service:
 # review rank ASC, created_at DESC, id DESC.
-_DEFAULT_SORT_ECHO = "review_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def get_species_transport(

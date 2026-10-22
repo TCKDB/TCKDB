@@ -34,6 +34,7 @@ from app.schemas.reads._field_bounds import (
 )
 from app.schemas.reads.scientific_common import (
     CollapseMode,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
@@ -113,7 +114,7 @@ class RequestEcho(ProfiledRequestEcho):
     """
 
     filter: dict[str, Any]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
     collapse: CollapseMode | None = None
     selection_policy: SelectionPolicy | None = None

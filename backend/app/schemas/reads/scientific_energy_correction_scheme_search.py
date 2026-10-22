@@ -24,6 +24,7 @@ from app.schemas.reads._field_bounds import (
     MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
@@ -94,7 +95,7 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope."""
 
     filter: dict[str, Any]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
 
 

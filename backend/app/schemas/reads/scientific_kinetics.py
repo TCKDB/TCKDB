@@ -40,6 +40,7 @@ from app.schemas.reads.scientific_common import (
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
     LiteratureSummary,
+    OrderEcho,
     Pagination,
     PathSearchSummary,
     ProfiledRequestEcho,
@@ -512,7 +513,7 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query."""
 
     filter: dict[str, object]
-    sort: str
+    sort: OrderEcho
     collapse: CollapseMode
     include: list[str]
 
