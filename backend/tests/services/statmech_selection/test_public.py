@@ -9,12 +9,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from tests.services.statmech_selection._rules import SyntheticRule, beats, population, ref
 
 from app.services.selection_kernel import Tri
 from app.services.statmech_selection.manifest import canonical
 from app.services.statmech_selection.public import MANIFEST_PATH, build_response, run_selection
 from app.services.structure_selection.public import SNAPSHOT_OPT_OUT
-from tests.services.statmech_selection._rules import SyntheticRule, beats, population, ref
 from tests.services.statmech_selection.test_manifest import make_manifest
 
 

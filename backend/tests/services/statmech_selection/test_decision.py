@@ -8,6 +8,8 @@ change, not on a count that would still be satisfied.
 from __future__ import annotations
 
 import pytest
+from app.services.statmech_selection.rules import RULE_INACTIVE, RULES_VERSION, default_rules, validate_rules
+from tests.services.statmech_selection._rules import SyntheticRule, beats, candidate, population, ref, run
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import SelectionPolicy
@@ -19,9 +21,7 @@ from app.services.statmech_selection.decision import (
     Selection,
     admin_key,
 )
-from app.services.statmech_selection.rules import RULE_INACTIVE, RULES_VERSION, default_rules, validate_rules
 from app.services.statmech_selection.vocabulary import Objective, Outcome
-from tests.services.statmech_selection._rules import SyntheticRule, beats, candidate, population, ref, run
 from tests.services.statmech_selection._support import (
     FSF_ENTROPY,
     IMPORTED_SOURCES,

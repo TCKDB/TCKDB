@@ -22,8 +22,8 @@ def seeded(db_session):
     baseline = h298_coverage_inventory(db_session)
     methane = species_entry_for(db_session, "Methane")
     propane = species_entry_for(db_session, "Propane")
-    make_thermo(db_session, methane, proto=protocol("g4"), status=S.approved)                 
-    make_thermo(db_session, methane, proto=protocol("g3"), status=S.approved)                 
+    make_thermo(db_session, methane, proto=protocol("g4"), status=S.approved)
+    make_thermo(db_session, methane, proto=protocol("g3"), status=S.approved)
     make_thermo(db_session, methane, proto=None)                                              # no protocol: unknown
     make_thermo(db_session, methane, proto=protocol("g4", departures=None))                   # departures unknown
     make_thermo(db_session, methane, target=None)                                             # target undeclared

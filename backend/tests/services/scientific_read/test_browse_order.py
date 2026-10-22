@@ -15,7 +15,6 @@ from sqlalchemy import select, text
 
 from app.db.models.common import RecordReviewStatus as S
 from app.db.models.common import SubmissionRecordType
-from app.db.models.record_review import RecordReview
 from app.db.models.species import SpeciesEntry
 from app.schemas.reads.scientific_common import (
     DISPLAY_ORDER_STATEMENT,

@@ -21,7 +21,6 @@ from app.services.kinetics_selection import (
     replay_matches,
     select_reaction_entry_kinetics,
 )
-from app.services.kinetics_selection import selection as selection_module
 from app.services.kinetics_selection.loader import load_population, scan_population
 from app.services.scientific_read.profile import (
     ResolvedReadProfile,

@@ -12,6 +12,8 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
+from app.services.statmech_selection.rules import RULE_INACTIVE
+from tests.services.statmech_selection._rules import _PREFERRED, SyntheticRule, beats, candidate, population, ref
 
 from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus
@@ -30,9 +32,7 @@ from app.services.statmech_selection.manifest import (
     reproduce_statmech_ordering,
 )
 from app.services.statmech_selection.models import SelectionBounds
-from app.services.statmech_selection.rules import RULE_INACTIVE
 from app.services.statmech_selection.service import StatmechQualification
-from tests.services.statmech_selection._rules import _PREFERRED, SyntheticRule, beats, candidate, population, ref
 from tests.services.statmech_selection._support import EFFECTIVE, approved_calcs, assess, req, subject
 
 EXPLORATORY = {"profile": "exploratory", "review_floor": None}

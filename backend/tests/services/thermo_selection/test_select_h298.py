@@ -40,8 +40,6 @@ from tests.services.scientific_read._factories import (
     make_calculation,
     make_conformer_group,
     make_lot,
-    make_species,
-    make_species_entry,
     set_review,
 )
 from tests.services.thermo_selection._support import T0, make_thermo, protocol, species_entry_for

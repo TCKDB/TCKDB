@@ -6,8 +6,6 @@ manifest format this release does not read is refused, never replayed under toda
 
 from __future__ import annotations
 
-import copy
-
 import pytest
 
 from app.db.models.common import RecordReviewStatus

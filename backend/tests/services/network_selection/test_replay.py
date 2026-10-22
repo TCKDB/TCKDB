@@ -3,7 +3,7 @@
 Replay reproduces reasoning from captured inputs: it recomputes every applicability verdict (level one), then
 edges, conflicts, fronts and the selection from those *recomputed* verdicts (level two), and compares both with what
 the manifest records. These tests forge manifests the way a forger would (resealing the digest) and expect the
-re-assessment, not the digest, to catch the change. 
+re-assessment, not the digest, to catch the change.
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from app.services.network_selection import (
 )
 from app.services.network_selection.manifest import manifest_digest
 from app.services.selection_kernel import Outcome
-from tests.services.network_selection._requests import bundle_request, channel_request
 from tests.services.network_selection._protocol import protocol
+from tests.services.network_selection._requests import bundle_request, channel_request
 from tests.services.network_selection._world import add_solve, fit_spec, set_review, target
 
 A_, B_ = "chemically_significant_eigenvalues", "modified_strong_collision"

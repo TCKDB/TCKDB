@@ -26,7 +26,7 @@ from app.services.structure_selection import (
 )
 from app.services.structure_selection.bounds import check_manifest_size
 from app.services.structure_selection.manifest import canonical, digest
-from app.services.structure_selection.models import Objective, ResultMode
+from app.services.structure_selection.models import ResultMode
 from app.services.structure_selection.models import StructureOutcome as O
 from tests.services.scientific_read._factories import make_geometry, make_lot, set_review
 from tests.services.structure_selection._support import (
@@ -37,7 +37,6 @@ from tests.services.structure_selection._support import (
     request,
     reset_current_read_profile,
 )
-from tests.services.structure_selection.test_decision import Pref
 from tests.services.structure_selection.test_service import build_basin, counts
 
 DECL_B = declaration(spin_treatment={"state": "known", "value": "unrestricted"})
@@ -97,7 +96,7 @@ def test_a_calculation_selection_reports_the_minimum_and_its_replayable_manifest
     assert result.manifest["outcome"] == "recorded_minimum"
     assert result.manifest["request"]["intent"] == "recorded_minimum"
     assert result.manifest["versions"] == {
-        "assessment": 1, "normalizer": 1, "decision": 1, "administrative_key": 1, "rules": 1,
+        "assessment": 1, "normalizer": 1, "decision": 1, "administrative_key": 2,
         "finding_semantics": [1],
     }
     assert result.manifest["read_profile"] == {"profile": "exploratory", "review_floor": None}
@@ -245,16 +244,16 @@ def test_a_forged_input_is_caught_by_its_checksum_and_a_resealed_one_by_the_reco
     [
         (("format", "version"), 99, "unsupported_manifest_format"),
         # A format other than the one this release reads (no earlier format is kept): refused.
-        (("format", "version"), 2, "unsupported_manifest_format"),
+        (("format", "version"), 1, "unsupported_manifest_format"),
         (("versions", "assessment"), 2, "unsupported_semantic_version"),
         (("versions", "normalizer"), 9, "unsupported_semantic_version"),
         (("versions", "decision"), 2, "unsupported_semantic_version"),
-        (("versions", "administrative_key"), 2, "unsupported_semantic_version"),
+        (("versions", "administrative_key"), 3, "unsupported_semantic_version"),
         (("versions", "finding_semantics"), [1, 2], "unsupported_semantic_version"),
         # A bool or a float is not the integer it compares equal to: True == 1 must not pass for version 1.
         (("versions", "assessment"), True, "unsupported_semantic_version"),
         (("versions", "decision"), 1.0, "unsupported_semantic_version"),
-        (("versions", "rules"), True, "unsupported_semantic_version"),
+        (("versions", "administrative_key"), True, "unsupported_semantic_version"),
         (("versions", "finding_semantics"), [True], "unsupported_semantic_version"),
     ],
 )
@@ -388,7 +387,7 @@ def test_an_unreadable_manifest_is_refused_not_crashed(calc_selection):
 
 
 # ---------------------------------------------------------------------------
-# Rules in the manifest
+# The protocol listing in the manifest
 # ---------------------------------------------------------------------------
 
 
@@ -398,31 +397,24 @@ def protocol_selection(db_session):
     other_lot = make_lot(db_session)
     build_basin(world, energy=-76.40)
     build_basin(world, energy=-76.50, lot=other_lot, declared=DECL_B)
-    rule = Pref("R1", prefer="restricted", yield_="unrestricted")
-    req = StructureRequest(Grain.conformer, Intent.protocol_preferred, objective=Objective.physical_accuracy, result_mode=ResultMode.all)
-    return rule, select(db_session, world, req, rules=[rule])
+    req = StructureRequest(Grain.conformer, Intent.protocol_preferred, result_mode=ResultMode.all)
+    return select(db_session, world, req)
 
 
-def test_a_protocol_decision_replays_with_the_registry_that_made_it(protocol_selection):
-    rule, result = protocol_selection
-    assert result.outcome is O.policy_preferred
-    assert replay_matches(result.manifest, rules=[rule])
+def test_a_protocol_decision_replays_and_holds_no_rule_block(protocol_selection):
+    result = protocol_selection
+    assert result.outcome is O.incomparable_alternatives
+    assert replay_matches(result.manifest)
+    assert not {"rules", "rule_matches", "edges", "pair_checks"} & set(result.manifest["decision"]["protocol"])
+    assert "rules" not in result.manifest["versions"]
 
 
-def test_replay_refuses_a_rule_that_is_gone_changed_or_repinned(protocol_selection):
-    rule, result = protocol_selection
+def test_a_manifest_of_the_old_shape_is_refused_as_an_unknown_format(protocol_selection):
+    old = copy.deepcopy(protocol_selection.manifest)
+    old["format"]["version"] = 1
     with pytest.raises(ReplayError) as exc:
-        replay_structure_decision(result.manifest)
-    assert exc.value.code == "rule_unavailable"
-    with pytest.raises(ReplayError) as exc:
-        replay_structure_decision(result.manifest, rules=[Pref("R1", prefer="restricted", yield_="unrestricted", status="inactive")])
-    assert exc.value.code == "rule_status_changed"
-    with pytest.raises(ReplayError) as exc:
-        replay_structure_decision(result.manifest, rules=[Pref("R1", prefer="restricted", yield_="unrestricted", sha="b" * 64)])
-    assert exc.value.code == "rule_manifest_changed"
-    # A replay under a rule that says the opposite does not reproduce the decision.
-    flipped = Pref("R1", prefer="unrestricted", yield_="restricted")
-    assert replay_matches(result.manifest, rules=[flipped]) is False
+        replay_structure_decision(reseal(old))
+    assert exc.value.code == "unsupported_manifest_format"
 
 
 def test_the_writer_stamps_the_registered_format_and_every_reader_refuses_a_float_bool_or_missing_one(
