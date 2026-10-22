@@ -72,13 +72,13 @@ Outcomes: `qualified_models`, `no_candidates`, `no_applicable_candidate`, `unres
 
 Summary precedence: bounded refusal, unsupported request, no candidates, then (when none qualifies)
 `evidence_conflict`, `unsupported_model`, `missing_required_data`, `unresolved_applicability`,
-`no_applicable_candidate`, then the preference decision. Every per-candidate reason is kept. With qualifying
+`no_applicable_candidate`, then the listing of the qualified models (sole eligible, or incomparable alternatives). Every per-candidate reason is kept. With qualifying
 candidates and unresolved alternatives the outcome is scoped to the eligible population and a required-full-coverage
 claim is not certified.
 
-`scientific_ref`, `sole_eligible_ref` and `administrative_ref` are mutually exclusive. A representative or
+`sole_eligible_ref` and `administrative_ref` are mutually exclusive. A representative or
 administrative pick is never labelled a minimum or a preferred model. `result_mode=first` may set an attributed
-administrative ref among incomparable first-front alternatives only; it cannot rescue a conflict, incomplete
+administrative ref among incomparable first-front alternatives only; it never overrides a conflict, incomplete
 coverage or a refusal, and it is suppressed when any group is unordered.
 
 ## What an existing record establishes
