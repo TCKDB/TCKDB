@@ -49,7 +49,7 @@ function speciesRecord(overrides: {
 function speciesEnvelope(offset: number, limit: number, allRecords: ReturnType<typeof speciesRecord>[]) {
     const page = allRecords.slice(offset, offset + limit)
     return {
-        request: { profile: "exploratory", profile_recommendation: "none", profile_release_ref: null, filter: {}, sort: "review_rank,has_entries,created_at,id", collapse: "all", include: [] },
+        request: { profile: "exploratory", profile_recommendation: "none", profile_release_ref: null, filter: {}, sort: { kind: "display_order", keys: [{ key: "review_rank", direction: "asc", meaning: "" }, { key: "has_entries", direction: "desc", meaning: "" }, { key: "created_at", direction: "desc", meaning: "" }, { key: "id", direction: "desc", meaning: "" }], statement: "Display order, not a scientific preference." }, collapse: "all", include: [] },
         review_summary: { approved: 0, under_review: 0, not_reviewed: allRecords.length, deprecated: 0, rejected: 0, total: allRecords.length },
         records: page,
         pagination: { offset, limit, returned: page.length, total: allRecords.length, post_collapse_total: allRecords.length },
@@ -99,7 +99,7 @@ function tsRecord(overrides: {
 function tsEnvelope(offset: number, limit: number, allRecords: ReturnType<typeof tsRecord>[]) {
     const page = allRecords.slice(offset, offset + limit)
     return {
-        request: { profile: "exploratory", profile_recommendation: "none", profile_release_ref: null, filter: {}, sort: "review_rank,created_at,id", include: [] },
+        request: { profile: "exploratory", profile_recommendation: "none", profile_release_ref: null, filter: {}, sort: { kind: "display_order", keys: [{ key: "review_rank", direction: "asc", meaning: "" }, { key: "created_at", direction: "desc", meaning: "" }, { key: "id", direction: "desc", meaning: "" }], statement: "Display order, not a scientific preference." }, include: [] },
         review_summary: { approved: 0, under_review: 0, not_reviewed: allRecords.length, deprecated: 0, rejected: 0, total: allRecords.length },
         records: page,
         pagination: { offset, limit, returned: page.length, total: allRecords.length, post_collapse_total: allRecords.length },
@@ -1116,7 +1116,7 @@ function reactionRecord(overrides: {
 function reactionEnvelope(offset: number, limit: number, allRecords: ReturnType<typeof reactionRecord>[]) {
     const page = allRecords.slice(offset, offset + limit)
     return {
-        request: { profile: "exploratory", profile_recommendation: "none", profile_release_ref: null, filter: {}, sort: "review_rank,has_kinetics,has_transition_state,created_at,id", collapse: "all", include: [] },
+        request: { profile: "exploratory", profile_recommendation: "none", profile_release_ref: null, filter: {}, sort: { kind: "display_order", keys: [{ key: "review_rank", direction: "asc", meaning: "" }, { key: "has_kinetics", direction: "desc", meaning: "" }, { key: "has_transition_state", direction: "desc", meaning: "" }, { key: "created_at", direction: "desc", meaning: "" }, { key: "id", direction: "desc", meaning: "" }], statement: "Display order, not a scientific preference." }, collapse: "all", include: [] },
         review_summary: { approved: 0, under_review: 0, not_reviewed: allRecords.length, deprecated: 0, rejected: 0, total: allRecords.length },
         records: page,
         pagination: { offset, limit, returned: page.length, total: allRecords.length, post_collapse_total: allRecords.length },
