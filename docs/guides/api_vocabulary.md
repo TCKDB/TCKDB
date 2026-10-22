@@ -570,13 +570,13 @@ How many records per subject the response returns.
 
 *On the wire:* the `selection_policy` request parameter, meaningful when `collapse=first`.
 
-Which candidate wins when the response is collapsed to one. Naming the policy makes "show me one" an explicit choice rather than a silent one. No policy persists a curator decision — for an attributed endorsement, use a dataset release.
+Which record is listed first when the response is collapsed to one. Naming the policy makes "show me one" an explicit choice rather than a silent one. No policy persists a curator decision — for an attributed endorsement, use a dataset release.
 
 | Token | What it means |
 | --- | --- |
-| `default` | The endpoint's standard ranking. |
-| `latest` | Most recently created first. |
-| `most_reviewed` | Best review status first, then most recent. |
+| `default` | The endpoint's display order: review rank, then newest deposited. |
+| `latest` | Most recently deposited first. |
+| `most_reviewed` | Review rank first (approved, then under_review and not_reviewed together), then most recently deposited. |
 
 ### Structure search mode
 
