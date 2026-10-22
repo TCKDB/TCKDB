@@ -70,18 +70,13 @@ def test_the_inventory_counts_applicability_to_each_records_own_question_and_why
     assert delta(after, seeded, "by_review_status", "not_reviewed") == 1
 
 
-def test_every_rule_is_reported_with_its_status_and_why_it_is_not_active(db_session, seeded):
-    after = kinetics_coverage_inventory(db_session)
-    assert "K-XYG3-B3LYP-BARRIER" in after["rules"]
-    assert all(r["status"] == "inactive" and r["inactive_reasons"] for r in after["rules"].values())
-    scope = after["rules"]["K-XYG3-B3LYP-BARRIER"]["scope_of_stated_questions"]
-    assert sum(scope.values()) >= 3  # asked of every record that states a question; H + CH4 is not a manifest member
-    assert delta(after, seeded, "rules", "K-XYG3-B3LYP-BARRIER", "scope_of_stated_questions", "true") == 0
+def test_the_inventory_carries_no_rule_tally(db_session, seeded):
+    assert "rules" not in kinetics_coverage_inventory(db_session)
 
 
 def test_the_inventory_is_json_serialisable_and_names_no_row_id(db_session, seeded):
     text_ = json.dumps(kinetics_coverage_inventory(db_session), allow_nan=False)
-    assert "_id\"" not in text_.replace("rule_id", "")
+    assert "_id\"" not in text_
 
 
 def test_the_inventory_writes_nothing(db_session, seeded):

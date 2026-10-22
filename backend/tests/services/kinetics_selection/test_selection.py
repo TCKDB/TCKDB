@@ -23,14 +23,12 @@ from app.services.kinetics_selection import (
 )
 from app.services.kinetics_selection import selection as selection_module
 from app.services.kinetics_selection.loader import load_population, scan_population
-from app.services.kinetics_selection.rules import default_rules
 from app.services.scientific_read.profile import (
     ResolvedReadProfile,
     reset_current_read_profile,
     set_current_read_profile,
 )
 from app.services.selection_kernel import Outcome
-from tests.services.kinetics_selection.test_engine import LabelRule
 from tests.services.kinetics_selection.test_service import (
     REQUEST,
     declared,
@@ -40,7 +38,6 @@ from tests.services.scientific_read._factories import make_calculation, make_lot
 
 PREFERRED = {"version": 1, "method_kind": "saddle_point_tst"}
 YIELDING = {"version": 1, "method_kind": "variational_tst"}
-RULE = LabelRule("TEST-R1", {"saddle_point_tst"}, {"variational_tst"})
 
 
 def with_protocol(session, world, key, protocol, **kw):
@@ -54,10 +51,8 @@ def with_protocol(session, world, key, protocol, **kw):
     return declared(session, world, det, children=attach, **kw), det
 
 
-def select(session, entry, request=REQUEST, rules=(RULE,)):
-    return select_reaction_entry_kinetics(
-        session, reaction_entry_id=entry.id, request=request, rules=rules, require_snapshot=False
-    )
+def select(session, entry, request=REQUEST):
+    return select_reaction_entry_kinetics(session, reaction_entry_id=entry.id, request=request, require_snapshot=False)
 
 
 @pytest.fixture
@@ -70,22 +65,13 @@ def two(db_session, world):
 # -- a decision over real rows -----------------------------------------------------------------------------
 
 
-def test_a_scoped_preference_selects_the_preferred_determination_over_a_better_reviewed_one(db_session, world, two):
+def test_two_eligible_determinations_are_incomparable_and_listed_in_display_order(db_session, world, two):
     good, det_good, other, det_other = two
     result = select(db_session, world.entry)
-    assert result.outcome is Outcome.policy_preferred
-    assert result.selected_determination_ref == det_good.public_ref
-    assert result.representation_refs == (good.public_ref,)
-    # Browse order (review first) would list the approved one first; the preference outranks it.
-    assert result.decision.administrative_order[0] == det_other.public_ref
-    (edge,) = result.decision.edges
-    assert edge["label"] == "expected-performance inference"
-
-
-def test_without_an_active_rule_the_same_population_is_unranked_and_says_so(db_session, world, two):
-    result = select(db_session, world.entry, rules=default_rules())
     assert result.outcome is Outcome.incomparable_alternatives and result.selected_determination_ref is None
-    assert result.decision.edges == () and {m["why"] for m in result.decision.rule_matches} == {"rule_status_inactive"}
+    # Review rank first: the approved one is listed first, and that is display order, not a preference.
+    assert result.decision.administrative_order == (det_other.public_ref, det_good.public_ref)
+    assert result.decision.fronts == ((det_other.public_ref, det_good.public_ref),)
     assert result.decision.administrative_first is not None
 
 
@@ -93,8 +79,7 @@ def test_a_record_that_does_not_state_its_protocol_competes_and_blocks_a_unique_
     declared(db_session, world, determination(db_session, world, "silent"))  # no protocol at all
     result = select(db_session, world.entry)
     assert result.outcome is Outcome.incomparable_alternatives
-    assert result.decision.edges  # the preference still holds between the two that state theirs
-    assert len(result.decision.fronts[0]) == 2  # the silent one stays in the first front beside the winner
+    assert len(result.decision.fronts) == 1 and len(result.decision.fronts[0]) == 3  # the silent one competes too
 
 
 def test_ineligible_records_are_disclosed_and_do_not_compete(db_session, world, two):
@@ -104,7 +89,7 @@ def test_ineligible_records_are_disclosed_and_do_not_compete(db_session, world, 
     db_session.add(legacy)
     db_session.flush()
     result = select(db_session, world.entry)
-    assert result.outcome is Outcome.policy_preferred
+    assert result.outcome is Outcome.incomparable_alternatives
     assert result.assessment.unresolved_refs == (legacy.public_ref,)
     assert "unresolved" in result.assessment.notes[0]
 
@@ -132,13 +117,12 @@ def test_selection_changes_nothing(db_session, world, two):
     assert counts() == before and not db_session.new and not db_session.dirty and not db_session.deleted
 
 
-def test_the_default_registry_is_used_when_none_is_given_and_a_snapshot_is_required_by_default(db_session, world, two):
+def test_a_snapshot_is_required_by_default(db_session, world, two):
     from app.services.read_snapshot import SnapshotNotConsistentError
 
     with pytest.raises(SnapshotNotConsistentError):
         select_reaction_entry_kinetics(db_session, reaction_entry_id=world.entry.id, request=REQUEST)
     result = select_reaction_entry_kinetics(db_session, reaction_entry_id=world.entry.id, request=REQUEST, require_snapshot=False)
-    assert next(r["rule_id"] for r in result.decision.rules) == "K-XYG3-B3LYP-BARRIER"
     assert result.outcome is Outcome.incomparable_alternatives
 
 
@@ -148,9 +132,9 @@ def test_the_default_registry_is_used_when_none_is_given_and_a_snapshot_is_requi
 def test_the_manifest_replays_without_the_database_and_reproduces_the_decision(db_session, world, two):
     result = select(db_session, world.entry)
     wire = json.loads(json.dumps(result.manifest))  # what a client would hold: plain JSON
-    assert replay_matches(wire, rules=(RULE,))
-    assert replay_decision(wire, rules=(RULE,)) == result.decision.to_dict()
-    assert result.manifest["policy"] == {"name": "kinetics_method_preferred", "version": 1}
+    assert replay_matches(wire)
+    assert replay_decision(wire) == result.decision.to_dict()
+    assert result.manifest["policy"] == {"name": "kinetics_selection", "version": 1}
     assert result.manifest["snapshot_isolation"] in {"read committed", "repeatable read", "serializable"}
 
 
@@ -160,9 +144,8 @@ def test_the_manifest_records_what_a_reader_needs_to_audit_the_decision(db_sessi
     assert manifest["request"]["direction"] == "forward" and manifest["request"]["temperature_min_k"] == 500.0
     assert manifest["population"]["assessed"] == 2 and manifest["population"]["visible_candidates"] == 2
     assert all({"assessment", "eligible", "kinetics_ref", "protocol"} <= set(c) for c in manifest["candidates"])
-    assert manifest["decision"]["rules"][0]["rule_id"] == "TEST-R1"
-    assert manifest["decision"]["edges"][0]["label"] == "expected-performance inference"
-    assert manifest["decision"]["pair_checks"] and manifest["decision"]["rule_matches"][0]["applied"] is True
+    assert manifest["decision"]["fronts"] and manifest["decision"]["administrative_order"]
+    assert not {"rules", "rule_matches", "pair_checks", "edges", "unused_edges"} & set(manifest["decision"])
 
 
 @pytest.mark.parametrize(
@@ -170,37 +153,17 @@ def test_the_manifest_records_what_a_reader_needs_to_audit_the_decision(db_sessi
     [
         (lambda m: m["format"].update(version=99), "unknown manifest format"),
         (lambda m: m["policy"].update(version=2), "this registry replays"),
-        (lambda m: m["policy"].update(name="h298_method_preferred"), "this registry replays"),
-        (lambda m: m["decision"]["rules"][0].update(version=9), "not in the running registry"),
-        (lambda m: m["decision"]["rules"][0].update(rule_id="OTHER"), "not in the running registry"),
-        (lambda m: m["decision"]["rules"][0].update(status="inactive"), "a rule's status change is a new version"),
-        (lambda m: m["decision"]["rules"][0].update(manifest_sha256="0" * 64), "different audited manifest"),
+        (lambda m: m["policy"].update(name="kinetics_method_preferred"), "this registry replays"),
         (lambda m: m["candidates"][0].update(eligible=not m["candidates"][0]["eligible"]), "records eligible="),
         (lambda m: m["determinations"][0].update(representation_refs=["kin_x"]), "determinations are not the ones"),
     ],
-    ids=["format", "policy_version", "policy_name", "rule_version", "rule_id", "rule_status", "rule_manifest", "eligibility", "determinations"],
+    ids=["format", "policy_version", "policy_name", "eligibility", "determinations"],
 )
 def test_a_replay_refuses_a_manifest_the_running_registry_cannot_stand_behind(db_session, world, two, tamper, message):
     manifest = copy.deepcopy(select(db_session, world.entry).manifest)
     tamper(manifest)
     with pytest.raises(ReplayError, match=message):
-        replay_decision(manifest, rules=(RULE,))
-
-
-def test_a_tampered_candidate_changes_the_replayed_decision_so_the_match_check_fails(db_session, world, two):
-    manifest = copy.deepcopy(select(db_session, world.entry).manifest)
-    for c in manifest["candidates"]:
-        if c["protocol"]["method_kind"] == "saddle_point_tst":
-            c["protocol"]["method_kind"] = "variational_tst"  # now nothing is preferred
-    assert replay_matches(manifest, rules=(RULE,)) is False
-    assert replay_decision(manifest, rules=(RULE,))["outcome"] == "incomparable_alternatives"
-
-
-def test_a_replayed_inactive_rule_set_reproduces_its_edge_free_decision(db_session, world, two):
-    manifest = select(db_session, world.entry, rules=default_rules()).manifest
-    assert replay_matches(manifest)  # default registry
-    with pytest.raises(ReplayError, match="not in the running registry"):
-        replay_decision(manifest, rules=(RULE,))
+        replay_decision(manifest)
 
 
 # -- what the manifest and the result may not carry ----------------------------------------------------------
@@ -208,8 +171,7 @@ def test_a_replayed_inactive_rule_set_reproduces_its_edge_free_decision(db_sessi
 #: Every integer a manifest may hold, by exact path: ordinals and counts, never a row id.
 ALLOWED_INTEGER_PATHS = {
     "format.version", "policy.version", "assessment_semantics.version", "assessment_semantics.source_findings.version",
-    "assessment_semantics.evidence_rubric.version", "decision.rules[].version", "decision.edges[].rule_version",
-    "decision.pair_checks[].rule_version", "decision.rule_matches[].rule_version",
+    "assessment_semantics.evidence_rubric.version",
     "subject.reactants[].charge", "subject.reactants[].multiplicity",
     "subject.products[].charge", "subject.products[].multiplicity",
     "request.max_candidates", "request.pressure", "population.kinetics_rows_for_entry",
@@ -273,7 +235,7 @@ def test_under_curated_a_hidden_record_never_enters_a_decision_or_its_manifest(d
     finally:
         reset_current_read_profile(token)
     open_ = select(db_session, world.entry)
-    assert open_.outcome is Outcome.policy_preferred and open_.manifest["population"]["kinetics_rows_for_entry"] == 2
+    assert open_.outcome is Outcome.incomparable_alternatives and open_.manifest["population"]["kinetics_rows_for_entry"] == 2
 
 
 # -- the facts a rule reads come from the record's own links ---------------------------------------------------
@@ -316,21 +278,6 @@ def test_the_energy_levels_are_the_records_own_declared_and_linked_calculations_
     assert candidates[sibling.public_ref].energy_levels != levels
 
 
-def test_a_decision_manifest_passes_through_the_selection_module_unchanged_by_a_registry_swap(db_session, world, two, monkeypatch):
-    seen = {}
-    real = selection_module.decide
-
-    def spy(candidates, **kwargs):
-        seen["rules"] = [r.rule_id for r in kwargs["rules"]]
-        return real(candidates, **kwargs)
-
-    monkeypatch.setattr(selection_module, "decide", spy)
-    select_reaction_entry_kinetics(db_session, reaction_entry_id=world.entry.id, request=REQUEST, require_snapshot=False)
-    assert seen["rules"] == [r.rule_id for r in default_rules()]
-    select(db_session, world.entry)
-    assert seen["rules"] == ["TEST-R1"]
-
-
 def test_an_ineligible_record_in_a_manifest_does_not_take_part_in_its_replay(db_session, world, two):
     from app.db.models.kinetics import Kinetics
 
@@ -340,7 +287,7 @@ def test_an_ineligible_record_in_a_manifest_does_not_take_part_in_its_replay(db_
     result = select(db_session, world.entry)
     wire = json.loads(json.dumps(result.manifest))
     assert [c["eligible"] for c in wire["candidates"]].count(False) == 1
-    assert replay_matches(wire, rules=(RULE,))
+    assert replay_matches(wire)
 
 
 def test_the_manifest_lists_candidates_in_id_order_whatever_order_the_result_holds_them(db_session, world, two):
@@ -357,7 +304,7 @@ def test_the_manifest_lists_candidates_in_id_order_whatever_order_the_result_hol
 
 def test_an_edited_top_level_outcome_is_not_a_match_even_when_the_decision_is_untouched(db_session, world, two):
     manifest = json.loads(json.dumps(select(db_session, world.entry).manifest))
-    assert replay_matches(manifest, rules=(RULE,)) and manifest["outcome"] == "policy_preferred"
-    manifest["outcome"] = "incomparable_alternatives"
-    assert manifest["decision"]["outcome"] == "policy_preferred"
-    assert not replay_matches(manifest, rules=(RULE,))
+    assert replay_matches(manifest) and manifest["outcome"] == "incomparable_alternatives"
+    manifest["outcome"] = "sole_eligible_candidate"
+    assert manifest["decision"]["outcome"] == "incomparable_alternatives"
+    assert not replay_matches(manifest)
