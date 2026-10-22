@@ -1102,8 +1102,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -9579,13 +9578,7 @@
           "administrative_policy": {
             "$ref": "#/components/schemas/AdminPolicy",
             "default": "default",
-            "description": "Administrative order within a scientific front or among exact ties. Never reorders fronts."
-          },
-          "apply_rules": {
-            "default": true,
-            "description": "Whether the audited rule registry takes part (it holds no active rule in this release).",
-            "title": "Apply Rules",
-            "type": "boolean"
+            "description": "Administrative order of exact ties and tied cohorts: display order, never a method preference."
           },
           "coverage_requirement": {
             "$ref": "#/components/schemas/app__services__structure_selection__models__CoverageRequirement",
@@ -9643,17 +9636,6 @@
             ],
             "description": "A stricter review floor than the read profile's. Applied at every owning grain."
           },
-          "objective": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/app__services__structure_selection__models__Objective"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Required for protocol_preferred; refused otherwise."
-          },
           "permitted_quality": {
             "anyOf": [
               {
@@ -9693,19 +9675,6 @@
               }
             ],
             "description": "A requested actual recipe (the declaration's shape, version 1). The units' own stated facts must establish it; a request never manufactures a missing fact."
-          },
-          "reference_model": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reference Model"
           },
           "repeat_policy": {
             "$ref": "#/components/schemas/RepeatPolicy",
@@ -14576,18 +14545,12 @@
       },
       "ConformerSelectionRequest": {
         "additionalProperties": false,
-        "description": "Which of one species entry's validated conformer basins is lowest, which support a claim, or which protocol.",
+        "description": "Which of one species entry's validated conformer basins is lowest, which support a claim, or which protocols cover it.",
         "properties": {
           "administrative_policy": {
             "$ref": "#/components/schemas/AdminPolicy",
             "default": "default",
-            "description": "Administrative order within a scientific front or among exact ties. Never reorders fronts."
-          },
-          "apply_rules": {
-            "default": true,
-            "description": "Whether the audited rule registry takes part (it holds no active rule in this release).",
-            "title": "Apply Rules",
-            "type": "boolean"
+            "description": "Administrative order of exact ties and tied cohorts: display order, never a method preference."
           },
           "coverage_requirement": {
             "$ref": "#/components/schemas/app__services__structure_selection__models__CoverageRequirement",
@@ -14646,17 +14609,6 @@
             ],
             "description": "A stricter review floor than the read profile's. Applied at every owning grain."
           },
-          "objective": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/app__services__structure_selection__models__Objective"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Required for protocol_preferred; refused otherwise."
-          },
           "permitted_quality": {
             "anyOf": [
               {
@@ -14696,19 +14648,6 @@
               }
             ],
             "description": "A requested actual recipe (the declaration's shape, version 1). The units' own stated facts must establish it; a request never manufactures a missing fact."
-          },
-          "reference_model": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reference Model"
           },
           "repeat_policy": {
             "$ref": "#/components/schemas/RepeatPolicy",
@@ -20668,9 +20607,14 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "default": "",
-            "title": "Sort",
-            "type": "string"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrderEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "IRCRequestEcho",
@@ -21146,8 +21090,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -24041,46 +23984,6 @@
         "title": "KineticsSelectionDisclosures",
         "type": "object"
       },
-      "KineticsSelectionEdge": {
-        "properties": {
-          "dispreferred": {
-            "title": "Dispreferred",
-            "type": "string"
-          },
-          "label": {
-            "description": "Always 'expected-performance inference': a benchmark, not a measurement.",
-            "title": "Label",
-            "type": "string"
-          },
-          "objective_key": {
-            "title": "Objective Key",
-            "type": "string"
-          },
-          "preferred": {
-            "title": "Preferred",
-            "type": "string"
-          },
-          "rule_id": {
-            "description": "The registry key of the rule. Not a database id.",
-            "title": "Rule Id",
-            "type": "string",
-            "x-tckdb-policy-hidden": true
-          },
-          "rule_version": {
-            "title": "Rule Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "preferred",
-          "dispreferred",
-          "rule_version",
-          "label",
-          "objective_key"
-        ],
-        "title": "KineticsSelectionEdge",
-        "type": "object"
-      },
       "KineticsSelectionExcluded": {
         "properties": {
           "kinetics_ref": {
@@ -24104,7 +24007,7 @@
         "type": "object"
       },
       "KineticsSelectionManifest": {
-        "description": "The replayable decision manifest of ``POST .../kinetics/select/manifest``.\n\nPublic refs only. Holds the normalised request, the snapshot isolation it was read under, every assessed\ncandidate with its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the\ndeterminations the eligible ones form, the rules consulted with each rule's verdict per determination, the\npair checks, the preference edges, the fronts and the administrative order: enough to recompute the decision\nwith no database.",
+        "description": "The replayable decision manifest of ``POST .../kinetics/select/manifest``.\n\nPublic refs only. Holds the normalised request, the snapshot isolation it was read under, every assessed\ncandidate with its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the\ndeterminations the eligible ones form, the fronts and the administrative order: enough to recompute the decision\nwith no database.",
         "properties": {
           "assessment_semantics": {
             "anyOf": [
@@ -24306,11 +24209,9 @@
       "KineticsSelectionOutcome": {
         "description": "The selection basis (the service ``Outcome`` outside the bounded-search refusal, which the endpoint reports\nas the 422 ``kinetics_selection_population_too_large`` instead).",
         "enum": [
-          "policy_preferred",
           "incomparable_alternatives",
           "sole_eligible_candidate",
-          "no_applicable_candidate",
-          "policy_conflict"
+          "no_applicable_candidate"
         ],
         "title": "KineticsSelectionOutcome",
         "type": "string"
@@ -24319,13 +24220,12 @@
         "description": "The determination this response names (with every one of its eligible fitted representations).",
         "properties": {
           "administrative": {
-            "description": "True when the determination was chosen by review/recency order among unranked alternatives. That is not a claim that it is method-superior.",
+            "description": "True when the determination is first in display order among several eligible alternatives. That is not a claim that it is better, preferred or method-superior.",
             "title": "Administrative",
             "type": "boolean"
           },
           "basis": {
             "enum": [
-              "policy_preferred",
               "sole_eligible_candidate",
               "administrative_first"
             ],
@@ -24360,9 +24260,8 @@
         "type": "object"
       },
       "KineticsSelectionPolicy": {
-        "description": "Which ordering the request asks for.\n\n``method_preferred``  apply the registered, audited kinetics rules; the review/recency order only sorts\n                      within a preference front. Every rule shipped in this release is inactive, so the\n                      answer is the administrative order among eligible determinations, labelled as such.\n``default``, ``most_reviewed``, ``latest``\n                      administrative order only (no rules), exactly as on the browse endpoints.",
+        "description": "Which administrative order the request asks for.\n\nEvery policy is administrative: an order over review status and deposition time, exactly as on the browse\nendpoints. None is a claim about which method is better.\n``default``        review rank, then newest deposited.\n``most_reviewed``  review rank, then newest deposited.\n``latest``         newest deposited first.",
         "enum": [
-          "method_preferred",
           "default",
           "most_reviewed",
           "latest"
@@ -24371,25 +24270,11 @@
         "type": "string"
       },
       "KineticsSelectionPolicyInfo": {
-        "description": "The selection semantics and the rule versions that were consulted.",
+        "description": "The selection procedure (name and version) the decision was made under.",
         "properties": {
           "name": {
             "title": "Name",
             "type": "string"
-          },
-          "rules": {
-            "description": "Registry entries consulted: rule id, version, status (every rule shipped is inactive), objective, evidence type and limits, and why an inactive rule is inactive.",
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Rules",
-            "type": "array"
-          },
-          "rules_applied": {
-            "description": "False under an administrative policy: no rule was consulted, only the administrative order.",
-            "title": "Rules Applied",
-            "type": "boolean"
           },
           "version": {
             "title": "Version",
@@ -24398,8 +24283,7 @@
         },
         "required": [
           "name",
-          "version",
-          "rules_applied"
+          "version"
         ],
         "title": "KineticsSelectionPolicyInfo",
         "type": "object"
@@ -24503,55 +24387,6 @@
         "title": "KineticsSelectionReason",
         "type": "object"
       },
-      "KineticsSelectionRelations": {
-        "description": "Preference relations between eligible determinations, and any contradiction among them.",
-        "properties": {
-          "cycles": {
-            "items": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "title": "Cycles",
-            "type": "array"
-          },
-          "edges": {
-            "items": {
-              "$ref": "#/components/schemas/KineticsSelectionEdge"
-            },
-            "title": "Edges",
-            "type": "array"
-          },
-          "opposing_pairs": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Opposing Pairs",
-            "type": "array"
-          },
-          "overridden_edges": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Overridden Edges",
-            "type": "array"
-          },
-          "unused_edges": {
-            "description": "Edges under more than one objective are not composed; they are listed here.",
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Unused Edges",
-            "type": "array"
-          }
-        },
-        "title": "KineticsSelectionRelations",
-        "type": "object"
-      },
       "KineticsSelectionRequest": {
         "additionalProperties": false,
         "description": "Request body. ``quantity`` and ``phase`` may be omitted; if given they must agree with the endpoint.",
@@ -24601,7 +24436,7 @@
           },
           "policy": {
             "$ref": "#/components/schemas/KineticsSelectionPolicy",
-            "default": "method_preferred"
+            "default": "default"
           },
           "pressure": {
             "$ref": "#/components/schemas/KineticsSelectionPressureIn"
@@ -24769,7 +24604,7 @@
             "$ref": "#/components/schemas/KineticsSelectionDisclosures"
           },
           "fronts": {
-            "description": "Preference fronts of determinations, best first; within a front unranked.",
+            "description": "The eligible determinations that tie, in display order. With no ranking between methods there is exactly one front (none when nothing is eligible); its order is not a preference.",
             "items": {
               "items": {
                 "type": "string"
@@ -24782,33 +24617,14 @@
           "outcome": {
             "$ref": "#/components/schemas/KineticsSelectionOutcome"
           },
-          "pair_checks": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Pair Checks",
-            "type": "array"
-          },
           "policy": {
             "$ref": "#/components/schemas/KineticsSelectionPolicyInfo"
-          },
-          "relations": {
-            "$ref": "#/components/schemas/KineticsSelectionRelations"
           },
           "request": {
             "$ref": "#/components/schemas/KineticsSelectionRequestEcho"
           },
           "review": {
             "$ref": "#/components/schemas/KineticsSelectionReview"
-          },
-          "rule_matches": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Rule Matches",
-            "type": "array"
           },
           "selection": {
             "anyOf": [
@@ -29783,16 +29599,6 @@
         "title": "NetworkCollisionFrequencyModel",
         "type": "string"
       },
-      "NetworkComparisonObjective": {
-        "description": "What a comparison between two products is a comparison *of*; agreement on one is not on another.",
-        "enum": [
-          "physical_accuracy",
-          "model_fidelity",
-          "representation_fidelity"
-        ],
-        "title": "NetworkComparisonObjective",
-        "type": "string"
-      },
       "NetworkConformerTreatment": {
         "description": "How the conformers of a well or saddle point enter the solve.",
         "enum": [
@@ -33583,7 +33389,7 @@
       },
       "NetworkSelectionManifest": {
         "additionalProperties": true,
-        "description": "The replayable decision manifest of ``POST .../kinetics/select/manifest``.\n\nPublic refs only: the normalised request, the snapshot isolation, every captured solve with its normalised facts,\nevery assessment, the rules consulted, each comparison and the administrative order. Enough to recompute the\ndecision at both levels with no database.",
+        "description": "The replayable decision manifest of ``POST .../kinetics/select/manifest``.\n\nPublic refs only: the normalised request, the snapshot isolation, every captured solve with its normalised facts,\nevery assessment and the administrative order. Enough to recompute the\ndecision at both levels with no database.",
         "properties": {
           "assessments": {
             "additionalProperties": true,
@@ -33721,11 +33527,9 @@
       },
       "NetworkSelectionOutcome": {
         "enum": [
-          "policy_preferred",
           "incomparable_alternatives",
           "sole_eligible_candidate",
-          "no_applicable_candidate",
-          "policy_conflict"
+          "no_applicable_candidate"
         ],
         "title": "NetworkSelectionOutcome",
         "type": "string"
@@ -33789,13 +33593,12 @@
         "description": "The node this response names: a determination of one channel, or a declared product set of one solve.",
         "properties": {
           "administrative": {
-            "description": "True when chosen by review/recency order among unranked alternatives: not a method claim.",
+            "description": "True when first in display order among several eligible alternatives: not a claim that it is better, preferred or method-superior.",
             "title": "Administrative",
             "type": "boolean"
           },
           "basis": {
             "enum": [
-              "policy_preferred",
               "sole_eligible_candidate",
               "administrative_first"
             ],
@@ -33839,9 +33642,8 @@
         "type": "object"
       },
       "NetworkSelectionPolicy": {
-        "description": "``method_preferred`` applies the registered, audited network rules (none is active in this release, so it\nranks nothing and says so); the others are the administrative order only, exactly as on the browse endpoints.",
+        "description": "The administrative order the request asks for, exactly as on the browse endpoints: review rank then newest\ndeposited (``default`` and ``most_reviewed``), or newest deposited first (``latest``). None is a claim about\nwhich method is better.",
         "enum": [
-          "method_preferred",
           "default",
           "most_reviewed",
           "latest"
@@ -33859,20 +33661,6 @@
             "title": "Name",
             "type": "string"
           },
-          "rules": {
-            "description": "Registry entries consulted: rule id, version, status (every rule shipped is inactive), objective, and why an inactive rule is inactive.",
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Rules",
-            "type": "array"
-          },
-          "rules_applied": {
-            "description": "False under an administrative policy: no rule was consulted, only the administrative order.",
-            "title": "Rules Applied",
-            "type": "boolean"
-          },
           "version": {
             "title": "Version",
             "type": "integer"
@@ -33881,8 +33669,7 @@
         "required": [
           "name",
           "version",
-          "bounds_version",
-          "rules_applied"
+          "bounds_version"
         ],
         "title": "NetworkSelectionPolicyInfo",
         "type": "object"
@@ -33904,55 +33691,6 @@
           }
         },
         "title": "NetworkSelectionRegimeIn",
-        "type": "object"
-      },
-      "NetworkSelectionRelations": {
-        "properties": {
-          "cycles": {
-            "items": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "title": "Cycles",
-            "type": "array"
-          },
-          "edges": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Edges",
-            "type": "array"
-          },
-          "opposing_pairs": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Opposing Pairs",
-            "type": "array"
-          },
-          "overridden_edges": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Overridden Edges",
-            "type": "array"
-          },
-          "unused_edges": {
-            "description": "Edges under more than one objective key are not composed; listed here.",
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Unused Edges",
-            "type": "array"
-          }
-        },
-        "title": "NetworkSelectionRelations",
         "type": "object"
       },
       "NetworkSelectionRequest": {
@@ -34017,10 +33755,6 @@
             "$ref": "#/components/schemas/NetworkSelectionMode",
             "default": "all"
           },
-          "objective": {
-            "$ref": "#/components/schemas/NetworkComparisonObjective",
-            "default": "physical_accuracy"
-          },
           "observable": {
             "anyOf": [
               {
@@ -34055,7 +33789,7 @@
           },
           "policy": {
             "$ref": "#/components/schemas/NetworkSelectionPolicy",
-            "default": "method_preferred"
+            "default": "default"
           },
           "pressure_max_bar": {
             "exclusiveMinimum": 0.0,
@@ -34072,32 +33806,6 @@
             "default": "rate_coefficient",
             "title": "Quantity",
             "type": "string"
-          },
-          "reference_model_ref": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Public network-solve ref (nsolve_...). Required for, and only for, model_fidelity.",
-            "title": "Reference Model Ref"
-          },
-          "reference_outputs": {
-            "anyOf": [
-              {
-                "maxLength": 512,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Names the reference output set. Required for, and only for, representation_fidelity.",
-            "title": "Reference Outputs"
           },
           "regime": {
             "$ref": "#/components/schemas/NetworkSelectionRegimeIn"
@@ -34197,9 +33905,6 @@
             "title": "Network Ref",
             "type": "string"
           },
-          "objective": {
-            "$ref": "#/components/schemas/NetworkComparisonObjective"
-          },
           "observable": {
             "anyOf": [
               {
@@ -34282,7 +33987,6 @@
           "temperature_max_k",
           "pressure_min_bar",
           "pressure_max_bar",
-          "objective",
           "administrative_policy",
           "result_mode"
         ],
@@ -34326,6 +34030,7 @@
             "$ref": "#/components/schemas/NetworkSelectionDisclosures"
           },
           "fronts": {
+            "description": "The eligible nodes that tie, in display order. With no ranking between methods there is exactly one front (none when nothing is eligible); its order is not a preference.",
             "items": {
               "items": {
                 "type": "string"
@@ -34338,22 +34043,11 @@
           "outcome": {
             "$ref": "#/components/schemas/NetworkSelectionOutcome"
           },
-          "pair_checks": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Pair Checks",
-            "type": "array"
-          },
           "policy": {
             "$ref": "#/components/schemas/NetworkSelectionPolicyInfo"
           },
-          "relations": {
-            "$ref": "#/components/schemas/NetworkSelectionRelations"
-          },
           "representations": {
-            "description": "Nested fronts of the alternate fits inside each eligible node. They rank no solve and add no independent confirmation.",
+            "description": "The alternate fits inside each eligible node, in display order. They rank no solve and add no independent confirmation.",
             "items": {
               "additionalProperties": true,
               "type": "object"
@@ -34366,14 +34060,6 @@
           },
           "review": {
             "$ref": "#/components/schemas/NetworkSelectionReview"
-          },
-          "rule_matches": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Rule Matches",
-            "type": "array"
           },
           "selection": {
             "anyOf": [
@@ -38014,8 +37700,36 @@
         "title": "OptResultPayload",
         "type": "object"
       },
+      "OrderEcho": {
+        "description": "The display order of a browse or list response, structured.\n\n``keys`` are applied in sequence, most significant first. ``kind`` is always ``display_order``; ``statement``\nsays in words that the order is not a scientific preference. See ``docs/specs/browse_order.md``.",
+        "properties": {
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/OrderKeyEcho"
+            },
+            "title": "Keys",
+            "type": "array"
+          },
+          "kind": {
+            "const": "display_order",
+            "default": "display_order",
+            "title": "Kind",
+            "type": "string"
+          },
+          "statement": {
+            "default": "This is display order. It is deterministic for the same data, filters and read profile, and it is not a scientific preference: the first record is listed first, never recommended or ranked best.",
+            "title": "Statement",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "title": "OrderEcho",
+        "type": "object"
+      },
       "OrderKeyEcho": {
-        "description": "One key of the order a read actually applied, with its direction.",
+        "description": "One key of the display order a read applied: its name, direction and plain meaning.",
         "properties": {
           "direction": {
             "enum": [
@@ -38026,18 +37740,18 @@
             "type": "string"
           },
           "key": {
-            "enum": [
-              "review_rank",
-              "created_at",
-              "id"
-            ],
             "title": "Key",
+            "type": "string"
+          },
+          "meaning": {
+            "title": "Meaning",
             "type": "string"
           }
         },
         "required": [
           "key",
-          "direction"
+          "direction",
+          "meaning"
         ],
         "title": "OrderKeyEcho",
         "type": "object"
@@ -38053,10 +37767,7 @@
           "unsupported_task",
           "unsupported_model",
           "evidence_conflict",
-          "unresolved_comparability",
-          "policy_conflict",
           "sole_eligible_candidate",
-          "policy_preferred",
           "incomparable_alternatives"
         ],
         "title": "Outcome",
@@ -39205,9 +38916,14 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "default": "",
-            "title": "Sort",
-            "type": "string"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrderEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "PathSearchRequestEcho",
@@ -45111,9 +44827,14 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "default": "",
-            "title": "Sort",
-            "type": "string"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrderEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "ScanRequestEcho",
@@ -49732,7 +49453,7 @@
         "type": "object"
       },
       "SelectionPolicy": {
-        "description": "Named, read-time selection policy used when ``collapse=first``.\n\nA selection policy makes \"show me one product for this species form\" an\n*explicit, named* choice rather than an implicit one. Policies rank\ncandidate products at read time only — none persists a curator decision.\n\nPolicies that would require a stored choice (``benchmark_reference``,\n``curator_pick``) are intentionally absent: they need the deferred\nproduct-selection persistence layer, not a read knob, and cannot be\nhonestly evaluated from the record data alone. See\n``backend/docs/specs/scientific_product_candidacy.md``.\n\n``default``        the endpoint's standard ranking.\n``latest``         most recently created first.\n``most_reviewed``  best review status first, then most recent.",
+        "description": "Named, read-time *administrative* order used when ``collapse=first``.\n\nA selection policy makes \"show me one product for this species form\" an\n*explicit, named* choice rather than an implicit one. Every policy is an\nadministrative order over review status and deposition time. None is a\nclaim about which method or result is scientifically better, and none\npersists a curator decision.\n\nPolicies that would require a stored choice (``benchmark_reference``,\n``curator_pick``) are intentionally absent: they need the deferred\nproduct-selection persistence layer, not a read knob, and cannot be\nhonestly evaluated from the record data alone. See\n``backend/docs/specs/scientific_product_candidacy.md``.\n\n``default``        the display order of ``docs/specs/browse_order.md``.\n``latest``         most recently deposited first.\n``most_reviewed``  review status first, then most recently deposited.",
         "enum": [
           "default",
           "latest",
@@ -53287,43 +53008,6 @@
         "title": "StatmechSelectionCandidate",
         "type": "object"
       },
-      "StatmechSelectionConflicts": {
-        "properties": {
-          "cycles": {
-            "items": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "title": "Cycles",
-            "type": "array"
-          },
-          "opposing_pairs": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Opposing Pairs",
-            "type": "array"
-          },
-          "overridden_edges": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Overridden Edges",
-            "type": "array"
-          }
-        },
-        "required": [
-          "opposing_pairs",
-          "cycles",
-          "overridden_edges"
-        ],
-        "title": "StatmechSelectionConflicts",
-        "type": "object"
-      },
       "StatmechSelectionIntegrity": {
         "properties": {
           "algorithm": {
@@ -53349,7 +53033,7 @@
       },
       "StatmechSelectionManifest": {
         "additionalProperties": true,
-        "description": "The replayable decision manifest of the ``/manifest`` download.\n\nPublic refs only: the normalised request, read profile, snapshot isolation, subject, every candidate's facts and\nsource calculation, each assessment, the registry entries consulted and the decision. ``reproduce_statmech_ordering``,\n``reassess_statmech_captured_inputs`` and ``replay_statmech_decision`` recompute it offline. The digests in\n``integrity`` are checksums, not signatures: anyone who edits a manifest can recompute them, so replay shows the\nreasoning follows from the captured inputs and proves neither that they are true nor that the population was\ncomplete. The download is a new snapshot of the current data, not a retrieval of an earlier decision.",
+        "description": "The replayable decision manifest of the ``/manifest`` download.\n\nPublic refs only: the normalised request, read profile, snapshot isolation, subject, every candidate's facts and\nsource calculation, each assessment and the decision. ``reproduce_statmech_ordering``,\n``reassess_statmech_captured_inputs`` and ``replay_statmech_decision`` recompute it offline. The digests in\n``integrity`` are checksums, not signatures: anyone who edits a manifest can recompute them, so replay shows the\nreasoning follows from the captured inputs and proves neither that they are true nor that the population was\ncomplete. The download is a new snapshot of the current data, not a retrieval of an earlier decision.",
         "properties": {
           "assessment_semantics": {
             "additionalProperties": true,
@@ -53579,16 +53263,6 @@
             "$ref": "#/components/schemas/SelectionPolicy",
             "default": "default"
           },
-          "comparison_objective": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/app__services__statmech_selection__vocabulary__Objective"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "conditions": {
             "$ref": "#/components/schemas/ConditionsBody"
           },
@@ -53649,18 +53323,6 @@
             ],
             "title": "Population"
           },
-          "reference_model_ref": {
-            "anyOf": [
-              {
-                "pattern": "^smd_[a-z2-7]{26}$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reference Model Ref"
-          },
           "result_mode": {
             "$ref": "#/components/schemas/ResultMode",
             "default": "all"
@@ -53716,17 +53378,6 @@
             "description": "The server's engineering bounds this decision was made under (never settable by the caller).",
             "title": "Bounds",
             "type": "object"
-          },
-          "comparison_objective": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Comparison Objective"
           },
           "conditions": {
             "additionalProperties": true,
@@ -53790,17 +53441,6 @@
             ],
             "title": "Profile Release Ref"
           },
-          "reference_model_ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reference Model Ref"
-          },
           "result_mode": {
             "title": "Result Mode",
             "type": "string"
@@ -53833,6 +53473,19 @@
       "StatmechSelectionResponse": {
         "description": "The outcome of a statmech selection and everything it rests on, public refs only.\n\n``outcome`` is the scientific outcome (a valid negative answer is HTTP 200). ``selection`` carries at most one\nreference; ``intent=qualify`` and every unresolved outcome carry none. ``coverage`` always says it is the caller's\nauthorized population only, never a physical-search certificate. No computed thermodynamic value is returned.\n``advisories`` and ``notices`` surface the disclosures that do not exclude a candidate. ``integrity`` carries the\nmanifest checksum: a checksum, not a signature.",
         "properties": {
+          "administrative_key": {
+            "additionalProperties": true,
+            "description": "The versioned display-order key (review rank, deposition time, tie-breaker).",
+            "title": "Administrative Key",
+            "type": "object"
+          },
+          "administrative_order": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Administrative Order",
+            "type": "array"
+          },
           "advisories": {
             "additionalProperties": {
               "items": {
@@ -53854,23 +53507,13 @@
             "title": "Candidates",
             "type": "array"
           },
-          "conflicts": {
-            "$ref": "#/components/schemas/StatmechSelectionConflicts"
-          },
           "coverage": {
             "additionalProperties": true,
             "title": "Coverage",
             "type": "object"
           },
-          "edges": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Edges",
-            "type": "array"
-          },
           "fronts": {
+            "description": "The qualified models that tie, in display order: one front, or none when nothing is listed. Its order is not a preference.",
             "items": {
               "items": {
                 "type": "string"
@@ -53899,11 +53542,6 @@
           "population": {
             "$ref": "#/components/schemas/StatmechSelectionPopulation"
           },
-          "protocol": {
-            "additionalProperties": true,
-            "title": "Protocol",
-            "type": "object"
-          },
           "request": {
             "$ref": "#/components/schemas/StatmechSelectionRequestEcho"
           },
@@ -53929,14 +53567,6 @@
             ],
             "title": "Summary"
           },
-          "undecided": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Undecided",
-            "type": "array"
-          },
           "versions": {
             "additionalProperties": true,
             "title": "Versions",
@@ -53953,13 +53583,11 @@
           "population",
           "coverage",
           "candidates",
-          "edges",
           "fronts",
-          "conflicts",
-          "undecided",
+          "administrative_order",
+          "administrative_key",
           "advisories",
           "notices",
-          "protocol",
           "manifest",
           "snapshot_isolation",
           "integrity"
@@ -53988,7 +53616,7 @@
         "type": "object"
       },
       "StatmechSelectionSelection": {
-        "description": "The three mutually exclusive references. At most one is set; each carries its basis and population limit.",
+        "description": "The two mutually exclusive references. At most one is set; each carries its basis and population limit.",
         "properties": {
           "administrative_ref": {
             "anyOf": [
@@ -54022,17 +53650,6 @@
               }
             ],
             "title": "Limitation"
-          },
-          "scientific_ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scientific Ref"
           },
           "sole_eligible_ref": {
             "anyOf": [
@@ -56366,10 +55983,8 @@
           "representative_minimum",
           "qualified_evidence",
           "validated_corpus_minimum",
-          "policy_preferred",
           "sole_eligible_candidate",
           "incomparable_alternatives",
-          "policy_conflict",
           "evidence_conflict"
         ],
         "title": "StructureOutcome",
@@ -56631,10 +56246,6 @@
             "title": "Administrative Policy",
             "type": "string"
           },
-          "apply_rules": {
-            "title": "Apply Rules",
-            "type": "boolean"
-          },
           "bounds": {
             "additionalProperties": true,
             "description": "The server's engineering bounds this decision was made under (never settable by the caller).",
@@ -56692,17 +56303,6 @@
               }
             ]
           },
-          "objective": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Objective"
-          },
           "permitted_quality": {
             "items": {
               "type": "string"
@@ -56752,17 +56352,6 @@
             ],
             "title": "Recipe"
           },
-          "reference_model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reference Model"
-          },
           "repeat_policy": {
             "title": "Repeat Policy",
             "type": "string"
@@ -56801,7 +56390,6 @@
           "require_connectivity",
           "administrative_policy",
           "result_mode",
-          "apply_rules",
           "repeat_policy",
           "bounds"
         ],
@@ -61225,35 +60813,6 @@
         "title": "ThermoSelectionDisclosures",
         "type": "object"
       },
-      "ThermoSelectionEdge": {
-        "properties": {
-          "dispreferred": {
-            "title": "Dispreferred",
-            "type": "string"
-          },
-          "preferred": {
-            "title": "Preferred",
-            "type": "string"
-          },
-          "rule_id": {
-            "description": "The registry key of the rule (for example E1). Not a database id.",
-            "title": "Rule Id",
-            "type": "string",
-            "x-tckdb-policy-hidden": true
-          },
-          "rule_version": {
-            "title": "Rule Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "preferred",
-          "dispreferred",
-          "rule_version"
-        ],
-        "title": "ThermoSelectionEdge",
-        "type": "object"
-      },
       "ThermoSelectionExcluded": {
         "properties": {
           "reason": {
@@ -61277,7 +60836,7 @@
         "type": "object"
       },
       "ThermoSelectionManifest": {
-        "description": "The replayable decision manifest of ``POST .../thermo/select/manifest``.\n\nPublic refs only. Holds the normalised request, the effective review floor, every assessed candidate\nwith its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the rules\napplied with each rule's verdict per candidate, the preference edges, the fronts and the administrative\norder: enough to recompute the decision with no database.",
+        "description": "The replayable decision manifest of ``POST .../thermo/select/manifest``.\n\nPublic refs only. Holds the normalised request, the effective review floor, every assessed candidate\nwith its normalised inputs (``id_rank`` is an ordinal over the visible records, not an id), the fronts and the\nadministrative order: enough to recompute the decision with no database.",
         "properties": {
           "assessment_semantics": {
             "anyOf": [
@@ -61432,11 +60991,9 @@
       "ThermoSelectionOutcome": {
         "description": "The selection basis. The service ``Outcome`` minus ``bounded_search_exceeded``, which the endpoint\nreports as the 422 ``thermo_selection_population_too_large`` instead (a test holds the two in step).",
         "enum": [
-          "policy_preferred",
           "incomparable_alternatives",
           "sole_eligible_candidate",
-          "no_applicable_candidate",
-          "policy_conflict"
+          "no_applicable_candidate"
         ],
         "title": "ThermoSelectionOutcome",
         "type": "string"
@@ -61445,13 +61002,12 @@
         "description": "The one record this response names, and exactly why it is named.",
         "properties": {
           "administrative": {
-            "description": "True when the record was chosen by review/recency order among unranked alternatives. That is not a claim that it is method-superior.",
+            "description": "True when the record is first in display order among several eligible alternatives. That is not a claim that it is better, preferred or method-superior.",
             "title": "Administrative",
             "type": "boolean"
           },
           "basis": {
             "enum": [
-              "policy_preferred",
               "sole_eligible_candidate",
               "administrative_first"
             ],
@@ -61477,9 +61033,8 @@
         "type": "object"
       },
       "ThermoSelectionPolicy": {
-        "description": "Which ordering the request asks for.\n\n``method_preferred``  apply the registered, evidence-backed method rules; the review/recency order\n                      only sorts within a preference front.\n``default``, ``most_reviewed``, ``latest``\n                      administrative order only (no method rules), exactly as on the browse endpoints.",
+        "description": "Which administrative order the request asks for.\n\nEvery policy is administrative: an order over review status and deposition time, exactly as on the browse\nendpoints. None is a claim about which method is better.\n``default``        review rank, then newest deposited.\n``most_reviewed``  review rank, then newest deposited.\n``latest``         newest deposited first.",
         "enum": [
-          "method_preferred",
           "default",
           "most_reviewed",
           "latest"
@@ -61488,20 +61043,11 @@
         "type": "string"
       },
       "ThermoSelectionPolicyInfo": {
-        "description": "The selection semantics and the rule versions that were applied.",
+        "description": "The selection procedure (name and version) the decision was made under.",
         "properties": {
           "name": {
             "title": "Name",
             "type": "string"
-          },
-          "rules": {
-            "description": "Registry entries applied: rule id, version, objective, scope, evidence type and limits.",
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Rules",
-            "type": "array"
           },
           "version": {
             "title": "Version",
@@ -61533,46 +61079,6 @@
         "title": "ThermoSelectionReason",
         "type": "object"
       },
-      "ThermoSelectionRelations": {
-        "description": "Preference relations between eligible records, and any contradiction among them.",
-        "properties": {
-          "cycles": {
-            "items": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "title": "Cycles",
-            "type": "array"
-          },
-          "edges": {
-            "items": {
-              "$ref": "#/components/schemas/ThermoSelectionEdge"
-            },
-            "title": "Edges",
-            "type": "array"
-          },
-          "opposing_pairs": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Opposing Pairs",
-            "type": "array"
-          },
-          "overridden_edges": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Overridden Edges",
-            "type": "array"
-          }
-        },
-        "title": "ThermoSelectionRelations",
-        "type": "object"
-      },
       "ThermoSelectionRequest": {
         "additionalProperties": false,
         "description": "Request body. ``quantity``, ``temperature_k`` and ``phase`` may be omitted; if given they must agree.",
@@ -61601,7 +61107,7 @@
           },
           "policy": {
             "$ref": "#/components/schemas/ThermoSelectionPolicy",
-            "default": "method_preferred"
+            "default": "default"
           },
           "quantity": {
             "const": "formation_enthalpy_298k",
@@ -61733,7 +61239,7 @@
             "$ref": "#/components/schemas/ThermoSelectionDisclosures"
           },
           "fronts": {
-            "description": "Preference fronts, best first; records within a front are unranked.",
+            "description": "The eligible records that tie, in display order. With no ranking between methods there is exactly one front (none when nothing is eligible); its order is not a preference.",
             "items": {
               "items": {
                 "type": "string"
@@ -61749,22 +61255,11 @@
           "policy": {
             "$ref": "#/components/schemas/ThermoSelectionPolicyInfo"
           },
-          "relations": {
-            "$ref": "#/components/schemas/ThermoSelectionRelations"
-          },
           "request": {
             "$ref": "#/components/schemas/ThermoSelectionRequestEcho"
           },
           "review": {
             "$ref": "#/components/schemas/ThermoSelectionReview"
-          },
-          "rule_matches": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Rule Matches",
-            "type": "array"
           },
           "selection": {
             "anyOf": [
@@ -63777,18 +63272,12 @@
       },
       "TransitionStateEvidenceSelectionRequest": {
         "additionalProperties": false,
-        "description": "Which of one transition state entry's saddle determinations support a claim, are lowest, or which protocol.\n\nOne entry only: comparison across several entries needs an explicit validated same-path declaration, which this\nrelease does not take, so sibling entries are assessed one at a time.",
+        "description": "Which of one transition state entry's saddle determinations support a claim, are lowest, or which protocols cover it.\n\nOne entry only: comparison across several entries needs an explicit validated same-path declaration, which this\nrelease does not take, so sibling entries are assessed one at a time.",
         "properties": {
           "administrative_policy": {
             "$ref": "#/components/schemas/AdminPolicy",
             "default": "default",
-            "description": "Administrative order within a scientific front or among exact ties. Never reorders fronts."
-          },
-          "apply_rules": {
-            "default": true,
-            "description": "Whether the audited rule registry takes part (it holds no active rule in this release).",
-            "title": "Apply Rules",
-            "type": "boolean"
+            "description": "Administrative order of exact ties and tied cohorts: display order, never a method preference."
           },
           "coverage_requirement": {
             "$ref": "#/components/schemas/app__services__structure_selection__models__CoverageRequirement",
@@ -63847,17 +63336,6 @@
             ],
             "description": "A stricter review floor than the read profile's. Applied at every owning grain."
           },
-          "objective": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/app__services__structure_selection__models__Objective"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Required for protocol_preferred; refused otherwise."
-          },
           "permitted_quality": {
             "anyOf": [
               {
@@ -63897,19 +63375,6 @@
               }
             ],
             "description": "A requested actual recipe (the declaration's shape, version 1). The units' own stated facts must establish it; a request never manufactures a missing fact."
-          },
-          "reference_model": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reference Model"
           },
           "repeat_policy": {
             "$ref": "#/components/schemas/RepeatPolicy",
@@ -68081,8 +67546,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -68197,8 +67661,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -68344,8 +67807,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -68423,8 +67885,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -68502,8 +67963,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -68552,9 +68012,14 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "default": "",
-            "title": "Sort",
-            "type": "string"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrderEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "RequestEcho",
@@ -68598,8 +68063,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -68649,8 +68113,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -68730,8 +68193,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -68809,8 +68271,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -68887,8 +68348,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -68932,8 +68392,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -68977,8 +68436,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -69023,8 +68481,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -69112,8 +68569,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -69201,8 +68657,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -69292,8 +68747,7 @@
             "$ref": "#/components/schemas/CalculationRanking"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -69353,11 +68807,14 @@
             ]
           },
           "effective_order": {
-            "items": {
-              "$ref": "#/components/schemas/OrderKeyEcho"
-            },
-            "title": "Effective Order",
-            "type": "array"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrderEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "filter": {
             "additionalProperties": true,
@@ -69422,8 +68879,7 @@
             "title": "Selection Policy Applied"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -69471,8 +68927,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -69525,8 +68980,7 @@
             "default": "default"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -69576,8 +69030,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -69657,8 +69110,7 @@
             "title": "Profile Release Ref"
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -69756,8 +69208,7 @@
             ]
           },
           "sort": {
-            "title": "Sort",
-            "type": "string"
+            "$ref": "#/components/schemas/OrderEcho"
           }
         },
         "required": [
@@ -69856,15 +69307,6 @@
         "title": "DividingSurface",
         "type": "string"
       },
-      "app__services__statmech_selection__vocabulary__Objective": {
-        "enum": [
-          "physical_accuracy",
-          "expected_accuracy",
-          "model_fidelity"
-        ],
-        "title": "Objective",
-        "type": "string"
-      },
       "app__services__structure_selection__models__CoverageRequirement": {
         "description": "``known_values``: an ordering of what is known, conditional on it. ``all_requested_members``: a complete claim.",
         "enum": [
@@ -69872,16 +69314,6 @@
           "all_requested_members"
         ],
         "title": "CoverageRequirement",
-        "type": "string"
-      },
-      "app__services__structure_selection__models__Objective": {
-        "description": "What a protocol preference optimises. ``model_fidelity`` is relative to a *pinned* reference model.",
-        "enum": [
-          "physical_accuracy",
-          "expected_accuracy",
-          "model_fidelity"
-        ],
-        "title": "Objective",
         "type": "string"
       },
       "tckdb_schemas__enums__CalculationDependencyRole": {
@@ -93731,7 +93163,7 @@
     },
     "/api/v1/scientific/networks/{network_ref}/kinetics/select": {
       "post": {
-        "description": "Assess every visible solve of the network against the question and say which node, if any, to use.\n\nThe competition unit is one determination (single channel) or one declared product set of one solve (bundle,\nfull network). A solve answers only if its stored declarations say so (state partition, boundaries, regime,\nvalidity, bath scope, output catalog, observable, coefficient basis, units, temperature and pressure support); a\nmissing fact makes it ``unresolved`` and a form this selector does not evaluate makes it ``unsupported``, never\napplicable by default. Nothing is derived, re-anchored, evaluated, spliced across solves or averaged.\n\n``outcome`` is the selection basis: ``policy_preferred``, ``incomparable_alternatives``,\n``sole_eligible_candidate``, ``no_applicable_candidate`` or ``policy_conflict``. Every rule shipped in this\nrelease is inactive, so ``method_preferred`` ranks nothing today and says so. A population over a server bound\n(solves, kinetics parents, channel or bundle nodes, states, channels, required outputs, evidence entries, numeric\ncells, snapshot size) is refused with 422 ``network_selection_population_too_large`` or\n``network_selection_snapshot_too_large``: nothing is assessed, because a winner picked from part of the\npopulation would say nothing about the rest.\n\n``mode=first`` may name a node among unranked first-front alternatives; the ``selection`` then says\n``administrative_first`` and that this is not a method claim.",
+        "description": "Assess every visible solve of the network against the question and say which node, if any, to use.\n\nThe competition unit is one determination (single channel) or one declared product set of one solve (bundle,\nfull network). A solve answers only if its stored declarations say so (state partition, boundaries, regime,\nvalidity, bath scope, output catalog, observable, coefficient basis, units, temperature and pressure support); a\nmissing fact makes it ``unresolved`` and a form this selector does not evaluate makes it ``unsupported``, never\napplicable by default. Nothing is derived, re-anchored, evaluated, spliced across solves or averaged.\n\n``outcome`` is the selection basis: ``sole_eligible_candidate`` (the only one, not the best),\n``incomparable_alternatives`` (several are eligible and TCKDB ranks none above another) or\n``no_applicable_candidate``. A population over a server bound\n(solves, kinetics parents, channel or bundle nodes, states, channels, required outputs, evidence entries, numeric\ncells, snapshot size) is refused with 422 ``network_selection_population_too_large`` or\n``network_selection_snapshot_too_large``: nothing is assessed, because an answer picked from part of the\npopulation would say nothing about the rest.\n\n``mode=first`` may name the first node in display order among the alternatives; the ``selection`` then says\n``administrative_first`` and that this is not a method claim.",
         "operationId": "select_network_kinetics_api_v1_scientific_networks__network_ref__kinetics_select_post",
         "parameters": [
           {
@@ -93815,7 +93247,7 @@
     },
     "/api/v1/scientific/networks/{network_ref}/kinetics/select/manifest": {
       "post": {
-        "description": "The same request as ``/kinetics/select``, answered with the decision manifest as a download.\n\nThe manifest holds the normalised request, the snapshot isolation it was read under, every captured solve with\nits normalised facts, every assessment, the rules consulted, each comparison and the administrative order, as\npublic refs only. It is enough to recompute the decision, and check the recorded assessments and outcome, with no\ndatabase. It is a new snapshot of the current data, not a retrieval of an earlier selection.",
+        "description": "The same request as ``/kinetics/select``, answered with the decision manifest as a download.\n\nThe manifest holds the normalised request, the snapshot isolation it was read under, every captured solve with\nits normalised facts, every assessment and the administrative order, as\npublic refs only. It is enough to recompute the decision, and check the recorded assessments and outcome, with no\ndatabase. It is a new snapshot of the current data, not a retrieval of an earlier selection.",
         "operationId": "select_network_kinetics_manifest_api_v1_scientific_networks__network_ref__kinetics_select_manifest_post",
         "parameters": [
           {
@@ -94366,7 +93798,7 @@
     },
     "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select": {
       "post": {
-        "description": "Assess every visible kinetics record of the entry against the question and say which, if any, to use.\n\nA record answers the question only if its stored claims say so (direction, target, coefficient basis, phase,\ntemperature and pressure coverage, collider); a missing fact makes it ``unresolved`` and a form this selector\ndoes not evaluate makes it ``unsupported``, never applicable by default. ``outcome`` is the selection basis:\n``policy_preferred`` (a registered, active rule leaves one determination with nothing preferred over it),\n``incomparable_alternatives`` (the rules do not rank the leading determinations), ``sole_eligible_candidate``,\n``no_applicable_candidate`` or ``policy_conflict`` (opposing rules or a cycle: nothing is selected). Every\nrule shipped in this release is inactive, so ``method_preferred`` ranks nothing today and says so.\n\nMore than 500 visible candidates is refused with 422 ``kinetics_selection_population_too_large``: nothing is\nassessed, because a winner picked from part of the population would say nothing about the rest. Only records\nvisible under the caller's read profile are counted.\n\n``mode=first`` may name a determination among unranked first-front alternatives; the ``selection`` then says\n``administrative_first`` and that this is not a method claim. A determination is returned with every eligible\nfitted representation of it.",
+        "description": "Assess every visible kinetics record of the entry against the question and say which, if any, to use.\n\nA record answers the question only if its stored claims say so (direction, target, coefficient basis, phase,\ntemperature and pressure coverage, collider); a missing fact makes it ``unresolved`` and a form this selector\ndoes not evaluate makes it ``unsupported``, never applicable by default. ``outcome`` is the selection basis:\n``sole_eligible_candidate`` (one determination is eligible; it is the only one, not the best),\n``incomparable_alternatives`` (several are eligible and TCKDB ranks none above another) or\n``no_applicable_candidate``.\n\nMore than 500 visible candidates is refused with 422 ``kinetics_selection_population_too_large``: nothing is\nassessed, because an answer picked from part of the population would say nothing about the rest. Only records\nvisible under the caller's read profile are counted.\n\n``mode=first`` may name the first determination in display order among the alternatives; the ``selection`` then says\n``administrative_first`` and that this is not a method claim. A determination is returned with every eligible\nfitted representation of it.",
         "operationId": "select_reaction_kinetics_api_v1_scientific_reaction_entries__reaction_entry_ref__kinetics_select_post",
         "parameters": [
           {
@@ -94450,7 +93882,7 @@
     },
     "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select/manifest": {
       "post": {
-        "description": "The same request as ``/kinetics/select``, answered with the decision manifest as a download.\n\nThe manifest holds the normalised request, the snapshot isolation it was read under, every assessed candidate\nwith its normalised inputs, the determinations, the rules consulted, each comparison and the administrative\norder, as public refs only. It is enough to recompute the decision with no database. It is a new snapshot of\nthe current data, not a retrieval of an earlier selection. The same visibility rules apply as for\n``/kinetics/select``.",
+        "description": "The same request as ``/kinetics/select``, answered with the decision manifest as a download.\n\nThe manifest holds the normalised request, the snapshot isolation it was read under, every assessed candidate\nwith its normalised inputs, the determinations and the administrative\norder, as public refs only. It is enough to recompute the decision with no database. It is a new snapshot of\nthe current data, not a retrieval of an earlier selection. The same visibility rules apply as for\n``/kinetics/select``.",
         "operationId": "select_reaction_kinetics_manifest_api_v1_scientific_reaction_entries__reaction_entry_ref__kinetics_select_manifest_post",
         "parameters": [
           {
@@ -97036,7 +96468,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_ref}/calculations/select": {
       "post": {
-        "description": "The lowest comparable recorded energy among the entry's calculations, or the audited-rule protocol preference.\n\nValues are ordered only inside one cohort (the same established recipe, quantity and energy convention); several\ncohorts end as ``incomparable_alternatives`` and a lower absolute energy never names a method winner. A calculation\nkeeps its own record: observations are not collapsed. The answer is conditional on the authorized population the\ncaller can see and is never a global-search certificate. More than 500 visible candidates, 5,000 nested rows, a\ndependency traversal past depth 8 or a manifest over 10 MiB is refused with a coded 422: nothing is chosen from a\nprefix. A deferred quantity (enthalpy, Gibbs energy, barrier, rate, ...) is 422 ``structure_selection_unsupported``.",
+        "description": "The lowest comparable recorded energy among the entry's calculations, or (``intent=protocol_preferred``) the protocols that cover every requested member, listed in display order.\n\nValues are ordered only inside one cohort (the same established recipe, quantity and energy convention); several\ncohorts end as ``incomparable_alternatives`` and a lower absolute energy never names a method winner. A calculation\nkeeps its own record: observations are not collapsed. The answer is conditional on the authorized population the\ncaller can see and is never a global-search certificate. More than 500 visible candidates, 5,000 nested rows, a\ndependency traversal past depth 8 or a manifest over 10 MiB is refused with a coded 422: nothing is chosen from a\nprefix. A deferred quantity (enthalpy, Gibbs energy, barrier, rate, ...) is 422 ``structure_selection_unsupported``.",
         "operationId": "select_species_calculations_api_v1_scientific_species_entries__species_entry_ref__calculations_select_post",
         "parameters": [
           {
@@ -97708,7 +97140,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select": {
       "post": {
-        "description": "Assess every visible thermo record of the entry for H298 and say which, if any, to use.\n\n``outcome`` is the selection basis: ``policy_preferred`` (a registered method rule leaves one\ncandidate with nothing preferred over it), ``incomparable_alternatives`` (the rules do not\nrank the leading candidates), ``sole_eligible_candidate``, ``no_applicable_candidate`` or\n``policy_conflict`` (opposing rules or a cycle: nothing is selected). More than 500 visible\ncandidates is refused with 422 ``thermo_selection_population_too_large``: nothing is assessed,\nbecause a winner picked from part of the population would say nothing about the rest. Only records\nvisible under the caller's read profile are counted.\n\n``result_mode=first`` may name a record among unranked first-front alternatives; the\n``selection`` then says ``administrative_first`` and that this is not a method claim.",
+        "description": "Assess every visible thermo record of the entry for H298 and say which, if any, to use.\n\n``outcome`` is the selection basis: ``sole_eligible_candidate`` (one record is eligible; it is the\nonly one, not the best), ``incomparable_alternatives`` (several are eligible and TCKDB ranks none\nabove another) or ``no_applicable_candidate``. More than 500 visible\ncandidates is refused with 422 ``thermo_selection_population_too_large``: nothing is assessed,\nbecause an answer picked from part of the population would say nothing about the rest. Only records\nvisible under the caller's read profile are counted.\n\n``result_mode=first`` may name the first record in display order among the alternatives; the\n``selection`` then says ``administrative_first`` and that this is not a method claim.",
         "operationId": "select_species_thermo_api_v1_scientific_species_entries__species_entry_ref__thermo_select_post",
         "parameters": [
           {
@@ -97792,7 +97224,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_ref}/thermo/select/manifest": {
       "post": {
-        "description": "The same request as ``/thermo/select``, answered with the decision manifest as a download.\n\nThe manifest holds the normalised request, the effective review floor, every assessed\ncandidate with its normalised inputs, the rules applied, each comparison and the\nadministrative order, as public refs only. It is enough to recompute the decision with no\ndatabase. The same visibility rules apply as for ``/thermo/select``.",
+        "description": "The same request as ``/thermo/select``, answered with the decision manifest as a download.\n\nThe manifest holds the normalised request, the effective review floor, every assessed\ncandidate with its normalised inputs and the\nadministrative order, as public refs only. It is enough to recompute the decision with no\ndatabase. The same visibility rules apply as for ``/thermo/select``.",
         "operationId": "select_species_thermo_manifest_api_v1_scientific_species_entries__species_entry_ref__thermo_select_manifest_post",
         "parameters": [
           {
