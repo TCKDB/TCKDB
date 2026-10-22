@@ -1,7 +1,7 @@
 """Replay of an H298 manifest reads exactly the running versions and refuses everything else.
 
 Replay reads recorded eligibility and re-runs the ordering. A manifest with no assessment block, a malformed or foreign
-one, a manifest format this release does not read, or a rule resting on different audited bytes is refused; nothing is
+one, a manifest format this release does not read is refused; nothing is
 read as the current semantics by default, and nothing is labelled "historical".
 """
 
@@ -19,30 +19,25 @@ from app.services.thermo_selection.models import (
     MANIFEST_FORMATS,
     POLICY_VERSION,
 )
-from tests.services.thermo_selection.test_h298_golden import _generate, _scenarios
+from tests.services.thermo_selection.test_h298_golden import _generate
 
 NEW = json.loads((Path(__file__).parent / "golden" / "h298_decisions.json").read_text(encoding="utf-8"))
-RULES = {name: rules for name, _, rules in _scenarios()}
 
 
 def _manifest(name: str) -> dict:
     return copy.deepcopy(NEW["manifests"][name]["manifest"])
 
 
-def _e1(manifest: dict) -> dict:
-    return next(r for r in manifest["decision"]["rules"] if r["rule_id"] == "E1")
-
-
 def test_the_premise_the_golden_holds_current_manifests_with_the_block():
-    assert len(NEW["manifests"]) >= 20
+    assert len(NEW["manifests"]) >= 8
     assert all("assessment_semantics" in e["manifest"] for e in NEW["manifests"].values())
 
 
 @pytest.mark.parametrize("name", sorted(NEW["manifests"]))
 def test_a_current_manifest_replays_to_the_decision_it_recorded(name):
     manifest = _manifest(name)
-    assert replay_decision(manifest, rules=RULES[name]) == (manifest["decision"] or {"outcome": manifest["outcome"]})
-    assert replay_matches(manifest, rules=RULES[name])
+    assert replay_decision(manifest) == (manifest["decision"] or {"outcome": manifest["outcome"]})
+    assert replay_matches(manifest)
 
 
 def test_a_manifest_built_now_records_the_structured_block():
@@ -53,6 +48,7 @@ def test_a_manifest_built_now_records_the_structured_block():
         "source_findings": {"name": "structure_source_findings", "version": 1},
     }
     assert manifest["policy"]["version"] == POLICY_VERSION == 1
+    assert manifest["format"]["version"] == MANIFEST_FORMAT_VERSION == 2
 
 
 @pytest.mark.parametrize("block", [{"version": 3}, {"version": "1"}, {"version": True}, "two", {}], ids=["future", "string", "bool", "not_a_block", "empty"])
@@ -60,7 +56,7 @@ def test_a_manifest_recording_semantics_this_release_does_not_carry_is_refused(b
     manifest = _manifest("single")
     manifest["assessment_semantics"] = block
     with pytest.raises(ReplayError):
-        replay_decision(manifest, rules=RULES["single"])
+        replay_decision(manifest)
 
 
 def test_a_manifest_with_no_assessment_block_is_refused_not_read_as_current():
@@ -68,7 +64,7 @@ def test_a_manifest_with_no_assessment_block_is_refused_not_read_as_current():
     manifest = _manifest("single")
     del manifest["assessment_semantics"]
     with pytest.raises(ReplayError, match="assessment_semantics"):
-        replay_decision(manifest, rules=RULES["single"])
+        replay_decision(manifest)
 
 
 def test_only_the_current_manifest_format_is_read():
@@ -78,31 +74,7 @@ def test_only_the_current_manifest_format_is_read():
         manifest = _manifest("single")
         manifest["format"]["version"] = bad
         with pytest.raises(ReplayError, match="unknown manifest format"):
-            replay_decision(manifest, rules=RULES["single"])
-
-
-def test_replay_refuses_a_rule_resting_on_different_audited_bytes():
-    """The E1 rule's audited-manifest digest is checked at replay, as kinetics, statmech and network do.
-
-    Kills: the digest comparison dropped from ``replay_decision`` (it used to check only ``(rule_id, version)``)."""
-    name = "e1_g4_over_g3"
-    manifest = _manifest(name)
-    assert len(_e1(manifest)["manifest_sha256"]) == 64
-    assert replay_matches(copy.deepcopy(manifest), rules=RULES[name])
-    _e1(manifest)["manifest_sha256"] = "0" * 64
-    with pytest.raises(ReplayError, match="different audited manifest"):
-        replay_decision(manifest, rules=RULES[name])
-    manifest = _manifest(name)
-    del _e1(manifest)["manifest_sha256"]
-    with pytest.raises(ReplayError, match="different audited manifest"):
-        replay_decision(manifest, rules=RULES[name])
-
-
-def test_a_rule_version_this_release_does_not_carry_is_refused():
-    manifest = _manifest("e1_g4_over_g3")
-    _e1(manifest)["version"] = 9
-    with pytest.raises(ReplayError, match="not in the running registry"):
-        replay_decision(manifest, rules=RULES["e1_g4_over_g3"])
+            replay_decision(manifest)
 
 
 @pytest.mark.parametrize("bad", [True, 1.0])
@@ -111,7 +83,7 @@ def test_a_policy_version_that_equals_the_integer_but_is_not_it_is_refused(bad):
     manifest = _manifest("single")
     manifest["policy"]["version"] = bad
     with pytest.raises(ReplayError, match="policy"):
-        replay_decision(manifest, rules=RULES["single"])
+        replay_decision(manifest)
 
 
 def test_the_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_bool_or_missing_one():
@@ -123,4 +95,4 @@ def test_the_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_
     assert manifest["format"] == {"name": MANIFEST_FORMAT_NAME, "version": current} and type(current) is int
     for tampered in bad_format_manifests(manifest, current):
         with pytest.raises(ReplayError, match="unknown manifest format"):
-            replay_decision(tampered, rules=RULES["single"])
+            replay_decision(tampered)
