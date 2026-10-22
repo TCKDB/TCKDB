@@ -144,9 +144,19 @@ def _no_declared_target(versions: dict[str, int]) -> TransitionStateTrustContext
 
 
 def _live_versions() -> dict[str, int]:
-    from app.services.structure_selection import ASSESSMENT_VERSION, DECISION_VERSION, NORMALIZER_VERSION
+    from app.services.structure_selection import (
+        ADMIN_KEY_VERSION,
+        ASSESSMENT_VERSION,
+        DECISION_VERSION,
+        NORMALIZER_VERSION,
+    )
 
-    return {"assessment": ASSESSMENT_VERSION, "normalizer": NORMALIZER_VERSION, "decision": DECISION_VERSION}
+    return {
+        "assessment": ASSESSMENT_VERSION,
+        "normalizer": NORMALIZER_VERSION,
+        "decision": DECISION_VERSION,
+        "administrative_key": ADMIN_KEY_VERSION,
+    }
 
 
 def validate_ts_scoped_structure_versions() -> None:

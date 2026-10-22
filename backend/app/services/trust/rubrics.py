@@ -2700,7 +2700,14 @@ def _ts_representative_freq_result(ts_entry: TransitionStateEntry, context: Tran
 #: The structure-selection semantics the badge's fixed question is asked under. ``scoped_ts_context`` refuses to run
 #: when the live versions differ, and a test pins the same equality, so a change to the assessor, the normaliser or
 #: the decision rules forces a deliberate TS rubric version bump instead of silently changing what the badge's warning means.
-TS_SCOPED_STRUCTURE_VERSIONS: dict[str, int] = {"assessment": 1, "normalizer": 1, "decision": 1}
+#: ``administrative_key`` is the structure administrative key the badge's ``qualifying_refs`` are listed in; its version 2
+#: (``under_review`` ranks equal to ``not_reviewed``) changed that order, so the rubric is at version 2.
+TS_SCOPED_STRUCTURE_VERSIONS: dict[str, int] = {
+    "assessment": 1,
+    "normalizer": 1,
+    "decision": 1,
+    "administrative_key": 2,
+}
 
 
 def _ts_has_calc_type(
@@ -3176,7 +3183,7 @@ def _check_ts_review_not_rejected_or_deprecated_if_applicable(
 # entry that declares a target.
 COMPUTED_TRANSITION_STATE: EvidenceRubric = EvidenceRubric(
     name="computed_transition_state",
-    version=1,
+    version=2,
     record_type="transition_state_entry",
     checks=(
         EvidenceCheckSpec(

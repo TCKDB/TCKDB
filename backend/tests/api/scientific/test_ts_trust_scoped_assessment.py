@@ -32,7 +32,7 @@ from app.db.models.common import (
     StructureFindingKind,
     StructureSourceRole,
 )
-from app.services.structure_selection import DECISION_VERSION
+from app.services.structure_selection import ADMIN_KEY_VERSION, DECISION_VERSION
 from app.services.structure_selection.models import (
     ASSESSMENT_VERSION,
     NORMALIZER_VERSION,
@@ -131,7 +131,12 @@ def test_a_detail_read_runs_the_assessment_and_a_qualifying_target_adds_no_warni
         "coverage_requirement": "known_values",
     }
     assert WARNING not in trust["evidence"]["checks"]  # a passed warning is absent from the map, as for every warning
-    assert block["versions"] == {"assessment": ASSESSMENT_VERSION, "normalizer": NORMALIZER_VERSION, "decision": DECISION_VERSION}
+    assert block["versions"] == {
+        "assessment": ASSESSMENT_VERSION,
+        "normalizer": NORMALIZER_VERSION,
+        "decision": DECISION_VERSION,
+        "administrative_key": ADMIN_KEY_VERSION,
+    }
     assert trust["is_certified"] is False
 
 
@@ -897,13 +902,14 @@ def test_the_pin_is_a_literal_tied_to_the_rubric_version():
     Kills: changing the structure versions (or the dict) while the TS rubric stays at its version.
     """
     assert (COMPUTED_TRANSITION_STATE.version, TS_SCOPED_STRUCTURE_VERSIONS) == (
-        1,
-        {"assessment": 1, "normalizer": 1, "decision": 1},
+        2,
+        {"assessment": 1, "normalizer": 1, "decision": 1, "administrative_key": 2},
     )
     assert TS_SCOPED_STRUCTURE_VERSIONS == {
         "assessment": ASSESSMENT_VERSION,
         "normalizer": NORMALIZER_VERSION,
         "decision": DECISION_VERSION,
+        "administrative_key": ADMIN_KEY_VERSION,
     }
 
 
@@ -917,6 +923,16 @@ def test_drift_fails_the_boot_not_a_request(monkeypatch):
         ts_scoped.validate_ts_scoped_structure_versions()
     with pytest.raises(RuntimeError, match="deliberate rubric bump"):
         create_app()
+
+
+def test_a_change_of_the_administrative_key_version_fails_the_boot_until_the_rubric_is_bumped(monkeypatch):
+    """Kills: leaving the administrative key out of the pin, so the badge's ``qualifying_refs`` order moves unmarked."""
+    from app.services.trust import rubrics, ts_scoped
+
+    assert "administrative_key" in rubrics.TS_SCOPED_STRUCTURE_VERSIONS
+    monkeypatch.setitem(rubrics.TS_SCOPED_STRUCTURE_VERSIONS, "administrative_key", ADMIN_KEY_VERSION + 1)
+    with pytest.raises(RuntimeError, match="deliberate rubric bump"):
+        ts_scoped.validate_ts_scoped_structure_versions()
 
 
 def test_the_outcome_vocabulary_is_the_structure_selection_vocabulary_narrowed_to_the_evidence_question():
