@@ -12,12 +12,10 @@ from __future__ import annotations
 import copy
 
 import pytest
-from tests.services.network_selection._rules import ProtocolRule, protocol
 
 from app.db.models.common import RecordReviewStatus as S
-from app.services.network_selection import manifest as manifest_module
-from app.services.network_selection import selection as selection_module
 from app.services.network_selection.manifest import manifest_digest
+from tests.services.network_selection._protocol import protocol
 from tests.services.network_selection._world import add_solve, build_world, fit_spec, set_review, target
 
 A_, B_ = "chemically_significant_eigenvalues", "modified_strong_collision"
@@ -95,12 +93,6 @@ def two(db_session, world):
     a = add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(A_), review=S.not_reviewed)
     b = add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(B_), review=S.approved)
     return a, b
-
-
-def use_rules(monkeypatch, *rules):
-    """Swap in test-only active rules at the service boundary and in the replay registry."""
-    monkeypatch.setattr(selection_module, "default_rules", lambda: tuple(rules))
-    monkeypatch.setattr(manifest_module, "default_rules", lambda: tuple(rules))
 
 
 # -- the export itself -------------------------------------------------------------------------------------------
@@ -195,16 +187,6 @@ def test_a_manifest_made_under_another_read_profile_is_stale(client, world, one)
         assert code(response) == "network_export_manifest_stale"
 
 
-def test_a_rule_change_makes_the_manifest_stale(client, world, two, monkeypatch):
-    a, _ = two
-    manifest = manifest_of(client, world)
-    use_rules(monkeypatch, ProtocolRule("T-PREFER-A", prefer=A_, yield_=B_))
-    # The recorded registry has no such rule, so replay itself refuses a document claiming otherwise; the live
-    # registry has one the document never saw, so the server's content differs.
-    response = export(client, world, manifest, a._dets["d_assoc"].public_ref, [a._fits[0].public_ref], allow_administrative_choice=True)
-    assert response.status_code == 422 and code(response) in ("network_export_manifest_stale", "network_export_manifest_invalid")
-
-
 def test_an_edited_manifest_with_a_stale_digest_does_not_replay(client, world, one):
     _, det, fit = one
     manifest = manifest_of(client, world)
@@ -261,7 +243,7 @@ def test_another_networks_manifest_is_refused(client, db_session, world, one):
 # -- the choice ----------------------------------------------------------------------------------------------------
 
 
-def test_administrative_choice_is_off_by_default_and_never_bypasses_a_conflict(client, world, two, monkeypatch):
+def test_administrative_choice_is_off_by_default_and_never_bypasses_an_empty_selection(client, world, two):
     a, b = two
     manifest = manifest_of(client, world)
     assert manifest["outcome"] == "incomparable_alternatives"
@@ -272,23 +254,21 @@ def test_administrative_choice_is_off_by_default_and_never_bypasses_a_conflict(c
     accepted = export(client, world, manifest, det_a, [fit_a], allow_administrative_choice=True).json()
     assert accepted["administrative"] is True and accepted["selection_basis"] == "administrative_choice"
 
-    use_rules(monkeypatch, ProtocolRule("T-A", prefer=A_, yield_=B_), ProtocolRule("T-B", prefer=B_, yield_=A_))
-    conflict = manifest_of(client, world)
-    assert conflict["outcome"] == "policy_conflict"
-    response = export(client, world, conflict, det_a, [fit_a], allow_administrative_choice=True)
+
+def test_nothing_exports_when_no_candidate_is_applicable_whatever_the_caller_accepts(client, world):
+    manifest = manifest_of(client, world)
+    assert manifest["outcome"] == "no_applicable_candidate"
+    response = export(client, world, manifest, "nkdet_doesnotexistdoesnotexist", ["nkin_x"], allow_administrative_choice=True)
     assert code(response) == "network_export_choice_not_allowed" and context(response)["reason"] == "outcome_selects_nothing"
 
 
-def test_only_the_selected_node_exports_when_a_rule_ranked_them(client, world, two, monkeypatch):
-    a, b = two
-    use_rules(monkeypatch, ProtocolRule("T-PREFER-A", prefer=A_, yield_=B_))
+def test_only_the_selected_node_exports_when_there_is_a_sole_eligible_one(client, world, one):
+    solve, det, fit = one
     manifest = manifest_of(client, world)
-    assert manifest["outcome"] == "policy_preferred"
-    ok = export(client, world, manifest, a._dets["d_assoc"].public_ref, [a._fits[0].public_ref])
-    assert ok.status_code == 200 and ok.json()["selection_basis"] == "policy_preferred"
-    other = export(
-        client, world, manifest, b._dets["d_assoc"].public_ref, [b._fits[0].public_ref], allow_administrative_choice=True
-    )
+    assert manifest["outcome"] == "sole_eligible_candidate"
+    ok = export(client, world, manifest, det, [fit])
+    assert ok.status_code == 200 and ok.json()["selection_basis"] == "sole_eligible_candidate"
+    other = export(client, world, manifest, "nkdet_otherotherotherotherother", [fit], allow_administrative_choice=True)
     assert code(other) == "network_export_choice_not_allowed" and context(other)["reason"] == "not_the_selected_node"
 
 
@@ -430,22 +410,19 @@ def test_no_database_id_appears_in_an_export(client, world, one):
     assert offenders == [], offenders
 
 
-def test_a_node_behind_the_leading_front_is_refused_even_when_administrative_choice_is_accepted(
-    client, db_session, world, monkeypatch
-):
+def test_a_node_outside_the_one_front_is_refused_even_when_administrative_choice_is_accepted(client, db_session, world):
     a = add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(A_))
     b = add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol(B_))
-    c = add_solve(db_session, world, fits=[fit_spec("assoc")], protocol=protocol("reservoir_state"))
-    use_rules(monkeypatch, ProtocolRule("T-PREFER-A", prefer=A_, yield_=B_))
     manifest = manifest_of(client, world)
-    assert manifest["outcome"] == "incomparable_alternatives"  # A and C are unranked; B yields to A
-    assert set(manifest["decision"]["fronts"][0]) == {a._dets["d_assoc"].public_ref, c._dets["d_assoc"].public_ref}
-    behind = export(
-        client, world, manifest, b._dets["d_assoc"].public_ref, [b._fits[0].public_ref], allow_administrative_choice=True
+    assert manifest["outcome"] == "incomparable_alternatives"
+    assert len(manifest["decision"]["fronts"]) == 1
+    assert set(manifest["decision"]["fronts"][0]) == {a._dets["d_assoc"].public_ref, b._dets["d_assoc"].public_ref}
+    outside = export(
+        client, world, manifest, "nkdet_outsideoutsideoutsideout", [b._fits[0].public_ref], allow_administrative_choice=True
     )
-    assert code(behind) == "network_export_choice_not_allowed" and context(behind)["reason"] == "outside_leading_front"
+    assert code(outside) == "network_export_choice_not_allowed" and context(outside)["reason"] == "outside_leading_front"
     inside = export(
-        client, world, manifest, c._dets["d_assoc"].public_ref, [c._fits[0].public_ref], allow_administrative_choice=True
+        client, world, manifest, b._dets["d_assoc"].public_ref, [b._fits[0].public_ref], allow_administrative_choice=True
     )
     assert inside.status_code == 200 and inside.json()["administrative"] is True
 
@@ -689,9 +666,8 @@ def test_the_live_selection_always_runs_under_the_servers_bounds(db_session, wor
         "bath": {"species_refs": [world.ar.public_ref], "mole_fractions": None},
         "partition": {"retained": sorted(world.hashes.values()), "eliminated": [], "lumps": []},
         "boundaries": [], "regime_kind": "time_independent", "initial_state_hashes": [],
-        "source_composition_hash": None, "sink_composition_hash": None, "objective": "physical_accuracy",
-        "reference_model_ref": None, "reference_outputs": None, "min_review_status": None,
-        "administrative_policy": "default", "result_mode": "all", "apply_rules": True,
+        "source_composition_hash": None, "sink_composition_hash": None, "min_review_status": None,
+        "administrative_policy": "default", "result_mode": "all",
         "bounds": SelectionBounds(solves=1).to_dict(),
     }
     with pytest.raises(RuntimeError):
