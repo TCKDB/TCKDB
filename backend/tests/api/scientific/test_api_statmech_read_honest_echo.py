@@ -39,6 +39,10 @@ LATEST_ORDER = [
 ]
 
 
+def _keys(order):
+    return [{"key": k["key"], "direction": k["direction"]} for k in order["keys"]]
+
+
 def _entry(db_session):
     species = make_species(db_session, smiles="CCO", inchi_key=next_inchi_key("HECHO"))
     return make_species_entry(db_session, species)
@@ -107,17 +111,17 @@ def test_collapse_first_latest_echoes_the_order_that_chose_the_record(client, db
     body = client.get(_species_url(entry, collapse="first", selection_policy="latest")).json()
 
     assert [_ref(r) for r in body["records"]] == [newer.public_ref]
-    assert body["request"]["effective_order"] == LATEST_ORDER
+    assert _keys(body["request"]["effective_order"]) == LATEST_ORDER
     assert body["request"]["selection_policy_applied"] is True
     # ``sort`` keeps its documented candidate-list meaning, unchanged.
-    assert body["request"]["sort"] == "review_rank,created_at,id"
+    assert [k["key"] for k in body["request"]["sort"]["keys"]] == ["review_rank", "created_at", "id"]
 
 
 def test_collapse_first_default_echoes_the_review_order(client, db_session):
     entry, older, _ = _older_approved_newer_unreviewed(db_session)
     body = client.get(_species_url(entry, collapse="first")).json()
     assert [_ref(r) for r in body["records"]] == [older.public_ref]
-    assert body["request"]["effective_order"] == REVIEW_ORDER
+    assert _keys(body["request"]["effective_order"]) == REVIEW_ORDER
     assert body["request"]["selection_policy_applied"] is True
 
 
@@ -128,7 +132,7 @@ def test_collapse_all_latest_keeps_review_order_and_says_policy_not_applied(clie
 
     assert [_ref(r) for r in body["records"]] == [older.public_ref, newer.public_ref]
     assert body["request"]["selection_policy"] == "latest"
-    assert body["request"]["effective_order"] == REVIEW_ORDER
+    assert _keys(body["request"]["effective_order"]) == REVIEW_ORDER
     assert body["request"]["selection_policy_applied"] is False
 
 
@@ -155,7 +159,7 @@ def test_echoed_order_agrees_with_the_real_sort_key():
     def echoed_key(cid, order):
         values = {"review_rank": REVIEW_RANK[status[cid]], "created_at": created[cid].timestamp(), "id": cid}
         return tuple(
-            values[k.key] if k.direction == "asc" else -values[k.key] for k in order
+            values[k.key] if k.direction == "asc" else -values[k.key] for k in order.keys
         )
 
     sequences = set()
@@ -227,13 +231,13 @@ def test_empty_responses_carry_the_full_echo(client, db_session):
     for body in (empty_entry, hidden_page, search_empty, search_unknown_ref):
         assert body["records"] == []
         req = body["request"]
-        assert req["effective_order"], req
+        assert req["effective_order"]["keys"], req
         assert req["review_visibility"]["visible_statuses"]
         assert "rejected" in req["review_visibility"]["excluded_statuses"]
-    assert empty_entry["request"]["effective_order"] == LATEST_ORDER
+    assert _keys(empty_entry["request"]["effective_order"]) == LATEST_ORDER
     assert empty_entry["request"]["selection_policy_applied"] is True
     assert search_empty["request"]["selection_policy_applied"] is None
-    assert search_empty["request"]["effective_order"] == REVIEW_ORDER
+    assert _keys(search_empty["request"]["effective_order"]) == REVIEW_ORDER
 
 
 # --- ties: the returned order follows the echoed order ---------------------
@@ -261,7 +265,7 @@ def test_collapse_all_and_search_order_follows_the_echoed_order_on_true_ties(cli
     ):
         returned = [_ref(r) for r in body["records"]]
         assert sorted(returned) == sorted(id_by_ref)
-        order = body["request"]["effective_order"]
+        order = body["request"]["effective_order"]["keys"]
         assert order[-1]["key"] == "id"
         # Status and created_at tie, so the only live key is id.
         sign = -1 if order[-1]["direction"] == "desc" else 1

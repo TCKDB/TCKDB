@@ -302,9 +302,13 @@ def test_default_sort_orders_records_review_rank_then_has_kinetics(client, db_se
     worst = _entry(db_session, reactant_smiles="[4H]", product_smiles="N")
 
     body = client.get(_browse_url(limit=200)).json()
-    assert body["request"]["sort"] == (
-        "review_rank,has_kinetics,has_transition_state,created_at,id"
-    )
+    assert [k["key"] for k in body["request"]["sort"]["keys"]] == [
+        "review_rank",
+        "has_kinetics",
+        "has_transition_state",
+        "created_at",
+        "id",
+    ]
 
     refs = [r["reaction_entry_ref"] for r in body["records"]]
     positions = {ref: i for i, ref in enumerate(refs)}

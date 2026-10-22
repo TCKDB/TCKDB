@@ -93331,7 +93331,7 @@
     },
     "/api/v1/scientific/reaction-entries/{reaction_entry_id}/full": {
       "get": {
-        "description": "Composite scientific read for a reaction entry.\n\nPath handle accepts an integer ``reaction_entry.id`` or a public ref\nstarting with ``rxe_``. Joins species, kinetics, transition states,\ncalculations, and review summary into one document. Top-level filters\napply per joined sub-array (Phase 2.1). Non-TS-backed kinetics surface\nin ``kinetics`` with null TS-chain provenance fields (Phase 2.2).\nSub-arrays sort deterministically; client-supplied ``sort=`` is\nrejected. See ``docs/specs/read_api_mvp.md`` §Endpoint 5 and\n``docs/specs/public_identifier_policy.md``.",
+        "description": "Composite scientific read for a reaction entry.\n\nPath handle accepts an integer ``reaction_entry.id`` or a public ref\nstarting with ``rxe_``. Joins species, kinetics, transition states,\ncalculations, and review summary into one document. Top-level filters\napply per joined sub-array (Phase 2.1). Non-TS-backed kinetics surface\nin ``kinetics`` with null TS-chain provenance fields (Phase 2.2).\nSub-arrays sort deterministically; client-supplied ``sort=`` is\nrejected. See ``docs/specs/browse_order.md`` §Endpoint 5 and\n``docs/specs/public_identifier_policy.md``.",
         "operationId": "reaction_full_api_v1_scientific_reaction_entries__reaction_entry_id__full_get",
         "parameters": [
           {
@@ -93485,7 +93485,7 @@
     },
     "/api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics": {
       "get": {
-        "description": "Return kinetics records for a reaction entry, sorted by review status, then newest.\n\nPath handle is strictly the reaction-entry resource: an integer\n``reaction_entry.id`` or a public ref starting with ``rxe_``. A\n``chem_reaction.id`` (or any other prefix) returns 422 / 404.\nProvenance keys are always present; TS-chain fields are populated\nonly for TS-backed records (Phase 2.2). Default sort is review\nstatus, then newest, then id (temperature coverage and evidence are\nreported per record, not ranked). ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``\n§Endpoint 3 and ``docs/specs/public_identifier_policy.md``.",
+        "description": "Return kinetics records for a reaction entry, sorted by review status, then newest.\n\nPath handle is strictly the reaction-entry resource: an integer\n``reaction_entry.id`` or a public ref starting with ``rxe_``. A\n``chem_reaction.id`` (or any other prefix) returns 422 / 404.\nProvenance keys are always present; TS-chain fields are populated\nonly for TS-backed records (Phase 2.2). Default sort is review\nstatus, then newest, then id (temperature coverage and evidence are\nreported per record, not ranked). ``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``\n§Endpoint 3 and ``docs/specs/public_identifier_policy.md``.",
         "operationId": "reaction_kinetics_api_v1_scientific_reaction_entries__reaction_entry_id__kinetics_get",
         "parameters": [
           {
@@ -94191,7 +94191,7 @@
     },
     "/api/v1/scientific/reactions/search": {
       "get": {
-        "description": "Discover reaction entries by reactants/products with availability + trust.\n\nRepeated ``reactants=`` and ``products=`` are accepted and preserve list\norder. ``direction=exact`` is rejected (v0). ``sort=`` is rejected (v0).\n\n``match=contains`` (the default) means set containment per role, so\n``?reactants=NN`` returns every reaction with NN among its reactants and\nleaves the product side unconstrained. ``match=exact`` asks for precisely\none equation, both sides, counts included. See\n``docs/specs/read_api_mvp.md`` §Endpoint 2.",
+        "description": "Discover reaction entries by reactants/products with availability + trust.\n\nRepeated ``reactants=`` and ``products=`` are accepted and preserve list\norder. ``direction=exact`` is rejected (v0). ``sort=`` is rejected (v0).\n\n``match=contains`` (the default) means set containment per role, so\n``?reactants=NN`` returns every reaction with NN among its reactants and\nleaves the product side unconstrained. ``match=exact`` asks for precisely\none equation, both sides, counts included. See\n``docs/specs/browse_order.md`` §Endpoint 2.",
         "operationId": "reaction_search_get_api_v1_scientific_reactions_search_get",
         "parameters": [
           {
@@ -96000,7 +96000,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/thermo": {
       "get": {
-        "description": "Return thermo records for a species entry, sorted per L3.\n\nPath handle is strictly the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\n``species.id`` (or any other prefix) returns 422 / 404.\n``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``\n§Endpoint 4 and ``docs/specs/public_identifier_policy.md``.",
+        "description": "Return thermo records for a species entry, sorted per L3.\n\nPath handle is strictly the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\n``species.id`` (or any other prefix) returns 422 / 404.\n``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``\n§Endpoint 4 and ``docs/specs/public_identifier_policy.md``.",
         "operationId": "species_thermo_api_v1_scientific_species_entries__species_entry_id__thermo_get",
         "parameters": [
           {
@@ -97790,7 +97790,7 @@
     },
     "/api/v1/scientific/species/search": {
       "get": {
-        "description": "Discover species by chemical identity with per-entry trust + availability.\n\nMultiple identifiers AND-combine; inconsistent identifiers return an\nempty result set rather than 422. Client-supplied ``sort=`` is rejected\nwith 422 (``client_sort_not_supported``). See ``docs/specs/read_api_mvp.md``\n§Endpoint 1 for the contract.",
+        "description": "Discover species by chemical identity with per-entry trust + availability.\n\nMultiple identifiers AND-combine; inconsistent identifiers return an\nempty result set rather than 422. Client-supplied ``sort=`` is rejected\nwith 422 (``client_sort_not_supported``). See ``docs/specs/browse_order.md``\n§Endpoint 1 for the contract.",
         "operationId": "species_search_api_v1_scientific_species_search_get",
         "parameters": [
           {
